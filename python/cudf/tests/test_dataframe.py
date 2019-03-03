@@ -2002,6 +2002,7 @@ def test_fillna_numerical(dtype, null_value):
 
     np.testing.assert_equal(expect, got)
 
+
 @pytest.mark.parametrize(
     'null_value',
     [None, np.nan])

@@ -197,7 +197,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             if fill_value == self.default_na_value():
                 fill_value_col = columnops.as_column(
                     fill_value, nan_as_null=False)
-            else: 
+            else:
                 fill_value_col = columnops.as_column(
                     [pd.to_datetime(fill_value)],
                     nan_as_null=False)
