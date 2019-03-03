@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 
 import cudf
-from cudf.dataframe import DataFrame
 
 __all__ = ['timeseries', 'randomdata']
 
@@ -47,16 +46,16 @@ def timeseries(
 
     index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
     state = np.random.RandomState(seed)
-    columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
+    columns = dict((k, make[dt](len(index), state)) for
+                   k, dt in dtypes.items())
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return cudf.from_pandas(df)
 
-def randomdata(nrows=10,
-    dtypes={'id': int, 'x': float, 'y': float},
-    seed=None,
-):
+
+def randomdata(nrows=10, dtypes={'id': int, 'x': float, 'y': float},
+               seed=None,):
     """ Create a dataframe with random data
 
     Parameters
@@ -115,5 +114,3 @@ make = {float: make_float,
         str: make_string,
         object: make_string,
         'category': make_categorical}
-
-
