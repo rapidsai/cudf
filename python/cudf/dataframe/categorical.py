@@ -318,14 +318,17 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
-        codes = columnops.as_column(self.cat().codes)
+        result = self.copy()
         if np.isscalar(fill_value):
-            fill_value = columnops.as_column(self._encode(fill_value)).astype(
-                codes.dtype)
+            fill_value_col = columnops.as_column(
+                pd.Categorical(fill_value,
+                               categories=self.cat().categories))
         else:
-            fill_value = fill_value.cat.codes()
-        cpp_replace.replace_nulls(codes, fill_value)
-        return self.replace(data=codes.data, mask=None)
+            fill_value_col = columnops.as_column(
+                fill_value, nan_as_null=False)
+        cpp_replace.replace_nulls(result, fill_value_col)
+        result = result.replace(mask=None)
+        return result
 
 
 def pandas_categorical_as_column(categorical, codes=None):
