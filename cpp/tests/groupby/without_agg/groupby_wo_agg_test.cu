@@ -112,10 +112,10 @@ struct GroupByWoAggTest : public GdfTest {
     std::srand(number_of_instantiations++);
 
     if (this->group_output_type == GroupByOutType::SQL) {
-      ctxt.flag_groupby_include_nulls = 1;
+      ctxt.flag_groupby_include_nulls = true;
       ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
     } else {
-      ctxt.flag_groupby_include_nulls = 0;
+      ctxt.flag_groupby_include_nulls = false;
       ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
     }
   }
@@ -307,7 +307,7 @@ struct GroupByWoAggTest : public GdfTest {
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    // ctxt.flag_groupby_include_nulls = 0;
+    // ctxt.flag_groupby_include_nulls = false;
     // if (num_columns > 1) {//@todo, it is working? 
     //   ctxt.flag_nulls_sort_behavior = 2;
     // }
@@ -662,7 +662,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    // ctxt.flag_groupby_include_nulls = 0;
+    // ctxt.flag_groupby_include_nulls = false;
     // if (num_columns > 1) {//@todo, it is working? 
     //   ctxt.flag_nulls_sort_behavior = 2;
     // }

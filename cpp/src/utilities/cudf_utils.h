@@ -39,7 +39,6 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 /**
   * Calculates the number of chars used for a validity indicator pseudo-column for a given column's size.
   *
-  * @note Note that this function assumes that `gdf_valid_type` is unsigned char
   * @node This function is different gdf_get_num_bytes_for_valids_allocation because it refers to bytes used as opposed to allocated
   *
   * @param[in] column_size the number of elements
@@ -47,6 +46,8 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
   */
 CUDA_HOST_DEVICE_CALLABLE
 gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) { 
+	static_assert(sizeof(gdf_valid_type) == sizeof(unsigned char),
+		"gdf_get_num_chars_bitmask assumed gdf_valid_type is unsigned char");
 	return (( column_size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
 }
 

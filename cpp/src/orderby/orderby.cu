@@ -67,36 +67,23 @@ namespace{ //annonymus
 } //end unknown namespace
 
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Sorts an array of gdf_column.
- * 
- * @param[in] cols Array of gdf_columns
- * @param[in] asc_desc Device array of sort order types for each column
- * (0 is ascending order and 1 is descending). If NULL is provided defaults
- * to ascending order for evey column.
- * @param[in] ncols # columns
- * @param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- * smaller than non-nulls or viceversa
- * @param[out] output_indices Pre-allocated gdf_column to be filled
- * with sorted indices
- * 
- * @returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by(gdf_column** cols,
+
+gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t* asc_desc,
-                       size_t ncols,
+                       size_t num_inputs,
                        gdf_column* output_indices,
                        gdf_context * context)                       
 {
 
   bool flag_nulls_are_smallest = false;
-  bool nulls_are_lessthan_always_false = false;
-  if (context->flag_nulls_sort_behavior == 1)
+  bool null_as_largest_for_multisort = false;
+  if (context->flag_nulls_sort_behavior == GDF_NULL_AS_SMALLEST)
+  /**< When sorting NULLS will be treated as the smallest number */
     flag_nulls_are_smallest = true;
-  else if (context->flag_nulls_sort_behavior == 2)
-    nulls_are_lessthan_always_false = true;
+  else if (context->flag_nulls_sort_behavior == GDF_NULL_AS_LARGEST_FOR_MULTISORT) 
+  /**< When sorting a multi column data set, if there is a NULL in any of the
+       columns for a row, then that row will be will be treated as the largest number */
+    null_as_largest_for_multisort = true;
 
-  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest, nulls_are_lessthan_always_false);
+  return multi_col_order_by(input_columns, asc_desc, num_inputs, output_indices, flag_nulls_are_smallest, null_as_largest_for_multisort);
 }

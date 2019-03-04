@@ -1,5 +1,6 @@
 #include <cassert>
 #include <thrust/fill.h>
+#include <algorithm>
 
 #include "cudf.h"
 #include "new_groupby.hpp"
@@ -204,13 +205,7 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
 
   gdf_size_type nrows = data_cols_in[0]->size;
   // setup for reduce by key  
-  bool have_nulls = false;
-  for (int i = 0; i < num_data_cols; i++) {
-    if (data_cols_in[i]->null_count > 0) {
-      have_nulls = true;
-      break;
-    }
-  }
+  bool const have_nulls{ std::any_of(data_cols_in, data_cols_in + num_data_cols, [](gdf_column * col){ return col->null_count > 0;}) };
 
   rmm::device_vector<void*> d_cols(num_data_cols); 
   rmm::device_vector<int> d_types(num_data_cols, 0);
@@ -269,7 +264,7 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
 gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
                                             gdf_column** data_cols_in,
                                             gdf_size_type num_key_cols,
-                                            gdf_index_type * key_col_indices,
+                                            gdf_index_type const * key_col_indices,
                                             gdf_column** data_cols_out,
                                             gdf_index_type* group_start_indices,
                                             gdf_size_type* num_group_start_indices, 
@@ -298,26 +293,23 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
   gdf_column sorted_indices_col;
   gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
                             nullptr, nrows, GDF_INT32);
-  if (status != GDF_SUCCESS)
-    return status;
+  GDF_REQUIRE(GDF_SUCCESS == status, status);
 
-  if (ctxt->flag_groupby_include_nulls == 1 || !group_by_keys_contain_nulls){  // SQL style
+  if (ctxt->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
   // run order by and get new sort indexes
     status = gdf_order_by(&orderby_cols_vect[0],             //input columns
                           nullptr,
                           num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                           &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                           ctxt);
-    if (status != GDF_SUCCESS)
-      return status;
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // run gather operation to establish new order
     std::unique_ptr< gdf_table<gdf_size_type> > table_in{new gdf_table<gdf_size_type>{num_data_cols, data_cols_in}};
     std::unique_ptr< gdf_table<gdf_size_type> > table_out{new gdf_table<gdf_size_type>{num_data_cols, data_cols_out}};
 
     status = table_in->gather<gdf_size_type>(sorted_indices, *table_out.get());
-    if (status != GDF_SUCCESS)
-      return status;
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
@@ -337,8 +329,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
                           num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                           &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                           ctxt);
-    if (status != GDF_SUCCESS)
-      return status;
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // lets filter out all the nulls in the group by key column by:
     // we will take the data which has been sorted such that the nulls in the group by keys are all last
@@ -347,8 +338,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     std::unique_ptr< gdf_table<gdf_size_type> > group_by_keys_table{new gdf_table<gdf_size_type>{num_key_cols, &orderby_cols_vect[0]}};
     int valid_count;
     status = group_by_keys_table->get_num_valid_rows(valid_count);
-    if (status != GDF_SUCCESS)
-      return status;
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     for (gdf_size_type i = 0; i < num_data_cols; i++)    {
       data_cols_in[i]->size = valid_count;
@@ -360,8 +350,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     std::unique_ptr< gdf_table<gdf_size_type> > table_out{new gdf_table<gdf_size_type>{num_data_cols, data_cols_out}};
     
     status = table_in->gather<gdf_size_type>(sorted_indices, *table_out.get());
-    if (status != GDF_SUCCESS)
-      return status;
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
