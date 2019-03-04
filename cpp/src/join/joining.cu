@@ -680,6 +680,7 @@ gdf_error join_call_compute_df(
     	    GDF_REQUIRE(GDF_SUCCESS == category_error, category_error);
         	NVCategory::destroy(original_column->dtype_info.category);
         	gdf_column_free(original_column);
+        	delete(original_column);
     	}
 
 
