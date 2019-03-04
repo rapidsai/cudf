@@ -1410,6 +1410,11 @@ class DataFrame(object):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
+
+        if left_index and right_index:
+            on = self.LEFT_RIGHT_INDEX_NAME
+            self[on] = self.index
+            right[on] = right.index
         if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
@@ -1429,8 +1434,9 @@ class DataFrame(object):
                     "DataFrames with 0 rows."
                     )
 
-        # Column prep - this can be simplified
+        # Column prep - this should be simplified
         col_cats = {}
+        """
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
@@ -1462,15 +1468,6 @@ class DataFrame(object):
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
-
-        # TODO: This expression moves into the cpp_join.pyx implementation.
-        """
-        if right_on:
-            on = right_on
-            self[right_on] = self.index
-        elif left_on:
-            on = left_on
-            right[left_on] = right.index
         """
 
         if right_on and left_on:
@@ -1482,11 +1479,6 @@ class DataFrame(object):
         elif right_index and left_on:
             right[left_on] = right.index
             right_on = left_on
-
-        if left_index and right_index:
-            on = self.LEFT_RIGHT_INDEX_NAME
-            self[on] = self.index
-            right[on] = right.index
 
         if on:
             left_on = on
@@ -1552,7 +1544,10 @@ class DataFrame(object):
                         )
                 right_column_idx = right_column_idx + 1
 
-        if right_index and left_on:
+        if left_index and right_index:
+            df = df.drop(self.LEFT_RIGHT_INDEX_NAME)
+            df = df.set_index(self.index[df.index.values])
+        elif right_index and left_on:
             new_index = Series(self.index,
                                index=RangeIndex(0, len(self[left_on])))
             indexed = self[left_on][df[left_on]-1]
@@ -1564,15 +1559,6 @@ class DataFrame(object):
             indexed = right[right_on][df[right_on]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
-
-        if left_index and right_index:
-            df.drop_column(self.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(self.index[df.index.values])
-
-        """
-        if left_on and right_on:
-            df.index = RangeIndex(0, len(df))
-        """
 
         _gdf.nvtx_range_pop()
 

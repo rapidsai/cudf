@@ -65,25 +65,18 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     # allocate column_view for on columns in left_on
     # remember index of column with the name
     idx = 0
-    for name in left_on:
-        result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0)
+    for name in list(set(left_on + right_on)):
+        # TODO: Need careful type promotion here between lhs and rhs
+        if name in left_on:
+            dtype = col_lhs[name]._column.dtype
+        else:
+            dtype = col_rhs[name]._column.dtype
+        result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=dtype, null_count=0)
         result_col_names.append(name)
         left_idx[idx] = list(col_lhs.keys()).index(name)
         right_idx[idx] = list(col_rhs.keys()).index(name)
         res_idx = res_idx + 1
         idx = idx + 1
-
-    # allocate column_view for on columns in right_on
-    # remember index of column
-    idx = 0
-    for name in right_on:
-        if name not in left_on:
-            result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0)
-            result_col_names.append(name)
-            left_idx[idx] = list(col_lhs.keys()).index(name)
-            right_idx[idx] = list(col_rhs.keys()).index(name)
-            res_idx = res_idx + 1
-            idx = idx + 1
 
     # allocate column_view for rhs
     # allocate column_view for result_cols not in right_on
