@@ -50,8 +50,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef int res_idx = 0
     cdef int idx = 0
 
-    # allocate column view for lhs
-    # and allocate column_view for result_cols not in left_on
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
@@ -62,8 +60,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
             res_idx = res_idx + 1
         idx = idx + 1
 
-    # allocate column_view for on columns in left_on
-    # remember index of column with the name
     idx = 0
     for name in list(set(left_on + right_on)):
         # TODO: Need careful type promotion here between lhs and rhs
@@ -78,8 +74,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         res_idx = res_idx + 1
         idx = idx + 1
 
-    # allocate column_view for rhs
-    # allocate column_view for result_cols not in right_on
     idx = 0
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)

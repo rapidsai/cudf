@@ -393,8 +393,6 @@ def test_dataframe_merge_order():
     df2['a'] = [7, 8]
 
     df = df1.merge(df2, how='left', on=['id', 'a'])
-    print(gdf)
-    print(df)
     assert_eq(gdf, df)
 
 
@@ -430,8 +428,6 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     else:
         pdf_result = pdf_left.merge(pdf_right, how=how)
         gdf_result = gdf_left.merge(gdf_right, how=how)
-        print(pdf_result)
-        print(gdf_result)
         assert np.array_equal(gdf_result.columns, pdf_result.columns)
         for column in gdf_result:
             assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
