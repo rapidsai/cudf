@@ -1436,19 +1436,34 @@ class DataFrame(object):
 
         # Column prep - this should be simplified
         col_cats = {}
-        """
-        for name in on:
+
+        for name in left_on or []:
             if pd.api.types.is_categorical_dtype(self[name]):
+                lcats = self[name].cat.categories
+                rcats = right[name].cat.categories
+                if how == 'right':
+                    cats = rcats
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                elif how in ['inner', 'outer']:
+                    # Do the join using the union of categories from both side.
+                    # Adjust for inner joins afterwards
+                    cats = sorted(set(lcats) | set(rcats))
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                    self[name] = self[name]._column.as_numerical
+                    right[name] = (right[name].cat.set_categories(cats)
+                                   .fillna(-1))
+                    right[name] = right[name]._column.as_numerical
+                col_cats[name] = cats
+        for name in right_on or []:
+            if pd.api.types.is_categorical_dtype(right[name]):
                 lcats = self[name].cat.categories
                 rcats = right[name].cat.categories
                 if how == 'left':
                     cats = lcats
                     right[name] = (right[name].cat.set_categories(cats)
                                    .fillna(-1))
-                elif how == 'right':
-                    cats = rcats
-                    self[name] = (self[name].cat.set_categories(cats)
-                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
@@ -1468,7 +1483,6 @@ class DataFrame(object):
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
-        """
 
         if right_on and left_on:
             raise NotImplementedError("merge(left_on='x', right_on='y' not"
