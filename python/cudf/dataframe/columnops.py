@@ -353,11 +353,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             try:
                 pa_type = None
                 if dtype is not None:
-                    np_type = np.dtype(dtype).type
-                    if np_type == np.bool_:
-                        pa_type = pa.bool_()
+                    if pd.api.types.is_categorical_dtype(dtype):
+                        pa_type = pa.string()
                     else:
-                        pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
+                        np_type = np.dtype(dtype).type
+                        if np_type == np.bool_:
+                            pa_type = pa.bool_()
+                        else:
+                            pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null
