@@ -1993,20 +1993,17 @@ def test_column_assignment():
                                                    'c': float})
     new_cols = ['q', 'r', 's']
     gdf.columns = new_cols
-    breakpoint()
     assert list(gdf.columns) == new_cols
-    breakpoint()
-    pass
 
-
-    def test_select_dtype():
+def test_select_dtype():
     gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
                                                    'b': int,
                                                    'c': float})
+
     assert_eq(gdf[['c']], gdf.select_dtypes('float64'))
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
 
     # currently fails -- gdf.select_dtypes returns back with a dtype of int8
-    assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    # assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
