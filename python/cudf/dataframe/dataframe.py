@@ -1390,18 +1390,6 @@ class DataFrame(object):
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
 
-        if right_on:
-            on = right_on
-            self[right_on] = self.index
-        elif left_on:
-            on = left_on
-            right[left_on] = right.index
-
-        if left_index and right_index:
-            on = self.LEFT_RIGHT_INDEX_NAME
-            self[on] = self.index
-            right[on] = right.index
-
         # Early termination Error checking
         if type != "":
             warnings.warn(
