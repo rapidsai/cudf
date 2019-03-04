@@ -2387,10 +2387,6 @@ class DataFrame(object):
 
         return df
 
-    @property
-    def ndim(self):
-        return len(self.columns)
-
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
