@@ -1987,7 +1987,19 @@ def test_series_list_nanasnull(nan_as_null):
     assert pa.Array.equals(expect, got.to_arrow())
 
 
-def test_select_dtype():
+def test_column_assignment():
+    gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
+                                                   'b': int,
+                                                   'c': float})
+    new_cols = ['q', 'r', 's']
+    gdf.columns = new_cols
+    breakpoint()
+    assert list(gdf.columns) == new_cols
+    breakpoint()
+    pass
+
+
+    def test_select_dtype():
     gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
                                                    'b': int,
                                                    'c': float})
