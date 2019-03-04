@@ -1422,13 +1422,14 @@ class DataFrame(object):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
-        if on is None:
+        if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
                 raise ValueError('No common columns to perform merge on')
 
         # Essential parameters
-        on = [on] if isinstance(on, str) else list(on)
+        if on:
+            on = [on] if isinstance(on, str) else list(on)
         lhs = self
         rhs = right
 
@@ -1440,6 +1441,7 @@ class DataFrame(object):
                     "DataFrames with 0 rows."
                     )
 
+        """
         # Column prep - this can be simplified
         col_cats = {}
         for name in on:
@@ -1473,10 +1475,40 @@ class DataFrame(object):
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
+        """
+
+        # TODO: This expression moves into the cpp_join.pyx implementation.
+        """
+        if right_on:
+            on = right_on
+            self[right_on] = self.index
+        elif left_on:
+            on = left_on
+            right[left_on] = right.index
+        """
+
+        if right_on and left_on:
+            raise NotImplementedError("merge(left_on='x', right_on='y' not"
+                                      "supported by CUDF at this time.")
+        if left_index and right_on:
+            self[right_on] = self.index
+            left_on = right_on
+        elif right_index and left_on:
+            right[left_on] = right.index
+            right_on = left_on
+
+        if left_index and right_index:
+            on = self.LEFT_RIGHT_INDEX_NAME
+            self[on] = self.index
+            right[on] = right.index
+
+        if on:
+            left_on = on
+            right_on = on
 
         # Compute merge
-        cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
-                                     method=method)
+        cols, valids = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
+                                     how, method=method)
 
         # Output conversion - take cols and valids from `cpp_join` and
         # combine into a DataFrame()
@@ -1487,6 +1519,7 @@ class DataFrame(object):
         # columns from `left` and the data from `cpp_join`. The final order
         # is left columns, followed by non-join-key right columns.
         on_count = 0
+        on = list(set(right_on + left_on))
         # gap spaces between left and `on` for result from `cpp_join`
         gap = len(self.columns) - len(on)
         for idc, name in enumerate(self.columns):
@@ -1497,8 +1530,9 @@ class DataFrame(object):
                         on_idx = idx + gap
                         on_count = on_count + 1
                         key = on[idx]
-                        categories = col_cats[key] if key in col_cats.keys()\
-                            else None
+                        # categories = col_cats[key] if key in col_cats.keys()\
+                        #    else None
+                        categories = None
                         df[key] = columnops.build_column(
                                 Buffer(cols[on_idx]),
                                 dtype=cols[on_idx].dtype,
@@ -1510,8 +1544,9 @@ class DataFrame(object):
                 # on_count corrects gap for non-`on` columns
                 left_column_idx = idc - on_count
                 left_name = fix_name(name, lsuffix)
-                categories = col_cats[left_name] if left_name in\
-                    col_cats.keys() else None
+                # categories = col_cats[left_name] if left_name in\
+                #     col_cats.keys() else None
+                categories = None
                 df[left_name] = columnops.build_column(
                         Buffer(cols[left_column_idx]),
                         dtype=cols[left_column_idx].dtype,
@@ -1523,8 +1558,9 @@ class DataFrame(object):
             if name not in on:
                 # now copy the columns from `right` that were not in `on`
                 right_name = fix_name(name, rsuffix)
-                categories = col_cats[right_name] if right_name in\
-                    col_cats.keys() else None
+                # categories = col_cats[right_name] if right_name in\
+                #    col_cats.keys() else None
+                categories = None
                 df[right_name] = columnops.build_column(
                         Buffer(cols[right_column_idx]),
                         dtype=cols[right_column_idx].dtype,
@@ -1533,16 +1569,16 @@ class DataFrame(object):
                         )
                 right_column_idx = right_column_idx + 1
 
-        if right_on:
-            new_index = Series(right.index,
-                               index=RangeIndex(1, len(right[right_on])))
-            indexed = right[right_on][df[right_on]-1]
+        if right_index and left_on:
+            new_index = Series(self.index,
+                               index=RangeIndex(0, len(self[left_on])))
+            indexed = self[left_on][df[left_on]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
-        elif left_on:
-            new_index = Series(self.index,
-                               index=RangeIndex(1, len(self[left_on])))
-            indexed = self[left_on][df[left_on]-1]
+        elif left_index and right_on:
+            new_index = Series(right.index,
+                               index=RangeIndex(0, len(right[right_on])))
+            indexed = right[right_on][df[right_on]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
 
@@ -1550,8 +1586,10 @@ class DataFrame(object):
             df.drop_column(self.LEFT_RIGHT_INDEX_NAME)
             df = df.set_index(self.index[df.index.values])
 
+        """
         if left_on and right_on:
             df.index = RangeIndex(0, len(df))
+        """
 
         _gdf.nvtx_range_pop()
 
