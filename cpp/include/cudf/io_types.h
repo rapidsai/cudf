@@ -22,7 +22,7 @@
  */
 #pragma once
 
- /*
+  /*
    * Enumerator for the supported forms of the input CSV file
    */
 typedef enum 
@@ -30,6 +30,17 @@ typedef enum
   FILE_PATH,								///< Indicates that the input is specified with a file path
   HOST_BUFFER								///< Indicates that the input is passed as a buffer in host memory
 } gdf_csv_input_form;
+
+  /*
+   * Enumerator describing the qoutation behavior for file readers/writers
+   */
+typedef enum 
+{
+  QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
+  QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
+  QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
+} gdf_csv_quote_style;
 
 /**---------------------------------------------------------------------------*
  * @brief  This struct contains all input parameters to the read_csv function.
@@ -104,7 +115,7 @@ typedef struct {
   char          decimal;                    ///< The decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL
 
   char          quotechar;                  ///< Define the character used to denote start and end of a quoted item
-  bool          quoting;                    ///< Treat string fields as quoted item and remove the first and last quotechar
+  gdf_csv_quote_style quoting;              ///< Treat string fields as quoted item and remove the first and last quotechar
   bool          doublequote;                ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar
 
   char          escapechar;                 // Single character used as the escape character

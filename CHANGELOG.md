@@ -40,6 +40,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #561 Add Doxygen style comments to Join CUDA functions
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
 - PR #822 Add support for `__cuda_array_interface__` for ingest
 - PR #756 Consolidate common helper functions from unordered map and multimap
@@ -64,6 +65,7 @@
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
+- PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
 
 ## Bug Fixes
 
