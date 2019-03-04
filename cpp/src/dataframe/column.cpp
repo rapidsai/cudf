@@ -85,7 +85,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
                   [](gdf_column *col) { return (nullptr != col->valid); })};
 
   GDF_REQUIRE(column_type == output_column->dtype, GDF_DTYPE_MISMATCH);
-  GDF_REQUIRE(output_column->size <= total_size, GDF_COLUMN_SIZE_MISMATCH);
+  GDF_REQUIRE(output_column->size == total_size, GDF_COLUMN_SIZE_MISMATCH);
 
   // TODO optimizations if needed
   // 1. Either 
