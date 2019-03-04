@@ -12,9 +12,10 @@
 
 #define REDUCTION_BLOCK_SIZE 128
 
+using namespace cudf::reduction;
+
 namespace { // anonymous namespace
 
-using namespace cudf::reduction;
 
 /*
 Generic reduction implementation with support for validity mask
@@ -45,7 +46,7 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
         T loaded = identity;
         if (i < size && gdf_is_valid(mask, i))
             loaded = loader(data, i);
-            
+
         // Block reduce
         T temp = BlockReduce(temp_storage).Reduce(loaded, functor);
         // Add current block
@@ -74,21 +75,6 @@ struct ReduceOp {
                     (T*)output, output_size, identity, functor1, loader1);
         CUDA_CHECK_LAST();
 
-        // 2nd round
-        //    Finish the partial reduction (if needed).
-        //    A single block reduction that computes one output stored to the
-        //    first index in *output*.
-        if ( output_size > 1 ) {
-            typedef typename F::second F2;
-            typedef typename F2::Loader Ld2;
-            F2 functor2;
-            Ld2 loader2;
-
-            launch_once(output, nullptr, output_size,
-                        output, 1, identity, functor2, loader2);
-            CUDA_CHECK_LAST();
-        }
-
         return GDF_SUCCESS;
     }
 
@@ -97,6 +83,11 @@ struct ReduceOp {
     void launch_once(const T *data, gdf_valid_type *valid, gdf_size_type size,
                      T *output, gdf_size_type output_size, T identity,
                      Functor functor, Loader loader) {
+
+        // fake single step (single grid), the perf is bad.
+        // Todo: using atomics (multi grid)
+        output_size = 1;
+
         // find needed gridsize
         // use atmost REDUCTION_BLOCK_SIZE blocks
         int blocksize = REDUCTION_BLOCK_SIZE;
@@ -120,18 +111,19 @@ struct ReduceOp {
 
 };
 
-template <typename Op>
+template <template <typename Ti> class Op>
 struct ReduceDispatcher {
+
     template <typename T>
     gdf_error launch(gdf_column *col,
-                         void *dev_result, 
+                         void *dev_result,
                          gdf_size_type dev_result_size)
     {
         GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
-        T identity = Op::template identity<T>();
-        return ReduceOp<T, Op>::launch(col, identity, 
+        T identity = Op<T>::identity();
+        return ReduceOp<T, Op<T>>::launch(col, identity,
                                        static_cast<T*>(dev_result),
-                                       dev_result_size); 
+                                       dev_result_size);
     }
 
     template <typename T,
@@ -145,7 +137,7 @@ struct ReduceDispatcher {
 
     template <typename T, typename std::enable_if<
               !std::is_arithmetic<T>::value &&
-              std::is_base_of<DeviceForNonArithmetic, Op>::value
+              std::is_base_of<DeviceForNonArithmetic, Op<T>>::value
               >::type* = nullptr>
     gdf_error operator()(gdf_column *col,
                          void *dev_result,
@@ -156,7 +148,7 @@ struct ReduceDispatcher {
 
     template <typename T, typename std::enable_if<
               !std::is_arithmetic<T>::value &&
-              !std::is_base_of<DeviceForNonArithmetic, Op>::value
+              !std::is_base_of<DeviceForNonArithmetic, Op<T>>::value
               >::type* = nullptr>
     gdf_error operator()(gdf_column *col,
                          void *dev_result,
@@ -168,45 +160,77 @@ struct ReduceDispatcher {
 
 }   // anonymous namespace
 
+typedef enum {
+  GDF_REDUCTION_SUM = 0,
+  GDF_REDUCTION_MIN,
+  GDF_REDUCTION_MAX,
+  GDF_REDUCTION_PRODUCTION,
+  GDF_REDUCTION_SUMOFSQUARES,
+} gdf_reduction_op;
+
+
+gdf_error gdf_reduction(gdf_column *col,
+                  gdf_reduction_op op,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
+{
+    switch(op){
+    case GDF_REDUCTION_SUM:
+        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(),
+                                     col, dev_result, dev_result_size);
+    case GDF_REDUCTION_MIN:
+        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(),
+                                     col, dev_result, dev_result_size);
+    case GDF_REDUCTION_MAX:
+        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(),
+                                     col, dev_result, dev_result_size);
+    case GDF_REDUCTION_PRODUCTION:
+        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(),
+                                     col, dev_result, dev_result_size);
+    case GDF_REDUCTION_SUMOFSQUARES:
+        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(),
+                                     col, dev_result, dev_result_size);
+    default:
+        { assert(false && "type_dispatcher: invalid gdf_type"); }
+    }
+
+    return GDF_INVALID_API_CALL;
+}
+
 
 gdf_error gdf_sum(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
-{   
-    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(),
-                                 col, dev_result, dev_result_size);
+{
+    return gdf_reduction(col, GDF_REDUCTION_SUM, dev_result, dev_result_size);
 }
 
 gdf_error gdf_product(gdf_column *col,
                       void *dev_result,
                       gdf_size_type dev_result_size)
 {
-    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(),
-                                 col, dev_result, dev_result_size);
+    return gdf_reduction(col, GDF_REDUCTION_PRODUCTION, dev_result, dev_result_size);
 }
 
 gdf_error gdf_sum_of_squares(gdf_column *col,
                              void *dev_result,
                              gdf_size_type dev_result_size)
 {
-    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(),
-                                 col, dev_result, dev_result_size);
+    return gdf_reduction(col, GDF_REDUCTION_SUMOFSQUARES, dev_result, dev_result_size);
 }
 
 gdf_error gdf_min(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(),
-                                 col, dev_result, dev_result_size);
+    return gdf_reduction(col, GDF_REDUCTION_MIN, dev_result, dev_result_size);
 }
 
 gdf_error gdf_max(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(),
-                                 col, dev_result, dev_result_size);
+    return gdf_reduction(col, GDF_REDUCTION_MAX, dev_result, dev_result_size);
 }
 
 

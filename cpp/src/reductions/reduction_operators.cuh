@@ -5,187 +5,141 @@
 namespace cudf {
 namespace reduction {
 
+template <typename T>
+__forceinline__  __device__
+T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
+{
+    return atomicCAS(addr, expected, new_value);
+}
 
-	template <typename T, typename T_equivalent, typename Op>
-    __forceinline__  __device__
-    void update_existing_value(T_equivalent & existing_value, value_type const & insert_pair, Op op)
-    {
-      const mapped_type insert_value = insert_pair.second;
+template <>
+__forceinline__  __device__
+float genericAtomicCAS(float* addr, float const & expected, float const & new_value)
+{
+    int ret = atomicCAS(reinterpret_cast<int*>(addr),
+        __float_as_int(expected), __float_as_int(new_value));
+    return __int_as_float(ret);
+}
 
-      mapped_type old_value = existing_value;
+// reinterpret double to uint64_t(unsigned long long)
+__forceinline__  __device__
+unsigned long long int double_as_ull(double value)
+{
+    // return __double_as_longlong(value); // this returns signed long long
+    return *( reinterpret_cast<unsigned long long int*>(&value) );
+}
 
-      mapped_type expected{old_value};
+template <>
+__forceinline__  __device__
+double genericAtomicCAS(double* addr, double const & expected, double const & new_value)
+{
+    unsigned long long int ret = atomicCAS(reinterpret_cast<unsigned long long int*>(addr),
+        double_as_ull(expected), double_as_ull(new_value));
+    return __longlong_as_double(ret);
+}
 
-      // Attempt to perform the aggregation with existing_value and
-      // store the result atomically
-      do 
-      {
-        expected = old_value;
+// ToDo: uint8/16 support
 
-        const mapped_type new_value = op(insert_value, old_value);
+template <typename T, typename Op>
+__forceinline__  __device__
+void update_existing_value(T & existing_value, T const & update_value, Op op)
+{
+  const T insert_value = update_value;
+  T old_value = existing_value;
+  T expected{old_value};
 
-        old_value = atomicCAS(&existing_value, expected, new_value);
-      }
-      // Guard against another thread's update to existing_value
-      while( expected != old_value );
-    }
+  // Attempt to perform the aggregation with existing_value and
+  // store the result atomically
+  do
+  {
+    expected = old_value;
 
-    // TODO Overload atomicAdd for 1 byte and 2 byte types, until then, overload specifically for the types
-    // where atomicAdd already has an overload. Otherwise the generic update_existing_value will be used.
-    // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
-    {
-      atomicAdd(&existing_value, static_cast<mapped_type>(1));
-    }
-    // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
-    {
-      atomicAdd(&existing_value, static_cast<mapped_type>(1));
-    }
-    // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
-    {
-      atomicAdd(&existing_value, static_cast<mapped_type>(1));
-    }
-    // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
-    {
-      atomicAdd(&existing_value, static_cast<mapped_type>(1));
-    }
+    const T new_value = op(insert_value, old_value);
 
-    // Specialization for SUM aggregator (int32)
-    __forceinline__  __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int32_t> op)
-    {
-      atomicAdd(&existing_value, insert_pair.second);
-    }
+    old_value = genericAtomicCAS(&existing_value, expected, new_value);
+  }
+  // Guard against another thread's update to existing_value
+  while( expected != old_value );
+}
 
-    // Specialization for SUM aggregator (int64)
-    __forceinline__  __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int64_t> op)
-    {
-      atomicAdd(&existing_value, insert_pair.second);
-    }
 
-    // Specialization for SUM aggregator (fp32)
-    __forceinline__  __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<float> op)
-    {
-      atomicAdd(&existing_value, insert_pair.second);
-    }
-
-    // Specialization for SUM aggregator (fp64)
-    __forceinline__  __device__
-    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<double> op)
-    {
-      atomicAdd(&existing_value, insert_pair.second);
-    }
+// TODO: specialized functions for available pair of operation and precision
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+template<typename T>
 struct IdentityLoader {
-    template<typename T>
     __device__
         T operator() (const T *ptr, int pos) const {
         return ptr[pos];
     }
 };
 
+template<typename T>
 struct DeviceSum {
-    typedef IdentityLoader Loader;
-    typedef DeviceSum second;
+    typedef IdentityLoader<T> Loader;
 
-    template<typename T>
     __device__
     T operator() (const T &lhs, const T &rhs) {
         return lhs + rhs;
     }
 
-    template<typename T>
     static constexpr T identity() { return T{0}; }
 };
 
+template<typename T>
 struct DeviceProduct {
-    typedef IdentityLoader Loader;
-    typedef DeviceProduct second;
+    typedef IdentityLoader<T> Loader;
 
-    template<typename T>
     __device__
     T operator() (const T &lhs, const T &rhs) {
         return lhs * rhs;
     }
 
-    template<typename T>
     static constexpr T identity() { return T{1}; }
 };
 
+template<typename T>
 struct DeviceSumOfSquares {
     struct Loader {
-        template<typename T>
         __device__
         T operator() (const T* ptr, int pos) const {
             T val = ptr[pos];   // load
             return val * val;   // squared
         }
     };
-    // round 2 just uses the basic sum reduction
-    typedef DeviceSum second;
 
-    template<typename T>
     __device__
     T operator() (const T &lhs, const T &rhs) const {
         return lhs + rhs;
     }
 
-    template<typename T>
     static constexpr T identity() { return T{0}; }
 };
 
 struct DeviceForNonArithmetic {};
 
+template<typename T>
 struct DeviceMin : DeviceForNonArithmetic {
-    typedef IdentityLoader Loader;
-    typedef DeviceMin second;
+    typedef IdentityLoader<T> Loader;
 
-    template<typename T>
     __device__
     T operator() (const T &lhs, const T &rhs) {
         return lhs <= rhs? lhs: rhs;
     }
 
-    template<typename T>
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
 };
 
+template<typename T>
 struct DeviceMax : DeviceForNonArithmetic {
-    typedef IdentityLoader Loader;
-    typedef DeviceMax second;
+    typedef IdentityLoader<T> Loader;
 
-    template<typename T>
     __device__
     T operator() (const T &lhs, const T &rhs) {
         return lhs >= rhs? lhs: rhs;
     }
 
-    template<typename T>
     static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
 };
 
