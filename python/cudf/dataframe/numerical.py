@@ -9,10 +9,10 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops, datetime
+from cudf.dataframe import columnops, datetime
 from cudf.utils import cudautils, utils
 from cudf import _gdf
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
@@ -200,11 +200,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
 
-    def unique_count(self, method='sort'):
+    def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
@@ -299,7 +301,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def _hashjoin(self, other, how='left', return_indexers=False):
 
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -345,7 +347,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         When the column is a index, set *return_indexers* to obtain
         the indices for shuffling the remaining columns.
         """
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -403,7 +405,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
 
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)

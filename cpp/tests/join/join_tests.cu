@@ -115,14 +115,14 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+  * @brief Creates a unique_ptr that wraps a gdf_column structure 
   *           intialized with a host vector
   *
-  * @Param host_vector vector containing data to be transfered to device side column
-  * @Param host_valid  vector containing valid masks associated with the supplied vector
-  * @Param n_count     null_count to be set for the generated column
+  * @param host_vector vector containing data to be transfered to device side column
+  * @param host_valid  vector containing valid masks associated with the supplied vector
+  * @param n_count     null_count to be set for the generated column
   *
-  * @Returns A unique_ptr wrapping the new gdf_column
+  * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
@@ -211,16 +211,16 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Initializes two sets of columns, left and right, with random 
+   * @brief  Initializes two sets of columns, left and right, with random 
    *            values for the join operation.
    *
-   * @Param left_column_length The length of the left set of columns
-   * @Param left_column_range The upper bound of random values for the left 
+   * @param left_column_length The length of the left set of columns
+   * @param left_column_range The upper bound of random values for the left 
    *                          columns. Values are [0, left_column_range)
-   * @Param right_column_length The length of the right set of columns
-   * @Param right_column_range The upper bound of random values for the right 
+   * @param right_column_length The length of the right set of columns
+   * @param right_column_range The upper bound of random values for the right 
    *                           columns. Values are [0, right_column_range)
-   * @Param print Optionally print the left and right set of columns for debug
+   * @param print Optionally print the left and right set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
@@ -258,11 +258,11 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Creates two gdf_columns with size 1 data buffer allocations, but
+   * @brief  Creates two gdf_columns with size 1 data buffer allocations, but
    * with a specified `size` attributed
    *
-   * @Param left_column_length The length of the left column
-   * @Param right_column_length The length of the right column
+   * @param left_column_length The length of the left column
+   * @param right_column_length The length of the right column
    * -------------------------------------------------------------------------*/
   void create_dummy_input( gdf_size_type const left_column_length, 
                            gdf_size_type const right_column_length)
@@ -290,12 +290,12 @@ struct JoinTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes a reference solution for joining the left and right sets of columns
+   * @brief  Computes a reference solution for joining the left and right sets of columns
    *
-   * @Param print Option to print the solution for debug
-   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf solution
+   * @param print Option to print the solution for debug
+   * @param sort Option to sort the solution. This is necessary for comparison against the gdf solution
    *
-   * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
+   * @returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
    * where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
@@ -399,11 +399,11 @@ struct JoinTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * @brief  Computes the result of joining the left and right sets of columns with the libgdf functions
    *
-   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
-   * @Param print Option to print the result computed by the libgdf function
-   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
+   * @param gdf_result A vector of result_type that holds the result of the libgdf join function
+   * @param print Option to print the result computed by the libgdf function
+   * @param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)

@@ -132,7 +132,7 @@ of bugs fixed in various releases.
 The installer adds the following text to your `__init__.py` to place a basic
 version in `YOURPROJECT.__version__`:
 
-    from ._version import get_versions
+    from cudf._version import get_versions
     __version__ = get_versions()['version']
     del get_versions
 
@@ -1688,7 +1688,7 @@ SAMPLE_CONFIG = """
 """
 
 INIT_PY_SNIPPET = """
-from ._version import get_versions
+from cudf._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 """

@@ -8,7 +8,7 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
+from libgdf_cffi.tests.utils import (new_column, unwrap_devary, get_dtype, gen_rand,
                     buffer_as_bits)
 
 
@@ -45,8 +45,8 @@ def test_sum(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    decimal = 4 if dtype == np.float32 else 6
-    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+    significant = 4 if dtype == np.float32 else 6
+    np.testing.assert_approx_equal(expect, got, significant=significant)
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
@@ -77,7 +77,7 @@ def test_product(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_almost_equal(expect, got)
+    np.testing.assert_approx_equal(expect, got)
 
 
 @pytest.mark.parametrize('nelem', params_sizes)
@@ -101,7 +101,7 @@ def test_sum_masked(nelem):
     boolmask = buffer_as_bits(mask)[:nelem]
     expect = data[boolmask].sum()
 
-    np.testing.assert_almost_equal(expect, got)
+    np.testing.assert_approx_equal(expect, got)
 
 
 accuracy_for_dtype = {
@@ -136,8 +136,8 @@ def test_sum_of_squares(dtype, nelem):
         else:
             print('overflow, passing')
     else:
-        np.testing.assert_array_almost_equal(expect, got,
-                                             decimal=accuracy_for_dtype[dtype])
+        np.testing.assert_approx_equal(expect, got,
+                                             significant=accuracy_for_dtype[dtype])
 
 
 @pytest.mark.parametrize('dtype,nelem', params)

@@ -97,10 +97,9 @@ class DataFrame(object):
     .. code-block:: python
 
           import pandas as pd
-          from cudf import DataFrame
-
+          import cudf
           pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-          df = DataFrame.from_pandas(pdf)
+          df = cudf.from_pandas(pdf)
           print(df)
 
     Output:
@@ -221,7 +220,8 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
+           isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -230,7 +230,8 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series,
+                        Series, Index, pd.Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -247,15 +248,34 @@ class DataFrame(object):
                 for col in arg:
                     df[col] = self[col]
             return df
+        elif isinstance(arg, DataFrame):
+            return self.mask(arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
-    def __setitem__(self, name, col):
-        """Add/set column by *name*
-        """
+    def mask(self, other):
+        df = self.copy()
+        for col in self.columns:
+            if col in other.columns:
+                boolbits = cudautils.compact_mask_bytes(
+                           other[col].to_gpu_array())
+            else:
+                boolbits = cudautils.make_empty_mask(len(self[col]))
+            df[col]._column = df[col]._column.set_mask(boolbits)
+        return df
 
-        if name in self._cols:
+    def __setitem__(self, name, col):
+        """Add/set column by *name or DataFrame*
+        """
+        # div[div < 0] = 0
+        if isinstance(name, DataFrame):
+            for col_name in self._cols:
+                mask = name[col_name]
+                self._cols[col_name] = self._cols[col_name] \
+                                           .masked_assign(value=col, mask=mask)
+
+        elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
             self.add_column(name, col)
@@ -576,19 +596,36 @@ class DataFrame(object):
                            ('b', list(range(20))),
                            ('c', list(range(20)))])
 
+           # get the row by index label from 'a' and 'b' columns.
+           df.loc[0, ['a', 'b']]
+
            # get rows from index 2 to index 5 from 'a' and 'b' columns.
            df.loc[2:5, ['a', 'b']]
+
+           # get the every 3rd rows from index 2 to 10 from 'a' and 'b'.
+           df.loc[2:10:3, ['a', 'b']]
 
         Output:
 
         .. code-block:: python
+          # get the row by index label from 'a' and 'b' columns.
+          a    0
+          b    0
 
+          # get rows from index 2 to index 5 from 'a' and 'b' columns.
                a    b
           2    2    2
           3    3    3
           4    4    4
           5    5    5
 
+          # get the every 3rd rows from index 2 to 10 from 'a' and 'b'.
+                a    b
+            2   2    2
+            5   5    5
+            8   8    8
+
+          #
         """
         return Loc(self)
 
@@ -652,6 +689,22 @@ class DataFrame(object):
         """
         return self._index
 
+    @index.setter
+    def index(self, _index):
+        new_length = len(_index)
+        old_length = len(self._index)
+
+        if new_length != old_length:
+            msg = f'Length mismatch: Expected index has {old_length}' \
+                    ' elements, new values have {new_length} elements'
+            raise ValueError(msg)
+
+        # try to build an index from generic _index
+        idx = as_index(_index)
+        self._index = idx
+        for k in self.columns:
+            self[k] = self[k].set_index(idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -676,8 +729,16 @@ class DataFrame(object):
                 df[k] = self[k].set_index(index)
             return df
 
-    def reset_index(self):
-        return self.set_index(RangeIndex(len(self)))
+    def reset_index(self, drop=False):
+        if not drop:
+            name = self.index.name or 'index'
+            out = DataFrame()
+            out[name] = self.index
+            for c in self.columns:
+                out[c] = self[c]
+        else:
+            out = self
+        return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
@@ -916,11 +977,12 @@ class DataFrame(object):
         return out.copy(deep=copy)
 
     @classmethod
-    def _concat(cls, objs, ignore_index=False):
-        nvtx_range_push("PYGDF_CONCAT", "orange")
+    def _concat(cls, objs, axis=0, ignore_index=False):
+        nvtx_range_push("CUDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
+
         objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
@@ -1189,7 +1251,7 @@ class DataFrame(object):
             column = columns
         if not (0 <= n < len(self)):
             raise ValueError("n out-of-bound")
-        col = self[column].reset_index()
+        col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
@@ -1198,7 +1260,7 @@ class DataFrame(object):
             if k == column:
                 df[k] = sorted_series
             else:
-                df[k] = self[k].reset_index().take(new_positions)
+                df[k] = self[k].reset_index(drop=True).take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
     def transpose(self):
@@ -1325,7 +1387,7 @@ class DataFrame(object):
              2    4 14.0   12.0
 
         """
-        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
+        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
         # Early termination Error checking
         if type != "":
@@ -1489,7 +1551,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
+        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1534,8 +1596,8 @@ class DataFrame(object):
         for name in other.columns:
             rhs[name] = other[name]
 
-        lhs = lhs.reset_index()
-        rhs = rhs.reset_index()
+        lhs = lhs.reset_index(drop=True)
+        rhs = rhs.reset_index(drop=True)
 
         cat_join = False
 
@@ -1643,7 +1705,7 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import Groupby
 
-            _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
+            _gdf.nvtx_range_push("CUDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
@@ -1712,7 +1774,7 @@ class DataFrame(object):
 
         """
 
-        _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
+        _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -1966,8 +2028,10 @@ class DataFrame(object):
 
         """
         index = self.index.to_pandas()
-        data = {c: x.to_pandas(index=index) for c, x in self._cols.items()}
-        return pd.DataFrame(data, columns=list(self._cols), index=index)
+        out = pd.DataFrame(index=index)
+        for c, x in self._cols.items():
+            out[c] = x.to_pandas(index=index)
+        return out
 
     @classmethod
     def from_pandas(cls, dataframe, nan_as_null=True):
@@ -2186,6 +2250,60 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
+    @classmethod
+    def from_gpu_matrix(self, data, index=None, columns=None,
+                        nan_as_null=False):
+        """Convert from a numba gpu ndarray.
+
+        Parameters
+        ----------
+        data : numba gpu ndarray
+        index : str
+            The name of the index column in *data*.
+            If None, the default index is used.
+        columns : list of str
+            List of column names to include.
+
+        Returns
+        -------
+        DataFrame
+        """
+        if data.ndim != 2:
+            raise ValueError("matrix dimension expected 2 but found {!r}"
+                             .format(data.ndim))
+
+        if columns is None:
+            names = [i for i in range(data.shape[1])]
+        else:
+            if len(columns) != data.shape[1]:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(data.ndim, len(columns)))
+            names = columns
+
+        if index is not None and len(index) != data.shape[0]:
+            msg = "index length expected {!r} but found {!r}"
+            raise ValueError(msg.format(data.ndim, len(columns)))
+
+        df = DataFrame()
+        data = data.transpose()  # to mimic the pandas behaviour
+        for i, k in enumerate(names):
+            df[k] = Series(data[i], nan_as_null=nan_as_null)
+
+        if index is not None:
+            indices = data[index]
+            return df.set_index(indices.astype(np.int64))
+
+        return df
+
+    def to_gpu_matrix(self):
+        """Convert to a numba gpu ndarray
+
+
+
+        Returns
+        -------
+        numba gpu ndarray
+        """
     def quantile(self,
                  q=0.5,
                  interpolation='linear',
@@ -2265,20 +2383,54 @@ class Loc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            row_slice, col_slice = arg
+        row_slice = None
+        row_label = None
+
+        if isinstance(arg, int):
+            if arg < 0 or arg >= len(self._df):
+                raise IndexError("label scalar %s is out of bound" % arg)
+            row_label = arg
+            col_slice = self._df.columns
+
+        elif isinstance(arg, tuple):
+            arg_1, arg_2 = arg
+            if isinstance(arg_1, int):
+                row_label = arg_1
+            elif isinstance(arg_1, slice):
+                row_slice = arg_1
+            else:
+                raise TypeError(type(arg_1))
+            col_slice = arg_2
+
         elif isinstance(arg, slice):
             row_slice = arg
             col_slice = self._df.columns
         else:
             raise TypeError(type(arg))
 
+        if row_label is not None:
+            ret_list = []
+            col_list = pd.Categorical(list(col_slice))
+            for col in col_list:
+                if pd.api.types.is_categorical_dtype(
+                        self._df[col][row_label].dtype
+                ):
+                    raise NotImplementedError(
+                        "categorical dtypes are not yet supported in loc"
+                    )
+                ret_list.append(self._df[col][row_label])
+            promoted_type = np.result_type(*[val.dtype for val in ret_list])
+            ret_list = np.array(ret_list, dtype=promoted_type)
+            return Series(ret_list,
+                          index=as_index(col_list))
+
         df = DataFrame()
         begin, end = self._df.index.find_label_range(row_slice.start,
                                                      row_slice.stop)
+        row_step = row_slice.step if row_slice.step is not None else 1
         for col in col_slice:
             sr = self._df[col]
-            df.add_column(col, sr[begin:end], forceindex=True)
+            df.add_column(col, sr[begin:end:row_step], forceindex=True)
 
         return df
 
@@ -2340,8 +2492,14 @@ class Iloc(object):
 
         for col in self._df.columns:
             sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
+            df.add_column(col, sr.iloc[tuple(rows)])
 
+        # 0-length rows can occur when when iloc[n=0]
+        # head(0)
+        if isinstance(arg, slice):
+            df.index = sr.index[arg]
+        else:
+            df.index = sr.index[rows]
         return df
 
     def __setitem__(self, key, value):
