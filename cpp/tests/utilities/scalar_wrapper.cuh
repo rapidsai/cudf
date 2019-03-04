@@ -27,21 +27,6 @@
 #include <thrust/logical.h>
 #include <bitset>
 
-#ifndef CUDA_RT_CALL
-#define CUDA_RT_CALL(call)                                                    \
-  do {                                                                        \
-    cudaError_t cudaStatus = (call);                                          \
-    if (cudaSuccess != cudaStatus) {                                          \
-      fprintf(stderr,                                                         \
-              "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with " \
-              "%s (%d).\n",                                                   \
-              #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus),      \
-              cudaStatus);                                                    \
-      exit(1);                                                                \
-    }                                                                         \
-  } while (0)
-#endif
-
 namespace cudf {
 namespace test {
 
@@ -73,16 +58,16 @@ struct scalar_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
    *
-   * Constructs a scalar_wrapper using a ref value for the host data.
+   * Constructs a scalar_wrapper using a value of type ScalarType.
    *
-   * @param host_data The value to use for the scalar
+   * @param value The value to use for the scalar
+   * @param is_valid is the scalar valid
    *---------------------------------------------------------------------------**/
-  scalar_wrapper(ScalarType const& host_data) {
-    initialize_with_host_data(host_data);
-  }
-
-  ~scalar_wrapper() {
-    RMM_FREE(the_scalar.data, 0);
+  scalar_wrapper(ScalarType value, bool is_valid = true) {
+    auto dataptr = reinterpret_cast<ScalarType*>(&(the_scalar.data));
+    *dataptr = value;
+    the_scalar.is_valid = is_valid;
+    the_scalar.dtype = gdf_dtype_of<ScalarType>();
   }
 
   /**---------------------------------------------------------------------------*
@@ -93,30 +78,31 @@ struct scalar_wrapper {
   gdf_scalar const* get() const { return &the_scalar; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Copies the underying gdf_scalar's data to the host.
-   *
-   * Returns the value of the scalar
-   *
+   * @brief returns the value of the scalar
+   * 
+   * @return ScalarType 
    *---------------------------------------------------------------------------**/
-  auto to_host() const {
-    ScalarType host_data;
-
-    if (nullptr != the_scalar.data) {
-      CUDA_RT_CALL(cudaMemcpy(&host_data, the_scalar.data,
-                              sizeof(ScalarType),
-                              cudaMemcpyDeviceToHost));
-    }
-
-    return host_data;
+  ScalarType value() {
+    return *reinterpret_cast<ScalarType*>(&(the_scalar.data));
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief returns the validity of the scalar
+   * 
+   * @return bool 
+   *---------------------------------------------------------------------------**/
+  bool is_valid() { return the_scalar.is_valid; }
 
   /**---------------------------------------------------------------------------*
    * @brief Prints the value of the underlying gdf_scalar.
    *
    *---------------------------------------------------------------------------**/
   void print() const {
-    ScalarType value = this->to_host();
-    std::cout << value << std::endl;
+    ScalarType value = *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
+    if (the_scalar.is_valid)
+      std::cout << value << std::endl;
+    else
+      std::cout << "null" << std::endl;
   }
 
   /**---------------------------------------------------------------------------*
@@ -127,34 +113,12 @@ struct scalar_wrapper {
    * @return false The two scalars are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(scalar_wrapper<ScalarType> const& rhs) const {
-    if (the_scalar.dtype != rhs.the_scalar.dtype) return false;
-
-    if (!(the_scalar.data && rhs.the_scalar.data))
-      return false;  // if one is null but not both
-
-    return (this->to_host() == rhs.to_host());
+    return (the_scalar.data == rhs.data &&
+            the_scalar.dtype == rhs.dtype &&
+            the_scalar.is_valid == rhs.is_valid);
   }
 
  private:
-  /**---------------------------------------------------------------------------*
-   * @brief Allocates and initializes the underyling gdf_scalar with host data.
-   *
-   * Creates a gdf_scalar and copies data from the host for it's data. 
-   * Sets the corresponding dtype based on the scalar_wrapper's ColumnType.
-   *
-   * @param host_data The host data to copy to device for the scalar's data
-   *---------------------------------------------------------------------------**/
-  void initialize_with_host_data(ScalarType const& host_data) {
-    // Allocate device storage for gdf_scalar and copy contents from host_data
-    RMM_ALLOC(&(the_scalar.data), sizeof(ScalarType), 0);
-    CUDA_RT_CALL(cudaMemcpy(the_scalar.data, &host_data,
-                            sizeof(ScalarType),
-                            cudaMemcpyHostToDevice));
-
-    // Fill the gdf_scalar members
-    the_scalar.dtype = cudf::gdf_dtype_of<ScalarType>();
-  }
-
   gdf_scalar the_scalar;
 };
 

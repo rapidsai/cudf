@@ -26,7 +26,7 @@ namespace cudf {
 namespace binops {
 
     /**---------------------------------------------------------------------------*
-     * @brief Computes bitwise AND of two input columns
+     * @brief Computes bitwise AND of two input valid masks
      * 
      * This is just a wrapper on apply_bitmask_to_bitmask that can also handle
      * cases when one or both of the input masks are nullptr, in which case, it
@@ -51,6 +51,7 @@ namespace binops {
         }
 
         if (valid_out == nullptr && valid_left == nullptr && valid_right == nullptr) {
+            // if both in cols have no mask, then out col is allowed to have no mask
             out_null_count = 0;
             return GDF_SUCCESS;
         }
@@ -84,6 +85,53 @@ namespace binops {
         return error;
     }
 
+    /**---------------------------------------------------------------------------*
+     * @brief Computes output valid mask for op between a column and a scalar
+     * 
+     * @param out_null_coun[out] number of nulls in output
+     * @param valid_out preallocated output mask
+     * @param valid_col input mask of column
+     * @param valid_scalar bool indicating if scalar is valid
+     * @param num_values number of values in input mask valid_col
+     * @return gdf_error 
+     *---------------------------------------------------------------------------**/
+    gdf_error scalar_col_valid_mask_and(gdf_size_type & out_null_count,
+                                        gdf_valid_type * valid_out,
+                                        gdf_valid_type * valid_col,
+                                        bool valid_scalar,
+                                        gdf_size_type num_values)
+    {
+        if (num_values == 0) {
+            out_null_count = 0;
+            return GDF_SUCCESS;
+        }
+
+        if (valid_out == nullptr && valid_col == nullptr && valid_scalar == true) {
+            // if in col has no mask and scalar is valid, then out col is allowed to have no mask
+            out_null_count = 0;
+            return GDF_SUCCESS;
+        }
+
+        GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
+
+    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+
+        if ( valid_scalar == false ) {
+            CUDA_TRY( cudaMemset(valid_out, 0x00, num_chars_bitmask) );
+        } 
+        else if ( valid_scalar == true && valid_col != nullptr ) {
+            CUDA_TRY( cudaMemcpy(valid_out, valid_col, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+        } 
+        else if ( valid_scalar == true && valid_col == nullptr ) {
+            CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
+        }
+
+        gdf_size_type non_nulls;
+    	auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
+        out_null_count = num_values - non_nulls;
+        return error;
+    }
+
 namespace jit {
 
     gdf_error binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
@@ -96,13 +144,13 @@ namespace jit {
         GDF_REQUIRE((out->size == rhs->size), GDF_COLUMN_SIZE_MISMATCH)
 
         // Check for null data pointer
-        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
+        GDF_REQUIRE((out->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
 
         // Check for datatype
         GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
         GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
 
-        binary_valid_mask_and(out->null_count, out->valid, nullptr, rhs->valid, rhs->size);
+        scalar_col_valid_mask_and(out->null_count, out->valid, rhs->valid, lhs->is_valid, rhs->size);
 
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Reverse, out, rhs, lhs)
@@ -121,13 +169,13 @@ namespace jit {
         GDF_REQUIRE((out->size == lhs->size), GDF_COLUMN_SIZE_MISMATCH)
 
         // Check for null data pointer
-        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
+        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr), GDF_DATASET_EMPTY)
 
         // Check for datatype
         GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
         GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
 
-        binary_valid_mask_and(out->null_count, out->valid, lhs->valid, nullptr, lhs->size);
+        scalar_col_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->is_valid, lhs->size);
 
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)

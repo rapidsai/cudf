@@ -32,7 +32,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::scalar_wrapper<TypeLhs>& lhs,
                   cudf::test::column_wrapper<TypeRhs>& rhs,
                   TypeOpe&& ope) {
-    auto lhs_h = lhs.to_host();
+    auto lhs_h = lhs.value();
     auto rhs_h = rhs.to_host();
     auto rhs_data = std::get<0>(rhs_h);
     auto out_h = out.to_host();
@@ -46,9 +46,10 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
     auto rhs_valid = std::get<1>(rhs_h);
     auto out_valid = std::get<1>(out_h);
 
+    uint32_t lhs_valid = (lhs.is_valid() ? UINT32_MAX : 0);
     ASSERT_TRUE(out_valid.size() == rhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == rhs_valid[index]);
+        ASSERT_TRUE(out_valid[index] == (lhs_valid & rhs_valid[index]));
     }
 }
 
@@ -57,7 +58,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeLhs>& lhs,
                   cudf::test::scalar_wrapper<TypeRhs>& rhs,
                   TypeOpe&& ope) {
-    auto rhs_h = rhs.to_host();
+    auto rhs_h = rhs.value();
     auto lhs_h = lhs.to_host();
     auto lhs_data = std::get<0>(lhs_h);
     auto out_h = out.to_host();
@@ -71,9 +72,10 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
     auto lhs_valid = std::get<1>(lhs_h);
     auto out_valid = std::get<1>(out_h);
 
+    uint32_t rhs_valid = (rhs.is_valid() ? UINT32_MAX : 0);
     ASSERT_TRUE(out_valid.size() == lhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == (lhs_valid[index]));
+        ASSERT_TRUE(out_valid[index] == (lhs_valid[index] & rhs_valid));
     }
 }
 

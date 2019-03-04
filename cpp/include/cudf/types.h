@@ -85,14 +85,32 @@ typedef struct {
 	// here we can also hold info for decimal datatype or any other datatype that requires additional information
 } gdf_dtype_extra_info;
 
+/**---------------------------------------------------------------------------*
+ * @union gdf_data
+ * @brief Union used for scalar type.
+ * It stores a unique value for scalar type.
+ * It has a direct relationship with the gdf_dtype.
+ *---------------------------------------------------------------------------**/
+typedef union {
+  int8_t   si08;  /**< GDF_INT8      */
+  int16_t  si16;  /**< GDF_INT16     */
+  int32_t  si32;  /**< GDF_INT32     */
+  int64_t  si64;  /**< GDF_INT64     */
+  float    fp32;  /**< GDF_FLOAT32   */
+  double   fp64;  /**< GDF_FLOAT64   */
+  int32_t  dt32;  /**< GDF_DATE32    */
+  int64_t  dt64;  /**< GDF_DATE64    */
+  int64_t  tmst;  /**< GDF_TIMESTAMP */
+} gdf_data;
 
 /**---------------------------------------------------------------------------*
  * @brief A struct to hold a scalar (single) value and its type information
  * 
  *---------------------------------------------------------------------------**/
 typedef struct {
-  void*  data;      /**< Pointer to the scalar data */
-  gdf_dtype dtype;  /**< The datatype of the scalar's data */
+  gdf_data  data;      /**< Pointer to the scalar data */
+  gdf_dtype dtype;     /**< The datatype of the scalar's data */
+  bool      is_valid;  /**< False if the value is null */
 } gdf_scalar;
 
 
