@@ -2009,5 +2009,7 @@ def test_select_dtype():
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
-    # currently fails -- gdf.select_dtypes returns back with a dtype of int8
-    # assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+
+    with pytest.raises(TypeError):
+        assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))

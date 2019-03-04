@@ -2376,12 +2376,14 @@ class DataFrame(object):
             include = [include]
         df = DataFrame()
 
-        include = [np.dtype(d) for d in include]
+        include = [pd.core.dtypes.common.pandas_dtype(d) for d in include]
 
         for x in self._cols.values():
-            if x.dtype in include:
-                df.add_column(x.name, x.data)
-
+            try:
+                if x.dtype in include:
+                    df.add_column(x.name, x)
+            except TypeError:
+                pass
         return df
 
     @ioutils.doc_to_parquet()
