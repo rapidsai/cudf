@@ -67,8 +67,6 @@
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
-
-
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update

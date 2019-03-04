@@ -31,12 +31,12 @@
  *---------------------------------------------------------------------------**/
 #if defined(__CUDACC_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
-#define device_assert(e)                                          \
+#define device_release_assert(e)                                          \
   ((e) ? static_cast<void>(0)                                     \
        : __assertfail(__ASSERT_STR_HELPER(e), __FILE__, __LINE__, \
                       __PRETTY_FUNCTION__, sizeof(char)))
 #else
-#define device_assert(e) (static_cast<void>(0))
+#define device_release_assert(e) (static_cast<void>(0))
 #endif
 
 #endif
