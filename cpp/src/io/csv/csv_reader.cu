@@ -239,7 +239,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 			first_row_len = raw_csv->num_bytes / sizeof(char);
 		}
 		first_row.resize(first_row_len);
-		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
+		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, first_row_len * sizeof(char), cudaMemcpyDefault));
 	}
 
 	int num_cols = 0;
