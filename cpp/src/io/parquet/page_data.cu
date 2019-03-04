@@ -34,8 +34,14 @@
 #define NANOSLEEP(d)  clock()
 #endif
 
+inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
+{
+    return __funnelshift_l(x, x, r);    // (x << r) | (x >> (32 - r));
+};
+
 
 namespace parquet { namespace gpu {
+
 
 // NOTE: For maximum SM occupancy with 32 registers/thread, we need sizeof(page_state_s) to be 1024 bytes or below
 #define LOG2_INDEX_QUEUE_LEN    7
@@ -79,6 +85,69 @@ struct page_state_s {
 };
 
 
+/**---------------------------------------------------------------------------*
+* @brief Computes a 32-bit hash when given a byte stream and range.
+*
+* MurmurHash3_32 implementation from
+* https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+*
+* MurmurHash3 was written by Austin Appleby, and is placed in the public
+* domain. The author hereby disclaims copyright to this source code.
+*
+* @param[in] key The input data to hash
+* @param[in] len The length of the input data
+* @param[in] seed An initialization value
+*
+* @return The hash value
+*---------------------------------------------------------------------------**/
+__device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
+{
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(key);
+    uint32_t h1 = seed, k1;
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+    int l = len;
+    // body
+    while (l >= 4)
+    {
+        k1 = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
+        k1 *= c1;
+        k1 = rotl32(k1, 15);
+        k1 *= c2;
+        h1 ^= k1;
+        h1 = rotl32(h1, 13);
+        h1 = h1 * 5 + 0xe6546b64;
+        p += 4;
+        l -= 4;
+    }
+    // tail
+    k1 = 0;
+    switch (l)
+    {
+    case 3:
+        k1 ^= p[2] << 16;
+    case 2:
+        k1 ^= p[1] << 8;
+    case 1:
+        k1 ^= p[0];
+        k1 *= c1;
+        k1 = rotl32(k1, 15);
+        k1 *= c2;
+        h1 ^= k1;
+    }
+    // finalization
+    h1 ^= len;
+    h1 ^= h1 >> 16;
+    h1 *= 0x85ebca6b;
+    h1 ^= h1 >> 13;
+    h1 *= 0xc2b2ae35;
+    h1 ^= h1 >> 16;
+    return h1;
+}
+
+
+// Read a 32-bit varint integer
+// NOTE: updates cur pointer passed in as reference
 inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end)
 {
     uint32_t v = *cur++;
@@ -530,6 +599,8 @@ enum CodingMode {
     PLAIN_VARIABLE_LENGTH,  // Plain string 32-bit length followed by data
     DICTIONARY_RLE,         // RLE-coded dictionary indices
     BOOL_RLE,               // 1-bit bool to byte
+    PLAIN_STR2HASH,         // Plain string to 32-bit hash
+    DICTIONARY_STR2HASH,    // String dictionary to 32-bit hash
 };
 
 
@@ -562,14 +633,14 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
         batch_len = SHFL0(batch_len);
         if (batch_len <= 0)
             break;
-        if (mode == DICTIONARY_RLE)
+        if (mode == DICTIONARY_RLE || mode == DICTIONARY_STR2HASH)
         {
             batch_len = gpuDecodeDictionaryIndices(s, batch_len, t); // May lower the value of batch_len
             dict_pos = s->scratch.dict_idx[t] * s->dtype_len_in;
             dict = s->dict_base;
             dict_size = s->dict_size;
         }
-        else if (mode == PLAIN_VARIABLE_LENGTH)
+        else if (mode == PLAIN_VARIABLE_LENGTH || mode == PLAIN_STR2HASH)
         {
             gpuInitStringDescriptors(s, batch_len, t);
             dict_pos = 0;
@@ -602,6 +673,12 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
                     {
                         // Boolean output indices (index into a fixed 2-entry {0,1} dictionary)
                         *dst8 = dict_pos;
+                    }
+                    else if (mode == DICTIONARY_STR2HASH || mode == PLAIN_STR2HASH)
+                    {
+                        const nvstrdesc_s *str = reinterpret_cast<const nvstrdesc_s *>(dict + dict_pos);
+                        uint32_t h = (dict_pos + sizeof(nvstrdesc_s) <= dict_size) ? device_str2hash32(str->ptr, str->count) : 0;
+                        *reinterpret_cast<uint32_t *>(dst8) = h;
                     }
                     else if (len & 3)
                     {
@@ -732,6 +809,10 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 if (dtype_len_out == 2)
                     s->dtype_len = 2; // INT16 output
             }
+            else if ((s->col.data_type & 7) == BYTE_ARRAY && dtype_len_out == 4)
+            {
+                s->dtype_len = 4; // HASH32 output
+            }
             // Setup local valid map and compute first & num rows relative to the current page
             s->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base);
             s->valid_map = s->col.valid_map_base;
@@ -836,12 +917,20 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
             }
             else
             {
+                int dtype = s->col.data_type & 7;
                 // WARP1: Decode values
-                if (s->dict_base)
+                if ((dtype == BYTE_ARRAY) && (s->dtype_len == 4))
+                {
+                    if (s->dict_base)
+                        gpuDecodeValues<DICTIONARY_STR2HASH>(s, t & 0x1f);
+                    else
+                        gpuDecodeValues<PLAIN_STR2HASH>(s, t & 0x1f);
+                }
+                else if (s->dict_base)
                     gpuDecodeValues<DICTIONARY_RLE>(s, t & 0x1f);
-                else if ((s->col.data_type & 7) == BYTE_ARRAY)
+                else if (dtype == BYTE_ARRAY)
                     gpuDecodeValues<PLAIN_VARIABLE_LENGTH>(s, t & 0x1f);
-                else if ((s->col.data_type & 7) == BOOLEAN)
+                else if (dtype == BOOLEAN)
                     gpuDecodeValues<BOOL_RLE>(s, t & 0x1f);
                 else
                     gpuDecodeValues<PLAIN_FIXED_LENGTH>(s, t & 0x1f);
