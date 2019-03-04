@@ -2,6 +2,7 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
+#include "utilities/type_dispatcher.hpp"
 #include "cudf/functions.h"
 #include "bitmask/bitmask_ops.h"
 #include "rmm/thrust_rmm_allocator.h"
@@ -154,6 +155,29 @@ void gpu_filter_op(IteratorTypeLeft begin_left, IteratorTypeRight begin_right, I
 
 }
 
+template <typename TypeVal>
+struct gdf_comparison_static_functor {
+
+    template <typename TypeCol>
+	typename std::enable_if_t<!std::is_arithmetic<TypeCol>::value, gdf_error>
+	operator()(gdf_column *lhs, TypeVal value, gdf_column *output, gdf_comparison_operator operation, cudaStream_t stream) {
+		return GDF_UNSUPPORTED_DTYPE;
+	}
+
+    template <typename TypeCol>
+	typename std::enable_if_t<std::is_arithmetic<TypeCol>::value, gdf_error>
+	operator()(gdf_column *lhs, TypeVal value, gdf_column *output, gdf_comparison_operator operation, cudaStream_t stream) {
+		thrust::device_ptr<TypeCol> left_ptr((TypeCol *) lhs->data);
+
+		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
+		gpu_filter_op(
+			thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<TypeVal>(value),
+			thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
+			lhs->null_count,lhs->null_count,output->null_count,stream
+		);
+		return GDF_SUCCESS;
+	}
+};
 
 // stencil: plantilla! 
 // 
@@ -166,66 +190,13 @@ gdf_error gdf_comparison_static_templated(gdf_column *lhs, T value, gdf_column *
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	if(lhs->dtype == GDF_INT8){
-		thrust::device_ptr<int8_t> left_ptr((int8_t *) lhs->data);
-		
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
+	auto result = cudf::type_dispatcher(lhs->dtype,
+										gdf_comparison_static_functor<T>{},
+										lhs, value, output, operation, stream);
 
-	}else if(lhs->dtype == GDF_INT16){
-		thrust::device_ptr<int16_t> left_ptr((int16_t *) lhs->data);
-
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
- 
-	}else if(lhs->dtype == GDF_INT32){
-		thrust::device_ptr<int32_t> left_ptr((int32_t *) lhs->data);
-
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
-	}else if(lhs->dtype == GDF_INT64){
-		thrust::device_ptr<int64_t> left_ptr((int64_t *) lhs->data);
-
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
-
-	}else if(lhs->dtype == GDF_FLOAT32){
-		thrust::device_ptr<float> left_ptr((float *) lhs->data);
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
-
-	}else if(lhs->dtype == GDF_FLOAT64){
-		thrust::device_ptr<double> left_ptr((double *) lhs->data);
-		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-		gpu_filter_op(
-				thrust::detail::make_normal_iterator(left_ptr),thrust::constant_iterator<T>(value),
-				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,lhs->valid,output->valid,
-				lhs->null_count,lhs->null_count,output->null_count,stream
-		);
-	}
 	cudaStreamSynchronize(stream);
 	cudaStreamDestroy(stream);
-	return GDF_SUCCESS;
+	return result;
 }
 
 gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation){
@@ -253,6 +224,45 @@ gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
 }
 
 
+template <typename TypeLhs>
+struct gdf_comparison_rhs_functor {
+    template <typename TypeRhs>
+	typename std::enable_if_t<!std::is_arithmetic<TypeRhs>::value, gdf_error>
+	operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation, cudaStream_t stream) {
+		return GDF_UNSUPPORTED_DTYPE;
+	}
+
+    template <typename TypeRhs>
+	typename std::enable_if_t<std::is_arithmetic<TypeRhs>::value, gdf_error>
+	operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation, cudaStream_t stream) {
+		thrust::device_ptr<TypeLhs> left_ptr((TypeLhs *) lhs->data);
+		thrust::device_ptr<TypeRhs> right_ptr((TypeRhs *) rhs->data);
+		thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
+		gpu_filter_op(
+				thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
+				thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
+				lhs->null_count,rhs->null_count,output->null_count,stream
+		);
+		return GDF_SUCCESS;
+	}
+};
+
+
+struct gdf_comparison_functor {
+    template <typename TypeLhs>
+	typename std::enable_if_t<!std::is_arithmetic<TypeLhs>::value, gdf_error>
+	operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation, cudaStream_t stream) {
+		return GDF_UNSUPPORTED_DTYPE;
+	}
+
+    template <typename TypeLhs>
+	typename std::enable_if_t<std::is_arithmetic<TypeLhs>::value, gdf_error>
+	operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation, cudaStream_t stream) {
+		return cudf::type_dispatcher(rhs->dtype,
+									 gdf_comparison_rhs_functor<TypeLhs>{},
+									 lhs, rhs, output, operation, stream);
+	}
+};
 
 
 gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation){
@@ -275,387 +285,13 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-
-
-	if(lhs->dtype == GDF_INT8){
-		thrust::device_ptr<int8_t> left_ptr((int8_t *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-		 	
-
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			//... 
-
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		}
-	}else if(lhs->dtype == GDF_INT16){
-		thrust::device_ptr<int16_t> left_ptr((int16_t *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-		 
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			 
-		}
-	}else if(lhs->dtype == GDF_INT32){
-		thrust::device_ptr<int32_t> left_ptr((int32_t *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-			 
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}
-	}else if(lhs->dtype == GDF_INT64){
-		thrust::device_ptr<int64_t> left_ptr((int64_t *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}
-	}else if(lhs->dtype == GDF_FLOAT32){
-		thrust::device_ptr<float> left_ptr((float *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-		
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}
-	}else if(lhs->dtype == GDF_FLOAT64){
-		thrust::device_ptr<double> left_ptr((double *) lhs->data);
-		if(rhs->dtype == GDF_INT8){
-			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT16){
-			thrust::device_ptr<int16_t> right_ptr((int16_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT32){
-			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_INT64){
-			thrust::device_ptr<int64_t> right_ptr((int64_t *) rhs->data);
-			
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT32){
-			thrust::device_ptr<float> right_ptr((float *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);
-			
-		}else if(rhs->dtype == GDF_FLOAT64){
-			thrust::device_ptr<double> right_ptr((double *) rhs->data);
-		
-			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
-			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
-			);			
-		}
-	} 
-
-
+	auto result = cudf::type_dispatcher(lhs->dtype,
+										gdf_comparison_functor{},
+										lhs, rhs, output, operation, stream);
 
 	cudaStreamSynchronize(stream);
 	cudaStreamDestroy(stream);
 
-
-
-	return GDF_SUCCESS;
+	return result;
 }
 
