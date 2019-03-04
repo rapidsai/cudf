@@ -1995,6 +1995,7 @@ def test_column_assignment():
     gdf.columns = new_cols
     assert list(gdf.columns) == new_cols
 
+
 def test_select_dtype():
     gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
                                                    'b': int,
