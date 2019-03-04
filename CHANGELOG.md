@@ -61,6 +61,7 @@
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
+- PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
 ## Bug Fixes
@@ -99,6 +100,7 @@
 - PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
+- PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 
 
 # cuDF 0.5.1 (05 Feb 2019)
