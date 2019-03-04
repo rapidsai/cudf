@@ -287,6 +287,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
+            # Needed because of bug in PyArrow
+            # https://issues.apache.org/jira/browse/ARROW-4766
             if len(arbitrary) > 0:
                 arbitrary = arbitrary.cast(pa.int8())
             else:
