@@ -103,10 +103,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef gdf_size_type col_rhs_len = len(col_rhs)
     cdef int c_num_cols_to_join = num_cols_to_join
     cdef int c_result_num_cols = result_num_cols
-    print(col_lhs_len)
-    print(col_rhs_len)
-    print(c_num_cols_to_join)
-    print(c_result_num_cols)
 
     with nogil:
         if how == 'left':

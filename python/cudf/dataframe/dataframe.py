@@ -1441,7 +1441,6 @@ class DataFrame(object):
                     "DataFrames with 0 rows."
                     )
 
-        """
         # Column prep - this can be simplified
         col_cats = {}
         for name in on:
@@ -1475,7 +1474,6 @@ class DataFrame(object):
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
-        """
 
         # TODO: This expression moves into the cpp_join.pyx implementation.
         """
@@ -1530,9 +1528,8 @@ class DataFrame(object):
                         on_idx = idx + gap
                         on_count = on_count + 1
                         key = on[idx]
-                        # categories = col_cats[key] if key in col_cats.keys()\
-                        #    else None
-                        categories = None
+                        categories = col_cats[key] if key in col_cats.keys()\
+                            else None
                         df[key] = columnops.build_column(
                                 Buffer(cols[on_idx]),
                                 dtype=cols[on_idx].dtype,
@@ -1544,9 +1541,8 @@ class DataFrame(object):
                 # on_count corrects gap for non-`on` columns
                 left_column_idx = idc - on_count
                 left_name = fix_name(name, lsuffix)
-                # categories = col_cats[left_name] if left_name in\
-                #     col_cats.keys() else None
-                categories = None
+                categories = col_cats[left_name] if left_name in\
+                    col_cats.keys() else None
                 df[left_name] = columnops.build_column(
                         Buffer(cols[left_column_idx]),
                         dtype=cols[left_column_idx].dtype,
@@ -1558,9 +1554,8 @@ class DataFrame(object):
             if name not in on:
                 # now copy the columns from `right` that were not in `on`
                 right_name = fix_name(name, rsuffix)
-                # categories = col_cats[right_name] if right_name in\
-                #    col_cats.keys() else None
-                categories = None
+                categories = col_cats[right_name] if right_name in\
+                    col_cats.keys() else None
                 df[right_name] = columnops.build_column(
                         Buffer(cols[right_column_idx]),
                         dtype=cols[right_column_idx].dtype,
