@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 from collections.abc import Sequence, Mapping
+from copy import copy
 import logging
 import warnings
 import numbers
@@ -1390,6 +1391,15 @@ class DataFrame(object):
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
 
+        lhs = self.copy(deep=False)
+        rhs = right.copy(deep=False)
+        if on:
+            on = copy(on)
+        if left_on:
+            left_on = copy(left_on)
+        if right_on:
+            right_on = copy(right_on)
+
         # Early termination Error checking
         if type != "":
             warnings.warn(
@@ -1401,7 +1411,7 @@ class DataFrame(object):
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-        same_names = set(self.columns) & set(right.columns)
+        same_names = set(lhs.columns) & set(rhs.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
@@ -1412,9 +1422,9 @@ class DataFrame(object):
             return name
 
         if left_index and right_index:
-            on = self.LEFT_RIGHT_INDEX_NAME
-            self[on] = self.index
-            right[on] = right.index
+            on = lhs.LEFT_RIGHT_INDEX_NAME
+            lhs[on] = lhs.index
+            rhs[on] = rhs.index
         if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
@@ -1423,8 +1433,6 @@ class DataFrame(object):
         # Essential parameters
         if on:
             on = [on] if isinstance(on, str) else list(on)
-        lhs = self
-        rhs = right
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1438,60 +1446,60 @@ class DataFrame(object):
         col_cats = {}
 
         for name in left_on or []:
-            if pd.api.types.is_categorical_dtype(self[name]):
-                lcats = self[name].cat.categories
-                rcats = right[name].cat.categories
-                if how == 'right':
+            if pd.api.types.is_categorical_dtype(lhs[name]):
+                lcats = lhs[name].cat.categories
+                rcats = rhs[name].cat.categories
+                if how == 'rhs':
                     cats = rcats
-                    self[name] = (self[name].cat.set_categories(cats)
-                                  .fillna(-1))
+                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    self[name] = (self[name].cat.set_categories(cats)
-                                  .fillna(-1))
-                    self[name] = self[name]._column.as_numerical
-                    right[name] = (right[name].cat.set_categories(cats)
-                                   .fillna(-1))
-                    right[name] = right[name]._column.as_numerical
+                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
+                    lhs[name] = lhs[name]._column.as_numerical
+                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
+                    rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
         for name in right_on or []:
-            if pd.api.types.is_categorical_dtype(right[name]):
-                lcats = self[name].cat.categories
-                rcats = right[name].cat.categories
+            if pd.api.types.is_categorical_dtype(rhs[name]):
+                lcats = lhs[name].cat.categories
+                rcats = rhs[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    right[name] = (right[name].cat.set_categories(cats)
-                                   .fillna(-1))
+                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    self[name] = (self[name].cat.set_categories(cats)
-                                  .fillna(-1))
-                    self[name] = self[name]._column.as_numerical
-                    right[name] = (right[name].cat.set_categories(cats)
-                                   .fillna(-1))
-                    right[name] = right[name]._column.as_numerical
+                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
+                    lhs[name] = lhs[name]._column.as_numerical
+                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                                 .fillna(-1))
+                    rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, lsuffix)
-                col_cats[f_n] = self[name].cat.categories
+                col_cats[f_n] = lhs[name].cat.categories
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
-                col_cats[f_n] = right[name].cat.categories
+                col_cats[f_n] = rhs[name].cat.categories
 
         if right_on and left_on:
             raise NotImplementedError("merge(left_on='x', right_on='y' not"
                                       "supported by CUDF at this time.")
         if left_index and right_on:
-            self[right_on] = self.index
+            lhs[right_on] = lhs.index
             left_on = right_on
         elif right_index and left_on:
-            right[left_on] = right.index
+            rhs[left_on] = rhs.index
             right_on = left_on
 
         if on:
@@ -1506,15 +1514,15 @@ class DataFrame(object):
         # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order on - left - right from libgdf
+        # Columns are returned in order on - left - rhs from libgdf
         # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`. The final order
-        # is left columns, followed by non-join-key right columns.
+        # is left columns, followed by non-join-key rhs columns.
         on_count = 0
         on = list(set(right_on + left_on))
         # gap spaces between left and `on` for result from `cpp_join`
-        gap = len(self.columns) - len(on)
-        for idc, name in enumerate(self.columns):
+        gap = len(lhs.columns) - len(on)
+        for idc, name in enumerate(lhs.columns):
             if name in on:
                 # on columns returned first from `cpp_join`
                 for idx in range(len(on)):
@@ -1543,34 +1551,34 @@ class DataFrame(object):
                         mask=Buffer(valids[left_column_idx]),
                         categories=categories,
                         )
-        right_column_idx = len(self.columns)
-        for name in right.columns:
+        rhs_column_idx = len(lhs.columns)
+        for name in rhs.columns:
             if name not in on:
-                # now copy the columns from `right` that were not in `on`
-                right_name = fix_name(name, rsuffix)
-                categories = col_cats[right_name] if right_name in\
+                # now copy the columns from `rhs` that were not in `on`
+                rhs_name = fix_name(name, rsuffix)
+                categories = col_cats[rhs_name] if rhs_name in\
                     col_cats.keys() else None
-                df[right_name] = columnops.build_column(
-                        Buffer(cols[right_column_idx]),
-                        dtype=cols[right_column_idx].dtype,
-                        mask=Buffer(valids[right_column_idx]),
+                df[rhs_name] = columnops.build_column(
+                        Buffer(cols[rhs_column_idx]),
+                        dtype=cols[rhs_column_idx].dtype,
+                        mask=Buffer(valids[rhs_column_idx]),
                         categories=categories,
                         )
-                right_column_idx = right_column_idx + 1
+                rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.drop(self.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(self.index[df.index.values])
+            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
+            df = df.set_index(lhs.index[df.index.values])
         elif right_index and left_on:
-            new_index = Series(self.index,
-                               index=RangeIndex(0, len(self[left_on])))
-            indexed = self[left_on][df[left_on]-1]
+            new_index = Series(lhs.index,
+                               index=RangeIndex(0, len(lhs[left_on])))
+            indexed = lhs[left_on][df[left_on]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
         elif left_index and right_on:
-            new_index = Series(right.index,
-                               index=RangeIndex(0, len(right[right_on])))
-            indexed = right[right_on][df[right_on]-1]
+            new_index = Series(rhs.index,
+                               index=RangeIndex(0, len(rhs[right_on])))
+            indexed = rhs[right_on][df[right_on]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
 
