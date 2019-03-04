@@ -34,10 +34,12 @@
 #define NANOSLEEP(d)  clock()
 #endif
 
-#define LOG2_BATCH_SIZE     4
+#define LOG2_BATCH_SIZE     5
 #define BATCH_SIZE          (1 << LOG2_BATCH_SIZE)
 #define LOG2_BATCH_COUNT    2
 #define BATCH_COUNT         (1 << LOG2_BATCH_COUNT)
+#define LOG2_PREFETCH_SIZE  9
+#define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)   // 512B, in 32B chunks
 
 struct unsnap_batch_s
 {
@@ -48,8 +50,12 @@ struct unsnap_batch_s
 
 struct unsnap_queue_s
 {
+    uint32_t prefetch_wrpos;
+    uint32_t prefetch_rdpos;
+    int32_t prefetch_end;
     int32_t batch_len[BATCH_COUNT];     // Length of each batch - <0:end, 0:not ready, >0:symbol count
     unsnap_batch_s batch[BATCH_COUNT * BATCH_SIZE];
+    uint8_t buf[PREFETCH_SIZE];         // Prefetch buffer
 };
 
 
@@ -65,63 +71,112 @@ struct unsnap_state_s
 };
 
 
+__device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
+{
+    const uint8_t *base = s->base;
+    uint32_t end = (uint32_t)min((size_t)(s->end - base), (size_t)0xffffffffu);
+    uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
+    int32_t pos = min(align_bytes, end);
+    int32_t blen;
+    // Start by prefetching up to the next a 32B-aligned location
+    if (t < pos)
+    {
+        s->q.buf[t] = base[t];
+    }
+    blen = 0;
+    do
+    {
+        SYNCWARP();
+        if (!t)
+        {
+            uint32_t minrdpos;
+            s->q.prefetch_wrpos = pos;
+            minrdpos = pos - min(pos, PREFETCH_SIZE - 32u);
+            blen = (int)min(32u, end - pos);
+            for (;;)
+            {
+                uint32_t rdpos = s->q.prefetch_rdpos;
+                if (rdpos >= minrdpos)
+                    break;
+                if (s->q.prefetch_end)
+                {
+                    blen = 0;
+                    break;
+                }
+                NANOSLEEP(100);
+            }
+        }
+        blen = SHFL0(blen);
+        if (t < blen)
+        {
+            s->q.buf[(pos + t) & (PREFETCH_SIZE - 1)] = base[pos + t];
+        }
+        pos += blen;
+    } while (blen > 0);
+}
+
+
+#define READ_BYTE(pos)  s->q.buf[(pos) & (PREFETCH_SIZE-1)]
+
+
 __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
 {
-    const uint8_t *bs = s->base;
     uint32_t cur = 0;
-    uint32_t end = (uint32_t)min((size_t)(s->end - bs), (size_t)0xffffffffu);
+    uint32_t end = (uint32_t)min((size_t)(s->end - s->base), (size_t)0xffffffffu);
     uint32_t bytes_left = s->uncompressed_size;
-    uint32_t is_literal = 0;
     uint32_t dst_pos = 0;
     int32_t batch = 0;
     uint32_t lit_len = 0;
+
     for (;;)
     {
         volatile unsnap_batch_s *b = &s->q.batch[batch * BATCH_SIZE];
         int32_t batch_len = 0;
+        uint32_t min_wrpos;
+
+        // Wait for prefetcher
+        s->q.prefetch_rdpos = cur;
+        min_wrpos = min(cur + 5 * BATCH_SIZE, end);
+        #pragma unroll(1) // We don't want unrolling here
+        while (s->q.prefetch_wrpos < min_wrpos)
+        {
+            NANOSLEEP(50);
+        }
 
         while (bytes_left > 0)
         {
-            uint32_t blen;
+            uint32_t blen, offset, is_literal;
 
             if (lit_len == 0)
             {
-                if (cur >= end)
-                    break;
-                blen = bs[cur++];
+                blen = READ_BYTE(cur);
+                cur++;
                 if (blen & 2)
                 {
-                    uint32_t offset;
                     // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-                    if (2 * (1 + (blen & 1)) > end - cur)
-                        break;
-                    offset = bs[cur] + (bs[cur+1] << 8);
+                    offset = READ_BYTE(cur) | (READ_BYTE(cur+1) << 8);
                     cur += 2;
                     if (blen & 1) // 4-byte offset
                     {
-                        offset |= (bs[cur] << 16) | (bs[cur+1] << 24);
+                        offset |= (READ_BYTE(cur) << 16) | (READ_BYTE(cur + 1) << 24);
                         cur += 2;
                     }
                     blen = (blen >> 2) + 1;
                     is_literal = 0;
                     if (offset - 1u >= dst_pos)
                         break;
-                    b->offset = offset;
                 }
                 else
                 {
                     if (blen & 1)
                     {
-                        uint32_t offset;
                         // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-                        if (cur >= end)
-                            break;
-                        offset = ((blen & 0xe0) << 3) | bs[cur++];
+                        offset = ((blen & 0xe0) << 3) | READ_BYTE(cur);
+                        cur++;
                         blen = ((blen >> 2) & 7) + 4;
                         is_literal = 0;
                         if (offset - 1u >= dst_pos)
                             break;
-                        b->offset = offset;
                     }
                     else
                     {
@@ -130,38 +185,43 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                         if (blen >= 60)
                         {
                             uint32_t num_bytes = blen - 59;
-                            if (num_bytes >= end - cur)
-                                break;
-                            blen = bs[cur++];
+                            blen = READ_BYTE(cur);
                             if (num_bytes > 1)
                             {
-                                blen |= bs[cur++] << 8;
+                                blen |= READ_BYTE(cur + 1) << 8;
                                 if (num_bytes > 2)
                                 {
-                                    blen |= bs[cur++] << 16;
+                                    blen |= READ_BYTE(cur + 2) << 16;
                                     if (num_bytes > 3)
                                     {
-                                        blen |= bs[cur++] << 24;
+                                        blen |= READ_BYTE(cur + 3) << 16;
                                         if (blen >= end)
                                             break;
                                     }
                                 }
                             }
+                            cur += num_bytes;
                         }
                         blen += 1;
-                        if (blen > end - cur)
-                            break;
                         lit_len = blen;
+                        is_literal = 64;
                     }
                 }
             }
             if (lit_len != 0)
             {
+                offset = cur;
                 blen = min(lit_len, 32);
                 lit_len -= blen;
-                is_literal = 64;
-                b->offset = cur;
                 cur += blen;
+                // Wait for prefetcher
+                s->q.prefetch_rdpos = cur;
+                min_wrpos = min(cur + 5 * BATCH_SIZE, end);
+                #pragma unroll(1) // We don't want unrolling here
+                while (s->q.prefetch_wrpos < min_wrpos)
+                {
+                    NANOSLEEP(50);
+                }
             }
             dst_pos += blen;
             if (bytes_left < blen)
@@ -170,6 +230,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
             }
             bytes_left -= blen;
             b->len = blen + is_literal;
+            b->offset = offset;
             b++;
             if (++batch_len == BATCH_SIZE)
                 break;
@@ -330,6 +391,9 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
         {
             s->error = -1;
         }
+        s->q.prefetch_end = 0;
+        s->q.prefetch_wrpos = 0;
+        s->q.prefetch_rdpos = 0;
     }
     __syncthreads();
     if (strm_id < count && !s->error)
@@ -344,12 +408,18 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
                 {
                     s->error = -2;
                 }
+                s->q.prefetch_end = 1;
             }
         }
         else if (t < 64)
         {
             // WARP1: LZ77
             snappy_process_symbols(s, t & 0x1f);
+        }
+        else if (t < 96)
+        {
+            // WARP2: prefetch byte stream for WARP0
+            snappy_prefetch_bytestream(s, t & 0x1f);
         }
     }
     __syncthreads();
