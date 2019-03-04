@@ -354,7 +354,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 pa_type = None
                 if dtype is not None:
                     if pd.api.types.is_categorical_dtype(dtype):
-                        pa_type = pa.string()
+                        raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
                         if np_type == np.bool_:
@@ -365,14 +365,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null
                 )
-            except pa.ArrowInvalid:
+            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 np_type = None
                 if dtype is not None:
-                    np_type = np.dtype(dtype)
-                data = as_column(
-                    np.array(arbitrary, dtype=np_type),
-                    nan_as_null=nan_as_null
-                )
+                    if pd.api.types.is_categorical_dtype(dtype):
+                        data = as_column(
+                            pd.Series(arbitrary, dtype='category'),
+                            nan_as_null=nan_as_null
+                        )
+                    else:
+                        np_type = np.dtype(dtype)
+                        data = as_column(
+                            np.array(arbitrary, dtype=np_type),
+                            nan_as_null=nan_as_null
+                        )
 
     return data
 
