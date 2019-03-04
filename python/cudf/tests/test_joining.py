@@ -478,3 +478,61 @@ def test_empty_joins(how, left_empty, right_empty):
     expected = left.merge(right, how=how)
     result = gleft.merge(gright, how=how)
     assert len(expected) == len(result)
+
+
+@pytest.mark.xfail(reason="left_on/right_on produces undefined results with 0"
+                          "index and is disabled")
+def test_merge_left_index_zero():
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[0, 1, 2, 3, 4, 6])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, left_on="x", right_on='y')
+    gd_merge = gleft.merge(gright, left_on="x", right_on='y')
+
+    assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+    {'left_index': True, 'right_index': True},
+])
+def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[0, 1, 2, 3, 4, 6])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, **kwargs)
+    if kwargs.get('left_on') and kwargs.get('right_on'):
+        with pytest.raises(NotImplementedError) as raises:
+            gd_merge = gleft.merge(gright, **kwargs)
+        raises.match("left_on='x', right_on='y' not supported")
+    else:
+        gd_merge = gleft.merge(gright, **kwargs)
+        assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+    {'left_index': True, 'right_index': True},
+])
+def test_merge_left_right_index_left_right_on_kwargs(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[1, 2, 3, 4, 5, 7])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, **kwargs)
+    if kwargs.get('left_on') and kwargs.get('right_on'):
+        with pytest.raises(NotImplementedError) as raises:
+            gd_merge = gleft.merge(gright, **kwargs)
+        raises.match("left_on='x', right_on='y' not supported")
+    else:
+        gd_merge = gleft.merge(gright, **kwargs)
+        assert_eq(pd_merge, gd_merge)
