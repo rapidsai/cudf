@@ -2372,17 +2372,14 @@ class DataFrame(object):
 
         """
 
-        # TODO: mechanism to hand int->int64 float->float64...
-
-        if isinstance(include, str):
+        if not isinstance(include, (list, tuple)):
             include = [include]
         df = DataFrame()
 
-        # convert any dtype() to string for comparison
-        include = [str(d) for d in include]
+        include = [np.dtype(d) for d in include]
 
         for x in self._cols.values():
-            if str(x.dtype) in include:
+            if x.dtype in include:
                 df.add_column(x.name, x.data)
 
         return df

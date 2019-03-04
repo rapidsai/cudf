@@ -2002,9 +2002,12 @@ def test_select_dtype():
                                                    'c': float})
 
     assert_eq(gdf[['c']], gdf.select_dtypes('float64'))
+    assert_eq(gdf[['c']], gdf.select_dtypes(np.float64))
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
+                                                          np.float64]))
 
     # currently fails -- gdf.select_dtypes returns back with a dtype of int8
     # assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
