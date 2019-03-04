@@ -19,7 +19,7 @@
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
-#include "device_assert.cuh"
+#include "device_release_assert.cuh"
 #include <cassert>
 #include <utility>
 
