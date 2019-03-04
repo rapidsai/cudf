@@ -182,9 +182,9 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
 	std::vector<cudaError_t> cuda_err(num_columns);
 	for(int column_index = 0; column_index < num_columns; column_index++){
-		/*if(output_columns[column_index]->dtype_info.category != nullptr){
+		if(output_columns[column_index]->dtype_info.category != nullptr){
 			NVCategory::destroy(output_columns[column_index]->dtype_info.category);
-		}*/
+		}
 
 		output_columns[column_index]->dtype_info.category = new_categories[column_index];
 
@@ -213,20 +213,22 @@ gdf_error free_nvcategory(gdf_column * column){
 //
 gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_column, gdf_column * output_column){
 
-	NVStrings * temp_strings = input_column->dtype_info.category->gather_strings(
-			(nv_category_index_type *) output_column->data,
-			output_column->size,
-			true );
+	if(output_column->size > 0){
+		NVStrings * temp_strings = input_column->dtype_info.category->gather_strings(
+				(nv_category_index_type *) output_column->data,
+				output_column->size,
+				DEVICE_ALLOCATED );
 
-	output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
+		output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
 
-	/*cudaError_t error = cudaMemcpy(
-			output_column->data,
-			output_column->dtype_info.category->values_cptr(),
-			sizeof(nv_category_index_type) * output_column->size,
-			cudaMemcpyDeviceToDevice);*/
+		CUDA_TRY( cudaMemcpy(
+				output_column->data,
+				output_column->dtype_info.category->values_cptr(),
+				sizeof(nv_category_index_type) * output_column->size,
+				cudaMemcpyDeviceToDevice) );
 
-	NVStrings::destroy(temp_strings);
+		NVStrings::destroy(temp_strings);
+	}
 	return GDF_SUCCESS;
 }
 
