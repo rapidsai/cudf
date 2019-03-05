@@ -23,7 +23,7 @@
 namespace cudf {
 
 /**
- * @brief A wrapper for a set of gdf_columns all with equal number of rows.
+ * @brief A wrapper for a set of gdf_columns of equal number of rows.
  *
  */
 struct table {
