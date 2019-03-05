@@ -117,7 +117,6 @@ void count_valid_bits(valid32_t const * const masks32,
  * in a validity bitmask.
  * 
  * If the bitmask is null, returns a count equal to the number of rows.
-
  * 
  * @param[in] masks The validity bitmask buffer in device memory
  * @param[in] num_rows The number of bits to count
