@@ -78,6 +78,7 @@ const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool p
 		string_host_data[row_index] = new char[length+1];
 
 		std::string rand_string = random_string(length);
+		rand_string.push_back(0);
 		if(print)
 			std::cout<<rand_string<<"\t";
 		std::memcpy((void *) string_host_data[row_index],rand_string.c_str(),rand_string.size());
