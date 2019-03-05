@@ -52,9 +52,11 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
         // Add current block
         agg = functor(agg, temp);
     }
+
     // First thread of each block stores the result.
-    if (tid == 0)
-        results[blkid] = agg;
+    if (tid == 0){
+        genericAtomicOperation(results[0], agg, functor);
+    }
 }
 
 
@@ -65,18 +67,19 @@ gdf_error ReduceOp(gdf_column *input, T identity, T *output,
 {
     // fake single step (single grid), the perf is bad.
     // Todo: using atomics (multi grid)
-    output_size = 1;
+    (void)output_size;
 
-    // initialize by identity value
+    // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(output, &identity,
             sizeof(T), cudaMemcpyHostToDevice, 0));
     CUDA_CHECK_LAST();
 
     // find needed gridsize
-    // use atmost REDUCTION_BLOCK_SIZE blocks
     int blocksize = REDUCTION_BLOCK_SIZE;
-    int gridsize = (output_size < REDUCTION_BLOCK_SIZE?
-                    output_size : REDUCTION_BLOCK_SIZE);
+//    int gridsize = (output_size < REDUCTION_BLOCK_SIZE?
+//                    output_size : REDUCTION_BLOCK_SIZE);
+    int gridsize = (input->size + REDUCTION_BLOCK_SIZE -1 )/REDUCTION_BLOCK_SIZE;
+
 
     typename Op::Loader loader;
     Op functor;
@@ -125,7 +128,8 @@ struct ReduceDispatcher {
                          void *dev_result,
                          gdf_size_type dev_result_size)
     {
-        return launch<T>(col, dev_result, dev_result_size);
+        using UnderlyingType = typename T::value_type;
+        return launch<UnderlyingType>(col, dev_result, dev_result_size);
     }
 
     template <typename T, typename std::enable_if<

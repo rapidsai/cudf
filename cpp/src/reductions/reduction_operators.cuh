@@ -5,6 +5,25 @@
 namespace cudf {
 namespace reduction {
 
+
+template <typename T_output, typename T_input>
+__forceinline__  __device__
+T_output type_reinterpret(T_input value)
+{
+    // return __double_as_longlong(value); // this returns signed long long
+    return *( reinterpret_cast<T_output*>(&value) );
+}
+
+template <typename T_input, typename T_internal>
+__forceinline__  __device__
+T_input genericAtomicCAS_type(T_input* addr, T_input const & expected, T_input const & new_value)
+{
+    T_internal ret = atomicCAS(reinterpret_cast<T_internal*>(addr),
+        type_reinterpret<T_internal, T_input>(expected),
+        type_reinterpret<T_internal, T_input>(new_value));
+    return type_reinterpret<T_input, T_internal>(ret);
+}
+
 template <typename T>
 __forceinline__  __device__
 T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
@@ -12,37 +31,49 @@ T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
     return atomicCAS(addr, expected, new_value);
 }
 
+// -------------------
+// specializations
+
 template <>
 __forceinline__  __device__
 float genericAtomicCAS(float* addr, float const & expected, float const & new_value)
 {
-    int ret = atomicCAS(reinterpret_cast<int*>(addr),
-        __float_as_int(expected), __float_as_int(new_value));
-    return __int_as_float(ret);
-}
-
-// reinterpret double to uint64_t(unsigned long long)
-__forceinline__  __device__
-unsigned long long int double_as_ull(double value)
-{
-    // return __double_as_longlong(value); // this returns signed long long
-    return *( reinterpret_cast<unsigned long long int*>(&value) );
+    return genericAtomicCAS_type<float, unsigned int>(addr, expected, new_value);
 }
 
 template <>
 __forceinline__  __device__
 double genericAtomicCAS(double* addr, double const & expected, double const & new_value)
 {
-    unsigned long long int ret = atomicCAS(reinterpret_cast<unsigned long long int*>(addr),
-        double_as_ull(expected), double_as_ull(new_value));
-    return __longlong_as_double(ret);
+    return genericAtomicCAS_type<double, unsigned long long int>(addr, expected, new_value);
 }
 
-// ToDo: uint8/16 support
+template <>
+__forceinline__  __device__
+int8_t genericAtomicCAS(int8_t* addr, int8_t const & expected, int8_t const & new_value)
+{
+    return genericAtomicCAS_type<int8_t, unsigned int>(addr, expected, new_value);
+}
+
+template <>
+__forceinline__  __device__
+int16_t genericAtomicCAS(int16_t* addr, int16_t const & expected, int16_t const & new_value)
+{
+    return genericAtomicCAS_type<int16_t, unsigned int>(addr, expected, new_value);
+}
+
+template <>
+__forceinline__  __device__
+int64_t genericAtomicCAS(int64_t* addr, int64_t const & expected, int64_t const & new_value)
+{
+    return genericAtomicCAS_type<int64_t, unsigned long long int>(addr, expected, new_value);
+}
+
+// -------------------
 
 template <typename T, typename Op>
 __forceinline__  __device__
-void update_existing_value(T & existing_value, T const & update_value, Op op)
+void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
 {
   const T insert_value = update_value;
   T old_value = existing_value;
