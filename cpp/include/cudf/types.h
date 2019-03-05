@@ -72,27 +72,50 @@ typedef enum {
     GDF_HASH_IDENTITY,  /**< Identity hash function that simply returns the key to be hashed */
 } gdf_hash_func;
 
+
+/**
+ * @brief Defines the unit of time that an algoithm or structure is storing.
+ *
+ * There are time types in cudf. Those time types can have different resolutions so this
+ * enum allows us to define different units of time. The types included are nanosecond,
+ * microsecond, millisecond, and second.
+ */
 typedef enum {
-	TIME_UNIT_NONE=0, // default (undefined)
-	TIME_UNIT_s,   // second
-	TIME_UNIT_ms,  // millisecond
-	TIME_UNIT_us,  // microsecond
-	TIME_UNIT_ns   // nanosecond
+	TIME_UNIT_NONE=0, /**< The default time unit type. */
+	TIME_UNIT_s,   /**< Second resolution time unit type */
+	TIME_UNIT_ms,  /**< Millisecond resolution time unit type */
+	TIME_UNIT_us,  /**< Microsecond resolution time unit type */
+	TIME_UNIT_ns   /**< Nanosecond resolution time unit type */
 } gdf_time_unit;
 
+/**
+ * @brief This struct allows us to include extra information about a columns type.
+ *
+ * Column types sometimes need extra information to properly encode the representation
+ * of the information found therein. At this stage it holds a gdf_time_unit which allows
+ * us to know the resolution of a time type.
+ */
 typedef struct {
 	gdf_time_unit time_unit;
 	// here we can also hold info for decimal datatype or any other datatype that requires additional information
 } gdf_dtype_extra_info;
 
+
+/**
+ * @brief Defines the C representation of a column in CUDF. This is the main unit of operation.
+ *
+ * This struct contains pointers to GPU memory and metadata which describes how that data is layed out.
+ *
+ *
+ */
 typedef struct gdf_column_{
-    void *data;                       /**< Pointer to the columns data */ 
+    void *data;                       /**< Type Erased pointer to the columns data */
     gdf_valid_type *valid;            /**< Pointer to the columns validity bit mask where the 'i'th bit indicates if the 'i'th row is NULL */
     gdf_size_type size;               /**< Number of data elements in the columns data buffer. Limited to 2^31 - 1.*/
     gdf_dtype dtype;                  /**< The datatype of the column's data */
     gdf_size_type null_count;         /**< The number of NULL values in the column's data */
-    gdf_dtype_extra_info dtype_info;
-    char *			col_name;			// host-side:	null terminated string
+    gdf_dtype_extra_info dtype_info;  /**< gdf_dtype_extra_info which stores extra information about the column's gdf_dtype */
+    char *			col_name;		  /**< Host side null terminated string with name of the column */
 } gdf_column;
 
 /* --------------------------------------------------------------------------*/
