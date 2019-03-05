@@ -16,12 +16,14 @@
 
 
 #include <cudf.h>
+
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
 
 #include <thrust/device_vector.h>
 #include <cstdint>
+
 
 /**
  * @file dispatcher_test.cu
@@ -98,6 +100,7 @@ __global__ void dispatch_test_kernel(gdf_dtype type, bool* d_result) {
 }
 }  // namespace
 
+// Every supported gdf_dtype should dispatch the correct type
 TEST_F(DispatcherTest, HostDispatchFunctor) {
   for (auto const& t : this->supported_dtypes) {
     bool result = cudf::type_dispatcher(t, test_functor{}, t);

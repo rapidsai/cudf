@@ -49,6 +49,7 @@
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
+- PR #694 Unit test utilities improvements
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
 - PR #1040 Fixed up Doxygen comment tags
@@ -57,6 +58,7 @@
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
+- PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #952 Added trait to map C++ type to `gdf_dtype`
 - PR #966 Updated RMM submodule.
 - PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs

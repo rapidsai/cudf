@@ -23,6 +23,7 @@
 #include <cassert>
 #include <utility>
 
+
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Invokes an instance of a functor template with the appropriate type
