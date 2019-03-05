@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-// These tests excerise the `assert(false)` on unsupported dtypes in the
-// type_dispatcher The assert is only present if the NDEBUG macro isn't defined
-#ifdef NDEBUG
-#undef NDEBUG
-#define REDEFINE
-#endif
 
 #include <cudf.h>
 
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
-#include "utilities/tuple_for_each.hpp"
 
 #include <thrust/device_vector.h>
 #include <cstdint>
@@ -38,19 +31,6 @@
  */
 
 struct DispatcherTest : public GdfTest {
-  /**---------------------------------------------------------------------------*
-   * @brief Lists every type dispatched by the type_dispatcher.
-   *
-   * This tuple *must* list every type supported by the type_dispatcher.
-   *
-   * Furthemore, gdf_dtype_of must have a specialization for each of these
-   * types that maps to the corresponding gdf_dtype.
-   *
-   *---------------------------------------------------------------------------**/
-  std::tuple<int8_t, int16_t, int32_t, int64_t, float, double, cudf::date32,
-             cudf::date64, cudf::timestamp, cudf::category>
-      supported_types;
-
   /**---------------------------------------------------------------------------*
    * @brief Lists every gdf_dtype that the type_dispatcher supports.
    *
@@ -68,21 +48,14 @@ struct DispatcherTest : public GdfTest {
   std::vector<gdf_dtype> unsupported_dtypes{GDF_invalid, GDF_STRING};
 };
 
-TEST_F(DispatcherTest, NumberOfTypesTest) {
-  // N_GDF_TYPES indicates how many enums there are in `gdf_dtype`,
-  // therefore, if a gdf_dtype is added without updating this test, the test
-  // will fail
-  const size_t expected_num_supported_dtypes =
-      N_GDF_TYPES - unsupported_dtypes.size();
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
+                                   double, cudf::date32, cudf::date64,
+                                   cudf::timestamp, cudf::category>;
 
-  // Note: If this test fails, that means a type was added to gdf_dtype
-  // without adding it to the `supported_dtypes` list in this test fixture
-  ASSERT_EQ(expected_num_supported_dtypes, supported_dtypes.size())
-      << "Number of supported types does not match what was expected.";
+template <typename T>
+struct TypedDispatcherTest : DispatcherTest {};
 
-  ASSERT_EQ(expected_num_supported_dtypes,
-            std::tuple_size<decltype(supported_types)>::value);
-}
+TYPED_TEST_CASE(TypedDispatcherTest, TestTypes);
 
 namespace {
 template <typename ExpectedType>
@@ -95,12 +68,22 @@ struct type_tester {
 }  // namespace
 
 // Ensure that the type_to_gdf_dtype trait maps to the correct gdf_dtype
-TEST_F(DispatcherTest, TraitsTest) {
-  cudf::detail::for_each(supported_types, [](auto type_dummy) {
-    using T = decltype(type_dummy);
-    EXPECT_TRUE(
-        cudf::type_dispatcher(cudf::gdf_dtype_of<T>(), type_tester<T>{}));
-  });
+TYPED_TEST(TypedDispatcherTest, TraitsTest) {
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::gdf_dtype_of<TypeParam>(),
+                                    type_tester<TypeParam>{}));
+}
+
+TEST_F(DispatcherTest, NumberOfTypesTest) {
+  // N_GDF_TYPES indicates how many enums there are in `gdf_dtype`,
+  // therefore, if a gdf_dtype is added without updating this test, the test
+  // will fail
+  const size_t expected_num_supported_dtypes =
+      N_GDF_TYPES - unsupported_dtypes.size();
+
+  // Note: If this test fails, that means a type was added to gdf_dtype
+  // without adding it to the `supported_dtypes` list in this test fixture
+  ASSERT_EQ(expected_num_supported_dtypes, supported_dtypes.size())
+      << "Number of supported types does not match what was expected.";
 }
 
 namespace {
@@ -134,15 +117,15 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
   }
 }
 
-using DispatcherDeathTest = DispatcherTest;
-
-// Unsuported gdf_dtypes should cause program to exit
-TEST_F(DispatcherDeathTest, UnsuportedTypesTest) {
-  testing::FLAGS_gtest_death_test_style = "threadsafe";
+// Unsuported gdf_dtypes should throw std::runtime_error in host code
+TEST_F(DispatcherTest, UnsuportedTypesTest) {
   for (auto const& t : unsupported_dtypes) {
-    EXPECT_DEATH(cudf::type_dispatcher(t, test_functor{}, t), "");
+    EXPECT_THROW(cudf::type_dispatcher(t, test_functor{}, t), std::runtime_error);
   }
 }
+
+using DispatcherDeathTest = DispatcherTest;
+
 
 // Unsuported gdf_dtypes in device code should set appropriate error code
 // and invalidates device context
@@ -166,7 +149,3 @@ TEST_F(DispatcherDeathTest, DeviceDispatchFunctor) {
     EXPECT_DEATH(call_kernel(t), "");
   }
 }
-
-#ifdef REDEFINE
-#define NDEBUG
-#endif

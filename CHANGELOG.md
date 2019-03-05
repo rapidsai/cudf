@@ -33,6 +33,7 @@
 - PR #1007 Replace relative path imports with absolute paths in cudf
 - PR #1013 select columns with df.columns
 - PR #1016 Rename Series.unique_count() to nunique() to match pandas API
+- PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
 
@@ -63,7 +64,8 @@
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
-
+- PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
+- PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
 ## Bug Fixes
 
@@ -98,6 +100,9 @@
 - PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
 - PR #1014 CSV Reader: Fix false positives in bool value detection
 - PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
+- PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
+- PR #1058 Added support for `DataFrame.loc[scalar]`
+- PR #1060 Fix column creation with all valid nan values
 
 
 # cuDF 0.5.1 (05 Feb 2019)

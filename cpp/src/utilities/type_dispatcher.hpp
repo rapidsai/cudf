@@ -1,10 +1,25 @@
-#ifndef GDF_TYPE_DISPATCHER_H
-#define GDF_TYPE_DISPATCHER_H
-
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#ifndef TYPE_DISPATCHER_HPP
+#define TYPE_DISPATCHER_HPP
 
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
+#include "release_assert.cuh"
 #include <cassert>
 #include <utility>
 
@@ -75,17 +90,17 @@
  * The return type for all template instantiations of the functor's "operator()"
  * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
- *
+ * 
  * NOTE: It is undefined behavior if an unsupported or invalid `gdf_dtype` is
  * supplied.
  *
- * @Param dtype The gdf_dtype enum that determines which type will be dispatched
- * @Param f The functor with a templated "operator()" that will be invoked with
+ * @param dtype The gdf_dtype enum that determines which type will be dispatched
+ * @param f The functor with a templated "operator()" that will be invoked with 
  * the dispatched type
- * @Param args A parameter-pack (i.e., arbitrary number of arguments) that will
+ * @param args A parameter-pack (i.e., arbitrary number of arguments) that will 
  * be perfectly-forwarded as the arguments of the functor's "operator()".
  *
- * @Returns Whatever is returned by the functor's "operator()".
+ * @returns Whatever is returned by the functor's "operator()". 
  *
  */
 /* ----------------------------------------------------------------------------*/
@@ -95,8 +110,7 @@ namespace cudf {
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
 template <class functor_t, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE 
-decltype(auto) type_dispatcher(gdf_dtype dtype,
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
                                                          functor_t f,
                                                          Ts&&... args) {
   switch(dtype)
@@ -114,13 +128,29 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
-    default: { assert(false && "type_dispatcher: invalid gdf_type"); }
+    default: {
+#ifdef __CUDA_ARCH__
+      
+      // This will cause the calling kernel to crash as well as invalidate
+      // the GPU context
+      release_assert(false && "Invalid gdf_dtype in type_dispatcher");
+
+      // The following code will never be reached, but the compiler generates a
+      // warning if there isn't a return value.
+
+      // Need to find out what the return type is in order to have a default
+      // return value and solve the compiler warning for lack of a default
+      // return
+      using return_type =
+          decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+      return return_type();
+#else
+      // In host-code, the compiler is smart enough to know we don't need a
+      // default return type since we're throwing an exception.
+      throw std::runtime_error("Invalid gdf_dtype in type_dispatcher");
+#endif
+    }
   }
-  // Need to find out what the return type is in order to have a default return
-  // value and solve the compiler warning for lack of a default return
-  using return_type =
-      decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-  return return_type();
 }
 
 /**---------------------------------------------------------------------------*
