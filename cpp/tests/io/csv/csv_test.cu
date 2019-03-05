@@ -312,7 +312,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '`';
-		args.quoting = true;          // strip outermost quotechar
+		args.quoting = QUOTE_ALL;     // enable quoting
 		args.doublequote = true;      // replace double quotechar with single
 		args.skip_blank_lines = true;
 		args.header = 0;
@@ -348,16 +348,16 @@ TEST(gdf_csv_test, QuotedStrings)
 	}
 }
 
-TEST(gdf_csv_test, KeepFullQuotedStrings)
+TEST(gdf_csv_test, IgnoreQuotes)
 {
-	const char* fname	= "/tmp/CsvKeepFullQuotedStringsTest.csv";
+	const char* fname	= "/tmp/CsvIgnoreQuotesTest.csv";
 	const char* names[]	= { "line", "verse" };
 	const char* types[]	= { "int32", "str" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << names[0] << ',' << names[1] << ',' << '\n';
-	outfile << "10,\"abc,\ndef, ghi\"" << '\n';
-	outfile << "20,\"jkl, \"\"mno\"\", pqr\"" << '\n';
+	outfile << "10,\"abcdef ghi\"" << '\n';
+	outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
 	outfile << "30,stu \"vwx\" yz" << '\n';
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
@@ -372,7 +372,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '\"';
-		args.quoting = false;         // do not strip outermost quotechar
+		args.quoting = QUOTE_NONE;    // disable quoting
 		args.doublequote = false;     // do not replace double quotechar with single
 		args.skip_blank_lines = true;
 		args.header = 0;
@@ -399,8 +399,8 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 			strings[i] = new char[stringLengths[i]];
 		}
 		EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
-		EXPECT_STREQ( strings[0], "\"abc,\ndef, ghi\"" );
-		EXPECT_STREQ( strings[1], "\"jkl, \"\"mno\"\", pqr\"" );
+		EXPECT_STREQ( strings[0], "\"abcdef ghi\"" );
+		EXPECT_STREQ( strings[1], "\"jkl \"\"mno\"\" pqr\"" );
 		EXPECT_STREQ( strings[2], "stu \"vwx\" yz" );
 		for (size_t i = 0; i < stringCount; ++i) {
 			delete[] strings[i];
