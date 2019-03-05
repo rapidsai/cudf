@@ -47,7 +47,7 @@ struct table {
 
   gdf_column* get_column(gdf_index_type index) { return columns[index]; }
 
-  gdf_size_type size() const { return num_columns; }
+  gdf_size_type num_columns() const { return num_columns; }
 
  private:
   gdf_column** columns;            /**< The set of gdf_columns*/
