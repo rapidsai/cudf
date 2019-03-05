@@ -116,7 +116,6 @@ void count_valid_bits(valid32_t const * const masks32,
  * @brief  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
  * 
-
  * If the bitmask is null, returns a count equal to the number of rows.
 
  * 

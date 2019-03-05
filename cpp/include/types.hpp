@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 namespace cudf {
 
 /**
- * @brief A wrapper for a set of gdf_columns all with equal number of rows.
+ * @brief A wrapper for a set of gdf_columns of equal number of rows.
  *
  */
 struct table {
