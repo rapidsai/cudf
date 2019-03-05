@@ -13,19 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf.h"
 #include "gtest/gtest.h"
+#include "utilities/error_utils.hpp"
+
+#include <rmm/rmm.h>
 #include <cuda_runtime_api.h>
 #include <cstring>
 
-#include <cudf.h>
-#include <rmm/rmm.h>
-
 // If this test fails, it means an error code was added without
 // adding support to gdf_error_get_name().
-TEST(GdfInternalTest, NameEveryError) {
-	for (int i = 0; i < N_GDF_ERRORS; i++)
-    {
-        const char *res = gdf_error_get_name((gdf_error)i);
-        ASSERT_EQ(0, strstr(res, "Unknown error"));
-    }
+TEST(ErrorTest, NameEveryError) {
+  for (int i = 0; i < N_GDF_ERRORS; i++) {
+    const char *res = gdf_error_get_name((gdf_error)i);
+    ASSERT_EQ(0, strstr(res, "Unknown error"));
+  }
+}
+
+TEST(ExpectsTest, FalseCondition) {
+  EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"),
+               cudf::detail::logic_error);
+}
+
+TEST(ExpectsTest, TrueCondition) {
+  EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true"));
 }
