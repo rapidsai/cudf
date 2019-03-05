@@ -17,22 +17,21 @@
 #include "gtest/gtest.h"
 #include "utilities/error_utils.hpp"
 
-#include <rmm/rmm.h>
 #include <cuda_runtime_api.h>
+#include <rmm/rmm.h>
 #include <cstring>
 
 // If this test fails, it means an error code was added without
 // adding support to gdf_error_get_name().
 TEST(ErrorTest, NameEveryError) {
   for (int i = 0; i < N_GDF_ERRORS; i++) {
-    const char *res = gdf_error_get_name((gdf_error)i);
+    const char* res = gdf_error_get_name((gdf_error)i);
     ASSERT_EQ(0, strstr(res, "Unknown error"));
   }
 }
 
 TEST(ExpectsTest, FalseCondition) {
-  EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"),
-               cudf::logic_error);
+  EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"), cudf::logic_error);
 }
 
 TEST(ExpectsTest, TrueCondition) {
@@ -40,15 +39,12 @@ TEST(ExpectsTest, TrueCondition) {
 }
 
 TEST(ExpectsTest, TryCatch) {
-  try{
-      CUDF_EXPECTS(false, "test message");
-  }
-  catch(cudf::logic_error const& e){
-      EXPECT_NE(nullptr, e.what());
-      // TODO How to verify that the `what` message is as expected?
-      // The exact content of the `what()` message depends on where
-      // libcudf was built and therefore it's probably not appropriate to 
-      // test the exact contents in a GTest
-      //std::cout << e.what() << std::endl;
+  try {
+    CUDF_EXPECTS(false, "test reason");
+  } catch (cudf::logic_error const& e) {
+    EXPECT_NE(nullptr, e.what());
+    std::string what(e.what());
+    EXPECT_NE(std::string::npos, what.find("cuDF failure at:"));
+    EXPECT_NE(std::string::npos, what.find("test reason"));
   }
 }

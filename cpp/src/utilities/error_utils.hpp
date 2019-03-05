@@ -60,6 +60,6 @@ struct logic_error : public std::logic_error {
   (!!(cond)) ? static_cast<void>(0)             \
              : throw cudf::logic_error(         \
                    "cuDF failure at: " __FILE__ \
-                   ":" CUDF_STRINGIFY(__LINE__) ". Reason: " reason)
+                   ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
 #endif
