@@ -2015,3 +2015,31 @@ def test_fillna_categorical(null_value):
     got = sr.fillna('a')
 
     assert_eq(expect, got)
+
+
+def test_column_assignment():
+    gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
+                                                   'b': int,
+                                                   'c': float})
+    new_cols = ['q', 'r', 's']
+    gdf.columns = new_cols
+    assert list(gdf.columns) == new_cols
+
+
+def test_select_dtype():
+    gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
+                                                   'b': int,
+                                                   'c': float})
+
+    assert_eq(gdf[['c']], gdf.select_dtypes('float64'))
+    assert_eq(gdf[['c']], gdf.select_dtypes(np.float64))
+    assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
+
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
+                                                          np.float64]))
+
+    assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+
+    with pytest.raises(TypeError):
+        assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
