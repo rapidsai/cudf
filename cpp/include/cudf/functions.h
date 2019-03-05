@@ -90,6 +90,7 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @param[in] size Number of rows in the column.
  * @param[in] dtype Data type of the column.
  * @param[in] null_count The number of non-valid elements in the validity bitmask
+ * @param[in] extra_info Extra information for column description
  * 
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
