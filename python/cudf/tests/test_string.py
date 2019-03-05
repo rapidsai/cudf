@@ -162,8 +162,8 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    if isinstance(expect_out, pd.Series):
-        expect = expect.replace("object", "str")
+    # if isinstance(expect_out, pd.Series):
+    #     expect = expect.replace("object", "str")
 
     assert expect == got
 

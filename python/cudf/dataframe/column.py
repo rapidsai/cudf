@@ -50,7 +50,7 @@ class Column(object):
                     null_count=0,
                     ordered=False
                 )
-            elif dtype == np.dtype('str'):
+            elif dtype == np.dtype('object'):
                 return StringColumn(
                     data=nvstrings.to_device([]),
                     null_count=0

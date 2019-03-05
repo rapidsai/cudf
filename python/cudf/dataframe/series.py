@@ -222,7 +222,7 @@ class Series(object):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                if self.dtype == np.dtype('str'):
+                if self.dtype == np.dtype('object'):
                     idx = arg.to_gpu_array()
                     selvals = self._column[idx]
                     index = self.index.take(idx)
@@ -231,7 +231,7 @@ class Series(object):
                         self._column, arg)
                     index = self.index.take(selinds.to_gpu_array())
             elif arg.dtype in [np.bool, np.bool_]:
-                if self.dtype == np.dtype('str'):
+                if self.dtype == np.dtype('object'):
                     idx = cudautils.boolean_array_to_index_array(
                         arg.to_gpu_array())
                     selvals = self._column[idx]
@@ -294,7 +294,7 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        if self.dtype == np.dtype('str'):
+        if self.dtype == np.dtype('object'):
             out = [str(v) for v in values]
         else:
             out = ['' if v is None else str(v) for v in values]
@@ -343,8 +343,6 @@ class Series(object):
             nrows = settings.formatting.get(nrows)
 
         str_dtype = self.dtype
-        if str_dtype == np.dtype('str'):
-            str_dtype = 'str'
 
         if len(self) == 0:
             return "<empty Series of dtype={}>".format(str_dtype)
