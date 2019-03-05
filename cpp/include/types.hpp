@@ -39,13 +39,16 @@ struct table {
     });
   }
 
-  gdf_column** data() const { return columns; }
+  gdf_column const* const* begin() const { return columns; }
+  gdf_column** begin() { return columns; }
 
-  gdf_column** begin() const { return columns; }
-
+  gdf_column const* const* end() const { return columns + num_columns; }
   gdf_column** end() const { return columns + num_columns; }
 
   gdf_column* get_column(gdf_index_type index) { return columns[index]; }
+  gdf_column const* get_column const(gdf_index_type index) {
+    return columns[index];
+  }
 
   gdf_size_type num_columns() const { return num_columns; }
 
