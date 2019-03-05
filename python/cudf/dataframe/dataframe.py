@@ -686,6 +686,19 @@ class DataFrame(object):
         """
         return pd.Index(self._cols)
 
+    @columns.setter
+    def columns(self, columns):
+        old_cols = list(self._cols.keys())
+        l_old_cols = len(old_cols)
+        l_new_cols = len(columns)
+        if l_new_cols != l_old_cols:
+            msg = f'Length of new column names: {l_new_cols} does not ' \
+                  'match length of previous column names: {l_old_cols}'
+            raise ValueError(msg)
+
+        mapper = dict(zip(old_cols, columns))
+        self.rename(mapper=mapper, inplace=True)
+
     @property
     def index(self):
         """Returns the index of the DataFrame
@@ -934,7 +947,7 @@ class DataFrame(object):
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
 
-    def rename(self, mapper=None, columns=None, copy=True):
+    def rename(self, mapper=None, columns=None, copy=True, inplace=False):
         """
         Alter column labels.
 
@@ -949,6 +962,8 @@ class DataFrame(object):
             the column axis' values.
         copy : boolean, default True
             Also copy underlying data
+        inplace: boolean, default False
+            Retrun new DataFrame.  If True, assign columns without copy
 
         Returns
         -------
@@ -958,7 +973,7 @@ class DataFrame(object):
         -----
         Difference from pandas:
           * Support axis='columns' only.
-          * Not supporting: index, inplace, level
+          * Not supporting: index, level
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -977,7 +992,10 @@ class DataFrame(object):
             for column in self.columns:
                 out[mapper(column)] = self[column]
 
-        return out.copy(deep=copy)
+        if inplace:
+            self._cols = out._cols
+        else:
+            return out.copy(deep=copy)
 
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
@@ -2422,6 +2440,30 @@ class DataFrame(object):
                                          exact=exact,
                                          quant_index=False)
         return result
+
+    def select_dtypes(self, include=None):
+        """Return a subset of the DataFrame’s columns based on the column dtypes.
+
+        Parameters
+        ----------
+        include : [type]
+            [description] (the default is None, which [default_description])
+
+        """
+
+        if not isinstance(include, (list, tuple)):
+            include = [include]
+        df = DataFrame()
+
+        include = [pd.core.dtypes.common.pandas_dtype(d) for d in include]
+
+        for x in self._cols.values():
+            try:
+                if x.dtype in include:
+                    df.add_column(x.name, x)
+            except TypeError:
+                pass
+        return df
 
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
