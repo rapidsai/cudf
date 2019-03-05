@@ -16,23 +16,13 @@ DataFrame
 
 Examples
 --------
-.. code-block:: python
-
-  import cudf
-
-  df = cudf.read_parquet(filename)
-
-  # Display results
-  print(df)
-
-Output:
-
-.. code-block:: python
-
-      num1                datetime text
-    0  123 2018-11-13T12:00:00.000 5451
-    1  456 2018-11-14T12:35:01.000 5784
-    2  789 2018-11-15T18:02:59.000 6117
+>>> import cudf
+>>> df = cudf.read_parquet(filename)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
 
 See Also
 --------
@@ -83,23 +73,13 @@ DataFrame
 
 Examples
 --------
-.. code-block:: python
-
-  import cudf
-
-  df = cudf.read_orc(filename)
-
-  # Display results
-  print(df)
-
-Output:
-
-.. code-block:: python
-
-    num1                datetime text
-  0  123 2018-11-13T12:00:00.000 5451
-  1  456 2018-11-14T12:35:01.000 5784
-  2  789 2018-11-15T18:02:59.000 6117
+>>> import cudf
+>>> df = cudf.read_orc(filename)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
 
 See Also
 --------
@@ -406,22 +386,13 @@ DataFrame
 
 Examples
 --------
-.. code-block:: python
-
-  import cudf
-
-  df = cudf.read_feather(filename)
-
-  print(df)
-
-Output:
-
-.. code-block:: python
-
-      num1                datetime text
-    0  123 2018-11-13T12:00:00.000 5451
-    1  456 2018-11-14T12:35:01.000 5784
-    2  789 2018-11-15T18:02:59.000 6117
+>>> import cudf
+>>> df = cudf.read_feather(filename)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
 
 See Also
 --------

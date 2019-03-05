@@ -1954,7 +1954,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64', 'datetime64[ms]',
                                    'category'])
 def test_dataframe_0_row_dtype(dtype):
