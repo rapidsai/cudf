@@ -138,24 +138,9 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
  * The null_count of the keycol and valcol columns are expected to be 0
  * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
  */
-gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
-                           gdf_column *keycol,
-                           gdf_column *valcol);
-gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol);
+gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
+                        gdf_column *keycol,
+                        gdf_column *valcol);
 
 /* segmented sorting */
 gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,

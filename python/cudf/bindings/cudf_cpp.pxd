@@ -248,24 +248,9 @@ cdef extern from "cudf.h" nogil:
                                        size_t sizeof_key, size_t sizeof_val)
     cdef gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl)
 
-    cdef gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
-                               gdf_column *keycol,
-                               gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
+    cdef gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                    gdf_column *keycol,
-                                    gdf_column *valcol)
 
     cdef gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,
         unsigned begin_bit, unsigned end_bit)
