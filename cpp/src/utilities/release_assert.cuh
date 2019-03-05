@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DEVICE_ASSERT_CUH
-#define DEVICE_ASSERT_CUH
+#ifndef RELEASE_ASSERT_CUH
+#define RELEASE_ASSERT_CUH
 
 #include <cuda_runtime.h>
 
@@ -31,12 +31,12 @@
  *---------------------------------------------------------------------------**/
 #if defined(__CUDACC_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
-#define device_release_assert(e)                                          \
+#define release_assert(e)                                          \
   ((e) ? static_cast<void>(0)                                     \
        : __assertfail(__ASSERT_STR_HELPER(e), __FILE__, __LINE__, \
                       __PRETTY_FUNCTION__, sizeof(char)))
 #else
-#define device_release_assert(e) (static_cast<void>(0))
+#define release_assert(e) (static_cast<void>(0))
 #endif
 
 #endif
