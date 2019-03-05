@@ -101,6 +101,7 @@
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1102 CSV Reader: Minor fixes and memory usage improvements
 
 
 # cuDF 0.5.1 (05 Feb 2019)
