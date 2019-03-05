@@ -255,12 +255,20 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 				 first_row[pos] == raw_csv->opts.terminator)) {
 			// Got to the end of a column
 			if (raw_csv->header_row >= 0) {
-				// first_row is the header, add the column name
-				string new_col_name(first_row.data() + prev, pos - prev);
+				// First_row is the header, add the column name
+				int col_name_len = pos - prev;
+				// Exclude '\r' character at the end of the column name if it's part of the terminator
+				if (col_name_len > 0 &&
+					raw_csv->opts.terminator == '\n' &&
+					first_row[pos] == '\n' &&
+					first_row[pos - 1] == '\r') {
+						--col_name_len;
+					}
+				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
 			}
 			else {
-				// first_row is the first data row, add the automatically generated name
+				// First_row is the first data row, add the automatically generated name
 				raw_csv->col_names.push_back(raw_csv->prefix + std::to_string(num_cols));
 			}
 			num_cols++;
@@ -318,12 +326,12 @@ gdf_error read_csv(csv_read_arg *args)
 	} else {
 		raw_csv->opts.terminator = args->lineterminator;
 	}
-	if (args->quotechar != '\0') {
+	if (args->quotechar != '\0' && args->quoting != QUOTE_NONE) {
 		raw_csv->opts.quotechar = args->quotechar;
-		raw_csv->opts.keepquotes = !args->quoting;
+		raw_csv->opts.keepquotes = false;
 		raw_csv->opts.doublequote = args->doublequote;
 	} else {
-		raw_csv->opts.quotechar = args->quotechar;
+		raw_csv->opts.quotechar = '\0';
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}

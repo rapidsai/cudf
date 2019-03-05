@@ -28,8 +28,16 @@ def is_file_like(obj):
     return True
 
 
+_quoting_enum = {
+    0: libgdf.QUOTE_MINIMAL,
+    1: libgdf.QUOTE_ALL,
+    2: libgdf.QUOTE_NONNUMERIC,
+    3: libgdf.QUOTE_NONE,
+}
+
+
 def read_csv(filepath_or_buffer, lineterminator='\n',
-             quotechar='"', quoting=True, doublequote=True,
+             quotechar='"', quoting=0, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
@@ -64,12 +72,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         or a dictionary with column_name:dtype (pandas style).
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
-    quoting : bool, default True
-        If True, start and end quotechar are removed from returned strings
-        If False, start and end quotechar are kept in returned strings
+    quoting : str or int, default 0
+        Controls quoting behavior. Set to one of
+        0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
+        2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
+        Quoting is enabled with all values except 3.
     doublequote : bool, default True
-        When quotechar is specified and quoting is True, indicates whether to
-        interpret two consecutive quotechar inside fields as single quotechar
+        When quoting is enabled, indicates whether to interpret two
+        consecutive quotechar inside fields as single quotechar
     header : int, default 'infer'
         Row number to use as the column names. Default behavior is to infer
         the column names: if no names are passed, header=0;
@@ -315,7 +325,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -380,7 +390,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting=True, doublequote=True,
+                     quotechar='"', quoting=0, doublequote=True,
                      header='infer',
                      sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
@@ -575,7 +585,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
