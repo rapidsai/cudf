@@ -53,7 +53,6 @@ TEST_F(ValidsTest, NullValids)
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, size, &count);
 
   ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
-
   EXPECT_EQ(size, count);
 }
 
