@@ -26,7 +26,7 @@ namespace cudf {
 namespace {
 
 /**---------------------------------------------------------------------------*
- * @brief Scatters the bits of a bitmask from one bitmask to another.
+ * @brief Scatters the bits from one bitmask to another.
  *
  * @param[in] source_mask The mask that will be scattered.
  * @param[out] destination_mask The output after scattering the input
