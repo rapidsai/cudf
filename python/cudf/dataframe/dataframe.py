@@ -1403,13 +1403,17 @@ class DataFrame(object):
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
-            raise NotImplementedError("Only indicator=False is currently supported")
+            raise NotImplementedError(
+                "Only indicator=False is currently supported"
+            )
 
         if lsuffix or rsuffix:
             raise ValueError(
                 "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')" % (lsuffix or '_x', rsuffix or '_y')
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')" %
+                (lsuffix or '_x', rsuffix or '_y')
             )
         else:
             lsuffix, rsuffix = suffixes
@@ -1726,8 +1730,8 @@ class DataFrame(object):
         if rsuffix == '':
             rsuffix = 'r'
 
-        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
-                       rsuffix=rsuffix, method=method)
+        df = lhs.merge(rhs, on=[idx_col_name], how=how,
+                       suffixes=(lsuffix, rsuffix), method=method)
 
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
