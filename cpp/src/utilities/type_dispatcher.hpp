@@ -19,7 +19,7 @@
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
-#include "device_release_assert.cuh"
+#include "release_assert.cuh"
 #include <cassert>
 #include <utility>
 
@@ -132,7 +132,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
       
       // This will cause the calling kernel to crash as well as invalidate
       // the GPU context
-      device_release_assert(false && "Invalid gdf_dtype in type_dispatcher");
+      release_assert(false && "Invalid gdf_dtype in type_dispatcher");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.
