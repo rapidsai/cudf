@@ -30,6 +30,14 @@
 
 namespace cudf {
 namespace detail {
+
+/**---------------------------------------------------------------------------*
+ * @brief Exception thrown when logical precondition is violated.
+ *
+ * This exception should not be thrown directly and is instead thrown by the
+ * CUDF_EXPECTS macro.
+ *
+ *---------------------------------------------------------------------------**/
 struct logic_error : public std::logic_error {
   logic_error(char const* const message) : std::logic_error(message) {}
 
