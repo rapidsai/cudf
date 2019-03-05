@@ -273,7 +273,7 @@ struct column_gatherer {
    * on a `gather_map`.
    *
    * @tparam ColumnType Dispatched type for the column being gathered
-   * @param source_column The column that will be gathered from
+   * @param source_column The column to gather from
    * @param gather_map Array of indices that maps source elements to destination
    * elements
    * @param destination_column The column that will be gathered into
