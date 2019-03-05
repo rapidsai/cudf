@@ -48,3 +48,11 @@ TEST(ExpectsTest, TryCatch) {
     EXPECT_NE(std::string::npos, what.find("test reason"));
   }
 }
+
+TEST(CudaTest, Test) {
+  try {
+    CUDA_EXPECTS(cudaErrorLaunchFailure);
+  } catch (cudf::cuda_error const& e) {
+    std::cout << e.what() << std::endl;
+  }
+}

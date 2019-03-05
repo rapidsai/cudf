@@ -4,6 +4,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
+#include <stdexcept>
 
 #define CUDA_TRY(call)                                                    \
   {                                                                       \
@@ -42,6 +43,14 @@ struct logic_error : public std::logic_error {
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Exception thrown when a CUDA error is encountered.
+ *
+ *---------------------------------------------------------------------------**/
+struct cuda_error : public std::runtime_error {
+  cuda_error(char const* const message) : std::runtime_error(message) {}
+};
 }  // namespace cudf
 
 #define STRINGIFY_DETAIL(x) #x
@@ -56,10 +65,22 @@ struct logic_error : public std::logic_error {
  * expected to be true
  * @throw cudf::logic_error if the condition evaluates to false.
  *---------------------------------------------------------------------------**/
-#define CUDF_EXPECTS(cond, reason)              \
-  (!!(cond)) ? static_cast<void>(0)             \
-             : throw cudf::logic_error(         \
-                   "cuDF failure at: " __FILE__ \
-                   ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_EXPECTS(cond, reason)                           \
+  (!!(cond))                                                 \
+      ? static_cast<void>(0)                                 \
+      : throw cudf::logic_error("cuDF failure at: " __FILE__ \
+                                ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
+#define CUDA_EXPECTS(call)             \
+  do {                                 \
+    cudaError_t const status = (call); \
+    if (cudaSuccess != status) {       \
+      throw cudf::cuda_error("error"); \
+    }                                  \
+  } while (0)
 #endif
+
+//std::string const msg{                                              
+      //    "CUDA error encountered at: " + __FILE__ + ":" +                
+      //    CUDF_STRINGIFY(__LINE__) + ": " + std::to_string(error) + " " + 
+      //    cudaGetErrorName(error) + " " + cudaGetErrorString(error)};     
