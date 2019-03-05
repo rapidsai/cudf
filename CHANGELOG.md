@@ -1,3 +1,18 @@
+# cuDF 0.7.0 (Date TBD)
+
+## New Features
+
+...
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
