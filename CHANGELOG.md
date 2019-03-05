@@ -36,11 +36,14 @@
 - PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #1052 Add left/right_index and left/right_on keywords to merge
+- PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 
 ## Improvements
 
 - PR #892 Add support for heterogeneous types in binary ops with JIT 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #561 Add Doxygen style comments to Join CUDA functions
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
 - PR #822 Add support for `__cuda_array_interface__` for ingest
 - PR #756 Consolidate common helper functions from unordered map and multimap
@@ -63,9 +66,13 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+- PR #1036 Use Numpydoc style docstrings
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
+- PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
+- PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1092 Fix select_dtype docstring
 
 ## Bug Fixes
 
@@ -103,6 +110,8 @@
 - PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
+- PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1080 Fix dtypes returned from loc / iloc because of lists
 
 
 # cuDF 0.5.1 (05 Feb 2019)
