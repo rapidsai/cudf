@@ -2261,8 +2261,8 @@ class DataFrame(object):
 
         Parameters
         ----------
-        include : [type]
-            [description] (the default is None, which [default_description])
+        include : str or list
+            which columns to include based on dtypes
 
         """
 
