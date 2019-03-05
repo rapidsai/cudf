@@ -39,13 +39,16 @@ TEST(ExpectsTest, TrueCondition) {
   EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true"));
 }
 
-TEST(ExpectsTest, Message) {
+TEST(ExpectsTest, TryCatch) {
   try{
       CUDF_EXPECTS(false, "test message");
   }
   catch(cudf::detail::logic_error const& e){
       EXPECT_NE(nullptr, e.what());
       // TODO How to verify that the `what` message is as expected?
-      std::cout << e.what() << std::endl;
+      // The exact content of the `what()` message depends on where
+      // libcudf was built and therefore it's probably not appropriate to 
+      // test the exact contents in a GTest
+      //std::cout << e.what() << std::endl;
   }
 }
