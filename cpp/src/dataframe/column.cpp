@@ -21,7 +21,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "utilities/type_dispatcher.hpp"
 #include <cuda_runtime_api.h>
