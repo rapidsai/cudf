@@ -1721,10 +1721,6 @@ class DataFrame(object):
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
-                print(cats)
-                print(lhs[idx_col_name])
-                print(rhs[idx_col_name])
-
         if lsuffix == '':
             lsuffix = 'l'
         if rsuffix == '':
