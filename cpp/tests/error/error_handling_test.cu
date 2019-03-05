@@ -32,7 +32,7 @@ TEST(ErrorTest, NameEveryError) {
 
 TEST(ExpectsTest, FalseCondition) {
   EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"),
-               cudf::detail::logic_error);
+               cudf::logic_error);
 }
 
 TEST(ExpectsTest, TrueCondition) {
@@ -43,7 +43,7 @@ TEST(ExpectsTest, TryCatch) {
   try{
       CUDF_EXPECTS(false, "test message");
   }
-  catch(cudf::detail::logic_error const& e){
+  catch(cudf::logic_error const& e){
       EXPECT_NE(nullptr, e.what());
       // TODO How to verify that the `what` message is as expected?
       // The exact content of the `what()` message depends on where

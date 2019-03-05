@@ -54,11 +54,11 @@ struct logic_error : public std::logic_error {
  * @param[in] cond Expression that evaluates to true or false
  * @param[in] reason String literal description of the reason that cond is
  * expected to be true
- * @throw cudf::detail::logic_error if the condition evaluates to false.
+ * @throw cudf::logic_error if the condition evaluates to false.
  *---------------------------------------------------------------------------**/
 #define CUDF_EXPECTS(cond, reason)              \
   (!!(cond)) ? static_cast<void>(0)             \
-             : throw cudf::detail::logic_error( \
+             : throw cudf::logic_error(         \
                    "cuDF failure at: " __FILE__ \
                    ":" CUDF_STRINGIFY(__LINE__) ". Reason: " reason)
 
