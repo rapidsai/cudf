@@ -632,4 +632,18 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                 col = newcol.view(NumericalColumn, dtype=newcol.dtype)
             outcols.append(Series(col))
 
-    return outcols
+    # Build dataframe
+    df = DataFrame()
+    # if names is not None and header_infer is -1:
+
+    for k, v in zip(new_names, outcols):
+        df[k] = v
+
+    # Set index if the index_col parameter is passed
+    if index_col is not None and index_col is not False:
+        if isinstance(index_col, (int)):
+            df = df.set_index(df.columns[index_col])
+        else:
+            df = df.set_index(index_col)
+
+    return df

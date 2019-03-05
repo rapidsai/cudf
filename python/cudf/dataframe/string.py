@@ -9,6 +9,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
 from cudf.dataframe import columnops
+from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 # from cudf.comm.serialize import register_distributed_serializer
 
@@ -51,7 +52,17 @@ class StringMethods(object):
         out_dev_arr = rmm.device_array(len(self._parent), dtype='int32')
         ptr = get_ctype_ptr(out_dev_arr)
         self._parent.data.len(ptr)
-        return Series(out_dev_arr, index=self._index)
+
+        mask = None
+        if self._parent.null_count > 0:
+            mask = self._parent.mask
+
+        column = columnops.build_column(
+            Buffer(out_dev_arr),
+            np.dtype('int32'),
+            mask=mask
+        )
+        return Series(column, index=self._index)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -107,7 +118,202 @@ class StringMethods(object):
         Join lists contained as elements in the Series/Index with passed
         delimiter.
         """
-        raise NotImplementedError("We don't support nested types yet")
+        raise NotImplementedError("Columns of arrays / lists are not yet "
+                                  "supported")
+
+    def extract(self, pat, flags=0, expand=True):
+        """
+        Extract capture groups in the regex `pat` as columns in a DataFrame.
+
+        For each subject string in the Series, extract groups from the first
+        match of regular expression `pat`.
+
+        Parameters
+        ----------
+        pat : str
+            Regular expression pattern with capturing groups.
+        expand : bool, default True
+            If True, return DataFrame with on column per capture group.
+            If False, return a Series/Index if there is one capture group or
+            DataFrame if there are multiple capture groups.
+
+        Returns
+        -------
+        DataFrame or Series/Index
+            A DataFrame with one row for each subject string, and one column
+            for each group. If `expand=False` and `pat` has only one capture
+            group, then return a Series/Index.
+
+        Notes
+        -----
+        The `flags` parameter is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is passed.
+        """
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        from cudf.dataframe import DataFrame, Series
+        out = self._parent.data.extract_column(pat)
+        if len(out) == 1 and expand is False:
+            return Series(
+                out[0],
+                index=self._index
+            )
+        else:
+            out_df = DataFrame(index=self._index)
+            for idx, val in enumerate(out):
+                out_df[idx] = val
+            return out_df
+
+    def contains(self, pat, case=True, flags=0, na=np.nan, regex=True):
+        """
+        Test if pattern or regex is contained within a string of a Series or
+        Index.
+
+        Return boolean Series or Index based on whether a given pattern or
+        regex is contained within a string of a Series or Index.
+
+        Parameters
+        ----------
+        pat : str
+            Character sequence or regular expression.
+        regex : bool, default True
+            If True, assumes the pattern is a regular expression.
+            If False, treats the pattern as a literal string.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+            A Series/Index of boolean dtype indicating whether the given
+            pattern is contained within the string of each element of the
+            Series/Index.
+
+        Notes
+        -----
+        The parameters `case`, `flags`, and `na` are not yet supported and
+        will raise a NotImplementedError if anything other than the default
+        value is set.
+        """
+        if case is not True:
+            raise NotImplementedError("`case` parameter is not yet supported")
+        elif flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+        elif na is not np.nan:
+            raise NotImplementedError("`na` parameter is not yet supported")
+
+        from cudf.dataframe import Series
+        out_dev_arr = rmm.device_array(len(self._parent), dtype='bool')
+        ptr = get_ctype_ptr(out_dev_arr)
+        self._parent.data.contains(pat, regex=regex, devptr=ptr)
+
+        mask = None
+        if self._parent.null_count > 0:
+            mask = self._parent.mask
+
+        column = columnops.build_column(
+            Buffer(out_dev_arr),
+            np.dtype('bool'),
+            mask=mask
+        )
+
+        return Series(
+            column,
+            index=self._index
+        )
+
+    def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
+        """
+        Replace occurences of pattern/regex in the Series/Index with some other
+        string.
+
+        Parameters
+        ----------
+        pat : str
+            String to be replaced as a character sequence or regular
+            expression.
+        repl : str
+            String to be used as replacement.
+        n : int, default -1 (all)
+            Number of replacements to make from the start.
+        regex : bool, default True
+            If True, assumes the pattern is a regular expression.
+            If False, treats the pattern as a literal string.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A copy of the object with all matching occurrences of pat replaced
+            by repl.
+
+        Notes
+        -----
+        The parameters `case` and `flags` are not yet supported and will raise
+        a NotImplementedError if anything other than the default value is set.
+        """
+        if case is not None:
+            raise NotImplementedError("`case` parameter is not yet supported")
+        elif flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        # Pandas treats 0 as all
+        if n == 0:
+            n = -1
+
+        from cudf.dataframe import Series
+        return Series(
+            self._parent.data.replace(pat, repl, n=n, regex=regex),
+            index=self._index
+        )
+
+    def lower(self):
+        """
+        Convert strings in the Series/Index to lowercase.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A copy of the object with all strings converted to lowercase.
+        """
+        from cudf.dataframe import Series
+        return Series(
+            self._parent.data.lower(),
+            index=self._index
+        )
+
+    def split(self, pat=' ', n=-1, expand=True):
+        """
+        Split strings around given separator/delimiter.
+
+        Splits the string in the Series/Index from the beginning, at the
+        specified delimiter string.
+
+        Parameters
+        ----------
+        pat : str, default ' ' (space)
+            String to split on, does not yet support regular expressions.
+        n : int, default -1 (all)
+            Limit number of splits in output. `None`, 0, and -1 will all be
+            interpreted as "all splits".
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame with each split as a column.
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
+        if expand is not True:
+            raise NotImplementedError("`expand` parameter is not supported")
+
+        from cudf.dataframe import DataFrame
+        out_df = DataFrame(index=self._index)
+        out = self._parent.data.split_column(delimiter=pat, n=n)
+        for idx, val in enumerate(out):
+            out_df[idx] = val
+        return out_df
 
 
 class StringColumn(columnops.TypedColumnBase):
@@ -128,6 +334,7 @@ class StringColumn(columnops.TypedColumnBase):
         if null_count is None:
             null_count = data.null_count()
         self._null_count = null_count
+        self._mask = None
 
     # def serialize(self, serialize):
     #     header, frames = super(StringColumn, self).serialize(serialize)
@@ -165,6 +372,19 @@ class StringColumn(columnops.TypedColumnBase):
     @property
     def null_count(self):
         return self._null_count
+
+    @property
+    def mask(self):
+        """Validity mask buffer
+        """
+        if self._mask is None:
+            mask_size = utils.calc_chunk_size(len(self.data),
+                                              utils.mask_bitsize)
+            out_mask_arr = rmm.device_array(mask_size, dtype='int8')
+            out_mask_ptr = get_ctype_ptr(out_mask_arr)
+            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
+            self._mask = Buffer(out_mask_arr)
+        return self._mask
 
     def element_indexing(self, arg):
         if isinstance(arg, Number):

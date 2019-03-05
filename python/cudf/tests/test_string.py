@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import pytest
+from contextlib import ExitStack as does_not_raise
 
 import numpy as np
 import pandas as pd
@@ -14,8 +15,8 @@ from librmm_cffi import librmm as rmm
 
 
 data_list = [
-    ['a', 'b', 'c', 'd', 'e'],
-    ['a', None, 'c', None, 'e'],
+    ['AbC', 'de', 'FGHI', 'j', 'kLm'],
+    ['nOPq', None, 'RsT', None, 'uVw'],
     [None, None, None, None, None]
 ]
 
@@ -34,6 +35,13 @@ idx_id_list = [
     "None_index",
     "Set_index"
 ]
+
+
+def raise_builder(flags, exceptions):
+    if any(flags):
+        return pytest.raises(exceptions)
+    else:
+        return does_not_raise()
 
 
 @pytest.fixture(params=data_list, ids=data_id_list)
@@ -76,11 +84,8 @@ def test_string_export(ps_gs):
     np.testing.assert_array_equal(expect, got)
 
     expect = pa.Array.from_pandas(ps)
-    print(type(expect))
-    print(expect)
     got = gs.to_arrow()
-    print(type(got))
-    print(got)
+
     assert pa.Array.equals(expect, got)
 
 
@@ -157,9 +162,6 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    print(expect)
-    print(got)
-
     if isinstance(expect_out, pd.Series):
         expect = expect.replace("object", "str")
 
@@ -200,17 +202,14 @@ def test_string_concat():
 def test_string_len(ps_gs):
     ps, gs = ps_gs
 
-    if gs.null_count > 0:
-        pytest.xfail("Currently nvstrings returns -1 for nulls instead of "
-                     "passing nulls")
-
     expect = ps.str.len()
     got = gs.str.len()
 
-    # Pandas returns as an int64 while we return as an int32
-    expect = expect.astype('int32')
-
-    assert_eq(expect, got)
+    # Can't handle nulls in Pandas so use PyArrow instead
+    # Pandas will return as a float64 so need to typecast to int32
+    expect = pa.array(expect, from_pandas=True).cast(pa.int32())
+    got = got.to_arrow()
+    assert pa.Array.equals(expect, got)
 
 
 @pytest.mark.parametrize('others', [
@@ -221,17 +220,12 @@ def test_string_len(ps_gs):
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
 @pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
 def test_string_cat(ps_gs, others, sep, na_rep):
-    if na_rep == '':
-        pytest.xfail("NVStrings isn't handling empty strings correctly")
     ps, gs = ps_gs
 
     expect = ps.str.cat(others=others, sep=sep, na_rep=na_rep)
     if isinstance(others, pd.Series):
         others = Series(others)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
-
-    print(expect)
-    print(got)
 
     assert_eq(expect, got)
 
@@ -245,3 +239,140 @@ def test_string_join(ps_gs, sep):
     got = gs.str.join(sep)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('pat', [
+    r'(a)',
+    r'(f)',
+    r'([a-z])',
+    r'([A-Z])'
+])
+@pytest.mark.parametrize('expand', [True, False])
+@pytest.mark.parametrize('flags,flags_raise', [
+    (0, 0),
+    (1, 1)
+])
+def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
+    ps, gs = ps_gs
+    expectation = raise_builder([flags_raise], NotImplementedError)
+
+    with expectation:
+        expect = ps.str.extract(pat, flags=flags, expand=expand)
+        got = gs.str.extract(pat, flags=flags, expand=expand)
+
+        assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('pat,regex', [
+    ('a', False),
+    ('f', False),
+    (r'[a-z]', True),
+    (r'[A-Z]', True)
+])
+@pytest.mark.parametrize('case,case_raise', [
+    (True, 0),
+    (False, 1)
+])
+@pytest.mark.parametrize('flags,flags_raise', [
+    (0, 0),
+    (1, 1)
+])
+@pytest.mark.parametrize('na,na_raise', [
+    (np.nan, 0),
+    (None, 1),
+    ('', 1)
+])
+def test_string_contains(ps_gs, pat, regex, case, case_raise, flags,
+                         flags_raise, na, na_raise):
+    ps, gs = ps_gs
+
+    expectation = raise_builder(
+        [case_raise, flags_raise, na_raise],
+        NotImplementedError
+    )
+
+    with expectation:
+        expect = ps.str.contains(pat, case=case, flags=flags, na=na,
+                                 regex=regex)
+        got = gs.str.contains(pat, case=case, flags=flags, na=na, regex=regex)
+
+        expect = pa.array(expect, from_pandas=True).cast(pa.bool_())
+        got = got.to_arrow()
+
+        assert pa.Array.equals(expect, got)
+
+
+# Pandas isn't respect the `n` parameter so ignoring it in test parameters
+@pytest.mark.parametrize('pat,regex', [
+    ('a', False),
+    ('f', False),
+    (r'[a-z]', True),
+    (r'[A-Z]', True)
+])
+@pytest.mark.parametrize('repl', ['qwerty', '', ' '])
+@pytest.mark.parametrize('case,case_raise', [
+    (None, 0),
+    (True, 1),
+    (False, 1)
+])
+@pytest.mark.parametrize('flags,flags_raise', [
+    (0, 0),
+    (1, 1)
+])
+def test_string_replace(ps_gs, pat, repl, case, case_raise, flags,
+                        flags_raise, regex):
+    ps, gs = ps_gs
+
+    expectation = raise_builder(
+        [case_raise, flags_raise],
+        NotImplementedError
+    )
+
+    with expectation:
+        expect = ps.str.replace(pat, repl, case=case, flags=flags,
+                                regex=regex)
+        got = gs.str.replace(pat, repl, case=case, flags=flags,
+                             regex=regex)
+
+        assert_eq(expect, got)
+
+
+def test_string_lower(ps_gs):
+    ps, gs = ps_gs
+
+    expect = ps.str.lower()
+    got = ps.str.lower()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('data', [
+    ['a b', ' c ', '   d', 'e   ', 'f'],
+    ['a-b', '-c-', '---d', 'e---', 'f'],
+    ['ab', 'c', 'd', 'e', 'f'],
+    [None, None, None, None, None]
+])
+@pytest.mark.parametrize('pat', [
+    None,
+    ' ',
+    '-'
+])
+@pytest.mark.parametrize('n', [-1, 0, 3, 10])
+@pytest.mark.parametrize('expand,expand_raise', [
+    (True, 0),
+    (False, 1)
+])
+def test_string_split(data, pat, n, expand, expand_raise):
+    ps = pd.Series(data, dtype='str')
+    gs = Series(data, dtype='str')
+
+    expectation = raise_builder(
+        [expand_raise],
+        NotImplementedError
+    )
+
+    with expectation:
+        expect = ps.str.split(pat=pat, n=n, expand=expand)
+        got = gs.str.split(pat=pat, n=n, expand=expand)
+
+        assert_eq(expect, got)
