@@ -38,3 +38,14 @@ TEST(ExpectsTest, FalseCondition) {
 TEST(ExpectsTest, TrueCondition) {
   EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true"));
 }
+
+TEST(ExpectsTest, Message) {
+  try{
+      CUDF_EXPECTS(false, "test message");
+  }
+  catch(cudf::detail::logic_error const& e){
+      EXPECT_NE(nullptr, e.what());
+      // TODO How to verify that the `what` message is as expected?
+      std::cout << e.what() << std::endl;
+  }
+}
