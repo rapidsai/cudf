@@ -4,6 +4,7 @@
 
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
+- PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
