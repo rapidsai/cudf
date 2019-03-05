@@ -103,7 +103,7 @@ class StringMethods(object):
         """
         from cudf.dataframe import Series, Index
         if isinstance(others, (Series, Index)):
-            assert others.dtype == np.dtype('str')
+            assert others.dtype == np.dtype('object')
             others = others.data
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
@@ -362,7 +362,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     @property
     def dtype(self):
-        return np.dtype('str')
+        return np.dtype('object')
 
     @property
     def data(self):

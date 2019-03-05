@@ -620,12 +620,15 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     # Extract parsed columns
 
     outcols = []
+    new_names = []
     for i in range(csv_reader.num_cols_out):
         if out[i].dtype == libgdf.GDF_STRING:
             ptr = int(ffi.cast("uintptr_t", out[i].data))
+            new_names.append(ffi.string(out[i].col_name).decode())
             outcols.append(nvstrings.bind_cpointer(ptr))
         else:
             newcol = Column.from_cffi_view(out[i])
+            new_names.append(ffi.string(out[i].col_name).decode())
             if(newcol.dtype == np.dtype('datetime64[ms]')):
                 col = newcol.view(DatetimeColumn, dtype='datetime64[ms]')
             else:

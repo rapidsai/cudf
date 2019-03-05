@@ -66,7 +66,7 @@ def test_string_ingest(construct):
     expect = ['a', 'a', 'b', 'c', 'a']
     data = construct(expect)
     got = Series(data)
-    assert got.dtype == np.dtype('str')
+    assert got.dtype == np.dtype('object')
     assert len(got) == 5
     for idx, val in enumerate(expect):
         assert expect[idx] == got[idx]
