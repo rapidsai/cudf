@@ -169,36 +169,11 @@ gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *h
 * The null_count of the keycol and valcol columns are expected to be 0
 * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
 */
-gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
+                                  gdf_column *keycol, gdf_column *valcol,
+                                  unsigned num_segments,
+                                  unsigned *d_begin_offsets,
+                                  unsigned *d_end_offsets);
 
 
 // transpose
