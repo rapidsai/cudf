@@ -1240,8 +1240,8 @@ class DataFrame(object):
         return self.transpose()
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
-              left_index=False, right_index=False, lsuffix='_x', rsuffix='_y',
-              type="", method='hash'):
+              left_index=False, right_index=False, lsuffix=None, rsuffix=None,
+              type="", method='hash', indicator=False, suffixes=('_x', '_y')):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
 
@@ -1271,10 +1271,9 @@ class DataFrame(object):
             Only accepts 'left'
             left: use only keys from left frame, similar to
             a SQL left outer join; preserve key order
-        lsuffix : str, defaults to '_x'
-            Suffix applied to overlapping column names on the left side
-        rsuffix : str, defaults to '_y'
-            Suffix applied to overlapping column names on the right side
+        suffixes: Tuple[str, str], defaults to ('_x', '_y')
+            Suffixes applied to overlapping column names on the left and right
+            sides
         type : str, defaults to 'hash'
 
         Returns
@@ -1300,6 +1299,21 @@ class DataFrame(object):
         2    4    14.0    12.0
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        if indicator:
+            raise NotImplementedError(
+                "Only indicator=False is currently supported"
+            )
+
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')" %
+                (lsuffix or '_x', rsuffix or '_y')
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
         if left_on and right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
@@ -1604,17 +1618,13 @@ class DataFrame(object):
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
-                print(cats)
-                print(lhs[idx_col_name])
-                print(rhs[idx_col_name])
-
         if lsuffix == '':
             lsuffix = 'l'
         if rsuffix == '':
             rsuffix = 'r'
 
-        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
-                       rsuffix=rsuffix, method=method)
+        df = lhs.merge(rhs, on=[idx_col_name], how=how,
+                       suffixes=(lsuffix, rsuffix), method=method)
 
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
@@ -2251,8 +2261,8 @@ class DataFrame(object):
 
         Parameters
         ----------
-        include : [type]
-            [description] (the default is None, which [default_description])
+        include : str or list
+            which columns to include based on dtypes
 
         """
 

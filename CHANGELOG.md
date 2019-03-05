@@ -52,6 +52,7 @@
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
 - PR #1052 Add left/right_index and left/right_on keywords to merge
+- PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 
 ## Improvements
 
@@ -86,6 +87,7 @@
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1092 Fix select_dtype docstring
 
 ## Bug Fixes
 
