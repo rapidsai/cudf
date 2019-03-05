@@ -229,7 +229,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
         fp.write('\n'.join(lines) + '\n')
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-                            quotechar='\"', quoting=True)
+                            quotechar='\"', quoting=1)
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
@@ -933,3 +933,20 @@ def test_csv_reader_hex_ints(tmpdir):
     df = read_csv(StringIO(buffer),
                   names=['hex_int'])
     np.testing.assert_array_equal(values, df['hex_int'])
+
+
+@pytest.mark.parametrize('quoting', [0, 1, 2, 3])
+def test_csv_reader_pd_consistent_quotes(quoting):
+    names = ['text']
+    dtypes = ['str']
+    lines = ['"a"', '"b ""c"" d"', '"f!\n."']
+
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_cols = read_csv_strings(StringIO(buffer),
+                               names=names, dtype=dtypes, quoting=quoting)
+    pd_df = pd.read_csv(StringIO(buffer),
+                        names=names, quoting=quoting)
+
+    col = [str(elem) for elem in cu_cols[0].to_host()]
+    np.testing.assert_array_equal(pd_df['text'], col)
