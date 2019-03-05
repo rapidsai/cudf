@@ -347,7 +347,6 @@ gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
                  cudaStream_t stream) {
   assert(source_table->size() == destination_table->size());
 
-
   gdf_error gdf_status{GDF_SUCCESS};
 
   auto gather_column = [gather_map, check_bounds, stream](
