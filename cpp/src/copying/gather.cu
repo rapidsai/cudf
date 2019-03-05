@@ -276,7 +276,7 @@ struct column_gatherer {
    * @param source_column The column to gather from
    * @param gather_map Array of indices that maps source elements to destination
    * elements
-   * @param destination_column The column that will be gathered into
+   * @param destination_column The column to gather into
    * @param check_bounds Optionally perform bounds checking on the values of
    * `gather_map`
    * @param stream Optional CUDA stream on which to execute kernels
