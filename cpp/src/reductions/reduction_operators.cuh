@@ -5,7 +5,7 @@
 namespace cudf {
 namespace reduction {
 
-
+// force reinterpret cast
 template <typename T_output, typename T_input>
 __forceinline__  __device__
 T_output type_reinterpret(T_input value)
@@ -24,6 +24,9 @@ T_input genericAtomicCAS_type(T_input* addr, T_input const & expected, T_input c
     return type_reinterpret<T_input, T_internal>(ret);
 }
 
+
+// -----------------------------------------------------------------------------------------
+// generic atomic CAS
 template <typename T>
 __forceinline__  __device__
 T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
@@ -48,6 +51,7 @@ double genericAtomicCAS(double* addr, double const & expected, double const & ne
     return genericAtomicCAS_type<double, unsigned long long int>(addr, expected, new_value);
 }
 
+// int8_t/int16_t assumes that the address of addr must aligned with int32_t
 template <>
 __forceinline__  __device__
 int8_t genericAtomicCAS(int8_t* addr, int8_t const & expected, int8_t const & new_value)
@@ -69,34 +73,7 @@ int64_t genericAtomicCAS(int64_t* addr, int64_t const & expected, int64_t const 
     return genericAtomicCAS_type<int64_t, unsigned long long int>(addr, expected, new_value);
 }
 
-// -------------------
-
-template <typename T, typename Op>
-__forceinline__  __device__
-void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
-{
-  const T insert_value = update_value;
-  T old_value = existing_value;
-  T expected{old_value};
-
-  // Attempt to perform the aggregation with existing_value and
-  // store the result atomically
-  do
-  {
-    expected = old_value;
-
-    const T new_value = op(insert_value, old_value);
-
-    old_value = genericAtomicCAS(&existing_value, expected, new_value);
-  }
-  // Guard against another thread's update to existing_value
-  while( expected != old_value );
-}
-
-
-// TODO: specialized functions for available pair of operation and precision
-
-
+// -----------------------------------------------------------------------------------------
 
 template<typename T>
 struct IdentityLoader {
@@ -174,6 +151,83 @@ struct DeviceMax : DeviceForNonArithmetic {
     static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
 };
 
+
+// -----------------------------------------------------------------------------------------
+
+template <typename T, typename Op>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
+{
+  T old_value = existing_value;
+  T expected{old_value};
+
+  // Attempt to perform the aggregation with existing_value and
+  // store the result atomically
+  do
+  {
+    expected = old_value;
+
+    const T new_value = op(update_value, old_value);
+
+    old_value = genericAtomicCAS(&existing_value, expected, new_value);
+  }
+  // Guard against another thread's update to existing_value
+  while( expected != old_value );
+}
+
+// -----------------------------------------------------------------------------------------
+// specialized functions for operators
+// `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
+// `atomicMin`, `atomicMax` support int32_t, int64_t
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceSum<int32_t> op)
+{
+    atomicAdd(&existing_value, update_value);
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceSum<float> op)
+{
+    atomicAdd(&existing_value, update_value);
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceSum<double> op)
+{
+    atomicAdd(&existing_value, update_value);
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceMin<int32_t> op)
+{
+    atomicMin(&existing_value, update_value);
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceMin<int64_t> op)
+{
+    atomicMin(reinterpret_cast<long long*>(&existing_value), static_cast<long long>(update_value));
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceMax<int32_t> op)
+{
+    atomicMax(&existing_value, update_value);
+}
+
+template <typename T>
+__forceinline__  __device__
+void genericAtomicOperation(T& existing_value, T const & update_value, DeviceMax<int64_t> op)
+{
+    atomicMax(reinterpret_cast<long long*>(&existing_value), static_cast<long long>(update_value));
+}
 
 } // namespace reduction
 } // namespace cudf
