@@ -1334,7 +1334,7 @@ class DataFrame(object):
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, lsuffix='_x', rsuffix='_y',
-              type="", method='hash'):
+              type="", method='hash', indicator=False):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
 
@@ -1403,6 +1403,8 @@ class DataFrame(object):
              2    4 14.0   12.0
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        if indicator:
+            raise NotImplementedError("Only indicator=False is currently supported")
 
         if left_on and right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
