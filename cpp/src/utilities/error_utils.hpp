@@ -29,8 +29,6 @@
   if (!(F)) return (S);
 
 namespace cudf {
-namespace detail {
-
 /**---------------------------------------------------------------------------*
  * @brief Exception thrown when logical precondition is violated.
  *
@@ -44,7 +42,6 @@ struct logic_error : public std::logic_error {
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
 };
-}  // namespace detail
 }  // namespace cudf
 
 #define STRINGIFY_DETAIL(x) #x
