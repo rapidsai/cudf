@@ -16,14 +16,12 @@
 
 #include <type_traits>
 #include <algorithm>
-#include <thrust/sequence.h>
-#include <thrust/equal.h>
 
 #include "cudf.h"
 #include "dlpack/dlpack.h"
 
-#include "rmm/thrust_rmm_allocator.h"
 #include "tests/utilities/cudf_test_fixtures.h"
+#include "tests/utilities/column_wrapper.cuh"
 
 template <class TestParameters>
 struct DLPackTypedTest : public GdfTest
@@ -44,11 +42,11 @@ using Types = testing::Types<int8_t,
 TYPED_TEST_CASE(DLPackTypedTest, Types);
 
 namespace{
-  static inline size_t tensor_size(const DLTensor *t)
+  static inline size_t tensor_size(const DLTensor& t)
   {
     size_t size = 1;
-    for (int i = 0; i < t->ndim; ++i) size *= t->shape[i];
-    size *= (t->dtype.bits * t->dtype.lanes + 7) / 8;
+    for (int i = 0; i < t.ndim; ++i) size *= t.shape[i];
+    size *= (t.dtype.bits * t.dtype.lanes + 7) / 8;
     return size;
   }
 
@@ -110,23 +108,21 @@ namespace{
 
     T *data = nullptr;
     const size_t N = nrows * ncols;
-    size_t bytesize = tensor_size(&(mng_tensor->dl_tensor));
+    size_t bytesize = tensor_size(mng_tensor->dl_tensor);
 
-    if (kDLGPU == device_type) {  
+    T *init = new T[N];
+    for (gdf_size_type c = 0; c < ncols; ++c)
+      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i;
+
+    if (kDLGPU == device_type) {
       EXPECT_EQ(RMM_ALLOC(&data, bytesize, 0), RMM_SUCCESS);
-      
-      // For some reason this raises an invalid device pointer exception...
-      //thrust::sequence(rmm::exec_policy(0)->on(0), data, data + N);
-
-      T *init = new T[N];
-      for (size_t i = 0; i < N; i++) init[i] = i;
       cudaMemcpy(data, init, bytesize, cudaMemcpyDefault);
-      delete [] init;
     } else {
       data = static_cast<T*>(malloc(bytesize));
-      thrust::sequence(thrust::host, data, data + N);
+      memcpy(data, init, bytesize);
     }
-    
+    delete [] init;
+
     EXPECT_NE(data, nullptr);
     if (data == nullptr) return nullptr;
     tensor.data = data;
@@ -140,12 +136,12 @@ namespace{
 
 TEST_F(DLPackTest, InvalidDeviceType)
 {
-  using TensorType = int32_t;
+  using T = int32_t;
 
   constexpr int64_t length = 100;
 
   DLManagedTensor *mng_tensor = 
-    create_DLTensor<TensorType>(1, length, kDLCPU);
+    create_DLTensor<T>(1, length, kDLCPU);
   ASSERT_NE(mng_tensor, nullptr);
 
   gdf_column *columns = nullptr;
@@ -165,14 +161,14 @@ TEST_F(DLPackTest, InvalidDeviceType)
 
 TEST_F(DLPackTest, InvalidDevice)
 {
-  using TensorType = int32_t;
+  using T = int32_t;
   constexpr int64_t length = 100;
 
   int device_id = 0;
   ASSERT_EQ(cudaGetDevice(&device_id), cudaSuccess);
 
   DLManagedTensor *mng_tensor = 
-    create_DLTensor<TensorType>(1, length);
+    create_DLTensor<T>(1, length);
 
   // spoof the wrong device ID
   mng_tensor->dl_tensor.ctx.device_id = device_id + 1;
@@ -190,15 +186,17 @@ TEST_F(DLPackTest, InvalidDevice)
 }
 
 TEST_F(DLPackTest, UnsupportedDimensions) {
-  using TensorType = int32_t;
+  using T = int32_t;
   constexpr int64_t length = 100;
 
   DLManagedTensor *mng_tensor = 
-    create_DLTensor<TensorType>(2, length);
+    create_DLTensor<T>(2, length);
 
   gdf_column *columns = nullptr;
   int num_columns = 0;
   
+  // too many dimensions
+  mng_tensor->dl_tensor.ndim = 3;
   ASSERT_EQ(gdf_from_dlpack(&columns, &num_columns, mng_tensor), 
                             GDF_NOTIMPLEMENTED_ERROR);
 
@@ -224,11 +222,11 @@ TEST_F(DLPackTest, UnsupportedDimensions) {
 
 TEST_F(DLPackTest, UnsupportedDataType)
 {
-  using TensorType = uint32_t; // unsigned types not supported yet
+  using T = uint32_t; // unsigned types not supported yet
   constexpr int64_t length = 100;
 
   DLManagedTensor *mng_tensor = 
-    create_DLTensor<TensorType>(1, length);
+    create_DLTensor<T>(1, length);
 
   gdf_column *columns = nullptr;
   int num_columns = 0;
@@ -252,6 +250,7 @@ TEST_F(DLPackTest, ToDLPack_EmptyDataset)
   ASSERT_EQ(gdf_to_dlpack(tensor, columns, 0), GDF_DATASET_EMPTY);
 
   columns[0] = new gdf_column;
+  columns[0]->dtype = GDF_FLOAT32;
   columns[0]->size = 0;
 
   ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_DATASET_EMPTY);
@@ -282,12 +281,41 @@ TEST_F(DLPackTest, ToDLPack_ColumnMismatch)
   delete [] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, FromDLPack)
+TEST_F(DLPackTest, ToDLPack_NonNumerical)
 {
-  using TensorType = typename TestFixture::TestParam;
+  gdf_column **columns = new gdf_column*[1];
+  columns[0] = new gdf_column;
+  columns[0]->size = 1;
+
+  DLManagedTensor *tensor = new DLManagedTensor;
+
+  // all non-numeric gdf_dtype enums results in GDF_UNSUPPORTED_TYPE
+  columns[0]->dtype = GDF_invalid;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_UNSUPPORTED_DTYPE);
+
+  columns[0]->dtype = GDF_DATE32;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_UNSUPPORTED_DTYPE);
+
+  columns[0]->dtype = GDF_DATE64;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_UNSUPPORTED_DTYPE);
+
+  columns[0]->dtype = GDF_TIMESTAMP;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_UNSUPPORTED_DTYPE);
+
+  columns[0]->dtype = GDF_CATEGORY;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_UNSUPPORTED_DTYPE);
+
+  delete tensor;
+  delete columns[0];
+  delete [] columns;
+}
+
+TYPED_TEST(DLPackTypedTest, FromDLPack_SingleColumn)
+{
+  using T = typename TestFixture::TestParam;
   constexpr int64_t length = 100;
 
-  DLManagedTensor *mng_tensor = create_DLTensor<TensorType>(1, length);
+  DLManagedTensor *mng_tensor = create_DLTensor<T>(1, length);
   ASSERT_NE(mng_tensor, nullptr);
 
   gdf_column *columns = nullptr;
@@ -299,27 +327,111 @@ TYPED_TEST(DLPackTypedTest, FromDLPack)
   ASSERT_EQ(num_columns, 1);
   ASSERT_EQ(columns[0].size, length);
 
-  TensorType *output = new TensorType[length];
-  cudaMemcpy(output, columns[0].data, length * sizeof(TensorType), cudaMemcpyDefault);
+  T *output = new T[length];
+  cudaMemcpy(output, columns[0].data, length * sizeof(T), cudaMemcpyDefault);
   for (int64_t i = 0; i < length; i++)
-    EXPECT_EQ(static_cast<TensorType>(i), output[i]);
+    EXPECT_EQ(static_cast<T>(i), output[i]);
   
   delete [] output;
 
-  // This causes an invalid device pointer exception
-  /*ASSERT_TRUE(thrust::equal(rmm::exec_policy(0)->on(0), 
-                            thrust::make_counting_iterator<TensorType>(0), 
-                            thrust::make_counting_iterator<TensorType>(length), 
-                            reinterpret_cast<TensorType*>(columns[0].data)));*/
-  
   gdf_column_free(&columns[0]);
   delete [] columns;
 }
 
-
-
-/*TYPED_TEST(DLPackTypedTest, ToDLPack)
+TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn)
 {
+  using T = typename TestFixture::TestParam;
+  constexpr int64_t length = 100;
+  constexpr int64_t width = 3;
+
+  DLManagedTensor *mng_tensor = create_DLTensor<T>(width, length);
+  ASSERT_NE(mng_tensor, nullptr);
+
+  gdf_column *columns = nullptr;
+  int num_columns = 0;
+  ASSERT_EQ(gdf_from_dlpack(&columns, &num_columns, mng_tensor), GDF_SUCCESS);
+  ASSERT_NE(columns, nullptr);
+
+  ASSERT_EQ(num_columns, width);
+
+  for (int64_t c = 0; c < num_columns; ++c)
+  {
+    ASSERT_EQ(columns[c].size, length);
+
+    T *output = new T[length];
+    cudaMemcpy(output, columns[c].data, length * sizeof(T), cudaMemcpyDefault);
+    for (int64_t i = 0; i < length; i++)
+      EXPECT_EQ(static_cast<T>(i), output[i]);
+
+    delete [] output;
+    gdf_column_free(&columns[c]);
+  }
+
+  delete [] columns;
+}
+
+TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn)
+{
+  using T = typename TestFixture::TestParam;
+
+  constexpr int64_t length = 100;
+  cudf::test::column_wrapper<T> col0(length,
+                                     [](gdf_index_type i) { return i; },
+                                     [](gdf_index_type i) { return true; });
+
+  gdf_column **columns = new gdf_column*[1];
+  columns[0] = col0.get();
+
+  DLManagedTensor *tensor = new DLManagedTensor;
+
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_SUCCESS);
+
+  ASSERT_EQ(tensor->dl_tensor.ndim, 1);
+  ASSERT_EQ(tensor->dl_tensor.shape[0], length);
+
+  T *output = new T[length];
+  cudaMemcpy(output, tensor->dl_tensor.data, length * sizeof(T), cudaMemcpyDefault);
+  for (int64_t i = 0; i < length; i++)
+    EXPECT_EQ(static_cast<T>(i), output[i]);
+  delete [] output;
+
+  tensor->deleter(tensor);
+  delete [] columns;
+}
+
+TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
+{
+  using T = typename TestFixture::TestParam;
+
+  constexpr int64_t length = 100;
+  constexpr int64_t width = 3;
+  cudf::test::column_wrapper<T>* cols[width];
+  gdf_column *columns[width];
+
+  for (int64_t c = 0; c < width; c++) {
+    cols[c] = new cudf::test::column_wrapper<T>(length,
+                                                [c](gdf_index_type i) { return i*(c+1); },
+                                                [](gdf_index_type i) { return true; });
+    columns[c] = cols[c]->get();
+  }
+
+  DLManagedTensor *tensor = new DLManagedTensor;
+
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, width), GDF_SUCCESS);
+
+  ASSERT_EQ(tensor->dl_tensor.ndim, 2);
+  ASSERT_EQ(tensor->dl_tensor.shape[0], length);
+  ASSERT_EQ(tensor->dl_tensor.shape[1], width);
+
+  T *output = new T[tensor_size(tensor->dl_tensor)/sizeof(T)];
+  cudaMemcpy(output, tensor->dl_tensor.data, width * length * sizeof(T), cudaMemcpyDefault);
+  for (int64_t c = 0; c < width; c++) {
+    T *o = &output[c * length];
+    for (int64_t i = 0; i < length; i++)
+      EXPECT_EQ(static_cast<T>(i*(c+1)), o[i]);
+  }
+  delete [] output;
   
-  
-}*/
+  tensor->deleter(tensor);
+  for (int64_t c = 0; c < width; c++) delete cols[c];
+}

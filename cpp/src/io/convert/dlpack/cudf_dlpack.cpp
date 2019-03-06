@@ -75,11 +75,11 @@ namespace {
     }
   };
 
-  static inline size_t tensor_size(const DLTensor *t)
+  static inline size_t tensor_size(const DLTensor& t)
   {
     size_t size = 1;
-    for (int i = 0; i < t->ndim; ++i) size *= t->shape[i];
-    size *= (t->dtype.bits * t->dtype.lanes + 7) / 8;
+    for (int i = 0; i < t.ndim; ++i) size *= t.shape[i];
+    size *= (t.dtype.bits * t.dtype.lanes + 7) / 8;
     return size;
   }
 }
@@ -102,9 +102,9 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   GDF_REQUIRE(tensor->dl_tensor.ctx.device_id == device_id, 
               GDF_INVALID_API_CALL);
 
-  // Currently only 1D tensors are supported
+  // Currently only 1D and 2D tensors are supported
   GDF_REQUIRE(tensor->dl_tensor.ndim > 0, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(tensor->dl_tensor.ndim == 1, GDF_NOTIMPLEMENTED_ERROR);
+  GDF_REQUIRE(tensor->dl_tensor.ndim <= 2, GDF_NOTIMPLEMENTED_ERROR);
 
   // Ensure the column is not too big
   GDF_REQUIRE(tensor->dl_tensor.shape[0] > 0, GDF_DATASET_EMPTY);
@@ -124,43 +124,61 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   // layouts will require copying anyway.)
 
   // compute the size and allocate data
-  *num_columns = tensor->dl_tensor.ndim;
+  *num_columns = 1;
+  if (tensor->dl_tensor.ndim == 2) *num_columns = tensor->dl_tensor.shape[1];
+  *columns = new gdf_column[*num_columns];
+  GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
+
   gdf_size_type byte_width = gdf_dtype_size(dtype);
   gdf_size_type length = tensor->dl_tensor.shape[0];
   size_t bytes = length * byte_width;
-  void* col_data = 0; 
-  RMM_TRY(RMM_ALLOC(&col_data, bytes, 0));
+
+  int64_t col_stride = 0;
+  if (*num_columns > 1) {
+    col_stride = byte_width * length;
+    if (nullptr != tensor->dl_tensor.strides)
+      col_stride = tensor->dl_tensor.strides[1];
+  }
 
   // copy the dl_tensor data
-  void *tensor_data = reinterpret_cast<void*>(
-    reinterpret_cast<uintptr_t>(tensor->dl_tensor.data) + 
-    tensor->dl_tensor.byte_offset);
-  CUDA_TRY(cudaMemcpy(col_data, tensor_data, bytes, cudaMemcpyDefault));
+  for (gdf_size_type c = 0; c < *num_columns; ++c) {
+    void *tensor_data = reinterpret_cast<void*>(
+      reinterpret_cast<uintptr_t>(tensor->dl_tensor.data) +
+      tensor->dl_tensor.byte_offset +
+      col_stride);
+
+    void* col_data = 0;
+    RMM_TRY(RMM_ALLOC(&col_data, bytes, 0));
+
+    CUDA_TRY(cudaMemcpy(col_data, tensor_data, bytes, cudaMemcpyDefault));
+
+    // construct column view
+    gdf_error status = gdf_column_view(&(*columns)[c], col_data,
+                                       nullptr, length, dtype);
+    GDF_REQUIRE(GDF_SUCCESS == status, status);
+  }
 
   // Call the managed tensor's deleter since our "borrowing" is done
   tensor->deleter(const_cast<DLManagedTensor*>(tensor));
-  
-  // construct column view
-  *columns = new gdf_column[*num_columns];
-  GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
-  return gdf_column_view(columns[0], col_data, nullptr, length, dtype);
 }
 
 // Convert an array of gdf_column(s) into a DLPack DLTensor
+// Supports 1D and 2D tensors (single or multiple columns)
 gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
                         int num_columns)
 {
-  GDF_REQUIRE(columns, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(num_columns > 0, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(columns[0]->size > 0, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
   // first column determines datatype and number of rows
   gdf_dtype type = columns[0]->dtype;
   gdf_size_type num_rows = columns[0]->size;
 
+  GDF_REQUIRE(type != GDF_invalid, GDF_UNSUPPORTED_DTYPE);
+  GDF_REQUIRE(num_rows > 0, GDF_DATASET_EMPTY);
+
   // ensure all columns are the same type and size
-  for (gdf_size_type i = 0; i < num_columns; ++i) {
+  for (gdf_size_type i = 1; i < num_columns; ++i) {
     GDF_REQUIRE(columns[i]->dtype == type, GDF_DTYPE_MISMATCH);
     GDF_REQUIRE(columns[i]->size == num_rows, GDF_COLUMN_SIZE_MISMATCH);
   }
@@ -181,32 +199,49 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
   CUDA_TRY( cudaGetDevice(&tensor->dl_tensor.ctx.device_id) );
   tensor->dl_tensor.ctx.device_type = kDLGPU;
 
-  char *data = nullptr;
-  const size_t N = num_rows * num_columns;
-  size_t bytesize = tensor_size(&(tensor->dl_tensor));
-  size_t column_bytesize = num_rows * (tensor->dl_tensor.dtype.bits / 8);
+  // If there is only one column, then a 1D tensor can just copy the pointer
+  // to the data in the column, and the deleter should not delete the original
+  // data. However, if there are multiple columns, we must do a copy of each
+  // column's data into the dense tensor array.
+  if (num_columns == 1) {
+    tensor->dl_tensor.data = columns[0]->data;
 
-  RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
-
-  char *d = data;
-  for (gdf_size_type i = 0; i < num_columns; ++i) {
-    cudaMemcpy(d, columns[i]->data, column_bytesize, cudaMemcpyDefault);
-    d += column_bytesize;
+    tensor->deleter = [](DLManagedTensor *arg)
+    {
+      arg->dl_tensor.data = 0;
+      delete [] arg->dl_tensor.shape;
+      delete [] arg->dl_tensor.strides;
+      delete arg;
+    };
   }
-    
-  tensor->dl_tensor.data = data;
+  else {
+    char *data = nullptr;
+    const size_t N = num_rows * num_columns;
+    size_t bytesize = tensor_size(tensor->dl_tensor);
+    size_t column_bytesize = num_rows * (tensor->dl_tensor.dtype.bits / 8);
+
+    RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
+
+    char *d = data;
+    for (gdf_size_type i = 0; i < num_columns; ++i) {
+      cudaMemcpy(d, columns[i]->data, column_bytesize, cudaMemcpyDefault);
+      d += column_bytesize;
+    }
+
+    tensor->dl_tensor.data = data;
+
+    tensor->deleter = [](DLManagedTensor * arg)
+    {
+      if (arg->dl_tensor.ctx.device_type == kDLGPU)
+        RMM_FREE(arg->dl_tensor.data, 0);
+      delete [] arg->dl_tensor.shape;
+      delete [] arg->dl_tensor.strides;
+      delete arg;
+    };
+  }
 
   tensor->manager_ctx = nullptr;
-  
-  auto deleter = [](DLManagedTensor * arg) {
-    if (arg->dl_tensor.ctx.device_type == kDLGPU)
-      RMM_FREE(arg->dl_tensor.data, 0);
-    delete [] arg->dl_tensor.shape;
-    delete [] arg->dl_tensor.strides;
-    delete arg;
-  };
-  
-  tensor->deleter = deleter;
+
+
   return GDF_SUCCESS;
 }
-	
