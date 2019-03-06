@@ -71,16 +71,15 @@ struct cuda_error : public std::runtime_error {
       : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
-#define CUDA_EXPECTS(call)             \
-  do {                                 \
-    cudaError_t const status = (call); \
-    if (cudaSuccess != status) {       \
-      throw cudf::cuda_error("error"); \
-    }                                  \
+#define CUDA_EXPECTS(call)                                                 \
+  do {                                                                     \
+    cudaError_t const status = (call);                                     \
+    if (cudaSuccess != status) {                                           \
+      std::string const msg{                                               \
+          "CUDA error encountered at: " + std::string{__FILE__} + ":" +    \
+          CUDF_STRINGIFY(__LINE__) + ": " + std::to_string(status) + " " + \
+          cudaGetErrorName(status) + " " + cudaGetErrorString(status)};    \
+      throw cudf::cuda_error(msg.c_str());                                 \
+    }                                                                      \
   } while (0)
 #endif
-
-//std::string const msg{                                              
-      //    "CUDA error encountered at: " + __FILE__ + ":" +                
-      //    CUDF_STRINGIFY(__LINE__) + ": " + std::to_string(error) + " " + 
-      //    cudaGetErrorName(error) + " " + cudaGetErrorString(error)};     
