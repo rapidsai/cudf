@@ -273,10 +273,10 @@ struct column_gatherer {
    * on a `gather_map`.
    *
    * @tparam ColumnType Dispatched type for the column being gathered
-   * @param source_column The column that will be gathered from
+   * @param source_column The column to gather from
    * @param gather_map Array of indices that maps source elements to destination
    * elements
-   * @param destination_column The column that will be gathered into
+   * @param destination_column The column to gather into
    * @param check_bounds Optionally perform bounds checking on the values of
    * `gather_map`
    * @param stream Optional CUDA stream on which to execute kernels
@@ -346,7 +346,6 @@ gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table, bool check_bounds,
                  cudaStream_t stream) {
   assert(source_table->size() == destination_table->size());
-
 
   gdf_error gdf_status{GDF_SUCCESS};
 
