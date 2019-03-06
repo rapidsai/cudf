@@ -1493,6 +1493,7 @@ def test_binops_series(pdf, gdf, binop):
 @pytest.mark.parametrize('func', [
     lambda df: df.empty,
     lambda df: df.x.empty,
+    lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
@@ -1954,7 +1955,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64', 'datetime64[ms]',
                                    'category'])
 def test_dataframe_0_row_dtype(dtype):
@@ -1985,3 +1986,31 @@ def test_series_list_nanasnull(nan_as_null):
     got = Series(data, nan_as_null=nan_as_null)
 
     assert pa.Array.equals(expect, got.to_arrow())
+
+
+def test_column_assignment():
+    gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
+                                                   'b': int,
+                                                   'c': float})
+    new_cols = ['q', 'r', 's']
+    gdf.columns = new_cols
+    assert list(gdf.columns) == new_cols
+
+
+def test_select_dtype():
+    gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
+                                                   'b': int,
+                                                   'c': float})
+
+    assert_eq(gdf[['c']], gdf.select_dtypes('float64'))
+    assert_eq(gdf[['c']], gdf.select_dtypes(np.float64))
+    assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
+
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
+                                                          np.float64]))
+
+    assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+
+    with pytest.raises(TypeError):
+        assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
