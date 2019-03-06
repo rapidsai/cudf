@@ -77,6 +77,7 @@
 - PR #1092 Fix select_dtype docstring
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
+- PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 
 ## Bug Fixes
 

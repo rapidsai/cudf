@@ -41,10 +41,17 @@ class CategoricalAccessor(object):
         else:
             return Series(data)
 
-    def set_categories(self, categories):
-        """Returns a new categorical column with the given indices.
-        """
-        codemap = {v: i for i, v in enumerate(categories)}
+    def set_categories(self, new_categories):
+        """Returns a new Series with the categories set to the
+        specified *new_categories*."""
+        from cudf.dataframe.series import Series
+        col = self._set_categories(new_categories)
+        return Series(data=col)
+
+    def _set_categories(self, new_categories):
+        """Returns a new CategoricalColumn with the categories set to the
+        specified *new_categories*."""
+        codemap = {v: i for i, v in enumerate(new_categories)}
         h_recoder = np.zeros(len(self.categories),
                              dtype=self._parent.data.dtype)
         for i, catval in enumerate(self.categories):
@@ -53,7 +60,7 @@ class CategoricalAccessor(object):
         recoded = cudautils.recode(self._parent.data.to_gpu_array(), h_recoder,
                                    self._parent.default_na_value())
         buf_rec = Buffer(recoded)
-        return self._parent.replace(data=buf_rec, categories=categories)
+        return self._parent.replace(data=buf_rec, categories=new_categories)
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
@@ -254,16 +261,16 @@ class CategoricalColumn(columnops.TypedColumnBase):
         rcats = other._categories
         if how == 'left':
             cats = lcats
-            other = other.cat().set_categories(cats).fillna(-1)
+            other = other.cat()._set_categories(cats).fillna(-1)
         elif how == 'right':
             cats = rcats
-            self = self.cat().set_categories(cats).fillna(-1)
+            self = self.cat()._set_categories(cats).fillna(-1)
         elif how in ['inner', 'outer']:
             # Do the join using the union of categories from both side.
             # Adjust for inner joins afterwards
             cats = sorted(set(lcats) | set(rcats))
-            self = self.cat().set_categories(cats).fillna(-1)
-            other = other.cat().set_categories(cats).fillna(-1)
+            self = self.cat()._set_categories(cats).fillna(-1)
+            other = other.cat()._set_categories(cats).fillna(-1)
         else:
             raise ValueError('unknown *how* ({!r})'.format(how))
 
@@ -288,7 +295,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             # Adjust for inner join.
             # Only retain categories common on both side.
             cats = sorted(set(lcats) & set(rcats))
-            joined_index = joined_index.cat().set_categories(cats)
+            joined_index = joined_index.cat()._set_categories(cats)
 
         if return_indexers:
             return joined_index, indexers

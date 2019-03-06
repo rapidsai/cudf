@@ -21,6 +21,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include <random>
+
 template <typename T>
 struct TableTest : public GdfTest {
   std::default_random_engine generator;
