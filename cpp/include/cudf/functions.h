@@ -2579,7 +2579,8 @@ typedef struct DLManagedTensor DLManagedTensor_;
 /** --------------------------------------------------------------------------*
  * @brief Convert a DLPack DLTensor into gdf_column(s)
  * 
- * Currently only 1D tensors are supported.
+ * Currently only 1D and 2D tensors are supported. This function makes copies
+ * of the input DLPack data into the created output columns.
  * 
  * @param[out] columns The output column(s)
  * @param[out] num_columns The number of gdf_columns in columns
@@ -2593,8 +2594,9 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 /** --------------------------------------------------------------------------*
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
  * 
- * Currently only 1D tensors are supported, so only a single column may be 
- * passed.
+ * Currently only 1D and 2D tensors are supported. For 1D tensors, no copy is 
+ * performed. For 2D tensors, the input columns are copied into the dense 
+ * output tensor memory.
  * 
  * @param[out] tensor The output DLTensor
  * @param[in] columns An array of pointers to gdf_column 
