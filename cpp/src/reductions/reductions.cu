@@ -16,7 +16,6 @@ using namespace cudf::reduction;
 
 namespace { // anonymous namespace
 
-
 /*
 Generic reduction implementation with support for validity mask
 */
@@ -62,16 +61,18 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
 
 
 template<typename T, typename Op>
-gdf_error ReduceOp(gdf_column *input, T identity, T *output)
+gdf_error ReduceOp(gdf_column *input, T *output)
 {
+    T identity = Op::template identity<T>();
+
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(output, &identity,
             sizeof(T), cudaMemcpyHostToDevice, 0));
     CUDA_CHECK_LAST();
 
     int blocksize = REDUCTION_BLOCK_SIZE;
-    int gridsize = (input->size + REDUCTION_BLOCK_SIZE -1 )/REDUCTION_BLOCK_SIZE;
-
+    int gridsize = (input->size + REDUCTION_BLOCK_SIZE -1 )
+        /REDUCTION_BLOCK_SIZE;
 
     typename Op::Loader loader;
     Op functor;
@@ -88,28 +89,28 @@ gdf_error ReduceOp(gdf_column *input, T identity, T *output)
 };
 
 
-template <template <typename Ti> class Op>
+template <typename Op>
 struct ReduceDispatcher {
+    static constexpr bool is_nonarithmetic_op =
+        std::is_same<Op, DeviceMin>::value ||
+        std::is_same<Op, DeviceMax>::value ;
 
     template <typename T>
     gdf_error launch(gdf_column *col, void *dev_result)
     {
         GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
-        T identity = Op<T>::identity();
-        return ReduceOp<T, Op<T>>(col, identity,
-                                       static_cast<T*>(dev_result));
+        return ReduceOp<T, Op>(col, static_cast<T*>(dev_result));
     }
 
-    template <typename T,
-              typename std::enable_if<std::is_arithmetic<T>::value>::type* = nullptr>
+    template <typename T, typename std::enable_if<
+                std::is_arithmetic<T>::value>::type* = nullptr>
     gdf_error operator()(gdf_column *col, void *dev_result)
     {
         return launch<T>(col, dev_result);
     }
 
     template <typename T, typename std::enable_if<
-              !std::is_arithmetic<T>::value &&
-              std::is_base_of<DeviceForNonArithmetic, Op<T>>::value
+                  !std::is_arithmetic<T>::value && is_nonarithmetic_op
               >::type* = nullptr>
     gdf_error operator()(gdf_column *col, void *dev_result)
     {
@@ -118,8 +119,7 @@ struct ReduceDispatcher {
     }
 
     template <typename T, typename std::enable_if<
-              !std::is_arithmetic<T>::value &&
-              !std::is_base_of<DeviceForNonArithmetic, Op<T>>::value
+                  !std::is_arithmetic<T>::value && !is_nonarithmetic_op
               >::type* = nullptr>
     gdf_error operator()(gdf_column *col, void *dev_result)
     {
@@ -145,20 +145,20 @@ gdf_error gdf_reduction(gdf_column *col,
 {
     switch(op){
     case GDF_REDUCTION_SUM:
-        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(),
-                                     col, dev_result);
+        return cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<DeviceSum>(), col, dev_result);
     case GDF_REDUCTION_MIN:
-        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(),
-                                     col, dev_result);
+        return cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<DeviceMin>(), col, dev_result);
     case GDF_REDUCTION_MAX:
-        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(),
-                                     col, dev_result);
+        return cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<DeviceMax>(), col, dev_result);
     case GDF_REDUCTION_PRODUCTION:
-        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(),
-                                     col, dev_result);
+        return cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<DeviceProduct>(), col, dev_result);
     case GDF_REDUCTION_SUMOFSQUARES:
-        return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(),
-                                     col, dev_result);
+        return cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<DeviceSumOfSquares>(), col, dev_result);
     default:
         { assert(false && "type_dispatcher: invalid gdf_type"); }
     }
@@ -166,7 +166,7 @@ gdf_error gdf_reduction(gdf_column *col,
     return GDF_INVALID_API_CALL;
 }
 
-
+// ToDo: remove these APIs
 gdf_error gdf_sum(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
