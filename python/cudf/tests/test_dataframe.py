@@ -330,8 +330,14 @@ def test_dataframe_column_add_drop():
 @pytest.mark.parametrize(axis, [0, 1, "index", "columns"]
 @pytest.mark.parametrize(how, ["any", "all"]
 def test_dropna(axis, how):
-    cdf = DataFrame([[0.0, None], [1.0, None], [None, None]])
-    pdf = pd.DataFrame
+    data = np.random.random(8)
+    mask = np.asarray([0b11010110], dtype=np.byte)
+    sr = Series.from_masked_array(data=data, mask=mask, null_count=3)
+    cdf = DataFrame()
+    cdf['a'] = sr
+    cdf['b'] = sr
+    cdf['c'] = [None, None, None, None, None, None, None, None]
+    pdf = cdf.to_pandas()
     expect = pdf.dropna(axis, how)
     got = cdf.dropna(axis, how)
     assert expect == got

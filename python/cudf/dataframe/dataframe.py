@@ -838,6 +838,45 @@ class DataFrame(object):
             outdf._drop_column(c)
         return outdf
 
+    def dropna(self, axis="index", how="all"):
+        """
+        Drop columns or rows with `null` values
+
+        Parameters
+        ----------
+        axis : int or string
+            0 or "index" - Drop by row/index
+            1 or "column" - Drop by column
+        how : string
+            "any" - Drop if any `null` values exist
+            "all" - Drop if all values are `null`
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Differences from pandas:
+            * Drops `null` values and not `NaN`
+        """
+
+        if axis==0 or axis=="index":
+            #TODO
+            return 0
+        elif axis==1 or axis=="column":
+            columns = []
+            for k, c in self._cols.items():
+                null_count = c.null_count
+                if how=="all" and null_count==len(c):
+                    columns.append(c.name)
+                elif how=="any" and null_count>0:
+                    columns.append(c.name)
+
+            return self.drop(columns)
+
+        
+
     def drop_column(self, name):
         """Drop a column by *name*
         """
