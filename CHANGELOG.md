@@ -4,6 +4,7 @@
 
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
+- PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
@@ -37,6 +38,7 @@
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
 - PR #1052 Add left/right_index and left/right_on keywords to merge
+- PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 
 ## Improvements
 
@@ -65,10 +67,13 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+- PR #1036 Use Numpydoc style docstrings
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
+- PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1092 Fix select_dtype docstring
 
 ## Bug Fixes
 
@@ -107,6 +112,8 @@
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1080 Fix dtypes returned from loc / iloc because of lists
+- PR #1102 CSV Reader: Minor fixes and memory usage improvements
 
 
 # cuDF 0.5.1 (05 Feb 2019)
