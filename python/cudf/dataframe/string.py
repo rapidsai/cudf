@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops
+from cudf.dataframe import columnops, numerical
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 # from cudf.comm.serialize import register_distributed_serializer
@@ -153,7 +153,7 @@ class StringMethods(object):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         from cudf.dataframe import DataFrame, Series
-        out = self._parent.data.extract_column(pat)
+        out = self._parent.data.extract(pat)
         if len(out) == 1 and expand is False:
             return Series(
                 out[0],
@@ -310,7 +310,7 @@ class StringMethods(object):
 
         from cudf.dataframe import DataFrame
         out_df = DataFrame(index=self._index)
-        out = self._parent.data.split_column(delimiter=pat, n=n)
+        out = self._parent.data.split(delimiter=pat, n=n)
         for idx, val in enumerate(out):
             out_df[idx] = val
         return out_df
@@ -478,6 +478,23 @@ class StringColumn(columnops.TypedColumnBase):
         #         "with nulls"
         #     )
         return self.to_arrow().to_pandas()
+
+    def sort_by_values(self, ascending=True, na_position="last"):
+        # sort_inds = get_sorted_inds(self, ascending, na_position)
+        idx_dev_arr = rmm.device_array(len(self), dtype='int32')
+        dev_ptr = get_ctype_ptr(idx_dev_arr)
+        self.data.order(2, asc=ascending, devptr=dev_ptr)
+
+        col_inds = numerical.NumericalColumn(
+            data=Buffer(idx_dev_arr),
+            mask=None,
+            null_count=0,
+            dtype=idx_dev_arr.dtype
+        )
+
+        col_keys = self[col_inds.data.mem]
+
+        return col_keys, col_inds
 
 
 # register_distributed_serializer(StringColumn)

@@ -390,18 +390,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 np_type = None
-                if dtype is not None:
-                    if pd.api.types.is_categorical_dtype(dtype):
-                        data = as_column(
-                            pd.Series(arbitrary, dtype='category'),
-                            nan_as_null=nan_as_null
-                        )
+                if pd.api.types.is_categorical_dtype(dtype):
+                    data = as_column(
+                        pd.Series(arbitrary, dtype='category'),
+                        nan_as_null=nan_as_null
+                    )
+                else:
+                    if dtype is None:
+                        np_type = None
                     else:
                         np_type = np.dtype(dtype)
-                        data = as_column(
-                            np.array(arbitrary, dtype=np_type),
-                            nan_as_null=nan_as_null
-                        )
+                    data = as_column(
+                        np.array(arbitrary, dtype=np_type),
+                        nan_as_null=nan_as_null
+                    )
 
     return data
 

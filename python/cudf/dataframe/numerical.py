@@ -9,7 +9,7 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from cudf.dataframe import columnops, datetime
+from cudf.dataframe import columnops, datetime, string
 from cudf.utils import cudautils, utils
 from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
@@ -20,6 +20,8 @@ from cudf._sort import get_sorted_inds
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.sort as cpp_sort
+from cudf.bindings.cudf_cpp import get_ctype_ptr
+
 
 # Operator mappings
 
@@ -126,6 +128,40 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif (dtype == np.dtype('object') or
+              np.issubdtype(dtype, np.dtype('U').type)):
+            if self.null_count > 0:
+                raise NotImplementedError(
+                    "nulls are not yet supported for conversion to string "
+                    "dtype"
+                )
+            import nvstrings
+            if np.issubdtype(self.dtype, np.signedinteger):
+                dev_array = self.astype('int32').data.mem
+                dev_ptr = get_ctype_ptr(dev_array)
+                return string.StringColumn(
+                    data=nvstrings.itos(dev_ptr, count=len(self), bdevmem=True)
+                )
+            elif np.issubdtype(self.dtype, np.floating):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # dev_array = self.astype('float32').data.mem
+                # dev_ptr = get_ctype_ptr(self.data.mem)
+                # return string.StringColumn(
+                #     data=nvstrings.ftos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
+            elif self.dtype == np.dtype('bool'):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # return string.StringColumn(
+                #     data=nvstrings.btos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,

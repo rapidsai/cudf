@@ -183,6 +183,26 @@ def test_string_astype(dtype):
 
     assert_eq(expect, got)
 
+@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_string_numeric_astype(dtype):
+    if dtype.startswith('bool'):
+        pytest.xfail("booleans not yet supported")
+        data = [1, 0, 1, 0, 1]
+    elif dtype.startswith('int'):
+        data = [1, 2, 3, 4, 5]
+    elif dtype.startswith('float'):
+        pytest.xfail("floats not yet supported")
+        data = [1.0, 2.0, 3.0, 4.0, 5.0]
+
+    ps = pd.Series(data, dtype=dtype)
+    gs = Series(data, dtype=dtype)
+
+    expect = ps.astype('str')
+    got = gs.astype('str')
+
+    assert_eq(expect, got)
+
 
 def test_string_concat():
     data1 = ['a', 'b', 'c', 'd', 'e']
@@ -195,6 +215,19 @@ def test_string_concat():
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('ascending', [True, False])
+def test_string_sort(ps_gs, ascending):
+    ps, gs = ps_gs
+
+    expect = ps.sort_values(ascending=ascending)
+    got = gs.sort_values(ascending=ascending)
+
+    print(expect)
+    print(got)
 
     assert_eq(expect, got)
 
@@ -374,5 +407,8 @@ def test_string_split(data, pat, n, expand, expand_raise):
     with expectation:
         expect = ps.str.split(pat=pat, n=n, expand=expand)
         got = gs.str.split(pat=pat, n=n, expand=expand)
+
+        print(expect)
+        print(got)
 
         assert_eq(expect, got)
