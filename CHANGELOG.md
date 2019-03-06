@@ -94,6 +94,7 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 
+
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
