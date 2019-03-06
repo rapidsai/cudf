@@ -4,6 +4,7 @@
 
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
+- PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
@@ -38,6 +39,7 @@
 - PR #1021 Add filtered selection with assignment for Dataframes
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
+- PR #1107 Add unsupported keywords to Series.fillna
 
 ## Improvements
 
@@ -74,6 +76,7 @@
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
 - PR #1092 Fix select_dtype docstring
 - PR #1111 Added cudf::table
+- PR #1108 Sorting for datetime columns
 
 ## Bug Fixes
 
@@ -113,6 +116,7 @@
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
+- PR #1102 CSV Reader: Minor fixes and memory usage improvements
 
 
 # cuDF 0.5.1 (05 Feb 2019)
