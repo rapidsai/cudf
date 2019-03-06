@@ -1379,16 +1379,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'rhs':
                     cats = rcats
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1398,16 +1398,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1598,23 +1598,23 @@ class DataFrame(object):
             if how == 'left':
                 cats = lcats
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how == 'right':
                 cats = rcats
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how in ['inner', 'outer']:
                 cats = sorted(set(lcats) | set(rcats))
 
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
