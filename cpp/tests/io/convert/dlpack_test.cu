@@ -434,4 +434,5 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
   
   tensor->deleter(tensor);
   for (int64_t c = 0; c < width; c++) delete cols[c];
+
 }
