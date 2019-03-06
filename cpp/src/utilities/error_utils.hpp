@@ -6,18 +6,6 @@
 #include <iostream>
 #include <stdexcept>
 
-#define CUDA_TRY(call)                                                    \
-  {                                                                       \
-    cudaError_t cudaStatus = call;                                        \
-    if (cudaSuccess != cudaStatus) {                                      \
-      std::cerr << "ERROR: CUDA Runtime call " << #call << " in line "    \
-                << __LINE__ << " of file " << __FILE__ << " failed with " \
-                << cudaGetErrorString(cudaStatus) << " (" << cudaStatus   \
-                << ").\n";                                                \
-      return GDF_CUDA_ERROR;                                              \
-    }                                                                     \
-  }
-
 #define RMM_TRY(x) \
   if ((x) != RMM_SUCCESS) return GDF_MEMORYMANAGER_ERROR;
 
@@ -71,7 +59,7 @@ struct cuda_error : public std::runtime_error {
       : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
-#define CUDA_EXPECTS(call)                                                 \
+#define CUDA_TRY(call)                                                     \
   do {                                                                     \
     cudaError_t const status = (call);                                     \
     if (cudaSuccess != status) {                                           \
@@ -81,5 +69,5 @@ struct cuda_error : public std::runtime_error {
           cudaGetErrorName(status) + " " + cudaGetErrorString(status)};    \
       throw cudf::cuda_error(msg.c_str());                                 \
     }                                                                      \
-  } while (0)
+  } while (0);
 #endif

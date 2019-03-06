@@ -51,7 +51,7 @@ TEST(ExpectsTest, TryCatch) {
 
 TEST(CudaTest, Test) {
   try {
-    CUDA_EXPECTS(cudaErrorLaunchFailure);
+    CUDA_TRY(cudaErrorLaunchFailure);
   } catch (cudf::cuda_error const& e) {
     std::cout << e.what() << std::endl;
   }
