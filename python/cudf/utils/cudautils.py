@@ -423,6 +423,29 @@ def reverse_array(data, out=None):
 
 
 #
+# Find NA
+#
+
+
+@cuda.jit
+def gpu_is_na(validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = mask_get(validity, tid)
+        if valid:
+            out[tid] = True
+        else:
+            out[tid] = False
+
+
+def is_na_mask(data, mask):
+    out = rmm.device_array_like(data)
+    if data.size > 0:
+        gpu_is_na.forall(out.size)(mask,out)
+    return out
+
+
+#
 # Fill NA
 #
 
