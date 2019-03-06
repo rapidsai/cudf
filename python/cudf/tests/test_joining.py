@@ -536,3 +536,25 @@ def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     else:
         gd_merge = gleft.merge(gright, **kwargs)
         assert_eq(pd_merge, gd_merge)
+
+
+def test_indicator():
+    gdf = cudf.DataFrame({'x': [1, 2, 1]})
+    gdf.merge(gdf, indicator=False)
+
+    with pytest.raises(NotImplementedError) as info:
+        gdf.merge(gdf, indicator=True)
+
+    assert "indicator=False" in str(info.value)
+
+
+def test_merge_suffixes():
+    pdf = cudf.DataFrame({'x': [1, 2, 1]})
+    gdf = cudf.DataFrame({'x': [1, 2, 1]})
+    assert_eq(gdf.merge(gdf, suffixes=('left', 'right')),
+              pdf.merge(pdf, suffixes=('left', 'right')))
+
+    with pytest.raises(ValueError) as info:
+        gdf.merge(gdf, lsuffix='left', rsuffix='right')
+
+    assert "suffixes=('left', 'right')" in str(info.value)

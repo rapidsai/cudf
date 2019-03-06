@@ -1493,6 +1493,7 @@ def test_binops_series(pdf, gdf, binop):
 @pytest.mark.parametrize('func', [
     lambda df: df.empty,
     lambda df: df.x.empty,
+    lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
@@ -1954,7 +1955,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64', 'datetime64[ms]',
                                    'category'])
 def test_dataframe_0_row_dtype(dtype):
