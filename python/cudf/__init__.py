@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from cudf import dataframe
-
+from cudf import datasets
 from cudf.dataframe import DataFrame, from_pandas, merge
 from cudf.dataframe import Index
 from cudf.dataframe import Series

@@ -42,3 +42,6 @@ cpp/python/librmm_cffi/librmm_cffi.py
 .project
 .cproject
 .settings
+
+## Doxygen
+cpp/doxygen/html
