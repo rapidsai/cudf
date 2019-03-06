@@ -2172,13 +2172,11 @@ class DataFrame(object):
         if data.ndim == 2:
             for i, k in enumerate(names):
                 # FIXME: unnecessary copy
-                df[k] = Series(np.ascontiguousarray(data[:, i]),
-                               nan_as_null=nan_as_null)
+                df[k] = Series(data[:, i], nan_as_null=nan_as_null)
         elif data.ndim == 1:
             for k in names:
                 # FIXME: unnecessary copy
-                df[k] = Series(np.ascontiguousarray(data[k]),
-                               nan_as_null=nan_as_null)
+                df[k] = Series(data[k], nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))
