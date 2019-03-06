@@ -54,6 +54,7 @@
 - PR #1021 Add filtered selection with assignment for Dataframes
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
+- PR #1107 Add unsupported keywords to Series.fillna
 
 ## Improvements
 

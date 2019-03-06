@@ -1493,6 +1493,7 @@ def test_binops_series(pdf, gdf, binop):
 @pytest.mark.parametrize('func', [
     lambda df: df.empty,
     lambda df: df.x.empty,
+    lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
