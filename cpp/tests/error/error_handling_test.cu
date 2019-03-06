@@ -49,10 +49,20 @@ TEST(ExpectsTest, TryCatch) {
   }
 }
 
-TEST(CudaTest, Test) {
+TEST(CudaTryTest, Error){
+    EXPECT_THROW( CUDA_TRY(cudaErrorLaunchFailure), cudf::cuda_error );
+}
+TEST(CudaTryTest, Success){
+    EXPECT_NO_THROW(CUDA_TRY(cudaSuccess));
+}
+
+TEST(CudaTryTest, TryCatch) {
   try {
-    CUDA_TRY(cudaErrorLaunchFailure);
+    CUDA_TRY(cudaErrorMemoryAllocation);
   } catch (cudf::cuda_error const& e) {
-    std::cout << e.what() << std::endl;
+    ASSERT_NE(nullptr, e.what());
+    std::string what(e.what());
+    EXPECT_NE(std::string::npos, what.find("CUDA error encountered at"));
+    EXPECT_NE(std::string::npos, what.find("cudaErrorMemoryAllocation"));
   }
 }
