@@ -31,16 +31,16 @@ class rmm_mgpu_context_t; // forward decl
 
  /* --------------------------------------------------------------------------*/
  /**
-  * @Synopsis  Computes the hash-based join between two sets of gdf_tables.
+  * @brief  Computes the hash-based join between two sets of gdf_tables.
   *
-  * @Param left_table The left table to be joined
-  * @Param right_table The right table to be joined
-  * @Param flip_indices Flag that indicates whether the left and right tables have been
+  * @param left_table The left table to be joined
+  * @param right_table The right table to be joined
+  * @param flip_indices Flag that indicates whether the left and right tables have been
   * flipped, meaning the output indices should also be flipped.
   * @tparam join_type The type of join to be performed
   * @tparam output_index_type The datatype used for the output indices
   *
-  * @Returns
+  * @returns
   */
  /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,

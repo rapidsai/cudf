@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 
-from . import numerical, columnops
-from .buffer import Buffer
+from cudf.dataframe import numerical, columnops
+from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
@@ -175,7 +175,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
                     self.nullmask.mem
                 )
                 .copy_to_host()
-                .astype('int8')
+                .astype(self.data.dtype)
             )
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
@@ -206,11 +206,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
             categories=self._categories,
             ordered=self._ordered)
 
-    def unique_count(self, method='sort'):
+    def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
