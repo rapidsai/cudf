@@ -8,54 +8,13 @@
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/counting_iterator.h>
+#include "utilities/type_dispatcher.hpp"
 
 #include <string>
 #include <functional>
 #include <vector>
 #include <tuple>
 #include <rmm/rmm.h>
-
-template <typename gdf_type>
-inline gdf_dtype gdf_enum_type_for()
-{
-    return GDF_invalid;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int8_t>()
-{
-    return GDF_INT8;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int16_t>()
-{
-    return GDF_INT16;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int32_t>()
-{
-    return GDF_INT32;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int64_t>()
-{
-    return GDF_INT64;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<float>()
-{
-    return GDF_FLOAT32;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<double>()
-{
-    return GDF_FLOAT64;
-}
 
 inline auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
     return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
@@ -169,7 +128,7 @@ template <typename ValueType = int8_t>
 gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
 {
     char *raw_pointer;
-    auto gdf_enum_type_value =  gdf_enum_type_for<ValueType>();
+    auto gdf_enum_type_value =  cudf::gdf_dtype_of<ValueType>();
     thrust::device_ptr<ValueType> device_pointer;
    // std::cout << "0. gen_gdb_column\n";     
     std::tie(raw_pointer, device_pointer) = init_device_vector<char, ValueType>(column_size);
