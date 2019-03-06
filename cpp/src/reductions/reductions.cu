@@ -160,10 +160,8 @@ gdf_error gdf_reduction(gdf_column *col,
         return cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<DeviceSumOfSquares>(), col, dev_result);
     default:
-        { assert(false && "type_dispatcher: invalid gdf_type"); }
+        return GDF_INVALID_API_CALL;
     }
-
-    return GDF_INVALID_API_CALL;
 }
 
 // ToDo: remove these APIs
