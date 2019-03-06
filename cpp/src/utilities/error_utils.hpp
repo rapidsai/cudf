@@ -86,6 +86,13 @@ inline void check_stream(cudaStream_t stream, const char* file,
 }  // namespace detail
 }  // namespace cudf
 
+/**---------------------------------------------------------------------------*
+ * @brief Error checking macro for CUDA runtime API functions.
+ *
+ * Invokes a CUDA runtime API function call, if the call does not return
+ * cudaSuccess, throws an exception detailing the CUDA error that occurred.
+ *
+ *---------------------------------------------------------------------------**/
 #define CUDA_TRY(call)                                            \
   do {                                                            \
     cudaError_t const status = (call);                            \
@@ -95,6 +102,14 @@ inline void check_stream(cudaStream_t stream, const char* file,
   } while (0);
 #endif
 
+/**---------------------------------------------------------------------------*
+ * @brief Debug macro to synchronize a stream and check for CUDA errors
+ *
+ * In a non-release build, this macro will synchronize the specified stream, and
+ * check for any CUDA errors returned from cudaGetLastError. If an error is
+ * reported, an exception is thrown detailing the CUDA error that occurred.
+ *
+ *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
 #define CHECK_STREAM(stream) \
   cudf::detail::check_stream((stream), __FILE__, __LINE__)
