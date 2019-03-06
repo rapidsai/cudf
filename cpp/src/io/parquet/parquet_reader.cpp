@@ -331,21 +331,19 @@ struct parquet_state {
 /**---------------------------------------------------------------------------*
  * @brief A helper class that wraps a gdf_column to provide RAII functionality.
  *
- * An abstraction on top of a gdf_column that provides functionality for
- * initializing, allocating, and managing a gdf_column and its memory.
+ * This abstraction provides functionality for initializing, allocating,
+ * and managing a gdf_column and its memory. Like other smart pointers,
+ * ownership can be transferred by calling `release()` and and using the raw
+ * pointer.
  *---------------------------------------------------------------------------**/
 class gdf_column_wrapper {
  public:
   gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
                      gdf_dtype_extra_info dtype_info, const std::string name) {
     col = (gdf_column *)malloc(sizeof(gdf_column));
-    col->data = nullptr;
-    col->valid = nullptr;
-    col->size = size;
-    col->dtype = dtype;
-    col->dtype_info = dtype_info;
     col->col_name = (char *)malloc(name.length() + 1);
     strcpy(col->col_name, name.c_str());
+    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info);
   }
 
   ~gdf_column_wrapper() {
@@ -364,8 +362,8 @@ class gdf_column_wrapper {
   }
 
   gdf_error allocate() {
-    auto num_rows = std::max(col->size, 1);
-    auto num_masks = gdf_get_num_chars_bitmask(num_rows);
+    const auto num_rows = std::max(col->size, 1);
+    const auto num_masks = gdf_get_num_chars_bitmask(num_rows);
     int column_byte_width = 0;
 
     // For strings, just store the startpos + length for now
@@ -509,23 +507,22 @@ gdf_error read_parquet(pq_read_arg *args) {
 
   GDF_TRY(init_metadata(raw, raw_size, &file_md));
 
-  num_columns = (file_md.row_groups.size() > 0)
-                    ? (int)file_md.row_groups[0].columns.size()
-                    : 0;
-  if (num_columns == 0) {
-    std::cout << "No columns found." << std::endl;
+  if (file_md.row_groups.empty() || file_md.row_groups[0].columns.empty()) {
+    std::cout << "No data found." << std::endl;
     return GDF_DATASET_EMPTY;
   }
 
   // Obtain the index column if available
   std::string index_col_name = get_index_col(file_md);
 
-  // Select only columns specified by the user (if it exists)
+  // Select only columns required (if it exists), otherwise select all
+  // For PANDAS behavior, always return index column unless there are no rows
   std::vector<std::pair<int, std::string>> col_names;
   if (args->use_cols) {
     std::vector<std::string> use_names(args->use_cols, args->use_cols + args->use_cols_len);
-    use_names.push_back(index_col_name);
-
+    if (file_md.num_rows != 0) {
+      use_names.push_back(index_col_name);
+    }
     for (const auto &name : use_names) {
       for (int i = 0; i < file_md.row_groups[0].columns.size(); ++i) {
         if (name == to_dot_string(file_md.row_groups[0].columns[i].meta_data.path_in_schema)) {
@@ -533,16 +530,19 @@ gdf_error read_parquet(pq_read_arg *args) {
         }
       }
     }
-    if (col_names.empty()) {
-      std::cout << "No matching columns found." << std::endl;
-      return GDF_SUCCESS;
-    }
-    num_columns = col_names.size();
   } else {
     for (const auto &col : file_md.row_groups[0].columns) {
-      col_names.emplace_back(col_names.size(), to_dot_string(col.meta_data.path_in_schema));
+      const auto name = to_dot_string(col.meta_data.path_in_schema);
+      if (file_md.num_rows != 0 || name != index_col_name) {
+        col_names.emplace_back(col_names.size(), name);
+      }
     }
   }
+  if (col_names.empty()) {
+    std::cout << "No matching columns found." << std::endl;
+    return GDF_SUCCESS;
+  }
+  num_columns = col_names.size();
 
   // Initialize gdf_column metadata
   std::cout << "Selected Columns = " << num_columns << std::endl;
