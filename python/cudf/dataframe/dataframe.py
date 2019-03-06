@@ -2258,7 +2258,7 @@ class DataFrame(object):
         df = DataFrame()
         for i, k in enumerate(names):
             # FIXME: unnecessary copy
-            df[k] = Series(np.ascontiguousarray(data[i]),
+            df[k] = Series(np.ascontiguousarray(data[:, i]),
                            nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
