@@ -665,14 +665,29 @@ gdf_error join_call_compute_df(
     	}
 
     	if(original_column->dtype == GDF_STRING_CATEGORY){
-    		gdf_error category_error =
-    				copy_category_from_input_and_compact_into_output(
-    				original_column,
-    				result_cols[output_column_index]);
-    	    GDF_REQUIRE(GDF_SUCCESS == category_error, category_error);
-        	NVCategory::destroy(original_column->dtype_info.category);
-        	gdf_column_free(original_column);
-        	delete(original_column);
+
+        gdf_column* output_column = result_cols[output_column_index];
+
+        if(output_column->size > 0){
+          NVStrings * temp_strings = original_column->dtype_info.category->gather_strings(
+              (nv_category_index_type *) output_column->data,
+              output_column->size,
+              DEVICE_ALLOCATED );
+
+          output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
+
+          CUDA_TRY( cudaMemcpy(
+              output_column->data,
+              output_column->dtype_info.category->values_cptr(),
+              sizeof(nv_category_index_type) * output_column->size,
+              cudaMemcpyDeviceToDevice) );
+
+          NVStrings::destroy(temp_strings);
+        }
+
+        NVCategory::destroy(original_column->dtype_info.category);
+        gdf_column_free(original_column);
+        delete(original_column);
     	}
     }
 

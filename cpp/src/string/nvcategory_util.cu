@@ -210,28 +210,6 @@ gdf_error free_nvcategory(gdf_column * column){
 	return GDF_SUCCESS;
 }
 
-//
-gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_column, gdf_column * output_column){
-
-	if(output_column->size > 0){
-		NVStrings * temp_strings = input_column->dtype_info.category->gather_strings(
-				(nv_category_index_type *) output_column->data,
-				output_column->size,
-				DEVICE_ALLOCATED );
-
-		output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
-
-		CUDA_TRY( cudaMemcpy(
-				output_column->data,
-				output_column->dtype_info.category->values_cptr(),
-				sizeof(nv_category_index_type) * output_column->size,
-				cudaMemcpyDeviceToDevice) );
-
-		NVStrings::destroy(temp_strings);
-	}
-	return GDF_SUCCESS;
-}
-
 gdf_column* create_column_nvcategory_from_one_string(const char* str){
 
 	const int num_rows = 1;
