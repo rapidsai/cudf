@@ -2151,27 +2151,34 @@ class DataFrame(object):
         -------
         DataFrame
         """
-        if data.ndim != 2:
-            raise ValueError("records dimension expected 2 but found {!r}"
+        if data.ndim != 1 and data.ndim != 2:
+            raise ValueError("records dimension expected 1 or 2 but found {!r}"
                              .format(data.ndim))
 
+        num_cols = len(data[0])
         if columns is None and data.dtype.names is None:
-            names = [i for i in range(data.shape[1])]
+            names = [i for i in range(num_cols)]
+
+        elif data.dtype.names is not None:
+            names = data.dtype.names
+
         else:
-            if len(columns) != data.shape[1]:
+            if len(columns) != num_cols:
                 msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.shape[1], len(columns)))
+                raise ValueError(msg.format(num_cols, len(columns)))
             names = columns
 
-        if index is not None and len(index) != data.shape[0]:
-            msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.shape[0], len(columns)))
-
         df = DataFrame()
-        for i, k in enumerate(names):
-            # FIXME: unnecessary copy
-            df[k] = Series(np.ascontiguousarray(data[:, i]),
-                           nan_as_null=nan_as_null)
+        if data.ndim == 2:
+            for i, k in enumerate(names):
+                # FIXME: unnecessary copy
+                df[k] = Series(np.ascontiguousarray(data[:, i]),
+                               nan_as_null=nan_as_null)
+        elif data.ndim == 1:
+            for k in names:
+                # FIXME: unnecessary copy
+                df[k] = Series(np.ascontiguousarray(data[k]),
+                               nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))
@@ -2209,7 +2216,7 @@ class DataFrame(object):
 
         if index is not None and len(index) != data.shape[0]:
             msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.shape[0], len(columns)))
+            raise ValueError(msg.format(data.shape[0], len(index)))
 
         df = DataFrame()
         data = data.transpose()  # to mimic the pandas behaviour
