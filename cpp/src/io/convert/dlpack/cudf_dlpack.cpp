@@ -22,34 +22,71 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
+#include "utilities/type_dispatcher.hpp"
 #include "dlpack/dlpack.h"
 #include "rmm/rmm.h"
 
-/** ---------------------------------------------------------------------------*
- * @brief Convert a DLPack DLDataType struct to a gdf_dtype enum value
- *
- * @param[in] type The DLDataType struct
- * @return A valid gdf_dtype if the data type is supported, or GDF_invalid if not.
- * ---------------------------------------------------------------------------**/
-gdf_dtype DLDataType_to_gdf_dtype(DLDataType type)
-{
-  if (type.lanes > 1)
-    return GDF_invalid; // vector types not currently supported
+namespace {
+  /** ---------------------------------------------------------------------------*
+   * @brief Convert a DLPack DLDataType struct to a gdf_dtype enum value
+   *
+   * @param[in] type The DLDataType struct
+   * @return A valid gdf_dtype if the data type is supported, or GDF_invalid if not.
+   * ---------------------------------------------------------------------------**/
+  gdf_dtype DLDataType_to_gdf_dtype(DLDataType type)
+  {
+    if (type.lanes > 1)
+      return GDF_invalid; // vector types not currently supported
 
-  switch (type.bits) {
-    case 8:  return (type.code == kDLInt) ?   GDF_INT8  : GDF_invalid;
-    case 16: return (type.code == kDLInt) ?   GDF_INT16 : GDF_invalid;
-    case 32: return (type.code == kDLInt) ?   GDF_INT32  : 
-                    (type.code == kDLFloat) ? GDF_FLOAT32 : GDF_invalid;
-    case 64: return (type.code == kDLInt) ?   GDF_INT64 : 
-                    (type.code == kDLFloat) ? GDF_FLOAT64 : GDF_invalid;
-    default: break;
+    switch (type.bits) {
+      case 8:  return (type.code == kDLInt) ?   GDF_INT8  : GDF_invalid;
+      case 16: return (type.code == kDLInt) ?   GDF_INT16 : GDF_invalid;
+      case 32: return (type.code == kDLInt) ?   GDF_INT32  : 
+                      (type.code == kDLFloat) ? GDF_FLOAT32 : GDF_invalid;
+      case 64: return (type.code == kDLInt) ?   GDF_INT64 : 
+                      (type.code == kDLFloat) ? GDF_FLOAT64 : GDF_invalid;
+      default: break;
+    }
+
+    return GDF_invalid;
   }
 
-  return GDF_invalid;
+  /** ---------------------------------------------------------------------------*
+   * @brief Convert a gdf_dtype to a DLPack DLDataType struct
+   *
+   * This struct must be used with cudf::type_dispatcher like this:
+   * tensor.dtype = cudf::type_dispatcher(gdf_type, gdf_dtype_to_DLDataType);
+   * ---------------------------------------------------------------------------**/
+  struct gdf_dtype_to_DLDataType {
+    template <typename T>
+    DLDataType operator()(){
+      DLDataType type;
+      if (std::is_integral<T>::value) {
+        if (std::is_signed<T>::value) type.code = kDLInt;
+        else                          type.code = kDLUInt;
+      }
+      else if (std::is_floating_point<T>::value) type.code = kDLFloat;
+      // Unfortunately DLPack type codes don't have an error code, so use 0xFF
+      else type.code = 0xFF;
+
+      type.bits = sizeof(T) * 8;
+      type.lanes = 1;
+      return type;
+    }
+  };
+
+  static inline size_t tensor_size(const DLTensor *t)
+  {
+    size_t size = 1;
+    for (int i = 0; i < t->ndim; ++i) size *= t->shape[i];
+    size *= (t->dtype.bits * t->dtype.lanes + 7) / 8;
+    return size;
+  }
 }
 
+
 // Convert a DLPack DLTensor into gdf_column(s)
+// Currently only 1D tensors are supported
 gdf_error gdf_from_dlpack(gdf_column** columns,
                           int *num_columns,
                           DLManagedTensor const * tensor)
@@ -111,9 +148,65 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
 // Convert an array of gdf_column(s) into a DLPack DLTensor
 gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
-                        gdf_column const * columns[], 
+                        gdf_column const * const * columns, 
                         int num_columns)
 {
+  GDF_REQUIRE(columns, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(num_columns > 0, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns[0]->size > 0, GDF_DATASET_EMPTY);
+
+  // first column determines datatype and number of rows
+  gdf_dtype type = columns[0]->dtype;
+  gdf_size_type num_rows = columns[0]->size;
+
+  // ensure all columns are the same type and size
+  for (gdf_size_type i = 0; i < num_columns; ++i) {
+    GDF_REQUIRE(columns[i]->dtype == type, GDF_DTYPE_MISMATCH);
+    GDF_REQUIRE(columns[i]->size == num_rows, GDF_COLUMN_SIZE_MISMATCH);
+  }
+
+  tensor->dl_tensor.ndim = (num_columns > 1) ? 2 : 1;
+  
+  tensor->dl_tensor.dtype = 
+    cudf::type_dispatcher(type, gdf_dtype_to_DLDataType() );
+  GDF_REQUIRE(tensor->dl_tensor.dtype.code != 0xFF, GDF_UNSUPPORTED_DTYPE);
+    
+  tensor->dl_tensor.shape = new int64_t[tensor->dl_tensor.ndim];
+  tensor->dl_tensor.shape[0] = num_rows;
+  if (tensor->dl_tensor.ndim > 1) 
+    tensor->dl_tensor.shape[1] = num_columns;
+  tensor->dl_tensor.strides = nullptr;
+  tensor->dl_tensor.byte_offset = 0;
+  
+  CUDA_TRY( cudaGetDevice(&tensor->dl_tensor.ctx.device_id) );
+  tensor->dl_tensor.ctx.device_type = kDLGPU;
+
+  char *data = nullptr;
+  const size_t N = num_rows * num_columns;
+  size_t bytesize = tensor_size(&(tensor->dl_tensor));
+  size_t column_bytesize = num_rows * (tensor->dl_tensor.dtype.bits / 8);
+
+  RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
+
+  char *d = data;
+  for (gdf_size_type i = 0; i < num_columns; ++i) {
+    cudaMemcpy(d, columns[i]->data, column_bytesize, cudaMemcpyDefault);
+    d += column_bytesize;
+  }
+    
+  tensor->dl_tensor.data = data;
+
+  tensor->manager_ctx = nullptr;
+  
+  auto deleter = [](DLManagedTensor * arg) {
+    if (arg->dl_tensor.ctx.device_type == kDLGPU)
+      RMM_FREE(arg->dl_tensor.data, 0);
+    delete [] arg->dl_tensor.shape;
+    delete [] arg->dl_tensor.strides;
+    delete arg;
+  };
+  
+  tensor->deleter = deleter;
   return GDF_SUCCESS;
 }
 	

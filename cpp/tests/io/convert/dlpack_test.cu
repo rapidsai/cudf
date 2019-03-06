@@ -242,6 +242,46 @@ TEST_F(DLPackTest, UnsupportedDataType)
   deleter(mng_tensor);
 }
 
+TEST_F(DLPackTest, ToDLPack_EmptyDataset)
+{
+  ASSERT_EQ(gdf_to_dlpack(nullptr, nullptr, 1), GDF_DATASET_EMPTY);
+  DLManagedTensor *tensor = new DLManagedTensor;
+  ASSERT_EQ(gdf_to_dlpack(tensor, nullptr, 1), GDF_DATASET_EMPTY);
+
+  gdf_column **columns = new gdf_column*[2];
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 0), GDF_DATASET_EMPTY);
+
+  columns[0] = new gdf_column;
+  columns[0]->size = 0;
+
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 1), GDF_DATASET_EMPTY);
+
+  delete tensor;
+  delete columns[0];
+  delete [] columns;
+}
+
+TEST_F(DLPackTest, ToDLPack_ColumnMismatch)
+{
+  gdf_column **columns = new gdf_column*[2];
+  columns[0] = new gdf_column;
+  columns[1] = new gdf_column;
+  columns[0]->size = columns[1]->size = 1;
+  columns[0]->dtype = GDF_INT32;
+  columns[1]->dtype = GDF_FLOAT32;
+
+  DLManagedTensor *tensor = new DLManagedTensor;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 2), GDF_DTYPE_MISMATCH);
+  columns[1]->dtype = GDF_INT32;
+  columns[1]->size = 2;
+  ASSERT_EQ(gdf_to_dlpack(tensor, columns, 2), GDF_COLUMN_SIZE_MISMATCH);
+
+  delete tensor;
+  delete columns[0];
+  delete columns[1];
+  delete [] columns;
+}
+
 TYPED_TEST(DLPackTypedTest, FromDLPack)
 {
   using TensorType = typename TestFixture::TestParam;
@@ -276,7 +316,10 @@ TYPED_TEST(DLPackTypedTest, FromDLPack)
   delete [] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, ToDLPack)
+
+
+/*TYPED_TEST(DLPackTypedTest, ToDLPack)
 {
-  ASSERT_EQ(gdf_to_dlpack(nullptr, nullptr, 1), GDF_SUCCESS);
-}
+  
+  
+}*/
