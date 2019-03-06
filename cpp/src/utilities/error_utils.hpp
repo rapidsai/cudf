@@ -96,8 +96,8 @@ inline void check_stream(cudaStream_t stream, const char* file,
 #endif
 
 #ifndef NDEBUG
-#define CHECK_STREAM(stream)
-cudf::detail::check_stream((stream), __FILE__, __LINE__)
+#define CHECK_STREAM(stream) \
+  cudf::detail::check_stream((stream), __FILE__, __LINE__)
 #else
 #define CHECK_STREAM(stream) static_cast<void>(0)
 #endif

@@ -66,3 +66,14 @@ TEST(CudaTryTest, TryCatch) {
     EXPECT_NE(std::string::npos, what.find("cudaErrorMemoryAllocation"));
   }
 }
+
+TEST(StreamCheck, Test){
+    EXPECT_NO_THROW(cudf::detail::check_stream(0, __FILE__, __LINE__));
+}
+
+// STREAM_CHECK only works in a non-Release build
+#ifndef NDEBUG
+TEST(StreamCheck, test){
+    EXPECT_NO_THROW(CHECK_STREAM(0));
+}
+#endif
