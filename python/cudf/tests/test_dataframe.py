@@ -327,8 +327,8 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ('b', 'c', 'a')
 
 
-@pytest.mark.parametrize(axis, [0, 1, "index", "columns"]
-@pytest.mark.parametrize(how, ["any", "all"]
+@pytest.mark.parametrize(axis, [0, 1, "index", "columns"])
+@pytest.mark.parametrize(how, ["any", "all"])
 def test_dropna(axis, how):
     data = np.random.random(8)
     mask = np.asarray([0b11010110], dtype=np.byte)
