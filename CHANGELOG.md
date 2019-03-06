@@ -4,6 +4,7 @@
 
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
+- PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
@@ -114,6 +115,7 @@
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
+- PR #1102 CSV Reader: Minor fixes and memory usage improvements
 
 
 # cuDF 0.5.1 (05 Feb 2019)
