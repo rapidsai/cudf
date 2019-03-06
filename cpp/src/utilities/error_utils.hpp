@@ -12,14 +12,13 @@
 #define RMM_TRY_CUDAERROR(x) \
   if ((x) != RMM_SUCCESS) return cudaPeekAtLastError();
 
-#define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
-
 /**---------------------------------------------------------------------------*
  * @brief DEPRECATED error checking macro that verifies a condition evaluates to
  * true or returns an error-code.
- * 
- * This macro is considered DEPRECATED and should not be used.
- * 
+ *
+ * This macro is considered DEPRECATED and should not be used in any new
+ * features.
+ *
  * Instead, CUDF_EXPECTS() should be used.
  *
  *---------------------------------------------------------------------------**/
@@ -58,6 +57,12 @@ struct cuda_error : public std::runtime_error {
  * 
  * Example usage:
  * 
+ * @code
+ * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+ * @endcode
+ *
+ * Example usage:
+ *
  * @code
  * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
  * @endcode
@@ -118,6 +123,8 @@ inline void check_stream(cudaStream_t stream, const char* file,
     }                                                             \
   } while (0);
 #endif
+
+#define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
 
 /**---------------------------------------------------------------------------*
  * @brief Debug macro to synchronize a stream and check for CUDA errors
