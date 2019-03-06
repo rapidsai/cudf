@@ -37,7 +37,7 @@ struct logic_error : public std::logic_error {
  *
  *---------------------------------------------------------------------------**/
 struct cuda_error : public std::runtime_error {
-  cuda_error(char const* const message) : std::runtime_error(message) {}
+  cuda_error(std::string const& message) : std::runtime_error(message) {}
 };
 }  // namespace cudf
 
@@ -59,15 +59,45 @@ struct cuda_error : public std::runtime_error {
       : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
-#define CUDA_TRY(call)                                                     \
-  do {                                                                     \
-    cudaError_t const status = (call);                                     \
-    if (cudaSuccess != status) {                                           \
-      std::string const msg{                                               \
-          "CUDA error encountered at: " + std::string{__FILE__} + ":" +    \
-          CUDF_STRINGIFY(__LINE__) + ": " + std::to_string(status) + " " + \
-          cudaGetErrorName(status) + " " + cudaGetErrorString(status)};    \
-      throw cudf::cuda_error(msg.c_str());                                 \
-    }                                                                      \
+namespace cudf {
+namespace detail {
+
+inline void throw_cuda_error(cudaError_t error, const char* file,
+                             unsigned int line) {
+  throw cudf::cuda_error(
+      std::string{"CUDA error encountered at: " + std::string{file} + ":" +
+                  std::to_string(line) + ": " + std::to_string(error) + " " +
+                  cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
+}
+
+inline void check_stream(cudaStream_t stream, const char* file,
+                         unsigned int line) {
+  cudaError_t error{cudaSuccess};
+  error = cudaStreamSynchronize(stream);
+  if (cudaSuccess != error) {
+    throw_cuda_error(error, file, line);
+  }
+
+  error = cudaGetLastError();
+  if (cudaSuccess != error) {
+    throw_cuda_error(error, file, line);
+  }
+}
+}  // namespace detail
+}  // namespace cudf
+
+#define CUDA_TRY(call)                                            \
+  do {                                                            \
+    cudaError_t const status = (call);                            \
+    if (cudaSuccess != status) {                                  \
+      cudf::detail::throw_cuda_error(status, __FILE__, __LINE__); \
+    }                                                             \
   } while (0);
+#endif
+
+#ifndef NDEBUG
+#define CHECK_STREAM(stream)
+cudf::detail::check_stream((stream), __FILE__, __LINE__)
+#else
+#define CHECK_STREAM(stream) static_cast<void>(0)
 #endif
