@@ -242,45 +242,6 @@ R"***(
     };
 )***";
 
-/*
- * The following code could be used to detect overflow or underflow
- * using 'Bit Hacks' in the operations, that's why the operation is
- * divided into signed, unsigned and double functions. It's required
- * to create a new field on gdf_column for this feature.
- *
- *     struct Add {
- *      template <typename TypeOut,
- *                typename TypeLhs,
- *                typename TypeRhs,
- *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enable_if_t<(isIntegralSigned<Common>)>* = nullptr>
- *      __device__
- *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
- *      }
- *
- *      template <typename TypeOut,
- *                typename TypeLhs,
- *                typename TypeRhs,
- *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enable_if_t<(isIntegralUnsigned<Common>)>* = nullptr>
- *      __device__
- *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
- *      }
- *
- *      template <typename TypeOut,
- *                typename TypeLhs,
- *                typename TypeRhs,
- *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enable_if_t<(isFloatingPoint<Common>)>* = nullptr>
- *      __device__
- *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
- *      }
- *  };
- */
-
 } // namespace code
 } // namespace jit
 } // namespace binops

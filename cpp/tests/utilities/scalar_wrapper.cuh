@@ -34,7 +34,7 @@ namespace test {
  * @brief Wrapper for a gdf_scalar used for unit testing.
  *
  * An abstraction on top of a gdf_scalar that provides functionality for
- * allocating, intiailizing, and otherwise managing gdf_scalar's for passing to
+ * allocating, intiailizing, and otherwise managing gdf_scalars for passing to
  * libcudf APIs in unit testing.
  *
  * @tparam ColumnType The underlying data type of the scalar
@@ -43,9 +43,6 @@ template <typename ScalarType>
 struct scalar_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to a gdf_scalar pointer.
-   *
-   * Allows for implicit conversion of a column_wrapper to a pointer to its
-   * underlying gdf_scalar.
    *
    * In this way, a column_wrapper can be passed directly into a libcudf API
    * and will be implicitly converted to a pointer to its underlying gdf_scalar
@@ -72,7 +69,6 @@ struct scalar_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_scalar.
-   *
    *---------------------------------------------------------------------------**/
   gdf_scalar* get() { return &the_scalar; }
   gdf_scalar const* get() const { return &the_scalar; }
@@ -95,7 +91,6 @@ struct scalar_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Prints the value of the underlying gdf_scalar.
-   *
    *---------------------------------------------------------------------------**/
   void print() const {
     ScalarType value = *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
@@ -106,7 +101,7 @@ struct scalar_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Compares if another scalar_wrapper is equal to this wrapper.
+   * @brief CompCompares this wrapper with another scalar_wrapper for equality.
    *
    * @param rhs  The other scalar_wrapper to check for equality
    * @return true The two scalars are equal

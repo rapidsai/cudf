@@ -6,9 +6,9 @@
 /**---------------------------------------------------------------------------*
  * @brief Sets all bits in input valid mask to 1
  * 
- * @param valid_out preallocated valid mask to set the values for
+ * @param valid_out preallocated output valid mask
  * @param out_null_count number of nulls (0 bits) in valid mask. Always set to 0
- * @param num_values number of values in column for which the output mask was made
+ * @param num_values number of values in column associated with output mask
  * @param stream cuda stream to run in
  * @return gdf_error 
  *---------------------------------------------------------------------------**/

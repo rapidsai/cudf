@@ -27,7 +27,7 @@ namespace binops {
 namespace jit {
 
 /**---------------------------------------------------------------------------*
- * @brief Cache to hold previously compiled code in. If JITIFY_THREAD_SAFE is
+ * @brief Cache to hold previously compiled code. If JITIFY_THREAD_SAFE is
  *  defined, then the cache is held globally in the process, otherwise it is
  *  held locally in each thread
  * 
