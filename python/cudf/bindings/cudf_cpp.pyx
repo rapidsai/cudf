@@ -192,7 +192,7 @@ _null_sort_behavior_api = {
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                  flag_sort_result, flag_sort_inplace,
-                                 flag_nulls_sort_behavior):
+                                 flag_null_sort_behavior):
 
     cdef gdf_method method_api = _join_method_api[method]
     cdef gdf_context* context = <gdf_context*>malloc(sizeof(gdf_context))
@@ -201,10 +201,10 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
     cdef int c_flag_distinct = flag_distinct
     cdef int c_flag_sort_result = flag_sort_result
     cdef int c_flag_sort_inplace = flag_sort_inplace
-    cdef gdf_nulls_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_nulls_sort_behavior]
+    cdef gdf_nulls_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
     
     with nogil:
-        gdf_context_view(context,
+        gdf_create_context(context,
                          c_flag_sorted,
                          method_api,
                          c_flag_distinct,

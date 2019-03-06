@@ -197,10 +197,10 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
 
 
 gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
-                     gdf_column** data_cols_in,
-									   gdf_index_type* unique_indices,
-                     gdf_size_type* num_unique_indices, 
-									   gdf_context* ctxt)
+                             gdf_column** data_cols_in,
+									           gdf_index_type* unique_indices,
+                             gdf_size_type* num_unique_indices, 
+									           gdf_context* context)
 {
 
   gdf_size_type nrows = data_cols_in[0]->size;
@@ -212,7 +212,7 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
   void** d_col_data = d_cols.data().get();
   int* d_col_types = d_types.data().get();
 
-  bool nulls_are_smallest = ctxt->flag_nulls_sort_behavior == GDF_NULL_AS_SMALLEST;
+  bool nulls_are_smallest = context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST;
 
   gdf_index_type* result_end;
   cudaStream_t stream;
@@ -268,7 +268,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
                                             gdf_column** data_cols_out,
                                             gdf_index_type* group_start_indices,
                                             gdf_size_type* num_group_start_indices, 
-                                            gdf_context* ctxt)      
+                                            gdf_context* context)      
 {
   GDF_REQUIRE((nullptr != data_cols_in), GDF_DATASET_EMPTY);
   GDF_REQUIRE((nullptr != data_cols_in[0]), GDF_DATASET_EMPTY);
@@ -295,13 +295,13 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
                             nullptr, nrows, GDF_INT32);
   GDF_REQUIRE(GDF_SUCCESS == status, status);
 
-  if (ctxt->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
+  if (context->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
   // run order by and get new sort indexes
     status = gdf_order_by(&orderby_cols_vect[0],             //input columns
                           nullptr,
                           num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                           &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                          ctxt);
+                          context);
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // run gather operation to establish new order
@@ -315,20 +315,20 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
 
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, ctxt);
+    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
 
     return status;
   } else {  // Pandas style
 
-    auto flag_nulls_sort_behavior = ctxt->flag_nulls_sort_behavior;
-    ctxt->flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT; // overide behaviour to filter out the nulls
+    auto flag_null_sort_behavior = context->flag_null_sort_behavior;
+    context->flag_null_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT; // overide behaviour to filter out the nulls
 
     // run order by and get new sort indexes
     status = gdf_order_by(&orderby_cols_vect[0],             //input columns
                           nullptr,
                           num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                           &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                          ctxt);
+                          context);
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // lets filter out all the nulls in the group by key column by:
@@ -356,9 +356,9 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
    
-    ctxt->flag_nulls_sort_behavior = flag_nulls_sort_behavior;
+    context->flag_null_sort_behavior = flag_null_sort_behavior;
 
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, ctxt);
+    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
 
     return status;
   }

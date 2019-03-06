@@ -54,7 +54,7 @@ struct GroupByWoAggTest : public GdfTest {
 
   const GroupByOutType group_output_type {test_parameters::group_output_type};
 
-  gdf_context ctxt;
+  gdf_context context;
  
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be grouped, and the value_type of each
@@ -112,11 +112,11 @@ struct GroupByWoAggTest : public GdfTest {
     std::srand(number_of_instantiations++);
 
     if (this->group_output_type == GroupByOutType::SQL) {
-      ctxt.flag_groupby_include_nulls = true;
-      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
+      context.flag_groupby_include_nulls = true;
+      context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
     } else {
-      ctxt.flag_groupby_include_nulls = false;
-      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
+      context.flag_groupby_include_nulls = false;
+      context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
     }
   }
 
@@ -307,9 +307,9 @@ struct GroupByWoAggTest : public GdfTest {
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    // ctxt.flag_groupby_include_nulls = false;
+    // context.flag_groupby_include_nulls = false;
     // if (num_columns > 1) {//@todo, it is working? 
-    //   ctxt.flag_nulls_sort_behavior = 2;
+    //   context.flag_null_sort_behavior = 2;
     // }
 
     gdf_error error{GDF_SUCCESS};
@@ -328,7 +328,7 @@ struct GroupByWoAggTest : public GdfTest {
                                         gdf_data_cols_out,
                                         this->gdf_raw_out_indices,
                                         &this->gdf_raw_out_indices_size,
-                                        &ctxt
+                                        &context
                                         );
 
 
@@ -662,9 +662,9 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    // ctxt.flag_groupby_include_nulls = false;
+    // context.flag_groupby_include_nulls = false;
     // if (num_columns > 1) {//@todo, it is working? 
-    //   ctxt.flag_nulls_sort_behavior = 2;
+    //   context.flag_null_sort_behavior = 2;
     // }
 
     gdf_error error{GDF_SUCCESS};
@@ -683,7 +683,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
                                         gdf_data_cols_out,
                                         this->gdf_raw_out_indices,
                                         &this->gdf_raw_out_indices_size,
-                                        &this->ctxt
+                                        &this->context
                                         );
 
 

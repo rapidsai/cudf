@@ -37,7 +37,7 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 }
 
 /**
-  * Calculates the number of chars used for a validity indicator pseudo-column for a given column's size.
+  * Calculates the number of bytes used for a validity indicator pseudo-column for a given column's size.
   *
   * @node This function is different gdf_get_num_bytes_for_valids_allocation because it refers to bytes used as opposed to allocated
   *
@@ -51,14 +51,6 @@ gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) {
 	return (( column_size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
 }
 
-// Buffers are padded to 64-byte boundaries (for SIMD) static
-constexpr int32_t kArrowAlignment = 64;
-
-// Tensors are padded to 64-byte boundaries static
-constexpr int32_t kTensorAlignment = 64;
-
-// Align on 8-byte boundaries in IPC static 
-constexpr int32_t kArrowIpcAlignment = 8;
 
 // Align on 4-byte boundaries in CUDF static 
 constexpr int32_t kCudfIpcAlignment = 4;

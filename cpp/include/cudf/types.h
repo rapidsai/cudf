@@ -157,25 +157,21 @@ typedef enum {
 } gdf_color;
 
 
-/* --------------------------------------------------------------------------*/
-/** 
+/**  --------------------------------------------------------------------------* 
  * @synopsis  These enums indicate how the nulls are treated in group_by/order_by operations.
- */
-/* ----------------------------------------------------------------------------*/
+ * ----------------------------------------------------------------------------*/
 typedef enum {
-  GDF_NULL_AS_LARGEST = 0, /**< When sorting NULLS will be treated as the largest number */
-  GDF_NULL_AS_SMALLEST,  /**< When sorting NULLS will be treated as the smallest number */
-  GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< When sorting a multi column data set, if there is a NULL in any of the
-                                     columns for a row, then that row will be will be treated as the largest number */
+  GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
+  GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
+  GDF_NULL_AS_LARGEST_FOR_MULTISORT  ///< In multicolumn sorting, a row with NULL in any column is treated as the largest number in comparisons                                     
 } gdf_nulls_sort_behavior;
 
 
-/* --------------------------------------------------------------------------*/
-/** 
+
+/** --------------------------------------------------------------------------*
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
- */
-/* ----------------------------------------------------------------------------*/
+ * ----------------------------------------------------------------------------*/
 typedef struct gdf_context_{
   int flag_sorted;              /**< Indicates if the input data is sorted. 0 = No, 1 = yes */
   gdf_method flag_method;       /**< The method to be used for the operation (e.g., sort vs hash) */
@@ -185,8 +181,8 @@ typedef struct gdf_context_{
   bool flag_groupby_include_nulls; 
                                 /**< false = Nulls are ignored in group by keys (Pandas style), 
                                 true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
-  gdf_nulls_sort_behavior flag_nulls_sort_behavior; 
-                                /**< GDF_NULL_AS_LARGEST = Nulls are are treated as largest,
+  gdf_nulls_sort_behavior flag_null_sort_behavior; 
+                                /**< GDF_NULL_AS_LARGEST = Nulls are treated as largest,
                                 GDF_NULL_AS_SMALLEST    = Nulls are treated as smallest, 
                                 GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest*/ 
 } gdf_context;

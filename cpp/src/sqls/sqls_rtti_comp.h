@@ -98,7 +98,7 @@ struct LesserRTTI
         return false;
       case State::True:
         return true;
-      case State::Undecided: //EQUALS
+      case State::Undecided: // When doing a multi-column comparison, when you have an equals, your state is undecided and you need to check the next column.
         break;
       }
     }
@@ -881,7 +881,7 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
  * @param[in] nrows # rows
  * @param[in] have_nulls Whether or not any column have null values
  * @param[in] nulls_are_smallest Whether or not nulls are smallest
- * @Param[in] nulls_are_lessthan_always_false. If set to true, nulls will always trigger less than equal to false
+ * @Param[in] null_as_largest_for_multisort. If set to true, nulls will always trigger less than equal to false
  * @param[in] stream CudaStream to work in
  * @param[out] d_indx Device array of re-ordered indices after sorting
  * @tparam IndexT The type of d_indx array 
@@ -899,7 +899,7 @@ void multi_col_sort(void* const *           d_cols,
                     bool                    have_nulls,
                     IndexT*                 d_indx,
                     bool                    nulls_are_smallest = false,
-                    bool                    nulls_are_lessthan_always_false = false,
+                    bool                    null_as_largest_for_multisort = false,
                     cudaStream_t            stream = NULL)
 {
   //cannot use counting_iterator 2 reasons:
@@ -909,7 +909,7 @@ void multi_col_sort(void* const *           d_cols,
   
   LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-    if (nulls_are_lessthan_always_false){ //Pandas 
+    if (null_as_largest_for_multisort){ //Pandas 
       thrust::sort(rmm::exec_policy(stream)->on(stream),
                   d_indx, d_indx+nrows,
                   [comp] __device__ (IndexT i1, IndexT i2){

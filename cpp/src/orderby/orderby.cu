@@ -33,7 +33,7 @@ namespace{ //annonymus
                                size_t ncols,
                                gdf_column* output_indices,
                                bool flag_nulls_are_smallest, 
-                               bool nulls_are_lessthan_always_false = false)
+                               bool null_as_largest_for_multisort = false)
   {
     GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
@@ -55,11 +55,11 @@ namespace{ //annonymus
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
 
-    // if using nulls_are_lessthan_always_false = true, then you cant set ascending descending order (asc_desc)
-    GDF_REQUIRE(((nulls_are_lessthan_always_false && (nullptr == asc_desc)) || !nulls_are_lessthan_always_false), GDF_INVALID_API_CALL);
+    // if using null_as_largest_for_multisort = true, then you cant set ascending descending order (asc_desc)
+    GDF_REQUIRE(((null_as_largest_for_multisort && (nullptr == asc_desc)) || !null_as_largest_for_multisort), GDF_INVALID_API_CALL);
 
 		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, nulls_are_lessthan_always_false);
+				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, null_as_largest_for_multisort);
 
     return GDF_SUCCESS;
   }
@@ -77,11 +77,11 @@ gdf_error gdf_order_by(gdf_column** input_columns,
 
   bool flag_nulls_are_smallest = false;
   bool null_as_largest_for_multisort = false;
-  if (context->flag_nulls_sort_behavior == GDF_NULL_AS_SMALLEST)
-  /**< When sorting NULLS will be treated as the smallest number */
+  if (context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST)
+  /* When sorting NULLS will be treated as the smallest number */
     flag_nulls_are_smallest = true;
-  else if (context->flag_nulls_sort_behavior == GDF_NULL_AS_LARGEST_FOR_MULTISORT) 
-  /**< When sorting a multi column data set, if there is a NULL in any of the
+  else if (context->flag_null_sort_behavior == GDF_NULL_AS_LARGEST_FOR_MULTISORT) 
+  /* When sorting a multi column data set, if there is a NULL in any of the
        columns for a row, then that row will be will be treated as the largest number */
     null_as_largest_for_multisort = true;
 

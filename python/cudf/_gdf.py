@@ -230,10 +230,10 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     gdf_context = ffi.new('gdf_context*')
 
     if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0,
+        libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
                                 null_sort_behavior_api)
     elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0,
+        libgdf.gdf_create_context(gdf_context, 1, method_api, 0, 0, 0,
                                 null_sort_behavior_api)
     else:
         msg = "method not supported"
@@ -279,7 +279,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
     gdf_context = ffi.new('gdf_context*')
 
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0,
+    libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
                             null_sort_behavior_api)
 
     if how not in ['left', 'inner', 'outer']:
@@ -590,7 +590,7 @@ def quantile(column, quant, method, exact):
     gdf_context = ffi.new('gdf_context*')
     method_api = _join_method_api['sort']
     null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0,
+    libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
                             null_sort_behavior_api)
     # px = ffi.new("double *")
     res = []

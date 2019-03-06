@@ -43,35 +43,6 @@ static inline host_valid_pointer create_and_init_valid(size_t length)
 }
 
 
-// Create a valid pointer and init randomly the last half column
-static inline
-void init_valid(std::uint8_t *      valid_bits,
-                const std::int64_t  start_offset,
-                size_t              length)
-{
-    gdf_valid_type current_byte;
-    size_t byte_offset = start_offset / 8;
-    size_t bit_offset = start_offset % 8;
-
-    if (length > 0) {
-        current_byte = valid_bits[byte_offset];
-    }
-    for (size_t i = 0; i < length; ++i) {
-        if (i < length / 2 || std::rand() % 2 == 1) {
-            current_byte |= gdf::util::byte_bitmask(bit_offset);
-        } else {
-            current_byte &= gdf::util::flipped_bitmask(bit_offset);
-        }
-        ++bit_offset;
-        valid_bits[byte_offset] = current_byte;
-        if (bit_offset == 8) {
-            bit_offset = 0;
-            ++byte_offset;
-            current_byte = valid_bits[byte_offset];
-        }
-    }
-}
-
 // Initialize valids
 static inline void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length)
 {

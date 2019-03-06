@@ -329,9 +329,9 @@ struct OrderByTest : public GdfTest
 
     gdf_context ctxt;
     if (nulls_are_smallest)
-      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_SMALLEST;
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_SMALLEST;
     else
-      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
 
     result_error = gdf_order_by(columns_to_sort,
                                 (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),

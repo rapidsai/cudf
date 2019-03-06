@@ -400,7 +400,7 @@ void copy_output_with_array_with_nulls(
 template<typename T>
 void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
 {
-    auto functor = [&valid, &v] (int index) -> std::string {
+    auto to_stringify_functor = [&valid, &v] (int index) -> std::string {
         if ( gdf_is_valid(valid, index)) {
             std::string ret;
             if (sizeof(v[index]) == 1)
@@ -418,7 +418,7 @@ void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
     };
     std::vector<int> indexes(v.size());
     std::iota (std::begin(indexes), std::end(indexes), 0);
-    std::transform(indexes.begin(), indexes.end(), std::ostream_iterator<std::string>(std::cout, "; "), functor);
+    std::transform(indexes.begin(), indexes.end(), std::ostream_iterator<std::string>(std::cout, "; "), to_stringify_functor);
 }
 
 template<std::size_t I = 0, typename... Tp>
