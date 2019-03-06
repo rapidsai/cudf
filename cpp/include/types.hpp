@@ -46,17 +46,29 @@ struct table {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns pointer to the first `gdf_column` in the table.
+   * @brief Returns const pointer to const of the first `gdf_column` in the
+   * table.
    *
    *---------------------------------------------------------------------------**/
   gdf_column const* const* begin() const { return columns; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns pointer to the first `gdf_column` in the table.
+   *
+   *---------------------------------------------------------------------------**/
   gdf_column** begin() { return columns; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns const pointer to const of one past the last `gdf_column` in
+   * the table
+   *
+   *---------------------------------------------------------------------------**/
+  gdf_column const* const* end() const { return columns + _num_columns; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to one past the last `gdf_column` in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_column const* const* end() const { return columns + _num_columns; }
   gdf_column** end() { return columns + _num_columns; }
 
   /**---------------------------------------------------------------------------*
@@ -69,6 +81,13 @@ struct table {
     assert(index < _num_columns);
     return columns[index];
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns pointer const of the column specified by an index.
+   *
+   * @param index The index of the desired column
+   * @return gdf_column* Pointer to the column at `index`
+   *---------------------------------------------------------------------------**/
   gdf_column const* get_column(gdf_index_type index) const {
     return columns[index];
   }
@@ -80,7 +99,7 @@ struct table {
   gdf_size_type num_columns() const { return _num_columns; }
 
  private:
-  gdf_column** columns;            /**< The set of gdf_columns*/
+  gdf_column** columns;             /**< The set of gdf_columns*/
   gdf_size_type const _num_columns; /**< The number of columns in the set */
 };
 
