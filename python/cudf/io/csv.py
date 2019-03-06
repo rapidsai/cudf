@@ -567,7 +567,6 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
     csv_reader.header = header_infer
-    csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.compression = compression_bytes
