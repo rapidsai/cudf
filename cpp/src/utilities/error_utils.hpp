@@ -14,6 +14,15 @@
 
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
 
+/**---------------------------------------------------------------------------*
+ * @brief DEPRECATED error checking macro that verifies a condition evaluates to
+ * true or returns an error-code.
+ * 
+ * This macro is considered DEPRECATED and should not be used.
+ * 
+ * Instead, CUDF_EXPECTS() should be used.
+ *
+ *---------------------------------------------------------------------------**/
 #define GDF_REQUIRE(F, S) \
   if (!(F)) return (S);
 
@@ -31,7 +40,6 @@ struct logic_error : public std::logic_error {
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
 };
-
 /**---------------------------------------------------------------------------*
  * @brief Exception thrown when a CUDA error is encountered.
  *
@@ -47,6 +55,12 @@ struct cuda_error : public std::runtime_error {
 /**---------------------------------------------------------------------------*
  * @brief Error checking macro that throws an exception when a condition is
  * violated.
+ * 
+ * Example usage:
+ * 
+ * @code
+ * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+ * @endcode
  *
  * @param[in] cond Expression that evaluates to true or false
  * @param[in] reason String literal description of the reason that cond is
@@ -92,6 +106,9 @@ inline void check_stream(cudaStream_t stream, const char* file,
  * Invokes a CUDA runtime API function call, if the call does not return
  * cudaSuccess, throws an exception detailing the CUDA error that occurred.
  *
+ * This macro supersedes GDF_REQUIRE and should be preferred in all instances.
+ * GDF_REQUIRE should be considered deprecated.
+ *
  *---------------------------------------------------------------------------**/
 #define CUDA_TRY(call)                                            \
   do {                                                            \
@@ -108,6 +125,13 @@ inline void check_stream(cudaStream_t stream, const char* file,
  * In a non-release build, this macro will synchronize the specified stream, and
  * check for any CUDA errors returned from cudaGetLastError. If an error is
  * reported, an exception is thrown detailing the CUDA error that occurred.
+ *
+ * The intent of this macro is to provide a mechanism for synchronous and
+ * deterministic execution for debugging asynchronous CUDA execution. It should
+ * be used after any asynchronous CUDA call, e.g., cudaMemcpyAsync, or an
+ * asynchronous kernel launch.
+ *
+ * Similar to assert(), it is only present in non-Release builds.
  *
  *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
