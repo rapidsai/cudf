@@ -75,6 +75,7 @@
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
 - PR #1092 Fix select_dtype docstring
+- PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
 
 ## Bug Fixes
