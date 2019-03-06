@@ -2160,12 +2160,12 @@ class DataFrame(object):
         else:
             if len(columns) != data.shape[1]:
                 msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.ndim, len(columns)))
+                raise ValueError(msg.format(data.shape[1], len(columns)))
             names = columns
 
         if index is not None and len(index) != data.shape[0]:
             msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.ndim, len(columns)))
+            raise ValueError(msg.format(data.shape[0], len(columns)))
 
         df = DataFrame()
         for i, k in enumerate(names):
@@ -2204,12 +2204,12 @@ class DataFrame(object):
         else:
             if len(columns) != data.shape[1]:
                 msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.ndim, len(columns)))
+                raise ValueError(msg.format(data.shape[1], len(columns)))
             names = columns
 
         if index is not None and len(index) != data.shape[0]:
             msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.ndim, len(columns)))
+            raise ValueError(msg.format(data.shape[0], len(columns)))
 
         df = DataFrame()
         data = data.transpose()  # to mimic the pandas behaviour
