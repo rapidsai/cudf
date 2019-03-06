@@ -91,6 +91,7 @@ typedef struct {
  * It stores a unique value for scalar type.
  * It has a direct relationship with the gdf_dtype.
  *---------------------------------------------------------------------------**/
+// TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
   int8_t   si08;  /**< GDF_INT8      */
   int16_t  si16;  /**< GDF_INT16     */
@@ -108,7 +109,7 @@ typedef union {
  * 
  *---------------------------------------------------------------------------**/
 typedef struct {
-  gdf_data  data;      /**< Pointer to the scalar data */
+  gdf_data  data;      /**< A union that represents the value */
   gdf_dtype dtype;     /**< The datatype of the scalar's data */
   bool      is_valid;  /**< False if the value is null */
 } gdf_scalar;
