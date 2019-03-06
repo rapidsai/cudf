@@ -89,10 +89,12 @@
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1100 Adds `CUDF_EXPECTS` error-checking macro
 - PR #1092 Fix select_dtype docstring
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
+
 
 
 ## Bug Fixes
