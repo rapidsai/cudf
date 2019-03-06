@@ -327,6 +327,16 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ('b', 'c', 'a')
 
 
+@pytest.mark.parametrize(axis, [0, 1, "index", "columns"]
+@pytest.mark.parametrize(how, ["any", "all"]
+def test_dropna(axis, how):
+    cdf = DataFrame([[0.0, None], [1.0, None], [None, None]])
+    pdf = pd.DataFrame
+    expect = pdf.dropna(axis, how)
+    got = cdf.dropna(axis, how)
+    assert expect == got
+
+
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
 def test_dataframe_astype(nelem):
     df = DataFrame()
