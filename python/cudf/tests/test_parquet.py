@@ -68,12 +68,6 @@ def test_parquet_reader(parquet_file, columns):
     if len(expect) == 0:
         expect = expect.reset_index(drop=True)
 
-    # Pandas parquet reader converts the Arrow Dictionary Array to an `object`
-    # dtype instead of a `categorical` dtype even though the metadata
-    # explicitly states pandas_dtype `categorical`
-    if 'col_category' in expect.columns:
-        expect['col_category'] = expect['col_category'].astype('category')
-
     assert_eq(expect, got, check_categorical=False)
 
 

@@ -21,28 +21,30 @@ from libc.stdlib cimport calloc, malloc, free
 
 
 
-dtypes = {np.float64:    GDF_FLOAT64,
-          np.float32:    GDF_FLOAT32,
-          np.int64:      GDF_INT64,
-          np.int32:      GDF_INT32,
-          np.int16:      GDF_INT16,
-          np.int8:       GDF_INT8,
-          np.bool_:      GDF_INT8,
-          np.datetime64: GDF_DATE64}
+dtypes = {
+    np.float64:    GDF_FLOAT64,
+    np.float32:    GDF_FLOAT32,
+    np.int64:      GDF_INT64,
+    np.int32:      GDF_INT32,
+    np.int16:      GDF_INT16,
+    np.int8:       GDF_INT8,
+    np.bool_:      GDF_INT8,
+    np.datetime64: GDF_DATE64,
+}
 
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
     return np.dtype({
-         GDF_FLOAT64: np.float64,
-         GDF_FLOAT32: np.float32,
-         GDF_INT64: np.int64,
-         GDF_INT32: np.int32,
-         GDF_INT16: np.int16,
-         GDF_INT8: np.int8,
-         GDF_DATE64: np.datetime64,
-         N_GDF_TYPES: np.int32,
-         GDF_CATEGORY: np.int32,
+         GDF_FLOAT64:           np.float64,
+         GDF_FLOAT32:           np.float32,
+         GDF_INT64:             np.int64,
+         GDF_INT32:             np.int32,
+         GDF_INT16:             np.int16,
+         GDF_INT8:              np.int8,
+         GDF_DATE64:            np.datetime64,
+         N_GDF_TYPES:           np.int32,
+         GDF_CATEGORY:          np.int32,
      }[dtype])
 
 def check_gdf_compatibility(col):
@@ -96,7 +98,7 @@ cdef gdf_column* column_view_from_column(col):
         valid_ptr = 0
 
     if pd.api.types.is_categorical_dtype(col.dtype):
-        g_dtype = GDF_INT8
+        g_dtype = dtypes[col.data.dtype.type]
     else:
         g_dtype = dtypes[col.dtype.type]
 
@@ -152,11 +154,13 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
 
     if dtype is not None:
         if pd.api.types.is_categorical_dtype(dtype):
-            g_dtype = GDF_INT8
+            if data is None:
+                g_dtype = dtypes[np.int8]
+            else:
+                g_dtype = dtypes[data.dtype.type]
         elif dtype != np.bool_:
             g_dtype = dtypes[dtype.type]
         else:
-            print("HITHER ::::::")
             g_dtype = dtypes[dtype]
     else:
         g_dtype = dtypes[data.dtype]
