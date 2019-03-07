@@ -69,6 +69,7 @@ struct ColumnChunkDesc
     nvstrdesc_s *str_dict_index; // index for string dictionary
     uint32_t *valid_map_base;   // base pointer of valid bit map for this column
     void *column_data_base;     // base pointer of column data
+    int8_t codec;               // compressed codec enum
 };
 
 
