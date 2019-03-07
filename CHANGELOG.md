@@ -95,7 +95,6 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 
-
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
@@ -136,8 +135,10 @@
 - PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
