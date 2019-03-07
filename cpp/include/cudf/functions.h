@@ -2594,9 +2594,9 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 /**
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
  * 
- * Currently only 1D and 2D tensors are supported. For 1D tensors, no copy is 
- * performed. For 2D tensors, the input columns are copied into the dense 
- * output tensor memory.
+ * Currently only 1D and 2D tensors are supported. This function allocates the
+ * DLPack tensor data and copies the data from the input column(s) into the
+ * tensor.
  * 
  * @param[out] tensor The output DLTensor
  * @param[in] columns An array of pointers to gdf_column 
