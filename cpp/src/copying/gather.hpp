@@ -59,7 +59,7 @@ namespace detail {
  * @param stream Optional CUDA stream on which to execute kernels
  * @return gdf_error
  *---------------------------------------------------------------------------**/
-gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
+void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table, bool check_bounds = false,
                  cudaStream_t stream = 0);
 }  // namespace detail

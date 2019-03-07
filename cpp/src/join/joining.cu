@@ -464,12 +464,9 @@ gdf_error construct_join_output_df(
       cudf::table left_destination_table(result_cols,
                                          num_left_cols - num_cols_to_join);
 
-      err = cudf::detail::gather(
-          &left_source_table,
-          static_cast<index_type const *>(left_indices->data),
-          &left_destination_table, check_bounds);
-
-      GDF_REQUIRE(GDF_SUCCESS == err, err);
+      cudf::detail::gather(&left_source_table,
+                           static_cast<index_type const *>(left_indices->data),
+                           &left_destination_table, check_bounds);
     }
 
     // Construct the right columns
@@ -478,12 +475,10 @@ gdf_error construct_join_output_df(
       cudf::table right_destination_table(result_cols + right_table_begin,
                                           num_right_cols - num_cols_to_join);
 
-      err = cudf::detail::gather(
-          &right_source_table,
-          static_cast<index_type const *>(right_indices->data),
-          &right_destination_table, check_bounds);
+      cudf::detail::gather(&right_source_table,
+                           static_cast<index_type const *>(right_indices->data),
+                           &right_destination_table, check_bounds);
 
-      GDF_REQUIRE(GDF_SUCCESS == err, err);
     }
 
     // Construct the joined columns
@@ -497,20 +492,16 @@ gdf_error construct_join_output_df(
       if (JoinType::FULL_JOIN == join_type) {
         cudf::table right_source_table(rjoincol.data(), rjoincol.size());
 
-        err = cudf::detail::gather(
+        cudf::detail::gather(
             &right_source_table,
             static_cast<index_type const *>(right_indices->data),
             &join_destination_table, check_bounds);
 
-        GDF_REQUIRE(GDF_SUCCESS == err, err);
-
       }
 
-      err = cudf::detail::gather(
-          &join_source_table,
-          static_cast<index_type const *>(left_indices->data),
-          &join_destination_table, check_bounds);
-      GDF_REQUIRE(GDF_SUCCESS == err, err);
+      cudf::detail::gather(&join_source_table,
+                           static_cast<index_type const *>(left_indices->data),
+                           &join_destination_table, check_bounds);
     }
 
     POP_RANGE();

@@ -33,7 +33,6 @@ using test_types =
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, IdentityTest) {
-
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
@@ -53,9 +52,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   cudf::table source_table{&raw_source, 1};
   cudf::table destination_table{&raw_destination, 1};
 
-  gdf_error status =
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-  EXPECT_EQ(GDF_SUCCESS, status);
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
   EXPECT_TRUE(source_column == destination_column);
 }
@@ -86,9 +84,8 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   cudf::table source_table{&raw_source, 1};
   cudf::table destination_table{&raw_destination, 1};
 
-  gdf_error status =
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-  EXPECT_EQ(GDF_SUCCESS, status);
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
   // Expected result is the reversal of the source column
   std::vector<TypeParam> expected_data;
@@ -134,9 +131,8 @@ TYPED_TEST(GatherTest, AllNull) {
   cudf::table source_table{&raw_source, 1};
   cudf::table destination_table{&raw_destination, 1};
 
-  gdf_error status =
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-  EXPECT_EQ(GDF_SUCCESS, status);
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
@@ -182,9 +178,8 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
   cudf::table source_table{&raw_source, 1};
   cudf::table destination_table{&raw_destination, 1};
 
-  gdf_error status =
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-  EXPECT_EQ(GDF_SUCCESS, status);
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;

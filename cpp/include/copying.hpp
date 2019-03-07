@@ -83,7 +83,7 @@ gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
  *
  * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
+void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
 }  // namespace cudf
 

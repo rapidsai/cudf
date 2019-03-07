@@ -219,16 +219,14 @@ __global__ void gather_bitmask_kernel(
  * @param[in] check_bounds Optionally perform bounds checking of values in
  * `gather_map`
  * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return gdf_error
  *---------------------------------------------------------------------------**/
-gdf_error gather_bitmask(gdf_valid_type const* source_mask,
-                         gdf_size_type num_source_rows,
-                         gdf_valid_type* destination_mask,
-                         gdf_size_type num_destination_rows,
-                         gdf_index_type const gather_map[],
-                         bool check_bounds = false, cudaStream_t stream = 0) {
-  GDF_REQUIRE(destination_mask != nullptr, GDF_VALIDITY_MISSING);
-
+void gather_bitmask(gdf_valid_type const* source_mask,
+                    gdf_size_type num_source_rows,
+                    gdf_valid_type* destination_mask,
+                    gdf_size_type num_destination_rows,
+                    gdf_index_type const gather_map[],
+                    bool check_bounds = false, cudaStream_t stream = 0) {
+  CUDF_EXPECTS(destination_mask != nullptr, "Missing valid buffer allocation");
 
   constexpr gdf_size_type BLOCK_SIZE{256};
   const gdf_size_type gather_grid_size =
@@ -254,12 +252,14 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
         gather_map);
   }
 
+  CHECK_STREAM(stream);
+
   if (in_place) {
     thrust::copy(rmm::exec_policy(stream)->on(stream), temp_bitmask.begin(),
                  temp_bitmask.end(), destination_mask);
   }
 
-  return GDF_SUCCESS;
+  CHECK_STREAM(stream);
 }
 
 /**---------------------------------------------------------------------------*
@@ -280,14 +280,12 @@ struct column_gatherer {
    * @param check_bounds Optionally perform bounds checking on the values of
    * `gather_map`
    * @param stream Optional CUDA stream on which to execute kernels
-   * @return gdf_error
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>
-  gdf_error operator()(gdf_column const* source_column,
-                       gdf_index_type const gather_map[],
-                       gdf_column* destination_column,
-                       bool check_bounds = false, cudaStream_t stream = 0) {
-    gdf_error gdf_status{GDF_SUCCESS};
+  void operator()(gdf_column const* source_column,
+                  gdf_index_type const gather_map[],
+                  gdf_column* destination_column, bool check_bounds = false,
+                  cudaStream_t stream = 0) {
     ColumnType const* const source_data{
         static_cast<ColumnType const*>(source_column->data)};
     ColumnType* destination_data{
@@ -322,19 +320,16 @@ struct column_gatherer {
     }
 
     if (destination_column->valid != nullptr) {
-      gdf_status = gather_bitmask(
-          source_column->valid, source_column->size, destination_column->valid,
-          num_destination_rows, gather_map, check_bounds, stream);
-      GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+      gather_bitmask(source_column->valid, source_column->size,
+                     destination_column->valid, num_destination_rows,
+                     gather_map, check_bounds, stream);
 
       // TODO compute the null count in the gather_bitmask kernels
-      gdf_status = set_null_count(destination_column);
-      GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+      gdf_error gdf_status = set_null_count(destination_column);
+      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
     }
 
-    CUDA_CHECK_LAST();
-
-    return gdf_status;
+    CHECK_STREAM(stream);
   }
 };
 }  // namespace
@@ -342,54 +337,40 @@ struct column_gatherer {
 namespace cudf {
 namespace detail {
 
-gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table, bool check_bounds,
-                 cudaStream_t stream) {
-  assert(source_table->size() == destination_table->size());
-
-  gdf_error gdf_status{GDF_SUCCESS};
+void gather(table const* source_table, gdf_index_type const gather_map[],
+            table* destination_table, bool check_bounds, cudaStream_t stream) {
+  CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
+               "Mismatched number of columns");
 
   auto gather_column = [gather_map, check_bounds, stream](
                            gdf_column const* source, gdf_column* destination) {
-    if (source->dtype != destination->dtype) {
-      throw GDF_DTYPE_MISMATCH;
-    }
+    CUDF_EXPECTS(source->dtype == destination->dtype, "Column type mismatch");
 
     // If the source column has a valid buffer, the destination column must
     // also have one
-    if ((nullptr != source->valid) and (nullptr == destination->valid)) {
-      throw GDF_VALIDITY_MISSING;
-    }
+    bool const source_has_nulls{source->valid != nullptr};
+    bool const dest_has_nulls{destination->valid != nullptr};
+    CUDF_EXPECTS((source_has_nulls && dest_has_nulls) || (not source_has_nulls),
+                 "Missing destination validity buffer");
 
     // TODO: Each column could be gathered on a separate stream
-    gdf_error gdf_status =
-        cudf::type_dispatcher(source->dtype, column_gatherer{}, source,
-                              gather_map, destination, check_bounds, stream);
-
-    if (GDF_SUCCESS != gdf_status) {
-      throw gdf_status;
-    }
+    cudf::type_dispatcher(source->dtype, column_gatherer{}, source, gather_map,
+                          destination, check_bounds, stream);
 
     return destination;
   };
 
-  try {
-    // Gather columns one-by-one
-    std::transform(source_table->begin(), source_table->end(),
-                   destination_table->begin(), destination_table->begin(),
-                   gather_column);
-  } catch (gdf_error e) {
-    return e;
-  }
-
-  return gdf_status;
+  // Gather columns one-by-one
+  std::transform(source_table->begin(), source_table->end(),
+                 destination_table->begin(), destination_table->begin(),
+                 gather_column);
 }
 
 }  // namespace detail
 
-gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table) {
-  return detail::gather(source_table, gather_map, destination_table);
+void gather(table const* source_table, gdf_index_type const gather_map[],
+            table* destination_table) {
+  detail::gather(source_table, gather_map, destination_table);
 }
 
 }  // namespace cudf
