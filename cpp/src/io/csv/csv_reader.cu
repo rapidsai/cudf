@@ -49,7 +49,7 @@
 #include "datetime_parser.cuh"
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 
@@ -239,7 +239,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 			first_row_len = raw_csv->num_bytes / sizeof(char);
 		}
 		first_row.resize(first_row_len);
-		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
+		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, first_row_len * sizeof(char), cudaMemcpyDefault));
 	}
 
 	int num_cols = 0;
@@ -255,12 +255,20 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 				 first_row[pos] == raw_csv->opts.terminator)) {
 			// Got to the end of a column
 			if (raw_csv->header_row >= 0) {
-				// first_row is the header, add the column name
-				string new_col_name(first_row.data() + prev, pos - prev);
+				// First_row is the header, add the column name
+				int col_name_len = pos - prev;
+				// Exclude '\r' character at the end of the column name if it's part of the terminator
+				if (col_name_len > 0 &&
+					raw_csv->opts.terminator == '\n' &&
+					first_row[pos] == '\n' &&
+					first_row[pos - 1] == '\r') {
+						--col_name_len;
+					}
+				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
 			}
 			else {
-				// first_row is the first data row, add the automatically generated name
+				// First_row is the first data row, add the automatically generated name
 				raw_csv->col_names.push_back(raw_csv->prefix + std::to_string(num_cols));
 			}
 			num_cols++;
@@ -318,12 +326,12 @@ gdf_error read_csv(csv_read_arg *args)
 	} else {
 		raw_csv->opts.terminator = args->lineterminator;
 	}
-	if (args->quotechar != '\0') {
+	if (args->quotechar != '\0' && args->quoting != QUOTE_NONE) {
 		raw_csv->opts.quotechar = args->quotechar;
-		raw_csv->opts.keepquotes = !args->quoting;
+		raw_csv->opts.keepquotes = false;
 		raw_csv->opts.doublequote = args->doublequote;
 	} else {
-		raw_csv->opts.quotechar = args->quotechar;
+		raw_csv->opts.quotechar = '\0';
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}
@@ -774,6 +782,7 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_dtypes);
 	free(h_valid);
 	free(h_data);
+	free(raw_csv->h_parseCol);
 
 	if (raw_csv->num_records != 0) {
 		error = launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
@@ -782,7 +791,16 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		// Sync with the default stream, just in case create_from_index() is asynchronous 
 		CUDA_TRY(cudaStreamSynchronize(0));
+	}
 
+	// Free buffers that are not used from this point on
+	RMM_TRY( RMM_FREE( d_data, 0 ) );
+	RMM_TRY( RMM_FREE ( raw_csv->recStart, 0) );
+	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) );
+	RMM_TRY( RMM_FREE( d_dtypes, 0 ) );
+	RMM_TRY( RMM_FREE( d_valid, 0 ) );
+
+	if (raw_csv->num_records != 0) {
 		stringColCount=0;
 		for (int col = 0; col < raw_csv->num_active_cols; col++) {
 
@@ -792,6 +810,8 @@ gdf_error read_csv(csv_read_arg *args)
 				continue;
 
 			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+
 			if ((raw_csv->opts.quotechar != '\0') && (raw_csv->opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
 				// quotechar in quote fields results in reduction to single
@@ -803,8 +823,6 @@ gdf_error read_csv(csv_read_arg *args)
 			else {
 				gdf->data = stringCol;
 			}
-
-			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
 
 			stringColCount++;
 		}
@@ -818,24 +836,10 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 
-	// free up space that is no longer needed
-	if (h_str_cols != NULL)
-		free ( h_str_cols);
-
-	free(raw_csv->h_parseCol);
-
-	if (d_str_cols != NULL)
-		RMM_TRY( RMM_FREE( d_str_cols, 0 ) ); 
-
-	RMM_TRY( RMM_FREE( d_valid, 0 ) );
+	// Free up remaining internal buffers
 	RMM_TRY( RMM_FREE( d_valid_count, 0 ) );
-	RMM_TRY( RMM_FREE( d_dtypes, 0 ) );
-	RMM_TRY( RMM_FREE( d_data, 0 ) ); 
 
-	RMM_TRY( RMM_FREE( raw_csv->recStart, 0 ) ); 
-	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) ); 
 	RMM_TRY( RMM_FREE ( raw_csv->data, 0) );
-
 
 	args->data 			= cols;
 	args->num_cols_out	= raw_csv->num_active_cols;

@@ -594,7 +594,7 @@ def quantile(column, quant, method, exact):
                                       ffi.cast('void *', px),
                                       gdf_context)
         else:
-            libgdf.gdf_quantile_aprrox(column.cffi_view,
+            libgdf.gdf_quantile_approx(column.cffi_view,
                                        q,
                                        ffi.cast('void *', px),
                                        gdf_context)
