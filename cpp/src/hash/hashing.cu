@@ -18,7 +18,7 @@
 
 #include "cudf.h"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "join/joining.h"
 #include "dataframe/cudf_table.cuh"
 #include "hash/hash_functions.cuh"

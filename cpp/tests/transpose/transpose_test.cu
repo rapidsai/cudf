@@ -21,7 +21,7 @@
 
 #include <cudf.h>
 #include <cudf/functions.h>
-#include <utilities/error_utils.h>
+#include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 
 #include <vector>
