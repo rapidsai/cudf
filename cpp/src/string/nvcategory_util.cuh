@@ -55,8 +55,6 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
 /**
  * Takes an array of input_columns and makes it so that they all share the same keys in NVCategory
  */
-gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns, cudaStream_t stream = 0);
-
 gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
 
 gdf_column* create_column_nvcategory_from_one_string(const char* str);

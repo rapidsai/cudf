@@ -58,8 +58,6 @@ gdf_error validate_categories(gdf_column * input_columns[], int num_columns, gdf
 		total_count += input_columns[i]->size;
 	}
 	return GDF_SUCCESS;
-
-
 }
 
 #include <iostream>
@@ -107,63 +105,24 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
 	return GDF_SUCCESS;
 }
 
-gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns, cudaStream_t stream){
+gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns){
+
 	if(num_columns == 0){
 		return GDF_DATASET_EMPTY;
 	}
 	gdf_size_type total_count;
 
 	gdf_error err = validate_categories(input_columns,num_columns,total_count);
-
-	if(err != GDF_SUCCESS) return err;
+	GDF_REQUIRE(GDF_SUCCESS == err, err);
 
 	err = validate_categories(output_columns,num_columns,total_count);
-	if(err != GDF_SUCCESS) return err;
-
+	GDF_REQUIRE(GDF_SUCCESS == err, err);
 
 	for(int column_index = 0; column_index < num_columns; column_index++){
 		if(input_columns[column_index]->size != output_columns[column_index]->size){
 			return GDF_COLUMN_SIZE_MISMATCH;
 		}
 	}
-
-	std::vector<NVStrings*> input_strings(num_columns);
-	//We have to make a big kahuna nvstrings to store this basically then generate the category from there
-	for(int column_index = 0; column_index < num_columns; column_index++){
-		input_strings[column_index] = input_columns[column_index]->dtype_info.category->to_strings();
-		if(output_columns[column_index]->dtype_info.category != nullptr){
-			NVCategory::destroy(output_columns[column_index]->dtype_info.category);
-		}
-	}
-
-	//using ull because bytes can be bigger thann gdf_size_type
-	size_t start_position = 0;
-	NVCategory * new_category = NVCategory::create_from_strings(input_strings);
-	for(int column_index = 0; column_index < num_columns; column_index++){
-		//clean up the temporary strings
-		NVStrings::destroy(input_strings[column_index]);
-	}
-	std::vector<cudaError_t> cuda_err(num_columns);
-	for(int column_index = 0; column_index < num_columns; column_index++){
-		output_columns[column_index]->dtype_info.category = new_category;
-		size_t size_to_copy = sizeof(nv_category_index_type) * input_columns[column_index]->size;
-		cuda_err[column_index] = cudaMemcpyAsync(output_columns[column_index]->data,
-				output_columns[column_index]->dtype_info.category->values_cptr() + start_position,
-				size_to_copy,
-				cudaMemcpyDeviceToDevice,
-				stream);
-		start_position += size_to_copy;
-	}
-	cudaStreamSynchronize(stream);
-	for(int column_index = 0; column_index < num_columns; column_index++){
-		if(cuda_err[column_index] != cudaSuccess){
-			return GDF_CUDA_ERROR;
-		}
-	}
-	return GDF_SUCCESS;
-}
-
-gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns){
 
 	NVStrings** temp_strs = new NVStrings*[num_columns];
 
