@@ -6,11 +6,12 @@ import pyarrow as pa
 
 from cudf.dataframe import columnops, numerical
 from cudf import _gdf
-from cudf.utils import utils
+from cudf.utils import utils, cudautils
 from cudf.dataframe.buffer import Buffer
 from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
@@ -188,6 +189,24 @@ class DatetimeColumn(columnops.TypedColumnBase):
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
+
+    def sort_by_values(self, ascending=True, na_position="last"):
+        sort_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = cudautils.gather(data=self.data.mem,
+                                    index=sort_inds.data.mem)
+        mask = None
+        if self.mask:
+            mask = self._get_mask_as_column()\
+                .take(sort_inds.data.to_gpu_array()).as_mask()
+            mask = Buffer(mask)
+        col_keys = self.replace(data=Buffer(col_keys),
+                                mask=mask,
+                                null_count=self.null_count,
+                                dtype=self.dtype)
+        col_inds = self.replace(data=sort_inds.data,
+                                mask=sort_inds.mask,
+                                dtype=sort_inds.data.dtype)
+        return col_keys, col_inds
 
 
 def binop(lhs, rhs, op, out_dtype):

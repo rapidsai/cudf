@@ -287,7 +287,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
-            arbitrary = arbitrary.cast(pa.int8())
+            # Needed because of bug in PyArrow
+            # https://issues.apache.org/jira/browse/ARROW-4766
+            if len(arbitrary) > 0:
+                arbitrary = arbitrary.cast(pa.int8())
+            else:
+                arbitrary = pa.array([], type=pa.int8())
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
                 data=padata,
@@ -348,11 +353,34 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(memoryview(arbitrary))
         except TypeError:
             try:
-                data = as_column(pa.array(arbitrary, from_pandas=nan_as_null),
-                                 dtype=dtype, nan_as_null=nan_as_null)
-            except pa.ArrowInvalid:
-                data = as_column(np.array(arbitrary), dtype=dtype,
-                                 nan_as_null=nan_as_null)
+                pa_type = None
+                if dtype is not None:
+                    if pd.api.types.is_categorical_dtype(dtype):
+                        raise TypeError
+                    else:
+                        np_type = np.dtype(dtype).type
+                        if np_type == np.bool_:
+                            pa_type = pa.bool_()
+                        else:
+                            pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
+                data = as_column(
+                    pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
+                    nan_as_null=nan_as_null
+                )
+            except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
+                np_type = None
+                if dtype is not None:
+                    if pd.api.types.is_categorical_dtype(dtype):
+                        data = as_column(
+                            pd.Series(arbitrary, dtype='category'),
+                            nan_as_null=nan_as_null
+                        )
+                    else:
+                        np_type = np.dtype(dtype)
+                        data = as_column(
+                            np.array(arbitrary, dtype=np_type),
+                            nan_as_null=nan_as_null
+                        )
 
     return data
 
