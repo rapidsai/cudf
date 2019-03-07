@@ -10,7 +10,7 @@
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "cudf/functions.h"
 #include "bitmask/bitmask_ops.h"
 

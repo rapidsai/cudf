@@ -596,8 +596,6 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
-    cdef gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
-
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)

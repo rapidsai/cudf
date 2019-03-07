@@ -55,10 +55,10 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
-set(CUDF_INTERNAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cudf/cudf_internal_test.cu")
+set(ERROR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/error/error_handling_test.cu")
 
-ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
+ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - filter tests ----------------------------------------------------------------------------------
@@ -67,8 +67,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gdf_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 

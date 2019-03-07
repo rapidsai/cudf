@@ -56,6 +56,7 @@
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
+- PR #1136 Removed `gdf_concat` 
 
 ## Improvements
 
@@ -90,6 +91,7 @@
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1100 Adds `CUDF_EXPECTS` error-checking macro
 - PR #1092 Fix select_dtype docstring
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
@@ -132,9 +134,13 @@
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
+- PR #1129 Fix join performance with index parameter from using numpy array
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 

@@ -89,7 +89,8 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @param[in] valid Pointer to validity bitmask for the data.
  * @param[in] size Number of rows in the column.
  * @param[in] dtype Data type of the column.
- * @param[in] null_count The number of non-valid elements in the validity bitmask
+ * @param[in] null_count The number of non-valid elements in the validity bitmask.
+ * @param[in] extra_info see gdf_dtype_extra_info. Extra data for column description.
  * 
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
@@ -106,16 +107,24 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
  */
 gdf_error gdf_column_free(gdf_column *column);
 
-/** 
- * @brief  Concatenates the gdf_columns into a single, contiguous column,
- * including the validity bitmasks
+/**
+ * @brief Concatenates multiple gdf_columns into a single, contiguous column,
+ * including the validity bitmasks.
  * 
- * @param[out] output A column whose buffers are already allocated that will 
- *                    contain the concatenation of the input columns
- * @param[in] columns_to_conat[] The columns to concatenate
+ * Note that input columns with nullptr validity masks are treated as if all
+ * elements are valid.
+ *
+ * @param[out] output_column A column whose buffers are already allocated that
+ *             will contain the concatenation of the input columns data and
+ *             validity bitmasks
+ * @param[in] columns_to_concat[] The columns to concatenate
  * @param[in] num_columns The number of columns to concatenate
  * 
- * @returns GDF_SUCCESS upon successful completion
+ * @return gdf_error GDF_SUCCESS upon completion; GDF_DATASET_EMPTY if any data
+ *         pointer is NULL, GDF_COLUMN_SIZE_MISMATCH if the output column size
+ *         != the total size of the input columns; GDF_DTYPE_MISMATCH if the
+ *         input columns have different datatypes.
+ *
  */
 gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
 
@@ -2265,17 +2274,6 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  */
 gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
-/**
- * @brief  Concatenates two gdf_columns
- *
- * @param[in] gdf_column of one input of any type
- * @param[in] gdf_column of same type as the first
- * @param[out] output gdf_column of same type as inputs. The output memory needs to be preallocated to be the same size as the sum of both inputs
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
 
 /*
  * Hashing
@@ -2312,7 +2310,8 @@ gdf_size_type gdf_dtype_size(gdf_dtype dtype);
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
  *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @return gdf_error GDF_SUCCESS, or GDF_UNSUPPORTED_DTYPE if col has an invalid
+ *         datatype
  */
 gdf_error get_column_byte_width(gdf_column * col, int * width);
 
