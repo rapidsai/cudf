@@ -290,6 +290,39 @@ CUDA_HOST_DEVICE_CALLABLE
 {
   return value;
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Trait to use to get underlying type of wrapped object
+ * 
+ * This struct can be used with either a fundamental type or a wrapper type and
+ * it uses unwrap to get the underlying type.
+ * Example use case: 
+ *  Making a functor to use with a `type_dispatcher` that works on the
+ *  underlying type of all `gdf_dtype`
+ *  
+ * struct example_functor{
+ *  template <typename T>
+ *  int operator()(){
+ *    using T1 = cudf::detail::unwrapped_type<T>::type;
+ *    return sizeof(T1);
+ *  }
+ * };
+ * 
+ * @tparam T Either wrapped object type or fundamental type
+ *---------------------------------------------------------------------------**/
+template <typename T>
+struct unwrapped_type {
+  using type = std::decay_t<decltype(unwrap(std::declval<T&>()))>;
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Helper type for `unwrapped_type`
+ * 
+ * @tparam T Either wrapped object type or fundamental type
+ *---------------------------------------------------------------------------**/
+template <typename T>
+using unwrapped_type_t = typename unwrapped_type<T>::type;
+
 } // namespace detail
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
