@@ -232,14 +232,13 @@ execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
-                   COMMENT "stringify header types.h"
+                   COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
 
 add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
-
 
 option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
 if(JITIFY_PROCESS_CACHE)
@@ -301,7 +300,7 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
 
 add_custom_target(install_python DEPENDS cudf rmm_install_python PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
-	###################################################################################################
+###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
 add_custom_command(OUTPUT CUDF_DOXYGEN
