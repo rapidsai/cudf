@@ -133,6 +133,7 @@
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
