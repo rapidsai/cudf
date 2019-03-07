@@ -279,7 +279,7 @@ typedef ::testing::Types< TestParameters< VTuple<int32_t>, GDF_HASH_IDENTITY, 0 
                           TestParameters< VTuple<int64_t, int32_t>, GDF_HASH_MURMUR3, 1>,
                           TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
                           TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_IDENTITY, 2, 3>,
-                          TestParameters< VTuple<uint32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
+                          TestParameters< VTuple<int32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
                           TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_MURMUR3, 1, 3>,
                           TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
                           TestParameters< VTuple<float, int32_t>, GDF_HASH_MURMUR3, 0>
