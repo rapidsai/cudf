@@ -24,6 +24,8 @@ namespace cudf {
 /**
  * @brief Scatters the rows (including null values) of a set of source columns
  * into a set of destination columns.
+ * 
+ * The two sets of columns must have equal numbers of columns.
  *
  * Scatters the rows of the source columns into the destination columns
  * according to a scatter map such that row "i" from the source columns will be
@@ -55,6 +57,8 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 /**
  * @brief Gathers the rows (including null values) of a set of source columns
  * into a set of destination columns.
+ * 
+ * The two sets of columns must have equal numbers of columns.
  *
  * Gathers the rows of the source columns into the destination columns according
  * to a gather map such that row "i" in the destination columns will contain
@@ -79,7 +83,6 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  * of rows equal in size to the number of elements in the gather_map that will
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
- * determined by the gather_map.
  *
  * @Returns GDF_SUCCESS upon successful completion
  */
