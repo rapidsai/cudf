@@ -165,6 +165,8 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
   // Call the managed tensor's deleter since our "borrowing" is done
   tensor->deleter(const_cast<DLManagedTensor*>(tensor));
+
+  return GDF_SUCCESS;
 }
 
 // Convert an array of gdf_column(s) into a DLPack DLTensor
@@ -206,45 +208,38 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
 
   // If there is only one column, then a 1D tensor can just copy the pointer
   // to the data in the column, and the deleter should not delete the original
-  // data. However, if there are multiple columns, we must do a copy of each
-  // column's data into the dense tensor array.
-  if (num_columns == 1) {
-    tensor->dl_tensor.data = columns[0]->data;
+  // data. However, this is inconsistent with the 2D cases where we must do a
+  // copy of each column's data into the dense tensor array. Also, if we don't
+  // copy, then the original column data could be changed, which would change
+  // the contents of the tensor, which might be surprising or cause issues.
+  // Therefore, for now we ALWAYS do a copy of the data. If this becomes
+  // a performance issue we can reevaluate in the future.
 
-    tensor->deleter = [](DLManagedTensor *arg)
-    {
-      arg->dl_tensor.data = 0;
-      delete [] arg->dl_tensor.shape;
-      delete [] arg->dl_tensor.strides;
-      delete arg;
-    };
+  char *data = nullptr;
+  const size_t N = num_rows * num_columns;
+  size_t bytesize = tensor_size(tensor->dl_tensor);
+  size_t column_bytesize = num_rows * (tensor->dl_tensor.dtype.bits / 8);
+
+  RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
+
+  char *d = data;
+  for (gdf_size_type i = 0; i < num_columns; ++i) {
+    CUDA_TRY(cudaMemcpy(d, columns[i]->data,
+                        column_bytesize, cudaMemcpyDefault));
+    d += column_bytesize;
   }
-  else {
-    char *data = nullptr;
-    const size_t N = num_rows * num_columns;
-    size_t bytesize = tensor_size(tensor->dl_tensor);
-    size_t column_bytesize = num_rows * (tensor->dl_tensor.dtype.bits / 8);
 
-    RMM_TRY( RMM_ALLOC(&data, bytesize, 0) );
+  tensor->dl_tensor.data = data;
 
-    char *d = data;
-    for (gdf_size_type i = 0; i < num_columns; ++i) {
-      CUDA_TRY(cudaMemcpy(d, columns[i]->data, 
-                          column_bytesize, cudaMemcpyDefault));
-      d += column_bytesize;
-    }
-
-    tensor->dl_tensor.data = data;
-
-    tensor->deleter = [](DLManagedTensor * arg)
-    {
-      if (arg->dl_tensor.ctx.device_type == kDLGPU)
-        RMM_TRY(RMM_FREE(arg->dl_tensor.data, 0));
-      delete [] arg->dl_tensor.shape;
-      delete [] arg->dl_tensor.strides;
-      delete arg;
-    };
-  }
+  tensor->deleter = [](DLManagedTensor * arg)
+  {
+    // TODO switch assert to RMM_TRY once RMM supports throwing exceptions
+    if (arg->dl_tensor.ctx.device_type == kDLGPU)
+      assert(RMM_SUCCESS == RMM_FREE(arg->dl_tensor.data, 0));
+    delete [] arg->dl_tensor.shape;
+    delete [] arg->dl_tensor.strides;
+    delete arg;
+  };
 
   tensor->manager_ctx = nullptr;
 
