@@ -22,6 +22,7 @@
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "types.hpp"
+#include <random>
 
 template <typename T>
 struct ScatterTest : GdfTest {};
