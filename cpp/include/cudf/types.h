@@ -8,6 +8,7 @@ typedef	long	gdf_date64;
 typedef	int		gdf_date32;
 typedef	int		gdf_category;
 typedef	long	gdf_timestamp;
+typedef signed char gdf_bool;
 
 
  /**

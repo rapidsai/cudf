@@ -300,7 +300,7 @@ using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 
 using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 
-using gdf_bool 	= detail::wrapper<int8_t, GDF_BOOL>;
+using bool8 	= detail::wrapper<gdf_bool, GDF_BOOL>;
 
 
 } // namespace cudf
