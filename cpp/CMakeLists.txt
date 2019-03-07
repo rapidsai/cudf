@@ -224,6 +224,7 @@ SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
+# Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
 add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
@@ -238,6 +239,13 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
 add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
+
+
+option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
+if(JITIFY_PROCESS_CACHE)
+    message(STATUS "Using process level cache for JIT compiled kernels")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
+endif(JITIFY_PROCESS_CACHE)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -255,12 +263,6 @@ if(HT_LEGACY_ALLOCATOR)
     message(STATUS "Using legacy allocator for hash tables")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
-
-option(JITIFY_THREAD_SAFE "Use a global cache for JIT compiled kernels" ON)
-if(JITIFY_THREAD_SAFE)
-    message(STATUS "Using global cache for JIT compiled kernels")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
-endif(JITIFY_THREAD_SAFE)
 
 
 ###################################################################################################
