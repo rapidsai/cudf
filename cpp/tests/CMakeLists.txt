@@ -215,6 +215,13 @@ set(TRANSPOSE_TEST_SRC
 
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
+# - table tests -------------------------------------------------------------------------------
+
+set(TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+
+ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################

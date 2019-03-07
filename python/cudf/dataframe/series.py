@@ -540,11 +540,18 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value):
+    def fillna(self, value, method=None, limit=None, axis=None):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
+        if method is not None:
+            raise NotImplementedError("The method keyword is not supported")
+        if limit is not None:
+            raise NotImplementedError("The limit keyword is not supported")
+        if axis:
+            raise NotImplementedError("The axis keyword is not supported")
+
         data = self._column.fillna(value)
 
         return self._copy_construct(data=data)
