@@ -163,6 +163,7 @@ find_file(NVSTRINGS_INCLUDE "NVStrings.h"
                 
 find_file(NVCATEGORY_INCLUDE "NVCategory.h"
           HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include/nvstrings"
                 "$ENV{CONDA_PREFIX}/include")                
                 
 find_library(NVSTRINGS_LIBRARY "NVStrings"
