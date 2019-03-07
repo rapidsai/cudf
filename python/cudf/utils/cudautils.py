@@ -842,3 +842,32 @@ def modulo(arr, d):
     if arr.size > 0:
         gpu_modulo.forall(arr.size)(arr, out, d)
     return out
+
+
+#
+# Elementwise AND and OR
+#
+@cuda.jit
+def gpu_elem_and(a, b):
+    i = cuda.grid(1)
+    if i < a.size:
+        out[i] = a and b
+
+
+@cuda.jit
+def gpu_elem_or(a, b, out):
+    i = cuda.grid(1)
+    if i < a.size:
+        out[i] = a or b
+
+
+def elem_and_or(a, b, operation)
+    assert a.size == b.size #Different length objects
+    out = rmm.device_array_like(a)
+    if operation == "and":
+        gpu_elem_and.forall(a.size)(a, b, out)
+    else operation == "or":
+        gpu_elem_or.forall(a.size)(a, b, out)
+    return out
+
+
