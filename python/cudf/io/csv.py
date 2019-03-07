@@ -28,8 +28,16 @@ def is_file_like(obj):
     return True
 
 
+_quoting_enum = {
+    0: libgdf.QUOTE_MINIMAL,
+    1: libgdf.QUOTE_ALL,
+    2: libgdf.QUOTE_NONNUMERIC,
+    3: libgdf.QUOTE_NONE,
+}
+
+
 def read_csv(filepath_or_buffer, lineterminator='\n',
-             quotechar='"', quoting=True, doublequote=True,
+             quotechar='"', quoting=0, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
@@ -64,12 +72,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         or a dictionary with column_name:dtype (pandas style).
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
-    quoting : bool, default True
-        If True, start and end quotechar are removed from returned strings
-        If False, start and end quotechar are kept in returned strings
+    quoting : str or int, default 0
+        Controls quoting behavior. Set to one of
+        0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
+        2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
+        Quoting is enabled with all values except 3.
     doublequote : bool, default True
-        When quotechar is specified and quoting is True, indicates whether to
-        interpret two consecutive quotechar inside fields as single quotechar
+        When quoting is enabled, indicates whether to interpret two
+        consecutive quotechar inside fields as single quotechar
     header : int, default 'infer'
         Row number to use as the column names. Default behavior is to infer
         the column names: if no names are passed, header=0;
@@ -131,41 +141,26 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     Examples
     --------
 
+    Create a test csv file
 
-    .. code-block:: python
+    >>> import cudf
+    >>> filename = 'foo.csv'
+    >>> lines = [
+    ...   "num1,datetime,text",
+    ...   "123,2018-11-13T12:00:00,abc",
+    ...   "456,2018-11-14T12:35:01,def",
+    ...   "789,2018-11-15T18:02:59,ghi"
+    ... ]
+    >>> with open(filename, 'w') as fp:
+    ...     fp.write('\\n'.join(lines)+'\\n')
 
-      import cudf
+    Read the file with ``cudf.read_csv``
 
-      # Create a test csv file
-      filename = 'foo.csv'
-      lines = [
-        "num1,datetime,text",
-        "123,2018-11-13T12:00:00,abc",
-        "456,2018-11-14T12:35:01,def",
-        "789,2018-11-15T18:02:59,ghi"
-      ]
-      with open(filename, 'w') as fp:
-          fp.write('\\n'.join(lines)+'\\n')
-
-      # Read the file with cudf
-      names = ['num1', 'datetime', 'text']
-      # Note 'int' for 3rd column- text will be hashed
-      dtypes = ['int', 'date', 'int']
-      df = cudf.read_csv(filename, delimiter=',',
-                         names=names, dtype=dtypes,
-                         skiprows=1)
-
-      # Display results
-      print(df)
-
-    Output:
-
-    .. code-block:: python
-
-          num1                datetime text
-        0  123 2018-11-13T12:00:00.000 5451
-        1  456 2018-11-14T12:35:01.000 5784
-        2  789 2018-11-15T18:02:59.000 6117
+    >>> cudf.read_csv(filename)
+      num1                datetime text
+    0  123 2018-11-13T12:00:00.000 5451
+    1  456 2018-11-14T12:35:01.000 5784
+    2  789 2018-11-15T18:02:59.000 6117
 
     See Also
     --------
@@ -315,7 +310,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -380,7 +375,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting=True, doublequote=True,
+                     quotechar='"', quoting=0, doublequote=True,
                      header='infer',
                      sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
@@ -412,44 +407,35 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     Examples
     --------
 
-    .. code-block:: python
+    Create a test csv file
 
-      import cudf
+    >>> import cudf
+    >>> filename = 'foo.csv'
+    >>> lines = [
+    ...   "num1,datetime,text",
+    ...   "123,2018-11-13T12:00:00,abc",
+    ...   "456,2018-11-14T12:35:01,def",
+    ...   "789,2018-11-15T18:02:59,ghi"
+    ... ]
+    >>> with open(filename, 'w') as fp:
+    ...     fp.write('\\n'.join(lines)+'\\n')
 
-      # Create a test csv file
-      filename = 'foo.csv'
-      lines = [
-        "num1,datetime,text",
-        "123,2018-11-13T12:00:00,abc",
-        "456,2018-11-14T12:35:01,def",
-        "789,2018-11-15T18:02:59,ghi"
-      ]
-      with open(filename, 'w') as fp:
-          fp.write('\\n'.join(lines)+'\\n')
+    Read the file with cudf
 
-      # Read the file with cudf
-      names = ['num1', 'datetime', 'text']
-      dtypes = ['int', 'date', 'str']
-      columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
-                              names=names, dtype=dtypes,
-                              skiprows=1)
-      # Display results
-      columns[0]
-      print(columns[0])
-      columns[2]
-      print(columns[2])
+    >>> names = ['num1', 'datetime', 'text']
+    >>> dtypes = ['int', 'date', 'str']
+    >>> columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
+    ...                         names=names, dtype=dtypes,
+    ...                         skiprows=1)
 
-    Output:
+    Display results
 
-    .. code-block:: python
-
-      <cudf.Series nrows=3 >
-      0  123
-      1  456
-      2  789
-
-      <nvstrings count=3>
-      ['abc', 'def', 'ghi']
+    >>> print(columns[0])
+    0  123
+    1  456
+    2  789
+    >>> print(columns[2])
+    ['abc', 'def', 'ghi']
 
     See Also
     --------
@@ -575,13 +561,12 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
     csv_reader.header = header_infer
-    csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.compression = compression_bytes

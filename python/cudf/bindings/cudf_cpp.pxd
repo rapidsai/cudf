@@ -632,7 +632,7 @@ cdef extern from "cudf.h" nogil:
 
                                     gdf_context*        ctxt)
 
-    cdef gdf_error gdf_quantile_aprrox(  gdf_column*  col_in,
+    cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
                                     double       q,
                                     void*        t_erased_res,
                                     gdf_context* ctxt)

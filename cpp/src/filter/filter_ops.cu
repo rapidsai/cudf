@@ -1,7 +1,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include "cudf/functions.h"
 #include "bitmask/bitmask_ops.h"

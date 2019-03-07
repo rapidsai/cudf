@@ -18,7 +18,7 @@
 
 #include "quantiles.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 #include "cudf.h"
@@ -193,7 +193,7 @@ gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
   return ret;
 }
 
-gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column;
+gdf_error gdf_quantile_approx(	gdf_column*  col_in,       //input column;
                                 double       q,            //requested quantile in [0,1]
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt)         //context info

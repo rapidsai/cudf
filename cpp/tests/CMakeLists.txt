@@ -6,7 +6,9 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
+    add_executable(${CMAKE_TEST_NAME}
+                   ${CMAKE_TEST_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
@@ -52,10 +54,10 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
-set(CUDF_INTERNAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cudf/cudf_internal_test.cu")
+set(ERROR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/error/error_handling_test.cu")
 
-ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
+ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - filter tests ----------------------------------------------------------------------------------
@@ -189,12 +191,28 @@ set(TYPES_TEST_SRC
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
+
+# - utilities tests -------------------------------------------------------------------------------------
+
+set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+
+ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
 
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
+
+# - table tests -------------------------------------------------------------------------------
+
+set(TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+
+ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################

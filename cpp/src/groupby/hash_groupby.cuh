@@ -19,7 +19,7 @@
 #include <cuda_runtime.h>
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"
