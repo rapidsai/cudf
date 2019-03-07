@@ -88,7 +88,7 @@ namespace {
 // Convert a DLPack DLTensor into gdf_column(s)
 // Currently only 1D tensors are supported
 gdf_error gdf_from_dlpack(gdf_column** columns,
-                          int *num_columns,
+                          gdf_size_type *num_columns,
                           DLManagedTensor const * tensor)
 {
   // We can copy from host or device pointers
@@ -133,6 +133,11 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   gdf_size_type length = tensor->dl_tensor.shape[0];
   size_t bytes = length * byte_width;
 
+  // Determine the stride between the start of each column
+  // For 1D tensors, stride is zero. For 2D tensors, if the strides pointer is
+  // not null, then get the stride from the tensor struct. Otherwise, 
+  // we assume the stride is just the size of the columns of the tensor in 
+  // bytes.
   int64_t col_stride = 0;
   if (*num_columns > 1) {
     col_stride = byte_width * length;
@@ -166,7 +171,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 // Supports 1D and 2D tensors (single or multiple columns)
 gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
-                        int num_columns)
+                        gdf_size_type num_columns)
 {
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
@@ -224,7 +229,8 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
 
     char *d = data;
     for (gdf_size_type i = 0; i < num_columns; ++i) {
-      cudaMemcpy(d, columns[i]->data, column_bytesize, cudaMemcpyDefault);
+      CUDA_TRY(cudaMemcpy(d, columns[i]->data, 
+                          column_bytesize, cudaMemcpyDefault));
       d += column_bytesize;
     }
 
@@ -233,7 +239,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
     tensor->deleter = [](DLManagedTensor * arg)
     {
       if (arg->dl_tensor.ctx.device_type == kDLGPU)
-        RMM_FREE(arg->dl_tensor.data, 0);
+        RMM_TRY(RMM_FREE(arg->dl_tensor.data, 0));
       delete [] arg->dl_tensor.shape;
       delete [] arg->dl_tensor.strides;
       delete arg;
@@ -241,7 +247,6 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
   }
 
   tensor->manager_ctx = nullptr;
-
 
   return GDF_SUCCESS;
 }
