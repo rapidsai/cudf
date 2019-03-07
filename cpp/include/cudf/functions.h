@@ -2274,17 +2274,6 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  */
 gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
-/**
- * @brief  Concatenates two gdf_columns
- *
- * @param[in] gdf_column of one input of any type
- * @param[in] gdf_column of same type as the first
- * @param[out] output gdf_column of same type as inputs. The output memory needs to be preallocated to be the same size as the sum of both inputs
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
 
 /*
  * Hashing
