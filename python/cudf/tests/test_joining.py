@@ -353,14 +353,6 @@ def test_dataframe_merge_no_common_column():
     raises.match('No common columns to perform merge on')
 
 
-def test_dataframe_merge_strings_not_supported():
-    pleft = pd.DataFrame({'x': [0, 1, 2, 3],
-                          'name': ['Alice', 'Bob', 'Charlie', 'Dan']})
-    with pytest.raises(NotImplementedError) as raises:
-        gleft = DataFrame.from_pandas(pleft)  # noqa:F841
-    raises.match('Strings are not yet supported')
-
-
 def test_dataframe_empty_merge():
     gdf1 = DataFrame([('a', []), ('b', [])])
     gdf2 = DataFrame([('a', []), ('c', [])])
