@@ -1,3 +1,18 @@
+# cuDF 0.7.0 (Date TBD)
+
+## New Features
+
+...
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -118,7 +133,8 @@
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
-
+- PR #1118 Enhanced the `DataFrame.from_records()` feature
+- PR #1129 Fix join performance with index parameter from using numpy array
 
 # cuDF 0.5.1 (05 Feb 2019)
 

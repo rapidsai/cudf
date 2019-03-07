@@ -217,8 +217,8 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, DeviceNDArray, pd.Series, range,
-                            Index)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                            DeviceNDArray)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
