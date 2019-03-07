@@ -562,11 +562,11 @@ gdf_error join_call_compute_df(
 
           int col_width;
           get_column_byte_width(new_left_column, &col_width);
-          RMM_TRY( RMM_ALLOC((void**)&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
+          RMM_TRY( RMM_ALLOC(&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
           RMM_TRY( RMM_ALLOC((void**)&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
           CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
 
-          RMM_TRY( RMM_ALLOC((void**)&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
+          RMM_TRY( RMM_ALLOC(&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
           RMM_TRY( RMM_ALLOC((void**)&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
           CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
 
