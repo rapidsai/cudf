@@ -160,9 +160,19 @@ find_file(NVSTRINGS_INCLUDE "NVStrings.h"
           HINTS "$ENV{NVSTRINGS_ROOT}/include"
                 "$ENV{CONDA_PREFIX}/include/nvstrings"
                 "$ENV{CONDA_PREFIX}/include")
+                
+find_file(NVCATEGORY_INCLUDE "NVCategory.h"
+          HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include")                
+                
 find_library(NVSTRINGS_LIBRARY "NVStrings"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
                    "$ENV{CONDA_PREFIX}/lib")
+
+find_library(NVCATEGORY_LIBRARY "NVCategory"
+             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+                   "$ENV{CONDA_PREFIX}/lib")
+
 
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -170,7 +180,9 @@ if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
                     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
-                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVCATEGORY_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVCategory.h
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVCATEGORY_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVCategory.so)
 endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
 
 ###################################################################################################
@@ -180,6 +192,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
+            src/string/nvcategory_util.cu
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -235,7 +248,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

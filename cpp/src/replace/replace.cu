@@ -21,7 +21,7 @@
 #include <thrust/execution_policy.h>
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities//type_dispatcher.hpp"
 #include "utilities/cudf_utils.h"
 

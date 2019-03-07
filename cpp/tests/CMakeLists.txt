@@ -54,10 +54,10 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
-set(CUDF_INTERNAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cudf/cudf_internal_test.cu")
+set(ERROR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/error/error_handling_test.cu")
 
-ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
+ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - filter tests ----------------------------------------------------------------------------------
@@ -191,7 +191,14 @@ set(TYPES_TEST_SRC
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
+# - nvcategory tests -------------------------------------------------------------------------------
 
+set(NVCATEGORY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+
+ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
+
+###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
