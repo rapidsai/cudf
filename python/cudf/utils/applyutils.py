@@ -9,7 +9,7 @@ from numba import cuda
 from librmm_cffi import librmm as rmm
 
 from cudf.utils.docutils import docfmt_partial
-from . import cudautils
+from cudf.utils import cudautils
 from cudf.dataframe.series import Series
 
 

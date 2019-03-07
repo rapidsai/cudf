@@ -30,9 +30,6 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 
-logger "Bump pyarrow"
-conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
-
 logger "Check versions..."
 python --version
 $CC --version
@@ -47,7 +44,7 @@ logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
 logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
 
 logger "Clean up make..."
 make clean
@@ -80,6 +77,18 @@ GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
+
+# Temporarily install cupy for testing
+logger "pip install cupy"
+pip install cupy-cuda92
+
+# Temporarily install feather for testing
+logger "conda install feather-format"
+conda install -c conda-forge -y feather-format
+
+# Temporarily install tzdata otherwise pyarrow core dumps
+logger "apt-get update && apt-get install -y tzdata"
+apt-get update && apt-get install -y tzdata
 
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python

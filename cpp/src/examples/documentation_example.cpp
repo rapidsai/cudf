@@ -49,7 +49,7 @@ class example_class {
   // DESCRIPTION: Non-trivial member functions should have a brief description
   // of the function as well as all of its parameters. Every parameter should be
   // decorated to indicate if it is an input or output parameter, or both with
-  // @Param[in], @Param[out], and @Param[in,out] respectively.
+  // @param[in], @param[out], and @param[in,out] respectively.
   /**---------------------------------------------------------------------------*
    * @brief This is a complicated function that requires more detailed
    * documentation.
@@ -82,8 +82,8 @@ class example_class {
   }
 
  private:
-  int my_int;                //< An example private member variable
-  std::vector<T> my_vector;  //< An example private member variable
+  int my_int;                ///< An example private member variable
+  std::vector<T> my_vector;  ///< An example private member variable
 };
 
 // DESCRIPTION: Free functions should be commented in the same way as
@@ -115,7 +115,7 @@ return_type free_function(functor_type functor, input_type input_argument) {
  *
  *---------------------------------------------------------------------------**/
 enum class example_enum {
-  first_enum,   //< Description of the first enum
-  second_enum,  //< Description of the second enum
-  third_enum    //< Description of the third enum
+  first_enum,   ///< Description of the first enum
+  second_enum,  ///< Description of the second enum
+  third_enum    ///< Description of the third enum
 };

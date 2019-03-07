@@ -4,17 +4,25 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from . import columnops, numerical
+from cudf.dataframe import columnops, numerical
 from cudf import _gdf
-from cudf.utils import utils
-from .buffer import Buffer
+from cudf.utils import utils, cudautils
+from cudf.dataframe.buffer import Buffer
 from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
+}
+
+_ordered_impl = {
+    'lt': libgdf.gdf_lt_generic,
+    'le': libgdf.gdf_le_generic,
+    'gt': libgdf.gdf_gt_generic,
+    'ge': libgdf.gdf_ge_generic,
 }
 
 
@@ -142,6 +150,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
             out_dtype=np.bool
         )
 
+    def ordered_compare(self, cmpop, rhs):
+        lhs, rhs = self, rhs
+        return binop(
+            lhs, rhs,
+            op=_ordered_impl[cmpop],
+            out_dtype=np.bool
+        )
+
     def to_pandas(self, index=None):
         return pd.Series(
             self.to_array(fillna='pandas').astype(self.dtype),
@@ -174,9 +190,27 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
 
+    def sort_by_values(self, ascending=True, na_position="last"):
+        sort_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = cudautils.gather(data=self.data.mem,
+                                    index=sort_inds.data.mem)
+        mask = None
+        if self.mask:
+            mask = self._get_mask_as_column()\
+                .take(sort_inds.data.to_gpu_array()).as_mask()
+            mask = Buffer(mask)
+        col_keys = self.replace(data=Buffer(col_keys),
+                                mask=mask,
+                                null_count=self.null_count,
+                                dtype=self.dtype)
+        col_inds = self.replace(data=sort_inds.data,
+                                mask=sort_inds.mask,
+                                dtype=sort_inds.data.dtype)
+        return col_keys, col_inds
+
 
 def binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)

@@ -37,6 +37,8 @@ def columnview_from_devary(devary, dtype=None):
 
 def _columnview(size, data, mask, dtype, null_count):
     colview = ffi.new('gdf_column*')
+    extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
+    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
     if null_count is None:
         libgdf.gdf_column_view(
             colview,
@@ -53,6 +55,7 @@ def _columnview(size, data, mask, dtype, null_count):
             size,
             np_to_gdf_dtype(dtype),
             null_count,
+            extra_dtype_info[0],
             )
     return colview
 
@@ -82,6 +85,8 @@ def columnview(size, data, mask=None, dtype=None, null_count=None):
     if mask is not None:
         assert null_count is not None
     dtype = dtype or data.dtype
+    if pd.api.types.is_categorical_dtype(dtype):
+        dtype = data.dtype
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
                        dtype=dtype, null_count=null_count)
 
@@ -131,10 +136,7 @@ np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if pd.api.types.is_categorical_dtype(dtype):
-        return libgdf.GDF_INT8
-    else:
-        return np_gdf_dict[np.dtype(dtype).type]
+    return np_gdf_dict[np.dtype(dtype).type]
 
 
 def gdf_to_np_dtype(dtype):
@@ -170,7 +172,7 @@ def np_to_pa_dtype(dtype):
 
 def apply_reduce(fn, inp):
     # allocate output+temp array
-    outsz = libgdf.gdf_reduce_optimal_output_size()
+    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
@@ -343,7 +345,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
+    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,
@@ -424,7 +426,7 @@ class SegmentedRadixortPlan(object):
                                                    unwrap_devary(d_ends[s:]))
 
 
-def hash_columns(columns, result):
+def hash_columns(columns, result, initial_hash_values=None):
     """Hash the *columns* and store in *result*.
     Returns *result*
     """
@@ -437,7 +439,11 @@ def hash_columns(columns, result):
     col_out = result.cffi_view
     ncols = len(col_input)
     hashfn = libgdf.GDF_HASH_MURMUR3
-    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    if initial_hash_values is None:
+        initial_hash_values = ffi.NULL
+    else:
+        initial_hash_values = unwrap_devary(initial_hash_values)
+    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
     return result
 
 
@@ -588,7 +594,7 @@ def quantile(column, quant, method, exact):
                                       ffi.cast('void *', px),
                                       gdf_context)
         else:
-            libgdf.gdf_quantile_aprrox(column.cffi_view,
+            libgdf.gdf_quantile_approx(column.cffi_view,
                                        q,
                                        ffi.cast('void *', px),
                                        gdf_context)

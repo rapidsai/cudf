@@ -20,7 +20,7 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "hash/hash_functions.cuh"
 #include "hash/managed.cuh"
 #include "sqls/sqls_rtti_comp.h"
@@ -50,10 +50,9 @@ struct ValidRange {
 };
 
 
-
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the validity mask for the rows in the gdf_table.
+ * @brief  Computes the validity mask for the rows in the gdf_table.
 
    If a single value in a row of the table is NULL, then the entire row is 
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
@@ -69,11 +68,11 @@ struct row_masker
    
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis Computes the bit-wise AND across all columns for the specified mask
+   * @brief Computes the bit-wise AND across all columns for the specified mask
    * 
-   * @Param mask_number The index of the mask to compute the bit-wise AND across all columns
+   * @param mask_number The index of the mask to compute the bit-wise AND across all columns
    * 
-   * @Returns The bit-wise AND across all columns for the specified mask number
+   * @returns The bit-wise AND across all columns for the specified mask number
    */
   /* ----------------------------------------------------------------------------*/
   __device__ __forceinline__
@@ -101,15 +100,15 @@ struct row_masker
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Scatters a validity bitmask.
+ * @brief  Scatters a validity bitmask.
  * 
  * This kernel is used in order to scatter the validity bit mask for a gdf_column.
  * 
- * @Param input_mask The mask that will be scattered.
- * @Param output_mask The output after scattering the input
- * @Param scatter_map The map that indicates where elements from the input
+ * @param input_mask The mask that will be scattered.
+ * @param output_mask The output after scattering the input
+ * @param scatter_map The map that indicates where elements from the input
    will be scattered to in the output. output_bit[ scatter_map [i] ] = input_bit[i]
- * @Param num_rows The number of bits in the masks
+ * @param num_rows The number of bits in the masks
  */
 /* ----------------------------------------------------------------------------*/
 template <typename size_type>
@@ -153,16 +152,16 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Gathers a validity bitmask.
+ * @brief  Gathers a validity bitmask.
  * 
  * This kernel is used in order to gather the validity bit mask for a gdf_column.
  * 
- * @Param input_mask The mask that will be gathered.
- * @Param output_mask The output after gathering the input
- * @Param gather_map The map that indicates where elements from the input
+ * @param input_mask The mask that will be gathered.
+ * @param output_mask The output after gathering the input
+ * @param gather_map The map that indicates where elements from the input
    will be gathered to in the output. output_bit[ gather_map [i] ] = input_bit[i]
- * @Param num_rows The number of bits expected in the output masks
- * @Param input_mask_length The number of bits in the input mask
+ * @param num_rows The number of bits expected in the output masks
+ * @param input_mask_length The number of bits in the input mask
  */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
@@ -231,7 +230,7 @@ void gather_valid( gdf_valid_type const * const input_mask,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis A class provides useful functionality for operating on a set of gdf_columns. 
+ * @brief A class provides useful functionality for operating on a set of gdf_columns. 
 
     The gdf_table class is meant to wrap a set of gdf_columns and provide functions
     for operating across all of the columns. It can be thought of as a `matrix`
@@ -319,7 +318,7 @@ public:
     thrust::tabulate(rmm::exec_policy()->on(0),
                      device_row_valid.begin(),
                      device_row_valid.end(),
-                     row_masker<size_type>(d_columns_valids, num_cols));
+                     row_masker<size_type>(d_columns_valids_ptr, num_cols));
 
     d_row_valid = device_row_valid.data().get();
   }
@@ -329,9 +328,9 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Updates the length of the gdf_columns in the table
+   * @brief  Updates the length of the gdf_columns in the table
    * 
-   * @Param new_length The new length
+   * @param new_length The new length
    */
   /* ----------------------------------------------------------------------------*/
   void set_column_length(const size_type new_length)
@@ -379,10 +378,10 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
+   * @brief  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
    * the byte widths of all columns in the table
    * 
-   * @Returns The size in bytes of the row in the table
+   * @returns The size in bytes of the row in the table
    */
   /* ----------------------------------------------------------------------------*/
   byte_type get_row_size_bytes() const
@@ -393,76 +392,38 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Packs the elements of a specified row into a contiguous byte-buffer
+   * @brief  Packs the elements of a specified row into a contiguous byte-buffer
    *
    * This function is called by a single thread, and the thread will copy each element
    * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
    * by passing in a cooperative group. 
    * 
-   * @Param index The row of the table to return
-   * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
+   * @param index The row of the table to return
+   * @param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
       row of the table 
    * 
    */
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  gdf_error get_packed_row_values(size_type row_index, byte_type * row_byte_buffer)
+  gdf_error get_packed_row_values(size_type row_index, void * row_byte_buffer) const
   {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
     }
 
-    byte_type * write_pointer{row_byte_buffer};
-
     // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const byte_type current_column_byte_width = d_columns_byte_widths_ptr[i];
-      switch(current_column_byte_width)
-      {
-        case 1:
-          {
-            using col_type = int8_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 2:
-          {
-            using col_type = int16_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 4:
-          {
-            using col_type = int32_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 8:
-          {
-            using col_type = int64_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        default:
-          {
-            return GDF_UNSUPPORTED_DTYPE;
-          }
-      }
+      const gdf_dtype source_col_type = d_columns_types_ptr[i];
+
+      cudf::type_dispatcher(source_col_type,
+                            copy_element{},
+                            row_byte_buffer, i,
+                            d_columns_data_ptr[i], row_index);
+
     }
+    return GDF_SUCCESS;
   }
 
   struct copy_element{
@@ -478,17 +439,51 @@ public:
 
   };
 
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @Synopsis  Packs the validity mask of a specified row into a contiguous byte-buffer 
+   * 
+   * This function is called by a single thread, and the thread will copy each element
+   * of the row into a single contiguous buffer.
+   * 
+   * @param row_index The row of the table to return validity mask for
+   * @param row_valid_byte_buffer A pointer to a preallocated buffer large enough to hold
+      the validity bitmask of a row of the table
+   */
+  /* ----------------------------------------------------------------------------*/
+  __device__
+  gdf_error get_row_valids(size_type row_index, gdf_valid_type * row_valid_byte_buffer) const
+  {
+    if(nullptr == row_valid_byte_buffer) {
+      return GDF_DATASET_EMPTY;
+    }
+    
+    for(size_type i = 0; i < num_columns; i++)
+    {
+      // get validity of item in column in self
+      if (gdf_is_valid(d_columns_valids_ptr[i], row_index))
+        // set validity in output buffer
+        row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (gdf_valid_type{1} << (i % GDF_VALID_BITSIZE));
+    }
+    return GDF_SUCCESS;
+  }
+
+  __device__
+  gdf_valid_type* get_columns_device_valids_ptr(size_type column_index)
+  {
+    return d_columns_valids_ptr[column_index];
+  }
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Copies a row from a source table to a target row in this table
+     * @brief  Copies a row from a source table to a target row in this table
      *  
      * This device function should be called by a single thread and the thread will copy all of 
      * the elements in the row from one table to the other. TODO: In the future, this could be done
      * by multiple threads by passing in a cooperative group.
      * 
-     * @Param other The other table from which the row is copied
-     * @Param my_row_index The index of the row in this table that will be written to
-     * @Param other_row_index The index of the row from the other table that will be copied from
+     * @param other The other table from which the row is copied
+     * @param my_row_index The index of the row in this table that will be written to
+     * @param other_row_index The index of the row from the other table that will be copied from
      */
     /* ----------------------------------------------------------------------------*/
   __device__ 
@@ -532,14 +527,14 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Checks for equality between a target row in this table and a source 
+   * @brief  Checks for equality between a target row in this table and a source 
    * row in another table.
    * 
-   * @Param rhs The other table whose row is compared to this tables
-   * @Param this_row_index The row index of this table to compare
-   * @Param rhs_row_index The row index of the rhs table to compare
+   * @param rhs The other table whose row is compared to this tables
+   * @param this_row_index The row index of this table to compare
+   * @param rhs_row_index The row index of the rhs table to compare
    * 
-   * @Returns True if the elements in both rows are equivalent, otherwise False
+   * @returns True if the elements in both rows are equivalent, otherwise False
    */
   /* ----------------------------------------------------------------------------*/
   __device__
@@ -593,36 +588,42 @@ public:
     void operator()(hash_value_type& hash_value, 
                     void const * col_data,
                     size_type row_index,
-                    size_type col_index)
+                    size_type col_index,
+                    bool use_initial_value = false,
+                    const hash_value_type& initial_value = 0)
     {
       hash_function<col_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      hash_value_type const key_hash{hasher(current_column[row_index])};
+      hash_value_type key_hash{hasher(current_column[row_index])};
+
+      if (use_initial_value)
+        key_hash = hasher.hash_combine(initial_value, key_hash);
 
       // Only combine hash-values after the first column
       if(0 == col_index)
         hash_value = key_hash;
       else
-        hash_value = hasher.hash_combine(hash_value,key_hash);
+        hash_value = hasher.hash_combine(hash_value, key_hash);
     }
   };
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Device function to compute a hash value for a given row in the table
+  /** --------------------------------------------------------------------------*
+   * @brief Device function to compute a hash value for a given row in the table
    * 
-   * @Param row_index The row of the table to compute the hash value for
-   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, 
+   * @param[in] row_index The row of the table to compute the hash value for
+   * @param[in] num_columns_to_hash The number of columns in the row to hash. If 0,
    * hashes all columns
+   * @param[in] initial_hash_values Optional initial hash values to combine with each column's hashed values
    * @tparam hash_function The hash function that is used for each element in the row,
    * as well as combine hash values
    * 
-   * @Returns The hash value of the row
-   */
-  /* ----------------------------------------------------------------------------*/
+   * @return The hash value of the row
+   * ----------------------------------------------------------------------------**/
   template <template <typename> class hash_function = default_hash>
   __device__ 
-  hash_value_type hash_row(size_type row_index, size_type num_columns_to_hash = 0) const
+  hash_value_type hash_row(size_type row_index,
+                           hash_value_type* initial_hash_values = nullptr,
+                           size_type num_columns_to_hash = 0) const
   {
     hash_value_type hash_value{0};
 
@@ -632,14 +633,17 @@ public:
       num_columns_to_hash = this->num_columns;
     }
 
+    bool const use_initial_value{ initial_hash_values != nullptr };
     // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
       gdf_dtype const current_column_type = d_columns_types_ptr[i];
 
+      hash_value_type const initial_hash_value = (use_initial_value) ? initial_hash_values[i] : 0;
       cudf::type_dispatcher(current_column_type, 
                           hash_element<hash_function>{}, 
-                          hash_value, d_columns_data_ptr[i], row_index, i);
+                          hash_value, d_columns_data_ptr[i], row_index, i,
+                          use_initial_value, initial_hash_value);
     }
 
     return hash_value;
@@ -652,14 +656,14 @@ public:
      the rows of the input table to rows of this table based on a gather map that
      maps every row of the input table to a corresponding row in this table.
    * 
-   * @Param[in] row_gather_map The mapping from input row locations to output row
+   * @param[in] row_gather_map The mapping from input row locations to output row
      locations, i.e., Row 'row_gather_map[i]' of this table will be gathered to 
      gather_output_table[i]
-   * @Param[in] gather_output_table The output table to which the rows of this table
+   * @param[in] gather_output_table The output table to which the rows of this table
      will be mapped
-   * @Param[in] range_check Flag to check if row_gather_map has valid values
+   * @param[in] range_check Flag to check if row_gather_map has valid values
    * 
-   * @Returns   
+   * @returns   
    */
   /* ----------------------------------------------------------------------------*/
   template <typename index_type>
@@ -772,16 +776,16 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  An in-place gather operation that permutes the rows of the table
+   * @brief  An in-place gather operation that permutes the rows of the table
    * according to a map. permuted_table[i] = original_table[ row_gather_map[i] ]
    * 
-   * @Param row_gather_map The map the determines the reordering of rows in the 
+   * @param row_gather_map The map the determines the reordering of rows in the 
    table 
    * 
-   * @Param range_check Flag to check if row_gather_map has valid values
+   * @param range_check Flag to check if row_gather_map has valid values
    table 
    * 
-   * @Returns   
+   * @returns   
    */
   /* ----------------------------------------------------------------------------*/
   template <typename size_type>
@@ -810,13 +814,13 @@ public:
    the rows of this table to rows of the output table based on a scatter map that
    maps every row of this table to a corresponding row in the output table.
  * 
- * @Param[out] scattered_output_table The rearrangement of the input table based 
+ * @param[out] scattered_output_table The rearrangement of the input table based 
    on the mappings from the row_scatter_map array
- * @Param[in] row_scatter_map The mapping from input row locations to output row
+ * @param[in] row_scatter_map The mapping from input row locations to output row
    locations, i.e., Row 'i' of this table will be scattered to 
    scattered_output_table[row_scatter_map[i]]
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 template <typename size_type>
@@ -951,15 +955,15 @@ private:
      maps rows in the input column to rows in the output column.
      input_column[row_gather_map[i]] will be assigned to output_column[i]
    * 
-   * @Param[in] input_column The input column whose rows will be gathered
-   * @Param[in] num_rows The number of rows in the input and output columns
-   * @Param[in] row_gather_map An array that maps rows in the input column
+   * @param[in] input_column The input column whose rows will be gathered
+   * @param[in] num_rows The number of rows in the input and output columns
+   * @param[in] row_gather_map An array that maps rows in the input column
      to rows in the output column
-   * @Param[out] output_column The rearrangement of the input column 
+   * @param[out] output_column The rearrangement of the input column 
      based on the mapping determined by the row_gather_map array
-   * @Param[in] range_check Flag to check validity of the values in row_gather_map
+   * @param[in] range_check Flag to check validity of the values in row_gather_map
    * 
-   * @Returns GDF_SUCCESS upon successful computation
+   * @returns GDF_SUCCESS upon successful computation
    */
   /* ----------------------------------------------------------------------------*/
   template <typename column_type,
@@ -1053,14 +1057,14 @@ private:
    maps rows in the input column to rows in the output column. input_column[i]
    will be scattered to output_column[ row_scatter_map[i] ]
  * 
- * @Param[in] input_column The input column whose rows will be scattered
- * @Param[in] num_rows The number of rows in the input and output columns
- * @Param[in] row_scatter_map An array that maps rows in the input column
+ * @param[in] input_column The input column whose rows will be scattered
+ * @param[in] num_rows The number of rows in the input and output columns
+ * @param[in] row_scatter_map An array that maps rows in the input column
    to rows in the output column
- * @Param[out] output_column The rearrangement of the input column 
+ * @param[out] output_column The rearrangement of the input column 
    based on the mapping determined by the row_scatter_map array
  * 
- * @Returns GDF_SUCCESS upon successful computation
+ * @returns GDF_SUCCESS upon successful computation
  */
 /* ----------------------------------------------------------------------------*/
 template <typename column_type,

@@ -2,7 +2,7 @@
 
 from libgdf_cffi import libgdf, ffi
 
-from cudf.dataframe.dataframe import Column
+from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.datetime import DatetimeColumn
@@ -10,6 +10,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 import collections.abc
+import os
 
 
 def _wrap_string(text):
@@ -27,15 +28,26 @@ def is_file_like(obj):
     return True
 
 
+_quoting_enum = {
+    0: libgdf.QUOTE_MINIMAL,
+    1: libgdf.QUOTE_ALL,
+    2: libgdf.QUOTE_NONNUMERIC,
+    3: libgdf.QUOTE_NONE,
+}
+
+
 def read_csv(filepath_or_buffer, lineterminator='\n',
-             quotechar='"', quoting=True, doublequote=True,
+             quotechar='"', quoting=0, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None):
+             nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
+             na_values=None, keep_default_na=True, na_filter=True,
+             prefix=None, index_col=None):
+
     """
     Load and parse a CSV file into a DataFrame
 
@@ -60,12 +72,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         or a dictionary with column_name:dtype (pandas style).
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
-    quoting : bool, default True
-        If True, start and end quotechar are removed from returned strings
-        If False, start and end quotechar are kept in returned strings
+    quoting : str or int, default 0
+        Controls quoting behavior. Set to one of
+        0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
+        2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
+        Quoting is enabled with all values except 3.
     doublequote : bool, default True
-        When quotechar is specified and quoting is True, indicates whether to
-        interpret two consecutive quotechar inside fields as single quotechar
+        When quoting is enabled, indicates whether to interpret two
+        consecutive quotechar inside fields as single quotechar
     header : int, default 'infer'
         Row number to use as the column names. Default behavior is to infer
         the column names: if no names are passed, header=0;
@@ -94,8 +108,31 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Values to consider as boolean True
     false_values : list, default None
         Values to consider as boolean False
-    nrows: int, default None
+    nrows : int, default None
         If specified, maximum number of rows to read
+    byte_range : list or tuple, default None
+        Byte range within the input file to be read. The first number is the
+        offset in bytes, the second number is the range size in bytes. Set the
+        size to zero to read all data after the offset location. Reads the row
+        that starts before or at the end of the range, even if it ends after
+        the end of the range.
+    skip_blank_lines : bool, default True
+        If True, discard and do not parse empty lines
+        If False, interpret empty lines as NaN values
+    comment : char, default None
+        Character used as a comments indicator. If found at the beginning of a
+        line, the line will be ignored altogether.
+    na_values : list, default None
+        Values to consider as invalid
+    keep_default_na : bool, default True
+        Whether or not to include the default NA values when parsing the data.
+    na_filter : bool, default True
+        Detect missing values (empty strings and the values in na_values).
+        Passing False can improve performance.
+    prefix : str, default None
+        Prefix to add to column numbers when parsing without a header row
+    index_col : int or string, default None
+        Column to use as the row labels
 
     Returns
     -------
@@ -104,46 +141,37 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     Examples
     --------
 
+    Create a test csv file
 
-    .. code-block:: python
+    >>> import cudf
+    >>> filename = 'foo.csv'
+    >>> lines = [
+    ...   "num1,datetime,text",
+    ...   "123,2018-11-13T12:00:00,abc",
+    ...   "456,2018-11-14T12:35:01,def",
+    ...   "789,2018-11-15T18:02:59,ghi"
+    ... ]
+    >>> with open(filename, 'w') as fp:
+    ...     fp.write('\\n'.join(lines)+'\\n')
 
-      import cudf
+    Read the file with ``cudf.read_csv``
 
-      # Create a test csv file
-      filename = 'foo.csv'
-      lines = [
-        "num1,datetime,text",
-        "123,2018-11-13T12:00:00,abc",
-        "456,2018-11-14T12:35:01,def",
-        "789,2018-11-15T18:02:59,ghi"
-      ]
-      with open(filename, 'w') as fp:
-          fp.write('\\n'.join(lines)+'\\n')
-
-      # Read the file with cudf
-      names = ['num1', 'datetime', 'text']
-      # Note 'int' for 3rd column- text will be hashed
-      dtypes = ['int', 'date', 'int']
-      df = cudf.read_csv(filename, delimiter=',',
-                         names=names, dtype=dtypes,
-                         skiprows=1)
-
-      # Display results
-      print(df)
-
-    Output:
-
-    .. code-block:: python
-
-          num1                datetime text
-        0  123 2018-11-13T12:00:00.000 5451
-        1  456 2018-11-14T12:35:01.000 5784
-        2  789 2018-11-15T18:02:59.000 6117
+    >>> cudf.read_csv(filename)
+      num1                datetime text
+    0  123 2018-11-13T12:00:00.000 5451
+    1  456 2018-11-14T12:35:01.000 5784
+    2  789 2018-11-15T18:02:59.000 6117
 
     See Also
     --------
     .read_csv_strings
     """
+
+    if delim_whitespace:
+        if delimiter is not None:
+            raise ValueError("cannot set both delimiter and delim_whitespace")
+        if sep != ',':
+            raise ValueError("cannot set both sep and delim_whitespace")
 
     # Alias sep -> delimiter.
     if delimiter is None:
@@ -161,7 +189,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             msg = '''All column dtypes must be specified.'''
             raise TypeError(msg)
 
-    nvtx_range_push("PYGDF_READ_CSV", "purple")
+    nvtx_range_push("CUDF_READ_CSV", "purple")
 
     csv_reader = ffi.new('csv_read_arg*')
 
@@ -181,12 +209,16 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH
         csv_reader.filepath_or_buffer = file_path
 
-    if header is 'infer':
+    if header == 'infer':
         header = -1
     header_infer = header
     arr_names = []
@@ -246,28 +278,39 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if nrows is not None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
 
-    # Start with default values recognized as boolean
-    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
-    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
 
+    arr_true_values = []
     for value in true_values or []:
         arr_true_values.append(_wrap_string(str(value)))
     arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
     csv_reader.true_values = arr_true_values_ptr
     csv_reader.num_true_values = len(arr_true_values)
 
+    arr_false_values = []
     for value in false_values or []:
         arr_false_values.append(_wrap_string(str(value)))
     false_values_ptr = ffi.new('char*[]', arr_false_values)
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -281,6 +324,17 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
     csv_reader.nrows = nrows if nrows is not None else -1
+    if byte_range is not None:
+        csv_reader.byte_range_offset = byte_range[0]
+        csv_reader.byte_range_size = byte_range[1]
+    else:
+        csv_reader.byte_range_offset = 0
+        csv_reader.byte_range_size = 0
+    csv_reader.skip_blank_lines = skip_blank_lines
+    csv_reader.comment = comment.encode() if comment else b'\0'
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -308,18 +362,29 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     for k, v in zip(new_names, outcols):
         df[k] = v
 
+    # Set index if the index_col parameter is passed
+    if index_col is not None and index_col is not False:
+        if isinstance(index_col, (int)):
+            df = df.set_index(df.columns[index_col])
+        else:
+            df = df.set_index(index_col)
+
     nvtx_range_pop()
 
     return df
 
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting=True, doublequote=True,
+                     quotechar='"', quoting=0, doublequote=True,
+                     header='infer',
                      sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
-                     true_values=None, false_values=None, nrows=None):
+                     true_values=None, false_values=None, nrows=None,
+                     byte_range=None, skip_blank_lines=True, comment=None,
+                     na_values=None, keep_default_na=True, na_filter=True,
+                     prefix=None, index_col=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -342,44 +407,35 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     Examples
     --------
 
-    .. code-block:: python
+    Create a test csv file
 
-      import cudf
+    >>> import cudf
+    >>> filename = 'foo.csv'
+    >>> lines = [
+    ...   "num1,datetime,text",
+    ...   "123,2018-11-13T12:00:00,abc",
+    ...   "456,2018-11-14T12:35:01,def",
+    ...   "789,2018-11-15T18:02:59,ghi"
+    ... ]
+    >>> with open(filename, 'w') as fp:
+    ...     fp.write('\\n'.join(lines)+'\\n')
 
-      # Create a test csv file
-      filename = 'foo.csv'
-      lines = [
-        "num1,datetime,text",
-        "123,2018-11-13T12:00:00,abc",
-        "456,2018-11-14T12:35:01,def",
-        "789,2018-11-15T18:02:59,ghi"
-      ]
-      with open(filename, 'w') as fp:
-          fp.write('\\n'.join(lines)+'\\n')
+    Read the file with cudf
 
-      # Read the file with cudf
-      names = ['num1', 'datetime', 'text']
-      dtypes = ['int', 'date', 'str']
-      columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
-                              names=names, dtype=dtypes,
-                              skiprows=1)
-      # Display results
-      columns[0]
-      print(columns[0])
-      columns[2]
-      print(columns[2])
+    >>> names = ['num1', 'datetime', 'text']
+    >>> dtypes = ['int', 'date', 'str']
+    >>> columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
+    ...                         names=names, dtype=dtypes,
+    ...                         skiprows=1)
 
-    Output:
+    Display results
 
-    .. code-block:: python
-
-      <cudf.Series nrows=3 >
-      0  123
-      1  456
-      2  789
-
-      <nvstrings count=3>
-      ['abc', 'def', 'ghi']
+    >>> print(columns[0])
+    0  123
+    1  456
+    2  789
+    >>> print(columns[2])
+    ['abc', 'def', 'ghi']
 
     See Also
     --------
@@ -388,25 +444,21 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     import nvstrings
     from cudf.dataframe.series import Series
 
-    if names is None or dtype is None:
-        msg = '''Automatic dtype detection not implemented:
-        Column names and dtypes must be specified.'''
-        raise TypeError(msg)
-
     # Alias sep -> delimiter.
     if delimiter is None:
         delimiter = sep
 
-    if isinstance(dtype, dict):
-        dtype_dict = True
-    elif isinstance(dtype, list):
-        dtype_dict = False
-        if len(dtype) != len(names):
+    if dtype is not None:
+        if isinstance(dtype, collections.abc.Mapping):
+            dtype_dict = True
+        elif isinstance(dtype, collections.abc.Iterable):
+            dtype_dict = False
+        else:
+            msg = '''dtype must be 'list like' or 'dict' '''
+            raise TypeError(msg)
+        if names is not None and len(dtype) != len(names):
             msg = '''All column dtypes must be specified.'''
             raise TypeError(msg)
-    else:
-        msg = '''dtype must be 'list' or 'dict' '''
-        raise TypeError(msg)
 
     csv_reader = ffi.new('csv_read_arg*')
 
@@ -424,25 +476,47 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH
         csv_reader.filepath_or_buffer = file_path
 
+    if header == 'infer':
+        header = -1
+    header_infer = header
     arr_names = []
     arr_dtypes = []
-    for col_name in names:
-        arr_names.append(_wrap_string(col_name))
-        if dtype_dict:
-            arr_dtypes.append(_wrap_string(str(dtype[col_name])))
-    names_ptr = ffi.new('char*[]', arr_names)
-    csv_reader.names = names_ptr
+    if names is None:
+        if header is -1:
+            header_infer = 0
+        if header is None:
+            header_infer = -1
+        csv_reader.names = ffi.NULL
+        csv_reader.num_cols = 0
+    else:
+        if header is None:
+            header_infer = -1
+        csv_reader.num_cols = len(names)
+        for col_name in names:
+            arr_names.append(_wrap_string(col_name))
+            if dtype is not None:
+                if dtype_dict:
+                    arr_dtypes.append(_wrap_string(str(dtype[col_name])))
+        names_ptr = ffi.new('char*[]', arr_names)
+        csv_reader.names = names_ptr
 
-    if not dtype_dict:
-        for col_dtype in dtype:
-            arr_dtypes.append(_wrap_string(str(col_dtype)))
-    dtype_ptr = ffi.new('char*[]', arr_dtypes)
-    csv_reader.dtype = dtype_ptr
+    if dtype is None:
+        csv_reader.dtype = ffi.NULL
+    else:
+        if not dtype_dict:
+            for col_dtype in dtype:
+                arr_dtypes.append(_wrap_string(str(col_dtype)))
+        dtype_ptr = ffi.new('char*[]', arr_dtypes)
+        csv_reader.dtype = dtype_ptr
 
     if decimal == delimiter:
         raise ValueError("decimal cannot be the same as delimiter")
@@ -452,6 +526,11 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
 
     if nrows is not None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
+
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
 
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
@@ -469,23 +548,42 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
-    csv_reader.num_cols = len(names)
+    csv_reader.header = header_infer
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
     csv_reader.nrows = nrows if nrows is not None else -1
+    if byte_range is not None:
+        csv_reader.byte_range_offset = byte_range[0]
+        csv_reader.byte_range_size = byte_range[1]
+    else:
+        csv_reader.byte_range_offset = 0
+        csv_reader.byte_range_size = 0
+    csv_reader.skip_blank_lines = skip_blank_lines
+    csv_reader.comment = comment.encode() if comment else b'\0'
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

@@ -7,7 +7,7 @@ import pandas as pd
 
 from cudf.dataframe import Series
 
-from . import utils
+from cudf.tests import utils
 
 
 def test_series_ceil():

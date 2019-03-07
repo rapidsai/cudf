@@ -21,7 +21,7 @@
 
 #include "cudf.h"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 
@@ -36,17 +36,17 @@ constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Computes the Join result between two tables using the hash-based implementation. 
+ * @brief Computes the Join result between two tables using the hash-based implementation. 
  * 
- * @Param num_cols The number of columns to join
- * @Param leftcol The left set of columns to join
- * @Param rightcol The right set of columns to join
- * @Param l_result The join computed indices of the left table
- * @Param r_result The join computed indices of the right table
+ * @param[in] num_cols The number of columns to join
+ * @param[in] leftcol The left set of columns to join
+ * @param[in] rightcol The right set of columns to join
+ * @param[out] l_result The join computed indices of the left table
+ * @param[out] r_result The join computed indices of the right table
  * @tparam join_type The type of join to be performed
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
+ * @returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, 
@@ -121,19 +121,19 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the join operation between a single left and single right column
- using the sort based implementation.
+ * @brief  Computes the join operation between a single left and single right column
+ * using the sort based implementation.
  * 
- * @Param leftcol The left column to join
- * @Param rightcol The right column to join
- * @Param left_result The join computed indices of the left table
- * @Param right_result The join computed indices of the right table
- * @Param ctxt Structure that determines various run parameters, such as if the inputs
- are already sorted.
-   @tparama join_type The type of join to perform
+ * @param[in] leftcol The left column to join
+ * @param[in] rightcol The right column to join
+ * @param[out] left_result The join computed indices of the left table
+ * @param[out] right_result The join computed indices of the right table
+ * @param[in] ctxt Structure that determines various run parameters, such as if the inputs
+ *             are already sorted.
+ * @tparama join_type The type of join to perform
  * 
- * @Returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
- appropriate error code.
+ * @returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
+ *          appropriate error code.
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
@@ -169,14 +169,16 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Allocates a buffer and fills it with a repeated value
-*
-* @Param buffer Address of the buffer to be allocated
-* @Param buffer_length Amount of memory to be allocated
-* @Param value The value to be filled into the buffer
-* @tparam data_type The data type to be used for the buffer
-* @tparam size_type The data type used for size calculations
-*/
+ * @brief  Allocates a buffer and fills it with a repeated value
+ *
+ * @param[in,out] buffer Address of the buffer to be allocated
+ * @param[in] buffer_length Amount of memory to be allocated
+ * @param[in] value The value to be filled into the buffer
+ * @tparam data_type The data type to be used for the buffer
+ * @tparam size_type The data type used for size calculations
+ * 
+ * @returns GDF_SUCCESS upon succesful completion
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
@@ -191,13 +193,15 @@ gdf_error allocValueBuffer(data_type ** buffer,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Allocates a buffer and fills it with a sequence
-*
-* @Param buffer Address of the buffer to be allocated
-* @Param buffer_length Amount of memory to be allocated
-* @tparam data_type The data type to be used for the buffer
-* @tparam size_type The data type used for size calculations
-*/
+ * @brief  Allocates a buffer and fills it with a sequence
+ *
+ * @param[in,out] buffer Address of the buffer to be allocated
+ * @param[in] buffer_length Amount of memory to be allocated
+ * @tparam data_type The data type to be used for the buffer
+ * @tparam size_type The data type used for size calculations
+ * 
+ * @returns GDF_SUCCESS upon succesful completion
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
@@ -211,17 +215,17 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Trivially computes full join of two tables if one of the tables
- are empty
+ * @brief  Trivially computes full join of two tables if one of the tables
+ * are empty
  * 
- * @Param left_size The size of the left table
- * @Param right_size The size of the right table
- * @Param rightcol The right set of columns to join
- * @Param left_result The join computed indices of the left table
- * @Param right_result The join computed indices of the right table
+ * @param[in] left_size The size of the left table
+ * @param[in] right_size The size of the right table
+ * @param[in] rightcol The right set of columns to join
+ * @param[out] left_result The join computed indices of the left table
+ * @param[out] right_result The join computed indices of the right table
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 template<typename size_type>
@@ -265,18 +269,18 @@ gdf_error trivial_full_join(
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the join operation between two sets of columns
+ * @brief  Computes the join operation between two sets of columns
  * 
- * @Param num_cols The number of columns to join
- * @Param leftcol The left set of columns to join
- * @Param rightcol The right set of columns to join
- * @Param left_result The join computed indices of the left table
- * @Param right_result The join computed indices of the right table
- * @Param join_context A structure that determines various run parameters, such as
-   whether to perform a hash or sort based join
+ * @param[in] num_cols The number of columns to join
+ * @param[in] leftcol The left set of columns to join
+ * @param[in] rightcol The right set of columns to join
+ * @param[out] left_result The join computed indices of the left table
+ * @param[out] right_result The join computed indices of the right table
+ * @param[in] join_context A structure that determines various run parameters, such as
+ *                         whether to perform a hash or sort based join
  * @tparam join_type The type of join to be performed
  * 
- * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
@@ -287,18 +291,16 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
   using size_type = int64_t;
 
-  if( (0 == num_cols) || (nullptr == leftcol) || (nullptr == rightcol))
-    return GDF_DATASET_EMPTY;
-
-  if(nullptr == join_context)
-    return GDF_INVALID_API_CALL;
+  GDF_REQUIRE( 0 != num_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != leftcol, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != rightcol, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != join_context, GDF_INVALID_API_CALL);
 
   const auto left_col_size = leftcol[0]->size;
   const auto right_col_size = rightcol[0]->size;
   
-  // Check that the number of rows does not exceed the maximum
-  if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
-  if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
+  GDF_REQUIRE( left_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
+  GDF_REQUIRE( right_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
 
 
   // If both frames are empty, return immediately
@@ -317,7 +319,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
     return GDF_SUCCESS;
   }
 
-  // If Inner Join and either table is empty, compute trivial full join
+  // If Full Join and either table is empty, compute trivial full join
   if( (JoinType::FULL_JOIN == join_type) && 
       ((0 == left_col_size) || (0 == right_col_size)) ){
     return trivial_full_join<size_type>(left_col_size, right_col_size, left_result, right_result);
@@ -502,14 +504,7 @@ gdf_error join_call_compute_df(
                          gdf_context *join_context) {
   GDF_REQUIRE(nullptr != left_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != right_cols, GDF_DATASET_EMPTY);
-
-  // If the inputs are empty, immediately return
-  if( (0 == left_cols[0]->size) && (0 == right_cols[0]->size) ){
-    return GDF_SUCCESS;
-  }
-
   GDF_REQUIRE(0 != num_cols_to_join, GDF_SUCCESS);
-
   GDF_REQUIRE(nullptr != left_join_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
@@ -522,6 +517,25 @@ gdf_error join_call_compute_df(
 
   GDF_REQUIRE(construct_output_dataframe or return_output_indices,
               GDF_INVALID_API_CALL);
+
+  auto const left_col_size = left_cols[0]->size;
+  auto const right_col_size = right_cols[0]->size;
+
+  // If the inputs are empty, immediately return
+  if ((0 == left_col_size) && (0 == right_col_size)) {
+    return GDF_SUCCESS;
+  }
+
+  // If left join and the left table is empty, return immediately
+  if ((JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)) {
+    return GDF_SUCCESS;
+  }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((JoinType::INNER_JOIN == join_type) &&
+      ((0 == left_col_size) || (0 == right_col_size))) {
+    return GDF_SUCCESS;
+  }
 
   // If index outputs are not requested, create columns to store them
   // for computing combined join output
@@ -564,9 +578,12 @@ gdf_error join_call_compute_df(
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
             join_context);
+
+    GDF_REQUIRE(GDF_SUCCESS == join_err, join_err);
+
     //If construct_output_dataframe is false then left_index_out or right_index_out
     //was not dynamically allocated.
-    if ((!construct_output_dataframe) || (GDF_SUCCESS != join_err)) {
+    if (not construct_output_dataframe) {
         return join_err;
     }
 

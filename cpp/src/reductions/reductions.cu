@@ -1,6 +1,6 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 
 #include <cub/block/block_reduce.cuh>
@@ -266,6 +266,6 @@ gdf_error gdf_max(gdf_column *col,
 }
 
 
-unsigned int gdf_reduce_optimal_output_size() {
+unsigned int gdf_reduction_get_intermediate_output_size() {
     return REDUCTION_BLOCK_SIZE;
 }

@@ -25,7 +25,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 
 #include <thrust/tabulate.h>
@@ -40,50 +40,6 @@ constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
 
-/** --------------------------------------------------------------------------*
- * @Synopsis  Counts the number of valid bits for the specified number of rows
- * in the host vector of gdf_valid_type masks
- * 
- * @Param masks The host vector of masks whose bits will be counted
- * @Param num_rows The number of bits to count
- * 
- * @Returns  The number of valid bits in [0, num_rows) in the host vector of masks
- * ----------------------------------------------------------------------------*/
-size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int const num_rows)
-{
-  if((0 == num_rows) || (0 == masks.size())){
-    return 0;
-  }
-
-  size_t count{0};
-
-  // Count the valid bits for all masks except the last one
-  for(size_t i = 0; i < (masks.size() - 1); ++i)
-  {
-    gdf_valid_type current_mask = masks[i];
-
-    while(current_mask > 0)
-    {
-      current_mask &= (current_mask-1) ;
-      count++;
-    }
-  }
-
-  // Only count the bits in the last mask that correspond to rows
-  int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
-
-  if(num_rows_last_mask == 0)
-    num_rows_last_mask = GDF_VALID_BITSIZE;
-
-  gdf_valid_type last_mask = *(masks.end() - 1);
-  for(int i = 0; (i < num_rows_last_mask) && (last_mask > 0); ++i)
-  {
-    count += (last_mask & gdf_valid_type(1));
-    last_mask >>= 1;
-  }
-
-  return count;
-}
 
 
 /* --------------------------------------------------------------------------*/
@@ -95,11 +51,11 @@ size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int cons
  * number of set bits. This requires handling the last 4B element as a special 
  * case as the buffer may not be a multiple of 4 bytes.
  * 
- * @Param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
- * @Param[in] num_masks32 The number of 4B elements in the buffer
- * @Param[in] num_rows The number of rows in the column, i.e., the number of bits
+ * @param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
+ * @param[in] num_masks32 The number of 4B elements in the buffer
+ * @param[in] num_rows The number of rows in the column, i.e., the number of bits
  * in the buffer that correspond to rows
- * @Param[out] global_count The number of set bits in the range of bits [0, num_rows)
+ * @param[out] global_count The number of set bits in the range of bits [0, num_rows)
  */
 /* ----------------------------------------------------------------------------*/
 template <typename size_type>
@@ -157,20 +113,31 @@ void count_valid_bits(valid32_t const * const masks32,
 }
 
 /* ---------------------------------------------------------------------------*
- * @Synopsis  Counts the number of valid bits for the specified number of rows
+ * @brief  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
  * 
- * @Param[in] masks The validity bitmask buffer in device memory
- * @Param[in] num_rows The number of bits to count
- * @Param[out] count The number of valid bits in the buffer from [0, num_rows)
+ * If the bitmask is null, returns a count equal to the number of rows.
  * 
- * @Returns  GDF_SUCCESS upon successful completion 
+ * @param[in] masks The validity bitmask buffer in device memory
+ * @param[in] num_rows The number of bits to count
+ * @param[out] count The number of valid bits in the buffer from [0, num_rows)
+ * 
+ * @returns  GDF_SUCCESS upon successful completion 
  *
  * ----------------------------------------------------------------------------*/
+
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-  if((nullptr == masks) || (nullptr == count)){return GDF_DATASET_EMPTY;}
+
+
+  if((nullptr == count)){return GDF_DATASET_EMPTY;}
+
   if(0 == num_rows) {return GDF_SUCCESS;}
+
+  if(nullptr == masks){
+      *count = num_rows;
+      return GDF_SUCCESS;
+  }
 
   // Masks will be proccessed as 4B types, therefore we require that the underlying
   // type be less than or equal to 4B
@@ -182,7 +149,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
   // Number of 4 byte types in the validity bit mask 
   gdf_size_type num_masks32{static_cast<gdf_size_type>(std::ceil(static_cast<float>(num_masks) / RATIO))};
 
-  int h_count{0};
+  gdf_size_type h_count{0};
   if(num_masks32 > 0)
   {
     // TODO: Probably shouldn't create/destroy the stream every time
@@ -193,8 +160,8 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
     // Cast validity buffer to 4 byte type
     valid32_t const * masks32{reinterpret_cast<valid32_t const *>(masks)};
 
-    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(int), count_stream));
-    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
+    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(gdf_size_type), count_stream));
+    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(gdf_size_type), count_stream));
 
     gdf_size_type const grid_size{(num_masks32 + block_size - 1)/block_size};
 
@@ -202,7 +169,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
 
     CUDA_TRY( cudaGetLastError() );
 
-    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost, count_stream));
+    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(gdf_size_type), cudaMemcpyDeviceToHost, count_stream));
     RMM_TRY(RMM_FREE(d_count, count_stream));
     CUDA_TRY(cudaStreamSynchronize(count_stream));
     CUDA_TRY(cudaStreamDestroy(count_stream));

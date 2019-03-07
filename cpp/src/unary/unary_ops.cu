@@ -12,7 +12,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 
 template<typename T, typename Tout, typename F>

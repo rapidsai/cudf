@@ -6,7 +6,7 @@
 # cython: language_level = 3
 
 from libcpp cimport bool
-from numpy cimport uint8_t, int64_t, int32_t, int16_t, int8_t
+from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -202,8 +202,13 @@ cdef extern from "cudf.h" nogil:
     gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                               gdf_size_type size, gdf_dtype dtype)
 
-    cdef gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
-                              gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count)
+    cdef gdf_error gdf_column_view_augmented(gdf_column *column,
+                                             void *data,
+                                             gdf_valid_type *valid,
+                                             gdf_size_type size,
+                                             gdf_dtype dtype,
+                                             gdf_size_type null_count,
+                                             gdf_dtype_extra_info extra_info)
 
     cdef gdf_error gdf_column_free(gdf_column *column)
 
@@ -350,10 +355,7 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive)
+    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, bool inclusive)
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
@@ -575,7 +577,7 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
-    cdef unsigned int gdf_reduce_optimal_output_size()
+    cdef unsigned int gdf_reduction_get_intermediate_output_size()
 
     cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
@@ -583,20 +585,18 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     
-    cdef gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation)
 
-    cdef gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation)
+    cdef gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation)
 
-    cdef gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
+    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
-    cdef gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
-
-    cdef gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
+    cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
 
@@ -670,7 +670,7 @@ cdef extern from "cudf.h" nogil:
 
                                     gdf_context*        ctxt)
 
-    cdef gdf_error gdf_quantile_aprrox(  gdf_column*  col_in,
+    cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
                                     double       q,
                                     void*        t_erased_res,
                                     gdf_context* ctxt)
@@ -680,3 +680,8 @@ cdef extern from "cudf.h" nogil:
                                    gdf_column* old_values,
                                    gdf_column* new_values);
 
+
+    cdef gdf_error gdf_digitize(gdf_column* col,
+                                gdf_column* bins,
+                                bool right,
+                                gdf_index_type* out_indices);

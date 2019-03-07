@@ -18,7 +18,7 @@
 
 #include "cudf.h"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "join/joining.h"
 #include "dataframe/cudf_table.cuh"
 #include "hash/hash_functions.cuh"
@@ -30,11 +30,11 @@ constexpr int ROWS_PER_THREAD = 1;
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  This function determines if a number is a power of 2.
+ * @brief  This function determines if a number is a power of 2.
  * 
- * @Param number The number to check.
+ * @param number The number to check.
  * 
- * @Returns True if the number is a power of 2.
+ * @returns True if the number is a power of 2.
  */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
@@ -45,7 +45,7 @@ bool is_power_two( T number )
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  This functor is used to compute the hash value for the rows
+ * @brief  This functor is used to compute the hash value for the rows
  * of a gdf_table
  */
 /* ----------------------------------------------------------------------------*/
@@ -53,34 +53,43 @@ template <template <typename> class hash_function,
          typename size_type>
 struct row_hasher
 {
-  row_hasher(gdf_table<size_type> const & table_to_hash)
-    : the_table{table_to_hash}
+  row_hasher(gdf_table<size_type> const & table_to_hash, hash_value_type *initial_hash_values)
+    : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
   {}
 
   __device__
   hash_value_type operator()(size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index);
+    return the_table.template hash_row<hash_function>(row_index, initial_hash_values);
   }
 
   gdf_table<size_type> const & the_table;
+  hash_value_type* initial_hash_values{nullptr};
 };
 
 
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * @brief Computes the hash value of each row in the input set of columns.
  * 
- * @Param num_cols The number of columns in the input set
- * @Param input The list of columns whose rows will be hashed
- * @Param hash The hash function to use
- * @Param output The hash value of each row of the input
+ * @param[in] num_cols The number of columns in the input set
+ * @param[in] input The list of columns whose rows will be hashed
+ * @param[in] hash The hash function to use
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
+ * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
+ * then each element will be hashed as-is.
+ * @param[out] output The hash value of each row of the input
  * 
- * @Returns   
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
+gdf_error gdf_hash(int num_cols,
+                   gdf_column **input,
+                   gdf_hash_func hash,
+                   hash_value_type *initial_hash_values,
+                   gdf_column *output)
 {
   // Ensure inputs aren't null
   if((0 == num_cols)
@@ -128,9 +137,9 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
     case GDF_HASH_MURMUR3:
       {
         thrust::tabulate(rmm::exec_policy()->on(0),
-                        row_hash_values, 
+                         row_hash_values,
                          row_hash_values + num_rows, 
-                         row_hasher<MurmurHash3_32,size_type>(*input_table));
+                         row_hasher<MurmurHash3_32,size_type>(*input_table, initial_hash_values));
         break;
       }
     case GDF_HASH_IDENTITY:
@@ -138,7 +147,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
         thrust::tabulate(rmm::exec_policy()->on(0),
                          row_hash_values, 
                          row_hash_values + num_rows, 
-                         row_hasher<IdentityHash,size_type>(*input_table));
+                         row_hasher<IdentityHash,size_type>(*input_table, initial_hash_values));
         break;
       }
     default:
@@ -153,7 +162,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses the FAST modulo operation implemented in int_fastdiv from here:
  * https://github.com/milakov/int_fastdiv
  */
@@ -183,7 +192,7 @@ struct fast_modulo_partitioner
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses the modulo operation.
  */
 /* ----------------------------------------------------------------------------*/
@@ -206,7 +215,7 @@ struct modulo_partitioner
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses bitshifts. Only works when num_partitions is a power of 2.
  *
  * For n % d, if d is a power of two, then it can be computed more efficiently via 
@@ -240,17 +249,17 @@ struct bitwise_partitioner
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
  * 
- * @Param[in] the_table The table whose rows will be partitioned
- * @Param[in] num_rows The number of rows in the table
- * @Param[in] num_partitions The number of partitions to divide the rows into
- * @Param[in] the_partitioner The functor that maps a rows hash value to a partition number
- * @Param[out] row_partition_numbers Array that holds which partition each row belongs to
- * @Param[out] block_partition_sizes Array that holds the size of each partition for each block,
+ * @param[in] the_table The table whose rows will be partitioned
+ * @param[in] num_rows The number of rows in the table
+ * @param[in] num_partitions The number of partitions to divide the rows into
+ * @param[in] the_partitioner The functor that maps a rows hash value to a partition number
+ * @param[out] row_partition_numbers Array that holds which partition each row belongs to
+ * @param[out] block_partition_sizes Array that holds the size of each partition for each block,
  * i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
          {block0 partition1 size, block1 partition1 size, ...},
          ...
          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
- * @Param[out] global_partition_sizes The number of rows in each partition.
+ * @param[out] global_partition_sizes The number of rows in each partition.
  */
 /* ----------------------------------------------------------------------------*/
 template <template <typename> class hash_function,
@@ -318,14 +327,14 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Given an array of partition numbers, computes the final output location
+ * @brief  Given an array of partition numbers, computes the final output location
    for each element in the output such that all rows with the same partition are 
    contiguous in memory.
  * 
- * @Param row_partition_numbers The array that records the partition number for each row
- * @Param num_rows The number of rows
- * @Param num_partitions THe number of partitions
- * @Param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
+ * @param row_partition_numbers The array that records the partition number for each row
+ * @param num_rows The number of rows
+ * @param num_partitions THe number of partitions
+ * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
  * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
          {block0 partition1 offset, block1 partition1 offset, ...},
          ...
@@ -383,14 +392,14 @@ void compute_row_output_locations(size_type * row_partition_numbers,
  * A copy of the input table is created where the rows are rearranged such that
  * rows with hash values in the same bin are contiguous.
  * 
- * @Param[in] input_table The table to partition
- * @Param[in] table_to_hash Sub-table of the input table with only the columns 
+ * @param[in] input_table The table to partition
+ * @param[in] table_to_hash Sub-table of the input table with only the columns 
  * that will be hashed
- * @Param[in] num_partitions The number of partitions that table will be rearranged into
- * @Param[out] partition_offsets Preallocated array the size of the number of 
+ * @param[in] num_partitions The number of partitions that table will be rearranged into
+ * @param[out] partition_offsets Preallocated array the size of the number of 
  * partitions. Where partition_offsets[i] indicates the starting position 
  * of partition 'i'
- * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
+ * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
  * of the input columns into the desired number of partitions
  * @tparam hash_function The hash function that will be used to hash the rows
  */
@@ -536,19 +545,19 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
  * bins the hash values into the desired number of partitions. Rearranges the input
  * columns such that rows with hash values in the same bin are contiguous.
  *
- * @Param[in] num_input_cols The number of columns in the input columns
- * @Param[in] input[] The input set of columns
- * @Param[in] columns_to_hash[] Indices of the columns in the input set to hash
- * @Param[in] num_cols_to_hash The number of columns to hash
- * @Param[in] num_partitions The number of partitions to rearrange the input rows into
- * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
+ * @param[in] num_input_cols The number of columns in the input columns
+ * @param[in] input[] The input set of columns
+ * @param[in] columns_to_hash[] Indices of the columns in the input set to hash
+ * @param[in] num_cols_to_hash The number of columns to hash
+ * @param[in] num_partitions The number of partitions to rearrange the input rows into
+ * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
  * of the input columns into the desired number of partitions
- * @Param[out] partition_offsets Preallocated array the size of the number of 
+ * @param[out] partition_offsets Preallocated array the size of the number of 
  * partitions. Where partition_offsets[i] indicates the starting position 
  * of partition 'i'
- * @Param[in] hash The hash function to use
+ * @param[in] hash The hash function to use
  *
- * @Returns  If the operation was successful, returns GDF_SUCCESS
+ * @returns  If the operation was successful, returns GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash_partition(int num_input_cols,

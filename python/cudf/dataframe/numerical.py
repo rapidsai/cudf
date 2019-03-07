@@ -9,16 +9,17 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops, datetime
+from cudf.dataframe import columnops, datetime
 from cudf.utils import cudautils, utils
 from cudf import _gdf
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.sort as cpp_sort
 
 # Operator mappings
 
@@ -113,6 +114,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            # Temporary workaround since libcudf doesn't support int16 ops
+            if other_dtype == np.dtype('int16'):
+                other_dtype = np.dtype('int32')
             ary = utils.scalar_broadcast_to(other, shape=len(self),
                                             dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
@@ -188,7 +192,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unique(self, method='sort'):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -196,15 +200,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
 
-    def unique_count(self, method='sort'):
-        if method is not 'sort':
+    def unique_count(self, method='sort', dropna=True):
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -295,7 +301,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def _hashjoin(self, other, how='left', return_indexers=False):
 
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -341,7 +347,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         When the column is a index, set *return_indexers* to obtain
         the indices for shuffling the remaining columns.
         """
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -399,7 +405,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
 
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
@@ -425,18 +431,45 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
+    # Temporary workaround since libcudf doesn't support int16 ops
+    if dtype == np.dtype('int16'):
+        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 
-def column_hash_values(column0, *other_columns):
+def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
     columns = [column0] + list(other_columns)
     buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
-    _gdf.hash_columns(columns, result)
+    if initial_hash_values:
+        initial_hash_values = rmm.to_device(initial_hash_values)
+    _gdf.hash_columns(columns, result, initial_hash_values)
     return result
+
+
+def digitize(column, bins, right=False):
+    """Return the indices of the bins to which each value in column belongs.
+
+    Parameters
+    ----------
+    column : Column
+        Input column.
+    bins : np.array
+        1-D monotonically increasing array of bins with same type as `column`.
+    right : bool
+        Indicates whether interval contains the right or left bin edge.
+
+    Returns
+    -------
+    A device array containing the indices
+    """
+    assert column.dtype == bins.dtype
+    bins_buf = Buffer(rmm.to_device(bins))
+    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    return cpp_sort.digitize(column, bin_col, right)
 
 
 register_distributed_serializer(NumericalColumn)
