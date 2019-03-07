@@ -408,7 +408,4 @@ def test_string_split(data, pat, n, expand, expand_raise):
         expect = ps.str.split(pat=pat, n=n, expand=expand)
         got = gs.str.split(pat=pat, n=n, expand=expand)
 
-        print(expect)
-        print(got)
-
         assert_eq(expect, got)
