@@ -32,6 +32,65 @@ using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(GatherTest, test_types);
 
+TYPED_TEST(GatherTest, DtypeMistach){
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  cudf::test::column_wrapper<int32_t> source{source_size};
+  cudf::test::column_wrapper<float> destination{destination_size};
+
+  gdf_column * raw_source = source.get();
+  gdf_column * raw_destination = destination.get();
+
+  cudf::table source_table{&raw_source, 1};
+  cudf::table destination_table{&raw_destination, 1};
+
+  rmm::device_vector<gdf_index_type> gather_map(source_size);
+
+  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
+                             &destination_table), cudf::logic_error);
+}
+
+TYPED_TEST(GatherTest, DestMissingValid){
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  cudf::test::column_wrapper<TypeParam> source{source_size, true};
+  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+
+  gdf_column * raw_source = source.get();
+  gdf_column * raw_destination = destination.get();
+
+  cudf::table source_table{&raw_source, 1};
+  cudf::table destination_table{&raw_destination, 1};
+
+  rmm::device_vector<gdf_index_type> gather_map(source_size);
+
+  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
+                             &destination_table), cudf::logic_error);
+}
+
+TYPED_TEST(GatherTest, NumColumnsMismatch){
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  cudf::test::column_wrapper<TypeParam> source0{source_size, true};
+  cudf::test::column_wrapper<TypeParam> source1{source_size, true};
+  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+
+  std::vector<gdf_column*> source_cols{source0.get(), source1.get()};
+
+  gdf_column * raw_destination = destination.get();
+
+  cudf::table source_table{source_cols.data(), 2};
+  cudf::table destination_table{&raw_destination, 1};
+
+  rmm::device_vector<gdf_index_type> gather_map(source_size);
+
+  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
+                             &destination_table), cudf::logic_error);
+}
+
 TYPED_TEST(GatherTest, IdentityTest) {
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
