@@ -193,8 +193,11 @@ struct NVCategoryTest : public GdfTest
 	}
 };
 
+//todo refactor tests
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 {
+	bool print = false;
+
 	gdf_column * column = create_nv_category_column(100,false);
 	gdf_column * output_column = create_indices_column(100);
 	gdf_column ** input_columns = new gdf_column *[1];
@@ -207,21 +210,23 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 
 	//doesnt output nvcategory type columns so works as is
 	gdf_error err = gdf_order_by(input_columns,asc_desc,1,output_column,false);
-
-
+	EXPECT_EQ(GDF_SUCCESS, err);
 
 	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
 
-	print_valid_data(output_column->valid,100);
+	if(print){
+		print_valid_data(output_column->valid,100);
 
-	print_typed_column((int32_t *) output_column->data,
-			output_column->valid,
-			100);
-
+		print_typed_column((int32_t *) output_column->data,
+				output_column->valid,
+				100);
+	}
 }
 
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 {
+	bool print = false;
+
 	//left will be Z,Y,X..... C,B,A,ZZ,YY....
 	gdf_column * category_column = create_nv_category_column(100,true);
 	gdf_column * category_column_2 = create_nv_category_column(100,false);
@@ -242,9 +247,11 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	cols[0] = category_column;
 	output_groups[0] = category_column_groups_out;
 
-	print_typed_column((int32_t *) constant_value_column_1->data,
-			constant_value_column_1->valid,
-			constant_value_column_1->size);
+	if(print){
+		print_typed_column((int32_t *) constant_value_column_1->data,
+				constant_value_column_1->valid,
+				constant_value_column_1->size);
+	}
 
 	gdf_error err = gdf_group_by_sum(1,                    // # columns
 			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
@@ -255,17 +262,16 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 			out_col_agg,      //aggregation result
 			&ctxt);
 
-	print_typed_column((int32_t *) output_groups[0]->data,
-			output_groups[0]->valid,
-			output_groups[0]->size);
+	if(print){
+		print_typed_column((int32_t *) output_groups[0]->data,
+				output_groups[0]->valid,
+				output_groups[0]->size);
 
 
-	print_typed_column((int32_t *) out_col_agg->data,
-			out_col_agg->valid,
-			out_col_agg->size);
-
-
-
+		print_typed_column((int32_t *) out_col_agg->data,
+				out_col_agg->valid,
+				out_col_agg->size);
+	}
 
 	err = gdf_group_by_max(1,                    // # columns
 			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
@@ -276,48 +282,53 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 			category_column_out,      //aggregation result
 			&ctxt);
 
-	if(err != GDF_SUCCESS){
-		std::cout<<"WE ARE NOT JAMMIN!"<<std::endl;
-	}else{
-		std::cout<<"WE ARE JAMMIN!"<<std::endl;
+	EXPECT_EQ(GDF_SUCCESS, err);
+
+	if(print){
+		print_typed_column((int32_t *) cols[0]->data,
+				cols[0]->valid,
+				cols[0]->size);
+
+
+		print_typed_column((int32_t *) category_column_2->data,
+				category_column_2->valid,
+				category_column_2->size);
+
+		print_typed_column((int32_t *) output_groups[0]->data,
+				output_groups[0]->valid,
+				output_groups[0]->size);
+
+
+		print_typed_column((int32_t *) category_column_out->data,
+				category_column_out->valid,
+				category_column_out->size);
 	}
-
-	print_typed_column((int32_t *) cols[0]->data,
-			cols[0]->valid,
-			cols[0]->size);
-
-
-	print_typed_column((int32_t *) category_column_2->data,
-			category_column_2->valid,
-			category_column_2->size);
-
-	print_typed_column((int32_t *) output_groups[0]->data,
-			output_groups[0]->valid,
-			output_groups[0]->size);
-
-
-	print_typed_column((int32_t *) category_column_out->data,
-			category_column_out->valid,
-			category_column_out->size);
 
 	char ** data = new char *[200];
 
 	category_column_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
-	std::cout<<"maxes\n";
-	for(int i = 0; i < category_column_out->size; i++){
-		std::cout<<data[i]<<"\t";
-	}
-	std::cout<<std::endl;
+
+	if(print){
+		std::cout<<"maxes\n";
+		for(int i = 0; i < category_column_out->size; i++){
+			std::cout<<data[i]<<"\t";
+		}
+		std::cout<<std::endl;
+  }
 
 	output_groups[0]->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
-	std::cout<<"groups\n";
-	for(int i = 0; i < category_column_out->size; i++){
-		std::cout<<data[i]<<"\t";
+
+	if(print){
+		std::cout<<"groups\n";
+		for(int i = 0; i < category_column_out->size; i++){
+			std::cout<<data[i]<<"\t";
+		}
+		std::cout<<std::endl;
+  }
+
+	if(print){
+		std::cout<<"lets concat the groups"<<std::endl;
 	}
-	std::cout<<std::endl;
-
-
-	std::cout<<"lets concat the groups"<<std::endl;
 
 	gdf_column * concat[2];
 	concat[0] = output_groups[0];
@@ -325,35 +336,34 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 
 	gdf_column * concat_out = create_nv_category_column(200,true);
 
-
-	std::cout<<"calling concat"<<std::endl;
-
-	std::cout<<"calliing concat category is null = "<<(concat[0]->dtype_info.category == nullptr)<<std::endl;
-	std::cout<<"calliing concat category is null = "<<(output_groups[0]->dtype_info.category == nullptr)<<std::endl;
-
+	if(print){
+		std::cout<<"calling concat"<<std::endl;
+		std::cout<<"calliing concat category is null = "<<(concat[0]->dtype_info.category == nullptr)<<std::endl;
+		std::cout<<"calliing concat category is null = "<<(output_groups[0]->dtype_info.category == nullptr)<<std::endl;
+	}
 
 	err = gdf_column_concat(concat_out,concat,2);
+	//EXPECT_EQ(GDF_SUCCESS, err); todo check this
 
-	std::cout<<"called concat category is null = "<<(category_column_groups_out->dtype_info.category == nullptr)<<std::endl;
-
-	if(err != GDF_SUCCESS){
-		std::cout<<"WE ARE NOT JAMMIN! "<<err<<std::endl;
-	}else{
-		std::cout<<"CONCAT"<<std::endl;
-	}
+	if(print){
+	  std::cout<<"called concat category is null = "<<(category_column_groups_out->dtype_info.category == nullptr)<<std::endl;
+  }
 
 	concat_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
-	std::cout<<"groups\n";
-	for(int i = 0; i < category_column_out->size; i++){
-		std::cout<<data[i]<<"\t";
-	}
-	std::cout<<std::endl;
 
-
+	if(print){
+		std::cout<<"groups\n";
+		for(int i = 0; i < category_column_out->size; i++){
+			std::cout<<data[i]<<"\t";
+		}
+		std::cout<<std::endl;
+  }
 }
 
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 {
+	bool print = false;
+
 	//left will be Z,Y,X..... C,B,A,Z,Y....
 	gdf_column * column_left = create_nv_category_column(100,true);
 	//right will be Z,Y,X....C,B,A,ZZ,YY ....
@@ -372,36 +382,39 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	cudaMemcpy(column_left->data,indices,sizeof(unsigned int) * column_left->size,cudaMemcpyDeviceToDevice);
 	cudaMemcpy(column_right->data,indices + column_left->size,sizeof(unsigned int) * column_right->size,cudaMemcpyDeviceToDevice);
 
-	print_typed_column((int32_t *) column_left->data,
-			column_left->valid,
-			100);
+	if(print){
+		print_typed_column((int32_t *) column_left->data,
+				column_left->valid,
+				100);
 
-	print_typed_column((int32_t *) column_right->data,
-			column_right->valid,
-			100);
-
+		print_typed_column((int32_t *) column_right->data,
+				column_right->valid,
+				100);
+	}
 
 	//TODO: damn so this is just a regular silly pointer, i cant just assume i can free it...
 	//without some locking mechanism theres no real way to clean this up easily, i could copy....
 	column_left->dtype_info.category = new_category;
 	column_right->dtype_info.category = new_category;
 
+	if(print){
 	//so a few options here, managing a single memory buffer is too annoying
 	print_typed_column((int8_t *) output_column->data,
 			output_column->valid,
 			100);
+	}
 
 	gdf_error err = gdf_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
-
-	std::cout<<err<<std::endl;
+	EXPECT_EQ(GDF_SUCCESS, err);
 	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
 
-	print_valid_data(output_column->valid,100);
+	if(print){
+		print_valid_data(output_column->valid,100);
 
-	print_typed_column((int8_t *) output_column->data,
-			output_column->valid,
-			100);
-
+		print_typed_column((int8_t *) output_column->data,
+				output_column->valid,
+				100);
+	}
 }
 
 // Selects the kind of join operation that is performed
@@ -661,7 +674,7 @@ struct NVCategoryJoinTest : public GdfTest
 
 TEST_F(NVCategoryJoinTest, join_test){
 
-	bool print = true;
+	bool print = false;
 	size_t rows_size = 16;
 //	size_t max_int_value = 50;
 	join_op op = join_op::INNER;
