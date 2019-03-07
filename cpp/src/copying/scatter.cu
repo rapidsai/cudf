@@ -70,13 +70,12 @@ __global__ void scatter_bitmask_kernel(
   }
 }
 
-gdf_error scatter_bitmask(gdf_valid_type const* source_mask,
-                          gdf_size_type num_source_rows,
-                          gdf_valid_type* destination_mask,
-                          gdf_size_type num_destination_rows,
-                          gdf_index_type const scatter_map[],
-                          cudaStream_t stream = 0) {
-  gdf_error gdf_status{GDF_SUCCESS};
+void scatter_bitmask(gdf_valid_type const* source_mask,
+                     gdf_size_type num_source_rows,
+                     gdf_valid_type* destination_mask,
+                     gdf_size_type num_destination_rows,
+                     gdf_index_type const scatter_map[],
+                     cudaStream_t stream = 0) {
   constexpr gdf_size_type BLOCK_SIZE{256};
   const gdf_size_type scatter_grid_size =
       (num_source_rows + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -102,13 +101,14 @@ gdf_error scatter_bitmask(gdf_valid_type const* source_mask,
   scatter_bitmask_kernel<<<scatter_grid_size, BLOCK_SIZE, 0, stream>>>(
       source_mask, num_source_rows, destination_mask, scatter_map);
 
+  CHECK_STREAM(stream);
+
   // Copy temporary bitmask to destination mask
   if (in_place) {
     thrust::copy(rmm::exec_policy(stream)->on(stream), temp_bitmask.begin(),
                  temp_bitmask.end(), destination_mask);
   }
-
-  return gdf_status;
+  CHECK_STREAM(stream);
 }
 
 /**---------------------------------------------------------------------------*
@@ -126,15 +126,11 @@ struct column_scatterer {
    * destination elements
    * @param destination_column The column that will be scattered into
    * @param stream Optional CUDA stream on which to execute kernels
-   * @return gdf_error
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>
-  gdf_error operator()(gdf_column const* source_column,
-                       gdf_index_type const scatter_map[],
-                       gdf_column* destination_column,
-                       cudaStream_t stream = 0) {
-    gdf_error gdf_status{GDF_SUCCESS};
-
+  void operator()(gdf_column const* source_column,
+                  gdf_index_type const scatter_map[],
+                  gdf_column* destination_column, cudaStream_t stream = 0) {
     ColumnType const* const source_data{
         static_cast<ColumnType const*>(source_column->data)};
     ColumnType* destination_data{
@@ -165,69 +161,53 @@ struct column_scatterer {
     bool const bitmasks_exist{(nullptr != source_column->valid) &&
                               (nullptr != destination_column->valid)};
     if (bitmasks_exist) {
-      gdf_status = scatter_bitmask(source_column->valid, source_column->size,
-                                   destination_column->valid,
-                                   destination_column->size, scatter_map);
-      GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+      scatter_bitmask(source_column->valid, source_column->size,
+                      destination_column->valid, destination_column->size,
+                      scatter_map);
 
       // Update destination column's null count
-      gdf_status = set_null_count(destination_column);
-      GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+      gdf_error gdf_status = set_null_count(destination_column);
+      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
     }
 
-    CUDA_CHECK_LAST();
-
-    return gdf_status;
+    CHECK_STREAM(stream);
   }
 };
 }  // namespace
 
 namespace detail {
-gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
-                  table* destination_table, cudaStream_t stream = 0) {
-  assert(source_table->size() == destination_table->size());
-
-  gdf_error gdf_status{GDF_SUCCESS};
+void scatter(table const* source_table, gdf_index_type const scatter_map[],
+             table* destination_table, cudaStream_t stream = 0) {
+  CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
+               "Mismatched number of columns");
 
   auto scatter_column = [scatter_map, stream](gdf_column const* source,
                                               gdf_column* destination) {
-    if (source->dtype != destination->dtype) {
-      throw GDF_DTYPE_MISMATCH;
-    }
+    CUDF_EXPECTS(source->dtype == destination->dtype, "Column type mismatch");
 
     // If the source column has a valid buffer, the destination column must
     // also have one
-    if ((nullptr != source->valid) and (nullptr == destination->valid)) {
-      throw GDF_VALIDITY_MISSING;
-    }
+    bool const source_has_nulls{source->valid != nullptr};
+    bool const dest_has_nulls{destination->valid != nullptr};
+    CUDF_EXPECTS((source_has_nulls && dest_has_nulls) || (not source_has_nulls),
+                 "Missing destination validity buffer");
 
     // TODO: Each column could be scattered on a separate stream
-    gdf_error gdf_status =
-        cudf::type_dispatcher(source->dtype, column_scatterer{}, source,
-                              scatter_map, destination, stream);
-
-    if (GDF_SUCCESS != gdf_status) {
-      throw gdf_status;
-    }
+    cudf::type_dispatcher(source->dtype, column_scatterer{}, source,
+                          scatter_map, destination, stream);
 
     return destination;
   };
 
-  try {
-    // Gather columns one-by-one
-    std::transform(source_table->begin(), source_table->end(),
-                   destination_table->begin(), destination_table->begin(),
-                   scatter_column);
-
-  } catch (gdf_error e) {
-    return e;
-  }
-  return gdf_status;
+  // Gather columns one-by-one
+  std::transform(source_table->begin(), source_table->end(),
+                 destination_table->begin(), destination_table->begin(),
+                 scatter_column);
 }
 }  // namespace detail
 
-gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
-                  table* destination_table) {
-  return detail::scatter(source_table, scatter_map, destination_table);
+void scatter(table const* source_table, gdf_index_type const scatter_map[],
+             table* destination_table) {
+  detail::scatter(source_table, scatter_map, destination_table);
 }
 }  // namespace cudf

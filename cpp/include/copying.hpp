@@ -49,7 +49,7 @@ namespace cudf {
  *
  * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
+void scatter(table const* source_table, gdf_index_type const scatter_map[],
                   table* destination_table);
 
 /**
