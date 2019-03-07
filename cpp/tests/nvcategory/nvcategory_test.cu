@@ -217,9 +217,9 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	if(print){
 		print_valid_data(output_column->valid,100);
 
-		print_typed_column((int32_t *) output_column->data,
+		/*print_typed_column((int32_t *) output_column->data,
 				output_column->valid,
-				100);
+				100);*/
 	}
 }
 
@@ -248,9 +248,9 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	output_groups[0] = category_column_groups_out;
 
 	if(print){
-		print_typed_column((int32_t *) constant_value_column_1->data,
+		/*print_typed_column((int32_t *) constant_value_column_1->data,
 				constant_value_column_1->valid,
-				constant_value_column_1->size);
+				constant_value_column_1->size);*/
 	}
 
 	gdf_error err = gdf_group_by_sum(1,                    // # columns
@@ -263,14 +263,14 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 			&ctxt);
 
 	if(print){
-		print_typed_column((int32_t *) output_groups[0]->data,
+		/*print_typed_column((int32_t *) output_groups[0]->data,
 				output_groups[0]->valid,
 				output_groups[0]->size);
 
 
 		print_typed_column((int32_t *) out_col_agg->data,
 				out_col_agg->valid,
-				out_col_agg->size);
+				out_col_agg->size);*/
 	}
 
 	err = gdf_group_by_max(1,                    // # columns
@@ -285,7 +285,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	EXPECT_EQ(GDF_SUCCESS, err);
 
 	if(print){
-		print_typed_column((int32_t *) cols[0]->data,
+		/*print_typed_column((int32_t *) cols[0]->data,
 				cols[0]->valid,
 				cols[0]->size);
 
@@ -301,7 +301,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 
 		print_typed_column((int32_t *) category_column_out->data,
 				category_column_out->valid,
-				category_column_out->size);
+				category_column_out->size);*/
 	}
 
 	char ** data = new char *[200];
@@ -334,7 +334,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	concat[0] = output_groups[0];
 	concat[1] = output_groups[0];
 
-	gdf_column * concat_out = create_nv_category_column(200,true);
+	gdf_column * concat_out = create_nv_category_column(output_groups[0]->size*2,true);
 
 	if(print){
 		std::cout<<"calling concat"<<std::endl;
@@ -343,7 +343,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	}
 
 	err = gdf_column_concat(concat_out,concat,2);
-	//EXPECT_EQ(GDF_SUCCESS, err); todo check this
+	EXPECT_EQ(GDF_SUCCESS, err);
 
 	if(print){
 	  std::cout<<"called concat category is null = "<<(category_column_groups_out->dtype_info.category == nullptr)<<std::endl;
@@ -383,13 +383,13 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	cudaMemcpy(column_right->data,indices + column_left->size,sizeof(unsigned int) * column_right->size,cudaMemcpyDeviceToDevice);
 
 	if(print){
-		print_typed_column((int32_t *) column_left->data,
+		/*print_typed_column((int32_t *) column_left->data,
 				column_left->valid,
 				100);
 
 		print_typed_column((int32_t *) column_right->data,
 				column_right->valid,
-				100);
+				100);*/
 	}
 
 	//TODO: damn so this is just a regular silly pointer, i cant just assume i can free it...
@@ -399,9 +399,9 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 
 	if(print){
 	//so a few options here, managing a single memory buffer is too annoying
-	print_typed_column((int8_t *) output_column->data,
+	/*print_typed_column((int8_t *) output_column->data,
 			output_column->valid,
-			100);
+			100);*/
 	}
 
 	gdf_error err = gdf_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
@@ -411,9 +411,9 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	if(print){
 		print_valid_data(output_column->valid,100);
 
-		print_typed_column((int8_t *) output_column->data,
+		/*print_typed_column((int8_t *) output_column->data,
 				output_column->valid,
-				100);
+				100);*/
 	}
 }
 
