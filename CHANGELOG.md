@@ -6,7 +6,8 @@
 
 ## Improvements
 
-...
+- PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
+- PR #1076 Added type trait to get underlying type of wrapped type
 
 ## Bug Fixes
 
@@ -94,9 +95,6 @@
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
-- PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
-- PR #1076 Added type trait to get underlying type of wrapped type
-
 
 ## Bug Fixes
 
