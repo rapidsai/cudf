@@ -33,7 +33,7 @@
 #include <cudf/functions.h>
 #include <utilities/cudf_utils.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.h>
+#include <utilities/error_utils.hpp>
 #include <quantiles/quantiles.h>
 
 #include "tests/utilities/cudf_test_fixtures.h"

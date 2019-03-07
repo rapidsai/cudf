@@ -2,7 +2,7 @@
 #include "cudf.h"
 #include "new_groupby.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 

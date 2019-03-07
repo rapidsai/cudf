@@ -23,7 +23,7 @@
 
 #include "dataframe/cudf_table.cuh"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>

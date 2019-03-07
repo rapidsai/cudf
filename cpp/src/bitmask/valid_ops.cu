@@ -25,7 +25,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 
 #include <thrust/tabulate.h>
