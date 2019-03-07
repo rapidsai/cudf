@@ -37,7 +37,8 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
 /*
  * @brief Concatenates multiple gdf_columns into a single, contiguous column,
  * including the validity bitmasks.
- */
+// Concatenates multiple gdf_columns into a single, contiguous column,
+// including the validity bitmasks.
 gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
 {
   GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
