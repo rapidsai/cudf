@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
@@ -214,7 +215,8 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                            DeviceNDArray)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -540,11 +542,18 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value):
+    def fillna(self, value, method=None, limit=None, axis=None):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
+        if method is not None:
+            raise NotImplementedError("The method keyword is not supported")
+        if limit is not None:
+            raise NotImplementedError("The limit keyword is not supported")
+        if axis:
+            raise NotImplementedError("The axis keyword is not supported")
+
         data = self._column.fillna(value)
 
         return self._copy_construct(data=data)

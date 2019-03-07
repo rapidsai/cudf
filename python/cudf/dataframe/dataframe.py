@@ -1240,8 +1240,8 @@ class DataFrame(object):
         return self.transpose()
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
-              left_index=False, right_index=False, lsuffix='_x', rsuffix='_y',
-              type="", method='hash'):
+              left_index=False, right_index=False, lsuffix=None, rsuffix=None,
+              type="", method='hash', indicator=False, suffixes=('_x', '_y')):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
 
@@ -1271,10 +1271,9 @@ class DataFrame(object):
             Only accepts 'left'
             left: use only keys from left frame, similar to
             a SQL left outer join; preserve key order
-        lsuffix : str, defaults to '_x'
-            Suffix applied to overlapping column names on the left side
-        rsuffix : str, defaults to '_y'
-            Suffix applied to overlapping column names on the right side
+        suffixes: Tuple[str, str], defaults to ('_x', '_y')
+            Suffixes applied to overlapping column names on the left and right
+            sides
         type : str, defaults to 'hash'
 
         Returns
@@ -1300,6 +1299,21 @@ class DataFrame(object):
         2    4    14.0    12.0
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        if indicator:
+            raise NotImplementedError(
+                "Only indicator=False is currently supported"
+            )
+
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')" %
+                (lsuffix or '_x', rsuffix or '_y')
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
         if left_on and right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
@@ -1365,16 +1379,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'rhs':
                     cats = rcats
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1384,16 +1398,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1482,7 +1496,7 @@ class DataFrame(object):
 
         if left_index and right_index:
             df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.values])
+            df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on])))
@@ -1584,37 +1598,33 @@ class DataFrame(object):
             if how == 'left':
                 cats = lcats
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how == 'right':
                 cats = rcats
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how in ['inner', 'outer']:
                 cats = sorted(set(lcats) | set(rcats))
 
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
-
-                print(cats)
-                print(lhs[idx_col_name])
-                print(rhs[idx_col_name])
 
         if lsuffix == '':
             lsuffix = 'l'
         if rsuffix == '':
             rsuffix = 'r'
 
-        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
-                       rsuffix=rsuffix, method=method)
+        df = lhs.merge(rhs, on=[idx_col_name], how=how,
+                       suffixes=(lsuffix, rsuffix), method=method)
 
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
@@ -2130,7 +2140,7 @@ class DataFrame(object):
 
         Parameters
         ----------
-        data : numpy structured dtype or recarray
+        data : numpy structured dtype or recarray of ndim=2
         index : str
             The name of the index column in *data*.
             If None, the default index is used.
@@ -2141,12 +2151,31 @@ class DataFrame(object):
         -------
         DataFrame
         """
-        names = data.dtype.names if columns is None else columns
+        if data.ndim != 1 and data.ndim != 2:
+            raise ValueError("records dimension expected 1 or 2 but found {!r}"
+                             .format(data.ndim))
+
+        num_cols = len(data[0])
+        if columns is None and data.dtype.names is None:
+            names = [i for i in range(num_cols)]
+
+        elif data.dtype.names is not None:
+            names = data.dtype.names
+
+        else:
+            if len(columns) != num_cols:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(num_cols, len(columns)))
+            names = columns
+
         df = DataFrame()
-        for k in names:
-            # FIXME: unnecessary copy
-            df[k] = Series(np.ascontiguousarray(data[k]),
-                           nan_as_null=nan_as_null)
+        if data.ndim == 2:
+            for i, k in enumerate(names):
+                df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+        elif data.ndim == 1:
+            for k in names:
+                df[k] = Series(data[k], nan_as_null=nan_as_null)
+
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))
@@ -2179,12 +2208,12 @@ class DataFrame(object):
         else:
             if len(columns) != data.shape[1]:
                 msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.ndim, len(columns)))
+                raise ValueError(msg.format(data.shape[1], len(columns)))
             names = columns
 
         if index is not None and len(index) != data.shape[0]:
             msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.ndim, len(columns)))
+            raise ValueError(msg.format(data.shape[0], len(index)))
 
         df = DataFrame()
         data = data.transpose()  # to mimic the pandas behaviour
@@ -2251,8 +2280,8 @@ class DataFrame(object):
 
         Parameters
         ----------
-        include : [type]
-            [description] (the default is None, which [default_description])
+        include : str or list
+            which columns to include based on dtypes
 
         """
 

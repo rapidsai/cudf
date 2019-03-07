@@ -7,6 +7,7 @@ from pandas.util.testing import (
     assert_index_equal, assert_series_equal,
     assert_frame_equal
 )
+import cudf
 from cudf.dataframe import Series, DataFrame
 from cudf.dataframe.index import DatetimeIndex
 from cudf.tests.utils import assert_eq
@@ -61,9 +62,26 @@ def test_dt_index(data, field):
 
 
 def test_setitem_datetime():
-    a = DataFrame()
-    a['a'] = pd.date_range('20010101', '20010105').values
-    # TODO check some stuff
+    df = DataFrame()
+    df['date'] = pd.date_range('20010101', '20010105').values
+    assert np.issubdtype(df.date.dtype, np.datetime64)
+
+
+def test_sort_datetime():
+    df = pd.DataFrame()
+    df['date'] = np.array([np.datetime64('2016-11-20'),
+                           np.datetime64('2020-11-20'),
+                           np.datetime64('2019-11-20'),
+                           np.datetime64('1918-11-20'),
+                           np.datetime64('2118-11-20')])
+    df['vals'] = np.random.sample(len(df['date']))
+
+    gdf = cudf.from_pandas(df)
+
+    s_df = df.sort_values(by='date')
+    s_gdf = gdf.sort_values(by='date')
+
+    assert_eq(s_df, s_gdf)
 
 
 def test_issue_165():
