@@ -229,7 +229,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
         fp.write('\n'.join(lines) + '\n')
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-                            quotechar='\"', quoting=True)
+                            quotechar='\"', quoting=1)
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
@@ -685,21 +685,19 @@ def test_csv_reader_filenotfound(tmpdir):
 
 
 def test_csv_reader_carriage_return(tmpdir):
-
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
-
     rows = 1000
+    names = ['int_row', 'int_double_row']
 
-    with open(str(fname), 'w') as fp:
-        for i in range(rows):
-            fp.write(str(i) + ', ' + str(2*i) + '\r\n')
+    buffer = ','.join(names) + '\r\n'
+    for row in range(rows):
+        buffer += str(row) + ', ' + str(2*row) + '\r\n'
 
-    df = read_csv(str(fname), names=["int1", "int2"])
+    df = read_csv(StringIO(buffer))
 
     assert(len(df) == rows)
     for row in range(0, rows):
-        assert(df['int1'][row] == row)
-        assert(df['int2'][row] == 2 * row)
+        assert(df[names[0]][row] == row)
+        assert(df[names[1]][row] == 2 * row)
 
 
 def test_csv_reader_bzip2_compression(tmpdir):
@@ -905,3 +903,50 @@ def test_csv_reader_bools_false_positives(tmpdir):
                   header=None, dtype=["int32"])
 
     np.testing.assert_array_equal(items, df['0'])
+
+
+def test_csv_reader_aligned_byte_range(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file19.csv")
+    nelem = 1000
+
+    input_df = pd.DataFrame({'key': np.arange(0, nelem),
+                             'zeros': np.zeros(nelem)})
+    input_df.to_csv(fname)
+
+    df = cudf.read_csv(str(fname), byte_range=(0, 4096))
+    # read_csv call above used to crash; the assert below is not crucial
+    assert(np.count_nonzero(df['zeros']) == 0)
+
+
+def test_csv_reader_hex_ints(tmpdir):
+    lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
+    values = [int(hex_int, 16) for hex_int in lines]
+
+    buffer = '\n'.join(lines) + '\n'
+
+    # with explicit data types
+    df = read_csv(StringIO(buffer),
+                  dtype=['int32'], names=['hex_int'])
+    np.testing.assert_array_equal(values, df['hex_int'])
+
+    # with data type inference
+    df = read_csv(StringIO(buffer),
+                  names=['hex_int'])
+    np.testing.assert_array_equal(values, df['hex_int'])
+
+
+@pytest.mark.parametrize('quoting', [0, 1, 2, 3])
+def test_csv_reader_pd_consistent_quotes(quoting):
+    names = ['text']
+    dtypes = ['str']
+    lines = ['"a"', '"b ""c"" d"', '"f!\n."']
+
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_cols = read_csv_strings(StringIO(buffer),
+                               names=names, dtype=dtypes, quoting=quoting)
+    pd_df = pd.read_csv(StringIO(buffer),
+                        names=names, quoting=quoting)
+
+    col = [str(elem) for elem in cu_cols[0].to_host()]
+    np.testing.assert_array_equal(pd_df['text'], col)

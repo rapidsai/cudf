@@ -23,7 +23,7 @@ cimport cython
 
 
 @cython.boundscheck(False)
-cpdef join(col_lhs, col_rhs, on, how, method='sort'):
+cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     """
       Call gdf join for full outer, inner and left joins.
     """
@@ -36,9 +36,10 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     result_col_names = []
 
-    cdef int[::1] left_idx = np.zeros(len(on), dtype=np.dtype("int32"))
-    cdef int[::1] right_idx = np.zeros(len(on), dtype=np.dtype("int32"))
+    cdef int[::1] left_idx = np.zeros(len(left_on), dtype=np.dtype("int32"))
+    cdef int[::1] right_idx = np.zeros(len(right_on), dtype=np.dtype("int32"))
 
+    on = list(set(left_on + right_on))
     num_cols_to_join = len(on)
     result_num_cols = len(col_lhs) + len(col_rhs) - num_cols_to_join
 
@@ -48,19 +49,25 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     cdef int res_idx = 0
     cdef int idx = 0
+
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
 
-        if name not in on:
+        if name not in left_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
             result_col_names.append(name)
             res_idx = res_idx + 1
         idx = idx + 1
 
     idx = 0
-    for name in on:
-        result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0)
+    for name in list(set(left_on + right_on)):
+        # TODO: Need careful type promotion here between lhs and rhs
+        if name in left_on:
+            dtype = col_lhs[name]._column.dtype
+        else:
+            dtype = col_rhs[name]._column.dtype
+        result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=dtype, null_count=0)
         result_col_names.append(name)
         left_idx[idx] = list(col_lhs.keys()).index(name)
         right_idx[idx] = list(col_rhs.keys()).index(name)
@@ -72,7 +79,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
         check_gdf_compatibility(col)
         list_rhs[idx] = column_view_from_column(col._column)
 
-        if name not in on:
+        if name not in right_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
             result_col_names.append(name)
             res_idx = res_idx + 1

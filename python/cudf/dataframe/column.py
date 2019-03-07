@@ -9,6 +9,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
@@ -55,7 +56,7 @@ class Column(object):
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
             new_cats = tuple(set([val for o in objs for val in o]))
-            objs = [o.cat().set_categories(new_cats) for o in objs]
+            objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
         for o in objs:
@@ -403,6 +404,9 @@ class Column(object):
                 return self.replace(data=newbuffer)
         elif isinstance(arg, (list, np.ndarray)):
             arg = np.array(arg)
+            arg = rmm.to_device(arg)
+
+        if isinstance(arg, DeviceNDArray):
             return self.take(arg)
         else:
             raise NotImplementedError(type(arg))

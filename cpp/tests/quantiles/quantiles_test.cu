@@ -33,7 +33,7 @@
 #include <cudf/functions.h>
 #include <utilities/cudf_utils.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.h>
+#include <utilities/error_utils.hpp>
 #include <quantiles/quantiles.h>
 
 #include "tests/utilities/cudf_test_fixtures.h"
@@ -65,7 +65,7 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
     {
       VType res = 0;
       auto q = qvals[j];
-      gdf_error ret = gdf_quantile_aprrox(col_in, q, &res, &ctxt);
+      gdf_error ret = gdf_quantile_approx(col_in, q, &res, &ctxt);
       v_out_exact[j] = res;
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       

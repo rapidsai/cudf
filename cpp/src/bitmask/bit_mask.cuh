@@ -20,7 +20,7 @@
 #include "cudf.h"
 #include "bit_mask.h"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include <cuda_runtime_api.h>
 
 using bit_mask_t = bit_mask::bit_mask_t;

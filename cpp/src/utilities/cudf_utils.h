@@ -4,7 +4,7 @@
 #include <cuda_runtime_api.h>
 #include <vector>
 #include "cudf.h"
-#include "error_utils.h"
+#include "error_utils.hpp"
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ __forceinline__

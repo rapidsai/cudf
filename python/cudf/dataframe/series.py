@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
@@ -214,7 +215,8 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                            DeviceNDArray)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -291,21 +293,11 @@ class Series(object):
 
         Examples
         --------
-
-        .. code-block:: python
-
-            from cudf.dataframe import Series
-
-            ser = Series([4, 3, 2, 1, 0])
-            print(ser.tail(2))
-
-        Output
-
-        .. code-block:: python
-
-           3    1
-           4    0
-
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.tail(2))
+        3    1
+        4    0
         """
         if n == 0:
             return self.iloc[0:0]
@@ -550,11 +542,18 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value):
+    def fillna(self, value, method=None, limit=None, axis=None):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
+        if method is not None:
+            raise NotImplementedError("The method keyword is not supported")
+        if limit is not None:
+            raise NotImplementedError("The limit keyword is not supported")
+        if axis:
+            raise NotImplementedError("The axis keyword is not supported")
+
         data = self._column.fillna(value)
 
         return self._copy_construct(data=data)
@@ -622,36 +621,29 @@ class Series(object):
 
         Examples
         --------
-        .. code-block:: python
+        >>> import cudf
+        >>> sr = cudf.Series(list(range(20)))
 
-          from cudf import Series
+        Get the value from 1st index
 
-          sr = Series(list(range(20)))
+        >>> sr.iloc[1]
+        1
 
-          # get the value from 1st index
-          sr.iloc[1]
+        Get the values from 0,2,9 and 18th index
 
-          # get the values from 0,2,9 and 18th index
-          sr.iloc[0,2,9,18]
+        >>> sr.iloc[0,2,9,18]
+         0    0
+         2    2
+         9    9
+        18   18
 
-          # get the values using slice indices
-          sr.iloc[3:10:2]
+        Get the values using slice indices
 
-        Output:
-
-        .. code-block:: python
-
-          1
-
-          0    0
-          2    2
-          9    9
-          18   18
-
-          3    3
-          5    5
-          7    7
-          9    9
+        >>> sr.iloc[3:10:2]
+        3    3
+        5    5
+        7    7
+        9    9
 
         Returns
         -------
@@ -726,23 +718,14 @@ class Series(object):
 
         Examples
         --------
-
-        .. code-block:: python
-
-              from cudf.dataframe import Series
-              s = Series([1,5,2,4,3])
-              s.sort_values()
-
-        Output:
-
-        .. code-block:: python
-
-              0    1
-              2    2
-              4    3
-              3    4
-              1    5
-
+        >>> import cudf
+        >>> s = cudf.Series([1, 5, 2, 4, 3])
+        >>> s.sort_values()
+        0    1
+        2    2
+        4    3
+        3    4
+        1    5
         """
         if len(self) == 0:
             return self

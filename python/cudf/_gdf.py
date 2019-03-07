@@ -37,6 +37,8 @@ def columnview_from_devary(devary, dtype=None):
 
 def _columnview(size, data, mask, dtype, null_count):
     colview = ffi.new('gdf_column*')
+    extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
+    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
     if null_count is None:
         libgdf.gdf_column_view(
             colview,
@@ -53,6 +55,7 @@ def _columnview(size, data, mask, dtype, null_count):
             size,
             np_to_gdf_dtype(dtype),
             null_count,
+            extra_dtype_info[0],
             )
     return colview
 
@@ -231,10 +234,10 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     if method == 'hash':
         libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
-                                null_sort_behavior_api)
+                                  null_sort_behavior_api)
     elif method == 'sort':
         libgdf.gdf_create_context(gdf_context, 1, method_api, 0, 0, 0,
-                                null_sort_behavior_api)
+                                  null_sort_behavior_api)
     else:
         msg = "method not supported"
         raise ValueError(msg)
@@ -280,7 +283,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     gdf_context = ffi.new('gdf_context*')
 
     libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
-                            null_sort_behavior_api)
+                              null_sort_behavior_api)
 
     if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left or inner"
@@ -353,7 +356,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
+    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,
@@ -591,7 +594,7 @@ def quantile(column, quant, method, exact):
     method_api = _join_method_api['sort']
     null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
     libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
-                            null_sort_behavior_api)
+                              null_sort_behavior_api)
     # px = ffi.new("double *")
     res = []
     for q in quant:
@@ -603,7 +606,7 @@ def quantile(column, quant, method, exact):
                                       ffi.cast('void *', px),
                                       gdf_context)
         else:
-            libgdf.gdf_quantile_aprrox(column.cffi_view,
+            libgdf.gdf_quantile_approx(column.cffi_view,
                                        q,
                                        ffi.cast('void *', px),
                                        gdf_context)

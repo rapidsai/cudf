@@ -20,7 +20,7 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "hash/hash_functions.cuh"
 #include "hash/managed.cuh"
 #include "sqls/sqls_rtti_comp.h"
