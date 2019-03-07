@@ -972,4 +972,3 @@ gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
                        gdf_index_type out_indices[]);
-

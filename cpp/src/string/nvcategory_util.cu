@@ -168,31 +168,3 @@ gdf_error free_nvcategory(gdf_column * column){
 	column->dtype_info.category = nullptr;
 	return GDF_SUCCESS;
 }
-
-gdf_column* create_column_nvcategory_from_one_string(const char* str){
-
-	const int num_rows = 1;
-	NVCategory* category = NVCategory::create_from_array(&str, num_rows);
-
-	gdf_column * column = new gdf_column;
-	int * data;
-	RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category), 0);
-
-	category->get_values(static_cast<nv_category_index_type *>(data),
-		DEVICE_ALLOCATED);
-
-
-	gdf_valid_type * valid;
-	signed int all_ones = -1;
-	RMM_ALLOC(&valid, 4, 0);
-	cudaMemcpy(valid, &all_ones, 4,cudaMemcpyHostToDevice) ;
-
-
-	gdf_error err = gdf_column_view(column,
-			(void *) data,
-			(gdf_valid_type *)valid,
-			num_rows,
-			GDF_STRING_CATEGORY);
-	column->dtype_info.category = category;
-	return column;
-}

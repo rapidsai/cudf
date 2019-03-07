@@ -57,6 +57,4 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
  */
 gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
 
-gdf_column* create_column_nvcategory_from_one_string(const char* str);
-
 #endif
