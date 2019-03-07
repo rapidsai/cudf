@@ -452,7 +452,6 @@ gdf_error construct_join_output_df(
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
-    gdf_error err{GDF_SUCCESS};
 
     // If the join_type is an outer join, then indices for non-matches will be
     // -1, requiring bounds checking when gathering the result table

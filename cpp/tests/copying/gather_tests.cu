@@ -25,6 +25,8 @@
 #include "types.hpp"
 #include "utilities/wrapper_types.hpp"
 
+#include <random>
+
 template <typename T>
 struct GatherTest : GdfTest {};
 
