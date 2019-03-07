@@ -162,10 +162,6 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     0  123 2018-11-13T12:00:00.000 5451
     1  456 2018-11-14T12:35:01.000 5784
     2  789 2018-11-15T18:02:59.000 6117
-
-    See Also
-    --------
-    .read_csv_strings
     """
 
     if delim_whitespace:

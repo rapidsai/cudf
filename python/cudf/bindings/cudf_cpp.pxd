@@ -35,6 +35,10 @@ cdef extern from "cudf.h" nogil:
     ctypedef long    gdf_date64
     ctypedef int     gdf_date32
     ctypedef int     gdf_category
+    ctypedef int     gdf_nvstring_category
+
+    cdef cppclass NVCategory:
+        pass
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -49,6 +53,7 @@ cdef extern from "cudf.h" nogil:
         GDF_TIMESTAMP,
         GDF_CATEGORY,
         GDF_STRING,
+        GDF_STRING_CATEGORY,
         N_GDF_TYPES,
 
     ctypedef enum gdf_error:
@@ -92,6 +97,7 @@ cdef extern from "cudf.h" nogil:
 
     ctypedef struct gdf_dtype_extra_info:
         gdf_time_unit time_unit
+        NVCategory *category
 
     ctypedef struct gdf_column:
         void *data
