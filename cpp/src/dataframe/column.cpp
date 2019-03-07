@@ -34,7 +34,10 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
                           gdf_size_type *column_lengths, 
                           gdf_size_type num_columns);
 
-
+/*
+ * @brief Concatenates multiple gdf_columns into a single, contiguous column,
+ * including the validity bitmasks.
+ */
 gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
 {
   GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
@@ -125,12 +128,12 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   return GDF_SUCCESS;
 }
 
-
+//@brief Return the size of the gdf_column data type.
 gdf_size_type gdf_column_sizeof() {
 	return sizeof(gdf_column);
 }
 
-
+//@brief  Constructor for the gdf_context struct
 gdf_error gdf_column_view(gdf_column *column,
                           void *data,
                           gdf_valid_type *valid,
@@ -145,7 +148,11 @@ gdf_error gdf_column_view(gdf_column *column,
 	return GDF_SUCCESS;
 }
 
-
+/*
+ * @brief Create a GDF column given data and validity bitmask pointers, size, and
+ *        datatype, and count of null (non-valid) elements
+ *
+ */
 gdf_error gdf_column_view_augmented(gdf_column *column,
                                     void *data,
                                     gdf_valid_type *valid,
@@ -163,7 +170,7 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
 	return GDF_SUCCESS;
 }
 
-
+// @brief Free the CUDA device memory of a gdf_column
 gdf_error gdf_column_free(gdf_column *column) 
 {
   RMM_TRY( RMM_FREE(column->data, 0)  );
@@ -182,6 +189,7 @@ namespace{
   };
 }
 
+//@brief  returns the byte width of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {

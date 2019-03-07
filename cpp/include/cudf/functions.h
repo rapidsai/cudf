@@ -107,7 +107,7 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
  */
 gdf_error gdf_column_free(gdf_column *column);
 
-/** ---------------------------------------------------------------------------*
+/**
  * @brief Concatenates multiple gdf_columns into a single, contiguous column,
  * including the validity bitmasks.
  * 
@@ -124,7 +124,8 @@ gdf_error gdf_column_free(gdf_column *column);
  *         pointer is NULL, GDF_COLUMN_SIZE_MISMATCH if the output column size
  *         != the total size of the input columns; GDF_DTYPE_MISMATCH if the
  *         input columns have different datatypes.
- * ---------------------------------------------------------------------------**/
+ *
+ */
 gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
 
 
