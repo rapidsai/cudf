@@ -1999,8 +1999,6 @@ gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar*
 /**
  * @brief Performs a binary operation between two gdf_columns.
  *
- * The function performs the binary operation of two gdf_column operands.
- *
  * The desired output type must be specified in out->dtype.
  *
  * If the valid field in the gdf_column output is not nullptr, then it will be
