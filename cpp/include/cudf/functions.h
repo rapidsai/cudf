@@ -2297,7 +2297,7 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  */
 
 /**
- * @brief returns the size in bytes of the spefified gdf_dtype
+ * @brief returns the size in bytes of the specified gdf_dtype
  * 
  * @param dtype the data type for which to return the size
  * @return gdf_size_type size in bytes
@@ -2305,7 +2305,7 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 gdf_size_type gdf_dtype_size(gdf_dtype dtype);
 
 /**
- * @brief  returns the byte width of the data type of the gdf_column
+ * @brief  returns the size in bytes of the data type of the gdf_column
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
