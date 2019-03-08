@@ -25,7 +25,7 @@
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.cuh"
-#include <NVCategory.h>
+#include <nvstrings/NVCategory.h>
 #include "copying/gather.hpp"
 #include "types.hpp"
 
@@ -560,50 +560,54 @@ gdf_error join_call_compute_df(
 
 
   //if the inputs are nvcategory we need to make the dictionaries comparable
-  bool const at_least_one_category_column{ std::any_of( left_cols, left_cols + num_cols_to_join, [](gdf_column * col){ return col->dtype == GDF_STRING_CATEGORY; }) };
+  bool at_least_one_category_column = false;
+  for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
+    at_least_one_category_column |= left_cols[join_column_index]->dtype == GDF_STRING_CATEGORY;
+  }
 
   std::vector<gdf_column*> new_left_cols(left_cols, left_cols + num_cols_to_join);
   std::vector<gdf_column*> new_right_cols(right_cols, right_cols + num_cols_to_join);
-
+  std::vector<gdf_column*> temp_columns_to_free;
   if(at_least_one_category_column){
     for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
       if(left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY){
-        if(right_cols[right_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY){
+        GDF_REQUIRE(right_cols[right_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY, GDF_DTYPE_MISMATCH);
 
-          gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
-          gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
+        gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
+        gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
 
-          gdf_column * new_join_columns[2] = {left_original_column, right_original_column};
+        gdf_column * new_join_columns[2] = {left_original_column, right_original_column};
 
-          gdf_column * new_left_column = new gdf_column;
-          gdf_column * new_right_column = new gdf_column;
+        gdf_column * new_left_column = new gdf_column;
+        gdf_column * new_right_column = new gdf_column;
 
-          gdf_column * input_join_columns_merge[2] = {left_original_column, right_original_column};
+        temp_columns_to_free.push_back(new_left_column);
+        temp_columns_to_free.push_back(new_right_column);
 
-          gdf_column_view(new_left_column, nullptr, nullptr, left_original_column->size, GDF_STRING_CATEGORY);
-          gdf_column_view(new_right_column, nullptr, nullptr, right_original_column->size, GDF_STRING_CATEGORY);
+        gdf_column * input_join_columns_merge[2] = {left_original_column, right_original_column};
 
-          int col_width;
-          get_column_byte_width(new_left_column, &col_width);
-          RMM_TRY( RMM_ALLOC(&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
-          RMM_TRY( RMM_ALLOC((void**)&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+        gdf_column_view(new_left_column, nullptr, nullptr, left_original_column->size, GDF_STRING_CATEGORY);
+        gdf_column_view(new_right_column, nullptr, nullptr, right_original_column->size, GDF_STRING_CATEGORY);
 
-          RMM_TRY( RMM_ALLOC(&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
-          RMM_TRY( RMM_ALLOC((void**)&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
+        int col_width;
+        get_column_byte_width(new_left_column, &col_width);
+        RMM_TRY( RMM_ALLOC(&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC(&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
+        CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
 
-          gdf_error err = sync_column_categories(input_join_columns_merge,
-              new_join_columns,
-              2);
+        RMM_TRY( RMM_ALLOC(&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC(&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
+        CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
 
-          GDF_REQUIRE(GDF_SUCCESS == err, err);
+        gdf_error err = sync_column_categories(input_join_columns_merge,
+            new_join_columns,
+            2);
 
-          new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
-          new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
-        }else{
-          return GDF_JOIN_DTYPE_MISMATCH;
-        }
+        GDF_REQUIRE(GDF_SUCCESS == err, err);
+
+        new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
+        new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
+
       }
     }
 
@@ -676,9 +680,9 @@ gdf_error join_call_compute_df(
     l_index_temp.reset(nullptr);
     r_index_temp.reset(nullptr);
 
-    //This code is done with the understanding that result columns is
-    //first left columns followed by right.
 
+
+    //If any of the of type GDF_STRING_CATEGORY we need to
     for(int output_column_index = 0; output_column_index < result_num_cols; output_column_index++){
     	gdf_column * original_column;
     	if(output_column_index < num_left_cols){
@@ -692,26 +696,27 @@ gdf_error join_call_compute_df(
         gdf_column* output_column = result_cols[output_column_index];
 
         if(output_column->size > 0){
-          NVStrings * temp_strings = original_column->dtype_info.category->gather_strings(
+
+          output_column->dtype_info.category = original_column->dtype_info.category->gather(
               (nv_category_index_type *) output_column->data,
               output_column->size,
-              DEVICE_ALLOCATED );
-
-          output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
+              DEVICE_ALLOCATED);
 
           CUDA_TRY( cudaMemcpy(
               output_column->data,
               output_column->dtype_info.category->values_cptr(),
               sizeof(nv_category_index_type) * output_column->size,
               cudaMemcpyDeviceToDevice) );
-
-          NVStrings::destroy(temp_strings);
         }
-
-        NVCategory::destroy(original_column->dtype_info.category);
-        gdf_column_free(original_column);
-        delete(original_column);
     	}
+    }
+
+    //freeing up the temp column used to synch categories between columns
+    for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
+      gdf_column * original_column = temp_columns_to_free[column_to_free];
+      NVCategory::destroy(original_column->dtype_info.category);
+      gdf_column_free(original_column);
+      delete(original_column);
     }
 
     CUDA_CHECK_LAST();
