@@ -25,7 +25,7 @@
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.cuh"
-#include <NVCategory.h>
+#include <nvstrings/NVCategory.h>
 
 #include "joining.h"
 

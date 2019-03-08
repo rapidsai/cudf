@@ -9,8 +9,7 @@
 #include <iostream>
 #include <random>
 
-#include <NVCategory.h>
-#include <nvstrings/NVStrings.h>
+#include <nvstrings/NVCategory.h>
 #include "rmm/rmm.h"
 #include <cstring>
 #include "tests/utilities/cudf_test_utils.cuh"

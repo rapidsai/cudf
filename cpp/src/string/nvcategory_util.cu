@@ -2,8 +2,8 @@
 #include "nvcategory_util.cuh"
 
 
-#include <NVCategory.h>
-#include <NVStrings.h>
+#include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 #include "rmm/rmm.h"
 
 #include "utilities/error_utils.hpp"
