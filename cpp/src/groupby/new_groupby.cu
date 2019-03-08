@@ -5,7 +5,7 @@
 #include "utilities/error_utils.hpp"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
-#include "string/nvcategory_util.cuh"
+#include "string/nvcategory_util.hpp"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -203,14 +203,14 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   for(int key_index = 0; key_index < num_key_columns; key_index++){
     if(out_key_columns[key_index]->dtype == GDF_STRING_CATEGORY){
       gdf_error_code = nvcategory_gather(out_key_columns[key_index],
-                                                  in_key_columns[key_index]->dtype_info.category);
+                                         static_cast<NVCategory *>(in_key_columns[key_index]->dtype_info.category));
       GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
     }
   }
   for(int out_column_index = 0; out_column_index < num_aggregation_columns; out_column_index++){
     if(out_aggregation_columns[out_column_index]->dtype == GDF_STRING_CATEGORY){
       gdf_error_code = nvcategory_gather(out_aggregation_columns[out_column_index],
-                                                  in_aggregation_columns[out_column_index]->dtype_info.category);
+                                         static_cast<NVCategory *>(in_aggregation_columns[out_column_index]->dtype_info.category));
       GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
     }
   }

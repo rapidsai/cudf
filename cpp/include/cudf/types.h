@@ -95,7 +95,7 @@ typedef enum {
 typedef struct {
   //here we can also hold info for decimal datatype or any other datatype that requires additional information
   gdf_time_unit time_unit; ///< Time Unit resolution
-  NVCategory * category; ///< Categories related to the GDF_STRING_CATEGORY datatype
+  void * category; ///< Categories related to the GDF_STRING_CATEGORY datatype
 } gdf_dtype_extra_info;
 
 

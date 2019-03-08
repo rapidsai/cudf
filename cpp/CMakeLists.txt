@@ -191,7 +191,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
-            src/string/nvcategory_util.cu
+            src/string/nvcategory_util.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
