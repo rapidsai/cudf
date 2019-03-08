@@ -132,11 +132,18 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
         TypeParam const w0{t0};
         TypeParam const w1{t1};
 
-        EXPECT_EQ(t0+t1, TypeParam{w0+w1}.value);
-        EXPECT_EQ(t0-t1, TypeParam{w0-w1}.value);
-        EXPECT_EQ(t0*t1, TypeParam{w0*w1}.value);
-        if(0 != t1)
-            EXPECT_EQ(t0/t1, TypeParam{w0/w1}.value);
+        // Types smaller than int are implicitly promoted to `int` for
+        // arithmetic operations. Therefore, need to convert it back to the
+        // original type
+        EXPECT_EQ(static_cast<UnderlyingType>(t0 + t1),
+                  TypeParam{w0 + w1}.value);
+        EXPECT_EQ(static_cast<UnderlyingType>(t0 - t1),
+                  TypeParam{w0 - w1}.value);
+        EXPECT_EQ(static_cast<UnderlyingType>(t0 * t1),
+                  TypeParam{w0 * w1}.value);
+        if (0 != t1)
+          EXPECT_EQ(static_cast<UnderlyingType>(t0 / t1),
+                    TypeParam{w0 / w1}.value);
     }
 }
 
