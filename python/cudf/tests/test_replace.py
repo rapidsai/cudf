@@ -122,6 +122,7 @@ def test_fillna_categorical(fill_type, null_value):
 
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     'fill_type',
     ['scalar', 'series'])
