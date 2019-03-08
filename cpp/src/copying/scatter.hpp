@@ -13,19 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "gtest/gtest.h"
-#include <cuda_runtime_api.h>
-#include <cstring>
 
-#include <cudf.h>
-#include <rmm/rmm.h>
+#ifndef SCATTER_HPP
+#define SCATTER_HPP
 
-// If this test fails, it means an error code was added without
-// adding support to gdf_error_get_name().
-TEST(GdfInternalTest, NameEveryError) {
-	for (int i = 0; i < N_GDF_ERRORS; i++)
-    {
-        const char *res = gdf_error_get_name((gdf_error)i);
-        ASSERT_EQ(0, strstr(res, "Unknown error"));
-    }
-}
+namespace cudf {
+
+// Forward declaration
+struct table;
+
+namespace detail {
+
+gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
+                  table* destination_table, cudaStream_t stream = 0);
+
+}  // namespace detail
+
+}  // namespace cudf
+
+#endif

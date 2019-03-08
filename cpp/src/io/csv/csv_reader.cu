@@ -49,7 +49,7 @@
 #include "datetime_parser.cuh"
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 
