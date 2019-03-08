@@ -37,9 +37,6 @@ cdef extern from "cudf.h" nogil:
     ctypedef int     gdf_category
     ctypedef int     gdf_nvstring_category
 
-    cdef cppclass NVCategory:
-        pass
-
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
         GDF_INT8,

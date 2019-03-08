@@ -139,8 +139,8 @@ def column_select_by_position(column, positions):
 
 
 def build_column(buffer, dtype, mask=None, categories=None):
-    from cudf.dataframe import numerical, categorical, datetime
-    if dtype == 'datetime64[ms]':
+    from cudf.dataframe import numerical, categorical, datetime, string
+    if np.dtype(dtype).type == np.datetime64:
         return datetime.DatetimeColumn(data=buffer,
                                        dtype=np.dtype(dtype),
                                        mask=mask)
@@ -150,6 +150,10 @@ def build_column(buffer, dtype, mask=None, categories=None):
                                              categories=categories,
                                              ordered=False,
                                              mask=mask)
+    elif np.dtype(dtype).type in (np.object_, np.str_):
+        if not isinstance(buffer, nvstrings.nvstrings):
+            raise TypeError
+        return string.StringColumn(data=buffer)
     else:
         return numerical.NumericalColumn(data=buffer,
                                          dtype=dtype,

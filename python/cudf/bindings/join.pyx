@@ -15,6 +15,7 @@ import pandas as pd
 import pyarrow as pa
 
 from librmm_cffi import librmm as rmm
+import nvcategory
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
@@ -143,18 +144,48 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef uintptr_t valid_ptr
 
     for idx in range(result_num_cols):
-        data_ptr = <uintptr_t>result_cols[idx].data
-        res.append(rmm.device_array_from_ptr(ptr=data_ptr,
-                                             nelem= result_cols[idx].size,
-                                             dtype=gdf_to_np_dtype( result_cols[idx].dtype),
-                                             finalizer=rmm._make_finalizer(
-                                                 data_ptr, 0)))
-        valid_ptr = <uintptr_t>result_cols[idx].valid
-        valids.append(rmm.device_array_from_ptr(ptr=valid_ptr,
-                                                nelem=calc_chunk_size(
-                                                    result_cols[idx].size, mask_bitsize),
-                                                dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(
-                                                    valid_ptr, 0)))
+        col_dtype = gdf_to_np_dtype(result_cols[idx].dtype)
+        if col_dtype == np.object_:
+            nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
+            nvcat_obj = nvcategory.nvcategory(int(nvcat_ptr))
+            nvstr_obj = nvcat_obj.to_strings()
+            res.append(nvstr_obj)
+            data_ptr = <uintptr_t>result_cols[idx].data
+            # We need to create this just to make sure the memory is properly freed
+            tmp_data = rmm.device_array_from_ptr(
+                ptr=data_ptr,
+                nelem= result_cols[idx].size,
+                dtype='int32',
+                finalizer=rmm._make_finalizer(data_ptr, 0)
+            )
+            del(tmp_data)
+            valid_ptr = <uintptr_t>result_cols[idx].valid
+            valids.append(
+                rmm.device_array_from_ptr(
+                    ptr=valid_ptr,
+                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(valid_ptr, 0)
+                )
+            )
+        else:
+            data_ptr = <uintptr_t>result_cols[idx].data
+            res.append(
+                rmm.device_array_from_ptr(
+                    ptr=data_ptr,
+                    nelem= result_cols[idx].size,
+                    dtype=col_dtype,
+                    finalizer=rmm._make_finalizer(data_ptr, 0)
+                )
+            )
+            valid_ptr = <uintptr_t>result_cols[idx].valid
+            valids.append(
+                rmm.device_array_from_ptr(
+                    ptr=valid_ptr,
+                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(valid_ptr, 0)
+                )
+            )
 
     return res, valids

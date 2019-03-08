@@ -335,6 +335,8 @@ class StringColumn(columnops.TypedColumnBase):
             null_count = data.null_count()
         self._null_count = null_count
         self._mask = None
+        self._nvcategory = None
+        self._indices = None
 
     # def serialize(self, serialize):
     #     header, frames = super(StringColumn, self).serialize(serialize)
@@ -385,6 +387,22 @@ class StringColumn(columnops.TypedColumnBase):
             self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
             self._mask = Buffer(out_mask_arr)
         return self._mask
+
+    @property
+    def nvcategory(self):
+        if self._nvcategory is None:
+            import nvcategory as nvc
+            self._nvcategory = nvc.from_strings(self.data)
+        return self._nvcategory
+
+    @property
+    def indices(self):
+        if self._indices is None:
+            out_dev_arr = rmm.device_array(len(self), dtype='int32')
+            ptr = get_ctype_ptr(out_dev_arr)
+            self.nvcategory.values(devptr=ptr)
+            self._indices = Buffer(out_dev_arr)
+        return self._indices
 
     def element_indexing(self, arg):
         if isinstance(arg, Number):

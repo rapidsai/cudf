@@ -12,6 +12,7 @@ from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
 from cudf import _gdf
 from cudf.utils import cudautils, utils
@@ -40,7 +41,6 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs, dtype=None):
-        import nvstrings
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
@@ -98,13 +98,16 @@ class Column(object):
     def from_cffi_view(cffi_view):
         """Create a Column object from a cffi struct gdf_column*.
         """
+        from cudf.dataframe import columnops
+
         data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
-        data_buf = Buffer(data_mem)
-
-        if mask_mem is not None:
-            mask = Buffer(mask_mem)
-
-        return Column(data=data_buf, mask=mask)
+        if isinstance(data_mem, nvstrings.nvstrings):
+            return columnops.build_column(data=data_mem)
+        else:
+            data_buf = Buffer(data_mem)
+            if mask_mem is not None:
+                mask = Buffer(mask_mem)
+            return columnops.build_column(data=data_buf, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """
@@ -215,11 +218,25 @@ class Column(object):
     def cffi_view(self):
         """LibGDF CFFI view
         """
-        return _gdf.columnview(size=self._data.size,
-                               data=self._data,
-                               mask=self._mask,
-                               dtype=self.dtype,
-                               null_count=self._null_count)
+        if self.dtype == np.dtype('object'):
+            nvcat = self.nvcategory
+            return _gdf.columnview(
+                size=self._data.size,
+                data=self.indices,
+                mask=self._mask,
+                dtype=self.dtype,
+                null_count=self._null_count,
+                nvcat=nvcat
+            )
+        else:
+            return _gdf.columnview(
+                size=self._data.size,
+                data=self._data,
+                mask=self._mask,
+                dtype=self.dtype,
+                null_count=self._null_count,
+                nvcat=nvcat
+            )
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask

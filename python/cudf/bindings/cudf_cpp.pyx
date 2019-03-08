@@ -89,7 +89,7 @@ cdef gdf_column* column_view_from_column(col):
     cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
-    cdef NVCategory category
+    cdef uintptr_t category
 
     if pd.api.types.is_categorical_dtype(col.dtype):
         g_dtype = dtypes[col.data.dtype.type]
@@ -97,9 +97,9 @@ cdef gdf_column* column_view_from_column(col):
         g_dtype = dtypes[col.dtype.type]
 
     if g_dtype == GDF_STRING_CATEGORY:
-        category = col.data.get_cpointer()
+        category = col.nvcategory.get_cpointer()
         if len(col) > 0:
-            data_ptr = col.data.values_cpointer()
+            data_ptr = get_ctype_ptr(col.indices)
         else:
             data_ptr = 0
     else:
@@ -120,7 +120,7 @@ cdef gdf_column* column_view_from_column(col):
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit = TIME_UNIT_NONE,
-        category = <NVCategory*> category
+        category = <void*> category
     )
 
     with nogil:
@@ -187,7 +187,7 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef gdf_size_type c_null_count = null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit = TIME_UNIT_NONE
-        category = <NVCategory*> NULL
+        category = <void*> NULL
     )
     
     with nogil:
