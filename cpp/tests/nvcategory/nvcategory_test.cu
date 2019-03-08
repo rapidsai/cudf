@@ -10,6 +10,7 @@
 #include <random>
 
 #include <nvstrings/NVCategory.h>
+
 #include "rmm/rmm.h"
 #include <cstring>
 #include "tests/utilities/cudf_test_utils.cuh"
