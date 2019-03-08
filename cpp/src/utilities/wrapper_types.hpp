@@ -59,7 +59,7 @@ struct wrapper
   value_type value;                                              ///< The wrapped value
 
   CUDA_HOST_DEVICE_CALLABLE
-  explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(T v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }
@@ -300,7 +300,18 @@ using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 
 using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 
-using bool8 	= detail::wrapper<gdf_bool, GDF_BOOL>;
+using bool8 = detail::wrapper<gdf_bool, GDF_BOOL>;
+
+// This is necessary for global, constant, non-fundamental types
+#define HOST_DEVICE_CONSTANT
+#ifdef __CUDA_ARCH__
+__device__ __constant__ static bool8 true_v{gdf_bool{1}};
+
+__device__ __constant__ static bool8 false_v{gdf_bool{0}};
+#else
+static constexpr bool8 true_v{gdf_bool{1}};
+static constexpr bool8 false_v{gdf_bool{0}};
+#endif
 
 
 } // namespace cudf
