@@ -573,13 +573,23 @@ gdf_error join_call_compute_df(
         int col_width;
         get_column_byte_width(new_left_column, &col_width);
         RMM_TRY( RMM_ALLOC(&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC(&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
-        CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+        if(left_original_column->valid != nullptr){
+          RMM_TRY( RMM_ALLOC(&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+        }else{
+          new_left_column->valid = nullptr;
+        }
+        new_left_column->null_count = left_original_column->null_count;
+
 
         RMM_TRY( RMM_ALLOC(&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC(&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
-        CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
-
+        if(right_original_column->valid != nullptr){
+          RMM_TRY( RMM_ALLOC(&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
+        }else{
+          new_right_column->valid = nullptr;
+        }
+        new_right_column->null_count = right_original_column->null_count;
         gdf_error err = sync_column_categories(input_join_columns_merge,
             new_join_columns,
             2);
