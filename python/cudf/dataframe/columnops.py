@@ -63,6 +63,20 @@ class TypedColumnBase(Column):
         params.update(dict(dtype=self._dtype))
         return params
 
+    def _mimic_inplace(self, result, inplace=False):
+        """
+        Used to mimic an inplace operation by copying data from the
+        result of an out-of-place operation.
+
+        If ``inplace`` is ``True``, copy data from ``result`` to ``self``.
+        Otherwise, return ``result`` unchanged.
+        """
+        if inplace:
+            self._data = result._data
+            self._mask = result._mask
+        else:
+            return result
+
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
         return inds
