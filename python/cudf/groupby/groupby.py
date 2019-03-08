@@ -10,6 +10,7 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
+from cudf.utils.cudautils import zeros
 from cudf._gdf import nvtx_range_pop
 import cudf.dataframe.index as index
 
@@ -157,28 +158,74 @@ class Groupby(object):
             # aggregated results will be in the same order for GDF_SORT method
             if need_to_index:
                 out_col_indices_series = Series(
-                    Buffer(rmm.device_array(col_agg.size, dtype=np.int32)))
+                    Buffer(
+                        rmm.device_array(
+                            col_agg.size,
+                            dtype=np.int32
+                        )
+                    )
+                )
                 out_col_indices = out_col_indices_series._column.cffi_view
             else:
                 out_col_indices = ffi.NULL
 
-            out_col_values_series = [Series(Buffer(rmm.device_array(
-                col_agg.size,
-                dtype=self._df[self._by[i]]._column.data.dtype)))
-                for i in range(0, ncols)]
+            out_col_values_series = []
+            for i in range(0, ncols):
+                if self._df[self._by[i]].dtype == np.dtype('object'):
+                    # This isn't ideal, but no better way to create an
+                    # nvstrings object of correct size
+                    gather_map = zeros(col_agg.size, dtype='int32')
+                    col = Series([None], dtype='str')[gather_map]
+                else:
+                    col = Series(
+                        Buffer(
+                            rmm.device_array(
+                                col_agg.size,
+                                dtype=self._df[self._by[i]]._column.data.dtype
+                            )
+                        )
+                    )
+                out_col_values_series.append(col)
             out_col_values = [
                 out_col_values_series[i]._column.cffi_view
                 for i in range(0, ncols)]
 
             if agg_type == "count":
                 out_col_agg_series = Series(
-                    Buffer(rmm.device_array(col_agg.size, dtype=np.int64)))
+                    Buffer(
+                        rmm.device_array(
+                            col_agg.size,
+                            dtype=np.int64
+                        )
+                    )
+                )
             elif agg_type == "mean":
                 out_col_agg_series = Series(
-                    Buffer(rmm.device_array(col_agg.size, dtype=np.float64)))
+                    Buffer(
+                        rmm.device_array(
+                            col_agg.size,
+                            dtype=np.float64
+                        )
+                    )
+                )
             else:
-                out_col_agg_series = Series(Buffer(rmm.device_array(
-                    col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
+                if self._df[val_col].dtype == np.dtype('object'):
+                    # This isn't ideal, but no better way to create an
+                    # nvstrings object of correct size
+                    gather_map = zeros(col_agg.size, dtype='int32')
+                    out_col_agg_series = Series(
+                        [None],
+                        dtype='str'
+                    )[gather_map]
+                else:
+                    out_col_agg_series = Series(
+                        Buffer(
+                            rmm.device_array(
+                                col_agg.size,
+                                dtype=self._df[val_col]._column.data.dtype
+                            )
+                        )
+                    )
 
             out_col_agg = out_col_agg_series._column.cffi_view
 
@@ -210,7 +257,8 @@ class Groupby(object):
                         result[thisBy] = CategoricalColumn(
                             data=result[thisBy].data,
                             categories=self._df[thisBy].cat.categories,
-                            ordered=self._df[thisBy].cat.ordered)
+                            ordered=self._df[thisBy].cat.ordered
+                        )
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index(drop=True)

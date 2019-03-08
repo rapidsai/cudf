@@ -223,7 +223,7 @@ class Column(object):
         if self.dtype == np.dtype('object'):
             nvcat = self.nvcategory
             return _gdf.columnview(
-                size=self._data.size,
+                size=self.indices.size,
                 data=self.indices,
                 mask=self._mask,
                 dtype=self.dtype,
