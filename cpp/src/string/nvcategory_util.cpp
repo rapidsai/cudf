@@ -46,6 +46,19 @@ gdf_error validate_categories(gdf_column * input_columns[], int num_columns, gdf
   return GDF_SUCCESS;
 }
 
+NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
+  NVCategory * combined_category = static_cast<NVCategory *>(
+        input_columns[0]->dtype_info.category)->copy();
+
+    for(int column_index = 1; column_index < num_columns; column_index++){
+      NVCategory * temp = combined_category;
+      combined_category = combined_category->merge_and_remap(
+          * static_cast<NVCategory *>(
+              input_columns[column_index]->dtype_info.category));
+      NVCategory::destroy(temp);
+    }
+    return combined_category;
+}
 
 gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns){
 
@@ -56,33 +69,19 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
   GDF_REQUIRE(output_column->dtype == GDF_STRING_CATEGORY,GDF_UNSUPPORTED_DTYPE);
   //TODO: we have no way to jsut copy a category this will fail if someone calls concat
   //on a single input
-  GDF_REQUIRE(num_columns >= 2,GDF_DATASET_EMPTY);
-  NVCategory * new_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
-  NVCategory * temp_category;
+  GDF_REQUIRE(num_columns >= 1,GDF_DATASET_EMPTY);
 
-  for (int i = 1; i < num_columns; i++) {
-    NVStrings * temp_strings = static_cast<NVCategory *>(input_columns[i]->dtype_info.category)->to_strings();
-    temp_category = new_category->add_strings(*temp_strings); //this is the only way to add to a category and keep the dictionary sorted
-    if(i > 1){
-      //only destroy categoryy after first iteration
-      NVCategory::destroy(new_category);
-
-    }
-
-    NVStrings::destroy(temp_strings);
-
-    new_category = temp_category;
-  }
-
-  new_category->get_values(
-      static_cast<nv_category_index_type *>(output_column->data),
-      true);
-  output_column->dtype_info.category = (void *) new_category;
+  NVCategory * combined_category = combine_column_categories(input_columns,num_columns);
+  combined_category->get_values(
+        static_cast<nv_category_index_type *>(output_column->data),
+        true);
+  output_column->dtype_info.category = (void *) combined_category;
 
 
 
   return GDF_SUCCESS;
 }
+
 
 gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns){
 
@@ -99,38 +98,25 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
     GDF_REQUIRE(input_columns[column_index]->size == output_columns[column_index]->size,GDF_COLUMN_SIZE_MISMATCH);
   }
 
-  std::vector<NVStrings *> temp_strs(num_columns);
+  NVCategory * combined_category = combine_column_categories(input_columns,num_columns);
 
+  gdf_size_type current_column_start_position = 0;
   for(int column_index = 0; column_index < num_columns; column_index++){
-    temp_strs[column_index] = static_cast<NVCategory *>(input_columns[column_index]->dtype_info.category)->to_strings();
-  }
-
-  NVCategory ** new_categories = new NVCategory*[num_columns];
-
-  for(int column_index_x = 0; column_index_x < num_columns; column_index_x++){
-    for(int column_index_y = 0; column_index_y < num_columns; column_index_y++){
-      if(column_index_x != column_index_y){
-        new_categories[column_index_x] = static_cast<NVCategory *>(output_columns[column_index_x]->dtype_info.category)->add_strings(*temp_strs[column_index_y]);
-      }
-    }
-  }
-
-  std::vector<cudaError_t> cuda_err(num_columns);
-  for(int column_index = 0; column_index < num_columns; column_index++){
-    if(output_columns[column_index]->dtype_info.category != nullptr){
-      NVCategory::destroy(static_cast<NVCategory *>(output_columns[column_index]->dtype_info.category));
-    }
-
-    output_columns[column_index]->dtype_info.category = (void *) new_categories[column_index];
-
-    size_t size_to_copy = sizeof(nv_category_index_type) * output_columns[column_index]->size;
+    gdf_size_type column_size = output_columns[column_index]->size;
+    gdf_size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
     CUDA_TRY( cudaMemcpy(output_columns[column_index]->data,
-                         static_cast<NVCategory *>(output_columns[column_index]->dtype_info.category)->values_cptr(),
+                          combined_category->values_cptr() + current_column_start_position,
                          size_to_copy,
-                         cudaMemcpyDeviceToDevice));
+                          cudaMemcpyDeviceToDevice));
+
+    //TODO: becuase of how gather works we are making a copy to preserve dictionaries as the same
+    //this has an overhead of having to store more than is necessary. remove when gather preserving dictionary is available for nvcategory
+    output_columns[column_index]->dtype_info.category = combined_category->copy();
+
+    current_column_start_position += column_size;
   }
 
-
+  NVCategory::destroy(combined_category);
 
   return GDF_SUCCESS;
 }
