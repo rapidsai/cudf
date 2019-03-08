@@ -20,7 +20,7 @@ typedef int nv_category_index_type;
  * @param nv_category the category that contains the data these indices map to
  * @return a gdf_error indicating success or failure type
  */
-gdf_error create_nvcategory_from_indices(gdf_column * column, NVCategory * nv_category);
+gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category);
 
 /**
  * Take a vector of columns of type GDF_STRING_CATEGORY and merge their dictionaries together in place
