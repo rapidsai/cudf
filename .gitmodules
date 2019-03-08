@@ -13,3 +13,4 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
+	branch = cudf
