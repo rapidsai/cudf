@@ -19,14 +19,13 @@ namespace { // anonymous namespace
 /*
 Generic reduction implementation with support for validity mask
 */
-
-template<typename T, typename F, typename Ld>
+template<typename T_in, typename T_out, typename F, typename Ld>
 __global__
-void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T *results, F functor, T identity,
+void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
+                      gdf_size_type size, T_out *results, F functor, T_out identity,
                       Ld loader)
 {
-    typedef cub::BlockReduce<T, REDUCTION_BLOCK_SIZE> BlockReduce;
+    typedef cub::BlockReduce<T_out, REDUCTION_BLOCK_SIZE> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
     int tid = threadIdx.x;
@@ -36,18 +35,18 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
 
     int step = blksz * gridsz;
 
-    T agg = identity;
+    T_out agg = identity;
 
     for (int base=blkid * blksz; base<size; base+=step) {
         // Threadblock synchronous loop
         int i = base + tid;
         // load
-        T loaded = identity;
+        T_out loaded = identity;
         if (i < size && gdf_is_valid(mask, i))
             loaded = loader(data, i);
 
         // Block reduce
-        T temp = BlockReduce(temp_storage).Reduce(loaded, functor);
+        T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
         // Add current block
         agg = functor(agg, temp);
     }
@@ -58,16 +57,14 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
     }
 }
 
-
-
-template<typename T, typename Op>
-gdf_error ReduceOp(gdf_column *input, T *output)
+template<typename T_in, typename T_out, typename Op>
+gdf_error ReduceOp(const gdf_column *input, T_out *output)
 {
-    T identity = Op::template identity<T>();
+    T_out identity = Op::template identity<T_out>();
 
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(output, &identity,
-            sizeof(T), cudaMemcpyHostToDevice, 0));
+            sizeof(T_out), cudaMemcpyHostToDevice, 0));
     CUDA_CHECK_LAST();
 
     int blocksize = REDUCTION_BLOCK_SIZE;
@@ -77,10 +74,11 @@ gdf_error ReduceOp(gdf_column *input, T *output)
     typename Op::Loader loader;
     Op functor;
 
-    // launch kernel
     gpu_reduction_op<<<gridsize, blocksize>>>(
-        (const T*)input->data, input->valid, input->size, (T*)output,
-        functor, identity, loader
+        & cudf::detail::unwrap(* ((const T_in*)input->data )),
+        input->valid, input->size,
+        & cudf::detail::unwrap(*output),
+        functor, cudf::detail::unwrap(identity), loader
     );
 
     CUDA_CHECK_LAST();
@@ -89,44 +87,63 @@ gdf_error ReduceOp(gdf_column *input, T *output)
 };
 
 
-template <typename Op>
-struct ReduceDispatcher {
-    static constexpr bool is_nonarithmetic_op =
-        std::is_same<Op, DeviceMin>::value ||
-        std::is_same<Op, DeviceMax>::value ;
-
-    template <typename T>
-    gdf_error launch(gdf_column *col, void *dev_result)
+template <typename T_in, typename Op>
+struct ReduceOutputDispatcher {
+private:
+    // return true if both are same type (e.g. date, timestamp...)
+    // or both are arithmetic types.
+    template <typename T, typename U>
+    static constexpr bool is_convertable()
     {
-        GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
-        return ReduceOp<T, Op>(col, static_cast<T*>(dev_result));
+        return std::is_same<T, U>::value ||
+            ( std::is_arithmetic<T>::value && std::is_arithmetic<U>::value );
     }
 
-    template <typename T, typename std::enable_if<
-                std::is_arithmetic<T>::value>::type* = nullptr>
-    gdf_error operator()(gdf_column *col, void *dev_result)
+public:
+    template <typename T_out, typename std::enable_if<
+                is_convertable<T_in, T_out>() >::type* = nullptr >
+    gdf_error operator()(const gdf_column *col, void *dev_result)
     {
-        return launch<T>(col, dev_result);
+        return ReduceOp<T_in, T_out, Op>
+            (col, static_cast<T_out*>(dev_result));
     }
 
-    template <typename T, typename std::enable_if<
-                  !std::is_arithmetic<T>::value && is_nonarithmetic_op
-              >::type* = nullptr>
-    gdf_error operator()(gdf_column *col, void *dev_result)
-    {
-        using UnderlyingType = typename T::value_type;
-        return launch<UnderlyingType>(col, dev_result);
-    }
-
-    template <typename T, typename std::enable_if<
-                  !std::is_arithmetic<T>::value && !is_nonarithmetic_op
-              >::type* = nullptr>
-    gdf_error operator()(gdf_column *col, void *dev_result)
+    template <typename T_out, typename std::enable_if<
+                !is_convertable<T_in, T_out>() >::type* = nullptr >
+    gdf_error operator()(const gdf_column *col, void *dev_result)
     {
         return GDF_UNSUPPORTED_DTYPE;
     }
 };
 
+template <typename Op>
+struct ReduceDispatcher {
+private:
+    // return true if T is arithmetic type
+    // or if Op is DeviceMin or DeviceMax for non-arithmetic types
+    template <typename T>
+    static constexpr bool is_supported()
+    {
+        return std::is_arithmetic<T>::value ||
+               std::is_same<Op, DeviceMin>::value ||
+               std::is_same<Op, DeviceMax>::value;
+    }
+
+public:
+    template <typename T, typename std::enable_if<is_supported<T>()>::type* = nullptr>
+    gdf_error operator()(const gdf_column *col, void *dev_result, gdf_dtype output_dtype)
+    {
+        GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
+        return cudf::type_dispatcher(output_dtype,
+            ReduceOutputDispatcher<T, Op>(), col, dev_result);
+    }
+
+    template <typename T, typename std::enable_if<!is_supported<T>()>::type* = nullptr>
+    gdf_error operator()(const gdf_column *col, void *dev_result, gdf_dtype output_dtype)
+    {
+        return GDF_UNSUPPORTED_DTYPE;
+    }
+};
 
 }   // anonymous namespace
 
@@ -139,65 +156,65 @@ typedef enum {
 } gdf_reduction_op;
 
 
-gdf_error gdf_reduction(gdf_column *col,
+gdf_error gdf_reduction(const gdf_column *col,
                   gdf_reduction_op op,
-                  void *dev_result)
+                  void *dev_result, gdf_dtype output_dtype)
 {
     switch(op){
     case GDF_REDUCTION_SUM:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSum>(), col, dev_result);
+            ReduceDispatcher<DeviceSum>(), col, dev_result, output_dtype);
     case GDF_REDUCTION_MIN:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMin>(), col, dev_result);
+            ReduceDispatcher<DeviceMin>(), col, dev_result, output_dtype);
     case GDF_REDUCTION_MAX:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMax>(), col, dev_result);
+            ReduceDispatcher<DeviceMax>(), col, dev_result, output_dtype);
     case GDF_REDUCTION_PRODUCTION:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceProduct>(), col, dev_result);
+            ReduceDispatcher<DeviceProduct>(), col, dev_result, output_dtype);
     case GDF_REDUCTION_SUMOFSQUARES:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSumOfSquares>(), col, dev_result);
+            ReduceDispatcher<DeviceSumOfSquares>(),
+            col, dev_result, output_dtype);
     default:
         return GDF_INVALID_API_CALL;
     }
 }
 
-// ToDo: remove these APIs
 gdf_error gdf_sum(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_SUM, dev_result);
+    return gdf_reduction(col, GDF_REDUCTION_SUM, dev_result, col->dtype);
 }
 
 gdf_error gdf_product(gdf_column *col,
                       void *dev_result,
                       gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_PRODUCTION, dev_result);
+    return gdf_reduction(col, GDF_REDUCTION_PRODUCTION, dev_result, col->dtype);
 }
 
 gdf_error gdf_sum_of_squares(gdf_column *col,
                              void *dev_result,
                              gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_SUMOFSQUARES, dev_result);
+    return gdf_reduction(col, GDF_REDUCTION_SUMOFSQUARES, dev_result, col->dtype);
 }
 
 gdf_error gdf_min(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_MIN, dev_result);
+    return gdf_reduction(col, GDF_REDUCTION_MIN, dev_result, col->dtype);
 }
 
 gdf_error gdf_max(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_MAX, dev_result);
+    return gdf_reduction(col, GDF_REDUCTION_MAX, dev_result, col->dtype);
 }
 
 

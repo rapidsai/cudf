@@ -55,7 +55,9 @@ double genericAtomicCAS(
         addr, expected, new_value);
 }
 
+
 // int8_t/int16_t assumes that the address of addr must aligned with int32_t
+// need align free genericAtomicCAS for int8_t/int16_t
 template <>
 __forceinline__  __device__
 int8_t genericAtomicCAS(
