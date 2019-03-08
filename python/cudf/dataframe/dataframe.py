@@ -1988,7 +1988,7 @@ class DataFrame(object):
         2  3  5
         """
         if inplace:
-            outdf = {} # this dict will just hold Nones
+            outdf = {}  # this dict will just hold Nones
         else:
             outdf = self.copy()
 
