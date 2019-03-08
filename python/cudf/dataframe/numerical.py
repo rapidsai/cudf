@@ -130,17 +130,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self
         elif (dtype == np.dtype('object') or
               np.issubdtype(dtype, np.dtype('U').type)):
-            if self.null_count > 0:
-                raise NotImplementedError(
-                    "nulls are not yet supported for conversion to string "
-                    "dtype"
-                )
             import nvstrings
             if np.issubdtype(self.dtype, np.signedinteger):
                 dev_array = self.astype('int32').data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
+                null_ptr = get_ctype_ptr(self.mask.mem)
                 return string.StringColumn(
-                    data=nvstrings.itos(dev_ptr, count=len(self), bdevmem=True)
+                    data=nvstrings.itos(
+                        dev_ptr,
+                        count=len(self),
+                        nulls=null_ptr,
+                        bdevmem=True
+                    )
                 )
             elif np.issubdtype(self.dtype, np.floating):
                 raise NotImplementedError(
