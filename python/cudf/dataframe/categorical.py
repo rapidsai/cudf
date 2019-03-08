@@ -327,12 +327,16 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         result = self.copy()
         if np.isscalar(fill_value):
+            if fill_value not in self.cat().categories:
+                raise ValueError("fill value must be in categories")
             fill_value_col = columnops.as_column(
                 pd.Categorical(fill_value,
                                categories=self.cat().categories))
         else:
             fill_value_col = columnops.as_column(
                 fill_value, nan_as_null=False)
+            # if fill_value has only a subset of the categories:
+            fill_value_col = fill_value_col.cat()._set_categories(self.cat().categories)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
         return result
