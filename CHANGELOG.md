@@ -55,6 +55,7 @@
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
+- PR #1136 Removed `gdf_concat` 
 
 ## Improvements
 
@@ -94,6 +95,7 @@
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
+- PR #1128 CSV Reader: The last data row does not need to be line terminated
 
 
 ## Bug Fixes
@@ -136,8 +138,11 @@
 - PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
+- PR #1145 Issue with .agg call on multi-column dataframes
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
@@ -184,8 +189,11 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #577 Added external C++ API for scatter/gather functions
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
 - PR #664 Added Debuging instructions to README

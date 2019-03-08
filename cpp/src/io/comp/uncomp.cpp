@@ -419,6 +419,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
             else if (bz_err == 0)
             {
                 uncomp_len = dst_len;
+                dst.resize(uncomp_len);
             }
         } while (bz_err == BZ_OUTBUFF_FULL);
         if (bz_err != 0)

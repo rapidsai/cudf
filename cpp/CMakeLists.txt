@@ -216,7 +216,9 @@ add_library(cudf SHARED
             src/io/comp/cpu_unbz2.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
-            src/utilities/nvtx/nvtx_utils.cpp)
+            src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

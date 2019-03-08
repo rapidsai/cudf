@@ -63,8 +63,11 @@ create_missing_indices(
 	thrust::device_vector<index_type> invalid_index_map(max_index_value, 1);
 	//Vector allocated for unmatched result
 	thrust::device_vector<index_type> unmatched_indices(max_index_value);
-	//Functor to check for index validity since left joins can create invalid indices
-	ValidRange<size_type> valid_range(0, max_index_value);
+	//lambda to check for index validity since left joins can create invalid indices
+    auto bounds_checker =
+    [max_index_value] __device__(gdf_index_type index) {
+        return ((index >= 0) && (index < max_index_value));
+    };
 
 	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
 	//Thus specifying that those locations are valid
@@ -75,7 +78,7 @@ create_missing_indices(
 			index_ptr,//Index locations
 			index_ptr,//Stencil - Check if index location is valid
 			invalid_index_map.begin(),//Output indices
-			valid_range);//Stencil Predicate
+			bounds_checker);//Stencil Predicate
 	size_type begin_counter = static_cast<size_type>(0);
 	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
 	//Create list of indices that have been marked as invalid

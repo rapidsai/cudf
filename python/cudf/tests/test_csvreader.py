@@ -183,7 +183,7 @@ def test_csv_reader_negative_vals(tmpdir):
              '-127.6300,-230.54600,-9']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     zero = [-181.5060, -127.6300]
     one = [-185.370, -230.54600]
@@ -204,7 +204,7 @@ def test_csv_reader_strings(tmpdir):
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
                             decimal='.', thousands="'")
@@ -226,7 +226,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
     lines = [','.join(names), '"a,\n",0', '"b ""c"" d",0', 'e,0', '"f,,!.,",0']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
                             quotechar='\"', quoting=1)
@@ -306,7 +306,7 @@ def test_csv_reader_float_decimal(tmpdir):
              '5,6e0;0,5679e2;1,2e10;0,07e-001;0,0']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     basic_32_ref = [1.2, 3.4, 5.6]
     basic_64_ref = [1234.5678, 3456.7890, 56.79]
@@ -370,7 +370,7 @@ def test_csv_reader_thousands(tmpdir):
              "12'345.6, 123'456.7, 12'345, 123'456'789"]
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     f32_ref = [1234.5, 12345.6]
     f64_ref = [1234.567, 123456.7]
@@ -393,7 +393,7 @@ def test_csv_reader_buffer():
              "1234.5, 1234567, 11/22/1995",
              "12345.6, 12345, 1/2/2002"]
 
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     f32_ref = [1234.5, 12345.6]
     int32_ref = [1234567, 12345]
@@ -419,7 +419,7 @@ def test_csv_reader_buffer_strings():
     dtypes = ['str', 'int']
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     cols_str = read_csv_strings(StringIO(buffer),
                                 names=names, dtype=dtypes, skiprows=1)
@@ -471,7 +471,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     lines = [','.join(names), data]
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     # Usage of true_values and false_values makes that column into bool type
     df_out = pd.read_csv(fname, names=names, skiprows=1,
@@ -493,7 +493,7 @@ def test_csv_quotednumbers(tmpdir):
              '1,"3.14"', '"2","300"', '"3",10101.0101', '4,"6.28318"']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     integer_ref = [1, 2, 3, 4]
     decimal_ref = [3.14, 300, 10101.0101, 6.28318]
@@ -582,7 +582,7 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
     with open(str(fname), 'w') as fp:
-        fp.write('\n'.join(lines) + '\n')
+        fp.write('\n'.join(lines))
 
     with open(str(fname), 'rb') as f_in, gzip.open(str(fnamez), 'wb') as f_out:
         shutil.copyfileobj(f_in, f_out)
@@ -612,7 +612,7 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
              '4.5, 4',
              '5.6, 5',
              '6.7, 6']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     cu_df = read_csv(StringIO(buffer), dtype=dtypes,
                      skiprows=skip_rows, header=header_row)
@@ -632,7 +632,7 @@ def test_csv_reader_dtype_inference():
              '4.5,4',
              '5.6,5',
              '6.7,6']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
 
@@ -649,7 +649,7 @@ def test_csv_reader_dtype_inference_whitespace():
              ' 4.5,4',
              '5.6,  5',
              ' 6.7,6 ']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
 
@@ -660,7 +660,7 @@ def test_csv_reader_dtype_inference_whitespace():
 def test_csv_reader_empty_dataframe():
 
     dtypes = ['float64', 'int64']
-    buffer = 'float_point, integer\n'
+    buffer = 'float_point, integer'
 
     # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
@@ -723,7 +723,7 @@ def test_csv_reader_tabs():
              '3.4\t,\t34\t,\t 01/01/2001',
              '\t 5.6,56 \t, 12/12/1970',
              '\t7.8 , 78\t,06/15/2018 \t']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     df = read_csv(StringIO(buffer))
 
@@ -780,7 +780,7 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
              '# last comment line'
              '\n',
              '1,1,1']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     cu_df = read_csv(StringIO(buffer), comment='#', header=header_row,
                      skiprows=skip_rows, skip_blank_lines=skip_blanks)
@@ -794,7 +794,7 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
 def test_csv_reader_prefix():
 
     lines = ['1, 1, 1, 1']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     prefix_str = 'a_prefix'
     df = read_csv(StringIO(buffer), header=None, prefix=prefix_str)
@@ -807,7 +807,7 @@ def test_csv_reader_prefix():
 def test_csv_reader_category_hash():
 
     lines = ['HBM0676', 'KRC0842', 'ILM1441', 'EJV0094', 'ILM1441']
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     df = read_csv(StringIO(buffer), names=['user'], dtype=['category'])
 
@@ -816,7 +816,7 @@ def test_csv_reader_category_hash():
 
 
 def test_csv_reader_delim_whitespace():
-    buffer = '1    2  3\n4  5 6\n'
+    buffer = '1    2  3\n4  5 6'
 
     # with header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
@@ -837,7 +837,7 @@ def test_csv_reader_delim_whitespace():
 
 def test_csv_reader_unnamed_cols():
     # first and last columns are unnamed
-    buffer = ',1,2,3,\n4,5,6,7,8\n'
+    buffer = ',1,2,3,\n4,5,6,7,8'
 
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
@@ -847,7 +847,7 @@ def test_csv_reader_unnamed_cols():
 
 
 def test_csv_reader_header_quotation():
-    buffer = '"1,,1","2,\n,2",3\n4,5,6\n'
+    buffer = '"1,,1","2,\n,2",3\n4,5,6'
 
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
@@ -855,13 +855,13 @@ def test_csv_reader_header_quotation():
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
 
     # test cases that fail with pandas
-    buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6\n'
+    buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6'
     cu_df = read_csv(StringIO(buffer_pd_fail))
     assert(cu_df.shape == (1, 3))
 
 
 def test_csv_reader_oversized_byte_range():
-    buffer = 'a,b,c,d,e\n4,5,6,7,8\n'
+    buffer = 'a,b,c,d,e\n4,5,6,7,8'
 
     cu_df = read_csv(StringIO(buffer), byte_range=(0, 1024))
     pd_df = pd.read_csv(StringIO(buffer))
@@ -871,7 +871,7 @@ def test_csv_reader_oversized_byte_range():
 
 
 def test_csv_reader_index_col():
-    buffer = '0,1,2\n3,4,5\n6,7,8\n'
+    buffer = '0,1,2\n3,4,5\n6,7,8'
     names = ['int1', 'int2', 'int3']
 
     # using a column name
@@ -897,7 +897,7 @@ def test_csv_reader_bools_false_positives(tmpdir):
     # when using ints to detect bool values
     items = [3977, 4329, 24015, 27567]
 
-    buffer = '\n'.join(str(i) for i in items) + '\n'
+    buffer = '\n'.join(str(i) for i in items)
 
     df = read_csv(StringIO(buffer),
                   header=None, dtype=["int32"])
@@ -922,7 +922,7 @@ def test_csv_reader_hex_ints(tmpdir):
     lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
     values = [int(hex_int, 16) for hex_int in lines]
 
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     # with explicit data types
     df = read_csv(StringIO(buffer),
@@ -941,7 +941,7 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     dtypes = ['str']
     lines = ['"a"', '"b ""c"" d"', '"f!\n."']
 
-    buffer = '\n'.join(lines) + '\n'
+    buffer = '\n'.join(lines)
 
     cu_cols = read_csv_strings(StringIO(buffer),
                                names=names, dtype=dtypes, quoting=quoting)
