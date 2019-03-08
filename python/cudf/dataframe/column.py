@@ -106,6 +106,7 @@ class Column(object):
             return columnops.build_column(data_mem, dtype)
         else:
             data_buf = Buffer(data_mem)
+            mask = None
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
             return columnops.build_column(data_buf, dtype, mask=mask)

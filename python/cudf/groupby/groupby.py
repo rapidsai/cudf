@@ -8,6 +8,7 @@ from pandas.api.types import is_categorical_dtype
 
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
+from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
@@ -248,6 +249,12 @@ class Groupby(object):
 
             num_row_results = out_col_agg.size
 
+            # NVStrings columns are not the same going in as coming out
+            out_col_values_series = [
+                Column.from_cffi_view(col) for col in out_col_values
+            ]
+            out_col_agg_series = Column.from_cffi_view(out_col_agg)
+
             if first_run:
                 for i, thisBy in enumerate(self._by):
                     result[thisBy] = out_col_values_series[i][
@@ -260,6 +267,7 @@ class Groupby(object):
                             ordered=self._df[thisBy].cat.ordered
                         )
 
+            # print(out_col_agg_series)
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
