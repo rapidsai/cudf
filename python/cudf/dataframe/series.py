@@ -545,7 +545,17 @@ class Series(object):
     def fillna(self, value, method=None, limit=None, axis=None):
         """Fill null values with ``value``.
 
-        Returns a copy with null filled.
+        Parameters
+        ----------
+        value : scalar or Series-like
+            Value to use to fill nulls. If Series-like, null values
+            are filled with the values in corresponding indices of the
+            given Series.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
         """
         if method is not None:
             raise NotImplementedError("The method keyword is not supported")
