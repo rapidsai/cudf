@@ -66,8 +66,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gdf_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -199,6 +198,15 @@ set(NVCATEGORY_TEST_SRC
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
+# - copying tests -------------------------------------------------------------------------------------
+
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
@@ -206,6 +214,7 @@ set(UTILITIES_TEST_SRC
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
+###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
