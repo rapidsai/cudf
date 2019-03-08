@@ -337,7 +337,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
-        data = as_column(pa.array([arbitrary]))
+        data = as_column(pa.array([arbitrary], from_pandas=True))
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
