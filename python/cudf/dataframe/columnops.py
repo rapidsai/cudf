@@ -336,6 +336,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
+    elif isinstance(arbitrary, pd.Timestamp):
+        data = as_column(pa.array([arbitrary]))
+
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
             data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)

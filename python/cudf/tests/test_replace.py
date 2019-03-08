@@ -121,3 +121,22 @@ def test_fillna_categorical(fill_type, null_value):
     got = sr.fillna(fill_value)
 
     assert_eq(expect, got)
+
+@pytest.mark.parametrize(
+    'fill_type',
+    ['scalar', 'series'])
+def test_fillna_datetime(fill_type):
+    psr = pd.Series(pd.date_range('2010-01-01', '2020-01-10', freq='1y'))
+
+    if fill_type == 'scalar':
+        fill_value = pd.Timestamp('2010-01-02')
+    elif fill_type == 'series':
+        fill_value = psr + pd.Timedelta('1d')
+
+    psr[[5, 9]] = None
+    sr = Series.from_pandas(psr)
+
+    expect = psr.fillna(fill_value)
+    got = sr.fillna(fill_value)
+
+    assert_eq(expect, got)

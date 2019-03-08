@@ -194,17 +194,11 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def fillna(self, fill_value):
         result = self.copy()
-        if np.isscalar(fill_value):
-            if fill_value == self.default_na_value():
-                fill_value_col = columnops.as_column(
-                    fill_value, nan_as_null=False)
-            else:
-                fill_value_col = columnops.as_column(
-                    [pd.to_datetime(fill_value)],
-                    nan_as_null=False)
-        else:
-            fill_value_col = columnops.as_column(
-                fill_value, nan_as_null=False)
+        if np.isscalar(fill_value) and (fill_value != self.default_na_value):
+            fill_value = [pd.to_datetime(fill_value)]
+        elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
+            fill_value = pd.to_datetime(fill_value)
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
         return result
