@@ -1956,7 +1956,7 @@ class DataFrame(object):
 
         return outdf
 
-    def fillna(self, value, method=None, limit=None, axis=None):
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
         Parameters
@@ -1987,16 +1987,20 @@ class DataFrame(object):
         1  2  4
         2  3  5
         """
-        outdf = self.copy()
+        if inplace:
+            outdf = {} # this dict will just hold Nones
+        else:
+            outdf = self.copy()
 
         if not is_dict_like(value):
             value = dict.fromkeys(self.columns, value)
 
         for k in value:
-            outdf[k] = self[k].fillna(value[k], method=method, limit=limit,
-                                      axis=axis)
+            outdf[k] = self[k].fillna(value[k], method=method, axis=axis,
+                                      inplace=inplace, limit=limit)
 
-        return outdf
+        if not inplace:
+            return outdf
 
     def to_pandas(self):
         """

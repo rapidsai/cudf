@@ -401,7 +401,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         cpp_replace.replace(replaced, to_replace_col, value_col)
         return replaced
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, inplace=False):
         """
         Fill null values with *fill_value*
         """
@@ -410,7 +410,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             columnops.as_column(fill_value, nan_as_null=False), result)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
-        return result
+        return self._mimic_inplace(result, inplace)
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):

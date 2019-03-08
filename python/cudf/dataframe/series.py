@@ -542,7 +542,7 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value, method=None, limit=None, axis=None):
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
         Parameters
@@ -564,9 +564,10 @@ class Series(object):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value)
+        data = self._column.fillna(value, inplace=inplace)
 
-        return self._copy_construct(data=data)
+        if not inplace:
+            return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

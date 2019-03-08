@@ -192,7 +192,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, inplace=False):
         result = self.copy()
 
         if np.isscalar(fill_value):
@@ -205,7 +205,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         cpp_replace.replace_nulls(result, fill_value_col)
 
         result = result.replace(mask=None)
-        return result
+        return self._mimic_inplace(result, inplace)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)

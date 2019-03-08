@@ -321,7 +321,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
         return self.replace(data=replaced.data)
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, inplace=False):
         """
         Fill null values with *fill_value*
         """
@@ -344,7 +344,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         cpp_replace.replace_nulls(result, fill_value_col)
 
         result = result.replace(mask=None)
-        return result
+        return self._mimic_inplace(result, inplace)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

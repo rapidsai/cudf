@@ -81,7 +81,10 @@ def test_dataframe_replace():
 @pytest.mark.parametrize(
     'null_value',
     [None, np.nan])
-def test_series_fillna_numerical(dtype, fill_type, null_value):
+@pytest.mark.parametrize(
+    'inplace',
+    [True, False])
+def test_series_fillna_numerical(dtype, fill_type, null_value, inplace):
     data = np.array([0, 1, null_value, 2, null_value], dtype='float64')
     sr = Series(data).astype(dtype)
 
@@ -92,7 +95,12 @@ def test_series_fillna_numerical(dtype, fill_type, null_value):
         fill_value = Series(np.random.randint(0, 5, (5,)))
         expect = np.array([0, 1, fill_value[2], 2, fill_value[4]], dtype=dtype)
 
-    got = sr.fillna(fill_value).to_array()
+    got = sr.fillna(fill_value, inplace=inplace)
+
+    if inplace:
+        got = sr
+    else:
+        got = got.to_array()
 
     np.testing.assert_equal(expect, got)
 
@@ -103,7 +111,10 @@ def test_series_fillna_numerical(dtype, fill_type, null_value):
 @pytest.mark.parametrize(
     'null_value',
     [None, np.nan])
-def test_fillna_categorical(fill_type, null_value):
+@pytest.mark.parametrize(
+    'inplace',
+    [True, False])
+def test_fillna_categorical(fill_type, null_value, inplace):
     data = pd.Series(['a', 'b', 'a', null_value, 'c', null_value],
                      dtype='category')
     sr = Series.from_pandas(data)
@@ -118,7 +129,10 @@ def test_fillna_categorical(fill_type, null_value):
         expect = pd.Series(['a', 'b', 'a', 'c', 'c', 'a'],
                            dtype='category')
 
-    got = sr.fillna(fill_value)
+    got = sr.fillna(fill_value, inplace=inplace)
+
+    if inplace:
+        got = sr
 
     assert_eq(expect, got)
 
@@ -126,7 +140,10 @@ def test_fillna_categorical(fill_type, null_value):
 @pytest.mark.parametrize(
     'fill_type',
     ['scalar', 'series'])
-def test_fillna_datetime(fill_type):
+@pytest.mark.parametrize(
+    'inplace',
+    [True, False])
+def test_fillna_datetime(fill_type, inplace):
     psr = pd.Series(pd.date_range('2010-01-01', '2020-01-10', freq='1y'))
 
     if fill_type == 'scalar':
@@ -138,7 +155,10 @@ def test_fillna_datetime(fill_type):
     sr = Series.from_pandas(psr)
 
     expect = psr.fillna(fill_value)
-    got = sr.fillna(fill_value)
+    got = sr.fillna(fill_value, inplace=inplace)
+
+    if inplace:
+        got = sr
 
     assert_eq(expect, got)
 
@@ -146,7 +166,10 @@ def test_fillna_datetime(fill_type):
 @pytest.mark.parametrize(
     'fill_type',
     ['scalar', 'series', 'dict'])
-def test_fillna_dataframe(fill_type):
+@pytest.mark.parametrize(
+    'inplace',
+    [True, False])
+def test_fillna_dataframe(fill_type, inplace):
     pdf = pd.DataFrame({'a': [1, 2, None], 'b': [None, None, 5]})
     gdf = DataFrame.from_pandas(pdf)
 
@@ -158,6 +181,9 @@ def test_fillna_dataframe(fill_type):
         fill_value = {'a': 5, 'b': Series([3, 4, 5])}
 
     expect = pdf.fillna(fill_value)
-    got = gdf.fillna(fill_value)
+    got = gdf.fillna(fill_value, inplace=inplace)
+
+    if inplace:
+        got = gdf
 
     assert_eq(expect, got)
