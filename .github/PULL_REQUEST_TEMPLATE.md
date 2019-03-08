@@ -1,26 +1,22 @@
 <!--
 
-Thanks for wanting to contribute to cuDF :)
+Thank you for contributing to cuDF :)
 
-First, if you need some help or want to chat to the core developers, please
-visit https://rapids.ai/community.html for links to our Google Group and other
-communication channels.
+Here are some guidelines to help the review process go smoothly.
 
-Here's some guidelines to help the review process go smoothly.
-
-0. Please write a description in this text box of the changes that are being
+1. Please write a description in this text box of the changes that are being
    made.
 
-1. Please ensure that you have written units tests for the changes made/features
+2. Please ensure that you have written units tests for the changes made/features
    added.
 
-2. If you are closing an issue please use one of the automatic closing words as
+3. If you are closing an issue please use one of the automatic closing words as
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
-3. If your pull request is not ready for review but you want to make use of the
+4. If your pull request is not ready for review but you want to make use of the
    continuous integration testing facilities please label it with `[WIP]`.
 
-4. If your pull request is ready to be reviewed without requiring additional
+5. If your pull request is ready to be reviewed without requiring additional
    work on top of it, then remove the `[WIP]` label (if present) and replace
    it with `[REVIEW]`. If assistance is required to complete the functionality,
    for example when the C/C++ code of a feature is complete but Python bindings
@@ -34,7 +30,7 @@ Here's some guidelines to help the review process go smoothly.
    opened by the person assisting, which then will be the PR that will be
    merged.
 
-5. Once all work has been done and review has taken place please do not add
+6. Once all work has been done and review has taken place please do not add
    features or make changes out of the scope of those requested by the reviewer
    (doing this just add delays as already reviewed code ends up having to be
    re-reviewed/it is hard to tell what is new etc!). Further, please do not

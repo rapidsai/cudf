@@ -44,7 +44,7 @@
 
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.h>
+#include <utilities/error_utils.hpp>
 #include <cudf/functions.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <sqls/sqls_rtti_comp.h>

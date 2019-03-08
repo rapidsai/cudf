@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef JOIN_COMPUTE_API_H
+#define JOIN_COMPUTE_API_H
 
 #include <cuda_runtime.h>
 #include <future>
@@ -21,7 +23,7 @@
 
 #include "dataframe/cudf_table.cuh"
 #include "rmm/rmm.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -40,15 +42,15 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Creates a vector of indices that do not appear in index_ptr
+* @brief  Creates a vector of indices that do not appear in index_ptr
 *
-* @Param index_ptr Array of indices
-* @Param max_index_value The maximum value an index can have in index_ptr
-* @Param index_size Number of left and right indices
+* @param index_ptr Array of indices
+* @param max_index_value The maximum value an index can have in index_ptr
+* @param index_size Number of left and right indices
 * @tparam index_type The type of data associated with index_ptr
 * @tparam size_type The data type used for size calculations
 *
-* @Returns  thrust::device_vector containing the indices that are missing from index_ptr
+* @returns  thrust::device_vector containing the indices that are missing from index_ptr
 */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type, typename size_type>
@@ -61,8 +63,11 @@ create_missing_indices(
 	thrust::device_vector<index_type> invalid_index_map(max_index_value, 1);
 	//Vector allocated for unmatched result
 	thrust::device_vector<index_type> unmatched_indices(max_index_value);
-	//Functor to check for index validity since left joins can create invalid indices
-	ValidRange<size_type> valid_range(0, max_index_value);
+	//lambda to check for index validity since left joins can create invalid indices
+    auto bounds_checker =
+    [max_index_value] __device__(gdf_index_type index) {
+        return ((index >= 0) && (index < max_index_value));
+    };
 
 	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
 	//Thus specifying that those locations are valid
@@ -73,7 +78,7 @@ create_missing_indices(
 			index_ptr,//Index locations
 			index_ptr,//Stencil - Check if index location is valid
 			invalid_index_map.begin(),//Output indices
-			valid_range);//Stencil Predicate
+			bounds_checker);//Stencil Predicate
 	size_type begin_counter = static_cast<size_type>(0);
 	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
 	//Create list of indices that have been marked as invalid
@@ -91,16 +96,16 @@ create_missing_indices(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Expands a buffer's size
+* @brief  Expands a buffer's size
 *
-* @Param buffer Address of the buffer to expand
-* @Param buffer_capacity Memory allocated for buffer
-* @Param buffer_size Number of elements in the buffer
-* @Param expand_size Amount of extra elements to be pushed into the buffer
+* @param buffer Address of the buffer to expand
+* @param buffer_capacity Memory allocated for buffer
+* @param buffer_size Number of elements in the buffer
+* @param expand_size Amount of extra elements to be pushed into the buffer
 * @tparam data_type The type of data associated with the buffer
 * @tparam size_type The data type used for size calculations
 *
-* @Returns  cudaSuccess upon successful completion of buffer expansion. Otherwise returns
+* @returns  cudaSuccess upon successful completion of buffer expansion. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
@@ -128,18 +133,18 @@ gdf_error expand_buffer(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Adds indices that are missing in r_index_ptr at the ends and places
+* @brief  Adds indices that are missing in r_index_ptr at the ends and places
 * JoinNoneValue to the corresponding l_index_ptr.
 *
-* @Param l_index_ptr Address of the left indices
-* @Param r_index_ptr Address of the right indices
-* @Param index_capacity Amount of memory allocated for left and right indices
-* @Param index_size Number of left and right indices
-* @Param max_index_value The maximum value an index can have in r_index_ptr
+* @param l_index_ptr Address of the left indices
+* @param r_index_ptr Address of the right indices
+* @param index_capacity Amount of memory allocated for left and right indices
+* @param index_size Number of left and right indices
+* @param max_index_value The maximum value an index can have in r_index_ptr
 * @tparam index_type The type of data associated with index_ptr
 * @tparam size_type The data type used for size calculations
 *
-* @Returns  cudaSuccess upon successful completion of append call. Otherwise returns
+* @returns  cudaSuccess upon successful completion of append call. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
@@ -187,18 +192,18 @@ gdf_error append_full_join_indices(
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Gives an estimate of the size of the join output produced when
+ * @brief  Gives an estimate of the size of the join output produced when
  * joining two tables together. If the two tables are of relatively equal size,
  * then the returned output size will be the exact output size. However, if the
  * probe table is significantly larger than the build table, then we attempt
  * to estimate the output size by using only a subset of the rows in the probe table.
  * 
- * @Param build_table The right hand table
- * @Param probe_table The left hand table
- * @Param hash_table A hash table built on the build table that maps the index
+ * @param build_table The right hand table
+ * @param probe_table The left hand table
+ * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
  * 
- * @Returns An estimate of the size of the output of the join operation
+ * @returns An estimate of the size of the output of the join operation
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type,
@@ -320,21 +325,46 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   return GDF_SUCCESS;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Computes the number of entries required in a hash table to satisfy
+ * inserting a specified number of keys to achieve the specified hash table
+ * occupancy.
+ *
+ * @param num_keys_to_insert The number of keys that will be inserted
+ * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
+ * 50% occupancy
+ * @return size_t The size of the hash table that will satisfy the desired
+ * occupancy for the specified number of insertions
+ *---------------------------------------------------------------------------**/
+inline size_t compute_hash_table_size(
+    gdf_size_type num_keys_to_insert,
+    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
+  assert(desired_occupancy != 0);
+  assert(desired_occupancy <= 100);
+  double const grow_factor{100.0 / desired_occupancy};
+
+  // Calculate size of hash map based on the desired occupancy
+  size_t hash_table_size{
+      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
+
+  return hash_table_size;
+}
+
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Performs a hash-based join between two sets of gdf_tables.
+* @brief  Performs a hash-based join between two sets of gdf_tables.
 *
-* @Param joined_output The output of the join operation
-* @Param left_table The left table to join
-* @Param right_table The right table to join
-* @Param flip_results Flag that indicates whether the left and right tables have been
+* @param joined_output The output of the join operation
+* @param left_table The left table to join
+* @param right_table The right table to join
+* @param flip_results Flag that indicates whether the left and right tables have been
 * switched, indicating that the output indices should also be flipped
 * @tparam join_type The type of join to be performed
 * @tparam hash_value_type The data type to be used for the Keys in the hash table
 * @tparam output_index_type The data type to be used for the output indices
 * @tparam size_type The data type used for size calculations, e.g. size of hash table
 *
-* @Returns  cudaSuccess upon successful completion of the join. Otherwise returns
+* @returns  cudaSuccess upon successful completion of the join. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
@@ -382,13 +412,12 @@ gdf_error compute_hash_join(
   gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_table_num_rows{probe_table.get_column_length()};
 
-  // Calculate size of hash map based on the desired occupancy
-  size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
+  // Hash table size must be at least 1 in order to have a valid allocation.
+  // Even if the hash table will be empty, it still must be allocated for the
+  // probing phase in the event of an outer join
+  size_t const hash_table_size =
+      std::max(compute_hash_table_size(build_table_num_rows), size_t{1});
 
-  // It's possible that the hash table size will be zero, in which case
-  // we still need to allocate something.
-  hash_table_size = std::max(hash_table_size, size_type(1));
- 
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
@@ -549,3 +578,4 @@ gdf_error compute_hash_join(
 
   return gdf_error_code;
 }
+#endif

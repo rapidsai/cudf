@@ -6,7 +6,9 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
+    add_executable(${CMAKE_TEST_NAME}
+                   ${CMAKE_TEST_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
@@ -27,7 +29,7 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -52,10 +54,10 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
-set(CUDF_INTERNAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cudf/cudf_internal_test.cu")
+set(ERROR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/error/error_handling_test.cu")
 
-ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
+ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - filter tests ----------------------------------------------------------------------------------
@@ -64,8 +66,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gpu_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -100,6 +101,14 @@ set(BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - bit_mask tests ---------------------------------------------------------------------------------
+
+set(BIT_MASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
+
+ConfigureTest(BIT_MASK_TEST "${BIT_MASK_TEST_SRC}")
 
 ###################################################################################################
 # - datetime tests --------------------------------------------------------------------------------
@@ -143,6 +152,11 @@ set(REPLACE_TEST_SRC
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
+set(REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace-nulls_tests.cu")
+
+ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
@@ -160,13 +174,12 @@ set(CSV_TEST_SRC
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
-# - rmm tests -------------------------------------------------------------------------------------
+# - sort tests -------------------------------------------------------------------------------------
 
-set(RMM_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
+set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
 
-ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
-
+ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
 # - types tests -------------------------------------------------------------------------------------
 
@@ -175,6 +188,39 @@ set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+
+###################################################################################################
+# - copying tests -------------------------------------------------------------------------------------
+
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - utilities tests -------------------------------------------------------------------------------------
+
+set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+
+ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - transpose tests -------------------------------------------------------------------------------
+
+set(TRANSPOSE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+
+ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
+
+# - table tests -------------------------------------------------------------------------------
+
+set(TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+
+ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################

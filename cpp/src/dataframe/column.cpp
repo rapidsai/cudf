@@ -21,10 +21,11 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
-#include <cuda_runtime_api.h>
 #include "utilities/type_dispatcher.hpp"
+#include <cuda_runtime_api.h>
+#include <algorithm>
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -33,68 +34,41 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
                           gdf_size_type *column_lengths, 
                           gdf_size_type num_columns);
 
-/** ---------------------------------------------------------------------------*
- * @brief Concatenates multiple gdf_columns into a single, contiguous column,
- * including the validity bitmasks.
- * 
- * Note that input columns with nullptr validity masks are treated as if all
- * elements are valid.
- *
- * @param[out] output_column A column whose buffers are already allocated that
- *             will contain the concatenation of the input columns data and
- *             validity bitmasks
- * @Param[in] columns_to_concat[] The columns to concatenate
- * @Param[in] num_columns The number of columns to concatenate
- * 
- * @return gdf_error GDF_SUCCESS upon completion; GDF_DATASET_EMPTY if any data
- *         pointer is NULL, GDF_COLUMN_SIZE_MISMATCH if the output column size
- *         != the total size of the input columns; GDF_DTYPE_MISMATCH if the
- *         input columns have different datatypes.
- * ---------------------------------------------------------------------------**/
+// Concatenates multiple gdf_columns into a single, contiguous column,
+// including the validity bitmasks.
 gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
 {
-  
-  if (nullptr == columns_to_concat){
-    return GDF_DATASET_EMPTY;
-  }
-
-  if ((nullptr == columns_to_concat[0])
-      || (nullptr == output_column)){
-    return GDF_DATASET_EMPTY;
-  }
+  GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
+  GDF_REQUIRE(output_column != nullptr, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns_to_concat != nullptr, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns_to_concat[0] != nullptr, GDF_DATASET_EMPTY);
 
   const gdf_dtype column_type = columns_to_concat[0]->dtype;
 
-  if (column_type != output_column->dtype){
-    return GDF_DTYPE_MISMATCH;
-  }
-
-  gdf_size_type total_size = 0;
-  bool at_least_one_mask_present = false;
+  gdf_size_type total_size{0};
 
   // Ensure all the columns are properly allocated
   // and have matching types
-  for (int i = 0; i < num_columns; ++i) {
-    gdf_column* current_column = columns_to_concat[i];
-    if (nullptr == current_column) {
-      return GDF_DATASET_EMPTY;
+  for (gdf_size_type i = 0; i < num_columns; ++i) {
+    gdf_column *current_column = columns_to_concat[i];
+
+    GDF_REQUIRE(current_column != nullptr, GDF_DATASET_EMPTY);
+
+    if((current_column->size > 0) && (nullptr == current_column->data)){
+        return GDF_DATASET_EMPTY;
     }
-    if ((current_column->size > 0) && (nullptr == current_column->data))
-    {
-      return GDF_DATASET_EMPTY;
-    }
-    if (column_type != current_column->dtype) {
-      return GDF_DTYPE_MISMATCH;
-    }
+
+    GDF_REQUIRE(column_type == current_column->dtype, GDF_DTYPE_MISMATCH);
 
     total_size += current_column->size;
-    at_least_one_mask_present |= (nullptr != columns_to_concat[i]->valid);
   }
 
-  // sum of the sizes of the input columns must equal output column size
-  if (output_column->size != total_size) {
-    return GDF_COLUMN_SIZE_MISMATCH;
-  }
+  bool const at_least_one_mask_present{
+      std::any_of(columns_to_concat, columns_to_concat + num_columns,
+                  [](gdf_column *col) { return (nullptr != col->valid); })};
+
+  GDF_REQUIRE(column_type == output_column->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(output_column->size == total_size, GDF_COLUMN_SIZE_MISMATCH);
 
   // TODO optimizations if needed
   // 1. Either 
@@ -109,14 +83,13 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   output_column->null_count = 0;
   int column_byte_width = 0;
   gdf_error result = get_column_byte_width(output_column, &column_byte_width);
-  if (GDF_SUCCESS != result) return result;  
+  GDF_REQUIRE(GDF_SUCCESS == result, result);
 
   // copy data
   for (int i = 0; i < num_columns; ++i) {   
     gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
     CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
     target += bytes;
-
     output_column->null_count += columns_to_concat[i]->null_count;
   }
   
@@ -153,26 +126,12 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   return GDF_SUCCESS;
 }
 
-/** ---------------------------------------------------------------------------*
- * @brief Return the size of the gdf_column data type.
- *
- * @return gdf_size_type Size of the gdf_column data type.
- *  ---------------------------------------------------------------------------**/
+// Return the size of the gdf_column data type.
 gdf_size_type gdf_column_sizeof() {
 	return sizeof(gdf_column);
 }
 
-/** ---------------------------------------------------------------------------*
- * @brief Create a GDF column given data and validity bitmask pointers, size, and
- *        datatype
- *
- * @param[out] column The output column.
- * @param[in] data Pointer to data.
- * @param[in] valid Pointer to validity bitmask for the data.
- * @param[in] size Number of rows in the column.
- * @param[in] dtype Data type of the column.
- * @return gdf_error Returns GDF_SUCCESS upon successful creation.
- * ---------------------------------------------------------------------------**/
+// Constructor for the gdf_context struct
 gdf_error gdf_column_view(gdf_column *column,
                           void *data,
                           gdf_valid_type *valid,
@@ -187,39 +146,27 @@ gdf_error gdf_column_view(gdf_column *column,
 	return GDF_SUCCESS;
 }
 
-/** ---------------------------------------------------------------------------*
- * @brief Create a GDF column given data and validity bitmask pointers, size, and
- *        datatype, and count of null (non-valid) elements
- *
- * @param[out] column The output column.
- * @param[in] data Pointer to data.
- * @param[in] valid Pointer to validity bitmask for the data.
- * @param[in] size Number of rows in the column.
- * @param[in] dtype Data type of the column.
- * @param[in] null_count The number of non-valid elements in the validity bitmask
- * @return gdf_error Returns GDF_SUCCESS upon successful creation.
- * ---------------------------------------------------------------------------**/
+
+ // Create a GDF column given data and validity bitmask pointers, size, and
+ //        datatype, and count of null (non-valid) elements
 gdf_error gdf_column_view_augmented(gdf_column *column,
                                     void *data,
                                     gdf_valid_type *valid,
 		                                gdf_size_type size,
                                     gdf_dtype dtype,
-                                    gdf_size_type null_count)
+                                    gdf_size_type null_count,
+                                    gdf_dtype_extra_info extra_info)
 {
 	column->data = data;
 	column->valid = valid;
 	column->size = size;
 	column->dtype = dtype;
 	column->null_count = null_count;
+	column->dtype_info = extra_info;
 	return GDF_SUCCESS;
 }
 
-/** ---------------------------------------------------------------------------*
- * @brief Free the CUDA device memory of a gdf_column
- *
- * @param[inout] column Data and validity bitmask pointers of this column will be freed
- * @return gdf_error GDF_SUCCESS or GDF_ERROR if there is an error freeing the data
- * ---------------------------------------------------------------------------**/
+// Free the CUDA device memory of a gdf_column
 gdf_error gdf_column_free(gdf_column *column) 
 {
   RMM_TRY( RMM_FREE(column->data, 0)  );
@@ -237,14 +184,8 @@ namespace{
     }
   };
 }
-/** ---------------------------------------------------------------------------*
- * @brief Get the byte width of a column
- *
- * @param[in] col The input column
- * @param[out] width The data type size of col
- * @return gdf_error GDF_SUCCESS, or GDF_UNSUPPORTED_DTYPE if col has an invalid
- *         datatype
- * ---------------------------------------------------------------------------**/
+
+// Returns the byte width of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {

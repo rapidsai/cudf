@@ -1,14 +1,14 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 
 
 struct SegmentedRadixSortPlan{
-    const size_t num_items;
+    const gdf_size_type num_items;
     // temporary storage
     void *storage;
     size_t storage_bytes;

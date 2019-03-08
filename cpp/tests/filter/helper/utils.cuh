@@ -8,54 +8,13 @@
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/counting_iterator.h>
+#include "utilities/type_dispatcher.hpp"
 
 #include <string>
 #include <functional>
 #include <vector>
 #include <tuple>
 #include <rmm/rmm.h>
-
-template <typename gdf_type>
-inline gdf_dtype gdf_enum_type_for()
-{
-    return GDF_invalid;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int8_t>()
-{
-    return GDF_INT8;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int16_t>()
-{
-    return GDF_INT16;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int32_t>()
-{
-    return GDF_INT32;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<int64_t>()
-{
-    return GDF_INT64;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<float>()
-{
-    return GDF_FLOAT32;
-}
-
-template <>
-inline gdf_dtype gdf_enum_type_for<double>()
-{
-    return GDF_FLOAT64;
-}
 
 inline auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
     return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
@@ -124,7 +83,7 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
 
     gdf_column output;
-    gdf_column_view_augmented(&output, (void *)raw_pointer, valid_value_pointer, column_size, column->dtype, column->null_count);
+    gdf_column_view_augmented(&output, (void *)raw_pointer, valid_value_pointer, column_size, column->dtype, column->null_count, column->dtype_info);
     return output;
 }
 
@@ -169,7 +128,7 @@ template <typename ValueType = int8_t>
 gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
 {
     char *raw_pointer;
-    auto gdf_enum_type_value =  gdf_enum_type_for<ValueType>();
+    auto gdf_enum_type_value =  cudf::gdf_dtype_of<ValueType>();
     thrust::device_ptr<ValueType> device_pointer;
    // std::cout << "0. gen_gdb_column\n";     
     std::tie(raw_pointer, device_pointer) = init_device_vector<char, ValueType>(column_size);
@@ -194,7 +153,8 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
                              (void *)raw_pointer, valid_value_pointer,
                              column_size,
                              gdf_enum_type_value,
-                             zero_bits);
+                             zero_bits,
+                             {});
     //std::cout << "4. gen_gdb_column\n"; 
     
     delete []host_valid;
@@ -213,7 +173,7 @@ void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil,
     
     int  n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
     std::vector<int> indexes;
-    for(size_t i = 0; i < host_stencil.size; i++) {
+    for(gdf_size_type i = 0; i < host_stencil.size; i++) {
         int col_position =  i / 8;
         int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
         int bit_offset =  (length_col - 1) - (i % 8);
@@ -250,7 +210,7 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
 
         EXPECT_EQ(lhs->size, rhs->size); 
         
-        for(size_t i = 0; i < output->size; i++) {
+        for(gdf_size_type i = 0; i < output->size; i++) {
             size_t col_position =  i / 8;
             size_t length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output->size - GDF_VALID_BITSIZE * (n_bytes - 1);
             size_t bit_offset =  (length_col - 1) - (i % 8);
@@ -270,7 +230,7 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
         auto output_data = get_gdf_data_from_device<int8_t>(output);
 
         EXPECT_EQ(lhs->size, rhs->size); 
-        for(size_t i = 0; i < lhs->size; i++)
+        for(gdf_size_type i = 0; i < lhs->size; i++)
         {
             EXPECT_EQ(lhs_data[i] == rhs_data[i] ? 1 : 0,  output_data[i]);              
         }

@@ -1,6 +1,6 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 
 #include <cub/block/block_reduce.cuh>
@@ -65,7 +65,6 @@ struct ReduceOp {
     static
     gdf_error launch(gdf_column *input, T identity, T *output,
                      gdf_size_type output_size) {
-
         // 1st round
         //    Partially reduce the input into *output_size* length.
         //    Each block computes one output in *output*.
@@ -209,6 +208,7 @@ struct ReduceDispatcher {
     gdf_error operator()(gdf_column *col, 
                          void *dev_result, 
                          gdf_size_type dev_result_size) {
+        GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
         T identity = Op::template identity<T>();
         return ReduceOp<T, Op>::launch(col, identity, 
                                        reinterpret_cast<T*>(dev_result), 
@@ -266,6 +266,6 @@ gdf_error gdf_max(gdf_column *col,
 }
 
 
-unsigned int gdf_reduce_optimal_output_size() {
+unsigned int gdf_reduction_get_intermediate_output_size() {
     return REDUCTION_BLOCK_SIZE;
 }

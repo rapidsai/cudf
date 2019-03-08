@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import sys
 import atexit
 import multiprocessing as mp
 
@@ -14,12 +13,12 @@ except ImportError:
     _have_distributed = False
 import pytest
 import cudf
-from . import utils
+from cudf.tests import utils
 
 
 require_distributed = pytest.mark.skipif(not _have_distributed,
                                          reason='no distributed')
-support_ipc = sys.platform.startswith('linux') and hasattr(mp, 'get_context')
+support_ipc = False
 require_ipc = pytest.mark.skipIf(
     support_ipc,
     reason='only on linux and multiprocess has .get_context',

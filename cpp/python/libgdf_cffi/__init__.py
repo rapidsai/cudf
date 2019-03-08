@@ -2,9 +2,9 @@ from __future__ import absolute_import
 
 import os
 import sys
-
-from .wrapper import _libgdf_wrapper
-from .wrapper import GDFError         # noqa: F401  # re-exported
+from itertools import chain
+from libgdf_cffi.wrapper import _libgdf_wrapper
+from libgdf_cffi.wrapper import GDFError         # noqa: F401  # re-exported
 
 try:
     from .libgdf_cffi import ffi
@@ -25,6 +25,11 @@ else:
         if os.path.isfile(localpath):
             return localpath
         else:
+            lib_path = os.path.join(sys.prefix, 'lib')
+            for sys_path in chain([lib_path], sys.path):
+                lib = os.path.join(sys_path, path)
+                if os.path.isfile(lib):
+                    return lib
             return path
 
     libgdf_api = ffi.dlopen(_get_lib_name())

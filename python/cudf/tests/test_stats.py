@@ -48,6 +48,27 @@ def test_series_reductions(method, dtype):
     np.testing.assert_approx_equal(expect, got)
 
 
+@pytest.mark.parametrize('method', methods)
+def test_series_reductions_concurrency(method):
+    from concurrent.futures import ThreadPoolExecutor
+    e = ThreadPoolExecutor(10)
+
+    np.random.seed(0)
+    srs = [Series(np.random.random(10000)) for _ in range(1)]
+
+    def call_test(sr):
+        fn = getattr(sr, method)
+        if method in ['std', 'var']:
+            return fn(ddof=1)
+        else:
+            return fn()
+
+    def f(sr):
+        return call_test(sr + 1)
+
+    list(e.map(f, srs * 50))
+
+
 @pytest.mark.parametrize('ddof', range(3))
 def test_series_std(ddof):
     np.random.seed(0)
@@ -65,13 +86,46 @@ def test_series_unique():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
-        assert len(set(arr[mask])) == sr.unique_count()
+        assert len(set(arr[mask])) == sr.nunique()
         df = pd.DataFrame(data=arr[mask], columns=['col'])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().to_pandas().sort_index()
         print(expect.head())
         print(got.head())
         assert got.equals(expect)
+
+
+@pytest.mark.parametrize('nan_as_null, dropna',
+                         [(True, True), (True, False),
+                          (False, True), (False, False)])
+def test_series_nunique(nan_as_null, dropna):
+    # We remove nulls as opposed to NaNs using the dropna parameter,
+    # so to test against pandas we replace NaN with another discrete value
+    cudf_series = Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
+    pd_series = pd.Series([1, 2, 2, 3, 3])
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
+
+    cudf_series = Series([1.0, 2.0, 3.0, np.nan, None],
+                         nan_as_null=nan_as_null)
+    if nan_as_null is True:
+        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
+    else:
+        pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, None])
+
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
+
+    cudf_series = Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
+    if nan_as_null is True:
+        pd_series = pd.Series([1.0, np.nan, np.nan])
+    else:
+        pd_series = pd.Series([1.0, -1.0, -1.0])
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
 
 
 def test_series_scale():

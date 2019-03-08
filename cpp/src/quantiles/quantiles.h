@@ -34,7 +34,7 @@ template<typename T>
 size_t quantile_index(T* dv, size_t n, double q, double& fract_pos, cudaStream_t stream, bool flag_sorted)
 {
   if( !flag_sorted )
-    thrust::sort(rmm::exec_policy(stream), dv, dv+n);
+    thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
 
   double pos = q*static_cast<double>(n);//(n-1);
   size_t k = static_cast<size_t>(pos);
@@ -52,7 +52,7 @@ T quantile_approx(T* dv, size_t n, double q, cudaStream_t stream = NULL, bool fl
   std::vector<T> hv(2);
   if( q >= 1.0 )
     {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream), dv, dv+n);
+      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
       cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
       return hv[0];
     }
@@ -77,7 +77,7 @@ RetT quantile_exact(T* dv, size_t n, double q, std::function<RetT(T, T, double)>
   std::vector<T> hv(2);
   if( q >= 1.0 )
     {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream), dv, dv+n);
+      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
       cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
       return hv[0];
     }
