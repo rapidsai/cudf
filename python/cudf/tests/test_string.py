@@ -9,7 +9,7 @@ import pyarrow as pa
 from numba import cuda
 
 from cudf import concat
-from cudf.dataframe import Series
+from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
 
@@ -409,3 +409,94 @@ def test_string_split(data, pat, n, expand, expand_raise):
         got = gs.str.split(pat=pat, n=n, expand=expand)
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_keys', [1, 2, 3])
+@pytest.mark.parametrize('how', ['left', 'right', 'inner'])
+def test_string_join_key(num_keys, how):
+    str_data = ['a', 'b', 'c', 'd', 'e']
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    for i in range(num_keys):
+        pdf[i] = str_data
+        gdf[i] = str_data
+    pdf['a'] = other_data
+    gdf['a'] = other_data
+
+    pdf2 = pdf.copy()
+    gdf2 = gdf.copy()
+
+    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
+    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_cols', [1, 2, 3])
+@pytest.mark.parametrize('how', ['left', 'right', 'inner'])
+def test_string_join_non_key(num_cols, how):
+    str_data = ['a', 'b', 'c', 'd', 'e']
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    for i in range(num_cols):
+        pdf[i] = str_data
+        gdf[i] = str_data
+    pdf['a'] = other_data
+    gdf['a'] = other_data
+
+    pdf2 = pdf.copy()
+    gdf2 = gdf.copy()
+
+    expect = pdf.merge(pdf2, on=['a'], how=how)
+    got = gdf.merge(gdf2, on=['a'], how=how)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_keys', [1, 2, 3])
+def test_string_groupby_key(num_keys):
+    str_data = ['a', 'b', 'a', 'b', 'a']
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    for i in range(num_keys):
+        pdf[i] = str_data
+        gdf[i] = str_data
+    pdf['a'] = other_data
+    gdf['a'] = other_data
+
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_cols', [1, 2, 3])
+def test_string_groupby_non_key(num_cols):
+    str_data = ['a', 'b', 'c', 'd', 'e']
+    other_data = [1, 2, 1, 2, 1]
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    for i in range(num_cols):
+        pdf[i] = str_data
+        gdf[i] = str_data
+    pdf['a'] = other_data
+    gdf['a'] = other_data
+
+    expect = pdf.groupby('a', as_index=False).count()
+    got = gdf.groupby('a', as_index=False).count()
+    assert_eq(expect, got)
+
+    expect = pdf.groupby('a', as_index=False).max()
+    got = gdf.groupby('a', as_index=False).max()
+    assert_eq(expect, got)
+
+    expect = pdf.groupby('a', as_index=False).min()
+    got = gdf.groupby('a', as_index=False).min()
+    assert_eq(expect, got)
