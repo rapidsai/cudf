@@ -10,7 +10,6 @@ typedef  int    gdf_category;
 typedef  long  gdf_timestamp;
 typedef int   gdf_nvstring_category;
 
-class NVCategory;
 
 
  /**
