@@ -296,10 +296,12 @@ CUDA_HOST_DEVICE_CALLABLE
  * 
  * This struct can be used with either a fundamental type or a wrapper type and
  * it uses unwrap to get the underlying type.
+ * 
  * Example use case: 
  *  Making a functor to use with a `type_dispatcher` that works on the
  *  underlying type of all `gdf_dtype`
  *  
+ * ```c++
  * struct example_functor{
  *  template <typename T>
  *  int operator()(){
@@ -307,6 +309,7 @@ CUDA_HOST_DEVICE_CALLABLE
  *    return sizeof(T1);
  *  }
  * };
+ * ```
  * 
  * @tparam T Either wrapped object type or fundamental type
  *---------------------------------------------------------------------------**/
@@ -317,6 +320,12 @@ struct unwrapped_type {
 
 /**---------------------------------------------------------------------------*
  * @brief Helper type for `unwrapped_type`
+ * 
+ * Example:
+ * ```c++
+ * using T1 = cudf::detail::unwrapped_type_t<date32>; // T1 = int 
+ * using T2 = cudf::detail::unwrapped_type_t<float>;  // T2 = float 
+ * ```
  * 
  * @tparam T Either wrapped object type or fundamental type
  *---------------------------------------------------------------------------**/
