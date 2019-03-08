@@ -416,7 +416,7 @@ class DataFrame(object):
     def _call_op(self, other, internal_fn, fn):
         result = DataFrame()
         result.set_index(self.index)
-        if other is self:
+        if internal_fn == '_unaryop':
             for col in self._cols:
                 result[col] = self._cols[col]._unaryop(fn)
         elif isinstance(other, Sequence):
