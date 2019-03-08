@@ -490,18 +490,18 @@ class StringColumn(columnops.TypedColumnBase):
         """
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
-        # if self.null_count > 0:
-        #     raise NotImplementedError(
-        #         "Converting to NumPy array is not yet supported for columns "
-        #         "with nulls"
-        #     )
+
         return self.to_arrow().to_pandas()
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        # sort_inds = get_sorted_inds(self, ascending, na_position)
+        if na_position == "last":
+            nullfirst = False
+        elif na_position == "first":
+            nullfirst = True
+
         idx_dev_arr = rmm.device_array(len(self), dtype='int32')
         dev_ptr = get_ctype_ptr(idx_dev_arr)
-        self.data.order(2, asc=ascending, devptr=dev_ptr)
+        self.data.order(2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr)
 
         col_inds = numerical.NumericalColumn(
             data=Buffer(idx_dev_arr),
