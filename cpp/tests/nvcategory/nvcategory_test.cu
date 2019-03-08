@@ -305,8 +305,11 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	}
 
 	char ** data = new char *[200];
+	for(int i = 0; i < 200; i++){
+	  data[i] = new char[10];
+	}
 
-	category_column_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
+	static_cast<NVCategory *>(category_column_out->dtype_info.category)->to_strings()->to_host(data, 0, category_column_out->size);
 
 	if(print){
 		std::cout<<"maxes\n";
@@ -316,7 +319,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 		std::cout<<std::endl;
   }
 
-	output_groups[0]->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
+	static_cast<NVCategory *>(output_groups[0]->dtype_info.category)->to_strings()->to_host(data, 0, category_column_out->size);
 
 	if(print){
 		std::cout<<"groups\n";
@@ -349,7 +352,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	  std::cout<<"called concat category is null = "<<(category_column_groups_out->dtype_info.category == nullptr)<<std::endl;
   }
 
-	concat_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
+	static_cast<NVCategory *>(concat_out->dtype_info.category)->to_strings()->to_host(data, 0, category_column_out->size);
 
 	if(print){
 		std::cout<<"groups\n";
@@ -358,6 +361,11 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 		}
 		std::cout<<std::endl;
   }
+
+	for(int i = 0; i < 200; i++){
+	  delete data[i];
+	}
+	delete data;
 }
 
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
@@ -370,8 +378,8 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	gdf_column * column_right = create_nv_category_column(100,false);
 	gdf_column * output_column = create_boolean_column(100);
 
-	NVStrings * temp_string = column_right->dtype_info.category->to_strings();
-	NVCategory * new_category = column_left->dtype_info.category->add_strings(
+	NVStrings * temp_string = static_cast<NVCategory *>(column_right->dtype_info.category)->to_strings();
+	NVCategory * new_category = static_cast<NVCategory *>(column_left->dtype_info.category)->add_strings(
 			*temp_string);
 
 	unsigned int * indices;

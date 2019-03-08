@@ -24,7 +24,7 @@
 #include "utilities/error_utils.hpp"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
-#include "string/nvcategory_util.cuh"
+#include "string/nvcategory_util.hpp"
 #include <nvstrings/NVCategory.h>
 #include "copying/gather.hpp"
 #include "types.hpp"
@@ -697,14 +697,14 @@ gdf_error join_call_compute_df(
 
         if(output_column->size > 0){
 
-          output_column->dtype_info.category = original_column->dtype_info.category->gather(
+          output_column->dtype_info.category = static_cast<NVCategory *>(original_column->dtype_info.category)->gather(
               (nv_category_index_type *) output_column->data,
               output_column->size,
               DEVICE_ALLOCATED);
 
           CUDA_TRY( cudaMemcpy(
               output_column->data,
-              output_column->dtype_info.category->values_cptr(),
+              static_cast<NVCategory *>(output_column->dtype_info.category)->values_cptr(),
               sizeof(nv_category_index_type) * output_column->size,
               cudaMemcpyDeviceToDevice) );
         }
@@ -714,7 +714,7 @@ gdf_error join_call_compute_df(
     //freeing up the temp column used to synch categories between columns
     for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
       gdf_column * original_column = temp_columns_to_free[column_to_free];
-      NVCategory::destroy(original_column->dtype_info.category);
+      NVCategory::destroy(static_cast<NVCategory *>(original_column->dtype_info.category));
       gdf_column_free(original_column);
       delete(original_column);
     }

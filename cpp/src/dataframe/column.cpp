@@ -24,7 +24,7 @@
 #include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "utilities/type_dispatcher.hpp"
-#include "string/nvcategory_util.cuh"
+#include "string/nvcategory_util.hpp"
 #include <cuda_runtime_api.h>
 #include <algorithm>
 
