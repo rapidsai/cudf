@@ -1940,36 +1940,6 @@ def test_series_list_nanasnull(nan_as_null):
     assert pa.Array.equals(expect, got.to_arrow())
 
 
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
-@pytest.mark.parametrize(
-    'null_value',
-    [None, np.nan])
-def test_fillna_numerical(dtype, null_value):
-    fill_value = np.random.randint(0, 5)
-    data = np.array([0, 1, null_value, 2, null_value], dtype='float64')
-    sr = Series(data).astype(dtype)
-
-    expect = np.array([0, 1, fill_value, 2, fill_value], dtype=dtype)
-    got = sr.fillna(fill_value).to_array()
-
-    np.testing.assert_equal(expect, got)
-
-
-@pytest.mark.parametrize(
-    'null_value',
-    [None, np.nan])
-def test_fillna_categorical(null_value):
-    data = ['a', 'b', 'a', null_value, 'c']
-    psr = pd.Series(data, dtype='category')
-    sr = Series.from_pandas(psr)
-
-    expect = psr.fillna('a')
-    got = sr.fillna('a')
-
-    assert_eq(expect, got)
-
-
 def test_column_assignment():
     gdf = gd.datasets.randomdata(nrows=20, dtypes={'a': 'category',
                                                    'b': int,
