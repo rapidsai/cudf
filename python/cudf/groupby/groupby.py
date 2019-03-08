@@ -251,9 +251,9 @@ class Groupby(object):
 
             # NVStrings columns are not the same going in as coming out
             out_col_values_series = [
-                Column.from_cffi_view(col) for col in out_col_values
+                Series(Column.from_cffi_view(col)) for col in out_col_values
             ]
-            out_col_agg_series = Column.from_cffi_view(out_col_agg)
+            out_col_agg_series = Series(Column.from_cffi_view(out_col_agg))
 
             if first_run:
                 for i, thisBy in enumerate(self._by):

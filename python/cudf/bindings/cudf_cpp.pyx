@@ -103,7 +103,7 @@ cdef gdf_column* column_view_from_column(col):
         else:
             data_ptr = 0
     else:
-        category = <uintptr_t> NULL
+        category = 0
 
         if len(col) > 0:
             data_ptr = get_column_data_ptr(col)
