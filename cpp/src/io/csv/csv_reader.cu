@@ -250,25 +250,30 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 		if(first_row[pos] == raw_csv->opts.quotechar) {
 			quotation = !quotation;
 		}
-		else if (!quotation &&
-				 (first_row[pos] == raw_csv->opts.delimiter ||
-				 first_row[pos] == raw_csv->opts.terminator)) {
-			// Got to the end of a column
+		// Check if end of a column/row
+		else if (pos == first_row.size() - 1 ||
+				 (!quotation && first_row[pos] == raw_csv->opts.delimiter)) {
+			// This is the header, add the column name
 			if (raw_csv->header_row >= 0) {
-				// First_row is the header, add the column name
-				int col_name_len = pos - prev;
-				// Exclude '\r' character at the end of the column name if it's part of the terminator
+				// Include the current character, in case the line is not terminated
+				int col_name_len = pos - prev + 1;
+				// Exclude the delimiter/terminator is present
+				if (first_row[pos] == raw_csv->opts.delimiter || first_row[pos] == raw_csv->opts.terminator) {
+					--col_name_len;
+				}
+				// Also exclude '\r' character at the end of the column name if it's part of the terminator
 				if (col_name_len > 0 &&
 					raw_csv->opts.terminator == '\n' &&
 					first_row[pos] == '\n' &&
 					first_row[pos - 1] == '\r') {
-						--col_name_len;
-					}
+					--col_name_len;
+				}
+
 				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
 			}
 			else {
-				// First_row is the first data row, add the automatically generated name
+				// This is the first data row, add the automatically generated name
 				raw_csv->col_names.push_back(raw_csv->prefix + std::to_string(num_cols));
 			}
 			num_cols++;
@@ -479,8 +484,11 @@ gdf_error read_csv(csv_read_arg *args)
 	checkError(error, "call to record number of rows");
 
 	//-----------------------------------------------------------------------------
-	//-- Allocate space to hold the record starting point
-	RMM_TRY( RMM_ALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * raw_csv->num_records, 0) ); 
+	//-- Allocate space to hold the record starting points
+	const bool last_line_terminated = (h_uncomp_data[h_uncomp_size - 1] == raw_csv->opts.terminator);
+	// If the last line is not terminated, allocate space for the EOF entry (added later)
+	const gdf_size_type record_start_count = raw_csv->num_records + (last_line_terminated ? 0 : 1);
+	RMM_TRY( RMM_ALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * record_start_count, 0) ); 
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
@@ -519,6 +527,14 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
 		thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 		raw_csv->num_records = recCount;
+	}
+
+	if (!last_line_terminated){
+		// Add the EOF as the last record when the terminator is missing in the last line
+		const cu_recstart_t eof_offset = h_uncomp_size;
+		CUDA_TRY(cudaMemcpy(raw_csv->recStart + raw_csv->num_records, &eof_offset, sizeof(cu_recstart_t), cudaMemcpyDefault));
+		// Update the record count
+		++raw_csv->num_records;
 	}
 
 	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, raw_csv);
@@ -1224,8 +1240,7 @@ gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
                                   raw_csv_t *csvData) {
 
 	char* d_chunk = nullptr;
-	// Allocate extra byte in case \r\n is at the chunk border
-	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes, 0)); 
 	
 	cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
