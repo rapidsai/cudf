@@ -117,6 +117,7 @@
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1145 Issue with .agg call on multi-column dataframes
 
 
 # cuDF 0.5.1 (05 Feb 2019)
