@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
@@ -214,7 +215,8 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                            DeviceNDArray)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):

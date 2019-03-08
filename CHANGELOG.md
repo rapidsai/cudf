@@ -1,3 +1,18 @@
+# cuDF 0.7.0 (Date TBD)
+
+## New Features
+
+...
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -72,6 +87,7 @@
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
+- PR #1033 Update `fillna()` to use libcudf function `gdf_replace_nulls`
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
 - PR #1092 Fix select_dtype docstring
@@ -118,7 +134,8 @@
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
-
+- PR #1118 Enhanced the `DataFrame.from_records()` feature
+- PR #1129 Fix join performance with index parameter from using numpy array
 
 # cuDF 0.5.1 (05 Feb 2019)
 

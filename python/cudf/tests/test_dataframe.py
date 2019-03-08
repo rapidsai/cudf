@@ -1055,6 +1055,24 @@ def test_from_pandas():
     pd.testing.assert_series_equal(s, gs.to_pandas())
 
 
+@pytest.mark.parametrize('dtypes', [int, float])
+def test_from_records(dtypes):
+    h_ary = np.ndarray(shape=(10, 4), dtype=dtypes)
+    rec_ary = h_ary.view(np.recarray)
+
+    gdf = gd.DataFrame.from_records(rec_ary, columns=['a', 'b', 'c', 'd'])
+    df = pd.DataFrame.from_records(rec_ary, columns=['a', 'b', 'c', 'd'])
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_records(rec_ary)
+    df = pd.DataFrame.from_records(rec_ary)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
 def test_from_gpu_matrix():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
     d_ary = rmm.to_device(h_ary)
@@ -1920,6 +1938,36 @@ def test_series_list_nanasnull(nan_as_null):
     got = Series(data, nan_as_null=nan_as_null)
 
     assert pa.Array.equals(expect, got.to_arrow())
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize(
+    'null_value',
+    [None, np.nan])
+def test_fillna_numerical(dtype, null_value):
+    fill_value = np.random.randint(0, 5)
+    data = np.array([0, 1, null_value, 2, null_value], dtype='float64')
+    sr = Series(data).astype(dtype)
+
+    expect = np.array([0, 1, fill_value, 2, fill_value], dtype=dtype)
+    got = sr.fillna(fill_value).to_array()
+
+    np.testing.assert_equal(expect, got)
+
+
+@pytest.mark.parametrize(
+    'null_value',
+    [None, np.nan])
+def test_fillna_categorical(null_value):
+    data = ['a', 'b', 'a', null_value, 'c']
+    psr = pd.Series(data, dtype='category')
+    sr = Series.from_pandas(psr)
+
+    expect = psr.fillna('a')
+    got = sr.fillna('a')
+
+    assert_eq(expect, got)
 
 
 def test_column_assignment():
