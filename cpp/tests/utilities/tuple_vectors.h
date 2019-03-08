@@ -33,7 +33,7 @@ void initialize_vector(std::vector<T>& v, const size_t column_length, const size
  if (sorted) { std::sort(v.begin(), v.end()); }
 }
 
-// Initialize a vector with random data
+// Initialize a vector with an initializer lambda
 template<typename T, typename initializer_t>
 void initialize_vector(std::vector<T>& v, const size_t column_length, initializer_t the_initializer)
 {

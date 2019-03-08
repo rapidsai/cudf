@@ -97,6 +97,7 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 
+
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
@@ -187,8 +188,11 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #577 Added external C++ API for scatter/gather functions
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
 - PR #664 Added Debuging instructions to README

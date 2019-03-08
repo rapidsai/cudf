@@ -28,6 +28,7 @@
 #include "hash_groupby_kernels.cuh"
 #include "dataframe/cudf_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
+#include "types.hpp"
 
 
 
@@ -208,11 +209,11 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
 
-      rmm::device_vector<int32_t> sorted_indices(*out_size);
+      rmm::device_vector<gdf_index_type> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy()->on(0), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
-      gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
+      gdf_error status = gdf_column_view(&sorted_indices_col, sorted_indices.data().get(), 
                             nullptr, *out_size, GDF_INT32);
       if (status != GDF_SUCCESS)
         return status;
@@ -225,14 +226,19 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
       if (status != GDF_SUCCESS)
         return status;
 
-      groupby_output_table.gather(sorted_indices);
+      // Reorder table according to indices from order_by
+      cudf::table result_table(groupby_output_table.get_columns(),
+                               groupby_output_table.get_num_columns());
+      cudf::detail::gather(&result_table, sorted_indices.data().get(), &result_table);
 
-      rmm::device_vector<aggregation_type> agg(*out_size);
+      rmm::device_vector<aggregation_type> temporary_aggregation_buffer(*out_size);
       thrust::gather(rmm::exec_policy()->on(0),
                sorted_indices.begin(), sorted_indices.end(),
                out_aggregation_column,
-               agg.begin());
-      thrust::copy(rmm::exec_policy()->on(0), agg.begin(), agg.end(), out_aggregation_column);
+               temporary_aggregation_buffer.begin());
+      thrust::copy(rmm::exec_policy()->on(0),
+                   temporary_aggregation_buffer.begin(),
+                   temporary_aggregation_buffer.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;
