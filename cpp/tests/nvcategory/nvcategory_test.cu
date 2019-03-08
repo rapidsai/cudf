@@ -717,3 +717,42 @@ TEST_F(NVCategoryJoinTest, join_test){
 	  EXPECT_EQ(reference_result[i], gdf_result[i]);
 	}
 }
+
+TEST_F(NVCategoryJoinTest, join_test_nulls){
+
+  bool print = false;
+  size_t rows_size = 16;
+//  size_t max_int_value = 50;
+  join_op op = join_op::INNER;
+
+  size_t length = 1;
+  const char ** left_string_data = generate_string_data(rows_size, length, print);
+  const char ** right_string_data = generate_string_data(rows_size, length, print);
+
+  left_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
+  right_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
+
+  gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
+  gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+  left_column->valid = nullptr;
+  right_column->valid = nullptr;
+  if(print){
+    std::cout<<"Raw string indexes:\n";
+    print_gdf_column(left_column);
+    print_gdf_column(right_column);
+  }
+
+  gdf_raw_left_columns.push_back(left_column);
+  gdf_raw_right_columns.push_back(right_column);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result(op, print);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
