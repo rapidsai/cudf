@@ -16,7 +16,7 @@
 #ifndef TYPE_DISPATCHER_HPP
 #define TYPE_DISPATCHER_HPP
 
-#include "NVStrings.h"
+#include <nvstrings/NVStrings.h>
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
 #include "release_assert.cuh"
@@ -221,6 +221,11 @@ inline constexpr gdf_dtype gdf_dtype_of<cudf::timestamp>() {
 template <>
 inline constexpr gdf_dtype gdf_dtype_of<cudf::category>() {
   return GDF_CATEGORY;
+};
+
+template <>
+inline constexpr gdf_dtype gdf_dtype_of<cudf::nvstring_category>() {
+  return GDF_STRING_CATEGORY;
 };
 
 template <>
