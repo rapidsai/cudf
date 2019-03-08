@@ -134,7 +134,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             if np.issubdtype(self.dtype, np.signedinteger):
                 dev_array = self.astype('int32').data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = get_ctype_ptr(self.mask.mem)
+                null_ptr = None
+                if self.mask is not None:
+                    null_ptr = get_ctype_ptr(self.mask.mem)
                 return string.StringColumn(
                     data=nvstrings.itos(
                         dev_ptr,

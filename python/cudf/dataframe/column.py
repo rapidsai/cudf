@@ -101,13 +101,14 @@ class Column(object):
         from cudf.dataframe import columnops
 
         data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
+        dtype = _gdf.gdf_to_np_dtype(cffi_view.dtype)
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data=data_mem)
+            return columnops.build_column(data_mem, dtype)
         else:
             data_buf = Buffer(data_mem)
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
-            return columnops.build_column(data=data_buf, mask=mask)
+            return columnops.build_column(data_buf, dtype, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """
@@ -218,6 +219,7 @@ class Column(object):
     def cffi_view(self):
         """LibGDF CFFI view
         """
+        nvcat = None
         if self.dtype == np.dtype('object'):
             nvcat = self.nvcategory
             return _gdf.columnview(

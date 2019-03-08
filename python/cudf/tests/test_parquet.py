@@ -67,6 +67,8 @@ def test_parquet_reader(parquet_file, columns):
     got = cudf.read_parquet(parquet_file, columns=columns)
     if len(expect) == 0:
         expect = expect.reset_index(drop=True)
+        if 'col_category' in expect.columns:
+            expect['col_category'] = expect['col_category'].astype('category')
 
     assert_eq(expect, got, check_categorical=False)
 

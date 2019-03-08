@@ -92,6 +92,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef int c_num_cols_to_join = num_cols_to_join
     cdef int c_result_num_cols = result_num_cols
 
+    print("before_join")
+
     with nogil:
         if how == 'left':
             result = gdf_left_join(list_lhs,
@@ -137,6 +139,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
 
     check_gdf_error(result)
 
+    print("after_join")
+
     res = []
     valids = []
 
@@ -148,6 +152,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
             nvcat_obj = nvcategory.nvcategory(int(nvcat_ptr))
+            print(nvcat_obj)
             nvstr_obj = nvcat_obj.to_strings()
             res.append(nvstr_obj)
             data_ptr = <uintptr_t>result_cols[idx].data
@@ -158,7 +163,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
                 dtype='int32',
                 finalizer=rmm._make_finalizer(data_ptr, 0)
             )
-            del(tmp_data)
             valid_ptr = <uintptr_t>result_cols[idx].valid
             valids.append(
                 rmm.device_array_from_ptr(

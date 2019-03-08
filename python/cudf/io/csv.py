@@ -352,7 +352,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         else:
             newcol = Column.from_cffi_view(out[i])
             new_names.append(ffi.string(out[i].col_name).decode())
-            if(newcol.dtype == np.dtype('datetime64[ms]')):
+            if(newcol.dtype.type == np.datetime64):
                 outcols.append(
                     newcol.view(DatetimeColumn, dtype='datetime64[ms]')
                 )

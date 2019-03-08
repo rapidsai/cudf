@@ -26,13 +26,17 @@ class StringMethods(object):
         self._index = index
 
     def __getattr__(self, attr, *args, **kwargs):
+        from cudf.dataframe.series import Series
         if hasattr(self._parent._data, attr):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
                 def wrapper(*args, **kwargs):
                     return getattr(self._parent._data, attr)(*args, **kwargs)
                 if isinstance(wrapper, nvstrings.nvstrings):
-                    wrapper = columnops.as_column(wrapper)
+                    wrapper = Series(
+                        columnops.as_column(wrapper),
+                        index=self._index
+                    )
                 return wrapper
             else:
                 return passed_attr
@@ -338,24 +342,6 @@ class StringColumn(columnops.TypedColumnBase):
         self._nvcategory = None
         self._indices = None
 
-    # def serialize(self, serialize):
-    #     header, frames = super(StringColumn, self).serialize(serialize)
-    #     assert 'dtype' not in header
-    #     header['dtype'] = serialize(self._dtype)
-    #     header['categories'] = self._categories
-    #     header['ordered'] = self._ordered
-    #     return header, frames
-
-    # @classmethod
-    # def deserialize(cls, deserialize, header, frames):
-    #     data, mask = cls._deserialize_data_mask(deserialize, header, frames)
-    #     dtype = deserialize(*header['dtype'])
-    #     categories = header['categories']
-    #     ordered = header['ordered']
-    #     col = cls(data=data, mask=mask, null_count=header['null_count'],
-    #               dtype=dtype, categories=categories, ordered=ordered)
-    #     return col
-
     def str(self, index=None):
         return StringMethods(self, index=index)
 
@@ -514,5 +500,13 @@ class StringColumn(columnops.TypedColumnBase):
 
         return col_keys, col_inds
 
+    def _replace_defaults(self):
+        params = {
+            'data': self.data,
+            'null_count': self.null_count,
+        }
+        return params
 
-# register_distributed_serializer(StringColumn)
+    def copy(self, deep=True):
+        params = self._replace_defaults()
+        return type(self)(**params)

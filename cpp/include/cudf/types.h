@@ -10,8 +10,6 @@ typedef  int    gdf_category;
 typedef  long  gdf_timestamp;
 typedef int   gdf_nvstring_category;
 
-class NVCategory;
-
 
  /**
  * @brief  These enums indicate the possible data types for a gdf_column

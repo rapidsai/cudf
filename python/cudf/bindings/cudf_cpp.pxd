@@ -94,7 +94,7 @@ cdef extern from "cudf.h" nogil:
 
     ctypedef struct gdf_dtype_extra_info:
         gdf_time_unit time_unit
-        NVCategory *category
+        void *category
 
     ctypedef struct gdf_column:
         void *data

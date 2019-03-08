@@ -190,12 +190,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         categories = None
         if hasattr(arbitrary, "categories"):
             categories = arbitrary.categories
-            data = build_column(
-                arbitrary.data,
-                arbitrary.dtype,
-                mask=arbitrary.mask,
-                categories=categories
-            )
+        data = build_column(
+            arbitrary.data,
+            arbitrary.dtype,
+            mask=arbitrary.mask,
+            categories=categories
+        )
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column

@@ -99,11 +99,11 @@ cdef gdf_column* column_view_from_column(col):
     if g_dtype == GDF_STRING_CATEGORY:
         category = col.nvcategory.get_cpointer()
         if len(col) > 0:
-            data_ptr = get_ctype_ptr(col.indices)
+            data_ptr = get_ctype_ptr(col.indices.mem)
         else:
             data_ptr = 0
     else:
-        category = NULL
+        category = <uintptr_t> NULL
 
         if len(col) > 0:
             data_ptr = get_column_data_ptr(col)
@@ -186,8 +186,8 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef gdf_size_type c_size = size
     cdef gdf_size_type c_null_count = null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = TIME_UNIT_NONE
-        category = <void*> NULL
+        time_unit = TIME_UNIT_NONE,
+        category = <void*> 0
     )
     
     with nogil:

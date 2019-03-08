@@ -1,11 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import atexit
-import multiprocessing as mp
 
 import numpy as np
 import pandas as pd
-from numba import cuda
 try:
     from distributed.protocol import serialize, deserialize
     _have_distributed = True
@@ -93,54 +91,6 @@ def test_serialize_groupby():
     got = gb.mean()
     expect = outgb.mean()
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
-
-
-def serialize_ipc(sr):
-    # Non-IPC
-    header, frames = serialize(sr)
-    assert header['column']['data_buffer']['kind'] == 'normal'
-    # IPC
-    hostport = 'tcp://0.0.0.0:8888'
-    fake_context = {
-        'recipient': hostport,
-        'sender': hostport,
-    }
-
-    assert sr._column.data._cached_ipch is None
-    header, frames = serialize(sr, context=fake_context)
-    assert header['column']['data_buffer']['kind'] == 'ipc'
-    # Check that _cached_ipch is set on the buffer
-    assert isinstance(sr._column.data._cached_ipch,
-                      cuda.cudadrv.devicearray.IpcArrayHandle)
-
-    # Spawn a new process to test the IPC handle deserialization
-    mpctx = mp.get_context('spawn')
-    result_queue = mpctx.Queue()
-
-    proc = mpctx.Process(target=_load_ipc, args=(header, frames, result_queue))
-    proc.start()
-    out = result_queue.get()
-    proc.join(3)
-    return out
-
-
-@require_distributed
-@require_ipc
-def test_serialize_ipc():
-    sr = cudf.Series(np.arange(10))
-    out = serialize_ipc(sr)
-    # Verify that the output array matches the source
-    np.testing.assert_array_equal(out.to_array(), sr.to_array())
-
-
-@require_distributed
-@require_ipc
-def test_serialize_ipc_slice():
-    sr = cudf.Series(np.arange(10))
-    # test with a slice to verify internal offset calculations work
-    out = serialize_ipc(sr[1:7])
-    # Verify that the output array matches the source
-    np.testing.assert_array_equal(out.to_array(), sr[1:7].to_array())
 
 
 def _load_ipc(header, frames, result_queue):
