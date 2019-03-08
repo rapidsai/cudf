@@ -186,32 +186,32 @@ def test_floor(dtype, ulp):
                  scale=100)
 
 
-# casting
+# # casting
 
-def _select_cast_fn(to_dtype):
-    return {
-        np.float32: libgdf.gdf_cast_generic_to_f32,
-        np.float64: libgdf.gdf_cast_generic_to_f64,
-        np.int8: libgdf.gdf_cast_generic_to_i8,
-        np.int32: libgdf.gdf_cast_generic_to_i32,
-        np.int64: libgdf.gdf_cast_generic_to_i64,
-    }[to_dtype]
-
-
-_cast_dtypes = [
-    np.float64,
-    np.float32,
-    np.int64,
-    np.int32,
-    np.int8,
-]
-
-_param_cast_pairs = list(itertools.product(_cast_dtypes, _cast_dtypes))
+# def _select_cast_fn(to_dtype):
+#     return {
+#         np.float32: libgdf.gdf_cast_generic_to_f32,
+#         np.float64: libgdf.gdf_cast_generic_to_f64,
+#         np.int8: libgdf.gdf_cast_generic_to_i8,
+#         np.int32: libgdf.gdf_cast_generic_to_i32,
+#         np.int64: libgdf.gdf_cast_generic_to_i64,
+#     }[to_dtype]
 
 
-@pytest.mark.parametrize('dtype,to_dtype', _param_cast_pairs)
-def test_cast(dtype, to_dtype):
-    cast_op_test(dtype, to_dtype, _select_cast_fn(to_dtype))
+# _cast_dtypes = [
+#     np.float64,
+#     np.float32,
+#     np.int64,
+#     np.int32,
+#     np.int8,
+# ]
+
+# _param_cast_pairs = list(itertools.product(_cast_dtypes, _cast_dtypes))
+
+
+# @pytest.mark.parametrize('dtype,to_dtype', _param_cast_pairs)
+# def test_cast(dtype, to_dtype):
+#     cast_op_test(dtype, to_dtype, _select_cast_fn(to_dtype))
 
 
 if __name__ == '__main__':
