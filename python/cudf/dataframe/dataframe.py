@@ -1956,6 +1956,48 @@ class DataFrame(object):
 
         return outdf
 
+    def fillna(self, value, method=None, limit=None, axis=None):
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> gdf.fillna(4).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> gdf.fillna({'a': 3, 'b': 4}).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
+        outdf = self.copy()
+
+        if not is_dict_like(value):
+            value = dict.fromkeys(self.columns, value)
+
+        for k in value:
+            outdf[k] = self[k].fillna(value[k], method=method, limit=limit,
+                                      axis=axis)
+
+        return outdf
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.

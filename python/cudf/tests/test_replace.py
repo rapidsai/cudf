@@ -141,3 +141,23 @@ def test_fillna_datetime(fill_type):
     got = sr.fillna(fill_value)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'fill_type',
+    ['scalar', 'series', 'dict'])
+def test_fillna_dataframe(fill_type):
+    pdf = pd.DataFrame({'a': [1, 2, None], 'b': [None, None, 5]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    if fill_type == 'scalar':
+        fill_value = 5
+    elif fill_type == 'series':
+        fill_value = Series([3, 4, 5])
+    else:
+        fill_value = {'a': 5, 'b': Series([3, 4, 5])}
+
+    expect = pdf.fillna(fill_value)
+    got = gdf.fillna(fill_value)
+
+    assert_eq(expect, got)
