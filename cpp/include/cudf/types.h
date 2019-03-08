@@ -4,11 +4,11 @@
 typedef int gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
-typedef	long	gdf_date64;
-typedef	int		gdf_date32;
-typedef	int		gdf_category;
-typedef	long	gdf_timestamp;
-typedef int 	gdf_nvstring_category;
+typedef  long  gdf_date64;
+typedef  int    gdf_date32;
+typedef  int    gdf_category;
+typedef  long  gdf_timestamp;
+typedef int   gdf_nvstring_category;
 
 class NVCategory;
 
@@ -24,13 +24,13 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
-    GDF_DATE32,   	///< int32_t days since the UNIX epoch
-    GDF_DATE64,   	///< int64_t milliseconds since the UNIX epoch
-    GDF_TIMESTAMP,	///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
+    GDF_DATE32,     ///< int32_t days since the UNIX epoch
+    GDF_DATE64,     ///< int64_t milliseconds since the UNIX epoch
+    GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
     GDF_CATEGORY,
     GDF_STRING,
     GDF_STRING_CATEGORY, ///< Stores indices of an NVCategory in data and in extra col info a reference to the nv_category
-    N_GDF_TYPES, 	///< additional types should go BEFORE N_GDF_TYPES
+    N_GDF_TYPES,   ///< additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
 
 
@@ -82,19 +82,19 @@ typedef enum {
  * The types included are nanosecond, microsecond, millisecond, and second.
  */
 typedef enum {
-	TIME_UNIT_NONE=0, ///< The default time unit type.
-	TIME_UNIT_s,   ///< Second resolution time unit type
-	TIME_UNIT_ms,  ///< Millisecond resolution time unit type
-	TIME_UNIT_us,  ///< Microsecond resolution time unit type
-	TIME_UNIT_ns   ///< Nanosecond resolution time unit type
+  TIME_UNIT_NONE=0, ///< The default time unit type.
+  TIME_UNIT_s,   ///< Second resolution time unit type
+  TIME_UNIT_ms,  ///< Millisecond resolution time unit type
+  TIME_UNIT_us,  ///< Microsecond resolution time unit type
+  TIME_UNIT_ns   ///< Nanosecond resolution time unit type
 } gdf_time_unit;
 
 /**
  * @brief Extra information about column type.
  */
 typedef struct {
-	// here we can also hold info for decimal datatype or any other datatype that requires additional information
-	gdf_time_unit time_unit; ///< Time Unit resolution
+  //here we can also hold info for decimal datatype or any other datatype that requires additional information
+  gdf_time_unit time_unit; ///< Time Unit resolution
   NVCategory * category; ///< Categories related to the GDF_STRING_CATEGORY datatype
 } gdf_dtype_extra_info;
 
@@ -111,7 +111,7 @@ typedef struct gdf_column_{
     gdf_dtype dtype;                  ///< The datatype of the column's data
     gdf_size_type null_count;         ///< The number of NULL values in the column's data
     gdf_dtype_extra_info dtype_info;  ///< gdf_dtype_extra_info which stores extra information about the column's gdf_dtype
-    char *			col_name;		  ///< Host side null terminated string with name of the column
+    char *      col_name;      ///< Host side null terminated string with name of the column
 } gdf_column;
 
 
@@ -200,30 +200,30 @@ typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 
 typedef enum{
-	GDF_ORDER_ASC,
-	GDF_ORDER_DESC
+  GDF_ORDER_ASC,
+  GDF_ORDER_DESC
 } order_by_type;
 
 typedef enum{
-	GDF_EQUALS,
-	GDF_NOT_EQUALS,
-	GDF_LESS_THAN,
-	GDF_LESS_THAN_OR_EQUALS,
-	GDF_GREATER_THAN,
-	GDF_GREATER_THAN_OR_EQUALS
+  GDF_EQUALS,
+  GDF_NOT_EQUALS,
+  GDF_LESS_THAN,
+  GDF_LESS_THAN_OR_EQUALS,
+  GDF_GREATER_THAN,
+  GDF_GREATER_THAN_OR_EQUALS
 } gdf_comparison_operator;
 
 typedef enum{
-	GDF_WINDOW_RANGE,
-	GDF_WINDOW_ROW
+  GDF_WINDOW_RANGE,
+  GDF_WINDOW_ROW
 } window_function_type;
 
 typedef enum{
-	GDF_WINDOW_AVG,
-	GDF_WINDOW_SUM,
-	GDF_WINDOW_MAX,
-	GDF_WINDOW_MIN,
-	GDF_WINDOW_COUNT,
-	GDF_WINDOW_STDDEV,
-	GDF_WINDOW_VAR ///< Window Variance
+  GDF_WINDOW_AVG,
+  GDF_WINDOW_SUM,
+  GDF_WINDOW_MAX,
+  GDF_WINDOW_MIN,
+  GDF_WINDOW_COUNT,
+  GDF_WINDOW_STDDEV,
+  GDF_WINDOW_VAR ///< Window Variance
 } window_reduction_type;
