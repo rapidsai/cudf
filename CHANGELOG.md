@@ -1,6 +1,7 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
+- PR #1142 Added `GDF_BOOL` column type
 
 ...
 
