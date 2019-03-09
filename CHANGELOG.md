@@ -6,7 +6,7 @@
 
 ## Improvements
 
-...
+- PR #1149 Change convertStrToValue() functions to `__device__` only
 
 ## Bug Fixes
 
@@ -96,7 +96,6 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
-
 
 ## Bug Fixes
 
