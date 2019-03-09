@@ -545,10 +545,20 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value, method=None, limit=None, axis=None):
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
-        Returns a copy with null filled.
+        Parameters
+        ----------
+        value : scalar or Series-like
+            Value to use to fill nulls. If Series-like, null values
+            are filled with the values in corresponding indices of the
+            given Series.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
         """
         if method is not None:
             raise NotImplementedError("The method keyword is not supported")
@@ -557,9 +567,10 @@ class Series(object):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value)
+        data = self._column.fillna(value, inplace=inplace)
 
-        return self._copy_construct(data=data)
+        if not inplace:
+            return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
