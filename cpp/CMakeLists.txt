@@ -141,6 +141,7 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${ZLIB_INCLUDE_DIRS}")
@@ -189,6 +190,13 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
+            src/binary/jit/code/kernel.cpp
+            src/binary/jit/code/operation.cpp
+            src/binary/jit/code/traits.cpp
+            src/binary/jit/core/binop.cpp
+            src/binary/jit/core/launcher.cpp
+            src/binary/jit/util/operator.cpp
+            src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
             src/compaction/stream_compaction_ops.cu
@@ -216,6 +224,31 @@ add_library(cudf SHARED
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+# Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
+add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
+
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
+
+add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
+
+add_dependencies(cudf stringify_run)
+
+option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
+if(JITIFY_PROCESS_CACHE)
+    message(STATUS "Using process level cache for JIT compiled kernels")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
+endif(JITIFY_PROCESS_CACHE)
+
+###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)
@@ -236,7 +269,8 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
+# TODO: better nvrtc linking with optional variables
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings nvrtc)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
@@ -268,7 +302,7 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
 
 add_custom_target(install_python DEPENDS cudf rmm_install_python PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
-	###################################################################################################
+###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
 add_custom_command(OUTPUT CUDF_DOXYGEN
