@@ -136,12 +136,16 @@ list_types_tuple = (list, np.array)
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
     from cudf.dataframe.buffer import Buffer
+    from cudf.utils.cudautils import copy_array
 
     buffers = pa_arr.buffers()
 
     if buffers[0]:
+        mask_dev_array = make_mask(len(pa_arr))
+        arrow_dev_array = rmm.to_device(np.array(buffers[0]).view('int8'))
+        copy_array(arrow_dev_array, mask_dev_array)
         pamask = Buffer(
-            np.array(buffers[0]).view('int8')
+            mask_dev_array
         )
     else:
         pamask = None
