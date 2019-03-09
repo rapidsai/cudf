@@ -24,6 +24,8 @@
 #include "hash/hash_functions.cuh"
 #include "utilities/int_fastdiv.h"
 #include "utilities/nvtx/nvtx_utils.h"
+#include "copying/scatter.hpp"
+#include "types.hpp"
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;
@@ -520,12 +522,14 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Creates the partitioned output table by scattering the rows of
   // the input table to rows of the output table based on each rows
   // output location
-  gdf_error gdf_error_code = input_table.scatter(partitioned_output,
-                                                 row_output_locations);
+  cudf::table source_table{input_table.get_columns(),
+                           input_table.get_num_columns()};
+  cudf::table destination_table{partitioned_output.get_columns(),
+                                input_table.get_num_columns()};
 
-  if(GDF_SUCCESS != gdf_error_code){
-    return gdf_error_code;
-  }
+  auto gdf_status = cudf::detail::scatter(&source_table, row_output_locations,
+                                          &destination_table);
+  GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
 
   CUDA_CHECK_LAST();
 

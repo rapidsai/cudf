@@ -41,7 +41,6 @@ constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 constexpr int block_size = 256;
 
 
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Kernel to count the number of set bits in a column's validity buffer
@@ -128,7 +127,7 @@ void count_valid_bits(valid32_t const * const masks32,
 
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-
+  // TODO: add a default parameter cudaStream_t stream = 0 when we move API to C++
 
   if((nullptr == count)){return GDF_DATASET_EMPTY;}
 
