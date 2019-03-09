@@ -1372,13 +1372,12 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf,
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
-   * @brief Template specialization for operator() that handles integer types
-   * that additionally checks whether the parsed data value should be overridden
-   * with user-specified true/false matches.
+   * @brief Template specialization for operator() for types whose values can be
+   * convertible to a 0 or 1 to represent false/true. The converting is done by
+   * checking against the default and user-specified true/false values list.
    *
    * It is handled here rather than within convertStrToValue() as that function
-   * is already used to construct the true/false match list from user-provided
-   * strings at the start of parsing.
+   * is used by other types (ex. timestamp) that aren't 'booleable'.
    *---------------------------------------------------------------------------**/
   template <typename T,
             typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
@@ -1386,21 +1385,22 @@ struct ConvertFunctor {
       const char *csvData, void *gdfColumnData, long rowIndex, long start,
       long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
-    value = convertStrToValue<T>(csvData, start, end, opts);
 
-    // Check for user-specified true/false values where the output is
+    // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     const size_t field_len = end - start + 1;
     if (serializedTrieContains(opts.trueValuesTrie, csvData + start, field_len)) {
       value = 1;
     } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, field_len)) {
       value = 0;
+    } else {
+      value = convertStrToValue<T>(csvData, start, end, opts);
     }
   }
 
   /**---------------------------------------------------------------------------*
    * @brief Default template operator() dispatch specialization all data types
-   * (including wrapper types) that is not covered by integral specialization.
+   * (including wrapper types) that is not covered by above.
    *---------------------------------------------------------------------------**/
   template <typename T,
             typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
