@@ -156,7 +156,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         col_dtype = gdf_to_np_dtype(result_cols[idx].dtype)
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
-            nvcat_obj = nvcategory.nvcategory(int(nvcat_ptr))
+            nvcat_obj = nvcategory.bind_cpointer(int(nvcat_ptr))
             print(nvcat_obj)
             nvstr_obj = nvcat_obj.to_strings()
             res.append(nvstr_obj)
