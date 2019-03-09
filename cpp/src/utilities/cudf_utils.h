@@ -53,45 +53,6 @@ gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) {
   return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
 }
 
-// Buffers are padded to 64-byte boundaries (for SIMD) static
-static constexpr int32_t kArrowAlignment = 64;
-
-// Tensors are padded to 64-byte boundaries static
-static constexpr int32_t kTensorAlignment = 64;
-
-// Align on 8-byte boundaries in IPC static
-static constexpr int32_t kArrowIpcAlignment = 8;
-
-// Align on 4-byte boundaries in CUDF static
-static constexpr int32_t kCudfIpcAlignment = 4;
-
-// todo, enable arrow ipc utils, and remove this method
-CUDA_HOST_DEVICE_CALLABLE
-static gdf_size_type PaddedLength(int64_t nbytes,
-                                  int32_t alignment = kArrowAlignment) {
-  return ((nbytes + alignment - 1) / alignment) * alignment;
-}
-
-/**
- * Calculates the number of bytes to allocate for a validity indicator
- * pseudo-column for a given column's size.
- *
- * @note Note that this function assumes the valids need to be allocated to be
- * aligned with a 4 byte boundary
- *
- * @param[in] column_size the number of elements
- * @return the number of bytes necessary to allocate for the validity indicator
- * pseudo-column
- */
-CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_get_num_bytes_for_valids_allocation(
-    gdf_size_type column_size) {
-  static_assert(sizeof(gdf_valid_type) == 1,
-                "gdf_valid_type assumed to be 1 byte");
-  return PaddedLength((column_size + (GDF_VALID_BITSIZE - 1)) /
-                      GDF_VALID_BITSIZE, kArrowAlignment);
-}
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Flatten AOS info from gdf_columns into SOA.

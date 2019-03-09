@@ -67,7 +67,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
  * @return the number of bytes necessary to allocate for the validity indicator
  * pseudo-column
  */
-gdf_size_type gdf_get_valid_allocation_bytes(gdf_size_type column_size);
+gdf_size_type gdf_get_num_bytes_for_valids_allocation(gdf_size_type column_size);
 
 /* column operations */
 
