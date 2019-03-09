@@ -771,7 +771,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
         s->error = 0;
         if (page_idx < num_pages && !(s->page.flags & PAGEINFO_FLAGS_DICTIONARY) && s->page.num_values > 0 && s->page.num_rows > 0)
         {
-            uint8_t *cur = s->page.compressed_page_data;
+            uint8_t *cur = s->page.page_data;
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
             uint32_t dtype_len_out = s->col.data_type >> 3;
@@ -860,7 +860,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 }
                 else
                 {
-                    s->dict_base = s->col.page_info[0].compressed_page_data; // dictionary is always stored in the first page
+                    s->dict_base = s->col.page_info[0].page_data; // dictionary is always stored in the first page
                     s->dict_size = s->col.page_info[0].uncompressed_page_size;
                 }
                 s->dict_run = 0;

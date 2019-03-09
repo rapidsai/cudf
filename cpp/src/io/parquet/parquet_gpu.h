@@ -36,7 +36,7 @@ struct nvstrdesc_s
 
 struct PageInfo
 {
-    uint8_t *compressed_page_data;      // ptr to compressed page data (before decompression) or uncompressed data (after decompression)
+    uint8_t *page_data;                 // Compressed page data before decompression, or uncompressed data after decompression
     int32_t compressed_page_size;       // compressed data size in bytes
     int32_t uncompressed_page_size;     // uncompressed data size in bytes
     int32_t num_values;                 // Number of values in this data page or dictionary
@@ -50,29 +50,54 @@ struct PageInfo
     int32_t valid_count;                // Count of valid (non-null) values in this page (negative values indicate data error)
 };
 
-struct ColumnChunkDesc
-{
-    uint8_t *compressed_data;   // pointer to compressed column chunk data
-    size_t compressed_size;     // total compressed data size for this chunk
-    size_t num_values;          // total number of values in this column
-    size_t start_row;           // starting row of this chunk
-    uint32_t num_rows;          // number of rows in this chunk
-    int16_t max_def_level;      // max definition level
-    int16_t max_rep_level;      // max repetition level
-    uint16_t data_type;         // basic column data type, ((type_length << 3) | parquet::Type)
-    uint8_t def_level_bits;     // bits to encode max definition level
-    uint8_t rep_level_bits;     // bits to encode max repetition level
-    int32_t num_data_pages;     // number of data pages
-    int32_t num_dict_pages;     // number of dictionary pages
-    int32_t max_num_pages;      // size of page_info array
-    PageInfo *page_info;        // output page info for up to num_dict_pages + num_data_pages (dictionary pages first)
-    nvstrdesc_s *str_dict_index; // index for string dictionary
-    uint32_t *valid_map_base;   // base pointer of valid bit map for this column
-    void *column_data_base;     // base pointer of column data
-    int8_t codec;               // compressed codec enum
+struct ColumnChunkDesc {
+  ColumnChunkDesc() = default;
+  explicit constexpr ColumnChunkDesc(
+      size_t compressed_size_, uint8_t *compressed_data_, size_t num_values_,
+      uint16_t datatype_, uint16_t datatype_length_, uint32_t start_row_,
+      uint32_t num_rows_, int16_t max_definition_level_,
+      int16_t max_repetition_level_, uint8_t def_level_bits_,
+      uint8_t rep_level_bits_, int8_t codec_)
+      : compressed_data(compressed_data_),
+        compressed_size(compressed_size_),
+        num_values(num_values_),
+        start_row(start_row_),
+        num_rows(num_rows_),
+        max_def_level(max_definition_level_),
+        max_rep_level(max_repetition_level_),
+        def_level_bits(def_level_bits_),
+        rep_level_bits(rep_level_bits_),
+        data_type(datatype_ | (datatype_length_ << 3)),
+        num_data_pages(0),
+        num_dict_pages(0),
+        max_num_pages(0),
+        page_info(nullptr),
+        str_dict_index(nullptr),
+        valid_map_base(nullptr),
+        column_data_base(nullptr),
+        codec(codec_) {}
+
+  uint8_t *compressed_data;     // pointer to compressed column chunk data
+  size_t compressed_size;       // total compressed data size for this chunk
+  size_t num_values;            // total number of values in this column
+  size_t start_row;             // starting row of this chunk
+  uint32_t num_rows;            // number of rows in this chunk
+  int16_t max_def_level;        // max definition level
+  int16_t max_rep_level;        // max repetition level
+  uint16_t data_type;           // basic column data type, ((type_length << 3) |
+                                // parquet::Type)
+  uint8_t def_level_bits;       // bits to encode max definition level
+  uint8_t rep_level_bits;       // bits to encode max repetition level
+  int32_t num_data_pages;       // number of data pages
+  int32_t num_dict_pages;       // number of dictionary pages
+  int32_t max_num_pages;        // size of page_info array
+  PageInfo *page_info;          // output page info for up to num_dict_pages +
+                                // num_data_pages (dictionary pages first)
+  nvstrdesc_s *str_dict_index;  // index for string dictionary
+  uint32_t *valid_map_base;     // base pointer of valid bit map for this column
+  void *column_data_base;       // base pointer of column data
+  int8_t codec;                 // compressed codec enum
 };
-
-
 
 // page_hdr.cu
 cudaError_t DecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks, cudaStream_t stream = (cudaStream_t)0);

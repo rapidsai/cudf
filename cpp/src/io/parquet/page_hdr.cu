@@ -300,7 +300,7 @@ gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
                         index_out = -1;
                         break;
                     }
-                    bs->page.compressed_page_data = const_cast<uint8_t *>(bs->cur);
+                    bs->page.page_data = const_cast<uint8_t *>(bs->cur);
                     bs->cur += bs->page.compressed_page_size;
                 }
                 else
@@ -360,7 +360,7 @@ gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
     {
         // Data type to describe a string
         nvstrdesc_s *dict_index = ck->str_dict_index;
-        const uint8_t *dict = ck->page_info[0].compressed_page_data;
+        const uint8_t *dict = ck->page_info[0].page_data;
         int dict_size = ck->page_info[0].uncompressed_page_size;
         int num_entries = ck->page_info[0].num_values;
         int pos = 0, cur = 0;
