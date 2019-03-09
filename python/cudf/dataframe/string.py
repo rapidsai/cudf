@@ -339,6 +339,13 @@ class StringColumn(columnops.TypedColumnBase):
             null_count = data.null_count()
         self._null_count = null_count
         self._mask = None
+        if self._null_count > 0:
+            mask_size = utils.calc_chunk_size(len(self.data),
+                                              utils.mask_bitsize)
+            out_mask_arr = rmm.device_array(mask_size, dtype='int8')
+            out_mask_ptr = get_ctype_ptr(out_mask_arr)
+            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
+            self._mask = Buffer(out_mask_arr)
         self._nvcategory = None
         self._indices = None
 
@@ -365,13 +372,6 @@ class StringColumn(columnops.TypedColumnBase):
     def mask(self):
         """Validity mask buffer
         """
-        if self._mask is None:
-            mask_size = utils.calc_chunk_size(len(self.data),
-                                              utils.mask_bitsize)
-            out_mask_arr = rmm.device_array(mask_size, dtype='int8')
-            out_mask_ptr = get_ctype_ptr(out_mask_arr)
-            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            self._mask = Buffer(out_mask_arr)
         return self._mask
 
     @property
