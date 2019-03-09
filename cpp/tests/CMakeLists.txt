@@ -200,6 +200,7 @@ set(TYPES_TEST_SRC
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
+
 # - nvcategory tests -------------------------------------------------------------------------------
 
 set(NVCATEGORY_TEST_SRC
@@ -207,7 +208,7 @@ set(NVCATEGORY_TEST_SRC
 
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
-###################################################################################################
+
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
@@ -218,6 +219,7 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
+
 
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")

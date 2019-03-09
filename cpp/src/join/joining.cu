@@ -577,10 +577,11 @@ gdf_error join_call_compute_df(
         gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
         gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
 
-        gdf_column * new_join_columns[2] = {left_original_column, right_original_column};
 
         gdf_column * new_left_column = new gdf_column;
         gdf_column * new_right_column = new gdf_column;
+
+        gdf_column * new_join_columns[2] = {new_left_column, new_right_column};
 
         temp_columns_to_free.push_back(new_left_column);
         temp_columns_to_free.push_back(new_right_column);
@@ -622,10 +623,7 @@ gdf_error join_call_compute_df(
       }
     }
 
-    //TODO: FELIPE ADD A COMMENT TO REQUEST REVIEW HERE this is very questionable for me to do as
-    // I do do not know if this is ok or not, I am chaning the vlaue of left_cols and right_cols to
-    //point to columns that may have been updated in case we had columns of type GDF_STRING_CATEGORY
-    //I think its fine since its not passed in by reference and we are just pointing this pointer somewehre else
+
     left_cols = new_left_cols.data();
     right_cols = new_right_cols.data();
   }
