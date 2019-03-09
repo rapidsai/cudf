@@ -218,7 +218,8 @@ add_library(cudf SHARED
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/gather.cu
-            src/copying/scatter.cu)
+            src/copying/scatter.cu
+            src/bitmask/legacy_bitmask.cpp)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
