@@ -210,6 +210,14 @@ class Series(object):
         """
         return len(self._column)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__':
+            if 'sqrt' in str(ufunc):
+                from cudf import sqrt
+                return sqrt(self)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
