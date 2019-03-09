@@ -55,6 +55,18 @@ gdf_error gdf_nvtx_range_pop();
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count);
 
+/**
+ * Calculates the number of bytes to allocate for a validity indicator
+ * pseudo-column for a given column's size.
+ *
+ * @note Note that this function assumes the valids need to be allocated to be
+ * padded to a multiple of 64 bytes
+ *
+ * @param[in] column_size the number of elements
+ * @return the number of bytes necessary to allocate for the validity indicator
+ * pseudo-column
+ */
+gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 
 /* column operations */
 
@@ -1969,6 +1981,60 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 
+/**
+ * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
+ * bool of lhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_scalar) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
+ * bool of rhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_scalar) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between two gdf_columns.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+
 /* arith */
 
 gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -2273,17 +2339,6 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
-
-/**
- * @brief  Concatenates two gdf_columns
- *
- * @param[in] gdf_column of one input of any type
- * @param[in] gdf_column of same type as the first
- * @param[out] output gdf_column of same type as inputs. The output memory needs to be preallocated to be the same size as the sum of both inputs
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
 /*

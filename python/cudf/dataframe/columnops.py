@@ -63,6 +63,20 @@ class TypedColumnBase(Column):
         params.update(dict(dtype=self._dtype))
         return params
 
+    def _mimic_inplace(self, result, inplace=False):
+        """
+        Used to mimic an inplace operation by copying data from the
+        result of an out-of-place operation.
+
+        If ``inplace`` is ``True``, copy data from ``result`` to ``self``.
+        Otherwise, return ``result`` unchanged.
+        """
+        if inplace:
+            self._data = result._data
+            self._mask = result._mask
+        else:
+            return result
+
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
         return inds
@@ -71,6 +85,9 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def find_and_replace(self, to_replace, values):
+        raise NotImplementedError
+
+    def fillna(self, fill_value):
         raise NotImplementedError
 
 
@@ -333,6 +350,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
+    elif isinstance(arbitrary, pd.Timestamp):
+        # This will always treat NaTs as nulls since it's not technically a
+        # discrete value like NaN
+        data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
+
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
             data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
@@ -342,7 +364,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 arbitrary = arbitrary.astype('int64')
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
-            data = as_column(pa.array([arbitrary]))
+            data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(np.array(arbitrary), dtype=dtype,

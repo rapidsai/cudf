@@ -11,8 +11,8 @@
 #define CUDA_DEVICE_CALLABLE __device__ __forceinline__
 #define CUDA_LAUNCHABLE __global__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE
-#define CUDA_DEVICE_CALLABLE
+#define CUDA_HOST_DEVICE_CALLABLE inline
+#define CUDA_DEVICE_CALLABLE inline
 #define CUDA_LAUNCHABLE
 #endif
 
@@ -36,9 +36,58 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 		return true;
 }
 
+/**
+ * Calculates the index of the last `gdf_valid_type` element in the validity
+ * bitmask for a given column's size.
+ *
+ * @note Note that this function assumes that `gdf_valid_type` is unsigned char
+ * @note This function is different gdf_get_num_bytes_for_valids_allocation
+ * because it refers to the last `gdf_valid_type` element that refers to
+ * elements in the column, NOT the last element in the allocation
+ *
+ * @param[in] column_size the number of elements
+ * @return The index of the last `gdf_valid_type` element that refers to
+ * elements in a column of size @p column_size
+ */
 CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type size) { 
-	return (( size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
+gdf_size_type gdf_last_bitmask_index(gdf_size_type column_size) {
+  return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
+}
+
+
+CUDA_HOST_DEVICE_CALLABLE
+gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) {
+  return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
+}
+
+// Buffers are padded to 64-byte boundaries (for SIMD) static
+static constexpr int32_t kArrowAlignment = 64;
+
+// Tensors are padded to 64-byte boundaries static
+static constexpr int32_t kTensorAlignment = 64;
+
+// Align on 8-byte boundaries in IPC static
+static constexpr int32_t kArrowIpcAlignment = 8;
+
+// Align on 4-byte boundaries in CUDF static
+static constexpr int32_t kCudfIpcAlignment = 4;
+
+// todo, enable arrow ipc utils, and remove this method
+CUDA_HOST_DEVICE_CALLABLE
+static gdf_size_type PaddedLength(int64_t nbytes,
+                                  int32_t alignment = kArrowAlignment) {
+  return ((nbytes + alignment - 1) / alignment) * alignment;
+}
+
+// Calculates number of bytes for valid bitmask for a column of a specified sizek
+CUDA_HOST_DEVICE_CALLABLE
+gdf_size_type gdf_get_num_bytes_for_valids_allocation(
+    gdf_size_type column_size) {
+  static_assert(sizeof(gdf_valid_type) == 1,
+                "gdf_valid_type assumed to be 1 byte");
+  return PaddedLength(
+      (column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE,
+      kArrowAlignment);
 }
 
 /* --------------------------------------------------------------------------*/
