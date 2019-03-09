@@ -54,9 +54,11 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
+        print("left dtype: " + str(list_lhs[idx].dtype))
 
         if name not in left_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
+            print("out: " + str(result_cols[res_idx].dtype))
             result_col_names.append(name)
             res_idx = res_idx + 1
         idx = idx + 1
@@ -69,6 +71,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         else:
             dtype = col_rhs[name]._column.dtype
         result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=dtype, null_count=0)
+        print("out: " + str(result_cols[res_idx].dtype))
         result_col_names.append(name)
         left_idx[idx] = list(col_lhs.keys()).index(name)
         right_idx[idx] = list(col_rhs.keys()).index(name)
@@ -79,9 +82,11 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
         list_rhs[idx] = column_view_from_column(col._column)
+        print("right: " + str(list_rhs[idx].dtype))
 
         if name not in right_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
+            print("out: " + str(result_cols[res_idx].dtype))
             result_col_names.append(name)
             res_idx = res_idx + 1
         idx = idx + 1

@@ -384,7 +384,10 @@ class StringColumn(columnops.TypedColumnBase):
     @property
     def indices(self):
         if self._indices is None:
-            out_dev_arr = rmm.device_array(len(self), dtype='int32')
+            out_dev_arr = rmm.device_array(
+                self.nvcategory.size(),
+                dtype='int32'
+            )
             ptr = get_ctype_ptr(out_dev_arr)
             self.nvcategory.values(devptr=ptr)
             self._indices = Buffer(out_dev_arr)

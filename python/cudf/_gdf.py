@@ -215,17 +215,18 @@ def cffi_view_to_column_mem(cffi_view):
             dtype='int32',
             finalizer=rmm._make_finalizer(data_ptr, 0)
         )
-        del(data)
         nvcat_ptr = int(ffi.cast("uintptr_t", cffi_view.dtype_info.category))
         nvcat_obj = nvcategory.nvcategory(nvcat_ptr)
         nvstr_obj = nvcat_obj.to_strings()
-        mask_ptr = int(ffi.cast("uintptr_t", cffi_view.valid))
-        mask = rmm.device_array_from_ptr(
-                mask_ptr,
-                nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
-                dtype=mask_dtype,
-                finalizer=rmm._make_finalizer(mask_ptr, 0)
-            )
+        mask = None
+        if cffi_view.valid:
+            mask_ptr = int(ffi.cast("uintptr_t", cffi_view.valid))
+            mask = rmm.device_array_from_ptr(
+                    mask_ptr,
+                    nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(mask_ptr, 0)
+                )
         return nvstr_obj, mask
     else:
         intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
@@ -235,7 +236,7 @@ def cffi_view_to_column_mem(cffi_view):
             dtype=gdf_to_np_dtype(cffi_view.dtype),
             finalizer=rmm._make_finalizer(intaddr, 0)
         )
-
+        mask = None
         if cffi_view.valid:
             intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
             mask = rmm.device_array_from_ptr(
@@ -244,8 +245,6 @@ def cffi_view_to_column_mem(cffi_view):
                 dtype=mask_dtype,
                 finalizer=rmm._make_finalizer(intaddr, 0)
             )
-        else:
-            mask = None
 
         return data, mask
 
