@@ -6,7 +6,9 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
+    add_executable(${CMAKE_TEST_NAME}
+                   ${CMAKE_TEST_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
@@ -52,10 +54,10 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
-set(CUDF_INTERNAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cudf/cudf_internal_test.cu")
+set(ERROR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/error/error_handling_test.cu")
 
-ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
+ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - filter tests ----------------------------------------------------------------------------------
@@ -64,8 +66,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gdf_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -102,7 +103,7 @@ set(BITMASK_TEST_SRC
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - bit_mask tests ---------------------------------------------------------------------------------
+# - bit_mask tests --------------------------------------------------------------------------------
 
 set(BIT_MASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
@@ -165,6 +166,16 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
+# - binary tests ----------------------------------------------------------------------------------
+
+set(BINARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-operands-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-integration-test.cpp")
+
+ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
 # - csv tests -------------------------------------------------------------------------------------
 
 set(CSV_TEST_SRC
@@ -173,14 +184,14 @@ set(CSV_TEST_SRC
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
-# - sort tests -------------------------------------------------------------------------------------
+# - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
-# - types tests -------------------------------------------------------------------------------------
+# - types tests -----------------------------------------------------------------------------------
 
 set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
@@ -189,12 +200,38 @@ set(TYPES_TEST_SRC
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
+# - copying tests ---------------------------------------------------------------------------------
+
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - utilities tests -------------------------------------------------------------------------------
+
+set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+
+ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
 
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
+
+###################################################################################################
+# - table tests -----------------------------------------------------------------------------------
+
+set(TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+
+ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################

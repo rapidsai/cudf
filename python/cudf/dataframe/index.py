@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import pickle
 from copy import deepcopy, copy
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
@@ -144,6 +145,12 @@ class Index(object):
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
+
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
 
@@ -281,6 +288,9 @@ class RangeIndex(Index):
             return index
         elif isinstance(index, (list, np.ndarray)):
             index = np.array(index)
+            index = rmm.to_device(index)
+
+        if isinstance(index, (DeviceNDArray)):
             return self.take(index)
         else:
             raise ValueError(index)

@@ -4,15 +4,15 @@
 #include <cuda_runtime_api.h>
 #include <vector>
 #include "cudf.h"
-#include "error_utils.h"
+#include "error_utils.hpp"
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ __forceinline__
 #define CUDA_DEVICE_CALLABLE __device__ __forceinline__
 #define CUDA_LAUNCHABLE __global__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE
-#define CUDA_DEVICE_CALLABLE
+#define CUDA_HOST_DEVICE_CALLABLE inline
+#define CUDA_DEVICE_CALLABLE inline
 #define CUDA_LAUNCHABLE
 #endif
 

@@ -49,7 +49,7 @@
 #include "datetime_parser.cuh"
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/cudf_utils.h" 
@@ -240,7 +240,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 			first_row_len = raw_csv->num_bytes / sizeof(char);
 		}
 		first_row.resize(first_row_len);
-		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
+		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, first_row_len * sizeof(char), cudaMemcpyDefault));
 	}
 
 	int num_cols = 0;
@@ -251,17 +251,30 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 		if(first_row[pos] == raw_csv->opts.quotechar) {
 			quotation = !quotation;
 		}
-		else if (!quotation &&
-				 (first_row[pos] == raw_csv->opts.delimiter ||
-				 first_row[pos] == raw_csv->opts.terminator)) {
-			// Got to the end of a column
+		// Check if end of a column/row
+		else if (pos == first_row.size() - 1 ||
+				 (!quotation && first_row[pos] == raw_csv->opts.delimiter)) {
+			// This is the header, add the column name
 			if (raw_csv->header_row >= 0) {
-				// first_row is the header, add the column name
-				string new_col_name(first_row.data() + prev, pos - prev);
+				// Include the current character, in case the line is not terminated
+				int col_name_len = pos - prev + 1;
+				// Exclude the delimiter/terminator is present
+				if (first_row[pos] == raw_csv->opts.delimiter || first_row[pos] == raw_csv->opts.terminator) {
+					--col_name_len;
+				}
+				// Also exclude '\r' character at the end of the column name if it's part of the terminator
+				if (col_name_len > 0 &&
+					raw_csv->opts.terminator == '\n' &&
+					first_row[pos] == '\n' &&
+					first_row[pos - 1] == '\r') {
+					--col_name_len;
+				}
+
+				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
 			}
 			else {
-				// first_row is the first data row, add the automatically generated name
+				// This is the first data row, add the automatically generated name
 				raw_csv->col_names.push_back(raw_csv->prefix + std::to_string(num_cols));
 			}
 			num_cols++;
@@ -319,12 +332,12 @@ gdf_error read_csv(csv_read_arg *args)
 	} else {
 		raw_csv->opts.terminator = args->lineterminator;
 	}
-	if (args->quotechar != '\0') {
+	if (args->quotechar != '\0' && args->quoting != QUOTE_NONE) {
 		raw_csv->opts.quotechar = args->quotechar;
-		raw_csv->opts.keepquotes = !args->quoting;
+		raw_csv->opts.keepquotes = false;
 		raw_csv->opts.doublequote = args->doublequote;
 	} else {
-		raw_csv->opts.quotechar = args->quotechar;
+		raw_csv->opts.quotechar = '\0';
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}
@@ -433,9 +446,11 @@ gdf_error read_csv(csv_read_arg *args)
 		if (raw_csv->byte_range_size != 0 && padded_byte_range_size < map_size) {
 			// Need to make sure that w/ padding we don't overshoot the end of file
 			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
-			// Ignore page padding for parsing purposes
-			raw_csv->num_bytes = map_size - page_padding;
+
 		}
+
+		// Ignore page padding for parsing purposes
+		raw_csv->num_bytes = map_size - page_padding;
 
 		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
 	
@@ -470,8 +485,11 @@ gdf_error read_csv(csv_read_arg *args)
 	checkError(error, "call to record number of rows");
 
 	//-----------------------------------------------------------------------------
-	//-- Allocate space to hold the record starting point
-	RMM_TRY( RMM_ALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * raw_csv->num_records, 0) ); 
+	//-- Allocate space to hold the record starting points
+	const bool last_line_terminated = (h_uncomp_data[h_uncomp_size - 1] == raw_csv->opts.terminator);
+	// If the last line is not terminated, allocate space for the EOF entry (added later)
+	const gdf_size_type record_start_count = raw_csv->num_records + (last_line_terminated ? 0 : 1);
+	RMM_TRY( RMM_ALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * record_start_count, 0) ); 
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
@@ -510,6 +528,14 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
 		thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 		raw_csv->num_records = recCount;
+	}
+
+	if (!last_line_terminated){
+		// Add the EOF as the last record when the terminator is missing in the last line
+		const cu_recstart_t eof_offset = h_uncomp_size;
+		CUDA_TRY(cudaMemcpy(raw_csv->recStart + raw_csv->num_records, &eof_offset, sizeof(cu_recstart_t), cudaMemcpyDefault));
+		// Update the record count
+		++raw_csv->num_records;
 	}
 
 	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, raw_csv);
@@ -773,6 +799,7 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_dtypes);
 	free(h_valid);
 	free(h_data);
+	free(raw_csv->h_parseCol);
 
 	if (raw_csv->num_records != 0) {
 		error = launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
@@ -781,7 +808,16 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		// Sync with the default stream, just in case create_from_index() is asynchronous 
 		CUDA_TRY(cudaStreamSynchronize(0));
+	}
 
+	// Free buffers that are not used from this point on
+	RMM_TRY( RMM_FREE( d_data, 0 ) );
+	RMM_TRY( RMM_FREE ( raw_csv->recStart, 0) );
+	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) );
+	RMM_TRY( RMM_FREE( d_dtypes, 0 ) );
+	RMM_TRY( RMM_FREE( d_valid, 0 ) );
+
+	if (raw_csv->num_records != 0) {
 		stringColCount=0;
 		for (int col = 0; col < raw_csv->num_active_cols; col++) {
 
@@ -791,6 +827,8 @@ gdf_error read_csv(csv_read_arg *args)
 				continue;
 
 			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+
 			if ((raw_csv->opts.quotechar != '\0') && (raw_csv->opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
 				// quotechar in quote fields results in reduction to single
@@ -802,8 +840,6 @@ gdf_error read_csv(csv_read_arg *args)
 			else {
 				gdf->data = stringCol;
 			}
-
-			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
 
 			stringColCount++;
 		}
@@ -817,24 +853,10 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 
-	// free up space that is no longer needed
-	if (h_str_cols != NULL)
-		free ( h_str_cols);
-
-	free(raw_csv->h_parseCol);
-
-	if (d_str_cols != NULL)
-		RMM_TRY( RMM_FREE( d_str_cols, 0 ) ); 
-
-	RMM_TRY( RMM_FREE( d_valid, 0 ) );
+	// Free up remaining internal buffers
 	RMM_TRY( RMM_FREE( d_valid_count, 0 ) );
-	RMM_TRY( RMM_FREE( d_dtypes, 0 ) );
-	RMM_TRY( RMM_FREE( d_data, 0 ) ); 
 
-	RMM_TRY( RMM_FREE( raw_csv->recStart, 0 ) ); 
-	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) ); 
 	RMM_TRY( RMM_FREE ( raw_csv->data, 0) );
-
 
 	args->data 			= cols;
 	args->num_cols_out	= raw_csv->num_active_cols;
@@ -1186,17 +1208,11 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 	// process the data
 	cu_reccnt_t tokenCount = 0;
 	for (long x = 0; x < byteToProcess; x++) {
-		
 		// Scan and log records. If quotations are enabled, then also log quotes
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 			tokenCount++;
-		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
-		           raw[x] == '\r' && raw[x + 1L] == '\n') {
-			x++;
-			tokenCount++;
 		}
-
 	}
 	atomicAdd(num_records, tokenCount);
 }
@@ -1225,8 +1241,7 @@ gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
                                   raw_csv_t *csvData) {
 
 	char* d_chunk = nullptr;
-	// Allocate extra byte in case \r\n is at the chunk border
-	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes, 0)); 
 	
 	cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
@@ -1245,8 +1260,8 @@ gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
 		// include_first_row should only apply to the first chunk
 		const bool cu_include_first_row = (ci == 0) && (csvData->byte_range_offset == 0);
 		
-		// Copy chunk to device. Copy extra byte if not last chunk
-		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
+		// Copy chunk to device
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		storeRecordStart <<< gridSize, blockSize >>> (
@@ -1310,22 +1325,12 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
-
 		// Scan and log records. If quotations are enabled, then also log quotes
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
-
-			const auto pos = atomicAdd(num_records, 1ull);
-			recStart[pos] = did + chunk_offset + x + 1;
-
-		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
-				   raw[x] == '\r' && raw[x + 1L] == '\n') {
-
-			x++;
 			const auto pos = atomicAdd(num_records, 1ull);
 			recStart[pos] = did + chunk_offset + x + 1;
 		}
-
 	}
 }
 
@@ -1588,6 +1593,20 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
   return GDF_SUCCESS;
 }
 
+/**
+* @brief Returns true is the input character is a valid digit.
+* Supports both decimal and hexadecimal digits (uppercase and lowercase).
+*/
+__device__ __forceinline__
+bool isDigit(char c, bool is_hex){
+	if (c >= '0' && c <= '9') return true;
+	if (is_hex) {
+		if (c >= 'A' && c <= 'F') return true;
+		if (c >= 'a' && c <= 'f') return true;
+	}
+	return false;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -1661,10 +1680,13 @@ void dataTypeDetection(char *raw_csv,
 			// This could possibly result in additional empty fields
 			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
 
-			long strLen=tempPos-start+1;
+			const long strLen = tempPos - start + 1;
+
+			const bool maybe_hex = ((strLen > 2 && raw_csv[start] == '0' && raw_csv[start + 1] == 'x') ||
+				(strLen > 3 && raw_csv[start] == '-' && raw_csv[start + 1] == '0' && raw_csv[start + 2] == 'x'));
 
 			for(long startPos=start; startPos<=tempPos; startPos++){
-				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
+				if(isDigit(raw_csv[startPos], maybe_hex)){
 					countNumber++;
 					continue;
 				}
@@ -1684,11 +1706,21 @@ void dataTypeDetection(char *raw_csv,
 				}
 			}
 
+			// Integers have to have the length of the string
+			long int_req_number_cnt = strLen;
+			// Off by one if they start with a minus sign
+			if(raw_csv[start]=='-' && strLen > 1){
+				--int_req_number_cnt;
+			}
+			// Off by one if they are a hexadecimal number
+			if(maybe_hex) {
+				--int_req_number_cnt;
+			}
+
 			if(strLen==0){ // Removed spaces ' ' in the pre-processing and thus we can have an empty string.
 				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
 			}
-			// Integers have to have the length of the string or can be off by one if they start with a minus sign
-			else if(countNumber==(strLen) || ( strLen>1 && countNumber==(strLen-1) && raw_csv[start]=='-') ){
+			else if(countNumber==int_req_number_cnt){
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
 				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
