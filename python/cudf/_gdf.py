@@ -216,8 +216,12 @@ def cffi_view_to_column_mem(cffi_view):
             finalizer=rmm._make_finalizer(data_ptr, 0)
         )
         nvcat_ptr = int(ffi.cast("uintptr_t", cffi_view.dtype_info.category))
+        print("creating nvcategory object")
+        print(cffi_view.dtype_info.category)
         nvcat_obj = nvcategory.nvcategory(nvcat_ptr)
+        print(nvcat_obj)
         nvstr_obj = nvcat_obj.to_strings()
+        print(nvstr_obj)
         mask = None
         if cffi_view.valid:
             mask_ptr = int(ffi.cast("uintptr_t", cffi_view.valid))
@@ -227,6 +231,8 @@ def cffi_view_to_column_mem(cffi_view):
                     dtype=mask_dtype,
                     finalizer=rmm._make_finalizer(mask_ptr, 0)
                 )
+        print("returning nvstring object")
+        print(cffi_view.dtype_info.category)
         return nvstr_obj, mask
     else:
         intaddr = int(ffi.cast("uintptr_t", cffi_view.data))

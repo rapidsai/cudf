@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 import pyarrow as pa
-from math import isnan, isinf
+from math import isnan, isinf, ceil
 
 from numba import njit
 
@@ -11,10 +11,12 @@ from librmm_cffi import librmm as rmm
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
+mask_byte_padding = 64
 
 
 def calc_chunk_size(size, chunksize):
-    return (size + chunksize - 1) // chunksize
+    return mask_byte_padding * \
+           ceil(((size + chunksize - 1) // chunksize) / mask_byte_padding)
 
 
 _TypeMinMax = namedtuple('_TypeMinMax', 'min,max')

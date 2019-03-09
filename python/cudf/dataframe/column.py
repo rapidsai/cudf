@@ -220,16 +220,14 @@ class Column(object):
     def cffi_view(self):
         """LibGDF CFFI view
         """
-        nvcat = None
         if self.dtype == np.dtype('object'):
-            nvcat = self.nvcategory
             return _gdf.columnview(
                 size=self.indices.size,
                 data=self.indices,
                 mask=self._mask,
                 dtype=self.dtype,
                 null_count=self._null_count,
-                nvcat=nvcat
+                nvcat=self.nvcategory
             )
         else:
             return _gdf.columnview(
@@ -237,8 +235,7 @@ class Column(object):
                 data=self._data,
                 mask=self._mask,
                 dtype=self.dtype,
-                null_count=self._null_count,
-                nvcat=nvcat
+                null_count=self._null_count
             )
 
     def set_mask(self, mask, null_count=None):

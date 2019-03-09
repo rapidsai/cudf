@@ -234,6 +234,7 @@ class Groupby(object):
             if agg_func is None:
                 raise RuntimeError(
                     "ERROR: this aggregator has not been implemented yet")
+
             err = agg_func(
                 ncols,
                 cols,
@@ -250,10 +251,22 @@ class Groupby(object):
             num_row_results = out_col_agg.size
 
             # NVStrings columns are not the same going in as coming out
-            out_col_values_series = [
-                Series(Column.from_cffi_view(col)) for col in out_col_values
-            ]
-            out_col_agg_series = Series(Column.from_cffi_view(out_col_agg))
+            for i, col in enumerate(out_col_values_series):
+                if col.dtype == np.dtype("object"):
+                    out_col_values_series[i] = Series(
+                        Column.from_cffi_view(out_col_values[i])
+                    )
+            if out_col_agg_series.dtype == np.dtype("object"):
+                print("before out_col_agg")
+
+                # Double free happens here!
+                out_col_agg_series = Series(
+                    Column.from_cffi_view(out_col_agg)
+                )
+                # End Double free
+
+                print("after out_col_agg")
+                print(out_col_agg_series)
 
             if first_run:
                 for i, thisBy in enumerate(self._by):
