@@ -145,6 +145,12 @@ class Index(object):
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
+
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
 

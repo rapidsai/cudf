@@ -61,6 +61,7 @@
 
 ## Improvements
 
+- PR #892 Add support for heterogeneous types in binary ops with JIT 
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #561 Add Doxygen style comments to Join CUDA functions
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
@@ -77,7 +78,6 @@
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
-- PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #952 Added trait to map C++ type to `gdf_dtype`
@@ -90,6 +90,7 @@
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
+- PR #1033 Update `fillna()` to use libcudf function `gdf_replace_nulls`
 - PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
 - PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
 - PR #1100 Adds `CUDF_EXPECTS` error-checking macro
@@ -97,6 +98,7 @@
 - PR #1111 Added cudf::table
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
+- PR #1128 CSV Reader: The last data row does not need to be line terminated
 
 ## Bug Fixes
 
@@ -141,6 +143,7 @@
 - PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
+- PR #1145 Issue with .agg call on multi-column dataframes
 
 
 # cuDF 0.5.1 (05 Feb 2019)
