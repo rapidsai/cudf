@@ -263,6 +263,9 @@ class Series(object):
             return self._copy_construct(data=self.data[:0],
                                         index=self.index[:0])
 
+        if self.dtype == np.dtype("object"):
+            return self[indices]
+
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
         if self._column.mask:

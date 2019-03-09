@@ -8,7 +8,6 @@ from pandas.api.types import is_categorical_dtype
 
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
-from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
@@ -176,7 +175,8 @@ class Groupby(object):
                     # This isn't ideal, but no better way to create an
                     # nvstrings object of correct size
                     gather_map = zeros(col_agg.size, dtype='int32')
-                    col = Series([None], dtype='str')[gather_map]
+                    col = Series([None], dtype='str')[gather_map]\
+                        .reset_index(drop=True)
                 else:
                     col = Series(
                         Buffer(
@@ -217,7 +217,7 @@ class Groupby(object):
                     out_col_agg_series = Series(
                         [None],
                         dtype='str'
-                    )[gather_map]
+                    )[gather_map].reset_index(drop=True)
                 else:
                     out_col_agg_series = Series(
                         Buffer(
@@ -250,23 +250,33 @@ class Groupby(object):
 
             num_row_results = out_col_agg.size
 
-            # NVStrings columns are not the same going in as coming out
+            # NVStrings columns are not the same going in as coming out but we
+            # can't create entire CFFI views otherwise multiple objects will
+            # try to free the memory
+            import nvcategory
             for i, col in enumerate(out_col_values_series):
                 if col.dtype == np.dtype("object"):
-                    out_col_values_series[i] = Series(
-                        Column.from_cffi_view(out_col_values[i])
+                    nvcat_ptr = int(
+                        ffi.cast(
+                            "uintptr_t",
+                            out_col_values[i].dtype_info.category
+                        )
                     )
+                    nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+                    nvstr_obj = nvcat_obj.to_strings()
+                    out_col_values_series[i]._column._data = nvstr_obj
+                    out_col_values_series[i]._column._nvcategory = nvcat_obj
             if out_col_agg_series.dtype == np.dtype("object"):
-                print("before out_col_agg")
-
-                # Double free happens here!
-                out_col_agg_series = Series(
-                    Column.from_cffi_view(out_col_agg)
+                nvcat_ptr = int(
+                    ffi.cast(
+                        "uintptr_t",
+                        out_col_agg.dtype_info.category
+                    )
                 )
-                # End Double free
-
-                print("after out_col_agg")
-                print(out_col_agg_series)
+                nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+                nvstr_obj = nvcat_obj.to_strings()
+                out_col_agg_series._column._data = nvstr_obj
+                out_col_agg_series._column._nvcategory = nvcat_obj
 
             if first_run:
                 for i, thisBy in enumerate(self._by):
@@ -280,8 +290,8 @@ class Groupby(object):
                             ordered=self._df[thisBy].cat.ordered
                         )
 
-            # print(out_col_agg_series)
-            out_col_agg_series.data.size = num_row_results
+            if out_col_agg_series.dtype != np.dtype("object"):
+                out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             if isinstance(val_columns_out, (str, Number)):
@@ -290,7 +300,8 @@ class Groupby(object):
                 result[val_columns_out[col_count]
                        ] = out_col_agg_series[:num_row_results]
 
-            out_col_agg_series.data.size = num_row_results
+            if out_col_agg_series.dtype != np.dtype("object"):
+                out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             first_run = False

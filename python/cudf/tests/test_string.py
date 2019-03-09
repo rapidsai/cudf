@@ -473,6 +473,9 @@ def test_string_groupby_key(num_keys):
     expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
     got = gdf.groupby(list(range(num_keys)), as_index=False).count()
 
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
+
     assert_eq(expect, got)
 
 
@@ -491,12 +494,24 @@ def test_string_groupby_non_key(num_cols):
 
     expect = pdf.groupby('a', as_index=False).count()
     got = gdf.groupby('a', as_index=False).count()
+
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
+
     assert_eq(expect, got)
 
     expect = pdf.groupby('a', as_index=False).max()
     got = gdf.groupby('a', as_index=False).max()
+
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
+
     assert_eq(expect, got)
 
     expect = pdf.groupby('a', as_index=False).min()
     got = gdf.groupby('a', as_index=False).min()
+
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
+
     assert_eq(expect, got)
