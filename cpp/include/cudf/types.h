@@ -93,6 +93,33 @@ typedef struct {
 } gdf_dtype_extra_info;
 
 
+
+/**
+ * @brief Union used to store single value for scalar type
+ */
+// TODO: #1119 Use traits to set `gdf_data` elements
+typedef union {
+  int8_t        si08;  /**< GDF_INT8      */
+  int16_t       si16;  /**< GDF_INT16     */
+  int32_t       si32;  /**< GDF_INT32     */
+  int64_t       si64;  /**< GDF_INT64     */
+  float         fp32;  /**< GDF_FLOAT32   */
+  double        fp64;  /**< GDF_FLOAT64   */
+  gdf_date32    dt32;  /**< GDF_DATE32    */
+  gdf_date64    dt64;  /**< GDF_DATE64    */
+  gdf_timestamp tmst;  /**< GDF_TIMESTAMP */
+} gdf_data;
+
+/**
+ * @brief A struct to hold a scalar (single) value and its type information
+ */
+typedef struct {
+  gdf_data  data;      /**< A union that represents the value */
+  gdf_dtype dtype;     /**< The datatype of the scalar's data */
+  bool      is_valid;  /**< False if the value is null */
+} gdf_scalar;
+
+
 /**
  * @brief The C representation of a column in CUDF. This is the main unit of operation.
  *
@@ -165,6 +192,27 @@ typedef enum {
   GDF_ORANGE,
   GDF_NUM_COLORS, ///< Add new colors above this line
 } gdf_color;
+
+
+/**
+ * @brief Types of binary operations that can be performed on data.
+ */
+typedef enum {
+  GDF_ADD,            /**< operator + */
+  GDF_SUB,            /**< operator - */
+  GDF_MUL,            /**< operator * */
+  GDF_DIV,            /**< operator / using common type of lhs and rhs */
+  GDF_TRUE_DIV,       /**< operator / after promoting type to floating point*/
+  GDF_FLOOR_DIV,      /**< operator / after promoting to float and then flooring the result */
+  GDF_MOD,            /**< operator %  */
+  GDF_POW,            /**< lhs ^ rhs   */
+  GDF_EQUAL,          /**< operator == */
+  GDF_NOT_EQUAL,      /**< operator != */
+  GDF_LESS,           /**< operator <  */
+  GDF_GREATER,        /**< operator >  */
+  GDF_LESS_EQUAL,     /**< operator <= */
+  GDF_GREATER_EQUAL,  /**< operator >= */
+} gdf_binary_operator;
 
 
 /** 
