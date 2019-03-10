@@ -50,7 +50,9 @@ NVCategory * combine_column_categories(gdf_column * input_columns[],int num_colu
       combined_category = combined_category->merge_and_remap(
           * static_cast<NVCategory *>(
               input_columns[column_index]->dtype_info.category));
-      NVCategory::destroy(temp);
+      if(column_index > 1){
+        NVCategory::destroy(temp);
+      }
     }
     if(num_columns == 1){
       return combined_category->copy();

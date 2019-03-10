@@ -704,7 +704,9 @@ TEST_F(NVCategoryJoinTest, join_test){
 	}
 
 	gdf_raw_left_columns.push_back(left_column);
+  gdf_raw_left_columns.push_back(left_column);
 	gdf_raw_right_columns.push_back(right_column);
+  gdf_raw_right_columns.push_back(right_column);
 
 	std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
