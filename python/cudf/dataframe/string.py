@@ -312,6 +312,13 @@ class StringMethods(object):
         if expand is not True:
             raise NotImplementedError("`expand` parameter is not supported")
 
+        # Pandas treats 0 as all
+        if n == 0 or n == -1:
+            n = -1
+        else:
+            # https://github.com/rapidsai/custrings/issues/132
+            n = n + 1
+
         from cudf.dataframe import DataFrame
         out_df = DataFrame(index=self._index)
         out = self._parent.data.split(delimiter=pat, n=n)
