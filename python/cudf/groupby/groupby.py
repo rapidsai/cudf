@@ -253,9 +253,9 @@ class Groupby(object):
             # NVStrings columns are not the same going in as coming out but we
             # can't create entire CFFI views otherwise multiple objects will
             # try to free the memory
-            import nvcategory
             for i, col in enumerate(out_col_values_series):
                 if col.dtype == np.dtype("object"):
+                    import nvcategory
                     nvcat_ptr = int(
                         ffi.cast(
                             "uintptr_t",
@@ -267,6 +267,7 @@ class Groupby(object):
                     out_col_values_series[i]._column._data = nvstr_obj
                     out_col_values_series[i]._column._nvcategory = nvcat_obj
             if out_col_agg_series.dtype == np.dtype("object"):
+                import nvcategory
                 nvcat_ptr = int(
                     ffi.cast(
                         "uintptr_t",
