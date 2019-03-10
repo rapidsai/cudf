@@ -457,15 +457,15 @@ gdf_error construct_join_output_df(
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size), 0) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size)) );
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size), 0) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size)) );
     }
     //create joined output column data buffers
     for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
@@ -473,8 +473,8 @@ gdf_error construct_join_output_df(
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size), 0) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(join_size)) );
     }
 
 
@@ -632,8 +632,8 @@ gdf_error join_call_compute_df(
         get_column_byte_width(new_left_column, &col_width);
         RMM_TRY( RMM_ALLOC(&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
         if(left_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(left_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_last_bitmask_index(left_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_left_column->valid = nullptr;
         }
@@ -642,8 +642,8 @@ gdf_error join_call_compute_df(
 
         RMM_TRY( RMM_ALLOC(&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
         if(right_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_bytes_for_valids_allocation(right_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_last_bitmask_index(right_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_right_column->valid = nullptr;
         }
