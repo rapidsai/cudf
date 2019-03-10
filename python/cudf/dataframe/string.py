@@ -11,7 +11,7 @@ import warnings
 from cudf.dataframe import columnops, numerical
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
-# from cudf.comm.serialize import register_distributed_serializer
+from cudf.comm.serialize import register_distributed_serializer
 
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from librmm_cffi import librmm as rmm
@@ -341,6 +341,7 @@ class StringColumn(columnops.TypedColumnBase):
         """
         assert isinstance(data, nvstrings.nvstrings)
         self._data = data
+        self._dtype = np.dtype("object")
 
         if null_count is None:
             null_count = data.null_count()
@@ -356,6 +357,30 @@ class StringColumn(columnops.TypedColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    def serialize(self, serialize):
+        header = {
+            'null_count': self._null_count,
+        }
+        frames = []
+
+        arrow_array = self.to_arrow()
+
+        header['data_buffer'], data_frames = serialize(arrow_array)
+        header['data_frame_count'] = len(data_frames)
+        frames.extend(data_frames)
+        header['frame_count'] = len(frames)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        data_nframe = header['data_frame_count']
+        data = deserialize(header['data_buffer'], frames[:data_nframe])
+        data = columnops.as_column(data)
+
+        col = cls(data=data, null_count=header['null_count'])
+        return col
+
     def str(self, index=None):
         return StringMethods(self, index=index)
 
@@ -364,7 +389,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     @property
     def dtype(self):
-        return np.dtype('object')
+        return self._dtype
 
     @property
     def data(self):
@@ -520,3 +545,6 @@ class StringColumn(columnops.TypedColumnBase):
     def copy(self, deep=True):
         params = self._replace_defaults()
         return type(self)(**params)
+
+
+register_distributed_serializer(StringColumn)

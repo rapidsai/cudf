@@ -117,3 +117,17 @@ def test_serialize_datetime():
     recreated = deserialize(*serialize(gdf))
     # Check
     pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
+
+
+@require_distributed
+def test_serialize_string():
+    # Make frame with string column
+    df = pd.DataFrame({'x': np.random.randint(0, 5, size=5),
+                       'y': np.random.normal(size=5)})
+    str_data = ['a', 'bc', 'def', 'ghij', 'klmno']
+    df['timestamp'] = str_data
+    gdf = cudf.DataFrame.from_pandas(df)
+    # (De)serialize roundtrip
+    recreated = deserialize(*serialize(gdf))
+    # Check
+    pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
