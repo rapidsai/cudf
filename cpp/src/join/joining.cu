@@ -604,7 +604,7 @@ gdf_error join_call_compute_df(
 
   std::vector<gdf_column*> new_left_cols(left_cols, left_cols + num_left_cols);
   std::vector<gdf_column*> new_right_cols(right_cols, right_cols + num_right_cols);
-  std::vector<gdf_column> temp_columns_to_free;
+  std::vector<gdf_column> temp_columns_to_free(num_cols_to_join * 2);
   if(at_least_one_category_column){
     for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
       if(left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY){
@@ -614,15 +614,8 @@ gdf_error join_call_compute_df(
         gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
 
 
-        gdf_column new_left_column;
-        gdf_column new_right_column;
-
-
-
-        temp_columns_to_free.push_back(new_left_column);
-        temp_columns_to_free.push_back(new_right_column);
-        gdf_column * new_left_column_ptr = &temp_columns_to_free[temp_columns_to_free.size()-2];
-        gdf_column * new_right_column_ptr = &temp_columns_to_free[temp_columns_to_free.size()-1];
+        gdf_column * new_left_column_ptr = &temp_columns_to_free[(join_column_index * 2)];
+        gdf_column * new_right_column_ptr = &temp_columns_to_free[(join_column_index * 2)+1];
 
         gdf_column * input_join_columns_merge[2] = {left_original_column, right_original_column};
         gdf_column * new_join_columns[2] = {new_left_column_ptr,

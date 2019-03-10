@@ -42,8 +42,7 @@ gdf_error validate_categories(gdf_column * input_columns[], int num_columns, gdf
 }
 
 NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
-  NVCategory * combined_category = static_cast<NVCategory *>(
-        input_columns[0]->dtype_info.category)->copy();
+  NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
 
     for(int column_index = 1; column_index < num_columns; column_index++){
       NVCategory * temp = combined_category;
@@ -52,8 +51,13 @@ NVCategory * combine_column_categories(gdf_column * input_columns[],int num_colu
               input_columns[column_index]->dtype_info.category));
       NVCategory::destroy(temp);
     }
-    return combined_category;
+    if(num_columns == 1){
+      return combined_category->copy();
+    }else{
+      return combined_category;
+    }
 }
+
 
 gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns){
 
