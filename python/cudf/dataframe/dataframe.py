@@ -418,7 +418,10 @@ class DataFrame(object):
     def _call_op(self, other, internal_fn, fn):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if internal_fn == '_unaryop':
+            for col in self._cols:
+                result[col] = self._cols[col]._unaryop(fn)
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], internal_fn)(
                         other[k],
