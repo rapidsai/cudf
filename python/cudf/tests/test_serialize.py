@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import atexit
-
 import numpy as np
 import pandas as pd
 try:
@@ -16,11 +14,6 @@ from cudf.tests import utils
 
 require_distributed = pytest.mark.skipif(not _have_distributed,
                                          reason='no distributed')
-support_ipc = False
-require_ipc = pytest.mark.skipIf(
-    support_ipc,
-    reason='only on linux and multiprocess has .get_context',
-    )
 
 
 @require_distributed
@@ -91,18 +84,6 @@ def test_serialize_groupby():
     got = gb.mean()
     expect = outgb.mean()
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
-
-
-def _load_ipc(header, frames, result_queue):
-    cudf._gdf.rmm_initialize()
-
-    try:
-        out = deserialize(header, frames)
-        result_queue.put(out)
-    except Exception as e:
-        result_queue.put(e)
-
-    atexit.register(cudf._gdf.rmm_finalize)
 
 
 @require_distributed
