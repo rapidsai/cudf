@@ -408,6 +408,7 @@ gdf_error update_nvcategory_join_table(cudf::table source_table, cudf::table des
     }
 
   }
+  return GDF_SUCCESS;
 }
 
 template <JoinType join_type, typename size_type, typename index_type>
