@@ -22,11 +22,6 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
   new_category->get_values(static_cast<nv_category_index_type *>(column->data),
                            DEVICE_ALLOCATED);
 
-  //This is questionable behavior and should be reviewed by peers
-  //Smart pointers would be lovely here
-  if(column->dtype_info.category != nullptr){
-    NVCategory::destroy(static_cast<NVCategory *>(column->dtype_info.category));
-  }
   column->dtype_info.category = new_category;
 
 
