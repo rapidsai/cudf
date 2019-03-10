@@ -418,8 +418,13 @@ def test_string_split(data, pat, n, expand, expand_raise):
 
 
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
-@pytest.mark.parametrize('how', ['left', 'right', 'inner'])
-def test_string_join_key(num_keys, how):
+@pytest.mark.parametrize('how,how_raise', [
+    ('left', 0),
+    ('right', 1),
+    ('inner', 0),
+    ('outer', 0)
+])
+def test_string_join_key(num_keys, how, how_raise):
     str_data = ['a', 'b', 'c', 'd', 'e']
     other_data = [1, 2, 3, 4, 5]
 
@@ -434,15 +439,26 @@ def test_string_join_key(num_keys, how):
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
-    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
-    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
+    expectation = raise_builder(
+        [how_raise],
+        NotImplementedError
+    )
 
-    assert_eq(expect, got)
+    with expectation:
+        expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
+        got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
+
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('num_cols', [1, 2, 3])
-@pytest.mark.parametrize('how', ['left', 'right', 'inner'])
-def test_string_join_non_key(num_cols, how):
+@pytest.mark.parametrize('how,how_raise', [
+    ('left', 0),
+    ('right', 1),
+    ('inner', 0),
+    ('outer', 0)
+])
+def test_string_join_non_key(num_cols, how, how_raise):
     str_data = ['a', 'b', 'c', 'd', 'e']
     other_data = [1, 2, 3, 4, 5]
 
@@ -457,10 +473,16 @@ def test_string_join_non_key(num_cols, how):
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
-    expect = pdf.merge(pdf2, on=['a'], how=how)
-    got = gdf.merge(gdf2, on=['a'], how=how)
+    expectation = raise_builder(
+        [how_raise],
+        NotImplementedError
+    )
 
-    assert_eq(expect, got)
+    with expectation:
+        expect = pdf.merge(pdf2, on=['a'], how=how)
+        got = gdf.merge(gdf2, on=['a'], how=how)
+
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
