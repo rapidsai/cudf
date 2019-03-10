@@ -386,6 +386,29 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   return gdf_error_code;
 }
 
+gdf_error update_nvcategory_join_table(cudf::table source_table, cudf::table destination_table){
+  for(int i = 0; i < source_table.num_columns();i++){
+    gdf_column * original_column = source_table.get_column(i);
+    if(original_column->dtype == GDF_STRING_CATEGORY){
+      gdf_column * output_column = destination_table.get_column(i);
+      output_column->dtype_info.category = static_cast<NVCategory *>(original_column->dtype_info.category)->gather(
+                     (nv_category_index_type *) output_column->data,
+                     output_column->size,
+                     DEVICE_ALLOCATED);
+      if(output_column->size > 0){
+
+        CUDA_TRY( cudaMemcpy(
+            output_column->data,
+            static_cast<NVCategory *>(output_column->dtype_info.category)->values_cptr(),
+            sizeof(nv_category_index_type) * output_column->size,
+            cudaMemcpyDeviceToDevice) );
+      }
+    }
+
+  }
+  return GDF_SUCCESS;
+}
+
 template <JoinType join_type, typename size_type, typename index_type>
 gdf_error construct_join_output_df(
         std::vector<gdf_column*>& ljoincol,
@@ -467,6 +490,9 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &left_destination_table, check_bounds);
+
+      gdf_error update_err = update_nvcategory_join_table(left_source_table,left_destination_table);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     // Construct the right columns
@@ -479,6 +505,8 @@ gdf_error construct_join_output_df(
                            static_cast<index_type const *>(right_indices->data),
                            &right_destination_table, check_bounds);
 
+      gdf_error update_err = update_nvcategory_join_table(right_source_table,right_destination_table);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     // Construct the joined columns
@@ -502,6 +530,9 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&join_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &join_destination_table, check_bounds);
+
+      gdf_error update_err = update_nvcategory_join_table(join_source_table,join_destination_table);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     POP_RANGE();
@@ -528,6 +559,13 @@ gdf_error join_call_compute_df(
   GDF_REQUIRE(nullptr != left_join_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
+
+  for(int column_index = 0; column_index  < num_left_cols; column_index++){
+    GDF_REQUIRE(left_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+  }
+  for(int column_index = 0; column_index  < num_right_cols; column_index++){
+    GDF_REQUIRE(right_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+  }
 
   // Determine if requested output is the indices of matching rows, the fully
   // constructed output dataframe, or both
@@ -689,34 +727,7 @@ gdf_error join_call_compute_df(
 
 
 
-    //If any of the of type GDF_STRING_CATEGORY we need to
-    for(int output_column_index = 0; output_column_index < result_num_cols; output_column_index++){
-    	gdf_column * original_column;
-    	if(output_column_index < num_left_cols){
-    		original_column = new_left_cols[output_column_index];
-    	}else{
-    		original_column = new_right_cols[output_column_index - num_left_cols];
-    	}
 
-    	if(original_column->dtype == GDF_STRING_CATEGORY){
-
-        gdf_column* output_column = result_cols[output_column_index];
-
-        if(output_column->size > 0){
-
-          output_column->dtype_info.category = static_cast<NVCategory *>(original_column->dtype_info.category)->gather(
-              (nv_category_index_type *) output_column->data,
-              output_column->size,
-              DEVICE_ALLOCATED);
-
-          CUDA_TRY( cudaMemcpy(
-              output_column->data,
-              static_cast<NVCategory *>(output_column->dtype_info.category)->values_cptr(),
-              sizeof(nv_category_index_type) * output_column->size,
-              cudaMemcpyDeviceToDevice) );
-        }
-    	}
-    }
 
     //freeing up the temp column used to synch categories between columns
     for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
