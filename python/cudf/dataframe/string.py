@@ -313,7 +313,7 @@ class StringMethods(object):
             raise NotImplementedError("`expand` parameter is not supported")
 
         # Pandas treats 0 as all
-        if n == 0 or n == -1:
+        if n <= 0:
             n = -1
         else:
             # https://github.com/rapidsai/custrings/issues/132
