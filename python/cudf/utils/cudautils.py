@@ -6,11 +6,11 @@ from numba import cuda, int32, numpy_support
 from math import isnan
 
 from librmm_cffi import librmm as rmm
+from cudf import _gdf
 
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
 
-from cudf import _gdf
 
 def optimal_block_count(minblkct):
     """Return the optimal block count for a CUDA kernel launch.
