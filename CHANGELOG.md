@@ -31,6 +31,7 @@
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #913 Add DLPack support: convert between cuDF DataFrame and DLTensor
 - PR #939 Add ORC reader from PyArrow
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
@@ -57,7 +58,9 @@
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
 - PR #1032 Add string support to cuDF python
-- PR #1136 Removed `gdf_concat`
+- PR #1136 Removed `gdf_concat` 
+- PR #1148 Add cudf.sqrt for dataframes and Series
+
 
 ## Improvements
 
