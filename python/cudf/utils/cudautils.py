@@ -10,6 +10,7 @@ from librmm_cffi import librmm as rmm
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
 
+from cudf import _gdf
 
 def optimal_block_count(minblkct):
     """Return the optimal block count for a CUDA kernel launch.
@@ -278,8 +279,6 @@ def scan(vals, op=_gdf.GDF_SCAN_SUM):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
-    from cudf import _gdf
-
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,
                              dtype=vals.dtype)
