@@ -2351,7 +2351,15 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  */
 
 /**
- * @brief  returns the byte width of the data type of the gdf_column
+ * @brief returns the size in bytes of the specified gdf_dtype
+ * 
+ * @param dtype the data type for which to return the size
+ * @return gdf_size_type size in bytes
+ */
+gdf_size_type gdf_dtype_size(gdf_dtype dtype);
+
+/**
+ * @brief  returns the size in bytes of the data type of the gdf_column
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
@@ -2615,3 +2623,39 @@ gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
                        gdf_index_type out_indices[]);
+
+// forward declaration for DLPack functions below
+// This approach is necessary to satisfy CFFI
+struct DLManagedTensor;
+typedef struct DLManagedTensor DLManagedTensor_;
+
+/**
+ * @brief Convert a DLPack DLTensor into gdf_column(s)
+ * 
+ * Currently only 1D and 2D tensors are supported. This function makes copies
+ * of the input DLPack data into the created output columns.
+ * 
+ * @param[out] columns The output column(s)
+ * @param[out] num_columns The number of gdf_columns in columns
+ * @param[in] tensor The input DLPack DLTensor
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ */
+gdf_error gdf_from_dlpack(gdf_column** columns,
+                          gdf_size_type *num_columns,
+                          DLManagedTensor_ const * tensor);
+
+/**
+ * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
+ * 
+ * Currently only 1D and 2D tensors are supported. This function allocates the
+ * DLPack tensor data and copies the data from the input column(s) into the
+ * tensor.
+ * 
+ * @param[out] tensor The output DLTensor
+ * @param[in] columns An array of pointers to gdf_column 
+ * @param[in] num_columns The number of input columns
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ */
+gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
+                        gdf_column const * const * columns,
+                        gdf_size_type num_columns);
