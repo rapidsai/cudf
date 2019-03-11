@@ -13,6 +13,7 @@
 [submodule "thirdparty/dlpack"]
 	path = thirdparty/dlpack
 	url = https://github.com/rapidsai/dlpack.git
+	branch=cudf
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
