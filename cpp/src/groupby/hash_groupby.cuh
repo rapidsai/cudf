@@ -24,7 +24,7 @@
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
-
+namespace { // anonymous namespace
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Calls the Hash Based group by compute API to compute the groupby with 
@@ -385,6 +385,8 @@ gdf_error multi_pass_avg(int ncols,
   
   return GDF_SUCCESS;
 }
+
+} // anonymous namespace
 
 /* --------------------------------------------------------------------------*/
 /** 

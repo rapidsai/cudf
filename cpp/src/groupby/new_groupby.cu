@@ -10,6 +10,7 @@
 #include "utilities/error_utils.hpp"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
+#include "groupby/sort_groupby.cuh"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -363,4 +364,77 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
 
     return status;
   }
+}
+
+
+gdf_error gdf_group_by_sort(gdf_column* in_key_columns[],
+                       int num_key_columns,
+                       gdf_column* in_aggregation_columns[],
+                       int num_aggregation_columns,
+                       gdf_agg_op agg_ops[],
+                       gdf_column* out_key_columns[],
+                       gdf_column* out_aggregation_columns[],
+                       gdf_context* options)
+{
+
+  // TODO: Remove when single pass multi-agg is implemented
+  if(num_aggregation_columns > 1)
+    assert(false && "Only 1 aggregation column currently supported.");
+
+  // Ensure inputs aren't null
+  if( (0 == num_key_columns)
+      || (0 == num_aggregation_columns)
+      || (nullptr == in_key_columns)
+      || (nullptr == in_aggregation_columns)
+      || (nullptr == agg_ops)
+      || (nullptr == out_key_columns)
+      || (nullptr == out_aggregation_columns)
+      || (nullptr == options))
+  {
+    return GDF_DATASET_EMPTY;
+  }
+
+  // Return immediately if inputs are empty
+  GDF_REQUIRE(0 != in_key_columns[0]->size, GDF_SUCCESS);
+  GDF_REQUIRE(0 != in_aggregation_columns[0]->size, GDF_SUCCESS);
+
+  auto result = verify_columns(in_key_columns, num_key_columns);
+  GDF_REQUIRE( GDF_SUCCESS == result, result );
+
+  result = verify_columns(in_aggregation_columns, num_aggregation_columns);
+  GDF_REQUIRE( GDF_SUCCESS == result, result );
+
+  gdf_error gdf_error_code{GDF_SUCCESS};
+
+  PUSH_RANGE("LIBGDF_GROUPBY_SORT", GROUPBY_COLOR);
+
+  // INSTEAD OF: use options object
+  // bool sort_result = false;
+  // if( 0 != options->flag_sort_result){
+  //   sort_result = true;
+  // }
+ 
+  // TODO: Only a single aggregator supported right now
+  gdf_agg_op op{agg_ops[0]};
+
+  switch(op)
+  { 
+    case GDF_COUNT_DISTINCT:
+      {
+        gdf_error_code = group_by_sort::gdf_group_by_sort<count_distinct_op>(num_key_columns,
+                                                   in_key_columns,
+                                                   in_aggregation_columns[0],
+                                                   out_key_columns,
+                                                   out_aggregation_columns[0],
+                                                   options);
+        break;
+      } 
+    default:
+      std::cerr << "Unsupported aggregation method for sort-based groupby." << std::endl;
+      gdf_error_code = GDF_UNSUPPORTED_METHOD;
+  }
+
+  POP_RANGE();
+
+  return gdf_error_code;
 }

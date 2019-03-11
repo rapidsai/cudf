@@ -14,7 +14,8 @@ enum struct agg_op
   MAX,//1
   SUM,//2
   CNT,//3
-  AVG //4
+  AVG, //4
+  CNT_DISTINCT //5
 };
 
 template <agg_op op>
@@ -80,6 +81,43 @@ struct AggOp<agg_op::CNT> {
     }
 };
 
+
+template<>
+struct AggOp<agg_op::CNT_DISTINCT> {
+    size_t count{0};
+    template <typename T>
+    T operator()(const T a, const T b) {
+        count = a+1;
+        return count;
+    }
+    template <typename T>
+    T operator()(const T a) {
+        count = 1;
+        return count;
+    }
+};
+  
+
+// helper function to tuple_each a tuple of any size
+template <class Tuple, typename Func, std::size_t N>
+struct TupleEach {
+  static void tuple_each(Tuple &t, Func &f) {
+    TupleEach<Tuple, Func, N - 1>::tuple_each(t, f);
+    f(std::get<N - 1>(t));
+  }
+};
+
+template <class Tuple, typename Func>
+struct TupleEach<Tuple, Func, 1> {
+  static void tuple_each(Tuple &t, Func &f) { f(std::get<0>(t)); }
+};
+
+template <typename Tuple, typename Func>
+void tuple_each(Tuple &t, Func &&f) {
+  TupleEach<Tuple, Func, std::tuple_size<Tuple>::value>::tuple_each(t, f);
+}
+
+
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
@@ -135,6 +173,8 @@ typedef ::testing::Types<
     TestParameters< agg_op::SUM, HASH, VTuple<int64_t >, float>,
     TestParameters< agg_op::CNT, HASH, VTuple<float   >, int32_t>,
     TestParameters< agg_op::CNT, HASH, VTuple<double  >, int32_t>,
+    TestParameters< agg_op::CNT_DISTINCT, HASH, VTuple<float   >, int32_t>,
+    TestParameters< agg_op::CNT_DISTINCT, HASH, VTuple<double  >, int32_t>,
     TestParameters< agg_op::SUM, HASH, VTuple<int32_t , int32_t >, int64_t >,
     TestParameters< agg_op::SUM, HASH, VTuple<int64_t , int32_t >, uint32_t>,
     TestParameters< agg_op::MIN, HASH, VTuple<float   , double  >, double  >,
@@ -143,6 +183,8 @@ typedef ::testing::Types<
     TestParameters< agg_op::MAX, HASH, VTuple<uint64_t, uint32_t>, uint64_t>,
     TestParameters< agg_op::CNT, HASH, VTuple<uint32_t, int32_t >, int32_t >,
     TestParameters< agg_op::CNT, HASH, VTuple<uint64_t, uint32_t>, uint64_t>,
+    TestParameters< agg_op::CNT_DISTINCT, HASH, VTuple<uint32_t, int32_t >, int32_t >,
+    TestParameters< agg_op::CNT_DISTINCT, HASH, VTuple<uint64_t, uint32_t>, uint64_t>,
     TestParameters< agg_op::MIN, HASH, VTuple<int32_t , int32_t , float   >, int64_t >,
     TestParameters< agg_op::MAX, HASH, VTuple<int64_t , int32_t , int32_t >, uint32_t>,
     TestParameters< agg_op::SUM, HASH, VTuple<float   , double  , uint64_t>, double  >,
