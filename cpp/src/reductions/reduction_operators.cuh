@@ -1,11 +1,11 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
+#include "utilities/wrapper_types.hpp"
 #include "utilities/error_utils.h"
 
 namespace cudf {
 namespace reduction {
 
-// force reinterpret cast
 template <typename T_output, typename T_input>
 __forceinline__  __device__
 T_output type_reinterpret(T_input value)
@@ -35,55 +35,30 @@ T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
 }
 
 // -------------------
-// specializations
+// specializations for `genericAtomicCAS`
 
-template <>
-__forceinline__  __device__
-float genericAtomicCAS(
-    float* addr, float const & expected, float const & new_value)
-{
-    return genericAtomicCAS_type<float, unsigned int>(
-        addr, expected, new_value);
+#define SPECIALIZE_GENERICATOMICAS(T, T_int) \
+template <> \
+__forceinline__  __device__ \
+T genericAtomicCAS( \
+    T* addr, T const & expected, T const & new_value){ \
+    return genericAtomicCAS_type<T, T_int>(addr, expected, new_value); \
 }
 
-template <>
-__forceinline__  __device__
-double genericAtomicCAS(
-    double* addr, double const & expected, double const & new_value)
-{
-    return genericAtomicCAS_type<double, unsigned long long int>(
-        addr, expected, new_value);
-}
-
+SPECIALIZE_GENERICATOMICAS(float,   unsigned int);
+SPECIALIZE_GENERICATOMICAS(double,  unsigned long long int);
+SPECIALIZE_GENERICATOMICAS(int64_t, unsigned long long int);
 
 // int8_t/int16_t assumes that the address of addr must aligned with int32_t
 // need align free genericAtomicCAS for int8_t/int16_t
-template <>
-__forceinline__  __device__
-int8_t genericAtomicCAS(
-    int8_t* addr, int8_t const & expected, int8_t const & new_value)
-{
-    return genericAtomicCAS_type<int8_t, unsigned int>(
-        addr, expected, new_value);
-}
+SPECIALIZE_GENERICATOMICAS(int8_t,  unsigned int);
+SPECIALIZE_GENERICATOMICAS(int16_t, unsigned int);
 
-template <>
-__forceinline__  __device__
-int16_t genericAtomicCAS(
-    int16_t* addr, int16_t const & expected, int16_t const & new_value)
-{
-    return genericAtomicCAS_type<int16_t, unsigned int>(
-        addr, expected, new_value);
-}
-
-template <>
-__forceinline__  __device__
-int64_t genericAtomicCAS(
-    int64_t* addr, int64_t const & expected, int64_t const & new_value)
-{
-    return genericAtomicCAS_type<int64_t, unsigned long long int>(
-        addr, expected, new_value);
-}
+// specializations for wrapper types
+SPECIALIZE_GENERICATOMICAS(cudf::timestamp, unsigned long long int);
+SPECIALIZE_GENERICATOMICAS(cudf::date64,    unsigned long long int);
+SPECIALIZE_GENERICATOMICAS(cudf::category,  unsigned int);
+SPECIALIZE_GENERICATOMICAS(cudf::date32,    unsigned int);
 
 // ------------------------------------------------------------------------
 
@@ -197,66 +172,40 @@ void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
 // `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
 // `atomicMin`, `atomicMax` support int32_t, int64_t
 
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    int32_t& existing_value, int32_t const & update_value, DeviceSum op)
-{
-    atomicAdd(&existing_value, update_value);
+#define SPECIALIZE_GENERICATOMIOPS(T, Op, AtomicOp) \
+template <> \
+__forceinline__  __device__ \
+void genericAtomicOperation( \
+    T& existing_value, T const & update_value, Op op){ \
+    AtomicOp(&existing_value, update_value); \
 }
 
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    float& existing_value, float const & update_value, DeviceSum op)
-{
-    atomicAdd(&existing_value, update_value);
+#define SPECIALIZE_GENERICATOMIOPS_TYPE(T, Op, AtomicOp, T_int) \
+template <> \
+__forceinline__  __device__ \
+void genericAtomicOperation( \
+    T& existing_value, T const & update_value, Op op){ \
+    AtomicOp(reinterpret_cast<T_int*>(&existing_value), \
+        static_cast<T_int>(update_value)); \
 }
 
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    double& existing_value, double const & update_value, DeviceSum op)
-{
-    atomicAdd(&existing_value, update_value);
-}
+SPECIALIZE_GENERICATOMIOPS(int32_t, DeviceSum, atomicAdd);
+SPECIALIZE_GENERICATOMIOPS(float  , DeviceSum, atomicAdd);
+SPECIALIZE_GENERICATOMIOPS(double,  DeviceSum, atomicAdd);
+SPECIALIZE_GENERICATOMIOPS(int32_t, DeviceMin, atomicMin);
+SPECIALIZE_GENERICATOMIOPS(int32_t, DeviceMax, atomicMax);
 
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    int32_t& existing_value, int32_t const & update_value, DeviceMin op)
-{
-    atomicMin(&existing_value, update_value);
-}
+SPECIALIZE_GENERICATOMIOPS_TYPE(int64_t, DeviceMin, atomicMin, long long);
+SPECIALIZE_GENERICATOMIOPS_TYPE(int64_t, DeviceMax, atomicMax, long long);
 
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    int64_t& existing_value, int64_t const & update_value, DeviceMin op)
-{
-    atomicMin(reinterpret_cast<long long*>(&existing_value),
-        static_cast<long long>(update_value));
-}
-
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    int32_t& existing_value, int32_t const & update_value, DeviceMax op)
-{
-    atomicMax(&existing_value, update_value);
-}
-
-template <>
-__forceinline__  __device__
-void genericAtomicOperation(
-    int64_t& existing_value, int64_t const & update_value, DeviceMax op)
-{
-    atomicMax(reinterpret_cast<long long*>(&existing_value),
-        static_cast<long long>(update_value));
-}
+// specializations for wrapper types
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::category, DeviceSum, atomicAdd, int);
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::category, DeviceMin, atomicMin, int);
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::category, DeviceMax, atomicMax, int);
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::date32, DeviceSum, atomicAdd, int);
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::date32, DeviceMin, atomicMin, int);
+SPECIALIZE_GENERICATOMIOPS_TYPE(cudf::date32, DeviceMax, atomicMax, int);
 
 } // namespace reduction
 } // namespace cudf
-
-
 

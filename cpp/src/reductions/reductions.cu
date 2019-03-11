@@ -22,8 +22,8 @@ Generic reduction implementation with support for validity mask
 template<typename T_in, typename T_out, typename F, typename Ld>
 __global__
 void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T_out *results, F functor, T_out identity,
-                      Ld loader)
+                      gdf_size_type size, T_out *results,
+                      F functor, T_out identity, Ld loader)
 {
     typedef cub::BlockReduce<T_out, REDUCTION_BLOCK_SIZE> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
@@ -36,7 +36,6 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
     int step = blksz * gridsz;
 
     T_out agg = identity;
-
     for (int base=blkid * blksz; base<size; base+=step) {
         // Threadblock synchronous loop
         int i = base + tid;
@@ -75,12 +74,8 @@ gdf_error ReduceOp(const gdf_column *input, T_out *output)
     Op functor;
 
     gpu_reduction_op<<<gridsize, blocksize>>>(
-        & cudf::detail::unwrap(* ((const T_in*)input->data )),
-        input->valid, input->size,
-        & cudf::detail::unwrap(*output),
-        functor, cudf::detail::unwrap(identity), loader
-    );
-
+        (const T_in*)input->data, input->valid, input->size,
+        output, functor, identity, loader);
     CUDA_CHECK_LAST();
 
     return GDF_SUCCESS;
@@ -90,8 +85,8 @@ gdf_error ReduceOp(const gdf_column *input, T_out *output)
 template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
 private:
-    // return true if both are same type (e.g. date, timestamp...)
-    // or both are arithmetic types.
+    // return true if both are same type (e.g. date, timestamp...) or
+    // both are arithmetic types.
     template <typename T, typename U>
     static constexpr bool is_convertable()
     {
@@ -119,27 +114,31 @@ public:
 template <typename Op>
 struct ReduceDispatcher {
 private:
-    // return true if T is arithmetic type
-    // or if Op is DeviceMin or DeviceMax for non-arithmetic types
+    // return true if T is arithmetic type or
+    // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
     template <typename T>
     static constexpr bool is_supported()
     {
         return std::is_arithmetic<T>::value ||
                std::is_same<Op, DeviceMin>::value ||
-               std::is_same<Op, DeviceMax>::value;
+               std::is_same<Op, DeviceMax>::value ;
     }
 
 public:
-    template <typename T, typename std::enable_if<is_supported<T>()>::type* = nullptr>
-    gdf_error operator()(const gdf_column *col, void *dev_result, gdf_dtype output_dtype)
+    template <typename T, typename std::enable_if<
+        is_supported<T>()>::type* = nullptr>
+    gdf_error operator()(const gdf_column *col,
+                         void *dev_result, gdf_dtype output_dtype)
     {
         GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
         return cudf::type_dispatcher(output_dtype,
             ReduceOutputDispatcher<T, Op>(), col, dev_result);
     }
 
-    template <typename T, typename std::enable_if<!is_supported<T>()>::type* = nullptr>
-    gdf_error operator()(const gdf_column *col, void *dev_result, gdf_dtype output_dtype)
+    template <typename T, typename std::enable_if<
+        !is_supported<T>()>::type* = nullptr>
+    gdf_error operator()(const gdf_column *col,
+                         void *dev_result, gdf_dtype output_dtype)
     {
         return GDF_UNSUPPORTED_DTYPE;
     }
