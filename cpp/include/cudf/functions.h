@@ -2631,10 +2631,15 @@ typedef struct DLManagedTensor DLManagedTensor_;
 
 /**
  * @brief Convert a DLPack DLTensor into gdf_column(s)
- * 
- * Currently only 1D and 2D tensors are supported. This function makes copies
+ *
+ * 1D and 2D tensors are supported. This function makes copies
  * of the input DLPack data into the created output columns.
- * 
+ *
+ * Note: this function does NOT call the input tensor's deleter currently
+ * because the caller of this function may still need it. Also, it is often
+ * packaged in a PyCapsule on the Python side, which (in the case of Cupy)
+ * may be set up to call the deleter in its own destructor
+ *
  * @param[out] columns The output column(s)
  * @param[out] num_columns The number of gdf_columns in columns
  * @param[in] tensor The input DLPack DLTensor
@@ -2646,11 +2651,10 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
 /**
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
- * 
- * Currently only 1D and 2D tensors are supported. This function allocates the
- * DLPack tensor data and copies the data from the input column(s) into the
- * tensor.
- * 
+ *
+ * 1D and 2D tensors are supported. This function allocates the DLPack tensor 
+ * data and copies the data from the input column(s) into the tensor.
+ *
  * @param[out] tensor The output DLTensor
  * @param[in] columns An array of pointers to gdf_column 
  * @param[in] num_columns The number of input columns

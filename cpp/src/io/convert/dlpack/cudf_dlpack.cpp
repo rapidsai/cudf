@@ -163,8 +163,11 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
     GDF_REQUIRE(GDF_SUCCESS == status, status);
   }
 
-  // Call the managed tensor's deleter since our "borrowing" is done
-  tensor->deleter(const_cast<DLManagedTensor*>(tensor));
+  // Note: we do NOT call the input tensor's deleter currently because 
+  // the caller of this function may still need it. Also, it is often 
+  // packaged in a PyCapsule on the Python side, which (in the case of Cupy)
+  // may be set up to call the deleter in its own destructor
+  //tensor->deleter(const_cast<DLManagedTensor*>(tensor));
 
   return GDF_SUCCESS;
 }
@@ -175,6 +178,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
                         gdf_size_type num_columns)
 {
+  GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY)
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
   // first column determines datatype and number of rows
