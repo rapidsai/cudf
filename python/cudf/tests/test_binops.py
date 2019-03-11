@@ -21,6 +21,8 @@ _binops = [
     operator.mul,
     operator.floordiv,
     operator.truediv,
+    operator.mod,
+    operator.pow,
 ]
 
 
@@ -38,7 +40,7 @@ def test_series_binop(binop, obj_class):
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_equal(result.to_array(), binop(arr, arr))
+    np.testing.assert_almost_equal(result.to_array(), binop(arr, arr))
 
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
@@ -55,7 +57,7 @@ def test_series_binop_scalar(nelem, binop, obj_class):
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_equal(result.to_array(), binop(arr, rhs))
+    np.testing.assert_almost_equal(result.to_array(), binop(arr, rhs))
 
 
 _cmpops = [
@@ -70,7 +72,7 @@ _cmpops = [
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('cmpop', _cmpops)
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+@pytest.mark.parametrize('dtype', ['int8', 'int32', 'int64',
                                    'float32', 'float64', 'datetime64[ms]'])
 def test_series_compare(cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)

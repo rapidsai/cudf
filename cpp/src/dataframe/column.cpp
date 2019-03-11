@@ -185,10 +185,15 @@ namespace{
   };
 }
 
-// Returns the byte width of the data type of the gdf_column
+// returns the size in bytes of the specified gdf_dtype
+gdf_size_type gdf_dtype_size(gdf_dtype dtype) {
+  return cudf::type_dispatcher(dtype, get_type_size{});
+}
+
+// Returns the size in bytes of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  *width = cudf::type_dispatcher(col->dtype, get_type_size{});
+  *width = gdf_dtype_size(col->dtype);
 	return GDF_SUCCESS;
 }
