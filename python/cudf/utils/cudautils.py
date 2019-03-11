@@ -267,12 +267,12 @@ def mask_assign_slot(size, mask):
     # expand bits into bytes
     expanded_mask = expand_mask_bits(size, mask)
     # compute prefixsum
-    slots = prefixsum(expanded_mask)
+    slots = scan(expanded_mask, GDF_SCAN_SUM)
     sz = int(slots[slots.size - 1])
     return slots, sz
 
 
-def prefixsum(vals):
+def scan(vals, op):
     """Compute the full prefixsum.
 
     Given the input of N.  The output size is N + 1.
@@ -287,9 +287,9 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    _gdf.apply_prefixsum(_gdf.columnview_from_devary(vals),
+    _gdf.apply_scan(_gdf.columnview_from_devary(vals),
                          _gdf.columnview_from_devary(slots[1:]),
-                         inclusive=True)
+                         op, inclusive=True)
 
     return slots
 
