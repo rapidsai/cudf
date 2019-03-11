@@ -56,9 +56,9 @@
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
-- PR #1136 Removed `gdf_concat` 
+- PR #1136 Removed `gdf_concat`
 - PR #1148 Add cudf.sqrt for dataframes and Series
-- PR #XXXX Add Python bindings for libcudf dlpack functions
+- PR #1159 Add Python bindings for libcudf dlpack functions
 
 ## Improvements
 

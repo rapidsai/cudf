@@ -622,6 +622,8 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
+    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
+
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
@@ -715,3 +717,17 @@ cdef extern from "cudf.h" nogil:
                                 gdf_column* bins,
                                 bool right,
                                 gdf_index_type* out_indices);
+
+    ctypedef struct DLManagedTensor:
+        pass
+    ctypedef struct DLManagedTensor_:
+        pass
+
+    cdef gdf_error gdf_from_dlpack(gdf_column** columns,
+                                   gdf_size_type *num_columns,
+                                   DLManagedTensor_ const * tensor)
+
+    cdef gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
+                                 gdf_column const * const * columns,
+                                 gdf_size_type num_columns)
+    
