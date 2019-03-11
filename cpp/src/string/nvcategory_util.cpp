@@ -9,6 +9,47 @@
 #include "utilities/error_utils.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
 
+namespace {
+  NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
+    NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
+
+      for(int column_index = 1; column_index < num_columns; column_index++){
+        NVCategory * temp = combined_category;
+        combined_category = combined_category->merge_and_remap(
+            * static_cast<NVCategory *>(
+                input_columns[column_index]->dtype_info.category));
+        if(column_index > 1){
+          NVCategory::destroy(temp);
+        }
+      }
+      if(num_columns == 1){
+        return combined_category->copy();
+      }else{
+        return combined_category;
+      }
+  }
+
+
+  gdf_error free_nvcategory(gdf_column * column){
+    NVCategory::destroy(static_cast<NVCategory *>(column->dtype_info.category));
+    column->dtype_info.category = nullptr;
+    return GDF_SUCCESS;
+  }
+}
+
+gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table){
+  GDF_REQUIRE(source_table.num_columns() == destination_table.num_columns(), GDF_TABLES_SIZE_MISMATCH);
+  for(int i = 0; i < source_table.num_columns();i++){
+    gdf_column * original_column = source_table.get_column(i);
+    if(original_column->dtype == GDF_STRING_CATEGORY){
+      gdf_column * output_column = destination_table.get_column(i);
+      GDF_REQUIRE(output_column->dtype == original_column->dtype, GDF_DTYPE_MISMATCH);
+      nvcategory_gather(output_column,static_cast<NVCategory *>(original_column->dtype_info.category));
+    }
+
+  }
+  return GDF_SUCCESS;
+}
 
 gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
@@ -40,25 +81,6 @@ gdf_error validate_categories(gdf_column * input_columns[], int num_columns, gdf
     total_count += input_columns[i]->size;
   }
   return GDF_SUCCESS;
-}
-
-NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
-  NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
-
-    for(int column_index = 1; column_index < num_columns; column_index++){
-      NVCategory * temp = combined_category;
-      combined_category = combined_category->merge_and_remap(
-          * static_cast<NVCategory *>(
-              input_columns[column_index]->dtype_info.category));
-      if(column_index > 1){
-        NVCategory::destroy(temp);
-      }
-    }
-    if(num_columns == 1){
-      return combined_category->copy();
-    }else{
-      return combined_category;
-    }
 }
 
 
@@ -123,8 +145,3 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
   return GDF_SUCCESS;
 }
 
-gdf_error free_nvcategory(gdf_column * column){
-  NVCategory::destroy(static_cast<NVCategory *>(column->dtype_info.category));
-  column->dtype_info.category = nullptr;
-  return GDF_SUCCESS;
-}

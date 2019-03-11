@@ -386,28 +386,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   return gdf_error_code;
 }
 
-gdf_error update_nvcategory_join_table(cudf::table source_table, cudf::table destination_table){
-  for(int i = 0; i < source_table.num_columns();i++){
-    gdf_column * original_column = source_table.get_column(i);
-    if(original_column->dtype == GDF_STRING_CATEGORY){
-      gdf_column * output_column = destination_table.get_column(i);
-      output_column->dtype_info.category = static_cast<NVCategory *>(original_column->dtype_info.category)->gather(
-                     (nv_category_index_type *) output_column->data,
-                     output_column->size,
-                     DEVICE_ALLOCATED);
-      if(output_column->size > 0){
 
-        CUDA_TRY( cudaMemcpy(
-            output_column->data,
-            static_cast<NVCategory *>(output_column->dtype_info.category)->values_cptr(),
-            sizeof(nv_category_index_type) * output_column->size,
-            cudaMemcpyDeviceToDevice) );
-      }
-    }
-
-  }
-  return GDF_SUCCESS;
-}
 
 template <JoinType join_type, typename size_type, typename index_type>
 gdf_error construct_join_output_df(
@@ -491,7 +470,7 @@ gdf_error construct_join_output_df(
                            static_cast<index_type const *>(left_indices->data),
                            &left_destination_table, check_bounds);
 
-      gdf_error update_err = update_nvcategory_join_table(left_source_table,left_destination_table);
+      gdf_error update_err = nvcategory_gather_table(left_source_table,left_destination_table);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
@@ -505,7 +484,7 @@ gdf_error construct_join_output_df(
                            static_cast<index_type const *>(right_indices->data),
                            &right_destination_table, check_bounds);
 
-      gdf_error update_err = update_nvcategory_join_table(right_source_table,right_destination_table);
+      gdf_error update_err = nvcategory_gather_table(right_source_table,right_destination_table);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
@@ -531,7 +510,7 @@ gdf_error construct_join_output_df(
                            static_cast<index_type const *>(left_indices->data),
                            &join_destination_table, check_bounds);
 
-      gdf_error update_err = update_nvcategory_join_table(join_source_table,join_destination_table);
+      gdf_error update_err = nvcategory_gather_table(join_source_table,join_destination_table);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
