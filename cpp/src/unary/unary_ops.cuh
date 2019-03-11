@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-#include <cmath>
-#include <algorithm>
+#include "utilities/cudf_utils.h"
+#include "utilities/error_utils.hpp"
+#include "utilities/type_dispatcher.hpp"
+#include "rmm/thrust_rmm_allocator.h"
+#include "cudf.h"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
-#include "cudf.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
-#include "rmm/thrust_rmm_allocator.h"
+#include <cmath>
+#include <algorithm>
+#include <type_traits>
 
 template<typename T, typename Tout, typename F>
 __global__
@@ -88,3 +90,5 @@ struct UnaryOp {
         return GDF_SUCCESS;
     }
 };
+
+
