@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
@@ -19,26 +20,21 @@ from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 
 # Operator mappings
 
-#   Unordered comparators
-_unordered_impl = {
+_binary_impl = {
+    # Unordered comparators
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
-}
-
-#   Ordered comparators
-_ordered_impl = {
+    # Ordered comparators
     'lt': libgdf.gdf_lt_generic,
     'le': libgdf.gdf_le_generic,
     'gt': libgdf.gdf_gt_generic,
     'ge': libgdf.gdf_ge_generic,
-}
-
-#   Binary operators
-_binary_impl = {
+    # Binary operators
     'add': libgdf.gdf_add_generic,
     'sub': libgdf.gdf_sub_generic,
     'mul': libgdf.gdf_mul_generic,
@@ -50,6 +46,7 @@ _binary_impl = {
 _unary_impl = {
     'ceil': libgdf.gdf_ceil_generic,
     'floor': libgdf.gdf_floor_generic,
+    'sqrt': libgdf.gdf_sqrt_generic,
 }
 
 
@@ -90,10 +87,9 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
-            op = _binary_impl[binop]
-            lhs, rhs = numeric_normalize_types(self, rhs)
-            return numeric_column_binop(lhs=lhs, rhs=rhs, op=op,
-                                        out_dtype=lhs.dtype)
+            out_dtype = np.result_type(self.dtype, rhs.dtype)
+            return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
+                                        out_dtype=out_dtype)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -103,12 +99,10 @@ class NumericalColumn(columnops.TypedColumnBase):
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
-        lhs, rhs = numeric_normalize_types(self, rhs)
-        return numeric_column_compare(lhs, rhs, op=_unordered_impl[cmpop])
+        return numeric_column_compare(self, rhs, op=cmpop)
 
     def ordered_compare(self, cmpop, rhs):
-        lhs, rhs = numeric_normalize_types(self, rhs)
-        return numeric_column_compare(lhs, rhs, op=_ordered_impl[cmpop])
+        return numeric_column_compare(self, rhs, op=cmpop)
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
@@ -278,7 +272,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == 'f':
-            return np.nan
+            return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
         else:
@@ -400,17 +394,31 @@ class NumericalColumn(columnops.TypedColumnBase):
         cpp_replace.replace(replaced, to_replace_col, value_col)
         return replaced
 
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with *fill_value*
+        """
+        result = self.copy()
+        fill_value_col, result = numeric_normalize_types(
+            columnops.as_column(fill_value, nan_as_null=False), result)
+        cpp_replace.replace_nulls(result, fill_value_col)
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
-    if lhs.dtype != rhs.dtype:
-        raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
-
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    if lhs.dtype != rhs.dtype or op not in _binary_impl:
+        # Use JIT implementation
+        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    else:
+        # Use compiled implementation
+        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
     nvtx_range_pop()

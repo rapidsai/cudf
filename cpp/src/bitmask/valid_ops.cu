@@ -25,7 +25,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 
 #include <thrust/tabulate.h>
@@ -39,7 +39,6 @@ constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
 constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
-
 
 
 /* --------------------------------------------------------------------------*/
@@ -128,7 +127,7 @@ void count_valid_bits(valid32_t const * const masks32,
 
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-
+  // TODO: add a default parameter cudaStream_t stream = 0 when we move API to C++
 
   if((nullptr == count)){return GDF_DATASET_EMPTY;}
 

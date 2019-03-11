@@ -13,6 +13,8 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
+import cudf.bindings.replace as cpp_replace
+
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
@@ -189,6 +191,21 @@ class DatetimeColumn(columnops.TypedColumnBase):
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
+
+    def fillna(self, fill_value, inplace=False):
+        result = self.copy()
+
+        if np.isscalar(fill_value):
+            fill_value = np.datetime64(fill_value, 'ms')
+        elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
+            fill_value = pd.to_datetime(fill_value)
+
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+
+        cpp_replace.replace_nulls(result, fill_value_col)
+
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)

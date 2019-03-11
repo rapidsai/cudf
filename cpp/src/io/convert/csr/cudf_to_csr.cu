@@ -20,7 +20,7 @@
  */
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 
