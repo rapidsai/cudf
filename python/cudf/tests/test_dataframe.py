@@ -1972,9 +1972,5 @@ def test_array_ufunc():
     gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
     pdf = gdf.to_pandas()
 
-    print(gdf)
-    print(pdf)
-    print(np.sqrt(gdf))
-    print(np.sqrt(pdf))
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
