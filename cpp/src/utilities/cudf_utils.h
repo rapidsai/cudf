@@ -28,8 +28,6 @@ inline gdf_error set_null_count(gdf_column* col) {
   return GDF_SUCCESS;
 }
 
-
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Flatten AOS info from gdf_columns into SOA.
