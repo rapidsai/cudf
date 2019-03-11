@@ -104,7 +104,7 @@ set(BITMASK_TEST_SRC
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - bit_mask tests ---------------------------------------------------------------------------------
+# - bit_mask tests --------------------------------------------------------------------------------
 
 set(BIT_MASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
@@ -167,6 +167,16 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
+# - binary tests ----------------------------------------------------------------------------------
+
+set(BINARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-operands-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-integration-test.cpp")
+
+ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
 # - csv tests -------------------------------------------------------------------------------------
 
 set(CSV_TEST_SRC
@@ -175,14 +185,14 @@ set(CSV_TEST_SRC
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
-# - sort tests -------------------------------------------------------------------------------------
+# - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
-# - types tests -------------------------------------------------------------------------------------
+# - types tests -----------------------------------------------------------------------------------
 
 set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
@@ -199,14 +209,23 @@ set(DLPACK_TEST_SRC
 ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 
 ###################################################################################################
+# - copying tests ---------------------------------------------------------------------------------
 
-# - utilities tests -------------------------------------------------------------------------------------
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
+###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
@@ -214,7 +233,8 @@ set(TRANSPOSE_TEST_SRC
 
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
-# - table tests -------------------------------------------------------------------------------
+###################################################################################################
+# - table tests -----------------------------------------------------------------------------------
 
 set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")

@@ -12,4 +12,8 @@
 	branch = branch-0.6
 [submodule "thirdparty/dlpack"]
 	path = thirdparty/dlpack
-	url = https://github.com/dmlc/dlpack.git
+	url = https://github.com/rapidsai/dlpack.git
+[submodule "thirdparty/jitify"]
+	path = thirdparty/jitify
+	url = https://github.com/rapidsai/jitify.git
+	branch = cudf

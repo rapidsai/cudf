@@ -1969,6 +1969,60 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 
+/**
+ * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
+ * bool of lhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_scalar) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
+ * bool of rhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_scalar) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between two gdf_columns.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+
 /* arith */
 
 gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
