@@ -267,12 +267,12 @@ def mask_assign_slot(size, mask):
     # expand bits into bytes
     expanded_mask = expand_mask_bits(size, mask)
     # compute prefixsum
-    slots = scan(expanded_mask, GDF_SCAN_SUM)
+    slots = scan(expanded_mask)
     sz = int(slots[slots.size - 1])
     return slots, sz
 
 
-def scan(vals, op):
+def scan(vals, op=_gdf.GDF_SCAN_SUM):
     """Compute the full prefixsum.
 
     Given the input of N.  The output size is N + 1.
@@ -288,8 +288,8 @@ def scan(vals, op):
 
     # Compute prefixsum on the mask
     _gdf.apply_scan(_gdf.columnview_from_devary(vals),
-                         _gdf.columnview_from_devary(slots[1:]),
-                         op, inclusive=True)
+                    _gdf.columnview_from_devary(slots[1:]),
+                    op, inclusive=True)
 
     return slots
 
@@ -740,7 +740,7 @@ def find_segments(arr, segs=None, markers=None):
     if segs is not None and null_markers and segs.size > 0:
         gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
-    slots = prefixsum(markers)
+    slots = scan(markers)
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments
