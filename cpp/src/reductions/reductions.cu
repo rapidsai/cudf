@@ -146,14 +146,6 @@ public:
 
 }   // anonymous namespace
 
-typedef enum {
-  GDF_REDUCTION_SUM = 0,
-  GDF_REDUCTION_MIN,
-  GDF_REDUCTION_MAX,
-  GDF_REDUCTION_PRODUCTION,
-  GDF_REDUCTION_SUMOFSQUARES,
-} gdf_reduction_op;
-
 
 gdf_error gdf_reduction(const gdf_column *col,
                   gdf_reduction_op op,

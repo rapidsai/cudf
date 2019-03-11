@@ -174,12 +174,6 @@ namespace { //anonymous
 
 } // end anonymous namespace
 
-typedef enum {
-  GDF_SCAN_SUM = 0,
-  GDF_SCAN_MIN,
-  GDF_SCAN_MAX,
-  GDF_SCAN_PRODUCTION,
-} gdf_scan_op;
 
 gdf_error gdf_scan(const gdf_column *input, gdf_column *output,
     gdf_scan_op op, bool inclusive)
@@ -204,8 +198,3 @@ gdf_error gdf_scan(const gdf_column *input, gdf_column *output,
     }
 }
 
-// ToDo: remove this function
-gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive)
-{
-    return gdf_scan(input, output, GDF_SCAN_SUM, inclusive);
-}

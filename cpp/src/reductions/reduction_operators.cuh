@@ -1,7 +1,7 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/wrapper_types.hpp"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 
 namespace cudf {
 namespace reduction {

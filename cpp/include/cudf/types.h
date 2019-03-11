@@ -4,10 +4,10 @@
 typedef int gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
-typedef	long	gdf_date64;
-typedef	int		gdf_date32;
-typedef	int		gdf_category;
-typedef	long	gdf_timestamp;
+typedef long    gdf_date64;
+typedef int     gdf_date32;
+typedef int     gdf_category;
+typedef long    gdf_timestamp;
 
 
  /**
@@ -21,12 +21,12 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
-    GDF_DATE32,   	///< int32_t days since the UNIX epoch
-    GDF_DATE64,   	///< int64_t milliseconds since the UNIX epoch
-    GDF_TIMESTAMP,	///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
+    GDF_DATE32,     ///< int32_t days since the UNIX epoch
+    GDF_DATE64,     ///< int64_t milliseconds since the UNIX epoch
+    GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
     GDF_CATEGORY,
     GDF_STRING,
-    N_GDF_TYPES, 	///< additional types should go BEFORE N_GDF_TYPES
+    N_GDF_TYPES,    ///< additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
 
 
@@ -37,7 +37,7 @@ typedef enum {
  * AS WELL
  */
 typedef enum {
-    GDF_SUCCESS=0,                
+    GDF_SUCCESS=0,
     GDF_CUDA_ERROR,                    ///< Error occured in a CUDA call
     GDF_UNSUPPORTED_DTYPE,             ///< The datatype of the gdf_column is unsupported
     GDF_COLUMN_SIZE_MISMATCH,          ///< Two columns that should be the same size aren't the same size
@@ -78,18 +78,18 @@ typedef enum {
  * The types included are nanosecond, microsecond, millisecond, and second.
  */
 typedef enum {
-	TIME_UNIT_NONE=0, ///< The default time unit type.
-	TIME_UNIT_s,   ///< Second resolution time unit type
-	TIME_UNIT_ms,  ///< Millisecond resolution time unit type
-	TIME_UNIT_us,  ///< Microsecond resolution time unit type
-	TIME_UNIT_ns   ///< Nanosecond resolution time unit type
+    TIME_UNIT_NONE=0, ///< The default time unit type.
+    TIME_UNIT_s,   ///< Second resolution time unit type
+    TIME_UNIT_ms,  ///< Millisecond resolution time unit type
+    TIME_UNIT_us,  ///< Microsecond resolution time unit type
+    TIME_UNIT_ns   ///< Nanosecond resolution time unit type
 } gdf_time_unit;
 
 /**
  * @brief Extra information about column type.
  */
 typedef struct {
-	gdf_time_unit time_unit; ///< Time Unit resolution
+    gdf_time_unit time_unit; ///< Time Unit resolution
 } gdf_dtype_extra_info;
 
 
@@ -132,11 +132,11 @@ typedef struct gdf_column_{
     gdf_dtype dtype;                  ///< The datatype of the column's data
     gdf_size_type null_count;         ///< The number of NULL values in the column's data
     gdf_dtype_extra_info dtype_info;  ///< gdf_dtype_extra_info which stores extra information about the column's gdf_dtype
-    char *			col_name;		  ///< Host side null terminated string with name of the column
+    char *          col_name;         ///< Host side null terminated string with name of the column
 } gdf_column;
 
 
-/** 
+/**
  * @brief  These enums indicate which method is to be used for an operation.
  * For example, it is used to select between the hash-based vs. sort-based implementations
  * of the Join operation.
@@ -158,7 +158,7 @@ typedef enum {
 
 
 
-/** 
+/**
  * @brief These enums indicate the supported aggregation operations that can be
  * performed on a set of aggregation columns as part of a GroupBy operation
  */
@@ -172,16 +172,38 @@ typedef enum {
   N_GDF_AGG_OPS,      ///< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE
 } gdf_agg_op;
 
+/**
+ * @brief These enums indicate the supported reduction operations that can be
+ * performed on a column
+ */
+typedef enum {
+  GDF_REDUCTION_SUM = 0,        ///< Computes the sum of all values in the column
+  GDF_REDUCTION_MIN,            ///< Computes the minimum value of all values in the column
+  GDF_REDUCTION_MAX,            ///< Computes the maximum value of all values in the column
+  GDF_REDUCTION_PRODUCTION,     ///< Computes the multiplicative product value of all values in the column
+  GDF_REDUCTION_SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
+} gdf_reduction_op;
+
+/**
+ * @brief These enums indicate the supported operations of prefix scan that can be
+ * performed on a column
+ */
+typedef enum {
+  GDF_SCAN_SUM = 0,             ///< Computes the prefix scan of sum operation of all values for the column
+  GDF_SCAN_MIN,                 ///< Computes the prefix scan of maximum operation of all values for the column
+  GDF_SCAN_MAX,                 ///< Computes the prefix scan of maximum operation of all values for the column
+  GDF_SCAN_PRODUCTION,          ///< Computes the prefix scan of multiplicative product operation of all values for the column
+} gdf_scan_op;
 
 
-/** 
+/**
  * @brief  Colors for use with NVTX ranges.
  *
  * These enumerations are the available pre-defined colors for use with
  * user-defined NVTX ranges.
  */
 typedef enum {
-  GDF_GREEN = 0, 
+  GDF_GREEN = 0,
   GDF_BLUE,
   GDF_YELLOW,
   GDF_PURPLE,
@@ -215,8 +237,8 @@ typedef enum {
 } gdf_binary_operator;
 
 
-/** 
- * @brief  This struct holds various information about how an operation should be 
+/**
+ * @brief  This struct holds various information about how an operation should be
  * performed as well as additional information about the input data.
  */
 typedef struct gdf_context_{
@@ -242,30 +264,30 @@ typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 
 typedef enum{
-	GDF_ORDER_ASC,
-	GDF_ORDER_DESC
+    GDF_ORDER_ASC,
+    GDF_ORDER_DESC
 } order_by_type;
 
 typedef enum{
-	GDF_EQUALS,
-	GDF_NOT_EQUALS,
-	GDF_LESS_THAN,
-	GDF_LESS_THAN_OR_EQUALS,
-	GDF_GREATER_THAN,
-	GDF_GREATER_THAN_OR_EQUALS
+    GDF_EQUALS,
+    GDF_NOT_EQUALS,
+    GDF_LESS_THAN,
+    GDF_LESS_THAN_OR_EQUALS,
+    GDF_GREATER_THAN,
+    GDF_GREATER_THAN_OR_EQUALS
 } gdf_comparison_operator;
 
 typedef enum{
-	GDF_WINDOW_RANGE,
-	GDF_WINDOW_ROW
+    GDF_WINDOW_RANGE,
+    GDF_WINDOW_ROW
 } window_function_type;
 
 typedef enum{
-	GDF_WINDOW_AVG,
-	GDF_WINDOW_SUM,
-	GDF_WINDOW_MAX,
-	GDF_WINDOW_MIN,
-	GDF_WINDOW_COUNT,
-	GDF_WINDOW_STDDEV,
-	GDF_WINDOW_VAR ///< Window Variance
+    GDF_WINDOW_AVG,
+    GDF_WINDOW_SUM,
+    GDF_WINDOW_MAX,
+    GDF_WINDOW_MIN,
+    GDF_WINDOW_COUNT,
+    GDF_WINDOW_STDDEV,
+    GDF_WINDOW_VAR ///< Window Variance
 } window_reduction_type;
