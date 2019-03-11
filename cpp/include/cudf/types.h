@@ -216,6 +216,8 @@ typedef enum {
   GDF_GREATER,        /**< operator >  */
   GDF_LESS_EQUAL,     /**< operator <= */
   GDF_GREATER_EQUAL,  /**< operator >= */
+  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
+  GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
 
 
