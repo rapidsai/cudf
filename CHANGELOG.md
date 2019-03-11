@@ -58,6 +58,7 @@
 - PR #1107 Add unsupported keywords to Series.fillna
 - PR #1136 Removed `gdf_concat` 
 - PR #1148 Add cudf.sqrt for dataframes and Series
+- PR #XXXX Add Python bindings for libcudf dlpack functions
 
 ## Improvements
 
@@ -99,7 +100,6 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
-
 
 ## Bug Fixes
 
