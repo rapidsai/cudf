@@ -4,6 +4,7 @@
 #include "utilities/error_utils.hpp"
 #include "bitmask/bit_mask.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <cub/device/device_scan.cuh>
 

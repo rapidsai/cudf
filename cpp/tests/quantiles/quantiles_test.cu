@@ -35,6 +35,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/error_utils.hpp>
 #include <quantiles/quantiles.h>
+#include <bitmask/legacy_bitmask.hpp>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 

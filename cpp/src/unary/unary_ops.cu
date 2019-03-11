@@ -14,6 +14,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
+#include <bitmask/legacy_bitmask.hpp>
 
 template<typename T, typename Tout, typename F>
 __global__

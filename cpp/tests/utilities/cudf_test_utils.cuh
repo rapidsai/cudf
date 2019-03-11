@@ -31,6 +31,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include <bitmask/legacy_bitmask.hpp>
 
 
 // Type for a unique_ptr to a gdf_column with a custom deleter

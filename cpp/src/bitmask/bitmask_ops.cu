@@ -3,6 +3,7 @@
 #include "utilities/error_utils.hpp"
 #include "cudf/functions.h"
 #include "rmm/thrust_rmm_allocator.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <cuda_runtime.h>
 #include <vector>
@@ -13,8 +14,9 @@
 #include <thrust/device_vector.h>
 
 
+
 gdf_error all_bitmask_on(gdf_valid_type * valid_out, gdf_size_type & out_null_count, gdf_size_type num_values, cudaStream_t stream){
-	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
 
 	gdf_valid_type max_char = 255;
 	thrust::fill(rmm::exec_policy(stream)->on(stream),
@@ -29,7 +31,7 @@ gdf_error all_bitmask_on(gdf_valid_type * valid_out, gdf_size_type & out_null_co
 gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_type * valid_out, gdf_valid_type * valid_left, gdf_valid_type * valid_right,
 		cudaStream_t stream, gdf_size_type num_values){
 
-	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
 
 	thrust::transform(rmm::exec_policy(stream)->on(stream),
 					  valid_left,

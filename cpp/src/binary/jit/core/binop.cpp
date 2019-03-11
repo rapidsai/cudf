@@ -23,6 +23,7 @@
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "cudf.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 namespace cudf {
 namespace binops {
@@ -69,7 +70,7 @@ namespace binops {
             return error;
         }
         
-    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+    	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
 
         if ( valid_left == nullptr && valid_right != nullptr ) {
             CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
@@ -116,7 +117,7 @@ namespace binops {
 
         GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
 
-    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+    	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
 
         if ( valid_scalar == false ) {
             CUDA_TRY( cudaMemset(valid_out, 0x00, num_chars_bitmask) );

@@ -30,6 +30,7 @@
 
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
+#include <bitmask/legacy_bitmask.hpp>
 
 #include <cudf.h>
 #include <cudf/functions.h>

@@ -56,15 +56,16 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count);
 
 /**
- * Calculates the number of bytes to allocate for a validity indicator
- * pseudo-column for a given column's size.
+ * Calculates the number of bytes to allocate for a column's validity bitmask
  *
- * @note Note that this function assumes the valids need to be allocated to be
+ * For a column with a specified number of elements, returns the required size
+ * in bytes of the validity bitmask to provide one bit per element.
+ *
+ * @note Note that this function assumes the bitmask needs to be allocated to be
  * padded to a multiple of 64 bytes
  *
- * @param[in] column_size the number of elements
- * @return the number of bytes necessary to allocate for the validity indicator
- * pseudo-column
+ * @param[in] column_size The number of elements
+ * @return the number of bytes necessary to allocate for validity bitmask
  */
 gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 
