@@ -29,7 +29,8 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -209,7 +210,15 @@ set(NVCATEGORY_TEST_SRC
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
-# - copying tests -------------------------------------------------------------------------------------
+# - DLPack tests -------------------------------------------------------------------------------------
+
+set(DLPACK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/convert/dlpack_test.cu")
+
+ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
+
+###################################################################################################
+# - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"

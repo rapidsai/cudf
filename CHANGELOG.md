@@ -31,6 +31,7 @@
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #913 Add DLPack support: convert between cuDF DataFrame and DLTensor
 - PR #939 Add ORC reader from PyArrow
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
