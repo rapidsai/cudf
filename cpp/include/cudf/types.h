@@ -93,6 +93,33 @@ typedef struct {
 } gdf_dtype_extra_info;
 
 
+
+/**
+ * @brief Union used to store single value for scalar type
+ */
+// TODO: #1119 Use traits to set `gdf_data` elements
+typedef union {
+  int8_t        si08;  /**< GDF_INT8      */
+  int16_t       si16;  /**< GDF_INT16     */
+  int32_t       si32;  /**< GDF_INT32     */
+  int64_t       si64;  /**< GDF_INT64     */
+  float         fp32;  /**< GDF_FLOAT32   */
+  double        fp64;  /**< GDF_FLOAT64   */
+  gdf_date32    dt32;  /**< GDF_DATE32    */
+  gdf_date64    dt64;  /**< GDF_DATE64    */
+  gdf_timestamp tmst;  /**< GDF_TIMESTAMP */
+} gdf_data;
+
+/**
+ * @brief A struct to hold a scalar (single) value and its type information
+ */
+typedef struct {
+  gdf_data  data;      /**< A union that represents the value */
+  gdf_dtype dtype;     /**< The datatype of the scalar's data */
+  bool      is_valid;  /**< False if the value is null */
+} gdf_scalar;
+
+
 /**
  * @brief The C representation of a column in CUDF. This is the main unit of operation.
  *
@@ -167,6 +194,28 @@ typedef enum {
 } gdf_color;
 
 
+/**
+ * @brief Types of binary operations that can be performed on data.
+ */
+typedef enum {
+  GDF_ADD,            /**< operator + */
+  GDF_SUB,            /**< operator - */
+  GDF_MUL,            /**< operator * */
+  GDF_DIV,            /**< operator / using common type of lhs and rhs */
+  GDF_TRUE_DIV,       /**< operator / after promoting type to floating point*/
+  GDF_FLOOR_DIV,      /**< operator / after promoting to float and then flooring the result */
+  GDF_MOD,            /**< operator %  */
+  GDF_POW,            /**< lhs ^ rhs   */
+  GDF_EQUAL,          /**< operator == */
+  GDF_NOT_EQUAL,      /**< operator != */
+  GDF_LESS,           /**< operator <  */
+  GDF_GREATER,        /**< operator >  */
+  GDF_LESS_EQUAL,     /**< operator <= */
+  GDF_GREATER_EQUAL,  /**< operator >= */
+} gdf_binary_operator;
+
+
+
 /**  --------------------------------------------------------------------------* 
  * @synopsis  These enums indicate how the nulls are treated in group_by/order_by operations.
  * ----------------------------------------------------------------------------*/
@@ -176,18 +225,16 @@ typedef enum {
   GDF_NULL_AS_LARGEST_FOR_MULTISORT  ///< In multicolumn sorting, a row with NULL in any column is treated as the largest number in comparisons                                     
 } gdf_nulls_sort_behavior;
 
-
-
 /** --------------------------------------------------------------------------*
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
- * ----------------------------------------------------------------------------*/
+/* ----------------------------------------------------------------------------*/
 typedef struct gdf_context_{
-  int flag_sorted;              /**< Indicates if the input data is sorted. 0 = No, 1 = yes */
-  gdf_method flag_method;       /**< The method to be used for the operation (e.g., sort vs hash) */
-  int flag_distinct;            /**< for COUNT: DISTINCT = 1, else = 0 */
-  int flag_sort_result;         /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
-  int flag_sort_inplace;        /**< 0 = No sort in place allowed, 1 = else */
+  int flag_sorted;              ///< Indicates if the input data is sorted. 0 = No, 1 = yes
+  gdf_method flag_method;       ///< The method to be used for the operation (e.g., sort vs hash)
+  int flag_distinct;            ///< for COUNT: DISTINCT = 1, else = 0
+  int flag_sort_result;         ///< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+  int flag_sort_inplace;        ///< 0 = No sort in place allowed, 1 = else
   bool flag_groupby_include_nulls; 
                                 /**< false = Nulls are ignored in group by keys (Pandas style), 
                                 true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 

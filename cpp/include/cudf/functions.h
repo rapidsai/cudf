@@ -1969,6 +1969,60 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 
+/**
+ * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
+ * bool of lhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_scalar) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
+ * bool of rhs gdf_scalar
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_scalar) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope);
+
+/**
+ * @brief Performs a binary operation between two gdf_columns.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator to use
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope);
+
+
 /* arith */
 
 gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -2283,7 +2337,6 @@ gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
 /*
@@ -2308,7 +2361,14 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  */
 
 /**
- * @brief  returns the byte width of the data type of the gdf_column
+ * @brief returns the size in bytes of the specified gdf_dtype
+ * 
+ * @param dtype the data type for which to return the size
+ * @return gdf_size_type size in bytes
+ */
+gdf_size_type gdf_dtype_size(gdf_dtype dtype);
+
+/**
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
@@ -2540,7 +2600,7 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
 									   gdf_context* context);
 
 
-/* --------------------------------------------------------------------------*
+/** 
  * @brief Replace elements from `col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col` 
  *        with `new_values[i]`.
@@ -2580,7 +2640,7 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        gdf_context * context);
 
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
  *
  * This function is a binary function. It will take in two gdf_columns.
@@ -2629,3 +2689,39 @@ gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
                        gdf_index_type out_indices[]);
+
+// forward declaration for DLPack functions below
+// This approach is necessary to satisfy CFFI
+struct DLManagedTensor;
+typedef struct DLManagedTensor DLManagedTensor_;
+
+/**
+ * @brief Convert a DLPack DLTensor into gdf_column(s)
+ * 
+ * Currently only 1D and 2D tensors are supported. This function makes copies
+ * of the input DLPack data into the created output columns.
+ * 
+ * @param[out] columns The output column(s)
+ * @param[out] num_columns The number of gdf_columns in columns
+ * @param[in] tensor The input DLPack DLTensor
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ */
+gdf_error gdf_from_dlpack(gdf_column** columns,
+                          gdf_size_type *num_columns,
+                          DLManagedTensor_ const * tensor);
+
+/**
+ * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
+ * 
+ * Currently only 1D and 2D tensors are supported. This function allocates the
+ * DLPack tensor data and copies the data from the input column(s) into the
+ * tensor.
+ * 
+ * @param[out] tensor The output DLTensor
+ * @param[in] columns An array of pointers to gdf_column 
+ * @param[in] num_columns The number of input columns
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ */
+gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
+                        gdf_column const * const * columns,
+                        gdf_size_type num_columns);
