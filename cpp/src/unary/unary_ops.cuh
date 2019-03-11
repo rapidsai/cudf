@@ -16,16 +16,7 @@
 
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "rmm/thrust_rmm_allocator.h"
 #include "cudf.h"
-
-#include <thrust/copy.h>
-#include <thrust/execution_policy.h>
-
-#include <cmath>
-#include <algorithm>
-#include <type_traits>
 
 template<typename T, typename Tout, typename F>
 __global__

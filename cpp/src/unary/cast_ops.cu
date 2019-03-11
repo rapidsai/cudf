@@ -22,6 +22,11 @@
 
 #include "unary_ops.cuh"
 
+#include "rmm/thrust_rmm_allocator.h"
+
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+
 // casting
 
 template<typename From, typename To>
