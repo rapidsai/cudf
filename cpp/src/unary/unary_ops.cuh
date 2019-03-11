@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef UNARY_OPS_H
+#define UNARY_OPS_H
+
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "cudf.h"
@@ -82,4 +85,4 @@ struct UnaryOp {
     }
 };
 
-
+#endif // UNARY_OPS_H

@@ -30,7 +30,7 @@ def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
                            nelem, gdf_dtype)
 
     expect = expect_fn(h_data)
-    test_fn(col_data, col_result)
+    libgdf.gdf_unary_math(col_data, col_result, test_fn)
 
     got = d_result.copy_to_host()
 
@@ -87,7 +87,7 @@ def test_col_mismatch_error():
                            nelem + 10, libgdf.GDF_FLOAT32)
 
     with pytest.raises(GDFError) as excinfo:
-        libgdf.gdf_sin_generic(col_data, col_result)
+        libgdf.gdf_unary_math(col_data, col_result, libgdf.GDF_SIN)
 
     assert 'GDF_COLUMN_SIZE_MISMATCH' == str(excinfo.value)
 
@@ -108,7 +108,7 @@ def test_unsupported_dtype_error():
                            nelem + 10, libgdf.GDF_FLOAT32)
 
     with pytest.raises(GDFError) as excinfo:
-        libgdf.gdf_sin_generic(col_data, col_result)
+        libgdf.gdf_unary_math(col_data, col_result, libgdf.GDF_SIN)
 
     assert 'GDF_UNSUPPORTED_DTYPE' == str(excinfo.value)
 
@@ -123,44 +123,44 @@ params_real_types = [
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_sin(dtype, ulp):
-    math_op_test(dtype, ulp, np.sin, libgdf.gdf_sin_generic)
+    math_op_test(dtype, ulp, np.sin, libgdf.GDF_SIN)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_cos(dtype, ulp):
-    math_op_test(dtype, ulp, np.cos, libgdf.gdf_cos_generic)
+    math_op_test(dtype, ulp, np.cos, libgdf.GDF_COS)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_tan(dtype, ulp):
-    math_op_test(dtype, ulp, np.tan, libgdf.gdf_tan_generic)
+    math_op_test(dtype, ulp, np.tan, libgdf.GDF_TAN)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_asin(dtype, ulp):
-    math_op_test(dtype, ulp, np.arcsin, libgdf.gdf_asin_generic)
+    math_op_test(dtype, ulp, np.arcsin, libgdf.GDF_ARCSIN)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_acos(dtype, ulp):
-    math_op_test(dtype, ulp, np.arccos, libgdf.gdf_acos_generic)
+    math_op_test(dtype, ulp, np.arccos, libgdf.GDF_ARCCOS)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_atan(dtype, ulp):
-    math_op_test(dtype, ulp, np.arctan, libgdf.gdf_atan_generic)
+    math_op_test(dtype, ulp, np.arctan, libgdf.GDF_ARCTAN)
 
 
 # exponential
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_exp(dtype, ulp):
-    math_op_test(dtype, ulp, np.exp, libgdf.gdf_exp_generic)
+    math_op_test(dtype, ulp, np.exp, libgdf.GDF_EXP)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_log(dtype, ulp):
-    math_op_test(dtype, ulp, np.log, libgdf.gdf_log_generic,
+    math_op_test(dtype, ulp, np.log, libgdf.GDF_LOG,
                  positive_only=True)
 
 
@@ -168,7 +168,7 @@ def test_log(dtype, ulp):
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_sqrt(dtype, ulp):
-    math_op_test(dtype, ulp, np.sqrt, libgdf.gdf_sqrt_generic,
+    math_op_test(dtype, ulp, np.sqrt, libgdf.GDF_SQRT,
                  positive_only=True)
 
 
@@ -176,13 +176,13 @@ def test_sqrt(dtype, ulp):
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_ceil(dtype, ulp):
-    math_op_test(dtype, ulp, np.ceil, libgdf.gdf_ceil_generic,
+    math_op_test(dtype, ulp, np.ceil, libgdf.GDF_CEIL,
                  scale=100)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_floor(dtype, ulp):
-    math_op_test(dtype, ulp, np.floor, libgdf.gdf_floor_generic,
+    math_op_test(dtype, ulp, np.floor, libgdf.GDF_FLOOR,
                  scale=100)
 
 

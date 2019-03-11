@@ -136,68 +136,74 @@ struct MathOpDispatcher {
     }
 };
 
-gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceSin>{},
-                                input, output);
-}
 
-gdf_error gdf_cos_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceCos>{},
-                                input, output);
-}
+gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op) {
+    
+    // Check for null pointers in input
+    GDF_REQUIRE((output != nullptr) && (input != nullptr), GDF_DATASET_EMPTY)
 
-gdf_error gdf_tan_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceTan>{},
-                                input, output);
-}
+    // Check for null data pointer
+    GDF_REQUIRE((output->data != nullptr) && (input->data != nullptr), GDF_DATASET_EMPTY)
 
-gdf_error gdf_asin_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceArcSin>{},
-                                input, output);
-}
+    if (output->valid == nullptr && input->valid == nullptr) {
+        // if input column has no mask, then output column is allowed to have no mask
+        output->null_count = 0;
+    } else {
+        GDF_REQUIRE((output->valid != nullptr), GDF_VALIDITY_MISSING)
 
-gdf_error gdf_acos_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceArcCos>{},
-                                input, output);
-}
+        // Validity mask transfer
+        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( input->size );
+        CUDA_TRY( cudaMemcpy(output->valid, input->valid, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+        output->null_count = input->null_count;
+    }
+    
 
-gdf_error gdf_atan_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceArcTan>{},
-                                input, output);
-}
-
-gdf_error gdf_exp_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceExp>{},
-                                input, output);
-}
-
-gdf_error gdf_log_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceLog>{},
-                                input, output);
-}
-
-gdf_error gdf_sqrt_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceSqrt>{},
-                                input, output);
-}
-
-gdf_error gdf_ceil_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceCeil>{},
-                                input, output);
-}
-
-gdf_error gdf_floor_generic(gdf_column *input, gdf_column *output) {
-    return cudf::type_dispatcher(input->dtype,
-                                MathOpDispatcher<DeviceFloor>{},
-                                input, output);
+    switch(op){
+        case GDF_SIN:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceSin>{},
+                                        input, output);
+        case GDF_COS:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceCos>{},
+                                        input, output);
+        case GDF_TAN:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceTan>{},
+                                        input, output);
+        case GDF_ARCSIN:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceArcSin>{},
+                                        input, output);
+        case GDF_ARCCOS:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceArcCos>{},
+                                        input, output);
+        case GDF_ARCTAN:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceArcTan>{},
+                                        input, output);
+        case GDF_EXP:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceExp>{},
+                                        input, output);
+        case GDF_LOG:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceLog>{},
+                                        input, output);
+        case GDF_SQRT:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceSqrt>{},
+                                        input, output);
+        case GDF_CEIL:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceCeil>{},
+                                        input, output);
+        case GDF_FLOOR:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceFloor>{},
+                                        input, output);
+        default:
+            return GDF_INVALID_API_CALL;
+    }
 }
