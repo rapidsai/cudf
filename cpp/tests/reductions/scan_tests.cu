@@ -40,9 +40,10 @@ struct ScanTest : public GdfTest
         std::vector<int>& exact_values,
         gdf_error reduction_error_code, gdf_scan_op op, bool inclusive)
     {
+        bool do_print = false;
 
-        this->val_check(int_values, "input = ");
-        this->val_check(exact_values, "exact = ");
+        this->val_check(int_values, do_print, "input = ");
+        this->val_check(exact_values, do_print, "exact = ");
 
         gdf_size_type col_size = int_values.size();
         std::vector<T> input_values(col_size);
@@ -68,7 +69,7 @@ struct ScanTest : public GdfTest
             auto tuple_host_result = col_out.to_host();
             auto host_result = std::get<0>(tuple_host_result);
 
-            this->val_check(host_result, "result = ");
+            this->val_check(host_result, do_print, "result = ");
 
             std::equal(exact_values.begin(), exact_values.end(),
                 host_result.begin(), host_result.end(),
@@ -78,15 +79,13 @@ struct ScanTest : public GdfTest
     }
 
     template <typename Ti>
-    void val_check(std::vector<Ti> & v, const char* msg = nullptr){
-#if 0   // for debugging
-        printf("%s {", msg);
-        std::for_each(v.begin(), v.end(), [](Ti i){ printf("%d, ", i);});
-        printf("}\n");
-#endif
-#if 1
+    void val_check(std::vector<Ti> & v, bool do_print=false, const char* msg = nullptr){
+        if( do_print ){
+            std::cout << msg << " {";
+            std::for_each(v.begin(), v.end(), [](Ti i){ std::cout << ", " <<  i;});
+            std::cout << "}"  << std::endl;
+        }
         range_check(v);
-#endif
     }
 
     // make sure all elements in the range of sint8([-128, 127])
@@ -102,11 +101,7 @@ struct ScanTest : public GdfTest
 };
 
 using Types = testing::Types<
-#if 1
     int8_t,int16_t, int32_t, int64_t, float, double>;
-#else
-    int8_t>;
-#endif
 
 TYPED_TEST_CASE(ScanTest, Types);
 

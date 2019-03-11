@@ -165,12 +165,13 @@ struct ReductionDtypeTest : public GdfTest
     }
 };
 
-TEST_F(ReductionDtypeTest, int8_to_others)
+// test case for different output precision
+TEST_F(ReductionDtypeTest, different_precision)
 {
     std::vector<int> v({6, -14, 13, 109, -13, -20, 45, 98, 122, 123});
     int exact = std::accumulate(v.begin(), v.end(), 0);
 
-    printf("exact = %d\n", exact);
+    std::cout << "exact = " << exact << std::endl;
 
     // over flow
     this->examin<int8_t, int8_t>
@@ -181,11 +182,23 @@ TEST_F(ReductionDtypeTest, int8_to_others)
         (v, int64_t(exact), GDF_SUCCESS,
         GDF_REDUCTION_SUM, GDF_INT64);
 
+    this->examin<int8_t, double>
+        (v, double(exact), GDF_SUCCESS,
+        GDF_REDUCTION_SUM, GDF_FLOAT64);
 
     // not supported case
     this->examin<int8_t, int64_t>
         (v, int64_t(exact), GDF_UNSUPPORTED_DTYPE,
         GDF_REDUCTION_SUM, GDF_DATE64);
+
+    // down cast (over flow)
+    this->examin<double, int8_t>
+        (v, int8_t(exact), GDF_SUCCESS,
+        GDF_REDUCTION_SUM, GDF_INT8);
+
+    // down cast (success case)
+    this->examin<double, int16_t>
+        (v, int16_t(exact), GDF_SUCCESS,
+        GDF_REDUCTION_SUM, GDF_INT16);
+
 }
-
-
