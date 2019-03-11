@@ -29,7 +29,8 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -198,6 +199,14 @@ set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+
+###################################################################################################
+# - DLPack tests -------------------------------------------------------------------------------------
+
+set(DLPACK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/convert/dlpack_test.cu")
+
+ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
