@@ -164,7 +164,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   }
 
   // Call the managed tensor's deleter since our "borrowing" is done
-  tensor->deleter(const_cast<DLManagedTensor*>(tensor));
+  // tensor->deleter(const_cast<DLManagedTensor*>(tensor));
 
   return GDF_SUCCESS;
 }

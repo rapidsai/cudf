@@ -11,6 +11,7 @@ from cudf.io import (read_csv, read_parquet, read_feather, read_json,
 from cudf.settings import set_options
 from cudf.reshape import melt
 from cudf.ops import sqrt
+from cudf.dlpack import from_dlpack, to_dlpack
 
 
 # Versioneer

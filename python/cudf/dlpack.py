@@ -1,0 +1,87 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.index import Index
+from cudf.dataframe.column import Column
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe import columnops
+from cudf.bindings import dlpack as cpp_dlpack
+
+
+def from_dlpack(pycapsule_obj):
+    """Converts from a DLPack tensor to a cuDF object.
+
+    DLPack is an open-source memory tensor structure:
+    `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+    This function takes a PyCapsule object which contains a pointer to
+    a DLPack tensor as input, and returns a cuDF object. This function deep
+    copies the data in the DLPack tensor into a cuDF object.
+
+    Parameters
+    ----------
+    pycapsule_obj : PyCapsule
+        Input DLPack tensor pointer which is encapsulated in a PyCapsule
+        object.
+
+    Returns
+    -------
+    A cuDF DataFrame or Series depending on if the input DLPack tensor is 1D
+    or 2D.
+    """
+    res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
+    cols = []
+    for idx in range(len(valids)):
+        cols.append(
+            columnops.build_column(
+                Buffer(res[idx]),
+                dtype=res[idx].dtype,
+                mask=Buffer(valids[idx])
+            )
+        )
+    if len(cols) == 1:
+        return Series(cols[0])
+    else:
+        df = DataFrame()
+        for idx, col in enumerate(cols):
+            df[idx] = col
+        return df
+
+
+def to_dlpack(cudf_obj):
+    """
+    Converts a cuDF object into a DLPack tensor.
+
+    DLPack is an open-source memory tensor structure:
+    `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+    This function takes a cuDF object and converts it to a PyCapsule object
+    which contains a pointer to a DLPack tensor. This function deep copies the
+    data into the DLPack tensor from the cuDF object.
+
+    Parameters
+    ----------
+    cudf_obj : DataFrame, Series, Index, or Column
+
+    Returns
+    -------
+    pycapsule_obj : PyCapsule
+        Output DLPack tensor pointer which is encapsulated in a PyCapsule
+        object.
+    """
+    gdf_cols = []
+
+    if isinstance(cudf_obj, DataFrame):
+        pass
+    elif isinstance(cudf_obj, Series):
+        pass
+    elif isinstance(cudf_obj, Index):
+        pass
+    elif isinstance(cudf_obj, Column):
+        pass
+    else:
+        raise TypeError(f"Input of type {type(cudf_obj)} cannot be converted "
+                        "to DLPack tensor")
+
+    return cpp_dlpack.to_dlpack(gdf_cols)

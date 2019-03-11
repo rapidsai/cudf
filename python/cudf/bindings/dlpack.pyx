@@ -9,6 +9,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.dlpack cimport DLManagedTensor
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t, int8_t
@@ -24,7 +25,8 @@ cpdef from_dlpack(dlpack_capsule):
     """
     Converts a DLPack Tensor PyCapsule into a list of cudf Column objects.
     """
-    cdef DLManagedTensor_* dlpack_tensor = pycapsule.PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
+    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
+    pycapsule.PyCapsule_SetName(dlpack_capsule, 'used_dltensor')
     cdef gdf_size_type c_result_num_cols
     cdef gdf_column* result_cols
 
@@ -37,24 +39,48 @@ cpdef from_dlpack(dlpack_capsule):
 
     check_gdf_error(result)
     
-    # TODO: Replace this with a generic function for cudf_cpp.pyx since this is
-    # copied from join.pyx
+    # TODO: Replace this with a generic function from cudf_cpp.pyx since this
+    # is copied from join.pyx
     res = []
     valids = []
+
     for idx in range(c_result_num_cols):
         data_ptr = <uintptr_t>result_cols[idx].data
-        res.append(rmm.device_array_from_ptr(ptr=data_ptr,
-                                             nelem= result_cols[idx].size,
-                                             dtype=gdf_to_np_dtype( result_cols[idx].dtype),
-                                             finalizer=rmm._make_finalizer(
-                                                 data_ptr, 0)))
+        if data_ptr:
+            res.append(
+                rmm.device_array_from_ptr(
+                    ptr=data_ptr,
+                    nelem=result_cols[idx].size,
+                    dtype=gdf_to_np_dtype( result_cols[idx].dtype),
+                    finalizer=rmm._make_finalizer(data_ptr, 0)
+                )
+            )
+        else:
+            res.append(
+                rmm.device_array(
+                    0,
+                    dtype=gdf_to_np_dtype( result_cols[idx].dtype)
+                )
+            )
+
         valid_ptr = <uintptr_t>result_cols[idx].valid
-        valids.append(rmm.device_array_from_ptr(ptr=valid_ptr,
-                                                nelem=calc_chunk_size(
-                                                    result_cols[idx].size, mask_bitsize),
-                                                dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(
-                                                    valid_ptr, 0)))
+        if valid_ptr:
+            valids.append(
+                rmm.device_array_from_ptr(
+                    ptr=valid_ptr,
+                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(valid_ptr, 0)
+                )
+            )
+        else:
+            valids.append(
+                rmm.device_array(
+                    0,
+                    dtype=mask_dtype
+                )
+            )
+
     return res, valids
 
 
@@ -62,21 +88,31 @@ cpdef to_dlpack(in_cols):
 
     input_num_cols = len(in_cols)
 
-    cdef DLManagedTensor_* dlpack_tensor
-    cdef gdf_column** input_cols = <gdf_column**>malloc(result_num_cols * sizeof(gdf_column*))
-    cdef c_input_num_cols gdf_size_type = input_num_cols
+    cdef DLManagedTensor dlpack_tensor
+    cdef gdf_column** input_cols = <gdf_column**>malloc(input_num_cols * sizeof(gdf_column*))
+    cdef gdf_size_type c_input_num_cols = input_num_cols
 
     for idx, col in enumerate(in_cols):
         check_gdf_compatibility(col)
-        input_cols[idx] = column_view_from_column(col._column)
+        input_cols[idx] = column_view_from_column(col)
 
     with nogil:
         result = gdf_to_dlpack(
-            dlpack_tensor,
+            &dlpack_tensor,
             input_cols,
             c_input_num_cols
         )
 
     check_gdf_error(result)
 
-    return pycapsule.PyCapsule_New(dlpack_tensor, 'dltensor', NULL)
+    return pycapsule.PyCapsule_New(&dlpack_tensor, 'dltensor', pycapsule_deleter)
+
+cdef void pycapsule_deleter(object pycap_obj):
+    cdef DLManagedTensor* dlpack_tensor= <DLManagedTensor*>0
+    try:
+        dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
+            pycap_obj, 'used_dltensor')
+    except Exception:
+        dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
+            pycap_obj, 'dltensor')
+    dlpack_tensor.deleter(dlpack_tensor)
