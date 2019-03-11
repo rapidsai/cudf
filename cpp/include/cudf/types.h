@@ -228,7 +228,7 @@ typedef enum {
 /** --------------------------------------------------------------------------*
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
-/* ----------------------------------------------------------------------------*/
+ * ----------------------------------------------------------------------------*/
 typedef struct gdf_context_{
   int flag_sorted;              ///< Indicates if the input data is sorted. 0 = No, 1 = yes
   gdf_method flag_method;       ///< The method to be used for the operation (e.g., sort vs hash)

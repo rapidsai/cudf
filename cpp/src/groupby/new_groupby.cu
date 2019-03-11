@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "cudf.h"
+#include "types.hpp"
+#include "copying.hpp"
 #include "new_groupby.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "utilities/error_utils.hpp"
@@ -305,12 +307,12 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // run gather operation to establish new order
-    std::unique_ptr< gdf_table<gdf_size_type> > table_in{new gdf_table<gdf_size_type>{num_data_cols, data_cols_in}};
-    std::unique_ptr< gdf_table<gdf_size_type> > table_out{new gdf_table<gdf_size_type>{num_data_cols, data_cols_out}};
-
-    status = table_in->gather<gdf_size_type>(sorted_indices, *table_out.get());
-    GDF_REQUIRE(GDF_SUCCESS == status, status);
-
+    // run gather operation to establish new order
+    cudf::table table_in(data_cols_in, num_data_cols);
+    cudf::table table_out(data_cols_out, num_data_cols);
+    
+    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
+    
     for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
@@ -346,12 +348,11 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     }
     
     // run gather operation to establish new order
-    std::unique_ptr< gdf_table<gdf_size_type> > table_in{new gdf_table<gdf_size_type>{num_data_cols, data_cols_in}};
-    std::unique_ptr< gdf_table<gdf_size_type> > table_out{new gdf_table<gdf_size_type>{num_data_cols, data_cols_out}};
+    cudf::table table_in(data_cols_in, num_data_cols);
+    cudf::table table_out(data_cols_out, num_data_cols);
     
-    status = table_in->gather<gdf_size_type>(sorted_indices, *table_out.get());
-    GDF_REQUIRE(GDF_SUCCESS == status, status);
-
+    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
+    
     for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
