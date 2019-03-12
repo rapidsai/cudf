@@ -178,7 +178,6 @@ struct column_scatterer {
 namespace detail {
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table, cudaStream_t stream = 0) {
-  CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -188,6 +187,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
     return;
   }
 
+  CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 
