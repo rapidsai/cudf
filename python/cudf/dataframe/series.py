@@ -1444,6 +1444,12 @@ class Iloc(object):
                 for idx in range(start, stop, step):
                     rows.append(idx)
 
+        elif isinstance(arg, list):
+            rows = arg
+
+        elif isinstance(arg, np.ndarray):
+            rows = arg.tolist()
+
         else:
             raise TypeError(type(arg))
 

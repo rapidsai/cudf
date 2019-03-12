@@ -427,7 +427,6 @@ def test_dataframe_loc_outbound():
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):
-
     # create random series
     np.random.seed(12)
     ps = pd.Series(np.random.sample(nelem))
@@ -454,6 +453,17 @@ def test_series_iloc(nelem):
         gs.iloc[nelem-1:nelem+1], ps.iloc[nelem-1:nelem+1])
     np.testing.assert_allclose(
         gs.iloc[nelem:nelem*2], ps.iloc[nelem:nelem*2])
+
+
+def test_iloc_list_array():
+    pdf = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf.iloc[[1, 2, 3]], gdf.iloc[[1, 2, 3]])
+    assert_eq(pdf.iloc[np.array([1, 2, 3])], gdf.iloc[np.array([1, 2, 3])])
+
+    assert_eq(pdf.x.iloc[[1, 2, 3]], gdf.x.iloc[[1, 2, 3]])
+    assert_eq(pdf.x.iloc[np.array([1, 2, 3])], gdf.x.iloc[np.array([1, 2, 3])])
 
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
