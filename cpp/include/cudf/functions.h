@@ -138,11 +138,17 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  * @param[in] Indicates if the input data is sorted. 0 = No, 1 = yes
  * @param[in] the method to be used for the operation (e.g., sort vs hash)
  * @param[in] for COUNT: DISTINCT = 1, else = 0
+ * @param[in] When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+ * @param[in] 0 = No sort in place allowed, 1 = else
+ * @param[in] GDF_NULL_AS_LARGEST = Nulls are treated as largest,
+ *            GDF_NULL_AS_SMALLEST    = Nulls are treated as smallest, 
+ *            GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace);
+gdf_error gdf_create_context(gdf_context *context, int flag_sorted, gdf_method flag_method,
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           gdf_nulls_sort_behavior flag_null_sort_behavior);
 
 
 /* error handling */
