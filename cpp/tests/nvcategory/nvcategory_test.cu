@@ -23,7 +23,7 @@
 
 namespace {
 std::string const default_chars = 
-	"abcdefghijklmnaoqrstuvwxyz";//ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+	"abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 }
 
 std::string random_string(size_t len = 15, std::string const &allowed_chars = default_chars) {
@@ -39,7 +39,7 @@ gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 	gdf_column * column = new gdf_column;
 	int32_t * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t) , 0), RMM_SUCCESS);
-	cudaMemcpy(data, host_data, sizeof(int32_t) * num_rows, cudaMemcpyHostToDevice);
+	CUDA_TRY( cudaMemcpy(data, host_data, sizeof(int32_t) * num_rows, cudaMemcpyHostToDevice) );
 
 	bit_mask::bit_mask_t * valid;
 	bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -237,116 +237,303 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	}
 }
 
-TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
+// Selects the kind of join operation that is performed
+enum struct agg_op
+{
+  MIN,//0
+  MAX,//1
+  SUM,//2
+  CNT,//3
+  AVG //4
+};
+
+template <agg_op op>
+struct AggOp {
+    template <typename T>
+    T operator()(const T a, const T b) {
+        return static_cast<T>(0);
+    }
+    template <typename T>
+    T operator()(const T a) {
+        return static_cast<T>(0);
+    }
+};
+
+template<>
+struct AggOp<agg_op::MIN> {
+    template <typename T>
+    T operator()(const T a, const T b) {
+        return (a < b)? a : b;
+    }
+    template <typename T>
+    T operator()(const T a) {
+        return a;
+    }
+};
+
+template<>
+struct AggOp<agg_op::MAX> {
+    template <typename T>
+    T operator()(const T a, const T b) {
+        return (a > b)? a : b;
+    }
+    template <typename T>
+    T operator()(const T a) {
+        return a;
+    }
+};
+
+template<>
+struct AggOp<agg_op::SUM> {
+    template <typename T>
+    T operator()(const T a, const T b) {
+        return a + b;
+    }
+    template <typename T>
+    T operator()(const T a) {
+        return a;
+    }
+};
+
+template<>
+struct AggOp<agg_op::CNT> {
+    size_t count{0};
+    template <typename T>
+    T operator()(const T a, const T b) {
+        count = a+1;
+        return count;
+    }
+    template <typename T>
+    T operator()(const T a) {
+        count = 1;
+        return count;
+    }
+};
+
+struct NVCategoryGroupByTest : public GdfTest
+{
+	using output_t = int32_t;
+	using map_t = std::map<std::string, output_t>;
+
+	const int length = 1;
+
+	std::vector<std::string> input_key;
+	std::vector<output_t> input_value;
+
+  std::vector<std::string> output_key;
+	std::vector<output_t> output_value;
+	
+	gdf_context ctxt = {0, GDF_HASH, 1};
+
+	// Containers for the raw pointers to the gdf_columns that will be used as input
+  // to the gdf_group_by functions
+  std::vector<gdf_column*> gdf_raw_input_key_columns;
+  gdf_column* gdf_raw_input_val_column;
+  std::vector<gdf_column*> gdf_raw_output_key_columns;
+	gdf_column* gdf_raw_output_val_column;
+
+	void copy_output(gdf_column* group_by_output_key, std::vector<std::string>& output_key,
+									 gdf_column* group_by_output_value, std::vector<output_t>& output_value){
+	
+		const size_t keys_size = group_by_output_key->size;
+		NVStrings * temp_strings = static_cast<NVCategory *>(group_by_output_key->dtype_info.category)->gather_strings( 
+			(nv_category_index_type *) group_by_output_key->data, keys_size, DEVICE_ALLOCATED );
+	
+		char** host_strings = new char*[keys_size];
+		for(size_t i=0;i<keys_size;i++){
+			host_strings[i]=new char[length+1];
+		}
+	
+		temp_strings->to_host(host_strings, 0, keys_size);
+	
+		for(size_t i=0;i<keys_size;i++){
+			host_strings[i][length]=0;
+		}
+	
+		output_key = std::vector<std::string>(host_strings, host_strings + keys_size);
+
+		NVStrings::destroy(temp_strings);
+
+		for(size_t i = 0; i < keys_size; i++){
+			delete host_strings[i];
+		}
+		delete host_strings;
+
+		output_value.resize(group_by_output_value->size);
+		CUDA_TRY( cudaMemcpy(output_value.data(), group_by_output_value->data, sizeof(output_t) * group_by_output_value->size, cudaMemcpyDeviceToHost) );
+	}
+
+	void compute_gdf_result(agg_op op, const gdf_error expected_error = GDF_SUCCESS, bool print=false)
+  {
+    const int num_columns = gdf_raw_input_key_columns.size();
+
+    gdf_error error{GDF_SUCCESS};
+
+    gdf_column **group_by_input_key = gdf_raw_input_key_columns.data();
+    gdf_column *group_by_input_value = gdf_raw_input_val_column;
+
+    gdf_column **group_by_output_key = gdf_raw_output_key_columns.data();
+    gdf_column *group_by_output_value = gdf_raw_output_val_column;
+
+    switch(op)
+    {
+      case agg_op::MIN:
+        {
+          error = gdf_group_by_min(num_columns,
+                                   group_by_input_key,
+                                   group_by_input_value,
+                                   nullptr,
+                                   group_by_output_key,
+                                   group_by_output_value,
+                                   &ctxt);
+          break;
+        }
+      case agg_op::MAX:
+        {
+          error = gdf_group_by_max(num_columns,
+                                   group_by_input_key,
+                                   group_by_input_value,
+                                   nullptr,
+                                   group_by_output_key,
+                                   group_by_output_value,
+                                   &ctxt);
+          break;
+        }
+      case agg_op::SUM:
+        {
+          error = gdf_group_by_sum(num_columns,
+                                   group_by_input_key,
+                                   group_by_input_value,
+                                   nullptr,
+                                   group_by_output_key,
+                                   group_by_output_value,
+                                   &ctxt);
+          break;
+        }
+      case agg_op::CNT:
+        {
+          error = gdf_group_by_count(num_columns,
+                                   group_by_input_key,
+                                   group_by_input_value,
+                                   nullptr,
+                                   group_by_output_key,
+                                   group_by_output_value,
+                                   &ctxt);
+          break;
+        }
+      case agg_op::AVG:
+        {
+          error = gdf_group_by_avg(num_columns,
+                                   group_by_input_key,
+                                   group_by_input_value,
+                                   nullptr,
+                                   group_by_output_key,
+                                   group_by_output_value,
+                                   &ctxt);
+          break;
+        }
+      default:
+        error = GDF_INVALID_AGGREGATOR;
+    }
+    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
+
+		if (GDF_SUCCESS == expected_error ) {
+			copy_output(
+				group_by_output_key[0], output_key,
+				group_by_output_value, output_value);
+
+			if (print){
+				print_gdf_column(group_by_output_key[0]);
+				print_gdf_column(group_by_output_value);
+			}
+		}
+	}
+
+	template <agg_op op>
+	map_t compute_reference_solution() {
+			map_t key_val_map;
+
+      if (op != agg_op::AVG) {
+          AggOp<op> agg;
+          for (size_t i = 0; i < input_value.size(); ++i) {
+              auto l_key = input_key[i];
+              auto sch = key_val_map.find(l_key);
+              if (sch != key_val_map.end()) {
+                  key_val_map[l_key] = agg(sch->second, input_value[i]);
+              } else {
+                  key_val_map[l_key] = agg(input_value[i]);
+              }
+          }
+      } else {
+          std::map<std::string, size_t> counters;
+          AggOp<agg_op::SUM> agg;
+          for (size_t i = 0; i < input_value.size(); ++i) {
+              auto l_key = input_key[i];
+              counters[l_key]++;
+              auto sch = key_val_map.find(l_key);
+              if (sch != key_val_map.end()) {
+                  key_val_map[l_key] = agg(sch->second, input_value[i]);
+              } else {
+                  key_val_map[l_key] = agg(input_value[i]);
+              }
+          }
+          for (auto& e : key_val_map) {
+              e.second = e.second/counters[e.first];
+          }
+      }
+      return key_val_map;
+	}
+
+  void compare_gdf_result(map_t& reference_map) {
+		ASSERT_EQ(output_value.size(), reference_map.size()) <<
+				"Size of gdf result does not match reference result\n";
+		ASSERT_EQ(output_key.size(), output_value.size()) <<
+				"Mismatch between aggregation and group by column size.";
+		for (size_t i = 0; i < output_value.size(); ++i) {
+				auto sch = reference_map.find(output_key[i]);
+				bool found = (sch != reference_map.end());
+				EXPECT_EQ(found, true);
+				if (!found) { continue; }
+				if (std::is_integral<output_t>::value) {
+						EXPECT_EQ(sch->second, output_value[i]);
+				} else {
+						EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
+				}
+				//ensure no duplicates in gdf output
+				reference_map.erase(sch);
+		}
+	}
+};
+
+TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
 {
 	bool print = false;
+	const int rows_size = 64;
+	const agg_op op = agg_op::AVG;
 
-	//left will be Z,Y,X..... C,B,A,ZZ,YY....
-	gdf_column * category_column = create_nv_category_column(100,true);
-	gdf_column * category_column_2 = create_nv_category_column(100,false);
-	gdf_column * category_column_out = create_nv_category_column(100,false);
+	const char ** string_data = generate_string_data(rows_size, length, print);
 
-	gdf_column * constant_value_column_1 = create_column_constant(100,1);
-	gdf_column * constant_value_column_5 = create_column_constant(100,5);
+  input_key = std::vector<std::string>(string_data, string_data + rows_size);
 
-	gdf_column * category_column_groups_out = create_nv_category_column(100,true);
-	gdf_column * out_col_agg = create_column_constant(100,1);
+	gdf_column * category_column = create_nv_category_column_strings(string_data, rows_size);
 
-	gdf_context ctxt;
-	ctxt.flag_distinct = false;
-	ctxt.flag_method = GDF_HASH;
-	ctxt.flag_sort_result = 1;
-	gdf_column ** cols = new gdf_column*[1];
-	gdf_column ** output_groups = new gdf_column*[1];
-	cols[0] = category_column;
-	output_groups[0] = category_column_groups_out;
+	gdf_raw_input_key_columns.push_back(category_column);
 
-	if(print){
-		/*print_typed_column((int32_t *) constant_value_column_1->data,
-				constant_value_column_1->valid,
-				constant_value_column_1->size);*/
-	}
+	int32_t* host_values = generate_int_data(rows_size, 10, print);
+	input_value = std::vector<int32_t>(host_values, host_values + rows_size);
 
-	gdf_error err = gdf_group_by_sum(1,                    // # columns
-			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-			constant_value_column_1,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-			nullptr,  //if not null return indices of re-ordered rows
-			output_groups,  //if not null return the grouped-by columns
-			//(multi-gather based on indices, which are needed anyway)
-			out_col_agg,      //aggregation result
-			&ctxt);
+	gdf_raw_input_val_column = create_column_ints(host_values, rows_size);
 
-	if(print){
-		/*print_typed_column((int32_t *) output_groups[0]->data,
-				output_groups[0]->valid,
-				output_groups[0]->size);
+	gdf_column * gdf_raw_output_key_column = create_nv_category_column(rows_size, true);
+	gdf_raw_output_key_columns.push_back(gdf_raw_output_key_column);
 
+	gdf_raw_output_val_column = create_column_constant(rows_size, 1);
 
-		print_typed_column((int32_t *) out_col_agg->data,
-				out_col_agg->valid,
-				out_col_agg->size);*/
-	}
+	this->compute_gdf_result(op, GDF_SUCCESS, print);
 
-	err = gdf_group_by_max(1,                    // # columns
-			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-			category_column_2,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-			nullptr,  //if not null return indices of re-ordered rows
-			output_groups,  //if not null return the grouped-by columns
-			//(multi-gather based on indices, which are needed anyway)
-			category_column_out,      //aggregation result
-			&ctxt);
+	auto reference_map = this->compute_reference_solution<op>();
 
-	EXPECT_EQ(GDF_SUCCESS, err);
-
-	if(print){
-		/*print_typed_column((int32_t *) cols[0]->data,
-				cols[0]->valid,
-				cols[0]->size);
-
-
-		print_typed_column((int32_t *) category_column_2->data,
-				category_column_2->valid,
-				category_column_2->size);
-
-		print_typed_column((int32_t *) output_groups[0]->data,
-				output_groups[0]->valid,
-				output_groups[0]->size);
-
-
-		print_typed_column((int32_t *) category_column_out->data,
-				category_column_out->valid,
-				category_column_out->size);*/
-	}
-
-	char ** data = new char *[200];
-	for(int i = 0; i < 200; i++){
-	  data[i] = new char[10];
-	}
-
-	static_cast<NVCategory *>(category_column_out->dtype_info.category)->to_strings()->to_host(data, 0, category_column_out->size);
-
-	if(print){
-		std::cout<<"maxes\n";
-		for(int i = 0; i < category_column_out->size; i++){
-			std::cout<<data[i]<<"\t";
-		}
-		std::cout<<std::endl;
-  }
-
-	static_cast<NVCategory *>(output_groups[0]->dtype_info.category)->to_strings()->to_host(data, 0, category_column_out->size);
-
-	if(print){
-		std::cout<<"groups\n";
-		for(int i = 0; i < category_column_out->size; i++){
-			std::cout<<data[i]<<"\t";
-		}
-		std::cout<<std::endl;
-  }
-
-	for(int i = 0; i < 200; i++){
-	  delete data[i];
-	}
-	delete data;
+	this->compare_gdf_result(reference_map);
 }
 
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
@@ -406,11 +593,11 @@ struct NVCategoryConcatTest : public GdfTest
 	const int length = 2;
 
 	std::vector<std::string> compute_gdf_result(bool print = false){
-		size_t concat_size = 0;
+		size_t keys_size = 0;
 		for(size_t i=0;i<concat_columns.size();i++)
-			concat_size+=concat_columns[i]->size;
+			keys_size+=concat_columns[i]->size;
 
-		concat_out = create_nv_category_column(concat_size, true);
+		concat_out = create_nv_category_column(keys_size, true);
 
 		gdf_error err = gdf_column_concat(concat_out, concat_columns.data(), concat_columns.size());
 		EXPECT_EQ(GDF_SUCCESS, err);
@@ -420,24 +607,24 @@ struct NVCategoryConcatTest : public GdfTest
 		}
 
 		NVStrings * temp_strings = static_cast<NVCategory *>(concat_out->dtype_info.category)->gather_strings( 
-			(nv_category_index_type *) concat_out->data, concat_size, DEVICE_ALLOCATED );
+			(nv_category_index_type *) concat_out->data, keys_size, DEVICE_ALLOCATED );
 	
-		char** host_strings = new char*[concat_size];
-		for(size_t i=0;i<concat_size;i++){
+		char** host_strings = new char*[keys_size];
+		for(size_t i=0;i<keys_size;i++){
 			host_strings[i]=new char[length+1];
 		}
 	
-		temp_strings->to_host(host_strings, 0, concat_size);
+		temp_strings->to_host(host_strings, 0, keys_size);
 	
-		for(size_t i=0;i<concat_size;i++){
+		for(size_t i=0;i<keys_size;i++){
 			host_strings[i][length]=0;
 		}
 	
-		std::vector<std::string> strings_vector(host_strings, host_strings + concat_size);
+		std::vector<std::string> strings_vector(host_strings, host_strings + keys_size);
 
 		NVStrings::destroy(temp_strings);
 
-		for(size_t i = 0; i < concat_size; i++){
+		for(size_t i = 0; i < keys_size; i++){
 			delete host_strings[i];
 		}
 		delete host_strings;

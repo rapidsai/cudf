@@ -437,6 +437,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
@@ -444,6 +445,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
     //create joined output column data buffers
     for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
@@ -453,6 +455,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
 
 
@@ -469,8 +472,9 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &left_destination_table, check_bounds);
-
+      CHECK_STREAM(0);
       gdf_error update_err = nvcategory_gather_table(left_source_table,left_destination_table);
+      CHECK_STREAM(0);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
@@ -483,8 +487,9 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&right_source_table,
                            static_cast<index_type const *>(right_indices->data),
                            &right_destination_table, check_bounds);
-
+      CHECK_STREAM(0);
       gdf_error update_err = nvcategory_gather_table(right_source_table,right_destination_table);
+      CHECK_STREAM(0);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
@@ -503,14 +508,15 @@ gdf_error construct_join_output_df(
             &right_source_table,
             static_cast<index_type const *>(right_indices->data),
             &join_destination_table, check_bounds);
-
+        CHECK_STREAM(0);
       }
 
       cudf::detail::gather(&join_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &join_destination_table, check_bounds);
-
+      CHECK_STREAM(0);
       gdf_error update_err = nvcategory_gather_table(join_source_table,join_destination_table);
+      CHECK_STREAM(0);
       GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
