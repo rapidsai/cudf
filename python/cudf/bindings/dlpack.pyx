@@ -169,6 +169,7 @@ cdef class DLPackMemory:
         self.dlm_tensor.deleter(self.dlm_tensor)
 
 cpdef int test_fromDlpack(object dltensor):
+    import cupy
     # dlm_tensor = <DLManagedTensor *>cpython.PyCapsule_GetPointer(
     #         dltensor, 'dltensor')
     mem = DLPackMemory(dltensor)
