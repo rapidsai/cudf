@@ -21,7 +21,7 @@
 #include <utilities/cudf_utils.h>
 
 /**---------------------------------------------------------------------------*
- * @brief Returns if the specified bit in a validity bit mask is set.
+ * @brief Returns true if the specified bit in a validity bit mask is set.
  *
  * @param valid The validity bitmask. If equal to `nullptr`, this function
  * always returns true
