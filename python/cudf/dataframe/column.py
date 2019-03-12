@@ -571,5 +571,6 @@ class Column(object):
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
+        """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)

@@ -52,6 +52,7 @@ def from_dlpack(pycapsule_obj):
 
 @ioutils.doc_to_dlpack()
 def to_dlpack(cudf_obj):
+    """{docstring}"""
     if isinstance(cudf_obj, DataFrame):
         gdf_cols = [col[1]._column for col in cudf_obj._cols.items()]
     elif isinstance(cudf_obj, Series):
