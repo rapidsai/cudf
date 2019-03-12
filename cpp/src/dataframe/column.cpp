@@ -24,6 +24,7 @@
 #include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "utilities/type_dispatcher.hpp"
+#include "bitmask/legacy_bitmask.hpp"
 #include <cuda_runtime_api.h>
 #include <algorithm>
 
@@ -120,7 +121,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type)) );
+                         gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
   }
   
   return GDF_SUCCESS;

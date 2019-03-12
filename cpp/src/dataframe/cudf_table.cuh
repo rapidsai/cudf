@@ -25,6 +25,7 @@
 #include "hash/managed.cuh"
 #include "copying/gather.hpp"
 #include "sqls/sqls_rtti_comp.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <thrust/tabulate.h>
 #include <cassert>
@@ -160,7 +161,7 @@ public:
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
-    const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
+    const size_type mask_size = gdf_valid_allocation_size(column_length);
     device_row_valid.resize(mask_size);
 
     // If a row contains a single NULL value, then the entire row is considered
