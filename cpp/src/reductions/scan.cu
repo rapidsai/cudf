@@ -4,6 +4,7 @@
 #include "utilities/error_utils.hpp"
 #include "bitmask/bit_mask.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <cub/device/device_scan.cuh>
 
@@ -78,9 +79,8 @@ namespace { //anonymous
 
             if( nullptr != input->valid ){
                 // copy null bitmask
-                size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
                 CUDA_TRY(cudaMemcpyAsync(output->valid, input->valid,
-                        valid_byte_length, cudaMemcpyDeviceToDevice, stream));
+                        gdf_num_bitmask_elements(input->size), cudaMemcpyDeviceToDevice, stream));
                 output->null_count = input->null_count;
             }
 

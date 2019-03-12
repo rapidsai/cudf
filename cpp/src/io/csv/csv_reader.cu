@@ -1093,7 +1093,7 @@ gdf_error allocateGdfDataSpace(gdf_column *col) {
   // TODO: We should not need to allocate space if there is nothing to parse
   // Need to debug/refactor the code to eliminate this requirement
   const auto num_rows = std::max(col->size, 1);
-  const auto num_masks = gdf_get_num_bytes_for_valids_allocation(num_rows);
+  const auto num_masks = gdf_valid_allocation_size(num_rows);
 
   RMM_TRY(RMM_ALLOC(&col->valid, sizeof(gdf_valid_type) * num_masks, 0));
   CUDA_TRY(cudaMemset(col->valid, 0, sizeof(gdf_valid_type) * num_masks));

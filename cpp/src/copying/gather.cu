@@ -22,6 +22,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include <bitmask/legacy_bitmask.hpp>
 
 /**
  * @brief Operations for copying from one column to another
@@ -96,13 +97,18 @@ __global__ void gather_bitmask_if_kernel(
       __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   while (destination_row < num_destination_rows) {
-    bool const source_bit_is_valid{
-        gdf_is_valid(source_mask, gather_map[destination_row])};
+    bool source_bit_is_valid{false};
+    bool const predicate_is_true{pred(stencil[destination_row])};
+    if (predicate_is_true) {
+      // If the predicate for `destination_row` is false, it's valid for
+      // `gather_map[destination_row]` to be out of bounds,
+      // therefore, only use it if the predicate evaluates to true
+      source_bit_is_valid =
+          gdf_is_valid(source_mask, gather_map[destination_row]);
+    }
 
     bool const destination_bit_is_valid{
         gdf_is_valid(destination_mask, destination_row)};
-
-    bool const predicate_is_true{pred(stencil[destination_row])};
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
@@ -111,7 +117,7 @@ __global__ void gather_bitmask_if_kernel(
     MaskType const result_mask =
         __ballot_sync(active_threads,
                       (predicate_is_true and source_bit_is_valid) or
-                          (not predicate_is_true && destination_bit_is_valid));
+                          (not predicate_is_true and destination_bit_is_valid));
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
@@ -238,7 +244,7 @@ void gather_bitmask(gdf_valid_type const* source_mask,
   bool const in_place{source_mask == destination_mask};
   rmm::device_vector<gdf_valid_type> temp_bitmask;
   if (in_place) {
-    temp_bitmask.resize(gdf_get_num_chars_bitmask(num_destination_rows));
+    temp_bitmask.resize(gdf_valid_allocation_size(num_destination_rows));
     output_bitmask = temp_bitmask.data().get();
   }
 
@@ -339,6 +345,16 @@ namespace detail {
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table, bool check_bounds, cudaStream_t stream) {
+  CUDF_EXPECTS(nullptr != source_table, "source table is null");
+  CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
+
+  // If the destination is empty, return immediately as there is nothing to
+  // gather
+  if (0 == destination_table->num_rows()) {
+    return;
+  }
+
+  CUDF_EXPECTS(nullptr != gather_map, "gather_map is null");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 

@@ -14,6 +14,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
+#include <bitmask/legacy_bitmask.hpp>
 
 template<typename T, typename Tout, typename F>
 __global__
@@ -375,8 +376,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {  
                                                                                                                 \
     output->dtype = LTO;                                                                                        \
     if (input->valid && output->valid) {                                                                        \
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                               \
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + num_chars_bitmask, output->valid);            \
+        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);            \
     }                                                                                                           \
                                                                                                                 \
     /* Handling datetime logical castings */                                                                    \
@@ -411,8 +411,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output, gdf
     output->dtype = LTO;                                                                                \
     output->dtype_info.time_unit = time_unit;                                                           \
     if (input->valid && output->valid) {                                                                \
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                       \
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + num_chars_bitmask, output->valid);    \
+        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);    \
     }                                                                                                   \
                                                                                                         \
     /* Handling datetime logical castings */                                                            \

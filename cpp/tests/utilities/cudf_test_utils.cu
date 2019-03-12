@@ -31,11 +31,10 @@ struct column_printer {
     cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(ColumnType),
                cudaMemcpyDeviceToHost);
 
-    gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
-    std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type{0});
+    std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows), ~gdf_valid_type{0});
     if (nullptr != the_column->valid) {
       cudaMemcpy(h_mask.data(), the_column->valid,
-                 num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+                 gdf_num_bitmask_elements(num_rows) * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
     }
 
     for (gdf_size_type i = 0; i < num_rows; ++i) {
@@ -67,18 +66,18 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   cudaPointerGetAttributes(&attrib, validity_mask);
   error = cudaGetLastError();
 
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
-  std::vector<gdf_valid_type> h_mask(num_masks);
+  std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows));
   if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
-    cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows), cudaMemcpyDeviceToHost);
   else
-    memcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type));
+    memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
 
-  std::transform(h_mask.begin(), h_mask.end(), std::ostream_iterator<std::string>(std::cout, " "), 
-                 [](gdf_valid_type x){ 
-                   auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@'); 
-                   return std::string(bits.rbegin(), bits.rend());  
-                 });
+  std::transform(
+      h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
+      std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
+        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@');
+        return std::string(bits.rbegin(), bits.rend());
+      });
   std::cout << std::endl;
 }
 
