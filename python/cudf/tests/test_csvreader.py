@@ -10,7 +10,6 @@ from io import StringIO
 from io import BytesIO
 
 from cudf import read_csv
-# from cudf.io.csv import read_csv_strings
 import cudf
 from cudf.tests.utils import assert_eq
 import gzip
