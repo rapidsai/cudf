@@ -88,7 +88,7 @@ cpdef to_dlpack(in_cols):
 
     input_num_cols = len(in_cols)
 
-    cdef DLManagedTensor dlpack_tensor
+    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>malloc(sizeof(DLManagedTensor))
     cdef gdf_column** input_cols = <gdf_column**>malloc(input_num_cols * sizeof(gdf_column*))
     cdef gdf_size_type c_input_num_cols = input_num_cols
 
@@ -98,14 +98,14 @@ cpdef to_dlpack(in_cols):
 
     with nogil:
         result = gdf_to_dlpack(
-            &dlpack_tensor,
+            dlpack_tensor,
             input_cols,
             c_input_num_cols
         )
 
     check_gdf_error(result)
 
-    return pycapsule.PyCapsule_New(&dlpack_tensor, 'dltensor', pycapsule_deleter)
+    return pycapsule.PyCapsule_New(dlpack_tensor, 'dltensor', pycapsule_deleter)
 
 cdef void pycapsule_deleter(object pycap_obj):
     cdef DLManagedTensor* dlpack_tensor= <DLManagedTensor*>0
