@@ -6,6 +6,7 @@ from cudf.dataframe.index import Index
 from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe import columnops
+from cudf.utils import ioutils
 from cudf.bindings import dlpack as cpp_dlpack
 
 
@@ -49,37 +50,16 @@ def from_dlpack(pycapsule_obj):
         return df
 
 
+@ioutils.doc_to_dlpack()
 def to_dlpack(cudf_obj):
-    """
-    Converts a cuDF object into a DLPack tensor.
-
-    DLPack is an open-source memory tensor structure:
-    `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-    This function takes a cuDF object and converts it to a PyCapsule object
-    which contains a pointer to a DLPack tensor. This function deep copies the
-    data into the DLPack tensor from the cuDF object.
-
-    Parameters
-    ----------
-    cudf_obj : DataFrame, Series, Index, or Column
-
-    Returns
-    -------
-    pycapsule_obj : PyCapsule
-        Output DLPack tensor pointer which is encapsulated in a PyCapsule
-        object.
-    """
-    gdf_cols = []
-
     if isinstance(cudf_obj, DataFrame):
-        pass
+        gdf_cols = [col[1]._column for col in cudf_obj._cols.items()]
     elif isinstance(cudf_obj, Series):
-        pass
+        gdf_cols = [cudf_obj._column]
     elif isinstance(cudf_obj, Index):
-        pass
+        gdf_cols = [cudf_obj._values]
     elif isinstance(cudf_obj, Column):
-        pass
+        gdf_cols = [cudf_obj]
     else:
         raise TypeError(f"Input of type {type(cudf_obj)} cannot be converted "
                         "to DLPack tensor")

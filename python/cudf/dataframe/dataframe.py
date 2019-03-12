@@ -2377,6 +2377,11 @@ class DataFrame(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
+
 
 class Loc(object):
     """

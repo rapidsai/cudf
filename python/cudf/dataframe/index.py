@@ -11,7 +11,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.column import Column
@@ -85,6 +85,11 @@ class Index(object):
 
     def to_arrow(self):
         return self.as_column().to_arrow()
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
 
     @property
     def gpu_values(self):
