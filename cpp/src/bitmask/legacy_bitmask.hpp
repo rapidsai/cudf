@@ -46,10 +46,5 @@ gdf_size_type gdf_last_bitmask_index(gdf_size_type column_size) {
   return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
 }
 
-CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) {
-  return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
-}
-
 
 #endif
