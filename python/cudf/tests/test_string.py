@@ -415,10 +415,10 @@ def test_string_split(data, pat, n, expand, expand_raise):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('str_data', [
-    [],
-    ['a', 'b', 'c', 'd', 'e'],
-    [None, None, None, None, None]
+@pytest.mark.parametrize('str_data,str_data_raise', [
+    ([], 0),
+    (['a', 'b', 'c', 'd', 'e'], 0),
+    ([None, None, None, None, None], 1)
 ])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
 @pytest.mark.parametrize('how,how_raise', [
@@ -427,9 +427,7 @@ def test_string_split(data, pat, n, expand, expand_raise):
     ('inner', 0),
     ('outer', 0)
 ])
-def test_string_join_key(str_data, num_keys, how, how_raise):
-    # if str_data == [None, None, None, None, None]:
-    #     pytest.xfail("Pandas treats None == None for joins...")
+def test_string_join_key(str_data, str_data_raise, num_keys, how, how_raise):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
@@ -444,8 +442,8 @@ def test_string_join_key(str_data, num_keys, how, how_raise):
     gdf2 = gdf.copy()
 
     expectation = raise_builder(
-        [how_raise],
-        NotImplementedError
+        [how_raise, str_data_raise],
+        (NotImplementedError, AssertionError)
     )
 
     with expectation:
@@ -455,9 +453,6 @@ def test_string_join_key(str_data, num_keys, how, how_raise):
         if len(expect) == 0 and len(got) == 0:
             expect = expect.reset_index(drop=True)
             got = got[expect.columns]
-
-        print(expect)
-        print(got)
 
         assert_eq(expect, got)
 
