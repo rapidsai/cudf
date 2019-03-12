@@ -94,8 +94,6 @@ void scatter_bitmask(gdf_valid_type const* source_mask,
     output_bitmask = temp_bitmask.data().get();
   }
 
-  std::cout << "num destination_mask_elements: " << num_destination_mask_elements << std::endl;
-
   // Ensure the output bitmask is initialized to zero
   CUDA_TRY(cudaMemsetAsync(
       output_bitmask, 0, num_destination_mask_elements * sizeof(gdf_valid_type),

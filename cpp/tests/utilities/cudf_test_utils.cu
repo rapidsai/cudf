@@ -34,7 +34,7 @@ struct column_printer {
     std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows), ~gdf_valid_type{0});
     if (nullptr != the_column->valid) {
       cudaMemcpy(h_mask.data(), the_column->valid,
-                 gdf_last_bitmask_index(num_rows) * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+                 gdf_num_bitmask_elements(num_rows) * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
     }
 
     for (gdf_size_type i = 0; i < num_rows; ++i) {
@@ -73,7 +73,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
     memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
 
   std::transform(
-      h_mask.begin(), h_mask.begin() + gdf_last_bitmask_index(num_rows),
+      h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
       std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
         auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@');
         return std::string(bits.rbegin(), bits.rend());

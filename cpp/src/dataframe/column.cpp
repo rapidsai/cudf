@@ -121,7 +121,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_last_bitmask_index(total_size) * sizeof(gdf_valid_type)) );
+                         gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
   }
   
   return GDF_SUCCESS;

@@ -52,7 +52,7 @@
     gdf_size_type count{0};
 
     // Count the valid bits for all masks except the last one
-    for (gdf_size_type i = 0; i < (gdf_last_bitmask_index(num_rows) - 1); ++i) {
+    for (gdf_size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
       gdf_valid_type current_mask = masks[i];
 
       while (current_mask > 0) {
@@ -69,7 +69,7 @@
 
     // Mask off only the bits that correspond to rows
     gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
-    gdf_valid_type last_mask = masks[gdf_last_bitmask_index(num_rows) - 1] & rows_mask;
+    gdf_valid_type last_mask = masks[gdf_num_bitmask_elements(num_rows) - 1] & rows_mask;
 
     while (last_mask > 0) {
       last_mask &= (last_mask - 1);
@@ -279,7 +279,7 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
     return false;  // if one is null but not both
 
   if (!thrust::equal(thrust::cuda::par, left->valid,
-                     left->valid + gdf_last_bitmask_index(left->size),
+                     left->valid + gdf_num_bitmask_elements(left->size),
                      right->valid))
     return false;
 

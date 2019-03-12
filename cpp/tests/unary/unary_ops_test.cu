@@ -687,7 +687,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<gdf_valid_type> outputValidDev(gdf_valid_allocation_size(inputCol.size));
 
         thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
-                          thrust::make_counting_iterator( gdf_last_bitmask_index(inputCol.size)),
+                          thrust::make_counting_iterator( gdf_num_bitmask_elements(inputCol.size)),
                           inputValidDev.begin(), generateValidRandom());
 
         inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
@@ -699,7 +699,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
 
-		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.begin() + gdf_last_bitmask_index(inputCol.size), outputValidDev.begin());
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.begin() + gdf_num_bitmask_elements(inputCol.size), outputValidDev.begin());
 
 		EXPECT_TRUE( result == true );
 	}
@@ -725,7 +725,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<gdf_valid_type> outputValidDev(gdf_valid_allocation_size(inputCol.size));
 
         thrust::transform(thrust::make_counting_iterator( static_cast<gdf_size_type>(0)),
-                        thrust::make_counting_iterator( gdf_last_bitmask_index(inputCol.size)),
+                        thrust::make_counting_iterator( gdf_num_bitmask_elements(inputCol.size)),
                         inputValidDev.begin(), generateValidRandom());
 
         inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
@@ -740,7 +740,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
         bool result =
             thrust::equal(inputValidDev.begin(),
                             inputValidDev.begin() +
-                                gdf_last_bitmask_index(inputCol.size),
+                                gdf_num_bitmask_elements(inputCol.size),
                             outputValidDev.begin());
 
         EXPECT_TRUE( result );

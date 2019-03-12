@@ -376,7 +376,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {  
                                                                                                                 \
     output->dtype = LTO;                                                                                        \
     if (input->valid && output->valid) {                                                                        \
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_last_bitmask_index(input->size), output->valid);            \
+        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);            \
     }                                                                                                           \
                                                                                                                 \
     /* Handling datetime logical castings */                                                                    \
@@ -411,7 +411,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output, gdf
     output->dtype = LTO;                                                                                \
     output->dtype_info.time_unit = time_unit;                                                           \
     if (input->valid && output->valid) {                                                                \
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_last_bitmask_index(input->size), output->valid);    \
+        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);    \
     }                                                                                                   \
                                                                                                         \
     /* Handling datetime logical castings */                                                            \

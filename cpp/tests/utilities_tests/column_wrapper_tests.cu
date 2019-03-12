@@ -92,20 +92,20 @@ void test_column(cudf::test::column_wrapper<T> const& col,
     EXPECT_TRUE(thrust::equal(
         rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
         expected_device_bitmask.begin() +
-            gdf_last_bitmask_index(expected_values.size()),
+            gdf_num_bitmask_elements(expected_values.size()),
         underlying_column->valid));
 
     // The last element in the bitmask has to be handled as a special case
     EXPECT_TRUE(std::equal(expected_bitmask.begin(),
                            expected_bitmask.begin() +
-                               gdf_last_bitmask_index(expected_values.size()),
+                               gdf_num_bitmask_elements(expected_values.size()),
                            actual_bitmask.begin()));
 
     // Only check the bits in the last mask that correspond to rows
     std::bitset<GDF_VALID_BITSIZE> expected_last_mask =
-        expected_bitmask[gdf_last_bitmask_index(expected_values.size()) - 1];
+        expected_bitmask[gdf_num_bitmask_elements(expected_values.size()) - 1];
     std::bitset<GDF_VALID_BITSIZE> actual_last_mask =
-        actual_bitmask[gdf_last_bitmask_index(expected_values.size()) - 1];
+        actual_bitmask[gdf_num_bitmask_elements(expected_values.size()) - 1];
     gdf_size_type valid_bits_last_mask =
         expected_values.size() % GDF_VALID_BITSIZE;
     if (0 == valid_bits_last_mask) {
@@ -232,7 +232,7 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
                             source_device_data + size, copy_device_data));
 
   EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0), source_column->valid,
-                            source_column->valid + gdf_last_bitmask_index(size),
+                            source_column->valid + gdf_num_bitmask_elements(size),
                             copy_column->valid));
 
   // Ensure to_host data is equal

@@ -53,7 +53,7 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
  * bits to represent elements in a column of size @p column_size
  */
 CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_last_bitmask_index(gdf_size_type column_size) {
+gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size) {
   return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
 }
 

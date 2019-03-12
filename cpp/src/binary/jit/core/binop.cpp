@@ -70,7 +70,7 @@ namespace binops {
             return error;
         }
         
-    	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
+    	gdf_size_type num_chars_bitmask = gdf_num_bitmask_elements( num_values );
 
         if ( valid_left == nullptr && valid_right != nullptr ) {
             CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
@@ -117,7 +117,7 @@ namespace binops {
 
         GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
 
-    	gdf_size_type num_chars_bitmask = gdf_last_bitmask_index( num_values );
+    	gdf_size_type num_chars_bitmask = gdf_num_bitmask_elements( num_values );
 
         if ( valid_scalar == false ) {
             CUDA_TRY( cudaMemset(valid_out, 0x00, num_chars_bitmask) );
