@@ -296,7 +296,6 @@ class Groupby(object):
                     nvstr_obj = nvstrings.to_device([])
                 out_col_agg_series._column._data = nvstr_obj
                 out_col_agg_series._column._nvcategory = nvcat_obj
-                print("done with out_col_agg")
 
             if first_run:
                 for i, thisBy in enumerate(self._by):
