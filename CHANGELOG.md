@@ -59,6 +59,7 @@
 - PR #1136 Removed `gdf_concat`
 - PR #1148 Add cudf.sqrt for dataframes and Series
 - PR #1159 Add Python bindings for libcudf dlpack functions
+- PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 
 ## Improvements
 
