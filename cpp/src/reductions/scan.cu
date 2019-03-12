@@ -11,7 +11,7 @@
 
 namespace { //anonymous
 
-#define COPYMASK_BLOCK_SIZE 1024
+static constexpr int copy_replace_nulls_blocksize = 1024;
 
     template <class T>
     __global__
@@ -47,10 +47,10 @@ namespace { //anonymous
             const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity, cudaStream_t stream)
     {
-        int blocksize = (size < COPYMASK_BLOCK_SIZE ?
-            size : COPYMASK_BLOCK_SIZE);
-        int gridsize = (size + COPYMASK_BLOCK_SIZE - 1) /
-            COPYMASK_BLOCK_SIZE;
+        int blocksize = (size < copy_replace_nulls_blocksize ?
+            size : copy_replace_nulls_blocksize);
+        int gridsize = (size + copy_replace_nulls_blocksize - 1) /
+            copy_replace_nulls_blocksize;
 
         // launch kernel
         gpu_copy_and_replace_nulls << <gridsize, blocksize, 0, stream >> > (
@@ -94,11 +94,10 @@ namespace { //anonymous
                 T* temp_input;
                 RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T), stream));
 
-                T identity = Op::template identity<T>();
-                // copy d_input data and replace with 0 if mask is null
+                // copy d_input data and replace with identity if mask is null
                 copy_and_replace_nulls(
                     static_cast<const T*>(input->data), input->valid,
-                    size, temp_input, identity, stream);
+                    size, temp_input, Op::template identity<T>(), stream);
 
                 // Do scan
                 ret = scan_function(temp_storage, temp_storage_bytes,
@@ -123,10 +122,8 @@ namespace { //anonymous
         gdf_error exclusive_scan(void *&temp_storage, size_t &temp_storage_bytes,
             const T *input, T *output, size_t size, cudaStream_t stream)
         {
-            Op op;
-            T identity = Op::template identity<T>(); // value for output[0]
             cub::DeviceScan::ExclusiveScan(temp_storage, temp_storage_bytes,
-                input, output, op, identity, size, stream);
+                input, output, Op{}, Op::template identity<T>(), size, stream);
             CUDA_CHECK_LAST();
             return GDF_SUCCESS;
         }

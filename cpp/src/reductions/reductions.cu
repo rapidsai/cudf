@@ -10,11 +10,11 @@
 
 #include "reduction_operators.cuh"
 
-#define REDUCTION_BLOCK_SIZE 128
-
 using namespace cudf::reduction;
 
 namespace { // anonymous namespace
+
+static constexpr int reduction_block_size = 128;
 
 /*
 Generic reduction implementation with support for validity mask
@@ -25,7 +25,7 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
                       gdf_size_type size, T_out *results,
                       F functor, T_out identity, Ld loader)
 {
-    typedef cub::BlockReduce<T_out, REDUCTION_BLOCK_SIZE> BlockReduce;
+    typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
     int tid = threadIdx.x;
@@ -66,16 +66,13 @@ gdf_error ReduceOp(const gdf_column *input, T_out *output)
             sizeof(T_out), cudaMemcpyHostToDevice, 0));
     CUDA_CHECK_LAST();
 
-    int blocksize = REDUCTION_BLOCK_SIZE;
-    int gridsize = (input->size + REDUCTION_BLOCK_SIZE -1 )
-        /REDUCTION_BLOCK_SIZE;
-
-    typename Op::Loader loader;
-    Op functor;
+    int blocksize = reduction_block_size;
+    int gridsize = (input->size + reduction_block_size -1 )
+        /reduction_block_size;
 
     gpu_reduction_op<<<gridsize, blocksize>>>(
         (const T_in*)input->data, input->valid, input->size,
-        output, functor, identity, loader);
+        output, Op{}, identity, typename Op::Loader{});
     CUDA_CHECK_LAST();
 
     return GDF_SUCCESS;
@@ -84,19 +81,9 @@ gdf_error ReduceOp(const gdf_column *input, T_out *output)
 
 template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
-private:
-    // return true if both are same type (e.g. date, timestamp...) or
-    // both are arithmetic types.
-    template <typename T, typename U>
-    static constexpr bool is_convertable()
-    {
-        return std::is_same<T, U>::value ||
-            ( std::is_arithmetic<T>::value && std::is_arithmetic<U>::value );
-    }
-
 public:
     template <typename T_out, typename std::enable_if<
-                is_convertable<T_in, T_out>() >::type* = nullptr >
+                std::is_convertible<T_in, T_out>::value >::type* = nullptr >
     gdf_error operator()(const gdf_column *col, void *dev_result)
     {
         return ReduceOp<T_in, T_out, Op>
@@ -104,7 +91,7 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-                !is_convertable<T_in, T_out>() >::type* = nullptr >
+                ! std::is_convertible<T_in, T_out>::value >::type* = nullptr >
     gdf_error operator()(const gdf_column *col, void *dev_result)
     {
         return GDF_UNSUPPORTED_DTYPE;
@@ -173,42 +160,49 @@ gdf_error gdf_reduction(const gdf_column *col,
     }
 }
 
+gdf_error gdf_reduction_stub(gdf_column *col,
+                  gdf_reduction_op op,
+                  void *dev_result, gdf_dtype output_dtype)
+{
+    return gdf_reduction(col, op, dev_result, output_dtype);
+}
+
 gdf_error gdf_sum(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_SUM, dev_result, col->dtype);
+    return gdf_reduction_stub(col, GDF_REDUCTION_SUM, dev_result, col->dtype);
 }
 
 gdf_error gdf_product(gdf_column *col,
                       void *dev_result,
                       gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_PRODUCTION, dev_result, col->dtype);
+    return gdf_reduction_stub(col, GDF_REDUCTION_PRODUCTION, dev_result, col->dtype);
 }
 
 gdf_error gdf_sum_of_squares(gdf_column *col,
                              void *dev_result,
                              gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_SUMOFSQUARES, dev_result, col->dtype);
+    return gdf_reduction_stub(col, GDF_REDUCTION_SUMOFSQUARES, dev_result, col->dtype);
 }
 
 gdf_error gdf_min(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_MIN, dev_result, col->dtype);
+    return gdf_reduction_stub(col, GDF_REDUCTION_MIN, dev_result, col->dtype);
 }
 
 gdf_error gdf_max(gdf_column *col,
                   void *dev_result,
                   gdf_size_type dev_result_size)
 {
-    return gdf_reduction(col, GDF_REDUCTION_MAX, dev_result, col->dtype);
+    return gdf_reduction_stub(col, GDF_REDUCTION_MAX, dev_result, col->dtype);
 }
 
 
 unsigned int gdf_reduction_get_intermediate_output_size() {
-    return REDUCTION_BLOCK_SIZE;
+    return reduction_block_size;
 }
