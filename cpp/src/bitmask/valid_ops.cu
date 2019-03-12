@@ -25,8 +25,9 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <thrust/tabulate.h>
 
@@ -39,51 +40,6 @@ constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
 constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
-
-/** --------------------------------------------------------------------------*
- * @brief  Counts the number of valid bits for the specified number of rows
- * in the host vector of gdf_valid_type masks
- * 
- * @param masks The host vector of masks whose bits will be counted
- * @param num_rows The number of bits to count
- * 
- * @returns  The number of valid bits in [0, num_rows) in the host vector of masks
- * ----------------------------------------------------------------------------*/
-size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int const num_rows)
-{
-  if((0 == num_rows) || (0 == masks.size())){
-    return 0;
-  }
-
-  size_t count{0};
-
-  // Count the valid bits for all masks except the last one
-  for(size_t i = 0; i < (masks.size() - 1); ++i)
-  {
-    gdf_valid_type current_mask = masks[i];
-
-    while(current_mask > 0)
-    {
-      current_mask &= (current_mask-1) ;
-      count++;
-    }
-  }
-
-  // Only count the bits in the last mask that correspond to rows
-  int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
-
-  if(num_rows_last_mask == 0)
-    num_rows_last_mask = GDF_VALID_BITSIZE;
-
-  gdf_valid_type last_mask = *(masks.end() - 1);
-  for(int i = 0; (i < num_rows_last_mask) && (last_mask > 0); ++i)
-  {
-    count += (last_mask & gdf_valid_type(1));
-    last_mask >>= 1;
-  }
-
-  return count;
-}
 
 
 /* --------------------------------------------------------------------------*/
@@ -172,7 +128,7 @@ void count_valid_bits(valid32_t const * const masks32,
 
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-
+  // TODO: add a default parameter cudaStream_t stream = 0 when we move API to C++
 
   if((nullptr == count)){return GDF_DATASET_EMPTY;}
 
@@ -185,10 +141,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
 
   // Masks will be proccessed as 4B types, therefore we require that the underlying
   // type be less than or equal to 4B
-  assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
+  static_assert(sizeof(valid32_t) >= sizeof(gdf_valid_type), "gdf_valid_type is assumed to be <= 4B type");
 
   // Number of gdf_valid_types in the validity bitmask
-  gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
+  gdf_size_type const num_masks{gdf_num_bitmask_elements(num_rows)};
 
   // Number of 4 byte types in the validity bit mask 
   gdf_size_type num_masks32{static_cast<gdf_size_type>(std::ceil(static_cast<float>(num_masks) / RATIO))};
@@ -290,7 +246,7 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
     // as input
     thrust::tabulate(rmm::exec_policy()->on(0),
                      output_mask,
-                     output_mask + gdf_get_num_chars_bitmask(output_column_length),
+                     output_mask + gdf_num_bitmask_elements(output_column_length),
                      mask_concatenator);
 
     CUDA_TRY( cudaGetLastError() );

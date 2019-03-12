@@ -41,32 +41,21 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     Examples
     --------
-
-    .. code-block:: python
-
-        import cudf
-        import numpy as np
-
-        df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
-                             'B': {0: 1, 1: 3, 2: 6},
-                             'C': {0: 1.0, 1: np.nan, 2: 4.0},
-                             'D': {0: 2.0, 1: 5.0, 2: 6.0}})
-        df2 = cudf.melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
-        print(df2)
-
-    Output:
-
-    .. code-block:: python
-
-             A    B variable value
-        0    1    1        C   1.0
-        1    1    3        C
-        2    5    6        C   4.0
-        3    1    1        D   2.0
-        4    1    3        D   5.0
-        5    5    6        D   6.0
+    >>> import cudf
+    >>> import numpy as np
+    >>> df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
+    ...                      'B': {0: 1, 1: 3, 2: 6},
+    ...                      'C': {0: 1.0, 1: np.nan, 2: 4.0},
+    ...                      'D': {0: 2.0, 1: 5.0, 2: 6.0}})
+    >>> cudf.melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
+         A    B variable value
+    0    1    1        C   1.0
+    1    1    3        C
+    2    5    6        C   4.0
+    3    1    1        D   2.0
+    4    1    3        D   5.0
+    5    5    6        D   6.0
     """
-
     # Arg cleaning
     import collections
     # id_vars

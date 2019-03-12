@@ -30,6 +30,7 @@
 
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
+#include <bitmask/legacy_bitmask.hpp>
 
 #include <cudf.h>
 #include <cudf/functions.h>
@@ -682,13 +683,14 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<float> inputDataDev(inputData);
 		rmm::device_vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
-		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
-		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> inputValidDev(gdf_valid_allocation_size(inputCol.size));
+		rmm::device_vector<gdf_valid_type> outputValidDev(gdf_valid_allocation_size(inputCol.size));
 
-		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
+        thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
+                          thrust::make_counting_iterator( gdf_num_bitmask_elements(inputCol.size)),
+                          inputValidDev.begin(), generateValidRandom());
 
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
+        inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
@@ -697,7 +699,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
 
-		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.begin() + gdf_num_bitmask_elements(inputCol.size), outputValidDev.begin());
 
 		EXPECT_TRUE( result == true );
 	}
@@ -719,13 +721,14 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<float> inputDataDev(inputData);
 		rmm::device_vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
-		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
-		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> inputValidDev(gdf_valid_allocation_size(inputCol.size));
+		rmm::device_vector<gdf_valid_type> outputValidDev(gdf_valid_allocation_size(inputCol.size));
 
-		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
+        thrust::transform(thrust::make_counting_iterator( static_cast<gdf_size_type>(0)),
+                        thrust::make_counting_iterator( gdf_num_bitmask_elements(inputCol.size)),
+                        inputValidDev.begin(), generateValidRandom());
 
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
+        inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
@@ -734,9 +737,13 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
 
-		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+        bool result =
+            thrust::equal(inputValidDev.begin(),
+                            inputValidDev.begin() +
+                                gdf_num_bitmask_elements(inputCol.size),
+                            outputValidDev.begin());
 
-		EXPECT_TRUE( result );
+        EXPECT_TRUE( result );
 
 		std::vector<float> results(colSize);
 		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());

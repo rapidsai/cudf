@@ -61,7 +61,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<ColumnType> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
@@ -75,7 +75,7 @@ struct ColumnConcatTest : public testing::Test
       std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
       
     gdf_size_type ref_null_count = 0;
-    std::vector<gdf_valid_type> ref_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> ref_valid(gdf_valid_allocation_size(total_size));
     for (gdf_size_type index = 0, col = 0, row = 0; index < total_size; ++index)
     {
       if (null_init(row, col)) gdf::util::turn_bit_on(ref_valid.data(), index);
@@ -116,7 +116,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<ColumnType> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
     
@@ -182,12 +182,12 @@ TYPED_TEST(ColumnConcatTest, OutputWrongSize){
   for (int i = 0; i < num_columns; ++i) {
     gdf_size_type size = column_sizes[i];
     std::vector<TypeParam> data(size);
-    std::vector<gdf_valid_type> valid(gdf_get_num_chars_bitmask(size));
+    std::vector<gdf_valid_type> valid(gdf_valid_allocation_size(size));
     input_column_pointers[i] = create_gdf_column(data, valid);
     input_columns[i] = input_column_pointers[i].get();
   }
   std::vector<TypeParam> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+  std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
   auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
   // test mismatched sizes
@@ -204,7 +204,7 @@ TYPED_TEST(ColumnConcatTest, NullInputData){
       std::accumulate(column_sizes.begin(), column_sizes.end(), 0)};
 
   std::vector<TypeParam> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+  std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
   auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
   std::vector<gdf_column> cols(num_columns);
@@ -343,5 +343,25 @@ TEST(ColumnByteWidth, TestByteWidth)
     col.dtype = pair.first;
     ASSERT_EQ(GDF_SUCCESS, get_column_byte_width(&col, &byte_width));
     EXPECT_EQ(pair.second, byte_width);
+  }
+}
+
+TEST(ColumnByteWidth, TestGdfTypeSize)
+{ 
+
+  std::map<gdf_dtype, int> enum_to_type_size { {GDF_INT8, sizeof(int8_t)},
+                                                  {GDF_INT16, sizeof(int16_t)},
+                                                  {GDF_INT32, sizeof(int32_t)},
+                                                  {GDF_INT64, sizeof(int64_t)},
+                                                  {GDF_FLOAT32, sizeof(float)},
+                                                  {GDF_FLOAT64, sizeof(double)},
+                                                  {GDF_DATE32, sizeof(gdf_date32)},
+                                                  {GDF_DATE64, sizeof(gdf_date64)},
+                                                  {GDF_TIMESTAMP, sizeof(gdf_timestamp)},
+                                                  {GDF_CATEGORY, sizeof(gdf_category)}
+                                                };
+  for(auto const& pair : enum_to_type_size)
+  {
+    EXPECT_EQ(pair.second, gdf_dtype_size(pair.first));
   }
 }

@@ -1,5 +1,8 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Copyright 2018-2019 BlazingDB, Inc.
+ *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +16,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "gtest/gtest.h"
-#include <cuda_runtime_api.h>
-#include <cstring>
 
-#include <cudf.h>
-#include <rmm/rmm.h>
+#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
-// If this test fails, it means an error code was added without
-// adding support to gdf_error_get_name().
-TEST(GdfInternalTest, NameEveryError) {
-	for (int i = 0; i < N_GDF_ERRORS; i++)
-    {
-        const char *res = gdf_error_get_name((gdf_error)i);
-        ASSERT_EQ(0, strstr(res, "Unknown error"));
-    }
+#include "cudf.h"
+#include <string>
+
+namespace cudf {
+namespace binops {
+namespace jit {
+
+    std::string getTypeName(gdf_dtype type);
+
+    std::string getOperatorName(gdf_binary_operator ope);
+
 }
+}
+}
+
+#endif
