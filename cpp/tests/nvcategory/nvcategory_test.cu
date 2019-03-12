@@ -352,58 +352,51 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 {
 	bool print = false;
+	const int rows_size = 64;
+	const size_t length = 1;
 
-	//left will be Z,Y,X..... C,B,A,Z,Y....
-	gdf_column * column_left = create_nv_category_column(100,true);
-	//right will be Z,Y,X....C,B,A,ZZ,YY ....
-	gdf_column * column_right = create_nv_category_column(100,false);
-	gdf_column * output_column = create_boolean_column(100);
+	const char ** left_string_data = generate_string_data(rows_size, length, print);
+  const char ** right_string_data = generate_string_data(rows_size, length, print);
 
-	NVStrings * temp_string = static_cast<NVCategory *>(column_right->dtype_info.category)->to_strings();
-	NVCategory * new_category = static_cast<NVCategory *>(column_left->dtype_info.category)->add_strings(
+  std::vector<std::string> left_host_column (left_string_data, left_string_data + rows_size);
+  std::vector<std::string> right_host_column (right_string_data, right_string_data + rows_size);
+
+  gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
+	gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+	
+	gdf_column * output_column = create_boolean_column(rows_size);
+
+	NVStrings * temp_string = static_cast<NVCategory *>(right_column->dtype_info.category)->to_strings();
+	NVCategory * new_category = static_cast<NVCategory *>(left_column->dtype_info.category)->add_strings(
 			*temp_string);
 
 	unsigned int * indices;
-	EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size()  , 0), RMM_SUCCESS);
+	EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size(), 0), RMM_SUCCESS);
 	//now reset data
-	new_category->get_values((int*)indices,true);
+	new_category->get_values( (int*)indices, true);
 
-	cudaMemcpy(column_left->data,indices,sizeof(unsigned int) * column_left->size,cudaMemcpyDeviceToDevice);
-	cudaMemcpy(column_right->data,indices + column_left->size,sizeof(unsigned int) * column_right->size,cudaMemcpyDeviceToDevice);
-
-	if(print){
-		/*print_typed_column((int32_t *) column_left->data,
-				column_left->valid,
-				100);
-
-		print_typed_column((int32_t *) column_right->data,
-				column_right->valid,
-				100);*/
-	}
-
-	//TODO: damn so this is just a regular silly pointer, i cant just assume i can free it...
-	//without some locking mechanism theres no real way to clean this up easily, i could copy....
-	column_left->dtype_info.category = new_category;
-	column_right->dtype_info.category = new_category;
+	CUDA_TRY( cudaMemcpy(left_column->data,indices,sizeof(unsigned int) * left_column->size,cudaMemcpyDeviceToDevice) );
+	CUDA_TRY( cudaMemcpy(right_column->data,indices + left_column->size,sizeof(unsigned int) * right_column->size,cudaMemcpyDeviceToDevice) );
 
 	if(print){
-	//so a few options here, managing a single memory buffer is too annoying
-	/*print_typed_column((int8_t *) output_column->data,
-			output_column->valid,
-			100);*/
+		print_gdf_column(left_column);
+		print_gdf_column(right_column);
 	}
 
-	gdf_error err = gdf_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
+	left_column->dtype_info.category = new_category;
+	right_column->dtype_info.category = new_category;
+
+	gdf_error err = gdf_comparison(left_column, right_column, output_column, gdf_comparison_operator::GDF_EQUALS);
 	EXPECT_EQ(GDF_SUCCESS, err);
-	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
 
-	if(print){
-		print_valid_data(output_column->valid,100);
+	int8_t * data = new int8_t[rows_size];
+	CUDA_TRY( cudaMemcpy(data, output_column->data, sizeof(int8_t) * rows_size, cudaMemcpyDeviceToHost) );
 
-		/*print_typed_column((int8_t *) output_column->data,
-				output_column->valid,
-				100);*/
+  for(size_t i = 0; i < rows_size; ++i){
+    EXPECT_EQ((bool)data[i], left_host_column[i] == right_host_column[i]);
 	}
+
+	delete data;
 }
 
 struct NVCategoryConcatTest : public GdfTest
