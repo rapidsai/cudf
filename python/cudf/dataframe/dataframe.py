@@ -2444,24 +2444,26 @@ class Iloc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        rows = []
         len_idx = len(self._df.index)
 
         if isinstance(arg, tuple):
             raise NotImplementedError('cudf columnar iloc not supported')
 
         elif isinstance(arg, int):
-            rows.append(arg)
+            rows = [arg]
 
         elif isinstance(arg, slice):
             start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
+            rows = []
             if sln > 0:
                 for idx in range(start, stop, step):
                     rows.append(idx)
 
-        elif isinstance(arg, utils.list_types_tuple):
-            for idx in arg:
-                rows.append(idx)
+        elif isinstance(arg, list):
+            rows = arg
+
+        elif isinstance(arg, np.ndarray):
+            rows = arg.tolist()
 
         else:
             raise TypeError(type(arg))

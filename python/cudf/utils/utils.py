@@ -129,9 +129,6 @@ def standard_python_slice(len_idx, arg):
     return start, stop, step, slice_length
 
 
-list_types_tuple = (list, np.ndarray)
-
-
 def buffers_from_pyarrow(pa_arr, dtype=None):
     from cudf.dataframe.buffer import Buffer
 
