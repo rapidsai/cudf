@@ -79,9 +79,8 @@ namespace { //anonymous
 
             if( nullptr != input->valid ){
                 // copy null bitmask
-                size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
                 CUDA_TRY(cudaMemcpyAsync(output->valid, input->valid,
-                        valid_byte_length, cudaMemcpyDeviceToDevice, stream));
+                        gdf_last_bitmask_index(input->size), cudaMemcpyDeviceToDevice, stream));
                 output->null_count = input->null_count;
             }
 
