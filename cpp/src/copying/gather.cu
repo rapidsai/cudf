@@ -239,7 +239,7 @@ void gather_bitmask(gdf_valid_type const* source_mask,
   bool const in_place{source_mask == destination_mask};
   rmm::device_vector<gdf_valid_type> temp_bitmask;
   if (in_place) {
-    temp_bitmask.resize(gdf_get_num_chars_bitmask(num_destination_rows));
+    temp_bitmask.resize(gdf_valid_allocation_size(num_destination_rows));
     output_bitmask = temp_bitmask.data().get();
   }
 

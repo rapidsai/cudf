@@ -84,7 +84,7 @@ void scatter_bitmask(gdf_valid_type const* source_mask,
   gdf_valid_type* output_bitmask{destination_mask};
 
   const gdf_size_type num_destination_mask_elements{
-      gdf_get_num_chars_bitmask(num_destination_rows)};
+      gdf_valid_allocation_size(num_destination_rows)};
 
   // Allocate temporary output bitmask if scattering in-place
   bool const in_place{source_mask == destination_mask};
@@ -93,6 +93,8 @@ void scatter_bitmask(gdf_valid_type const* source_mask,
     temp_bitmask.resize(num_destination_mask_elements);
     output_bitmask = temp_bitmask.data().get();
   }
+
+  std::cout << "num destination_mask_elements: " << num_destination_mask_elements << std::endl;
 
   // Ensure the output bitmask is initialized to zero
   CUDA_TRY(cudaMemsetAsync(
