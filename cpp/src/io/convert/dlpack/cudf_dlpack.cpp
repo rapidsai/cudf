@@ -178,7 +178,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
                         gdf_size_type num_columns)
 {
-  GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY)
+  GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
   // first column determines datatype and number of rows
