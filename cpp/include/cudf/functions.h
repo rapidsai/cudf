@@ -63,6 +63,8 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
  *
  * @note Note that this function assumes the bitmask needs to be allocated to be
  * padded to a multiple of 64 bytes
+ * 
+ * @note This function assumes that the size of gdf_valid_type is 1 byte
  *
  * @param[in] column_size The number of elements
  * @return the number of bytes necessary to allocate for validity bitmask
