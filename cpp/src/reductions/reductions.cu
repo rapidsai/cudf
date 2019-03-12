@@ -43,7 +43,7 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
         // load
         T_out loaded = identity;
         if (i < size && gdf_is_valid(mask, i))
-            loaded = loader(data, i);
+            loaded = static_cast<T_out>(loader(data, i));
 
         // Block reduce
         T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
@@ -78,7 +78,7 @@ gdf_error ReduceOp(const gdf_column *input,
 
     // kernel call
     gpu_reduction_op<<<gridsize, blocksize, 0, stream>>>(
-        (const T_in*)input->data, input->valid, input->size,
+        static_cast<const T_in*>(input->data), input->valid, input->size,
         static_cast<T_out*>(result),
         Op{}, identity, typename Op::Loader{});
     CUDA_CHECK_LAST();
