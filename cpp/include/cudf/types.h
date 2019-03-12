@@ -64,6 +64,7 @@ typedef enum {
     GDF_NULL_NVTX_NAME,                ///< The requested name for an NVTX range cannot be nullptr
     GDF_TIMESTAMP_RESOLUTION_MISMATCH, ///< Resolution mismatch between two columns of GDF_TIMESTAMP
     GDF_NOTIMPLEMENTED_ERROR,          ///< A feature is not implemented
+    GDF_TABLES_SIZE_MISMATCH,          ///< Two tables that should have the same number of columns have different numbers of columns
     N_GDF_ERRORS
 } gdf_error;
 
@@ -216,6 +217,8 @@ typedef enum {
   GDF_GREATER,        /**< operator >  */
   GDF_LESS_EQUAL,     /**< operator <= */
   GDF_GREATER_EQUAL,  /**< operator >= */
+  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
+  GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
 
 

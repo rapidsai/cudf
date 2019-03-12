@@ -3,6 +3,7 @@
 
 #include "cudf.h"
 #include <vector>
+#include "types.hpp"
 class NVCategory;
 
 const bool DEVICE_ALLOCATED = true;
@@ -33,10 +34,18 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
 /**
  * @brief Takes an array of input_columns and makes it so that they all share the same keys in NVCategory
  *
- * @param[in] the columns whose categories must be synchronized
- * @param[out] same data as input_columns but with categories syncrhonized
- * @param[in] number of input columns
+ * @param[in] input_columns the columns whose categories must be synchronized
+ * @param[out] output_columns same data as input_columns but with categories syncrhonized
+ * @param[in] num_columns number of input columns
  */
 gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
 
+
+/**
+ * @brief Takes two tables and gathers the destination table's data interpreted as int32 from the dictionary of the source table's NVCategory.
+ *
+ * @param[in] source_table Contains columns that contain dictionaries used for gathering.
+ * @param[in,out] destination_table Contains columns that contain indices that map into source_table dictionaries.
+ */
+gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table);
 #endif
