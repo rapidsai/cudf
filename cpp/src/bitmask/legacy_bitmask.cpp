@@ -49,3 +49,7 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size) {
       (column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE,
       kArrowAlignment);
 }
+
+gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size) {
+  return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
+}
