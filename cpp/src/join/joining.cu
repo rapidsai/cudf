@@ -636,7 +636,7 @@ gdf_error join_call_compute_df(
 
         new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
         new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
-
+        CHECK_STREAM(0);
       }
     }
 
@@ -686,7 +686,7 @@ gdf_error join_call_compute_df(
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
             join_context);
-
+    CHECK_STREAM(0);
     GDF_REQUIRE(GDF_SUCCESS == join_err, join_err);
 
     //If construct_output_dataframe is false then left_index_out or right_index_out
@@ -702,7 +702,7 @@ gdf_error join_call_compute_df(
             right_cols, num_right_cols, right_join_cols,
             num_cols_to_join, result_num_cols, result_cols,
             left_index_out, right_index_out);
-
+    CHECK_STREAM(0);
     l_index_temp.reset(nullptr);
     r_index_temp.reset(nullptr);
 
@@ -717,7 +717,7 @@ gdf_error join_call_compute_df(
       delete temp_columns_to_free[column_to_free];
     }
 
-    CUDA_CHECK_LAST();
+    CHECK_STREAM(0);
 
 
     return df_err;
