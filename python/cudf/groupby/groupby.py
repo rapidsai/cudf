@@ -235,12 +235,6 @@ class Groupby(object):
                 raise RuntimeError(
                     "ERROR: this aggregator has not been implemented yet")
 
-            for idx in range(ncols):
-                print("cols " + str(idx) + ": " + str(int(ffi.cast("uintptr_t", cols[idx].dtype_info.category))))
-                print("out_col_values " + str(idx) + ": " + str(int(ffi.cast("uintptr_t", out_col_values[idx].dtype_info.category))))
-
-            print("out_col_agg in: " + str(int(ffi.cast("uintptr_t", out_col_agg.dtype_info.category))))
-
             err = agg_func(
                 ncols,
                 cols,
@@ -251,7 +245,6 @@ class Groupby(object):
                 ctx)
 
             if (err is not None):
-                print(err)
                 raise RuntimeError(err)
 
             num_row_results = out_col_agg.size
@@ -260,7 +253,7 @@ class Groupby(object):
             # can't create entire CFFI views otherwise multiple objects will
             # try to free the memory
             for i, col in enumerate(out_col_values_series):
-                if col.dtype == np.dtype("object"):
+                if col.dtype == np.dtype("object") and len(col) > 0:
                     import nvcategory
                     nvcat_ptr = int(
                         ffi.cast(
@@ -268,7 +261,6 @@ class Groupby(object):
                             out_col_values[i].dtype_info.category
                         )
                     )
-                    print("out_col_values " + str(i) + ": " + str(nvcat_ptr))
                     nvcat_obj = None
                     if nvcat_ptr:
                         nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
@@ -278,7 +270,8 @@ class Groupby(object):
                         nvstr_obj = nvstrings.to_device([])
                     out_col_values_series[i]._column._data = nvstr_obj
                     out_col_values_series[i]._column._nvcategory = nvcat_obj
-            if out_col_agg_series.dtype == np.dtype("object"):
+            if out_col_agg_series.dtype == np.dtype("object") and \
+                    len(out_col_agg_series) > 0:
                 import nvcategory
                 nvcat_ptr = int(
                     ffi.cast(
@@ -286,7 +279,6 @@ class Groupby(object):
                         out_col_agg.dtype_info.category
                     )
                 )
-                print("out_col_agg out: " + str(nvcat_ptr))
                 nvcat_obj = None
                 if nvcat_ptr:
                     nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
