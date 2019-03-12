@@ -13,52 +13,120 @@ T_output type_reinterpret(T_input value)
     return *( reinterpret_cast<T_output*>(&value) );
 }
 
-template <typename T_input, typename T_internal>
+template <typename T, typename Op, size_t n>
+struct genericAtomicOperationImpl;
+
+// single byte atomic operation
+template<typename T, typename Op>
+struct genericAtomicOperationImpl<T, Op, 1> {
+    __forceinline__  __device__
+    void operator()(T* addr, T const & update_value, Op op)
+    {
+        using T_int = unsigned int;
+
+        T_int * address_uint32 = reinterpret_cast<T_int *>
+            (addr - ((size_t)addr & 3));
+        unsigned int shift = (((size_t)addr & 3) * 8);
+
+        T_int old = *address_uint32;
+        T_int assumed ;
+
+        do {
+            assumed = old;
+            T target_value = T((old >> shift) & 0xff);
+            T new_value = op(update_value, target_value);
+
+            old = (old & ~(0x000000ff << shift)) | (new_value << shift);
+            old = atomicCAS(address_uint32, assumed, old);
+        } while (assumed != old);
+    }
+};
+
+// 2 bytes atomic operation
+template<typename T, typename Op>
+struct genericAtomicOperationImpl<T, Op, 2> {
+    __forceinline__  __device__
+    void operator()(T* addr, T const & update_value, Op op)
+    {
+        using T_int = unsigned int;
+
+        T_int * address_uint32 = reinterpret_cast<T_int *>
+            (addr - ((size_t)addr & 2));
+        bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? true : false;
+
+        T_int old = *address_uint32;
+        T_int assumed ;
+
+        do {
+            assumed = old;
+            T target_value = (is_32_align) ? T(old >> 16) : T(old & 0xffff);
+            T new_value = op(update_value, target_value);
+
+            old = (is_32_align) ? (old & 0xffff) | (new_value << 16)
+                                : (old & 0xffff0000) | new_value;
+            old = atomicCAS(address_uint32, assumed, old);
+        } while (assumed != old);
+    }
+};
+
+// 4 bytes atomic operation
+template<typename T, typename Op>
+struct genericAtomicOperationImpl<T, Op, 4> {
+    __forceinline__  __device__
+    void operator()(T* addr, T const & update_value, Op op)
+    {
+        using T_int = unsigned int;
+
+        T old_value = *addr;
+        T assumed {old_value};
+
+        do {
+            assumed  = old_value;
+            const T new_value = op(update_value, old_value);
+
+            T_int ret = atomicCAS(
+                reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(assumed),
+                type_reinterpret<T_int, T>(new_value));
+            old_value = type_reinterpret<T, T_int>(ret);
+
+        } while (assumed != old_value);
+    }
+};
+
+// 8 bytes atomic operation
+template<typename T, typename Op>
+struct genericAtomicOperationImpl<T, Op, 8> {
+    __forceinline__  __device__
+    void operator()(T* addr, T const & update_value, Op op)
+    {
+        using T_int = unsigned long long int;
+
+        T old_value = *addr;
+        T assumed {old_value};
+
+        do {
+            assumed  = old_value;
+            const T new_value = op(update_value, old_value);
+
+            T_int ret = atomicCAS(
+                reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(assumed),
+                type_reinterpret<T_int, T>(new_value));
+            old_value = type_reinterpret<T, T_int>(ret);
+
+        } while (assumed != old_value);
+    }
+};
+
+
+template <typename T, typename Op>
 __forceinline__  __device__
-T_input genericAtomicCAS_type(T_input* addr,
-    T_input const & expected, T_input const & new_value)
+void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
 {
-    T_internal ret = atomicCAS(
-        reinterpret_cast<T_internal*>(addr),
-        type_reinterpret<T_internal, T_input>(expected),
-        type_reinterpret<T_internal, T_input>(new_value));
-    return type_reinterpret<T_input, T_internal>(ret);
+    genericAtomicOperationImpl<T, Op, sizeof(T)>() (&existing_value, update_value, op);
 }
 
-// ------------------------------------------------------------------------
-// generic atomic CAS
-template <typename T>
-__forceinline__  __device__
-T genericAtomicCAS(T* addr, T const & expected, T const & new_value)
-{
-    return atomicCAS(addr, expected, new_value);
-}
-
-// -------------------
-// specializations for `genericAtomicCAS`
-
-#define SPECIALIZE_GENERICATOMICAS(T, T_int) \
-template <> \
-__forceinline__  __device__ \
-T genericAtomicCAS( \
-    T* addr, T const & expected, T const & new_value){ \
-    return genericAtomicCAS_type<T, T_int>(addr, expected, new_value); \
-}
-
-SPECIALIZE_GENERICATOMICAS(float,   unsigned int);
-SPECIALIZE_GENERICATOMICAS(double,  unsigned long long int);
-SPECIALIZE_GENERICATOMICAS(int64_t, unsigned long long int);
-
-// int8_t/int16_t assumes that the address of addr must aligned with int32_t
-// need align free genericAtomicCAS for int8_t/int16_t
-SPECIALIZE_GENERICATOMICAS(int8_t,  unsigned int);
-SPECIALIZE_GENERICATOMICAS(int16_t, unsigned int);
-
-// specializations for wrapper types
-SPECIALIZE_GENERICATOMICAS(cudf::timestamp, unsigned long long int);
-SPECIALIZE_GENERICATOMICAS(cudf::date64,    unsigned long long int);
-SPECIALIZE_GENERICATOMICAS(cudf::category,  unsigned int);
-SPECIALIZE_GENERICATOMICAS(cudf::date32,    unsigned int);
 
 // ------------------------------------------------------------------------
 
@@ -145,136 +213,6 @@ struct DeviceMax{
 
 
 // ------------------------------------------------------------------------
-
-template <typename T, typename Op, size_t n>
-struct genericAtomicOperationImpl;
-
-
-// single byte atomic operation
-template<typename T, typename Op>
-struct genericAtomicOperationImpl<T, Op, 1> {
-    __forceinline__  __device__
-    void operator()(T* addr, T const & update_value, Op op)
-    {
-        using T_int = unsigned int;
-
-        T_int * address_uint32 = reinterpret_cast<T_int *>(addr - ((size_t)addr & 3));
-        unsigned int shift = (((size_t)addr & 3) * 8);
-
-        T_int old = *address_uint32;
-        T_int assumed ;
-
-        do {
-            assumed = old;
-            T target_value = T((old >> shift) & 0xff);
-            T new_value = op(update_value, target_value);
-
-            old = (old & ~(0x000000ff << shift)) | (new_value << shift);
-            old = atomicCAS(address_uint32, assumed, old);
-        } while (assumed != old);
-    }
-};
-
-// 2 bytes atomic operation
-template<typename T, typename Op>
-struct genericAtomicOperationImpl<T, Op, 2> {
-    __forceinline__  __device__
-    void operator()(T* addr, T const & update_value, Op op)
-    {
-        using T_int = unsigned int;
-
-        T_int * address_uint32 = reinterpret_cast<T_int *>(addr - ((size_t)addr & 2));
-        bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? true : false;
-
-        T_int old = *address_uint32;
-        T_int assumed ;
-
-        do {
-            assumed = old;
-            T target_value = (is_32_align) ? T(old >> 16) : T(old & 0xffff);
-            T new_value = op(update_value, target_value);
-
-            old = (is_32_align) ? (old & 0xffff) | (new_value << 16) : (old & 0xffff0000) | new_value;
-            old = atomicCAS(address_uint32, assumed, old);
-        } while (assumed != old);
-    }
-};
-
-// 4 bytes atomic operation
-template<typename T, typename Op>
-struct genericAtomicOperationImpl<T, Op, 4> {
-    __forceinline__  __device__
-    void operator()(T* addr, T const & update_value, Op op)
-    {
-        using T_int = unsigned int;
-
-        T old_value = *addr;
-        T assumed {old_value};
-
-        do {
-            assumed  = old_value;
-            const T new_value = op(update_value, old_value);
-
-            T_int ret = atomicCAS(
-                reinterpret_cast<T_int*>(addr),
-                type_reinterpret<T_int, T>(assumed),
-                type_reinterpret<T_int, T>(new_value));
-            old_value = type_reinterpret<T, T_int>(ret);
-
-        } while (assumed != old_value);
-    }
-};
-
-// 8 bytes atomic operation
-template<typename T, typename Op>
-struct genericAtomicOperationImpl<T, Op, 8> {
-    __forceinline__  __device__
-    void operator()(T* addr, T const & update_value, Op op)
-    {
-        using T_int = unsigned long long int;
-
-        T old_value = *addr;
-        T assumed {old_value};
-
-        do {
-            assumed  = old_value;
-            const T new_value = op(update_value, old_value);
-
-            T_int ret = atomicCAS(
-                reinterpret_cast<T_int*>(addr),
-                type_reinterpret<T_int, T>(assumed),
-                type_reinterpret<T_int, T>(new_value));
-            old_value = type_reinterpret<T, T_int>(ret);
-
-        } while (assumed != old_value);
-    }
-};
-
-
-template <typename T, typename Op>
-__forceinline__  __device__
-void genericAtomicOperation(T& existing_value, T const & update_value, Op op)
-{
-#if 1
-    genericAtomicOperationImpl<T, Op, sizeof(T)>() (&existing_value, update_value, op);
-#else
-  T old_value = existing_value;
-  T expected{old_value};
-
-  // Attempt to perform the aggregation with existing_value and
-  // store the result atomically
-  do
-  {
-    expected = old_value;
-
-    const T new_value = op(update_value, old_value);
-
-    old_value = genericAtomicCAS(&existing_value, expected, new_value);
-  }
-  // Guard against another thread's update to existing_value
-  while( expected != old_value );
-#endif
-}
 
 // ------------------------------------------------------------------------
 // specialized functions for operators
