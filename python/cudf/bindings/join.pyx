@@ -54,16 +54,13 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
-        print("left dtype " + str(idx) + ": " + str(list_lhs[idx].dtype))
 
         mask_size = 0
         if col.has_null_mask:
             mask_size = col.nullmask.size
-        print("left mask_size: " + str(mask_size))
 
         if name not in left_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
-            print("out dtype " + str(res_idx) + ": " + str(result_cols[res_idx].dtype))
             result_col_names.append(name)
             res_idx = res_idx + 1
         idx = idx + 1
@@ -76,7 +73,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         else:
             dtype = col_rhs[name]._column.dtype
         result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=dtype, null_count=0)
-        print("out dtype " + str(res_idx) + ": " + str(result_cols[res_idx].dtype))
         result_col_names.append(name)
         left_idx[idx] = list(col_lhs.keys()).index(name)
         right_idx[idx] = list(col_rhs.keys()).index(name)
@@ -87,16 +83,13 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
         list_rhs[idx] = column_view_from_column(col._column)
-        print("right dtype " + str(idx) + ": " + str(list_rhs[idx].dtype))
 
         mask_size = 0
         if col.has_null_mask:
             mask_size = col.nullmask.size
-        print("right mask_size: " + str(mask_size))
 
         if name not in right_on:
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
-            print("out dtype " + str(res_idx) + ": " + str(result_cols[res_idx].dtype))
             result_col_names.append(name)
             res_idx = res_idx + 1
         idx = idx + 1
@@ -107,7 +100,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef int c_num_cols_to_join = num_cols_to_join
     cdef int c_result_num_cols = result_num_cols
 
-    print("before_join")
 
     with nogil:
         if how == 'left':
@@ -154,7 +146,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
 
     check_gdf_error(result)
 
-    print("after_join")
 
     res = []
     valids = []
@@ -167,7 +158,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
             nvcat_obj = nvcategory.bind_cpointer(int(nvcat_ptr))
-            print(nvcat_obj)
             nvstr_obj = nvcat_obj.to_strings()
             res.append(nvstr_obj)
             data_ptr = <uintptr_t>result_cols[idx].data
