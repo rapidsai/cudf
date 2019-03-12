@@ -202,9 +202,14 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
     
   tensor->dl_tensor.shape = new int64_t[tensor->dl_tensor.ndim];
   tensor->dl_tensor.shape[0] = num_rows;
-  if (tensor->dl_tensor.ndim > 1) 
+  if (tensor->dl_tensor.ndim > 1) {
     tensor->dl_tensor.shape[1] = num_columns;
-  tensor->dl_tensor.strides = nullptr;
+    tensor->dl_tensor.strides = new int64_t[2] {0, 0};
+  }
+  else {
+    tensor->dl_tensor.strides = new int64_t[1] {0};
+  }
+  // tensor->dl_tensor.strides = nullptr;
   tensor->dl_tensor.byte_offset = 0;
   
   CUDA_TRY( cudaGetDevice(&tensor->dl_tensor.ctx.device_id) );

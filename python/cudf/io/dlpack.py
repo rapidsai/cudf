@@ -34,11 +34,14 @@ def from_dlpack(pycapsule_obj):
     res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
     cols = []
     for idx in range(len(valids)):
+        mask = None
+        if valids[idx]:
+            mask = Buffer(valids[idx])
         cols.append(
             columnops.build_column(
                 Buffer(res[idx]),
                 dtype=res[idx].dtype,
-                mask=Buffer(valids[idx])
+                mask=mask
             )
         )
     if len(cols) == 1:

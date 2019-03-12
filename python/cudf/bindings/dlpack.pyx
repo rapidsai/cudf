@@ -74,12 +74,13 @@ cpdef from_dlpack(dlpack_capsule):
                 )
             )
         else:
-            valids.append(
-                rmm.device_array(
-                    0,
-                    dtype=mask_dtype
-                )
-            )
+            # valids.append(
+            #     rmm.device_array(
+            #         0,
+            #         dtype=mask_dtype
+            #     )
+            # )
+            valids.append(None)
 
     return res, valids
 

@@ -51,6 +51,8 @@ def assert_eq(a, b, **kwargs):
         tm.assert_series_equal(a, b, **kwargs)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, **kwargs)
+    elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
+        assert np.allclose(a, b)
     else:
         if a == b:
             return True
