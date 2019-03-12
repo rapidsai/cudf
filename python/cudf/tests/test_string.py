@@ -414,6 +414,11 @@ def test_string_split(data, pat, n, expand, expand_raise):
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
+])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
 @pytest.mark.parametrize('how,how_raise', [
     ('left', 0),
@@ -421,15 +426,16 @@ def test_string_split(data, pat, n, expand, expand_raise):
     ('inner', 0),
     ('outer', 0)
 ])
-def test_string_join_key(num_keys, how, how_raise):
-    str_data = ['a', 'b', 'c', 'd', 'e']
-    other_data = [1, 2, 3, 4, 5]
+def test_string_join_key(str_data, num_keys, how, how_raise):
+    # if str_data == [None, None, None, None, None]:
+    #     pytest.xfail("Pandas treats None == None for joins...")
+    other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_keys):
-        pdf[i] = str_data
-        gdf[i] = str_data
+        pdf[i] = pd.Series(str_data, dtype='str')
+        gdf[i] = Series(str_data, dtype='str')
     pdf['a'] = other_data
     gdf['a'] = other_data
 
@@ -445,9 +451,21 @@ def test_string_join_key(num_keys, how, how_raise):
         expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
         got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
 
+        if len(expect) == 0 and len(got) == 0:
+            expect = expect.reset_index(drop=True)
+            got = got[expect.columns]
+
+        print(expect)
+        print(got)
+
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
+])
 @pytest.mark.parametrize('num_cols', [1, 2, 3])
 @pytest.mark.parametrize('how,how_raise', [
     ('left', 0),
@@ -455,15 +473,14 @@ def test_string_join_key(num_keys, how, how_raise):
     ('inner', 0),
     ('outer', 0)
 ])
-def test_string_join_non_key(num_cols, how, how_raise):
-    str_data = ['a', 'b', 'c', 'd', 'e']
-    other_data = [1, 2, 3, 4, 5]
+def test_string_join_non_key(str_data, num_cols, how, how_raise):
+    other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_cols):
-        pdf[i] = str_data
-        gdf[i] = str_data
+        pdf[i] = pd.Series(str_data, dtype='str')
+        gdf[i] = Series(str_data, dtype='str')
     pdf['a'] = other_data
     gdf['a'] = other_data
 
@@ -479,19 +496,27 @@ def test_string_join_non_key(num_cols, how, how_raise):
         expect = pdf.merge(pdf2, on=['a'], how=how)
         got = gdf.merge(gdf2, on=['a'], how=how)
 
+        if len(expect) == 0 and len(got) == 0:
+            expect = expect.reset_index(drop=True)
+            got = got[expect.columns]
+
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
+])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
-def test_string_groupby_key(num_keys):
-    str_data = ['a', 'b', 'a', 'b', 'a']
-    other_data = [1, 2, 3, 4, 5]
+def test_string_groupby_key(str_data, num_keys):
+    other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_keys):
-        pdf[i] = str_data
-        gdf[i] = str_data
+        pdf[i] = pd.Series(str_data, dtype='str')
+        gdf[i] = Series(str_data, dtype='str')
     pdf['a'] = other_data
     gdf['a'] = other_data
 
@@ -504,16 +529,20 @@ def test_string_groupby_key(num_keys):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
+])
 @pytest.mark.parametrize('num_cols', [1, 2, 3])
-def test_string_groupby_non_key(num_cols):
-    str_data = ['a', 'b', 'c', 'd', 'e']
-    other_data = [1, 2, 1, 2, 1]
+def test_string_groupby_non_key(str_data, num_cols):
+    other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_cols):
-        pdf[i] = str_data
-        gdf[i] = str_data
+        pdf[i] = pd.Series(str_data, dtype='str')
+        gdf[i] = Series(str_data, dtype='str')
     pdf['a'] = other_data
     gdf['a'] = other_data
 

@@ -235,6 +235,12 @@ class Groupby(object):
                 raise RuntimeError(
                     "ERROR: this aggregator has not been implemented yet")
 
+            for idx in range(ncols):
+                print("cols " + str(idx) + ": " + str(int(ffi.cast("uintptr_t", cols[idx].dtype_info.category))))
+                print("out_col_values " + str(idx) + ": " + str(int(ffi.cast("uintptr_t", out_col_values[idx].dtype_info.category))))
+
+            print("out_col_agg in: " + str(int(ffi.cast("uintptr_t", out_col_agg.dtype_info.category))))
+
             err = agg_func(
                 ncols,
                 cols,
@@ -262,8 +268,14 @@ class Groupby(object):
                             out_col_values[i].dtype_info.category
                         )
                     )
-                    nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                    nvstr_obj = nvcat_obj.to_strings()
+                    print("out_col_values " + str(i) + ": " + str(nvcat_ptr))
+                    nvcat_obj = None
+                    if nvcat_ptr:
+                        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+                        nvstr_obj = nvcat_obj.to_strings()
+                    else:
+                        import nvstrings
+                        nvstr_obj = nvstrings.to_device([])
                     out_col_values_series[i]._column._data = nvstr_obj
                     out_col_values_series[i]._column._nvcategory = nvcat_obj
             if out_col_agg_series.dtype == np.dtype("object"):
@@ -274,10 +286,17 @@ class Groupby(object):
                         out_col_agg.dtype_info.category
                     )
                 )
-                nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                nvstr_obj = nvcat_obj.to_strings()
+                print("out_col_agg out: " + str(nvcat_ptr))
+                nvcat_obj = None
+                if nvcat_ptr:
+                    nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+                    nvstr_obj = nvcat_obj.to_strings()
+                else:
+                    import nvstrings
+                    nvstr_obj = nvstrings.to_device([])
                 out_col_agg_series._column._data = nvstr_obj
                 out_col_agg_series._column._nvcategory = nvcat_obj
+                print("done with out_col_agg")
 
             if first_run:
                 for i, thisBy in enumerate(self._by):

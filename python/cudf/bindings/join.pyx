@@ -16,6 +16,7 @@ import pyarrow as pa
 
 from librmm_cffi import librmm as rmm
 import nvcategory
+import nvstrings
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
@@ -100,7 +101,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef int c_num_cols_to_join = num_cols_to_join
     cdef int c_result_num_cols = result_num_cols
 
-
     with nogil:
         if how == 'left':
             result = gdf_left_join(list_lhs,
@@ -146,7 +146,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
 
     check_gdf_error(result)
 
-
     res = []
     valids = []
 
@@ -157,8 +156,11 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         col_dtype = gdf_to_np_dtype(result_cols[idx].dtype)
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
-            nvcat_obj = nvcategory.bind_cpointer(int(nvcat_ptr))
-            nvstr_obj = nvcat_obj.to_strings()
+            if nvcat_ptr:
+                nvcat_obj = nvcategory.bind_cpointer(int(nvcat_ptr))
+                nvstr_obj = nvcat_obj.to_strings()
+            else:
+                nvstr_obj = nvstrings.to_device([])
             res.append(nvstr_obj)
             data_ptr = <uintptr_t>result_cols[idx].data
             # We need to create this just to make sure the memory is properly freed

@@ -329,7 +329,7 @@ cdef extern from "cudf.h" nogil:
                                          unsigned *d_begin_offsets,
                                          unsigned *d_end_offsets)
 
-    gdf_error gdf_inner_join(
+    cdef gdf_error gdf_inner_join(
                              gdf_column **left_cols,
                              int num_left_cols,
                              int left_join_cols[],
@@ -341,7 +341,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_left_join(
                              gdf_column **left_cols,
@@ -355,7 +355,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_full_join(
                              gdf_column **left_cols,
@@ -369,7 +369,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_hash_partition(int num_input_cols,
                                  gdf_column * input[],
