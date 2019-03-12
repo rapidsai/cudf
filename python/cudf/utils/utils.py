@@ -71,10 +71,19 @@ def scalar_broadcast_to(scalar, shape, dtype):
 
     if not isinstance(shape, tuple):
         shape = (shape,)
-    da = rmm.device_array(shape, dtype=dtype)
-    if da.size != 0:
-        fill_value(da, scalar)
-    return da
+
+    if np.dtype(dtype) == np.dtype("object"):
+        import nvstrings
+        from cudf.dataframe.string import StringColumn
+        from cudf.utils.cudautils import zeros
+        gather_map = zeros(shape[0], dtype='int32')
+        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
+        return scalar_str_col[gather_map]
+    else:
+        da = rmm.device_array(shape, dtype=dtype)
+        if da.size != 0:
+            fill_value(da, scalar)
+        return da
 
 
 def normalize_index(index, size, doraise=True):

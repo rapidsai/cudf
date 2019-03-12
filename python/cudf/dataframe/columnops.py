@@ -292,10 +292,18 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 else:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
-                    arbitrary = utils.scalar_broadcast_to(
-                        np.nan,
-                        (len(arbitrary),),
-                        dtype=new_dtype)
+                    if new_dtype == np.dtype("object"):
+                        arbitrary = utils.scalar_broadcast_to(
+                            None,
+                            (len(arbitrary),),
+                            dtype=new_dtype
+                        )
+                    else:
+                        arbitrary = utils.scalar_broadcast_to(
+                            np.nan,
+                            (len(arbitrary),),
+                            dtype=new_dtype
+                        )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)

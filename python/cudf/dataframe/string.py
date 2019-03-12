@@ -358,7 +358,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     def __reduce__(self):
         cpumem = self.to_arrow()
-        return columnops.as_column, (cpumem,)
+        return columnops.as_column, (cpumem, False, np.dtype('object'))
 
     def str(self, index=None):
         return StringMethods(self, index=index)

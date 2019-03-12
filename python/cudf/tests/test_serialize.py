@@ -112,3 +112,22 @@ def test_serialize_string():
     recreated = deserialize(*serialize(gdf))
     # Check
     pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
+
+
+@require_distributed
+def test_serialize_empty_string():
+    pd_series = pd.Series([], dtype='str')
+    gd_series = cudf.Series([], dtype='str')
+
+    recreated = deserialize(*serialize(gd_series))
+    pd.util.testing.assert_series_equal(recreated.to_pandas(), pd_series)
+
+
+@require_distributed
+def test_serialize_all_null_string():
+    data = [None, None, None, None, None]
+    pd_series = pd.Series(data, dtype='str')
+    gd_series = cudf.Series(data, dtype='str')
+
+    recreated = deserialize(*serialize(gd_series))
+    pd.util.testing.assert_series_equal(recreated.to_pandas(), pd_series)
