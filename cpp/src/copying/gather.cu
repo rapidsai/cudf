@@ -344,7 +344,6 @@ namespace detail {
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table, bool check_bounds, cudaStream_t stream) {
-  CUDF_EXPECTS(nullptr != gather_map, "gather_map is null");
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -354,6 +353,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     return;
   }
 
+  CUDF_EXPECTS(nullptr != gather_map, "gather_map is null");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 
