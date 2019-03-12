@@ -74,6 +74,7 @@ class TypedColumnBase(Column):
         if inplace:
             self._data = result._data
             self._mask = result._mask
+            self._null_count = result._null_count
         else:
             return result
 
