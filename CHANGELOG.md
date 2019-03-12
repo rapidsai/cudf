@@ -60,6 +60,7 @@
 - PR #1032 Add string support to cuDF python
 - PR #1136 Removed `gdf_concat`
 - PR #1148 Add cudf.sqrt for dataframes and Series
+- PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 
 ## Improvements
 
