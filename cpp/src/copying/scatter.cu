@@ -15,12 +15,12 @@
  */
 
 #include <thrust/scatter.h>
+#include <bitmask/legacy_bitmask.hpp>
 #include "copying.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
-#include <bitmask/legacy_bitmask.hpp>
 
 namespace cudf {
 
@@ -83,20 +83,18 @@ void scatter_bitmask(gdf_valid_type const* source_mask,
 
   gdf_valid_type* output_bitmask{destination_mask};
 
-  const gdf_size_type num_destination_mask_elements{
-      gdf_valid_allocation_size(num_destination_rows)};
-
   // Allocate temporary output bitmask if scattering in-place
   bool const in_place{source_mask == destination_mask};
   rmm::device_vector<gdf_valid_type> temp_bitmask;
   if (in_place) {
-    temp_bitmask.resize(num_destination_mask_elements);
+    temp_bitmask.resize(gdf_valid_allocation_size(num_destination_rows));
     output_bitmask = temp_bitmask.data().get();
   }
 
   // Ensure the output bitmask is initialized to zero
   CUDA_TRY(cudaMemsetAsync(
-      output_bitmask, 0, num_destination_mask_elements * sizeof(gdf_valid_type),
+      output_bitmask, 0,
+      gdf_num_bitmask_elements(num_destination_rows) * sizeof(gdf_valid_type),
       stream));
 
   scatter_bitmask_kernel<<<scatter_grid_size, BLOCK_SIZE, 0, stream>>>(
