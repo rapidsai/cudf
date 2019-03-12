@@ -58,7 +58,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
   GDF_REQUIRE(column->dtype == GDF_STRING_CATEGORY,GDF_UNSUPPORTED_DTYPE);
 
   if(column->size == 0){
-    column->dtype_info.category = static_cast<void *>(new NVCategory);
+    column->dtype_info.category = nullptr;
     return GDF_SUCCESS;
   }
 
