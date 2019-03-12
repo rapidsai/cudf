@@ -226,9 +226,6 @@ def test_string_sort(ps_gs, ascending):
     expect = ps.sort_values(ascending=ascending)
     got = gs.sort_values(ascending=ascending)
 
-    print(expect)
-    print(got)
-
     assert_eq(expect, got)
 
 
