@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <iterator>
 #include <type_traits>
+#include <stdlib.h>
 
 #include "gtest/gtest.h"
 
@@ -31,6 +32,16 @@
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "tests/utilities/column_wrapper.cuh"
+
+template <typename T>
+T getValueFromScalar(gdf_scalar& scalar)
+{
+    T val;
+    memcpy(&val, &scalar.data, sizeof(T));
+
+    return val;
+}
+
 
 // This is the main test feature
 template <typename T>
@@ -61,17 +72,17 @@ struct ReductionTest : public GdfTest
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T> dev_result(1);
 
-        gdf_dtype out_dtype = underlying_column->dtype;
-        gdf_error result_error{GDF_SUCCESS};
+        gdf_scalar result;
+        result.dtype = underlying_column->dtype;
 
-        result_error = gdf_reduction( underlying_column, op,
-            thrust::raw_pointer_cast( dev_result.data() ), out_dtype);
+        gdf_error result_error{GDF_SUCCESS};
+        result_error = gdf_reduction( underlying_column, op, &result);
 
         EXPECT_EQ(reduction_error_code, result_error);
 
         if( result_error == GDF_SUCCESS){
-            thrust::host_vector<T> host_result(dev_result);
-            EXPECT_EQ(exact_value, host_result[0]);
+            T host_result = getValueFromScalar<T>(result);
+            EXPECT_EQ(exact_value, host_result);
         }
     }
 };
@@ -147,20 +158,21 @@ struct ReductionDtypeTest : public GdfTest
         cudf::test::column_wrapper<T_in> const col(input_values);
 
         const gdf_column * underlying_column = col.get();
-        thrust::device_vector<T_out> dev_result(1);
+
+        gdf_scalar result;
+        result.dtype = underlying_column->dtype;
 
         gdf_error result_error{GDF_SUCCESS};
 
-        result_error = gdf_reduction( underlying_column, op,
-            thrust::raw_pointer_cast( dev_result.data() ), out_dtype);
+        result_error = gdf_reduction( underlying_column, op, &result);
 
         EXPECT_EQ(reduction_error_code, result_error);
 
-        if( result_error == GDF_SUCCESS){
-            thrust::host_vector<T_out> host_result(dev_result);
-            EXPECT_EQ(exact_value, host_result[0]);
+        if( 0 && result_error == GDF_SUCCESS){
+            T_out host_result = getValueFromScalar<T_out>(result);
+            EXPECT_EQ(exact_value, host_result);
             std::cout << "the value = <" << exact_value
-                << ", " << host_result[0] << ">" << std::endl;
+                << ", " << host_result << ">" << std::endl;
         }
     }
 };
@@ -186,9 +198,24 @@ TEST_F(ReductionDtypeTest, different_precision)
         (v, double(exact), GDF_SUCCESS,
         GDF_REDUCTION_SUM, GDF_FLOAT64);
 
-    // not supported case
-    this->examin<int8_t, int64_t>
+    // not supported case:
+    // Though the underlying type of cudf::date64 is int64_t,
+    // they are not convertible types.
+    this->examin<cudf::date64, int64_t>
         (v, int64_t(exact), GDF_UNSUPPORTED_DTYPE,
+        GDF_REDUCTION_SUM, GDF_INT64);
+
+    // any of wrapper classes is convertible
+    this->examin<cudf::date64, cudf::timestamp>
+        (v, cudf::timestamp(exact), GDF_UNSUPPORTED_DTYPE,
+        GDF_REDUCTION_SUM, GDF_TIMESTAMP);
+
+    this->examin<cudf::date32, cudf::category>
+        (v, cudf::category(exact), GDF_UNSUPPORTED_DTYPE,
+        GDF_REDUCTION_SUM, GDF_CATEGORY);
+
+    this->examin<cudf::date32, cudf::date64>
+        (v, cudf::date64(exact), GDF_UNSUPPORTED_DTYPE,
         GDF_REDUCTION_SUM, GDF_DATE64);
 
     // down cast (over flow)
@@ -200,5 +227,6 @@ TEST_F(ReductionDtypeTest, different_precision)
     this->examin<double, int16_t>
         (v, int16_t(exact), GDF_SUCCESS,
         GDF_REDUCTION_SUM, GDF_INT16);
+
 
 }

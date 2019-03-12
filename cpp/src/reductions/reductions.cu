@@ -1,4 +1,5 @@
 #include "cudf.h"
+#include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
@@ -57,23 +58,37 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
 }
 
 template<typename T_in, typename T_out, typename Op>
-gdf_error ReduceOp(const gdf_column *input, T_out *output)
+gdf_error ReduceOp(const gdf_column *input,
+                   gdf_scalar* scalar, cudaStream_t stream)
 {
     T_out identity = Op::template identity<T_out>();
 
+    // allocate temporary memory for the result
+    void *result = NULL;
+    RMM_TRY(RMM_ALLOC(&result, sizeof(T_out), stream));
+
     // initialize output by identity value
-    CUDA_TRY(cudaMemcpyAsync(output, &identity,
-            sizeof(T_out), cudaMemcpyHostToDevice, 0));
+    CUDA_TRY(cudaMemcpyAsync(result, &identity,
+            sizeof(T_out), cudaMemcpyHostToDevice, stream));
     CUDA_CHECK_LAST();
 
     int blocksize = reduction_block_size;
     int gridsize = (input->size + reduction_block_size -1 )
         /reduction_block_size;
 
-    gpu_reduction_op<<<gridsize, blocksize>>>(
+    // kernel call
+    gpu_reduction_op<<<gridsize, blocksize, 0, stream>>>(
         (const T_in*)input->data, input->valid, input->size,
-        output, Op{}, identity, typename Op::Loader{});
+        static_cast<T_out*>(result),
+        Op{}, identity, typename Op::Loader{});
     CUDA_CHECK_LAST();
+
+    // read back the result to host memory
+    CUDA_TRY(cudaMemcpyAsync(&scalar->data, result,
+            sizeof(T_out), cudaMemcpyDeviceToHost, stream));
+
+    // cleanup temporary memory
+    RMM_TRY(RMM_FREE(result, stream));
 
     return GDF_SUCCESS;
 };
@@ -84,15 +99,16 @@ struct ReduceOutputDispatcher {
 public:
     template <typename T_out, typename std::enable_if<
                 std::is_convertible<T_in, T_out>::value >::type* = nullptr >
-    gdf_error operator()(const gdf_column *col, void *dev_result)
+    gdf_error operator()(const gdf_column *col,
+                         gdf_scalar* scalar, cudaStream_t stream)
     {
-        return ReduceOp<T_in, T_out, Op>
-            (col, static_cast<T_out*>(dev_result));
+        return ReduceOp<T_in, T_out, Op>(col, scalar, stream);
     }
 
     template <typename T_out, typename std::enable_if<
                 ! std::is_convertible<T_in, T_out>::value >::type* = nullptr >
-    gdf_error operator()(const gdf_column *col, void *dev_result)
+    gdf_error operator()(const gdf_column *col,
+                         gdf_scalar* scalar, cudaStream_t stream)
     {
         return GDF_UNSUPPORTED_DTYPE;
     }
@@ -115,17 +131,17 @@ public:
     template <typename T, typename std::enable_if<
         is_supported<T>()>::type* = nullptr>
     gdf_error operator()(const gdf_column *col,
-                         void *dev_result, gdf_dtype output_dtype)
+                         gdf_scalar* scalar, cudaStream_t stream=0)
     {
         GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
-        return cudf::type_dispatcher(output_dtype,
-            ReduceOutputDispatcher<T, Op>(), col, dev_result);
+        return cudf::type_dispatcher(scalar->dtype,
+            ReduceOutputDispatcher<T, Op>(), col, scalar, stream);
     }
 
     template <typename T, typename std::enable_if<
         !is_supported<T>()>::type* = nullptr>
     gdf_error operator()(const gdf_column *col,
-                         void *dev_result, gdf_dtype output_dtype)
+                         gdf_scalar* scalar, cudaStream_t stream=0)
     {
         return GDF_UNSUPPORTED_DTYPE;
     }
@@ -136,25 +152,24 @@ public:
 
 gdf_error gdf_reduction(const gdf_column *col,
                   gdf_reduction_op op,
-                  void *dev_result, gdf_dtype output_dtype)
+                  gdf_scalar* output)
 {
     switch(op){
     case GDF_REDUCTION_SUM:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSum>(), col, dev_result, output_dtype);
+            ReduceDispatcher<DeviceSum>(), col, output);
     case GDF_REDUCTION_MIN:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMin>(), col, dev_result, output_dtype);
+            ReduceDispatcher<DeviceMin>(), col, output);
     case GDF_REDUCTION_MAX:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMax>(), col, dev_result, output_dtype);
+            ReduceDispatcher<DeviceMax>(), col, output);
     case GDF_REDUCTION_PRODUCTION:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceProduct>(), col, dev_result, output_dtype);
+            ReduceDispatcher<DeviceProduct>(), col, output);
     case GDF_REDUCTION_SUMOFSQUARES:
         return cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSumOfSquares>(),
-            col, dev_result, output_dtype);
+            ReduceDispatcher<DeviceSumOfSquares>(), col, output);
     default:
         return GDF_INVALID_API_CALL;
     }
@@ -164,7 +179,17 @@ gdf_error gdf_reduction_stub(gdf_column *col,
                   gdf_reduction_op op,
                   void *dev_result, gdf_dtype output_dtype)
 {
-    return gdf_reduction(col, op, dev_result, output_dtype);
+    gdf_scalar scalar;
+    scalar.dtype = output_dtype;
+
+    gdf_error ret = gdf_reduction(col, op, &scalar);    // do reduction
+
+    // back to device memory.
+    CUDA_TRY(cudaMemcpyAsync(dev_result, &scalar.data,
+            8, cudaMemcpyHostToDevice, 0));
+    CUDA_CHECK_LAST();
+
+    return ret;
 }
 
 gdf_error gdf_sum(gdf_column *col,

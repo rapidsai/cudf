@@ -2129,24 +2129,22 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /**
  * @brief  Computes the reduction of the values in all rows of a column
  * Though the overflow may happen at reduction, there is no way to detect the overflow.
- * Specifing higher precision by `output_dtype` may prevent the overflow.
+ * Specifing higher precision by `result->dtype` may prevent the overflow.
  *
  * @param[in] col Input column
  * @param[in] op  The operation of the reduction
- * @param[out] dev_result The output of the reduction.
- *             It must be pre-allocated with the size of output_dtype at the device.
- * @param[in] output_dtype The element type of the reduction output.
- *            If the input column holds arithmetic type,
- *            any arithmetic types can be specified.
- *            If the input column holds non arithemetic type (date32, timestamp, category...),
- *            sane type must be specified.
+ * @param[in/out] result The pre-allocated output scalar value with the output precision.
+ *    `result->dtype` must be specified of the one of convertible dtypes of input dtype.
+ *     It is treated as the output precision.
+ *     If the input column holds arithmetic type, any arithmetic types can be specified.
+ *     If the input column holds non arithemetic type (date32, timestamp, category...),
+ *     same type must be specified.
  *
  * @returns    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
  */
-gdf_error gdf_reduction(const gdf_column *col,
-                        gdf_reduction_op op,
-                        void *dev_result, gdf_dtype output_dtype);
+gdf_error gdf_reduction(const gdf_column *col, gdf_reduction_op op,
+                        gdf_scalar* result);
 
 /* The following reduction functions use the result array as a temporary working
 space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary

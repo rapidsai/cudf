@@ -31,14 +31,14 @@ static constexpr int copy_replace_nulls_blocksize = 1024;
 /**
  * @brief Copy data stream and replace nulls by a scholar value
  *
- * @Param[in] data The stream to be copied
- * @Param[in] mask The bitmask stream for nulls
- * @Param[in] size The element count of stream
- * @Param[out] results The stream for the result
- * @Param[in] identity The scholar value to be used to replace nulls
- * @Param[in] stream The cuda stream to be used
+ * @param[in] data The stream to be copied
+ * @param[in] mask The bitmask stream for nulls
+ * @param[in] size The element count of stream
+ * @param[out] results The stream for the result
+ * @param[in] identity The scholar value to be used to replace nulls
+ * @param[in] stream The cuda stream to be used
  *
- * @Returns  If the operation was successful, returns GDF_SUCCESS
+ * @returns  If the operation was successful, returns GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
     template <typename T>
