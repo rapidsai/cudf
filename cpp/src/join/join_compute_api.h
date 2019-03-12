@@ -79,6 +79,7 @@ create_missing_indices(
 			index_ptr,//Stencil - Check if index location is valid
 			invalid_index_map.begin(),//Output indices
 			bounds_checker);//Stencil Predicate
+	CHECK_STREAM(0);
 	size_type begin_counter = static_cast<size_type>(0);
 	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
 	//Create list of indices that have been marked as invalid
@@ -90,6 +91,7 @@ create_missing_indices(
 			unmatched_indices.begin(),
 			thrust::identity<index_type>()) -
 		unmatched_indices.begin();
+	CHECK_STREAM(0);
 	unmatched_indices.resize(compacted_size);
 	return unmatched_indices;
 }
@@ -160,7 +162,7 @@ gdf_error append_full_join_indices(
     thrust::device_vector<index_type> unmatched_indices =
         create_missing_indices(
                 *r_index_ptr, max_index_value, *index_size);
-    CUDA_CHECK_LAST()
+    CHECK_STREAM(0);
 
     //Expand l_index_ptr and r_index_ptr if necessary
     size_type mismatch_index_size = unmatched_indices.size();
@@ -186,7 +188,7 @@ gdf_error append_full_join_indices(
     *index_capacity = l_index_capacity;
     *index_size = *index_size + mismatch_index_size;
 
-    CUDA_CHECK_LAST()
+    CHECK_STREAM(0);
 	return GDF_SUCCESS;
 }
 
@@ -262,7 +264,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_type)));
   *d_size_estimate = 0;
 
-  CUDA_TRY( cudaGetLastError() );
+  CHECK_STREAM(0);
 
   // Continue probing with a subset of the probe table until either:
   // a non-zero output size estimate is found OR
@@ -290,7 +292,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
                                       d_size_estimate);
 
     // Device sync is required to ensure d_size_estimate is updated
-    CUDA_TRY( cudaDeviceSynchronize() );
+    CHECK_STREAM(0);
     
     	
     // Increase the estimated output size by a factor of the ratio between the
@@ -425,7 +427,7 @@ gdf_error compute_hash_join(
   // (although should be possible once we move to Arrow)
   hash_table->prefetch(0);
 
-  CUDA_TRY( cudaDeviceSynchronize() );
+  CHECK_STREAM(0);
 
   // Allocate a gdf_error for the device to hold error code returned from
   // the build kernel and intialize with GDF_SUCCESS
@@ -447,7 +449,7 @@ gdf_error compute_hash_join(
     
     // Device synch is required to ensure d_gdf_error_code 
     // has been written
-    CUDA_TRY( cudaDeviceSynchronize() );
+    CHECK_STREAM(0);
   }
 
   // Check error code from the kernel
@@ -515,7 +517,7 @@ gdf_error compute_hash_join(
                                        estimated_join_output_size,
                                        flip_results);
 
-    CUDA_TRY( cudaGetLastError() );
+    CHECK_STREAM(0);
 
     CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
 
