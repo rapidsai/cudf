@@ -56,13 +56,14 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
   GDF_REQUIRE(nv_category != nullptr,GDF_INVALID_API_CALL );
   GDF_REQUIRE(column->dtype == GDF_STRING_CATEGORY,GDF_UNSUPPORTED_DTYPE);
-  CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
-  CUDF_EXPECTS(nv_category != nullptr, "Trying to gather nullptr data in nvcategory_gather");
+
   if(column->size == 0){
     column->dtype_info.category = static_cast<void *>(new NVCategory);
     return GDF_SUCCESS;
   }
 
+  CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
+  CUDF_EXPECTS(nv_category != nullptr, "Trying to gather nullptr data in nvcategory_gather");
   NVCategory * new_category = nv_category->gather(static_cast<nv_category_index_type *>(column->data),
                                                           column->size,
                                                           DEVICE_ALLOCATED);
