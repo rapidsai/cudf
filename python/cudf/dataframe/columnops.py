@@ -65,11 +65,10 @@ class TypedColumnBase(Column):
 
     def _mimic_inplace(self, result, inplace=False):
         """
-        Used to mimic an inplace operation by copying data from the
-        result of an out-of-place operation.
+        If `inplace=True`, used to mimic an inplace operation
+        by replacing data in ``self`` with data in ``result``.
 
-        If ``inplace`` is ``True``, copy data from ``result`` to ``self``.
-        Otherwise, return ``result`` unchanged.
+        Otherwise, returns ``result`` unchanged.
         """
         if inplace:
             self._data = result._data
