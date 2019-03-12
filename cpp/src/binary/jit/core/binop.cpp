@@ -23,6 +23,7 @@
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "cudf.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 namespace cudf {
 namespace binops {
@@ -69,16 +70,16 @@ namespace binops {
             return error;
         }
         
-    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+    	gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements( num_values );
 
         if ( valid_left == nullptr && valid_right != nullptr ) {
-            CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+            CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_bitmask_elements, cudaMemcpyDeviceToDevice) );
         } 
         else if ( valid_left != nullptr && valid_right == nullptr ) {
-            CUDA_TRY( cudaMemcpy(valid_out, valid_left, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+            CUDA_TRY( cudaMemcpy(valid_out, valid_left, num_bitmask_elements, cudaMemcpyDeviceToDevice) );
         } 
         else if ( valid_left == nullptr && valid_right == nullptr ) {
-            CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
+            CUDA_TRY( cudaMemset(valid_out, 0xff, num_bitmask_elements) );
         }
 
         gdf_size_type non_nulls;
@@ -116,16 +117,16 @@ namespace binops {
 
         GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
 
-    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
+    	gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements( num_values );
 
         if ( valid_scalar == false ) {
-            CUDA_TRY( cudaMemset(valid_out, 0x00, num_chars_bitmask) );
+            CUDA_TRY( cudaMemset(valid_out, 0x00, num_bitmask_elements) );
         } 
         else if ( valid_scalar == true && valid_col != nullptr ) {
-            CUDA_TRY( cudaMemcpy(valid_out, valid_col, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+            CUDA_TRY( cudaMemcpy(valid_out, valid_col, num_bitmask_elements, cudaMemcpyDeviceToDevice) );
         } 
         else if ( valid_scalar == true && valid_col == nullptr ) {
-            CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
+            CUDA_TRY( cudaMemset(valid_out, 0xff, num_bitmask_elements) );
         }
 
         gdf_size_type non_nulls;

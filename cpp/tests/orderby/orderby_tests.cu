@@ -27,6 +27,7 @@
 #include <rmm/rmm.h>
 #include <cudf/functions.h>
 #include <utilities/bit_util.cuh>
+#include <bitmask/legacy_bitmask.hpp>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 
@@ -130,9 +131,8 @@ struct OrderByTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, gdf_num_bitmask_elements(host_vector.size()), cudaMemcpyHostToDevice), cudaSuccess);
       the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
