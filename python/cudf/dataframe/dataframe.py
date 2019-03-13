@@ -2462,13 +2462,20 @@ class Iloc(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, (tuple)):
-            arg = list(arg)
+            if len(arg) == 1:
+                arg = list(arg)
+            elif len(arg) == 2:
+                return self[arg[0]][arg[1]]
+            else:
+                return pd.core.indexing.IndexingError(
+                    "Too many indexers"
+                )
 
         if isinstance(arg, numbers.Integral):
             rows = []
             for col in self._df.columns:
                 rows.append(self._df[col][arg])
-            return Series(np.array(rows))
+            return Series(np.array(rows), name=arg)
         else:
             df = DataFrame()
             for col in self._df.columns:
