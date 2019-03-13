@@ -2634,6 +2634,12 @@ typedef struct DLManagedTensor DLManagedTensor_;
  *
  * 1D and 2D tensors are supported. This function makes copies
  * of the input DLPack data into the created output columns.
+ * 
+ * Note: currently only supports column-major ("Fortran" order) memory layout
+ * Therefore row-major tensors should be transposed before calling 
+ * this function
+ * TODO: provide a parameter to select row- or column-major ordering (row major
+ * input will require a transpose)
  *
  * Note: this function does NOT call the input tensor's deleter currently
  * because the caller of this function may still need it. Also, it is often
@@ -2654,6 +2660,12 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
  *
  * 1D and 2D tensors are supported. This function allocates the DLPack tensor 
  * data and copies the data from the input column(s) into the tensor.
+ * 
+ * Note: currently only supports column-major ("Fortran" order) memory layout
+ * Therefore the output of this function should be transposed if row-major is
+ * needed.
+ * TODO: provide a parameter to select row- or column-major ordering (row major
+ * output will require a transpose)
  *
  * @param[out] tensor The output DLTensor
  * @param[in] columns An array of pointers to gdf_column 
