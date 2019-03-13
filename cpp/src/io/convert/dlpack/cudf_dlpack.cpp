@@ -86,7 +86,7 @@ namespace {
 
 
 // Convert a DLPack DLTensor into gdf_column(s)
-// Currently only 1D tensors are supported
+// Currently 1D and 2D column-major (Fortran order) tensors are supported
 gdf_error gdf_from_dlpack(gdf_column** columns,
                           gdf_size_type *num_columns,
                           DLManagedTensor const * tensor)
@@ -108,6 +108,9 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
   // Ensure the column is not too big
   GDF_REQUIRE(tensor->dl_tensor.shape[0] > 0, GDF_DATASET_EMPTY);
+  if (tensor->dl_tensor.ndim > 1)
+    GDF_REQUIRE(tensor->dl_tensor.shape[1] > 0, GDF_DATASET_EMPTY);
+
   GDF_REQUIRE(tensor->dl_tensor.shape[0] < 
               std::numeric_limits<gdf_size_type>::max(), 
               GDF_COLUMN_SIZE_TOO_BIG);
@@ -124,14 +127,15 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   // layouts will require copying anyway.)
 
   // compute the size and allocate data
+  // Note: assumes Fortran (column-major) data layout
   *num_columns = 1;
   if (tensor->dl_tensor.ndim == 2) *num_columns = tensor->dl_tensor.shape[1];
   *columns = new gdf_column[*num_columns];
   GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
 
   gdf_size_type byte_width = gdf_dtype_size(dtype);
-  gdf_size_type length = tensor->dl_tensor.shape[0];
-  size_t bytes = length * byte_width;
+  gdf_size_type num_rows = tensor->dl_tensor.shape[0];
+  size_t bytes = num_rows * byte_width;
 
   // Determine the stride between the start of each column
   // For 1D tensors, stride is zero. For 2D tensors, if the strides pointer is
@@ -140,11 +144,11 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   // bytes.
   int64_t col_stride = 0;
   if (*num_columns > 1) {
-    col_stride = byte_width * length;
+    col_stride = byte_width * num_rows;
     if (nullptr != tensor->dl_tensor.strides)
-      col_stride = tensor->dl_tensor.strides[1];
+      col_stride = byte_width * tensor->dl_tensor.strides[1];
   }
-
+  
   // copy the dl_tensor data
   for (gdf_size_type c = 0; c < *num_columns; ++c) {
     void *tensor_data = reinterpret_cast<void*>(
@@ -159,12 +163,15 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
     // construct column view
     gdf_error status = gdf_column_view(&(*columns)[c], col_data,
-                                       nullptr, length, dtype);
+                                       nullptr, num_rows, dtype);
     GDF_REQUIRE(GDF_SUCCESS == status, status);
   }
 
-  // Call the managed tensor's deleter since our "borrowing" is done
-  tensor->deleter(const_cast<DLManagedTensor*>(tensor));
+  // Note: we do NOT call the input tensor's deleter currently because 
+  // the caller of this function may still need it. Also, it is often 
+  // packaged in a PyCapsule on the Python side, which (in the case of Cupy)
+  // may be set up to call the deleter in its own destructor
+  //tensor->deleter(const_cast<DLManagedTensor*>(tensor));
 
   return GDF_SUCCESS;
 }
@@ -175,6 +182,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const * const * columns, 
                         gdf_size_type num_columns)
 {
+  GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 
   // first column determines datatype and number of rows
@@ -198,9 +206,14 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
     
   tensor->dl_tensor.shape = new int64_t[tensor->dl_tensor.ndim];
   tensor->dl_tensor.shape[0] = num_rows;
-  if (tensor->dl_tensor.ndim > 1) 
+  if (tensor->dl_tensor.ndim > 1) {
     tensor->dl_tensor.shape[1] = num_columns;
-  tensor->dl_tensor.strides = nullptr;
+    tensor->dl_tensor.strides = new int64_t[2] {1, num_rows};
+  }
+  else {
+    tensor->dl_tensor.strides = new int64_t[1] {1};
+  }
+  // tensor->dl_tensor.strides = nullptr;
   tensor->dl_tensor.byte_offset = 0;
   
   CUDA_TRY( cudaGetDevice(&tensor->dl_tensor.ctx.device_id) );
