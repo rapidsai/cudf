@@ -59,6 +59,7 @@
 - PR #1136 Removed `gdf_concat`
 - PR #1153 Added function for getting the padded allocation size for valid bitmask
 - PR #1148 Add cudf.sqrt for dataframes and Series
+- PR #1159 Add Python bindings for libcudf dlpack functions
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 - PR #1168 to_frame for series accepts a name argument
 
@@ -102,7 +103,7 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
-- PR #XXXX Bump Arrow version to 0.12.1
+- PR #1183 Bump Arrow version to 0.12.1
 
 ## Bug Fixes
 

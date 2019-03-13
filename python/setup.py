@@ -18,7 +18,10 @@ cython_files = ['cudf/bindings/*.pyx']
 extensions = [
     Extension("*",
               sources=cython_files,
-              include_dirs=['../cpp/include/'],
+              include_dirs=[
+                '../cpp/include/',
+                '../cpp/thirdparty/dlpack/include/dlpack/'
+              ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
