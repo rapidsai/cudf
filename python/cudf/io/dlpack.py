@@ -34,10 +34,13 @@ def from_dlpack(pycapsule_obj):
     """
     try:
         res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
-    except GDFError:
-        raise ValueError(
-            "Cannot create a cuDF Object from a DLPack tensor of 0 size"
-        )
+    except GDFError as err:
+        if str(err) == "b'GDF_DATASET_EMPTY'":
+            raise ValueError(
+                "Cannot create a cuDF Object from a DLPack tensor of 0 size"
+            )
+        else:
+            raise err
     cols = []
     for idx in range(len(valids)):
         mask = None

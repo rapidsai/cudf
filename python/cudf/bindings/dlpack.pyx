@@ -116,9 +116,13 @@ cpdef to_dlpack(in_cols):
 
     check_gdf_error(result)
 
-    return pycapsule.PyCapsule_New(dlpack_tensor, 'dltensor', pycapsule_deleter)
+    return pycapsule.PyCapsule_New(
+        dlpack_tensor,
+        'dltensor',
+        dlmanaged_tensor_pycapsule_deleter
+    )
 
-cdef void pycapsule_deleter(object pycap_obj):
+cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     cdef DLManagedTensor* dlpack_tensor= <DLManagedTensor*>0
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
