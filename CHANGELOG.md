@@ -144,6 +144,7 @@
 - PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1174: Fix release script typo
 - PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
