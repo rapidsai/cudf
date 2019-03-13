@@ -42,22 +42,20 @@ T getValueFromScalar(gdf_scalar& scalar)
     return val;
 }
 
-
 // This is the main test feature
 template <typename T>
 struct ReductionTest : public GdfTest
 {
     // Sum/Prod/SumOfSquare never support non arithmetics
-    static constexpr gdf_error ret_non_arithmetic =
-        (std::is_arithmetic<T>::value)
-         ? GDF_SUCCESS : GDF_UNSUPPORTED_DTYPE;
+    static constexpr bool ret_non_arithmetic =
+        (std::is_arithmetic<T>::value) ? true : false;
 
     ReductionTest(){}
 
     ~ReductionTest(){}
 
     void examin(std::vector<int>& int_values,
-        T exact_value, gdf_error reduction_error_code,
+        T exact_value, bool succeeded_condition,
         gdf_reduction_op op)
     {
         gdf_size_type col_size = int_values.size();
@@ -72,17 +70,17 @@ struct ReductionTest : public GdfTest
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T> dev_result(1);
 
-        gdf_scalar result;
-        result.dtype = underlying_column->dtype;
-
-        gdf_error result_error{GDF_SUCCESS};
-        result_error = gdf_reduction( underlying_column, op, &result);
-
-        EXPECT_EQ(reduction_error_code, result_error);
-
-        if( result_error == GDF_SUCCESS){
+        auto statement = [&]() {
+            gdf_scalar result = gdf_reduction(underlying_column, op,
+                                              underlying_column->dtype);
             T host_result = getValueFromScalar<T>(result);
             EXPECT_EQ(exact_value, host_result);
+        };
+
+        if( succeeded_condition ){
+            CUDF_EXPECT_NO_THROW(statement());
+        }else{
+            EXPECT_ANY_THROW(statement());
         }
     }
 };
@@ -102,7 +100,7 @@ TYPED_TEST(ReductionTest, MinMax)
 
     // Min/Max succeeds for any gdf types including
     // non-arithmetic types (date32, date64, timestamp, category)
-    gdf_error result_error(GDF_SUCCESS);
+    bool result_error(true);
 
     this->examin(v, TypeParam(exact_min_result),
         result_error, GDF_REDUCTION_MIN);
@@ -145,7 +143,7 @@ struct ReductionDtypeTest : public GdfTest
 {
     template <typename T_in, typename T_out>
     void examin(std::vector<int>& int_values,
-        T_out exact_value, gdf_error reduction_error_code,
+        T_out exact_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype out_dtype)
     {
         gdf_size_type col_size = int_values.size();
@@ -156,23 +154,21 @@ struct ReductionDtypeTest : public GdfTest
            [](int x) { T_in t(x) ; return t; } );
 
         cudf::test::column_wrapper<T_in> const col(input_values);
-
         const gdf_column * underlying_column = col.get();
 
-        gdf_scalar result;
-        result.dtype = underlying_column->dtype;
-
-        gdf_error result_error{GDF_SUCCESS};
-
-        result_error = gdf_reduction( underlying_column, op, &result);
-
-        EXPECT_EQ(reduction_error_code, result_error);
-
-        if( 0 && result_error == GDF_SUCCESS){
+        auto statement = [&]() {
+            gdf_scalar result = gdf_reduction(underlying_column, op,
+                                              underlying_column->dtype);
             T_out host_result = getValueFromScalar<T_out>(result);
             EXPECT_EQ(exact_value, host_result);
             std::cout << "the value = <" << exact_value
                 << ", " << host_result << ">" << std::endl;
+        };
+
+        if( succeeded_condition ){
+            CUDF_EXPECT_NO_THROW(statement());
+        }else{
+            EXPECT_ANY_THROW(statement());
         }
     }
 };
@@ -187,46 +183,36 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // over flow
     this->examin<int8_t, int8_t>
-        (v, int8_t(exact), GDF_SUCCESS,
-        GDF_REDUCTION_SUM, GDF_INT8);
+        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8);
 
     this->examin<int8_t, int64_t>
-        (v, int64_t(exact), GDF_SUCCESS,
-        GDF_REDUCTION_SUM, GDF_INT64);
+        (v, int64_t(exact), true, GDF_REDUCTION_SUM, GDF_INT64);
 
     this->examin<int8_t, double>
-        (v, double(exact), GDF_SUCCESS,
-        GDF_REDUCTION_SUM, GDF_FLOAT64);
-
-    // not supported case:
-    // Though the underlying type of cudf::date64 is int64_t,
-    // they are not convertible types.
-    this->examin<cudf::date64, int64_t>
-        (v, int64_t(exact), GDF_UNSUPPORTED_DTYPE,
-        GDF_REDUCTION_SUM, GDF_INT64);
-
-    // any of wrapper classes is convertible
-    this->examin<cudf::date64, cudf::timestamp>
-        (v, cudf::timestamp(exact), GDF_UNSUPPORTED_DTYPE,
-        GDF_REDUCTION_SUM, GDF_TIMESTAMP);
-
-    this->examin<cudf::date32, cudf::category>
-        (v, cudf::category(exact), GDF_UNSUPPORTED_DTYPE,
-        GDF_REDUCTION_SUM, GDF_CATEGORY);
-
-    this->examin<cudf::date32, cudf::date64>
-        (v, cudf::date64(exact), GDF_UNSUPPORTED_DTYPE,
-        GDF_REDUCTION_SUM, GDF_DATE64);
+        (v, double(exact), true, GDF_REDUCTION_SUM, GDF_FLOAT64);
 
     // down cast (over flow)
     this->examin<double, int8_t>
-        (v, int8_t(exact), GDF_SUCCESS,
-        GDF_REDUCTION_SUM, GDF_INT8);
+        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8);
 
-    // down cast (success case)
+    // down cast (no over flow)
     this->examin<double, int16_t>
-        (v, int16_t(exact), GDF_SUCCESS,
-        GDF_REDUCTION_SUM, GDF_INT16);
+        (v, int16_t(exact), true, GDF_REDUCTION_SUM, GDF_INT16);
 
+    // not supported case:
+    // any of wrapper classes is not convertible
+    this->examin<cudf::date64, cudf::timestamp>
+        (v, cudf::timestamp(exact), false, GDF_REDUCTION_SUM, GDF_TIMESTAMP);
+
+    this->examin<cudf::date32, cudf::category>
+        (v, cudf::category(exact), false, GDF_REDUCTION_SUM, GDF_CATEGORY);
+
+    this->examin<cudf::date32, cudf::date64>
+        (v, cudf::date64(exact), false, GDF_REDUCTION_SUM, GDF_DATE64);
+
+    // Though the underlying type of cudf::date64 is int64_t,
+    // they are not convertible types.
+    this->examin<cudf::date64, int64_t>
+        (v, int64_t(exact), false, GDF_REDUCTION_SUM, GDF_INT64);
 
 }

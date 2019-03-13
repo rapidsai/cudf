@@ -2143,8 +2143,8 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
  * @returns    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
  */
-gdf_error gdf_reduction(const gdf_column *col, gdf_reduction_op op,
-                        gdf_scalar* result);
+gdf_scalar gdf_reduction(const gdf_column *col, gdf_reduction_op op,
+                        gdf_dtype output_dtype);
 
 /* The following reduction functions use the result array as a temporary working
 space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
