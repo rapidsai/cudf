@@ -15,6 +15,7 @@
  */
 
 #include "cudf.h"
+#include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
 #include "io/comp/gpuinflate.h"
 
@@ -44,7 +45,11 @@
     }                                                                 \
   }
 
-extern gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type size);
+#if 0
+#define LOG_PRINTF(...) std::printf(__VA_ARGS__)
+#else
+#define LOG_PRINTF(...) (void)0
+#endif
 
 uint8_t *LoadFile(const char *input_fname, size_t *len) {
   size_t file_size;
@@ -128,27 +133,12 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   return std::make_pair(GDF_invalid, gdf_dtype_extra_info{TIME_UNIT_NONE});
 }
 
-// TODO: Remove
-void print_gdf_column(gdf_column *col, int index) {
-  printf("  [%d] name=%s size=%d type=%d data=%lx valid=%lx\n", index,
-         col->col_name, col->size, col->dtype, (int64_t)col->data,
-         (int64_t)col->valid);
-}
-
+/**
+ * @brief Function that requires the number of bits to store a given value
+ **/
 template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
   return static_cast<T>(parquet::CPReader::NumRequiredBits(max_level));
-}
-template <typename T = uint8_t>
-T required_type_length(parquet::ConvertedType converted_type) {
-  if (converted_type == parquet::ConvertedType::INT_8 ||
-      converted_type == parquet::ConvertedType::UINT_8) {
-    return 1;
-  } else if (converted_type == parquet::ConvertedType::INT_16 ||
-             converted_type == parquet::ConvertedType::UINT_16) {
-    return 2;
-  }
-  return 0;
 }
 
 /**
@@ -346,21 +336,21 @@ class ParquetMetadata : public parquet::FileMetaData {
   }
 
   void print_metadata() {
-    printf("Metadata:\n");
-    printf(" version = %d\n", version);
-    printf(" created_by = \"%s\"\n", created_by.c_str());
-    printf(" schema (%zd entries):\n", schema.size());
+    LOG_PRINTF("\n[+] Metadata:\n");
+    LOG_PRINTF(" version = %d\n", version);
+    LOG_PRINTF(" created_by = \"%s\"\n", created_by.c_str());
+    LOG_PRINTF(" schema (%zd entries):\n", schema.size());
     for (size_t i = 0; i < schema.size(); i++) {
-      printf(
+      LOG_PRINTF(
           "  [%zd] type=%d, name=\"%s\", num_children=%d, rep_type=%d, "
           "max_def_lvl=%d, max_rep_lvl=%d\n",
           i, schema[i].type, schema[i].name.c_str(), schema[i].num_children,
           schema[i].repetition_type, schema[i].max_definition_level,
           schema[i].max_repetition_level);
     }
-    printf(" num rows = %zd\n", (size_t)num_rows);
-    printf(" num row groups = %zd\n", row_groups.size());
-    printf(" num columns = %zd\n", row_groups[0].columns.size());
+    LOG_PRINTF(" num rows = %zd\n", (size_t)num_rows);
+    LOG_PRINTF(" num row groups = %zd\n", row_groups.size());
+    LOG_PRINTF(" num columns = %zd\n", row_groups[0].columns.size());
   }
 };
 
@@ -368,7 +358,7 @@ class ParquetMetadata : public parquet::FileMetaData {
  * @brief Returns the number of total pages from the given column chunks
  * 
  * @param[in] chunks List of column chunk descriptors
- * @param[in,out] Total number of pages making up the column chunks
+ * @param[in,out] total_pages Total number of pages making up the column chunks
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
@@ -383,10 +373,11 @@ gdf_error count_page_headers(
                            chunks.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
 
-  std::cout << "[GPU] " << chunks.size() << " chunks:" << std::endl;
+  LOG_PRINTF("[+] Chunk Information\n");
   for (size_t c = 0; c < chunks.size(); c++) {
-    printf(
-        "[%zd] %d rows, %d data pages, %d dictionary pages, data_type=0x%x\n",
+    LOG_PRINTF(
+        " %2zd: num_rows=%d, num_data_pages=%d, num_dict_pages=%d, "
+        "data_type=0x%x\n",
         c, chunks[c].num_rows, chunks[c].num_data_pages,
         chunks[c].num_dict_pages, chunks[c].data_type);
     *total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -420,10 +411,11 @@ gdf_error decode_page_headers(
                            pages.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
 
+  LOG_PRINTF("[+] Page Header Information\n");
   for (size_t i = 0; i < pages.size(); i++) {
-    printf(
-        "[%zd] ck=%d, row=%d, flags=%d, num_values=%d, encoding=%d, "
-        "size=%d\n",
+    LOG_PRINTF(
+        " %2zd: chunk_idx=%d, chunk_row=%d, flags=%d, num_values=%d, "
+        "encoding=%d, size=%d\n",
         i, pages[i].chunk_idx, pages[i].chunk_row, pages[i].flags,
         pages[i].num_values, pages[i].encoding,
         pages[i].uncompressed_page_size);
@@ -473,10 +465,13 @@ gdf_error decompress_page_data(
     });
   }
 
-  std::cout << "Total compressed size: " << total_decompressed_size << std::endl;
-  std::cout << " gzip pages   = " << codecs[0].second << std::endl;
-  std::cout << " snappy pages = " << codecs[1].second << std::endl;
+  LOG_PRINTF(
+      "[+] Compression\n Total compressed size: %zd\n Number of "
+      "compressed pages: %zd\n  gzip:    %zd \n  snappy: %zd\n",
+      total_decompressed_size, num_compressed_pages, codecs[0].second,
+      codecs[1].second);
 
+  // Dispatch batches of pages to decompress for each codec
   uint8_t *decompressed_pages = nullptr;
   RMM_TRY(RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0));
   page_data->emplace_back(decompressed_pages);
@@ -536,8 +531,8 @@ gdf_error decompress_page_data(
     }
   }
 
-  // Update pages in device memory with the updated value of
-  // compressed_page_data, now pointing to the uncompressed data buffer
+  // Update the page information in device memory with the updated value of
+  // page_data; it now points to the uncompressed data buffer
   CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(), pages.host_ptr(),
                            pages.memory_size(), cudaMemcpyHostToDevice));
 
@@ -550,7 +545,7 @@ gdf_error decompress_page_data(
  * @param[in] chunks List of column chunk descriptors
  * @param[in] pages List of page information
  * @param[in] chunk_map Mapping between column chunk and gdf_column
- * @param[in] Total number of rows to output
+ * @param[in] total_rows Total number of rows to output
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
@@ -576,19 +571,15 @@ gdf_error decode_page_data(
 
   // Build index for string dictionaries since they can't be indexed
   // directly due to variable-sized elements
-  parquet::gpu::nvstrdesc_s *str_dict_index = nullptr;
-  device_ptr<void> str_dict_index_ptr;
+  rmm::device_vector<parquet::gpu::nvstrdesc_s> str_dict_index;
   if (total_str_dict_indexes > 0) {
-    RMM_TRY(RMM_ALLOC(
-        &str_dict_index,
-        total_str_dict_indexes * sizeof(parquet::gpu::nvstrdesc_s), 0));
-    str_dict_index_ptr = device_ptr<void>(str_dict_index);
+    str_dict_index.resize(total_str_dict_indexes);
   }
 
   // Update chunks with pointers to column data
   for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
     if (is_dict_chunk(chunks[c])) {
-      chunks[c].str_dict_index = str_dict_index + str_ofs;
+      chunks[c].str_dict_index = str_dict_index.data().get() + str_ofs;
       str_ofs += pages[page_count].num_values;
     }
     chunks[c].valid_map_base = (uint32_t *)chunk_map[c]->valid;
@@ -602,6 +593,21 @@ gdf_error decode_page_data(
   }
   CUDA_TRY(DecodePageData(pages.device_ptr(), pages.size(), chunks.device_ptr(),
                           chunks.size(), total_rows));
+  CUDA_TRY(cudaMemcpyAsync(pages.host_ptr(), pages.device_ptr(),
+                           pages.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaStreamSynchronize(0));
+
+  LOG_PRINTF("[+] Page Data Information\n");
+  for (size_t i = 0; i < pages.size(); i++) {
+    if (pages[i].num_rows > 0) {
+      LOG_PRINTF(" %2zd: valid_count=%d/%d\n", i, pages[i].valid_count,
+                 pages[i].num_rows);
+      const size_t c = pages[i].chunk_idx;
+      if (c < chunks.size()) {
+        chunk_map[c]->null_count += pages[i].num_rows - pages[i].valid_count;
+      }
+    }
+  }
 
   return GDF_SUCCESS;
 }
@@ -627,8 +633,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   // Init schema and metadata
   ParquetMetadata md;
   GDF_TRY(md.init(raw, raw_size));
-  GDF_REQUIRE(md.get_num_rowgroups() != 0, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(md.get_num_columns() != 0, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(md.get_num_rowgroups() > 0, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(md.get_num_columns() > 0, GDF_DATASET_EMPTY);
 
   // Obtain the index column if available
   std::string index_col_name = md.get_index_column_name();
@@ -639,10 +645,9 @@ gdf_error read_parquet(pq_read_arg *args) {
   if (args->use_cols) {
     std::vector<std::string> use_names(args->use_cols,
                                        args->use_cols + args->use_cols_len);
-    if (md.get_total_rows() != 0) {
+    if (md.get_total_rows() > 0) {
       use_names.push_back(index_col_name);
     }
-
     size_t index = 0;
     for (const auto &use_name : use_names) {
       for (const auto name : md.get_column_names()) {
@@ -654,25 +659,27 @@ gdf_error read_parquet(pq_read_arg *args) {
     }
   } else {
     for (const auto& name : md.get_column_names()) {
-      if (md.get_total_rows() != 0 || name != index_col_name) {
+      if (md.get_total_rows() > 0 || name != index_col_name) {
         col_names.emplace_back(col_names.size(), name);
       }
     }
   }
-  if (col_names.empty()) {
-    std::cout << "No matching columns found." << std::endl;
-    return GDF_SUCCESS;
-  }
+  GDF_REQUIRE(not col_names.empty(), GDF_INVALID_API_CALL);
   num_columns = col_names.size();
 
   // Initialize gdf_columns
-  std::cout << "Selected Columns = " << num_columns << std::endl;
+  LOG_PRINTF("[+] Selected columns\n");
   for (const auto &name : col_names) {
     auto &col_schema = md.schema[md.row_groups[0].columns[name.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type);
 
     columns.emplace_back(static_cast<gdf_size_type>(md.get_total_rows()),
                          dtype_info.first, dtype_info.second, name.second);
+
+    LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
+               columns.size() - 1, columns.back()->col_name,
+               (size_t)columns.back()->size, columns.back()->dtype,
+               (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
 
     if (name.second == index_col_name) {
       index_col = columns.size() - 1;
@@ -687,7 +694,7 @@ gdf_error read_parquet(pq_read_arg *args) {
 
   // Initialize column chunk info
   size_t total_decompressed_size = 0;
-  std::cout << "Selected Rowgroups = " << md.get_num_rowgroups() << std::endl;
+  LOG_PRINTF("[+] Column Chunk Description\n");
   for (const auto &rowgroup : md.row_groups) {
     for (const auto &name : col_names) {
       auto &col_meta = rowgroup.columns[name.first].meta_data;
@@ -730,6 +737,25 @@ gdf_error read_parquet(pq_read_arg *args) {
           required_bits(col_schema.max_definition_level),
           required_bits(col_schema.max_repetition_level), col_meta.codec));
 
+      LOG_PRINTF(
+          " %2d: %s start_row=%d, num_rows=%ld, codec=%d, "
+          "num_values=%ld total_compressed_size=%ld "
+          "total_uncompressed_size=%ld\n",
+          name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
+          col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
+          col_meta.total_uncompressed_size);
+      LOG_PRINTF(
+          "     schema_idx=%d, type=%d, type_width=%d, max_def_level=%d, "
+          "max_rep_level=%d\n",
+          rowgroup.columns[name.first].schema_idx, col_schema.type, type_width,
+          col_schema.max_definition_level, col_schema.max_repetition_level);
+      LOG_PRINTF(
+          "     data_page_offset=%zd, index_page_offset=%zd, "
+          "dict_page_offset=%zd\n",
+          (size_t)col_meta.data_page_offset,
+          (size_t)col_meta.index_page_offset,
+          (size_t)col_meta.dictionary_page_offset);
+
       // Map each column chunk to its output gdf_column
       chunk_map[chunks.size() - 1] = gdf_column.get();
 
@@ -757,7 +783,7 @@ gdf_error read_parquet(pq_read_arg *args) {
     }
     GDF_TRY(decode_page_data(chunks, pages, chunk_map, num_rows));
   } else {
-    // Expect to return allocated, but empty/invalid column data
+    // Columns are still expected to be allocated for an empty dataframe
     for (auto &column : columns) {
       GDF_TRY(column.allocate());
     }

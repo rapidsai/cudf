@@ -230,7 +230,7 @@ add_library(cudf SHARED
             src/io/csv/csv_reader.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader.cpp
+            src/io/parquet/parquet_reader.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
