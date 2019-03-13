@@ -32,7 +32,7 @@ elif [ "$RELEASE_TYPE" == "minor" ]; then
   NEXT_SHORT_TAG="${CURRENT_MAJOR}.${NEXT_MINOR}"
 elif [ "$RELEASE_TYPE" == "patch" ]; then
   NEXT_FULL_TAG="${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
-  NEXT_SHORT_TAG="${CURRENT_MAJOR}.${NEXT_MINOR}"
+  NEXT_SHORT_TAG="${CURRENT_MAJOR}.${CURRENT_MINOR}"
 else
   echo "Incorrect release type; use 'major', 'minor', or 'patch' as an argument"
   exit 1
