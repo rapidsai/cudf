@@ -140,16 +140,11 @@ def test_from_dlpack_cupy_2d(data_2d):
     expectation = data_size_expectation_builder(data_2d)
 
     with expectation:
-        cupy_array = cupy.array(data_2d)
+        cupy_array = cupy.array(data_2d, order='F')
         cupy_host_array = cupy_array.get()
         dlt = cupy_array.toDlpack()
 
         gdf = cudf.from_dlpack(dlt)
-        print(gdf.to_pandas())
-        if isinstance(gdf, cudf.DataFrame):
-            for col in gdf.columns:
-                if gdf[col].dtype == np.dtype('float64'):
-                    print(cudf.utils.cudautils.mask_from_devary(gdf[col].data.mem).copy_to_host())
         cudf_host_array = np.array(gdf.to_pandas())
 
         assert_eq(cudf_host_array, cupy_host_array)
