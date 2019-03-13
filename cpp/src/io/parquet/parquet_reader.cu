@@ -45,7 +45,7 @@
     }                                                                 \
   }
 
-#if 0
+#if 1
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
@@ -644,8 +644,8 @@ gdf_error read_parquet(pq_read_arg *args) {
     if (md.get_total_rows() > 0) {
       use_names.push_back(index_col_name);
     }
-    size_t index = 0;
     for (const auto &use_name : use_names) {
+      size_t index = 0;
       for (const auto name : md.get_column_names()) {
         if (name == use_name) {
           col_names.emplace_back(index, name);
@@ -664,7 +664,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   num_columns = col_names.size();
 
   // Initialize gdf_columns
-  LOG_PRINTF("[+] Selected columns\n");
+  LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &name : col_names) {
     auto &col_schema = md.schema[md.row_groups[0].columns[name.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type);
@@ -692,10 +692,11 @@ gdf_error read_parquet(pq_read_arg *args) {
   size_t total_decompressed_size = 0;
   LOG_PRINTF("[+] Column Chunk Description\n");
   for (const auto &rowgroup : md.row_groups) {
-    for (const auto &name : col_names) {
+    for (size_t i = 0; i < col_names.size(); i++) {
+      auto name = col_names[i];
       auto &col_meta = rowgroup.columns[name.first].meta_data;
       auto &col_schema = md.schema[rowgroup.columns[name.first].schema_idx];
-      auto &gdf_column = columns[name.first];
+      auto &gdf_column = columns[i];
 
       // Spec requires each row group to contain exactly one chunk for every
       // column. If there are too many or too few, continue with best effort
