@@ -29,7 +29,7 @@ def data_size_expectation_builder(data):
     if data.size > 0:
         return does_not_raise()
     else:
-        return pytest.raises(Exception)
+        return pytest.raises((ValueError, IndexError))
 
 
 @pytest.fixture(params=params_1d)

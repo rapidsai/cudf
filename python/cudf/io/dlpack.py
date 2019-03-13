@@ -8,6 +8,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.dataframe import columnops
 from cudf.utils import ioutils
 from cudf.bindings import dlpack as cpp_dlpack
+from cudf.bindings.GDFError import GDFError
 
 
 def from_dlpack(pycapsule_obj):
@@ -31,7 +32,12 @@ def from_dlpack(pycapsule_obj):
     A cuDF DataFrame or Series depending on if the input DLPack tensor is 1D
     or 2D.
     """
-    res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
+    try:
+        res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
+    except GDFError:
+        raise ValueError(
+            "Cannot create a cuDF Object from a DLPack tensor of 0 size"
+        )
     cols = []
     for idx in range(len(valids)):
         mask = None
@@ -56,6 +62,9 @@ def from_dlpack(pycapsule_obj):
 @ioutils.doc_to_dlpack()
 def to_dlpack(cudf_obj):
     """{docstring}"""
+    if len(cudf_obj) == 0:
+        raise ValueError("Cannot create DLPack tensor of 0 size")
+
     if isinstance(cudf_obj, DataFrame):
         gdf_cols = [col[1]._column for col in cudf_obj._cols.items()]
     elif isinstance(cudf_obj, Series):
