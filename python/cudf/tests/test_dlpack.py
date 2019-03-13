@@ -31,16 +31,17 @@ def data_1d(request):
 
 @pytest.fixture(params=params_2d)
 def data_2d(request):
-    return np.array([[request.param[2]] * request.param[0]] *
-                    request.param[1])
+    a = np.ascontiguousarray(np.array([[request.param[2]] * request.param[0]] *
+                             request.param[1]))
+    return a
 
+def test_to_dlpack_dataframe(data_2d):
+    if (data_2d.size > 0):
+        gdf = cudf.DataFrame.from_records(data_2d)
+        dlt = gdf.to_dlpack()
 
-def test_to_dlpack_dataframe(ncols, data_2d):
-    gdf = cudf.DataFrame.from_records(data_2d)
-    dlt = gdf.to_dlpack()
-
-    # PyCapsules are a C-API thing so couldn't come up with a better way
-    assert str(type(dlt)) == "<class 'PyCapsule'>"
+        # PyCapsules are a C-API thing so couldn't come up with a better way
+        assert str(type(dlt)) == "<class 'PyCapsule'>"
 
 
 def test_to_dlpack_series(data_1d):
