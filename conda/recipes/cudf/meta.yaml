@@ -31,7 +31,7 @@ requirements:
     - libcudf={{ version }}
     - libcudf_cffi={{ version }}
     - numba>=0.40
-    - nvstrings=0.3.0dev0
+    - nvstrings
   run:
     - python x.x
     - cython>=0.29,<0.30
@@ -40,7 +40,7 @@ requirements:
     - libcudf_cffi={{ version }}
     - pandas>=0.23.4
     - numba>=0.40
-    - nvstrings=0.3.0dev0
+    - nvstrings
 
 test:
   requires:
