@@ -231,8 +231,7 @@ struct CastFrom_Dispatcher
 
 gdf_error gdf_cast(gdf_column *input, gdf_column *output) {
     if (input->valid && output->valid) {
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + num_chars_bitmask, output->valid);
+        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);
     }
 
     return cudf::type_dispatcher(input->dtype,

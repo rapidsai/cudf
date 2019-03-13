@@ -152,8 +152,7 @@ gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_o
         GDF_REQUIRE((output->valid != nullptr), GDF_VALIDITY_MISSING)
 
         // Validity mask transfer
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( input->size );
-        CUDA_TRY( cudaMemcpy(output->valid, input->valid, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
+        CUDA_TRY( cudaMemcpy(output->valid, input->valid, gdf_num_bitmask_elements( input->size ), cudaMemcpyDeviceToDevice) );
         output->null_count = input->null_count;
     }
     
