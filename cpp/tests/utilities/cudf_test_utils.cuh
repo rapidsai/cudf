@@ -31,6 +31,56 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include <bitmask/legacy_bitmask.hpp>
+
+  /**
+   * @Synopsis  Counts the number of valid bits for the specified number of rows
+   * in the host vector of gdf_valid_type masks
+   *
+   * @Param masks The host vector of masks whose bits will be counted
+   * @Param num_rows The number of bits to count
+   *
+   * @Returns  The number of valid bits in [0, num_rows) in the host vector of
+   * masks
+   **/
+  inline gdf_size_type count_valid_bits_host(
+      std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows) {
+    if ((0 == num_rows) || (0 == masks.size())) {
+      return 0;
+    }
+
+    gdf_size_type count{0};
+
+    // Count the valid bits for all masks except the last one
+    for (gdf_size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
+      gdf_valid_type current_mask = masks[i];
+
+      while (current_mask > 0) {
+        current_mask &= (current_mask - 1);
+        count++;
+      }
+    }
+
+    // Only count the bits in the last mask that correspond to rows
+    int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
+    if (num_rows_last_mask == 0) {
+      num_rows_last_mask = GDF_VALID_BITSIZE;
+    }
+
+    // Mask off only the bits that correspond to rows
+    gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
+    gdf_valid_type last_mask = masks[gdf_num_bitmask_elements(num_rows) - 1] & rows_mask;
+
+    while (last_mask > 0) {
+      last_mask &= (last_mask - 1);
+      count++;
+    }
+
+    std::cout << "rows: " << num_rows << " null count: " << count << std::endl;
+
+    return count;
+
+  }
 
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
@@ -98,19 +148,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   {
     RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type), 0);
     cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
-
-    // Count the number of null bits
-    // count in all but last element in case it is not full
-    the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
-      [](gdf_size_type s, gdf_valid_type x) { 
-        return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
-      });
-    // Now count the bits in the last mask
-    size_t unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
-    if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
-    auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
-    last_mask = (last_mask << unused_bits) >> unused_bits;
-    the_column->null_count += last_mask.count();
+    the_column->null_count = (host_vector.size() - count_valid_bits_host(valid_vector, host_vector.size()));
   }
   else
   {
@@ -127,7 +165,7 @@ template <typename T, typename valid_initializer_t>
 gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_initializer_t bit_initializer)
 {
   const size_t num_rows = data.size();
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = gdf_valid_allocation_size(num_rows);
 
   // Initialize the valid mask for this column using the initializer
   std::vector<gdf_valid_type> valid_masks(num_masks,0);
@@ -241,58 +279,12 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
     return false;  // if one is null but not both
 
   if (!thrust::equal(thrust::cuda::par, left->valid,
-                     left->valid + gdf_get_num_chars_bitmask(left->size),
+                     left->valid + gdf_num_bitmask_elements(left->size),
                      right->valid))
     return false;
 
   return true;
   }
 
-  /**
-   * @Synopsis  Counts the number of valid bits for the specified number of rows
-   * in the host vector of gdf_valid_type masks
-   *
-   * @Param masks The host vector of masks whose bits will be counted
-   * @Param num_rows The number of bits to count
-   *
-   * @Returns  The number of valid bits in [0, num_rows) in the host vector of
-   * masks
-   **/
-  inline gdf_size_type count_valid_bits_host(
-      std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows) {
-    if ((0 == num_rows) || (0 == masks.size())) {
-      return 0;
-    }
-
-    gdf_size_type count{0};
-
-    // Count the valid bits for all masks except the last one
-    for (size_t i = 0; i < (masks.size() - 1); ++i) {
-      gdf_valid_type current_mask = masks[i];
-
-      while (current_mask > 0) {
-        current_mask &= (current_mask - 1);
-        count++;
-      }
-    }
-
-    // Only count the bits in the last mask that correspond to rows
-    int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
-    if (num_rows_last_mask == 0) {
-      num_rows_last_mask = GDF_VALID_BITSIZE;
-    }
-
-    // Mask off only the bits that correspond to rows
-    gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
-    gdf_valid_type last_mask = masks.back() & rows_mask;
-
-    while (last_mask > 0) {
-      last_mask &= (last_mask - 1);
-      count++;
-    }
-
-    return count;
-
-  }
 
 #endif

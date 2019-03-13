@@ -91,15 +91,21 @@ void test_column(cudf::test::column_wrapper<T> const& col,
         expected_bitmask);
     EXPECT_TRUE(thrust::equal(
         rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
-        expected_device_bitmask.end() - 1, underlying_column->valid));
+        expected_device_bitmask.begin() +
+            gdf_num_bitmask_elements(expected_values.size()),
+        underlying_column->valid));
 
     // The last element in the bitmask has to be handled as a special case
-    EXPECT_TRUE(std::equal(expected_bitmask.begin(), expected_bitmask.end() - 1,
+    EXPECT_TRUE(std::equal(expected_bitmask.begin(),
+                           expected_bitmask.begin() +
+                               gdf_num_bitmask_elements(expected_values.size()),
                            actual_bitmask.begin()));
 
     // Only check the bits in the last mask that correspond to rows
-    std::bitset<GDF_VALID_BITSIZE> expected_last_mask{expected_bitmask.back()};
-    std::bitset<GDF_VALID_BITSIZE> actual_last_mask{actual_bitmask.back()};
+    std::bitset<GDF_VALID_BITSIZE> expected_last_mask =
+        expected_bitmask[gdf_num_bitmask_elements(expected_values.size()) - 1];
+    std::bitset<GDF_VALID_BITSIZE> actual_last_mask =
+        actual_bitmask[gdf_num_bitmask_elements(expected_values.size()) - 1];
     gdf_size_type valid_bits_last_mask =
         expected_values.size() % GDF_VALID_BITSIZE;
     if (0 == valid_bits_last_mask) {
@@ -126,7 +132,7 @@ TYPED_TEST(ColumnWrapperTest, SizeConstructorWithBitmask) {
   gdf_size_type const size{this->random_size()};
   cudf::test::column_wrapper<TypeParam> const col(size, true);
   std::vector<TypeParam> expected_values(size);
-  std::vector<gdf_valid_type> expected_bitmask(gdf_get_num_chars_bitmask(size));
+  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size));
   test_column(col, expected_values, expected_bitmask);
 }
 
@@ -138,7 +144,7 @@ TYPED_TEST(ColumnWrapperTest, ValueBitmaskVectorConstructor) {
   std::generate(expected_values.begin(), expected_values.end(),
                 [this]() { return TypeParam(this->generator()); });
 
-  std::vector<gdf_valid_type> expected_bitmask(gdf_get_num_chars_bitmask(size),
+  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size),
                                                0xFF);
 
   cudf::test::column_wrapper<TypeParam> const col(expected_values,
@@ -170,7 +176,7 @@ TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
   std::vector<TypeParam> expected_values(size);
   std::iota(expected_values.begin(), expected_values.end(),
             static_cast<TypeParam>(0));
-  std::vector<gdf_valid_type> expected_bitmask(gdf_get_num_chars_bitmask(size),
+  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size),
                                                0xff);
   test_column(col, expected_values, expected_bitmask);
 }
@@ -184,7 +190,7 @@ TYPED_TEST(ColumnWrapperTest, ValueVectorBitmaskInitConstructor) {
                 [this]() { return TypeParam(this->generator()); });
 
   // Every even bit is null
-  std::vector<gdf_valid_type> expected_bitmask(gdf_get_num_chars_bitmask(size),
+  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size),
                                                0xAA);
 
   auto even_bits_null = [](auto row) { return (row % 2); };
@@ -225,10 +231,9 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
   EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0), source_device_data,
                             source_device_data + size, copy_device_data));
 
-  EXPECT_TRUE(
-      thrust::equal(rmm::exec_policy()->on(0), source_column->valid,
-                    source_column->valid + gdf_get_num_chars_bitmask(size),
-                    copy_column->valid));
+  EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0), source_column->valid,
+                            source_column->valid + gdf_num_bitmask_elements(size),
+                            copy_column->valid));
 
   // Ensure to_host data is equal
   std::vector<TypeParam> source_data;

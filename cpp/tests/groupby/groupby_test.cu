@@ -35,6 +35,7 @@
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters.cuh"
 #include "groupby_test_helpers.cuh"
+#include <bitmask/legacy_bitmask.hpp>
 
 // A new instance of this class will be created for each *TEST(GroupTest, ...)
 // Put all repeated setup and validation stuff here
@@ -128,7 +129,7 @@ struct GroupTest : public GdfTest {
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    int valid_size = gdf_valid_allocation_size(host_vector.size());
     EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
