@@ -149,6 +149,7 @@
 - PR #1129 Fix join performance with index parameter from using numpy array
 - PR #1145 Issue with .agg call on multi-column dataframes
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
+- PR #XXXX Fix iloc performance regression
 
 
 # cuDF 0.5.1 (05 Feb 2019)
