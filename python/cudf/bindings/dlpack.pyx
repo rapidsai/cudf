@@ -25,6 +25,8 @@ import warnings
 cpdef from_dlpack(dlpack_capsule):
     """
     Converts a DLPack Tensor PyCapsule into a list of cudf Column objects.
+
+    DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
     warnings.warn("WARNING: cuDF from_dlpack() assumes column-major (Fortran"
                   " order) input. If the input tensor is row-major, transpose"
@@ -87,6 +89,8 @@ cpdef from_dlpack(dlpack_capsule):
 cpdef to_dlpack(in_cols):
     """
     Converts a a list of cudf Column objects into a DLPack Tensor PyCapsule.
+
+    DLPack Tensor PyCapsule will have the name "dltensor".
     """
 
     warnings.warn("WARNING: cuDF to_dlpack() produces column-major (Fortran "
