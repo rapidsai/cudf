@@ -117,6 +117,7 @@
 - PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1174: Fix release script typo
 
 
 # cuDF 0.5.1 (05 Feb 2019)
@@ -124,7 +125,6 @@
 ## Bug Fixes
 
 - PR #842 Avoid using numpy via cimport to prevent ABI issues in Cython compilation
-- PR #1174: Fix release script typo
 
 
 # cuDF 0.5.0 (28 Jan 2019)
