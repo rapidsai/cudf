@@ -1374,8 +1374,8 @@ class DataFrame(object):
         if left_on:
             left_on = [left_on] if isinstance(left_on, str) else list(left_on)
         if right_on:
-            right_on = [right_on] if isinstance(right_on, str) else list(right_on)
-
+            right_on = ([right_on] if isinstance(right_on, str)
+                        else list(right_on))
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
