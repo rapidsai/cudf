@@ -31,7 +31,7 @@ requirements:
     - libcudf={{ version }}
     - libcudf_cffi={{ version }}
     - numba>=0.40
-    - nvstrings
+    - nvstrings=0.3.0dev0
   run:
     - python x.x
     - cython>=0.29,<0.30
@@ -40,11 +40,11 @@ requirements:
     - libcudf_cffi={{ version }}
     - pandas>=0.23.4
     - numba>=0.40
-    - nvstrings
+    - nvstrings=0.3.0dev0
 
 test:
   requires:
-    - distributed>=1.22.1
+    - distributed>=1.23.0
     - pytest
   imports:
     - cudf
