@@ -284,6 +284,13 @@ class DataFrame(object):
         """
         return self._size
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__' and 'sqrt' == ufunc.__name__:
+            from cudf import sqrt
+            return sqrt(self)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -416,7 +423,10 @@ class DataFrame(object):
     def _call_op(self, other, internal_fn, fn):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if internal_fn == '_unaryop':
+            for col in self._cols:
+                result[col] = self._cols[col]._unaryop(fn)
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], internal_fn)(
                         other[k],
@@ -1379,16 +1389,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'rhs':
                     cats = rcats
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1398,16 +1408,16 @@ class DataFrame(object):
                 rcats = rhs[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                 elif how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat.set_categories(cats)
+                    lhs[name] = (lhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat.set_categories(cats)
+                    rhs[name] = (rhs[name].cat._set_categories(cats)
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
@@ -1496,7 +1506,7 @@ class DataFrame(object):
 
         if left_index and right_index:
             df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.values])
+            df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on])))
@@ -1598,23 +1608,23 @@ class DataFrame(object):
             if how == 'left':
                 cats = lcats
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how == 'right':
                 cats = rcats
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
             elif how in ['inner', 'outer']:
                 cats = sorted(set(lcats) | set(rcats))
 
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
                 rhs[idx_col_name] = (rhs[idx_col_name].cat
-                                                      .set_categories(cats)
+                                                      ._set_categories(cats)
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
@@ -1956,6 +1966,52 @@ class DataFrame(object):
 
         return outdf
 
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> gdf.fillna(4).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> gdf.fillna({'a': 3, 'b': 4}).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
+        if inplace:
+            outdf = {}  # this dict will just hold Nones
+        else:
+            outdf = self.copy()
+
+        if not is_dict_like(value):
+            value = dict.fromkeys(self.columns, value)
+
+        for k in value:
+            outdf[k] = self[k].fillna(value[k], method=method, axis=axis,
+                                      inplace=inplace, limit=limit)
+
+        if not inplace:
+            return outdf
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
@@ -2140,7 +2196,7 @@ class DataFrame(object):
 
         Parameters
         ----------
-        data : numpy structured dtype or recarray
+        data : numpy structured dtype or recarray of ndim=2
         index : str
             The name of the index column in *data*.
             If None, the default index is used.
@@ -2151,12 +2207,31 @@ class DataFrame(object):
         -------
         DataFrame
         """
-        names = data.dtype.names if columns is None else columns
+        if data.ndim != 1 and data.ndim != 2:
+            raise ValueError("records dimension expected 1 or 2 but found {!r}"
+                             .format(data.ndim))
+
+        num_cols = len(data[0])
+        if columns is None and data.dtype.names is None:
+            names = [i for i in range(num_cols)]
+
+        elif data.dtype.names is not None:
+            names = data.dtype.names
+
+        else:
+            if len(columns) != num_cols:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(num_cols, len(columns)))
+            names = columns
+
         df = DataFrame()
-        for k in names:
-            # FIXME: unnecessary copy
-            df[k] = Series(np.ascontiguousarray(data[k]),
-                           nan_as_null=nan_as_null)
+        if data.ndim == 2:
+            for i, k in enumerate(names):
+                df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+        elif data.ndim == 1:
+            for k in names:
+                df[k] = Series(data[k], nan_as_null=nan_as_null)
+
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))
@@ -2189,12 +2264,12 @@ class DataFrame(object):
         else:
             if len(columns) != data.shape[1]:
                 msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.ndim, len(columns)))
+                raise ValueError(msg.format(data.shape[1], len(columns)))
             names = columns
 
         if index is not None and len(index) != data.shape[0]:
             msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.ndim, len(columns)))
+            raise ValueError(msg.format(data.shape[0], len(index)))
 
         df = DataFrame()
         data = data.transpose()  # to mimic the pandas behaviour
@@ -2308,6 +2383,12 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
 
 
 class Loc(object):

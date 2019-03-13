@@ -9,11 +9,12 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
 from cudf import _gdf
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 
 
@@ -55,7 +56,7 @@ class Column(object):
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
             new_cats = tuple(set([val for o in objs for val in o]))
-            objs = [o.cat().set_categories(new_cats) for o in objs]
+            objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
         for o in objs:
@@ -403,6 +404,9 @@ class Column(object):
                 return self.replace(data=newbuffer)
         elif isinstance(arg, (list, np.ndarray)):
             arg = np.array(arg)
+            arg = rmm.to_device(arg)
+
+        if isinstance(arg, DeviceNDArray):
             return self.take(arg)
         else:
             raise NotImplementedError(type(arg))
@@ -564,3 +568,9 @@ class Column(object):
         device array
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)

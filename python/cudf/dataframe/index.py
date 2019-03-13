@@ -6,11 +6,12 @@ import pandas as pd
 import numpy as np
 import pickle
 from copy import deepcopy, copy
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.column import Column
@@ -85,6 +86,12 @@ class Index(object):
     def to_arrow(self):
         return self.as_column().to_arrow()
 
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
+
     @property
     def gpu_values(self):
         return self.as_column().to_gpu_array()
@@ -143,6 +150,12 @@ class Index(object):
 
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
+
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
 
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
@@ -281,6 +294,9 @@ class RangeIndex(Index):
             return index
         elif isinstance(index, (list, np.ndarray)):
             index = np.array(index)
+            index = rmm.to_device(index)
+
+        if isinstance(index, (DeviceNDArray)):
             return self.take(index)
         else:
             raise ValueError(index)
