@@ -62,6 +62,10 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
 
+# Temporary testing - Try to fix openssl version issues
+logger "conda install -c conda-forge openssl=1.0.2r"
+conda install -y -c conda-forge openssl=1.0.2r
+
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 

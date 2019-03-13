@@ -42,7 +42,7 @@ conda list
 
 # Temporarily install feather for testing
 logger "conda install -c rapidsai-nightly nvstrings=0.3.0dev0"
-conda install -c rapidsai -c rapidsai-nightly -c conda-forge -y openssl nvstrings=0.3.0dev0
+conda install -c rapidsai -c rapidsai-nightly -c conda-forge -y openssl=1.0.2r nvstrings=0.3.0dev0
 
 logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
