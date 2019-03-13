@@ -4,6 +4,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 
 template<typename T, typename Tout, typename F>

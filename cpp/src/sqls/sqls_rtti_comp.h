@@ -26,6 +26,7 @@
 
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include "bitmask/legacy_bitmask.hpp"
 
 template<typename IndexT>
 struct LesserRTTI
