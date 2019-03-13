@@ -41,7 +41,7 @@ def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
     np.testing.assert_array_max_ulp(expect, got, maxulp=ulp)
 
 
-def cast_op_test(dtype, to_dtype, test_fn, nelem=128):
+def cast_op_test(dtype, to_dtype, nelem=128):
     h_data = gen_rand(dtype, nelem).astype(dtype)
     d_data = rmm.to_device(h_data)
     d_result = rmm.device_array(d_data.size, dtype=to_dtype)
@@ -60,7 +60,7 @@ def cast_op_test(dtype, to_dtype, test_fn, nelem=128):
                            nelem, get_dtype(to_dtype))
 
     expect = h_data.astype(to_dtype)
-    test_fn(col_data, col_result)
+    libgdf.gdf_cast(col_data, col_result)
 
     got = d_result.copy_to_host()
 
@@ -188,16 +188,6 @@ def test_floor(dtype, ulp):
 
 # casting
 
-def _select_cast_fn(to_dtype):
-    return {
-        np.float32: libgdf.gdf_cast_generic_to_f32,
-        np.float64: libgdf.gdf_cast_generic_to_f64,
-        np.int8: libgdf.gdf_cast_generic_to_i8,
-        np.int32: libgdf.gdf_cast_generic_to_i32,
-        np.int64: libgdf.gdf_cast_generic_to_i64,
-    }[to_dtype]
-
-
 _cast_dtypes = [
     np.float64,
     np.float32,
@@ -211,7 +201,7 @@ _param_cast_pairs = list(itertools.product(_cast_dtypes, _cast_dtypes))
 
 @pytest.mark.parametrize('dtype,to_dtype', _param_cast_pairs)
 def test_cast(dtype, to_dtype):
-    cast_op_test(dtype, to_dtype, _select_cast_fn(to_dtype))
+    cast_op_test(dtype, to_dtype)
 
 
 if __name__ == '__main__':

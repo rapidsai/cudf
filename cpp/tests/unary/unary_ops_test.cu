@@ -156,7 +156,7 @@ TEST_F(gdf_cast_test, usage_example) {
 
 	gdf_error gdfError;
 
-	// example for gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output)
+	// example for gdf_cast generic to f32
 	{
 		// Output column
 		rmm::device_vector<float> outDataDev(colSize);
@@ -172,7 +172,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<float> results(colSize);
 
 		// from int32
-		gdfError = gdf_cast_generic_to_f32(&inputInt32Col, &outputFloat32Col);
+		gdfError = gdf_cast(&inputInt32Col, &outputFloat32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -183,7 +183,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382.0 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output);
+	// example for gdf_cast generic to i32
 	{
 		// Output column
 		rmm::device_vector<int32_t> outDataDev(colSize);
@@ -199,7 +199,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int32_t> results(colSize);
 
 		// from float32
-		gdfError = gdf_cast_generic_to_i32(&inputFloat32Col, &outputInt32Col);
+		gdfError = gdf_cast(&inputFloat32Col, &outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -210,7 +210,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output) - upcast
+	// example for gdf_cast generic to i64 - upcast
 	{
 		// Output column
 		rmm::device_vector<int64_t> outDataDev(colSize);
@@ -226,7 +226,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int64_t> results(colSize);
 
 		// from int32
-		gdfError = gdf_cast_generic_to_i64(&inputInt32Col, &outputInt64Col);
+		gdfError = gdf_cast(&inputInt32Col, &outputInt64Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -237,7 +237,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output) - downcast
+	// example for gdf_cast generic to i32 - downcast
 	{
 		// Output column
 		rmm::device_vector<int32_t> outDataDev(colSize);
@@ -253,7 +253,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int32_t> results(colSize);
 
 		// from int64
-		gdfError = gdf_cast_generic_to_i32(&inputInt64Col, &outputInt32Col);
+		gdfError = gdf_cast(&inputInt64Col, &outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -264,7 +264,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output)
+	// example for gdf_cast generic to i32
 	{
 		// Output column
 		rmm::device_vector<int32_t> outDataDev(colSize);
@@ -280,7 +280,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int32_t> results(colSize);
 
 		// from date32
-		gdfError = gdf_cast_generic_to_i32(&inputDate32Col, &outputInt32Col);
+		gdfError = gdf_cast(&inputDate32Col, &outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -291,7 +291,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output)
+	// example for gdf_cast generic to date32
 	{
 		// Output column
 		rmm::device_vector<int32_t> outDataDev(colSize);
@@ -307,7 +307,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int32_t> results(colSize);
 
 		// from int32
-		gdfError = gdf_cast_generic_to_date32(&inputInt32Col, &outputDate32Col);
+		gdfError = gdf_cast(&inputInt32Col, &outputDate32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -318,7 +318,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == 19382 );
 	}
 
-	// example for gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
+	// example for gdf_cast generic to timestamp
 	{
 		// Output column
 		rmm::device_vector<int64_t> outDataDev(colSize);
@@ -335,7 +335,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int64_t> results(colSize);
 
 		// from date64
-		gdfError = gdf_cast_generic_to_timestamp(&inputDate64Col, &outputTimestampMicroCol, TIME_UNIT_us);
+		gdfError = gdf_cast(&inputDate64Col, &outputTimestampMicroCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -346,7 +346,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		EXPECT_TRUE( results[2] == -1577923201000000 ); // '1919-12-31 23:59:59.000000'
 	}
 
-	// example for gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output)
+	// example for gdf_cast generic to date32
 	{
 		// Output column
 		rmm::device_vector<int32_t> outDataDev(colSize);
@@ -362,7 +362,7 @@ TEST_F(gdf_cast_test, usage_example) {
 		std::vector<int32_t> results(colSize);
 
 		// from timestamp in ms
-		gdfError = gdf_cast_generic_to_date32(&inputTimestampMilliCol, &outputDate32Col);
+		gdfError = gdf_cast(&inputTimestampMilliCol, &outputDate32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -464,7 +464,7 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());		\
 		outputCol.valid = nullptr;												\
 																				\
-		gdf_error gdfError = gdf_cast_##VFROM##_to_##VTO(&inputCol, &outputCol);\
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		std::vector<TTO> results(colSize);										\
@@ -546,9 +546,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
 		originalOutputCol.valid = nullptr;										\
 																				\
-		gdf_error gdfError = gdf_cast_##VFROM##_to_##VTO(&inputCol, &outputCol);\
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast_##VTO##_to_##VFROM(&outputCol, &originalOutputCol);	\
+		gdfError = gdf_cast(&outputCol, &originalOutputCol);					\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		std::vector<TFROM> results(colSize);									\
@@ -593,9 +593,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
 		originalOutputCol.valid = nullptr;										\
 																				\
-		gdf_error gdfError = gdf_cast_##VFROM##_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);\
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast_timestamp_to_##VFROM(&outputCol, &originalOutputCol);	\
+		gdfError = gdf_cast(&outputCol, &originalOutputCol);					\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		std::vector<TFROM> results(colSize);									\
@@ -663,7 +663,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = nullptr;
 
-		gdf_error gdfError = gdf_cast_f32_to_f64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 	}
 
@@ -695,7 +695,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_f32_to_f32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
 
@@ -732,7 +732,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_f32_to_f32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
 
@@ -797,7 +797,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_date32_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -906,7 +906,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_date64_to_date32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
@@ -969,7 +969,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_date32_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -1033,7 +1033,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol, TIME_UNIT_s);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1094,7 +1094,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
@@ -1155,7 +1155,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1216,7 +1216,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
@@ -1277,7 +1277,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ns);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1338,7 +1338,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
@@ -1399,7 +1399,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol, TIME_UNIT_us);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1460,7 +1460,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date32(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
@@ -1542,7 +1542,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast_date64_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1621,7 +1621,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -1682,7 +1682,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast_date64_to_timestamp(&inputCol, &outputCol, TIME_UNIT_s);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1743,7 +1743,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -1804,7 +1804,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast_date64_to_timestamp(&inputCol, &outputCol, TIME_UNIT_us);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1865,7 +1865,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -1926,7 +1926,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast_date64_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ns);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -1987,7 +1987,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 
-		gdf_error gdfError = gdf_cast_timestamp_to_date64(&inputCol, &outputCol);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
@@ -2104,7 +2104,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2216,7 +2216,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_s);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2328,7 +2328,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_us);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2440,7 +2440,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_s);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2552,7 +2552,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ns);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2664,7 +2664,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_s);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2776,7 +2776,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ns);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -2888,7 +2888,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_us);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -3000,7 +3000,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ns);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -3112,7 +3112,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -3224,7 +3224,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
@@ -3336,7 +3336,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
 		outputCol.dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol, TIME_UNIT_us);
+		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
 
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
