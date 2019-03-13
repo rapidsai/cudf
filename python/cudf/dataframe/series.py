@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
@@ -178,10 +178,30 @@ class Series(object):
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
 
-    def to_frame(self):
-        """ Convert Series into a DataFrame """
+    def to_frame(self, name=None):
+        """Convert Series into a DataFrame
+
+        Parameters
+        ----------
+        name : str, default None
+            Name to be used for the column
+
+        Returns
+        -------
+        DataFrame
+            cudf DataFrame
+        """
+
         from cudf import DataFrame
-        return DataFrame({self.name or 0: self}, index=self.index)
+
+        if name is not None:
+            col = name
+        elif self.name is None:
+            col = 0
+        else:
+            col = self.name
+
+        return DataFrame({col: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -1373,6 +1393,12 @@ class Series(object):
         """
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
 
     def rename(self, index=None, copy=True):
         """

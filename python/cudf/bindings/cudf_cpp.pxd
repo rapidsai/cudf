@@ -5,6 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cudf.bindings.dlpack cimport DLManagedTensor
+
 from libcpp cimport bool
 from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
@@ -625,6 +627,8 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
+    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
+
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
@@ -717,4 +721,13 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
-                                gdf_index_type* out_indices);
+                                gdf_index_type* out_indices)
+
+    cdef gdf_error gdf_from_dlpack(gdf_column** columns,
+                                   gdf_size_type *num_columns,
+                                   const DLManagedTensor * tensor) except +
+
+    cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
+                                 const gdf_column ** columns,
+                                 gdf_size_type num_columns) except +
+    

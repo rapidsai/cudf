@@ -15,7 +15,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 
 from cudf import _gdf
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 
 
@@ -597,3 +597,9 @@ class Column(object):
         device array
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)

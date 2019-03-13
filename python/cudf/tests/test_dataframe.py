@@ -1673,6 +1673,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     assert_eq(expect, got)
 
 
+@pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
     from numba import cuda
     import cudf
@@ -1895,10 +1896,16 @@ def test_reset_index(pdf, gdf, drop):
 def test_to_frame(pdf, gdf):
     assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    s = pd.Series([1, 2, 3])
-    g = gd.from_pandas(s)
+    name = "foo"
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    assert_eq(s, g)
+    name = False
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(gdf_new_name, pdf_new_name)
+    assert gdf_new_name.columns[0] is name
 
 
 def test_dataframe_empty_sort_index():
