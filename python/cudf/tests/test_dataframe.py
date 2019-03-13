@@ -1669,6 +1669,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     assert_eq(expect, got)
 
 
+@pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
     from numba import cuda
     import cudf
