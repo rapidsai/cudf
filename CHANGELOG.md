@@ -56,14 +56,15 @@
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
-- PR #1136 Removed `gdf_concat` 
-- PR #1153 Added function for getting the padded allocation size for valid bitmask 
+- PR #1136 Removed `gdf_concat`
+- PR #1153 Added function for getting the padded allocation size for valid bitmask
 - PR #1148 Add cudf.sqrt for dataframes and Series
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
+- PR #1168 to_frame for series accepts a name argument
 
 ## Improvements
 
-- PR #892 Add support for heterogeneous types in binary ops with JIT 
+- PR #892 Add support for heterogeneous types in binary ops with JIT
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #561 Add Doxygen style comments to Join CUDA functions
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
