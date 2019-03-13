@@ -1325,9 +1325,14 @@ class DataFrame(object):
         else:
             lsuffix, rsuffix = suffixes
 
-        if left_on and right_on:
+        if left_on and right_on and left_on != right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
+
+        if isinstance(left_on, (str, int)):
+            left_on = [left_on]
+        if isinstance(right_on, (str, int)):
+            right_on = [right_on]
 
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
@@ -1430,9 +1435,6 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = rhs[name].cat.categories
 
-        if right_on and left_on:
-            raise NotImplementedError("merge(left_on='x', right_on='y' not"
-                                      "supported by CUDF at this time.")
         if left_index and right_on:
             lhs[right_on] = lhs.index
             left_on = right_on
@@ -2471,6 +2473,9 @@ class Iloc(object):
             rows.append(arg)
 
         elif isinstance(arg, slice):
+            if arg == slice(None, None) or arg == slice(0, len(self._df)):
+                return self._df
+
             start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
             if sln > 0:
                 for idx in range(start, stop, step):

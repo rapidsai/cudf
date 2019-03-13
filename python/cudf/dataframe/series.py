@@ -1465,6 +1465,9 @@ class Iloc(object):
             rows.append(arg)
 
         elif isinstance(arg, slice):
+            if arg == slice(None, None) or arg == slice(0, len(self._df)):
+                return self._df
+
             start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
             if sln > 0:
                 for idx in range(start, stop, step):
