@@ -1473,7 +1473,11 @@ class Iloc(object):
         col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
                                        nan_as_null=True)
 
-        return Series(col_data, index=as_index(np.asarray(rows)))
+        return Series(
+            col_data,
+            index=as_index(np.asarray(rows)),
+            name=self._sr.name
+        )
 
     def __setitem__(self, key, value):
         # throws an exception while updating
