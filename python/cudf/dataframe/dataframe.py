@@ -1329,11 +1329,6 @@ class DataFrame(object):
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
 
-        if isinstance(left_on, (str, int)):
-            left_on = [left_on]
-        if isinstance(right_on, (str, int)):
-            right_on = [right_on]
-
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
         if on:
@@ -1376,6 +1371,11 @@ class DataFrame(object):
         # Essential parameters
         if on:
             on = [on] if isinstance(on, str) else list(on)
+        if left_on:
+            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
+        if right_on:
+            right_on = [right_on] if isinstance(right_on, str) else list(right_on)
+
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1436,10 +1436,10 @@ class DataFrame(object):
                 col_cats[f_n] = rhs[name].cat.categories
 
         if left_index and right_on:
-            lhs[right_on] = lhs.index
+            lhs[right_on[0]] = lhs.index
             left_on = right_on
         elif right_index and left_on:
-            rhs[left_on] = rhs.index
+            rhs[left_on[0]] = rhs.index
             right_on = left_on
 
         if on:
@@ -1511,14 +1511,14 @@ class DataFrame(object):
             df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
-                               index=RangeIndex(0, len(lhs[left_on])))
-            indexed = lhs[left_on][df[left_on]-1]
+                               index=RangeIndex(0, len(lhs[left_on[0]])))
+            indexed = lhs[left_on[0]][df[left_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
         elif left_index and right_on:
             new_index = Series(rhs.index,
-                               index=RangeIndex(0, len(rhs[right_on])))
-            indexed = rhs[right_on][df[right_on]-1]
+                               index=RangeIndex(0, len(rhs[right_on[0]])))
+            indexed = rhs[right_on[0]][df[right_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
 
