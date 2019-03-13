@@ -2461,7 +2461,21 @@ class Iloc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        return self._df[arg]
+        if isinstance(arg, (tuple)):
+            arg = list(arg)
+
+        if isinstance(arg, numbers.Integral):
+            rows = []
+            for col in self._df.columns:
+                rows.append(self._df[col][arg])
+            return Series(np.array(rows))
+        else:
+            df = DataFrame()
+            for col in self._df.columns:
+                df[col] = self._df[col][arg]
+            df.index = self._df.index[arg]
+
+            return df
 
     def __setitem__(self, key, value):
         # throws an exception while updating
