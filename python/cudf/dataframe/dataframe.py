@@ -2461,63 +2461,65 @@ class Iloc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._df.index)
+        # rows = []
+        # len_idx = len(self._df.index)
 
-        if isinstance(arg, tuple):
-            raise NotImplementedError('cudf columnar iloc not supported')
+        # if isinstance(arg, tuple):
+        #     raise NotImplementedError('cudf columnar iloc not supported')
 
-        elif isinstance(arg, int):
-            rows.append(arg)
+        # elif isinstance(arg, int):
+        #     rows.append(arg)
 
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
+        # elif isinstance(arg, slice):
+        #     start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
+        #     if sln > 0:
+        #         for idx in range(start, stop, step):
+        #             rows.append(idx)
 
-        elif isinstance(arg, utils.list_types_tuple):
-            for idx in arg:
-                rows.append(idx)
+        # elif isinstance(arg, utils.list_types_tuple):
+        #     for idx in arg:
+        #         rows.append(idx)
 
-        else:
-            raise TypeError(type(arg))
+        # else:
+        #     raise TypeError(type(arg))
 
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
+        # # To check whether all the indices are valid.
+        # for idx in rows:
+        #     if abs(idx) > len_idx or idx == len_idx:
+        #         raise IndexError("positional indexers are out-of-bounds")
 
-        # returns the series similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            ret_list = []
-            col_list = pd.Categorical(list(self._df.columns))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                    self._df[col][rows[0]].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in iloc"
-                    )
-                ret_list.append(self._df[col][rows[0]])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
+        # # returns the series similar to pandas
+        # if isinstance(arg, int) and len(rows) == 1:
+        #     ret_list = []
+        #     col_list = pd.Categorical(list(self._df.columns))
+        #     for col in col_list:
+        #         if pd.api.types.is_categorical_dtype(
+        #             self._df[col][rows[0]].dtype
+        #         ):
+        #             raise NotImplementedError(
+        #                 "categorical dtypes are not yet supported in iloc"
+        #             )
+        #         ret_list.append(self._df[col][rows[0]])
+        #     promoted_type = np.result_type(*[val.dtype for val in ret_list])
+        #     ret_list = np.array(ret_list, dtype=promoted_type)
+        #     return Series(ret_list,
+        #                   index=as_index(col_list))
 
-        df = DataFrame()
+        # df = DataFrame()
 
-        for col in self._df.columns:
-            sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)])
+        # for col in self._df.columns:
+        #     sr = self._df[col]
+        #     df.add_column(col, sr.iloc[tuple(rows)])
 
-        # 0-length rows can occur when when iloc[n=0]
-        # head(0)
-        if isinstance(arg, slice):
-            df.index = sr.index[arg]
-        else:
-            df.index = sr.index[rows]
-        return df
+        # # 0-length rows can occur when when iloc[n=0]
+        # # head(0)
+        # if isinstance(arg, slice):
+        #     df.index = sr.index[arg]
+        # else:
+        #     df.index = sr.index[rows]
+        # return df
+
+        return self._df[arg]
 
     def __setitem__(self, key, value):
         # throws an exception while updating
