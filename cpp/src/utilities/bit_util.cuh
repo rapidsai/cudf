@@ -24,7 +24,7 @@ static constexpr int ValidSize = 32;
 using ValidType = uint32_t;
 
 
-// Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
+// Instead of this function, use gdf_valid_allocation_size from legacy_bitmask.hpp
 //__host__ __device__ __forceinline__
 //  size_t
 //  valid_size(size_t column_length)

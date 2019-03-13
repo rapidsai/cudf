@@ -105,7 +105,7 @@ struct column_wrapper {
     std::vector<gdf_valid_type> host_bitmask;
 
     if (allocate_bitmask) {
-      host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
+      host_bitmask.resize(gdf_valid_allocation_size(column_size));
     }
 
     initialize_with_host_data(host_data, host_bitmask);
@@ -158,7 +158,7 @@ struct column_wrapper {
   template <typename BitInitializerType>
   column_wrapper(std::vector<ColumnType> const& host_data,
                  BitInitializerType bit_initializer) {
-    const size_t num_masks = gdf_get_num_chars_bitmask(host_data.size());
+    const size_t num_masks = gdf_valid_allocation_size(host_data.size());
     const gdf_size_type num_rows{static_cast<gdf_size_type>(host_data.size())};
 
     // Initialize the valid mask for this column using the initializer
@@ -194,7 +194,7 @@ struct column_wrapper {
   column_wrapper(gdf_size_type column_size,
                  ValueInitializerType value_initalizer,
                  BitInitializerType bit_initializer) {
-    const size_t num_masks = gdf_get_num_chars_bitmask(column_size);
+    const size_t num_masks = gdf_valid_allocation_size(column_size);
 
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
@@ -231,7 +231,7 @@ struct column_wrapper {
    *
    *---------------------------------------------------------------------------**/
   auto to_host() const {
-    gdf_size_type const num_masks{gdf_get_num_chars_bitmask(the_column.size)};
+    gdf_size_type const num_masks{gdf_valid_allocation_size(the_column.size)};
     std::vector<ColumnType> host_data;
     std::vector<gdf_valid_type> host_bitmask;
 
@@ -366,7 +366,7 @@ struct column_wrapper {
     // and copy its contents from the host vector
     if (host_bitmask.size() > 0) {
       gdf_size_type const required_bitmask_size{
-          gdf_get_num_chars_bitmask(host_data.size())};
+          gdf_valid_allocation_size(host_data.size())};
 
       if (host_bitmask.size() < static_cast<size_t>(required_bitmask_size)) {
         throw std::runtime_error("Insufficiently sized bitmask vector.");
