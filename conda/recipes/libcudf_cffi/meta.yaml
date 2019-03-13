@@ -27,6 +27,7 @@ build:
 requirements:
   # use channel:
   #   - nvidia
+  #   - rapidsai
   #   - rapidsai-nightly
   #   - conda-forge
   #   - defaults
