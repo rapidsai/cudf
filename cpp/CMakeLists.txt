@@ -234,6 +234,8 @@ add_library(cudf SHARED
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
+            src/io/comp/brotli_dict.cpp
+            src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu

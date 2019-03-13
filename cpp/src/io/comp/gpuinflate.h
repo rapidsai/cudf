@@ -40,5 +40,9 @@ cudaError_t gpuinflate(gpu_inflate_input_s *inputs, gpu_inflate_status_s *output
 // SNAPPY decompression
 cudaError_t gpu_unsnap(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count = 1, cudaStream_t stream = (cudaStream_t)0);
 
+// BROTLI decompression
+size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
+cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, void *scratch, size_t scratch_size, int count = 1, cudaStream_t stream = (cudaStream_t)0);
+
 #endif // _GPUINFLATE_H_
 
