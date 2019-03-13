@@ -124,6 +124,7 @@
 ## Bug Fixes
 
 - PR #842 Avoid using numpy via cimport to prevent ABI issues in Cython compilation
+- PR #1174: Fix release script typo
 
 
 # cuDF 0.5.0 (28 Jan 2019)
