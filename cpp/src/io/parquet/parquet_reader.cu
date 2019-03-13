@@ -16,7 +16,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "io/comp/gpuinflate.h"
 
 #include <cuda_runtime.h>
@@ -174,19 +174,15 @@ class gdf_column_wrapper {
   }
 
   gdf_error allocate() {
-    const auto num_rows = std::max(col->size, 1);
-    const auto num_masks = gdf_get_num_chars_bitmask(num_rows);
-    int column_byte_width = 0;
-
     // For strings, just store the startpos + length for now
-    if (col->dtype == GDF_STRING) {
-      column_byte_width = sizeof(parquet::gpu::nvstrdesc_s);
-    } else {
-      get_column_byte_width(col, &column_byte_width);
-    }
+    const auto num_rows = std::max(col->size, 1);
+    const auto column_byte_width = (col->dtype == GDF_STRING)
+                                       ? sizeof(parquet::gpu::nvstrdesc_s)
+                                       : gdf_dtype_size(col->dtype);
+
     RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
-    RMM_TRY(RMM_ALLOC(&col->valid, sizeof(gdf_valid_type) * num_masks, 0));
-    CUDA_TRY(cudaMemset(col->valid, 0, sizeof(gdf_valid_type) * num_masks));
+    RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
+    CUDA_TRY(cudaMemset(col->valid, 0, gdf_valid_allocation_size(num_rows)));
 
     return GDF_SUCCESS;
   }
@@ -712,12 +708,10 @@ gdf_error read_parquet(pq_read_arg *args) {
         continue;
       }
 
-      int32_t type_width = 0;
-      if (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY) {
-        type_width = col_schema.type_length;
-      } else {
-        get_column_byte_width(gdf_column.get(), &type_width);
-      }
+      int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
+                               ? col_schema.type_length
+                               : gdf_dtype_size(gdf_column->dtype);
+
       uint8_t *d_data = nullptr;
       if (col_meta.total_compressed_size != 0) {
         const auto offset = (col_meta.dictionary_page_offset != 0)
