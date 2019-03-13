@@ -126,19 +126,26 @@ class NumericalColumn(columnops.TypedColumnBase):
               np.issubdtype(dtype, np.dtype('U').type)):
             import nvstrings
             if np.issubdtype(self.dtype, np.signedinteger):
-                dev_array = self.astype('int32').data.mem
-                dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = None
-                if self.mask is not None:
-                    null_ptr = get_ctype_ptr(self.mask.mem)
-                return string.StringColumn(
-                    data=nvstrings.itos(
-                        dev_ptr,
-                        count=len(self),
-                        nulls=null_ptr,
-                        bdevmem=True
+                if len(self) > 0:
+                    dev_array = self.astype('int32').data.mem
+                    dev_ptr = get_ctype_ptr(dev_array)
+                    null_ptr = None
+                    if self.mask is not None:
+                        null_ptr = get_ctype_ptr(self.mask.mem)
+                    return string.StringColumn(
+                        data=nvstrings.itos(
+                            dev_ptr,
+                            count=len(self),
+                            nulls=null_ptr,
+                            bdevmem=True
+                        )
                     )
-                )
+                else:
+                    return string.StringColumn(
+                        data=nvstrings.to_device(
+                            []
+                        )
+                    )
             elif np.issubdtype(self.dtype, np.floating):
                 raise NotImplementedError(
                     f"Casting object of {self.dtype} dtype "

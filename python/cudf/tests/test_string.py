@@ -184,6 +184,20 @@ def test_string_astype(dtype):
 
     assert_eq(expect, got)
 
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_string_empty_astype(dtype):
+    data = []
+    ps = pd.Series(data, dtype="str")
+    gs = Series(data, dtype="str")
+
+    expect = ps.astype(dtype)
+    got = gs.astype(dtype)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
 def test_string_numeric_astype(dtype):
@@ -195,6 +209,25 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith('float'):
         pytest.xfail("floats not yet supported")
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
+
+    ps = pd.Series(data, dtype=dtype)
+    gs = Series(data, dtype=dtype)
+
+    expect = ps.astype('str')
+    got = gs.astype('str')
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_string_empty_numeric_astype(dtype):
+    if dtype.startswith('bool'):
+        pytest.xfail("booleans not yet supported")
+    elif dtype.startswith('float'):
+        pytest.xfail("floats not yet supported")
+
+    data = []
 
     ps = pd.Series(data, dtype=dtype)
     gs = Series(data, dtype=dtype)
@@ -253,7 +286,10 @@ def test_string_len(ps_gs):
 def test_string_cat(ps_gs, others, sep, na_rep):
     ps, gs = ps_gs
 
-    expect = ps.str.cat(others=others, sep=sep, na_rep=na_rep)
+    pd_others = others
+    if isinstance(pd_others, pd.Series):
+        pd_others = pd_others.values
+    expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     if isinstance(others, pd.Series):
         others = Series(others)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
