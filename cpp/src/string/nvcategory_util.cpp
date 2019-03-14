@@ -15,14 +15,16 @@ namespace {
 
       for(int column_index = 1; column_index < num_columns; column_index++){
         NVCategory * temp = combined_category;
-        combined_category = combined_category->merge_and_remap(
-            * static_cast<NVCategory *>(
-                input_columns[column_index]->dtype_info.category));
-        if(column_index > 1){
-          NVCategory::destroy(temp);
+        if(input_columns[column_index]->size > 0){
+          combined_category = combined_category->merge_and_remap(
+              * static_cast<NVCategory *>(
+                  input_columns[column_index]->dtype_info.category));
+          if(column_index > 1){
+            NVCategory::destroy(temp);
+          }
         }
       }
-      if(num_columns == 1){
+      if(combined_category == static_cast<NVCategory *>(input_columns[0]->dtype_info.category)){
         return combined_category->copy();
       }else{
         return combined_category;
@@ -126,7 +128,7 @@ gdf_error validate_categories(gdf_column * input_columns[], int num_columns, gdf
   for (int i = 0; i < num_columns; ++i) {
     gdf_column* current_column = input_columns[i];
     GDF_REQUIRE(current_column != nullptr,GDF_DATASET_EMPTY);
-    GDF_REQUIRE(current_column->data != nullptr,GDF_DATASET_EMPTY);
+    GDF_REQUIRE((current_column->data != nullptr || current_column->size == 0),GDF_DATASET_EMPTY);
     GDF_REQUIRE(current_column->dtype == GDF_STRING_CATEGORY,GDF_UNSUPPORTED_DTYPE);
 
     total_count += input_columns[i]->size;
