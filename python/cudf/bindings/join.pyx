@@ -197,7 +197,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
             else:
                 res.append(
                     rmm.device_array(
-                        nelem=0,
+                        0,
                         dtype=col_dtype
                     )
                 )

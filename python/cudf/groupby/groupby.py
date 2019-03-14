@@ -175,7 +175,7 @@ class Groupby(object):
                     # This isn't ideal, but no better way to create an
                     # nvstrings object of correct size
                     gather_map = zeros(col_agg.size, dtype='int32')
-                    col = Series([None], dtype='str')[gather_map]\
+                    col = Series([''], dtype='str')[gather_map]\
                         .reset_index(drop=True)
                 else:
                     col = Series(
@@ -215,7 +215,7 @@ class Groupby(object):
                     # nvstrings object of correct size
                     gather_map = zeros(col_agg.size, dtype='int32')
                     out_col_agg_series = Series(
-                        [None],
+                        [''],
                         dtype='str'
                     )[gather_map].reset_index(drop=True)
                 else:

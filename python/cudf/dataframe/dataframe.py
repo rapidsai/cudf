@@ -1482,10 +1482,13 @@ class DataFrame(object):
                         if isinstance(cols[on_idx], nvstrings.nvstrings):
                             df[key] = cols[on_idx]
                         else:
+                            mask = None
+                            if valids[on_idx] is not None:
+                                mask = Buffer(valids[on_idx])
                             df[key] = columnops.build_column(
                                     Buffer(cols[on_idx]),
                                     dtype=cols[on_idx].dtype,
-                                    mask=Buffer(valids[on_idx]),
+                                    mask=mask,
                                     categories=categories,
                             )
             else:  # not an `on`-column, `cpp_join` returns these after `on`
@@ -1498,10 +1501,13 @@ class DataFrame(object):
                 if isinstance(cols[left_column_idx], nvstrings.nvstrings):
                     df[left_name] = cols[left_column_idx]
                 else:
+                    mask = None
+                    if valids[left_column_idx] is not None:
+                        mask = Buffer(valids[left_column_idx])
                     df[left_name] = columnops.build_column(
                             Buffer(cols[left_column_idx]),
                             dtype=cols[left_column_idx].dtype,
-                            mask=Buffer(valids[left_column_idx]),
+                            mask=mask,
                             categories=categories,
                     )
         rhs_column_idx = len(lhs.columns)
@@ -1514,10 +1520,13 @@ class DataFrame(object):
                 if isinstance(cols[rhs_column_idx], nvstrings.nvstrings):
                     df[rhs_name] = cols[rhs_column_idx]
                 else:
+                    mask = None
+                    if valids[rhs_column_idx] is not None:
+                        mask = Buffer(valids[rhs_column_idx])
                     df[rhs_name] = columnops.build_column(
                             Buffer(cols[rhs_column_idx]),
                             dtype=cols[rhs_column_idx].dtype,
-                            mask=Buffer(valids[rhs_column_idx]),
+                            mask=mask,
                             categories=categories,
                     )
                 rhs_column_idx = rhs_column_idx + 1
