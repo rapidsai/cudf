@@ -635,8 +635,15 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
             break;
         if (mode == DICTIONARY_RLE || mode == DICTIONARY_STR2HASH)
         {
-            batch_len = gpuDecodeDictionaryIndices(s, batch_len, t); // May lower the value of batch_len
-            dict_pos = s->scratch.dict_idx[t] * s->dtype_len_in;
+            if (s->dict_bits > 0)
+            {
+                batch_len = gpuDecodeDictionaryIndices(s, batch_len, t); // May lower the value of batch_len
+                dict_pos = s->scratch.dict_idx[t] * s->dtype_len_in;
+            }
+            else
+            {
+                dict_pos = 0; // 0-bits for dictionary indices
+            }
             dict = s->dict_base;
             dict_size = s->dict_size;
         }
@@ -649,8 +656,15 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
         }
         else if (mode == BOOL_RLE)
         {
-            batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
-            dict_pos = s->scratch.dict_idx[t];
+            if (s->dict_bits > 0)
+            {
+                batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
+                dict_pos = s->scratch.dict_idx[t];
+            }
+            else
+            {
+                dict_pos = 0;
+            }
         }
         else // PLAIN_FIXED_LENGTH
         {
@@ -866,7 +880,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 s->dict_run = 0;
                 s->dict_val = 0;
                 s->dict_bits = (cur < end) ? *cur++ : 0;
-                if (s->dict_bits <= 0 || s->dict_bits > 32 || !s->dict_base)
+                if (s->dict_bits > 32 || !s->dict_base)
                 {
                     s->error = (10 << 8) | s->dict_bits;
                 }
