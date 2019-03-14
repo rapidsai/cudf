@@ -163,40 +163,55 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
                 nvstr_obj = nvstrings.to_device([])
             res.append(nvstr_obj)
             data_ptr = <uintptr_t>result_cols[idx].data
+            if data_ptr:
             # We need to create this just to make sure the memory is properly freed
-            tmp_data = rmm.device_array_from_ptr(
-                ptr=data_ptr,
-                nelem= result_cols[idx].size,
-                dtype='int32',
-                finalizer=rmm._make_finalizer(data_ptr, 0)
-            )
-            valid_ptr = <uintptr_t>result_cols[idx].valid
-            valids.append(
-                rmm.device_array_from_ptr(
-                    ptr=valid_ptr,
-                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
-                    dtype=mask_dtype,
-                    finalizer=rmm._make_finalizer(valid_ptr, 0)
-                )
-            )
-        else:
-            data_ptr = <uintptr_t>result_cols[idx].data
-            res.append(
-                rmm.device_array_from_ptr(
+                tmp_data = rmm.device_array_from_ptr(
                     ptr=data_ptr,
                     nelem= result_cols[idx].size,
-                    dtype=col_dtype,
+                    dtype='int32',
                     finalizer=rmm._make_finalizer(data_ptr, 0)
                 )
-            )
-            valid_ptr = <uintptr_t>result_cols[idx].valid
-            valids.append(
-                rmm.device_array_from_ptr(
-                    ptr=valid_ptr,
-                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
-                    dtype=mask_dtype,
-                    finalizer=rmm._make_finalizer(valid_ptr, 0)
+            if valid_ptr:
+                valid_ptr = <uintptr_t>result_cols[idx].valid
+                valids.append(
+                    rmm.device_array_from_ptr(
+                        ptr=valid_ptr,
+                        nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                        dtype=mask_dtype,
+                        finalizer=rmm._make_finalizer(valid_ptr, 0)
+                    )
                 )
-            )
+            else:
+                valids.append(None)
+        else:
+            data_ptr = <uintptr_t>result_cols[idx].data
+            if data_ptr:
+                res.append(
+                    rmm.device_array_from_ptr(
+                        ptr=data_ptr,
+                        nelem= result_cols[idx].size,
+                        dtype=col_dtype,
+                        finalizer=rmm._make_finalizer(data_ptr, 0)
+                    )
+                )
+            else:
+                res.append(
+                    rmm.device_array(
+                        nelem=0,
+                        dtype=col_dtype
+                    )
+                )
+            valid_ptr = <uintptr_t>result_cols[idx].valid
+            if valid_ptr:
+                valids.append(
+                    rmm.device_array_from_ptr(
+                        ptr=valid_ptr,
+                        nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                        dtype=mask_dtype,
+                        finalizer=rmm._make_finalizer(valid_ptr, 0)
+                    )
+                )
+            else:
+                valids.append(None)
 
     return res, valids
