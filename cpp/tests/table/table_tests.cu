@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "types.hpp"
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <types.hpp>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <random>
 

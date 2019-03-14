@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-
-#include <cudf.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <utilities/type_dispatcher.hpp>
-#include "gtest/gtest.h"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cudf.h>
 
 #include <thrust/device_vector.h>
-#include <cstdint>
 
+#include <gtest/gtest.h>
+
+#include <cstdint>
 
 /**
  * @file dispatcher_test.cu

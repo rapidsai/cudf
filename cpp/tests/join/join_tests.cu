@@ -14,30 +14,31 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
+// See this header for all of the recursive handling of tuples of vectors
+#include <tests/utilities/tuple_vectors.h>
+
+// See this header for all of the handling of valids' vectors
+#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <join/joining.h>
+#include <join/join_compute_api.h>
+#include <utilities/bit_util.cuh>
+
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <iostream>
 #include <vector>
 #include <map>
 #include <type_traits>
 #include <memory>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <rmm/rmm.h>
-#include <cudf/functions.h>
-#include <join/joining.h>
-#include <join/join_compute_api.h>
-#include <utilities/bit_util.cuh>
-
-#include "tests/utilities/cudf_test_fixtures.h"
-
-// See this header for all of the recursive handling of tuples of vectors
-#include "tests/utilities/tuple_vectors.h"
-
-// See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <cstdlib>
 
 // Selects the kind of join operation that is performed
 enum struct join_op

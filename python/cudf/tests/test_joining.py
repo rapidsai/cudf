@@ -550,3 +550,17 @@ def test_merge_suffixes():
         gdf.merge(gdf, lsuffix='left', rsuffix='right')
 
     assert "suffixes=('left', 'right')" in str(info.value)
+
+
+def test_merge_left_on_right_on():
+    left = pd.DataFrame({'xx': [1, 2, 3, 4, 5, 6]})
+    right = pd.DataFrame({'xx': [10, 20, 30, 6, 5, 4]})
+
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
+
+    assert_eq(left.merge(right, on='xx'),
+              gleft.merge(gright, on='xx'))
+
+    assert_eq(left.merge(right, left_on='xx', right_on='xx'),
+              gleft.merge(gright, left_on='xx', right_on='xx'))

@@ -17,10 +17,15 @@
 #ifndef ORDER_BY_TYPE_VECTORS_H
 #define ORDER_BY_TYPE_VECTORS_H
 
+#include <tests/utilities/tuple_vectors.h>
+#include <tests/utilities/valid_vectors.h>
+
+#include <utilities/cudf_utils.h>
+
 #include <memory>
 #include <vector>
 #include <string>
-#include <utilities/cudf_utils.h>
+#include <numeric>
 
 // Initialize valids
 void initialize_order_by_types(std::vector<int8_t>& order_by_types, size_t length, bool random_values = true)
