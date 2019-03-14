@@ -51,7 +51,7 @@ def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
-@pytest.fixture(params=['snappy', 'gzip', 'brotli', None])
+@pytest.fixture(params=['snappy', 'gzip', None])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine='pyarrow', compression=request.param)
@@ -62,7 +62,9 @@ def parquet_file(request, tmp_path_factory, pdf):
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
-                                     ['col_int32', 'col_float32'], None])
+                                     ['col_int32', 'col_float32'],
+                                     ['col_int16', 'col_float64', 'col_int8'],
+                                     None])
 def test_parquet_reader(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
@@ -70,6 +72,18 @@ def test_parquet_reader(parquet_file, columns, engine):
         expect = expect.reset_index(drop=True)
         if 'col_category' in expect.columns:
             expect['col_category'] = expect['col_category'].astype('category')
+
+    # cuDF currently handles bools, categories, and strings differently
+    # For categories, cuIO returns a hashed value rather than dictionary
+    # For bool, cuDF doesn't support it so convert it to int8
+    # For strings, we need to merge in dataframe support
+    if engine == 'cudf':
+        if 'col_category' in expect.columns:
+            expect = expect.drop(columns=['col_category'])
+        if 'col_category' in got.columns:
+            got = got.drop('col_category')
+        if 'col_bool' in expect.columns:
+            expect['col_bool'] = expect['col_bool'].astype('int8')
 
     assert_eq(expect, got, check_categorical=False)
 
