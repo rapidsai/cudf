@@ -147,7 +147,7 @@ struct inflate_state_s {
 #endif
 
     int16_t lencnt[MAXBITS+1];
-    int16_t lensym[MAXLCODES];
+    int16_t lensym[FIXLCODES]; // Assumes FIXLCODES >= MAXLCODES
     int16_t distcnt[MAXBITS+1];
     int16_t distsym[MAXDCODES];
 
