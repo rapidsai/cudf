@@ -40,6 +40,10 @@ conda list
 # BUILD - Build libcudf and cuDF from source
 ################################################################################
 
+# Temporarily install feather for testing
+logger "conda install -c rapidsai -c rapidsai-nightly nvstrings=0.3*"
+conda install -c rapidsai -c rapidsai-nightly nvstrings=0.3*
+
 logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
