@@ -16,14 +16,12 @@
 #ifndef TYPE_DISPATCHER_HPP
 #define TYPE_DISPATCHER_HPP
 
-#include <nvstrings/NVStrings.h>
-#include "cudf/types.h"
 #include "wrapper_types.hpp"
 #include "release_assert.cuh"
 
 #include <cudf/types.h>
 
-#include <NVStrings.h>
+#include <nvstrings/NVStrings.h>
 
 #include <cassert>
 #include <utility>

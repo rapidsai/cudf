@@ -16,7 +16,7 @@
 
 #include <cudf.h>
 
-#include <NVStrings.h>
+#include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -29,8 +29,6 @@
 
 #include <cstdlib>
 
-#include <cudf.h>
-#include <nvstrings/NVStrings.h>
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {
