@@ -62,11 +62,48 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     return GDF_SUCCESS;
   }
 
+  //column may have null values here, we will do the following
+  //check if the category we are gathering from has null if it does not
+  bool destroy_category = false;
+  if(column->null_count > 0){
+
+    nv_category_index_type null_index = nv_category->get_value(nullptr);
+    if(null_index == -1){
+      const char* empty = 0;
+      NVStrings* strs = NVStrings::create_from_array(&empty,1);
+      nv_category = nv_category->add_keys_and_remap(*strs);
+
+      destroy_category = true;
+      null_index = nv_category->get_value(nullptr);
+
+      NVStrings::destroy(strs);
+
+    }
+    GDF_REQUIRE(null_index == 0, GDF_INVALID_API_CALL);
+    gdf_column null_index_column;
+
+    //this GDF_INT32 could change if this changes in nvcategory
+    gdf_column_view(&null_index_column, nullptr, nullptr, 1, GDF_STRING_CATEGORY);
+    int col_width;
+    get_column_byte_width(&null_index_column, &col_width);
+    RMM_TRY( RMM_ALLOC(&(null_index_column.data), col_width, 0) ); // TODO: non-default stream?
+    CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
+    null_index_column.valid = nullptr;
+    null_index_column.null_count = 0;
+
+    gdf_error err = gdf_replace_nulls(column, &null_index_column);
+    CUDF_EXPECTS(err == GDF_SUCCESS,"couldnn replace");
+    gdf_column_free(&null_index_column);
+  }
+
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
   CUDF_EXPECTS(nv_category != nullptr, "Trying to gather nullptr data in nvcategory_gather");
   NVCategory * new_category = nv_category->gather(static_cast<nv_category_index_type *>(column->data),
                                                           column->size,
                                                           DEVICE_ALLOCATED);
+  if(destroy_category){
+    NVCategory::destroy(nv_category);
+  }
   CHECK_STREAM(0);
   new_category->get_values(static_cast<nv_category_index_type *>(column->data),
                            DEVICE_ALLOCATED);
