@@ -15,11 +15,12 @@
  */
 
 #include "cudf.h"
+#include "io/comp/gpuinflate.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
-#include "io/comp/gpuinflate.h"
 
 #include <cuda_runtime.h>
+#include "NVStrings.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -817,6 +818,17 @@ gdf_error read_parquet(pq_read_arg *args) {
   args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
+
+    // For string dtype, allocate and return in an NvStrings container instance
+    // The container takes a list of string pointers and lengths, and copies
+    // into its own memory so the source memory must not be released yet
+    if (args->data[i]->dtype == GDF_STRING) {
+      using str_pair = std::pair<const char *, size_t>;
+      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s));
+
+      auto str_list = static_cast<str_pair *>(args->data[i]->data);
+      args->data[i]->data = NVStrings::create_from_index(str_list, num_rows);
+    }
   }
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
