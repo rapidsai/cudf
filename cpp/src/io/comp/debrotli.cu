@@ -54,8 +54,6 @@ THE SOFTWARE.
 #include "gpuinflate.h"
 #include "brotli_dict.h"
 
-#define nullptr 0
-
 #define HUFFTAB_LUT1_BITS                   8
 #define HUFFCODE(len, sym)                  ((uint16_t)(((sym) << 4) + (len)))
 #define BROTLI_CODE_LENGTH_CODES            18
@@ -163,7 +161,6 @@ struct debrotli_state_s
     debrotli_huff_tree_group_s *literal_hgroup;
     debrotli_huff_tree_group_s *insert_copy_hgroup;
     debrotli_huff_tree_group_s *distance_hgroup;
-    const brotli_dictionary_s *dictionary;
     uint16_t *block_type_vlc[3];
     huff_scratch_s hs;
     uint32_t mtf[65];
@@ -1721,7 +1718,7 @@ static __device__ int TransformDictionaryWord(uint8_t* dst, uint8_t *dstend, con
 
 
 // ProcessCommands, actual decoding: 1 warp, most work done by thread0
-static __device__ void ProcessCommands(debrotli_state_s *s, int t)
+static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_dictionary_s *words, int t)
 {
     int32_t meta_block_len = s->meta_block_len;
     uint8_t *out = s->out;
@@ -1882,7 +1879,6 @@ static __device__ void ProcessCommands(debrotli_state_s *s, int t)
                     // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is larger than the max LZ77 distance
                     if (distance_code > max_distance) {
                         int address = distance_code - max_distance - 1;
-                        const brotli_dictionary_s *words = s->dictionary;
                         int offset, mask, word_idx, transform_idx;
                         uint32_t shift;
 
@@ -2010,7 +2006,6 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
             s->dist_rb[3] = 4;
             s->dist_rb_idx = 0;
             s->p1 = s->p2 = 0;
-            s->dictionary = (brotli_dictionary_s *)(scratch + scratch_size);
             initbits(s, src, src_size);
             DecodeStreamHeader(s);
         }
@@ -2083,7 +2078,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                     if (!s->error)
                     {
                         if (t < 32)
-                            ProcessCommands(s, t);
+                            ProcessCommands(s, (brotli_dictionary_s *)(scratch + scratch_size), t);
                         __syncthreads();
                     }
                     // Free any allocated memory
@@ -2095,10 +2090,6 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                         }
                         __syncthreads();
                     }
-
-                    if (!t)
-                        s->is_last = 1;
-
                 }
                 if (!t)
                 {
@@ -2114,7 +2105,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
     {
         outputs[z].bytes_written = s->out - s->outbase;
         outputs[z].status = s->error;
-        outputs[z].reserved = (s->fb_base) ? s->fb_base - scratch : 0;
+        outputs[z].reserved = s->fb_size;
     }
 }
 
