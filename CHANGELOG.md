@@ -152,6 +152,7 @@
 - PR #1145 Issue with .agg call on multi-column dataframes
 - PR #908 Some testing code cleanup
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
+- PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
 
 
