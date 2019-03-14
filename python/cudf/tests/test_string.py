@@ -700,6 +700,7 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
 
         assert_eq(expect, got)
 
+
 @pytest.raises(
     NotImplementedError,
     "Strings are not yet supported in the index"
