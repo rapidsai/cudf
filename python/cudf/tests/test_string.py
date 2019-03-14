@@ -699,3 +699,19 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
                 expect[i] = expect[i].astype('str')
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('scalar', [
+    'a',
+    None
+])
+def test_string_set_scalar(scalar):
+    pdf = pd.DataFrame()
+    pdf['a'] = [1, 2, 3, 4, 5]
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf['b'] = "a"
+    gdf['b'] = "a"
+
+    assert_eq(pdf['b'], gdf['b'])
+    assert_eq(pdf, gdf)
