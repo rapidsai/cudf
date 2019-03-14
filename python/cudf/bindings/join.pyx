@@ -171,8 +171,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
                     dtype='int32',
                     finalizer=rmm._make_finalizer(data_ptr, 0)
                 )
+            valid_ptr = <uintptr_t>result_cols[idx].valid
             if valid_ptr:
-                valid_ptr = <uintptr_t>result_cols[idx].valid
                 valids.append(
                     rmm.device_array_from_ptr(
                         ptr=valid_ptr,
