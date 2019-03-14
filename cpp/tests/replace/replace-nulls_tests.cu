@@ -15,19 +15,18 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-
-#include "gtest/gtest.h"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 
 #include <cudf.h>
-#include <cudf/functions.h>
 
 #include <thrust/device_vector.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
+#include <gtest/gtest.h>
+
+#include <cstdlib>
+#include <iostream>
+#include <vector>
 
 // This is the main test feature
 template <class T>

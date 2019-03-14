@@ -150,6 +150,7 @@
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
 - PR #1145 Issue with .agg call on multi-column dataframes
+- PR #908 Some testing code cleanup
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
 
 

@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-// #include "test_utils.h"
-#include "gtest/gtest.h"
 #include <tests/utilities/cudf_test_fixtures.h>
-#include "tests/utilities/cudf_test_utils.cuh"
+#include <tests/utilities/cudf_test_utils.cuh>
 
 #include <cudf.h>
-#include <cudf/functions.h>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
+
+#include <gtest/gtest.h>
 
 #include <vector>
 #include <random>

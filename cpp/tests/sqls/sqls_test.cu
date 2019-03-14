@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <sqls/sqls_rtti_comp.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.h>
+#include <cudf.h>
+
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/tuple.h>
@@ -28,6 +36,8 @@
 #include <thrust/reduce.h>
 #include <thrust/functional.h>
 
+#include <gtest/gtest.h>
+
 #include <iostream>
 #include <vector>
 #include <tuple>
@@ -35,22 +45,9 @@
 #include <type_traits>
 #include <numeric>
 #include <unordered_map>
-//
 
 #include <cassert>
 #include <cmath>
-
-//
-
-#include <cudf.h>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-#include <cudf/functions.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <sqls/sqls_rtti_comp.h>
-
-#include "gtest/gtest.h"
-#include "tests/utilities/cudf_test_fixtures.h"
 
 
 ///using IndexT = int;//okay...

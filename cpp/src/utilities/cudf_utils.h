@@ -1,10 +1,12 @@
 #ifndef GDF_UTILS_H
 #define GDF_UTILS_H
 
+#include <utilities/error_utils.hpp>
+#include <cudf.h>
+
 #include <cuda_runtime_api.h>
+
 #include <vector>
-#include "cudf.h"
-#include "error_utils.hpp"
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
