@@ -613,6 +613,43 @@ def test_string_join_non_key_nulls(str_data_nulls):
     assert_eq(expect, got)
 
 
+def test_string_join_values_nulls():
+    left_dict = [
+        {'b': 'MATCH 1', 'a': 1.},
+        {'b': 'MATCH 1', 'a': 1.},
+        {'b': 'LEFT NO MATCH 1', 'a': -1.},
+        {'b': 'MATCH 2', 'a': 2.},
+        {'b': 'MATCH 2', 'a': 2.},
+        {'b': 'MATCH 1', 'a': 1.},
+        {'b': 'MATCH 1', 'a': 1.},
+        {'b': 'MATCH 2', 'a': 2.},
+        {'b': 'MATCH 2', 'a': 2.},
+        {'b': 'LEFT NO MATCH 2', 'a': -2.},
+        {'b': 'MATCH 3', 'a': 3.},
+        {'b': 'MATCH 3', 'a': 3.},
+    ]
+
+    right_dict = [
+        {'b': 'RIGHT NO MATCH 1', 'c': -1.},
+        {'b': 'MATCH 3', 'c': 3.},
+        {'b': 'MATCH 2', 'c': 2.},
+        {'b': 'RIGHT NO MATCH 2', 'c': -2.},
+        {'b': 'RIGHT NO MATCH 3', 'c': -3.},
+        {'b': 'MATCH 1', 'c': 1.}
+    ]
+
+    left_pdf = pd.DataFrame(left_dict)
+    right_pdf = pd.DataFrame(right_dict)
+
+    left_gdf = DataFrame.from_pandas(left_pdf)
+    right_gdf = DataFrame.from_pandas(right_pdf)
+
+    expect = left_pdf.merge(right_pdf, how='left', on='b')
+    got = left_gdf.merge(right_gdf, how='left', on='b')
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize('str_data,str_data_raise', [
     ([], 0),
     (['a', 'b', 'c', 'd', 'e'], 0),

@@ -270,7 +270,7 @@ class Column(object):
         """
         nelem = len(self)
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
+        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xff if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)

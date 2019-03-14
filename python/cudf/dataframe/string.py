@@ -283,7 +283,7 @@ class StringMethods(object):
             index=self._index
         )
 
-    def split(self, pat=' ', n=-1, expand=True):
+    def split(self, pat=None, n=-1, expand=True):
         """
         Split strings around given separator/delimiter.
 
@@ -312,11 +312,8 @@ class StringMethods(object):
             raise NotImplementedError("`expand` parameter is not supported")
 
         # Pandas treats 0 as all
-        if n <= 0:
+        if n == 0:
             n = -1
-        else:
-            # https://github.com/rapidsai/custrings/issues/132
-            n = n + 1
 
         from cudf.dataframe import DataFrame
         out_df = DataFrame(index=self._index)
