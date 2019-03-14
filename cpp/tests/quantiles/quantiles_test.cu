@@ -17,8 +17,19 @@
 //Quantile (percentile) testing
 
 
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
+#include <quantiles/quantiles.h>
+#include <cudf.h>
+
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+
+#include <gtest/gtest.h>
 
 #include <iostream>
 #include <vector>
@@ -27,17 +38,6 @@
 #include <cassert>
 #include <cmath>
 
-#include "gtest/gtest.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <utilities/cudf_utils.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.hpp>
-#include <quantiles/quantiles.h>
-#include <bitmask/legacy_bitmask.hpp>
-
-#include "tests/utilities/cudf_test_fixtures.h"
 
 
 

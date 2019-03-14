@@ -13,96 +13,144 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GDF_TEST_UTILS_H
-#define GDF_TEST_UTILS_H
+#ifndef CUDF_TEST_UTILS_CUH_
+#define CUDF_TEST_UTILS_CUH_
+
+// See this header for all of the recursive handling of tuples of vectors
+#include "tuple_vectors.h"
+
+#include <utilities/cudf_utils.h>
+#include <utilities/bit_util.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <bitmask/legacy_bitmask.hpp>
+
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+
+#include <thrust/equal.h>
 
 #include <bitset>
 #include <numeric> // for std::accumulate
 #include <memory>
-#include <thrust/equal.h>
 
-#include "gtest/gtest.h"
-
-// See this header for all of the recursive handling of tuples of vectors
-#include "tuple_vectors.h"
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "cudf/functions.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/bit_util.cuh"
-#include "utilities/type_dispatcher.hpp"
-#include <bitmask/legacy_bitmask.hpp>
-
-  /**
-   * @Synopsis  Counts the number of valid bits for the specified number of rows
-   * in the host vector of gdf_valid_type masks
-   *
-   * @Param masks The host vector of masks whose bits will be counted
-   * @Param num_rows The number of bits to count
-   *
-   * @Returns  The number of valid bits in [0, num_rows) in the host vector of
-   * masks
-   **/
-  inline gdf_size_type count_valid_bits_host(
-      std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows) {
-    if ((0 == num_rows) || (0 == masks.size())) {
-      return 0;
-    }
-
-    gdf_size_type count{0};
-
-    // Count the valid bits for all masks except the last one
-    for (gdf_size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
-      gdf_valid_type current_mask = masks[i];
-
-      while (current_mask > 0) {
-        current_mask &= (current_mask - 1);
-        count++;
-      }
-    }
-
-    // Only count the bits in the last mask that correspond to rows
-    int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
-    if (num_rows_last_mask == 0) {
-      num_rows_last_mask = GDF_VALID_BITSIZE;
-    }
-
-    // Mask off only the bits that correspond to rows
-    gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
-    gdf_valid_type last_mask = masks[gdf_num_bitmask_elements(num_rows) - 1] & rows_mask;
-
-    while (last_mask > 0) {
-      last_mask &= (last_mask - 1);
-      count++;
-    }
-
-    std::cout << "rows: " << num_rows << " null count: " << count << std::endl;
-
-    return count;
-
-  }
-
+// We use this single character to represent a gdf_column element being null
+constexpr const char null_representative = '@';
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
-using gdf_col_pointer = typename std::unique_ptr<gdf_column, 
-                                                 std::function<void(gdf_column*)>>;
+using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
-/**---------------------------------------------------------------------------*
- * @brief prints column data from a column on device
- * 
- * @param the_column host pointer to gdf_column object
- *---------------------------------------------------------------------------**/
-void print_gdf_column(gdf_column const * the_column);
+/**
+ * @brief  Counts the number of valid bits for the specified number of rows
+ * in the host vector of gdf_valid_type masks
+ *
+ * @param masks The host vector of masks whose bits will be counted
+ * @param num_rows The number of bits to count
+ *
+ * @returns The number of valid bits in [0, num_rows) in the host vector of
+ * masks
+ **/
+gdf_size_type count_valid_bits_host(
+  std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows);
+
+
+/**
+ * @brief Prints a "broken-down" column's data to the standard output stream,
+ * while accounting for null indication.
+ *
+ * @note See the @ref gdf_column variant
+ *
+ */
+template <typename Element>
+void print_typed_column(
+    const Element *    __restrict__  col_data,
+    gdf_valid_type *   __restrict__  validity_mask,
+    const size_t                     size_in_elements,
+    unsigned                         min_element_print_width = 1)
+{
+  static_assert(not std::is_same<Element, void>::value, "Can't print void* columns - a concrete type is needed");
+  if (col_data == nullptr) {
+      std::cout << "(nullptr column data pointer - nothing to print)";
+      return;
+  }
+  if (size_in_elements == 0) {
+      std::cout << "(empty column)";
+      return;
+  }
+  std::vector<Element> h_data(size_in_elements);
+
+  cudaMemcpy(h_data.data(), col_data, size_in_elements * sizeof(Element), cudaMemcpyDefault);
+
+  const size_t num_valid_type_elements = gdf_valid_allocation_size(size_in_elements);
+  std::vector<gdf_valid_type> h_mask(num_valid_type_elements );
+  if(nullptr != validity_mask)
+  {
+    cudaMemcpy(h_mask.data(), validity_mask, num_valid_type_elements, cudaMemcpyDefault);
+  }
+
+  for(size_t i = 0; i < size_in_elements; ++i)
+  {
+      std::cout << std::setw(min_element_print_width);
+      if ((validity_mask == nullptr) or gdf_is_valid(h_mask.data(), i))
+      {
+          if (sizeof(Element) < sizeof(int)) {
+              std::cout << (int) h_data[i];
+          }
+          else {
+              std::cout << h_data[i];
+          }
+      }
+      else {
+          std::cout << null_representative;
+      }
+      if (i + 1 < size_in_elements) { std::cout << ' '; }
+  }
+  std::cout << std::endl;
+}
+
+/**
+ * @brief No-frills, single-line printing of a gdf_column's (typed) data to the
+ * standard output stream, while accounting for nulls
+ *
+ * @todo More bells and whistles here would be nice to have.
+ *
+ * @param column[in] a @ref gdf_column to print.
+ * @param min_element_print_width[in] Every element will take up this any
+ * characters when printed.
+ */
+template <typename Element>
+inline void print_typed_column(const gdf_column& column, unsigned min_element_print_width = 1)
+{
+    print_typed_column<Element>(
+        static_cast<const Element*>(column.data),
+        column.valid,
+        column.size,
+        min_element_print_width);
+}
+
+/**
+ * @brief No-frills, single-line printing of a gdf_column's (typed) data to the
+ * standard output stream, while accounting for nulls
+ *
+ * @note See the @ref gdf_column variant
+ */
+void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1);
+
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
  * 
  * @param validity_mask The validity bitmask to print
- * @param num_rows The length of the column (not the bitmask) in rows
+ * @param length Length of the mask in bits
+ *
+ * @note the mask may have more space allocated for it than is necessary 
+ * for the specified length; in particular, it will have "slack" bits
+ * in the last byte, if length % 8 != 0. Such slack bits are ignored and
+ * not printed. Usually, length is the number of elements of a gdf_column.
  * ---------------------------------------------------------------------------**/
 void print_valid_data(const gdf_valid_type *validity_mask, 
-                      const size_t num_rows);
+                      const size_t length);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -120,7 +168,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   // Get the corresponding gdf_dtype for the ColumnType
   gdf_dtype gdf_col_type{cudf::gdf_dtype_of<ColumnType>()};
 
-  EXPECT_TRUE(GDF_invalid != gdf_col_type);
+   CUDF_EXPECTS(gdf_col_type != GDF_invalid, "Cannot create columns with the GDF_invalid element type");
 
   // Create a new instance of a gdf_column with a custom deleter that will free
   // the associated device memory when it eventually goes out of scope
@@ -189,6 +237,7 @@ convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tupl
   //bottom of compile-time recursion
   //purposely empty...
 }
+
 template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
 convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t,
@@ -261,7 +310,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
 template <typename T>
-bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
+bool gdf_equal_columns(gdf_column* left, gdf_column* right)
+{
   if (left->size != right->size) return false;
   if (left->dtype != right->dtype) return false;
   if (left->null_count != right->null_count) return false;
@@ -282,9 +332,9 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
                      left->valid + gdf_num_bitmask_elements(left->size),
                      right->valid))
     return false;
-
+  
   return true;
-  }
+}
 
 
 #endif
