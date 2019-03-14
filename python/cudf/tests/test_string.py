@@ -700,6 +700,26 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
 
         assert_eq(expect, got)
 
+@pytest.raises(
+    NotImplementedError,
+    "Strings are not yet supported in the index"
+)
+def test_string_groupby_key_index():
+    str_data = ['a', 'b', 'c', 'd', 'e']
+    other_data = [1, 2, 3, 4, 5]
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    pdf['a'] = pd.Series(str_data, dtype="str")
+    gdf['a'] = Series(str_data, dtype="str")
+    pdf['b'] = other_data
+    gdf['b'] = other_data
+
+    expect = pdf.groupby('a').count()
+    got = gdf.groupby('a').count()
+
+    assert_eq(expect, got)
+
 
 @pytest.mark.parametrize('scalar', [
     'a',
