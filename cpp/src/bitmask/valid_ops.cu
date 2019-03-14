@@ -27,6 +27,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
+#include "bitmask/legacy_bitmask.hpp"
 
 #include <thrust/tabulate.h>
 
@@ -39,7 +40,6 @@ constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
 constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
-
 
 
 /* --------------------------------------------------------------------------*/
@@ -128,7 +128,7 @@ void count_valid_bits(valid32_t const * const masks32,
 
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-
+  // TODO: add a default parameter cudaStream_t stream = 0 when we move API to C++
 
   if((nullptr == count)){return GDF_DATASET_EMPTY;}
 
@@ -141,10 +141,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
 
   // Masks will be proccessed as 4B types, therefore we require that the underlying
   // type be less than or equal to 4B
-  assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
+  static_assert(sizeof(valid32_t) >= sizeof(gdf_valid_type), "gdf_valid_type is assumed to be <= 4B type");
 
   // Number of gdf_valid_types in the validity bitmask
-  gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
+  gdf_size_type const num_masks{gdf_num_bitmask_elements(num_rows)};
 
   // Number of 4 byte types in the validity bit mask 
   gdf_size_type num_masks32{static_cast<gdf_size_type>(std::ceil(static_cast<float>(num_masks) / RATIO))};
@@ -246,7 +246,7 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
     // as input
     thrust::tabulate(rmm::exec_policy()->on(0),
                      output_mask,
-                     output_mask + gdf_get_num_chars_bitmask(output_column_length),
+                     output_mask + gdf_num_bitmask_elements(output_column_length),
                      mask_concatenator);
 
     CUDA_TRY( cudaGetLastError() );

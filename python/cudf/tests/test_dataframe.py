@@ -177,37 +177,6 @@ def test_series_init_none():
     assert got.split() == expect.split()
 
 
-def test_series_replace():
-    a1 = np.array([0, 1, 2, 3, 4])
-
-    # Numerical
-    a2 = np.array([5, 1, 2, 3, 4])
-    sr1 = Series(a1)
-    sr2 = sr1.replace(0, 5)
-    np.testing.assert_equal(sr2.to_array(), a2)
-
-    # Categorical
-    psr3 = pd.Series(["one", "two", "three"], dtype='category')
-    psr4 = psr3.replace("one", "two")
-    sr3 = Series.from_pandas(psr3)
-    sr4 = sr3.replace("one", "two")
-    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
-
-    # List input
-    a6 = np.array([5, 6, 2, 3, 4])
-    sr6 = sr1.replace([0, 1], [5, 6])
-    np.testing.assert_equal(sr6.to_array(), a6)
-
-    a7 = np.array([5.5, 6.5, 2, 3, 4])
-    sr7 = sr1.replace([0, 1], [5.5, 6.5])
-    np.testing.assert_equal(sr7.to_array(), a7)
-
-    # Series input
-    a8 = np.array([5, 5, 5, 3, 4])
-    sr8 = sr1.replace(sr1[:3], 5)
-    np.testing.assert_equal(sr8.to_array(), a8)
-
-
 def test_dataframe_basic():
     np.random.seed(0)
     df = DataFrame()
@@ -525,8 +494,8 @@ def test_dataframe_iloc(nelem):
 
 
 @pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="cudf columnar iloc not supported"
+    raises=AssertionError,
+    reason="Series.index are different"
 )
 def test_dataframe_iloc_tuple():
     gdf = DataFrame()
@@ -539,11 +508,11 @@ def test_dataframe_iloc_tuple():
     pdf['a'] = ha
     pdf['b'] = hb
 
-    def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'])
-        np.testing.assert_equal(g['b'].to_array(), p['b'])
+    # We don't support passing the column names into the index quite yet
+    got = gdf.iloc[1, [1]]
+    expect = pdf.iloc[1, [1]]
 
-    assert_col(gdf.iloc[1, 2], pdf.iloc[1, 2])
+    assert_eq(got, expect)
 
 
 @pytest.mark.xfail(
@@ -1363,7 +1332,7 @@ def test_dataframe_shape_empty():
      'datetime64[ms]']
 )
 @pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
-def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
         pytest.skip(msg='nulls not supported in dtype: ' + dtype)
 
@@ -1525,41 +1494,6 @@ def test_is_monotonic(gdf):
     assert not gdf.index.is_monotonic
     assert not gdf.index.is_monotonic_increasing
     assert not gdf.index.is_monotonic_decreasing
-
-
-def test_dataframe_replace():
-    # numerical
-    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
-    gdf1 = DataFrame.from_pandas(pdf1)
-    pdf2 = pdf1.replace(0, 4)
-    gdf2 = gdf1.replace(0, 4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
-
-    # categorical
-    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'],
-                         'b': ['one', 'two', 'three']}, dtype='category')
-    gdf4 = DataFrame.from_pandas(pdf4)
-    pdf5 = pdf4.replace('two', 'three')
-    gdf5 = gdf4.replace('two', 'three')
-    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
-
-    # list input
-    pdf6 = pdf1.replace([0, 1], [4, 5])
-    gdf6 = gdf1.replace([0, 1], [4, 5])
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
-
-    pdf7 = pdf1.replace([0, 1], 4)
-    gdf7 = gdf1.replace([0, 1], 4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
-
-    # dict input:
-    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
-    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
-
-    pdf9 = pdf1.replace({'a': 0}, {'a': 4})
-    gdf9 = gdf1.replace({'a': 0}, {'a': 4})
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
 
 
 @pytest.mark.xfail(reason="null is not supported in gpu yet")
@@ -1735,6 +1669,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     assert_eq(expect, got)
 
 
+@pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
     from numba import cuda
     import cudf
@@ -1957,10 +1892,16 @@ def test_reset_index(pdf, gdf, drop):
 def test_to_frame(pdf, gdf):
     assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    s = pd.Series([1, 2, 3])
-    g = gd.from_pandas(s)
+    name = "foo"
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    assert_eq(s, g)
+    name = False
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(gdf_new_name, pdf_new_name)
+    assert gdf_new_name.columns[0] is name
 
 
 def test_dataframe_empty_sort_index():
@@ -2032,3 +1973,11 @@ def test_select_dtype():
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+
+def test_array_ufunc():
+    gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(np.sqrt(gdf), np.sqrt(pdf))
+    assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))

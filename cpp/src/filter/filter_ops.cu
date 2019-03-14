@@ -140,8 +140,8 @@ void gpu_filter_op(IteratorTypeLeft begin_left, IteratorTypeRight begin_right, I
 	}else if(valid_right == valid_left){
 		//this is often the case if we are passing in the same column to operate on itself
 		//or when we are sending something like  a constant_iterator for the right hand side, allows us some shortcuts
-		gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-		cudaError_t error = cudaMemcpyAsync(valid_out,valid_left,num_chars_bitmask * sizeof(gdf_valid_type),cudaMemcpyDeviceToDevice,stream);
+		gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+		cudaError_t error = cudaMemcpyAsync(valid_out,valid_left,num_bitmask_elements * sizeof(gdf_valid_type),cudaMemcpyDeviceToDevice,stream);
 		out_null_count = left_null_count;
 
 	}else{
