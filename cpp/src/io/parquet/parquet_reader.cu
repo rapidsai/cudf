@@ -372,10 +372,16 @@ gdf_error count_page_headers(
   LOG_PRINTF("[+] Chunk Information\n");
   for (size_t c = 0; c < chunks.size(); c++) {
     LOG_PRINTF(
-        " %2zd: num_rows=%d, num_data_pages=%d, num_dict_pages=%d, "
-        "data_type=0x%x\n",
-        c, chunks[c].num_rows, chunks[c].num_data_pages,
-        chunks[c].num_dict_pages, chunks[c].data_type);
+        " %2zd: comp_data=%ld, comp_size=%zd, num_values=%zd\n     "
+        "start_row=%zd num_rows=%d max_def_level=%d max_rep_level=%d\n     "
+        "data_type=%d def_level_bits=%d rep_level_bits=%d\n     "
+        "num_data_pages=%d num_dict_pages=%d max_num_pages=%d\n",
+        c, (uint64_t)chunks[c].compressed_data, chunks[c].compressed_size,
+        chunks[c].num_values, chunks[c].start_row, chunks[c].num_rows,
+        chunks[c].max_def_level, chunks[c].max_rep_level, chunks[c].data_type,
+        chunks[c].def_level_bits, chunks[c].rep_level_bits,
+        chunks[c].num_data_pages, chunks[c].num_dict_pages,
+        chunks[c].max_num_pages);
     *total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
   }
 
@@ -410,11 +416,14 @@ gdf_error decode_page_headers(
   LOG_PRINTF("[+] Page Header Information\n");
   for (size_t i = 0; i < pages.size(); i++) {
     LOG_PRINTF(
-        " %2zd: chunk_idx=%d, chunk_row=%d, flags=%d, num_values=%d, "
-        "encoding=%d, size=%d\n",
-        i, pages[i].chunk_idx, pages[i].chunk_row, pages[i].flags,
-        pages[i].num_values, pages[i].encoding,
-        pages[i].uncompressed_page_size);
+        " %2zd: comp_size=%d, uncomp_size=%d, num_values=%d, chunk_row=%d, "
+        "num_rows=%d\n     chunk_idx=%d, flags=%d, encoding=%d, def_level=%d "
+        "rep_level=%d, valid_count=%d\n",
+        i, pages[i].compressed_page_size, pages[i].uncompressed_page_size,
+        pages[i].num_values, pages[i].chunk_row, pages[i].num_rows,
+        pages[i].chunk_idx, pages[i].flags, pages[i].encoding,
+        pages[i].definition_level_encoding, pages[i].repetition_level_encoding,
+        pages[i].valid_count);
   }
 
   return GDF_SUCCESS;
@@ -551,7 +560,7 @@ gdf_error decode_page_data(
     const std::vector<gdf_column *> &chunk_map, size_t total_rows) {
 
   auto is_dict_chunk = [](const parquet::gpu::ColumnChunkDesc &chunk) {
-    return (chunk.data_type & 0x3) == parquet::BYTE_ARRAY &&
+    return (chunk.data_type & 0x7) == parquet::BYTE_ARRAY &&
            chunk.num_dict_pages > 0;
   };
 
@@ -710,8 +719,14 @@ gdf_error read_parquet(pq_read_arg *args) {
       }
 
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
-                               ? col_schema.type_length
-                               : gdf_dtype_size(gdf_column->dtype);
+                               ? (col_schema.type_length << 3)
+                               : 0;
+      if (gdf_column->dtype == GDF_INT8)
+        type_width = 1;  // I32 -> I8
+      else if (gdf_column->dtype == GDF_INT16)
+        type_width = 2;  // I32 -> I16
+      else if (gdf_column->dtype == GDF_CATEGORY)
+        type_width = 4;  // str -> hash32
 
       uint8_t *d_data = nullptr;
       if (col_meta.total_compressed_size != 0) {
@@ -734,15 +749,15 @@ gdf_error read_parquet(pq_read_arg *args) {
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%ld, codec=%d, "
-          "num_values=%ld total_compressed_size=%ld "
-          "total_uncompressed_size=%ld\n",
+          "num_values=%ld\n",
           name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
-          col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
-          col_meta.total_uncompressed_size);
+          col_meta.codec, col_meta.num_values);
+      LOG_PRINTF("     total_compressed_size=%ld total_uncompressed_size=%ld\n",
+          col_meta.total_compressed_size, col_meta.total_uncompressed_size);
       LOG_PRINTF(
           "     schema_idx=%d, type=%d, type_width=%d, max_def_level=%d, "
           "max_rep_level=%d\n",
-          rowgroup.columns[name.first].schema_idx, col_schema.type, type_width,
+          rowgroup.columns[name.first].schema_idx, chunks[chunks.size()-1].data_type, type_width,
           col_schema.max_definition_level, col_schema.max_repetition_level);
       LOG_PRINTF(
           "     data_page_offset=%zd, index_page_offset=%zd, "
