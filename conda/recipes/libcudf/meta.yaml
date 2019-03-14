@@ -31,11 +31,11 @@ requirements:
   #   - conda-forge
   #   - defaults
   build:
-    - cmake>=3.12.4
-    - nvstrings=0.3.0dev0
+    - cmake >=3.12.4
+    - nvstrings 0.3*
   run:
-    - pyarrow=0.12.1
-    - nvstrings=0.3.0dev0
+    - pyarrow 0.12.1
+    - nvstrings 0.3*
 
 test:
   commands:

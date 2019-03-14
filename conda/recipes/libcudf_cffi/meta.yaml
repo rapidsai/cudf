@@ -32,19 +32,19 @@ requirements:
   #   - conda-forge
   #   - defaults
   build:
-    - cmake>=3.12.4
+    - cmake >=3.12.4
     - python x.x
     - cffi
     - setuptools
-    - nvstrings=0.3.0dev0
-    - pycparser=2.19
-    - pyarrow=0.12.1
+    - nvstrings 0.3*
+    - pycparser 2.19
+    - pyarrow 0.12.1
   run:
-    - libcudf={{ version }}
+    - libcudf {{ version }}
     - python x.x
     - cffi
-    - pycparser=2.19
-    - pyarrow=0.12.1
+    - pycparser 2.19
+    - pyarrow 0.12.1
 
 test:
   commands:
