@@ -1102,10 +1102,11 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
     print_gdf_column(right_column);
   }
 
-  gdf_raw_left_columns.push_back(left_column);
   gdf_raw_left_columns.push_back(left_non_join_column);
-  gdf_raw_right_columns.push_back(right_column);
+  gdf_raw_left_columns.push_back(left_column);
+  
   gdf_raw_right_columns.push_back(right_non_join_column);
+  gdf_raw_right_columns.push_back(right_column);
 
   gdf_column * result_column_nonjoin_left = create_column_ints(column_left_a, left_size);
   gdf_column * result_column_nonjoin_right = create_column_ints(column_left_a, left_size);
@@ -1117,8 +1118,8 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
 
   std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
-  std::vector<int> left_join_idx={0};
-  std::vector<int> right_join_idx={0};
+  std::vector<int> left_join_idx={1};
+  std::vector<int> right_join_idx={1};
 
   std::vector<result_type> gdf_result = this->compute_gdf_result(op, left_join_idx, right_join_idx, print);
 
