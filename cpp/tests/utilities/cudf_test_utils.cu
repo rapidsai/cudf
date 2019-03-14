@@ -15,6 +15,7 @@
  */
 
 #include "cudf_test_utils.cuh"
+#include <nvstrings/NVCategory.h>
 
 namespace {
 
@@ -49,6 +50,32 @@ struct column_printer {
       }
     }
     std::cout << std::endl;
+
+    if(the_column->dtype == GDF_STRING_CATEGORY){
+      std::cout<<"Data on category:\n";
+      size_t length = 1;
+
+      if(the_column->dtype_info.category != nullptr){
+        size_t keys_size = static_cast<NVCategory *>(the_column->dtype_info.category)->keys_size();
+        if(keys_size>0){
+          char ** data = new char *[keys_size];
+          for(size_t i=0; i<keys_size; i++){
+            data[i]=new char[length+1];
+          }
+
+          static_cast<NVCategory *>(the_column->dtype_info.category)->get_keys()->to_host(data, 0, keys_size);
+
+          for(size_t i=0; i<keys_size; i++){
+            data[i][length]=0;
+          }
+
+          for(size_t i=0; i<keys_size; i++){
+            std::cout<<"("<<data[i]<<"|"<<i<<")\t";
+          }
+          std::cout<<std::endl;
+        }
+      }
+    }
   }
 };
 }
