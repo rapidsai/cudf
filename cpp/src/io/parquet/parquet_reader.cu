@@ -456,18 +456,25 @@ gdf_error decompress_page_data(
     }
   };
 
+  // Brotli scratch memory for decoding
+  rmm::device_vector<uint8_t> debrotli_scratch;
+
   // Count the exact number of compressed pages
   size_t num_compressed_pages = 0;
   size_t total_decompressed_size = 0;
-  std::array<std::pair<parquet::Compression, size_t>, 2> codecs{
-      std::make_pair(parquet::GZIP, 0), std::make_pair(parquet::SNAPPY, 0)};
+  std::array<std::pair<parquet::Compression, size_t>, 3> codecs{
+      std::make_pair(parquet::GZIP, 0), std::make_pair(parquet::SNAPPY, 0),
+      std::make_pair(parquet::BROTLI, 0)};
 
-  for (auto& codec : codecs) {
+  for (auto &codec : codecs) {
     for_each_codec_page(codec.first, [&](size_t page) {
       total_decompressed_size += pages[page].uncompressed_page_size;
       codec.second++;
       num_compressed_pages++;
     });
+    if (codec.first == parquet::BROTLI && codec.second > 0) {
+      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second > 0));
+    }
   }
 
   LOG_PRINTF(
@@ -485,7 +492,7 @@ gdf_error decompress_page_data(
 
   size_t decompressed_ofs = 0;
   int32_t argc = 0;
-  for (const auto& codec : codecs) {
+  for (const auto &codec : codecs) {
     if (codec.second > 0) {
       int32_t start_pos = argc;
 
@@ -524,6 +531,12 @@ gdf_error decompress_page_data(
                               inflate_out.device_ptr(start_pos),
                               argc - start_pos));
           break;
+        case parquet::BROTLI:
+          CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
+                                inflate_out.device_ptr(start_pos),
+                                debrotli_scratch.data().get(),
+                                debrotli_scratch.size(), argc - start_pos));
+          break;
         default:
           std::cerr << "This is a bug" << std::endl;
           break;
@@ -535,6 +548,7 @@ gdf_error decompress_page_data(
           cudaMemcpyDeviceToHost));
     }
   }
+  CUDA_TRY(cudaStreamSynchronize(0));
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
