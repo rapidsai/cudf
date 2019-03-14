@@ -38,13 +38,13 @@ requirements:
     - setuptools
     - nvstrings=0.3.0dev0
     - pycparser=2.19
-    - pyarrow=0.12.0
+    - pyarrow=0.12.1
   run:
     - libcudf={{ version }}
     - python x.x
     - cffi
     - pycparser=2.19
-    - pyarrow=0.12.0
+    - pyarrow=0.12.1
 
 test:
   commands:
