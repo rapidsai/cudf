@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
- #include <cstdlib>
- #include <iostream>
- #include <vector>
- 
- #include <thrust/device_vector.h>
- 
- #include "gtest/gtest.h"
- #include "tests/utilities/cudf_test_fixtures.h"
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <cudf.h>
-#include <cudf/functions.h>
+#include <thrust/device_vector.h>
+
+
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <gtest/gtest.h>
+
+#include <iostream>
+#include <vector>
+
+#include <cstdlib>
 
 struct gdf_hashing_test : public GdfTest {};
 

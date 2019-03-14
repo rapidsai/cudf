@@ -103,6 +103,7 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
+- PR #1183 Bump Arrow version to 0.12.1
 
 ## Bug Fixes
 
@@ -144,12 +145,15 @@
 - PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1174: Fix release script typo
 - PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
 - PR #1145 Issue with .agg call on multi-column dataframes
+- PR #908 Some testing code cleanup
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
 - PR #1184 Fix iloc performance regression
+- PR #1185 Support left_on/right_on and also on=str in merge
 
 
 # cuDF 0.5.1 (05 Feb 2019)

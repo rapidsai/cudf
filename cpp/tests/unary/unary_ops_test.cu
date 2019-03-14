@@ -15,28 +15,26 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <numeric>
-#include <limits>
-#include <random>
-#include <algorithm>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <utilities/cudf_utils.h>
+#include <cudf.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include "gtest/gtest.h"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include <bitmask/legacy_bitmask.hpp>
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <utilities/cudf_utils.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <gtest/gtest.h>
+
+#include <iostream>
+#include <vector>
+#include <numeric>
+#include <limits>
+#include <random>
+#include <algorithm>
+#include <cstdlib>
 
 struct gdf_cast_test : public GdfTest {};
 

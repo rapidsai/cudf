@@ -1,4 +1,13 @@
-#include "gtest/gtest.h"
+#include <tests/utilities/cudf_test_utils.cuh>
+
+#include <utilities/cudf_utils.h>
+#include <cudf.h>
+
+#include <thrust/device_vector.h>
+
+#include <gtest/gtest.h>
+
+#include <gtest/gtest.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -6,15 +15,6 @@
 #include <chrono>
 #include <map>
 
-#include <thrust/device_vector.h>
-
-#include "gtest/gtest.h"
-
-#include <cudf.h>
-#include <utilities/cudf_utils.h>
-#include <cudf/functions.h>
-
-#include "tests/utilities/cudf_test_utils.cuh"
 
 // uncomment to enable benchmarking gdf_column_concat
 //#define ENABLE_CONCAT_BENCHMARK 

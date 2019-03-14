@@ -44,7 +44,7 @@ requirements:
 
 test:
   requires:
-    - distributed>=1.22.1
+    - distributed>=1.23.0
     - pytest
   imports:
     - cudf
