@@ -58,6 +58,8 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
 
+#include <utilities/nvtx/nvtx_utils.h>
+
 constexpr size_t max_chunk_bytes = 64*1024*1024; // 64MB
 
 using std::vector;
@@ -303,6 +305,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
  *---------------------------------------------------------------------------**/
 gdf_error read_csv(csv_read_arg *args)
 {
+    PUSH_RANGE("READCSV", GDF_BLUE);
 	gdf_error error = gdf_error::GDF_SUCCESS;
 
 	//-----------------------------------------------------------------------------
@@ -863,6 +866,7 @@ gdf_error read_csv(csv_read_arg *args)
 	args->num_rows_out	= raw_csv->num_records;
 
 	delete raw_csv;
+    POP_RANGE();
 	return error;
 }
 

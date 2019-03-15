@@ -21,6 +21,7 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
+#include <utilities/nvtx/nvtx_utils.h>
 
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -85,5 +86,8 @@ gdf_error gdf_order_by(gdf_column** cols,
                        gdf_column* output_indices,
                        int flag_nulls_are_smallest)
 {
-  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest);
+  PUSH_RANGE("ORDERBY", GDF_DARK_GREEN);
+  gdf_error result = multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest);
+  POP_RANGE();
+  return result;
 }

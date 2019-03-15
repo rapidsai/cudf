@@ -21,6 +21,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include <utilities/nvtx/nvtx_utils.h>
 
 namespace cudf {
 
@@ -207,6 +208,8 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table) {
+  PUSH_RANGE("SCATTER", GDF_DARK_GREEN);
   detail::scatter(source_table, scatter_map, destination_table);
+  POP_RANGE();
 }
 }  // namespace cudf

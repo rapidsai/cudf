@@ -24,6 +24,7 @@
 #include "utilities/cudf_utils.h"
 #include "cudf.h"
 #include "bitmask/legacy_bitmask.hpp"
+#include <utilities/nvtx/nvtx_utils.h>
 
 namespace cudf {
 namespace binops {
@@ -218,13 +219,23 @@ namespace jit {
 
 
 gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    PUSH_RANGE("JIT_BINOP_SV", GDF_BLUE);
+    gdf_error result = cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    POP_RANGE();
+
+    return result;
 }
 
 gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
-    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    PUSH_RANGE("JIT_BINOP_VS", GDF_BLUE);
+    gdf_error result = cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    POP_RANGE();
+    return result;
 }
 
 gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    PUSH_RANGE("JIT_BINOP_VV", GDF_BLUE);
+    gdf_error result = cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    POP_RANGE();
+    return result;
 }

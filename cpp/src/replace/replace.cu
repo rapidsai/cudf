@@ -25,6 +25,7 @@
 #include "utilities//type_dispatcher.hpp"
 #include "utilities/cudf_utils.h"
 #include "bitmask/legacy_bitmask.hpp"
+#include "utilities/nvtx/nvtx_utils.h"
 
 namespace{ //anonymous
 
@@ -105,6 +106,8 @@ namespace{ //anonymous
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
     GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
+    PUSH_RANGE("FIND_REPLACE", GDF_BLUE);
+
     
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,
@@ -112,6 +115,8 @@ namespace{ //anonymous
                           old_values->data,
                           new_values->data,
                           new_values->size); 
+
+    POP_RANGE();
 
     return GDF_SUCCESS;
   }
@@ -219,12 +224,15 @@ gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* col_in)
   GDF_REQUIRE(nullptr != col_out->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
+  PUSH_RANGE("REPLACE_NULLS", GDF_DARK_GREEN);
+
   cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
                         col_out->size,
                         col_in->size,
                         col_out->data,
                         col_out->valid,
                         col_in->data);
+  POP_RANGE();
   return GDF_SUCCESS;
 }
 

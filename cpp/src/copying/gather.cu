@@ -23,6 +23,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
 #include <bitmask/legacy_bitmask.hpp>
+#include <utilities/nvtx/nvtx_utils.h>
 
 /**
  * @brief Operations for copying from one column to another
@@ -371,7 +372,9 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table) {
+  PUSH_RANGE("GATHER", GDF_DARK_GREEN);
   detail::gather(source_table, gather_map, destination_table);
+  POP_RANGE();
 }
 
 }  // namespace cudf
