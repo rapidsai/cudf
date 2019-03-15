@@ -40,17 +40,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define GDF_TRY(call)                                                 \
-  {                                                                   \
-    gdf_error gdf_status = call;                                      \
-    if (gdf_status != GDF_SUCCESS) {                                  \
-      std::cerr << "ERROR: "                                          \
-                << " in line " << __LINE__ << " of file " << __FILE__ \
-                << " failed with "                                    \
-                << " (" << gdf_status << ")." << std::endl;           \
-      return gdf_status;                                              \
-    }                                                                 \
-  }
+#define CUDF_TRY(call) CUDF_EXPECTS(call == GDF_SUCCESS, "Failed call")
 
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
@@ -227,13 +217,13 @@ class hostdevice_vector {
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size)
       : num_elements(initial_size), max_elements(max_size) {
-    cudaMallocHost(&h_data, sizeof(T) * max_elements);
+    CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
     RMM_ALLOC(&d_data, sizeof(T) * max_elements, 0);
   }
 
   ~hostdevice_vector() {
     RMM_FREE(d_data, 0);
-    cudaFreeHost(h_data);
+    CUDA_TRY(cudaFreeHost(h_data));
   }
 
   bool insert(const T &data) {
@@ -288,26 +278,27 @@ class ParquetMetadata : public parquet::FileMetaData {
   }
 
  public:
-  gdf_error init(const uint8_t *data, size_t len) {
+  explicit ParquetMetadata(const uint8_t *data, size_t len) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
     const auto header = (const parquet::file_header_s *)data;
     const auto ender = (const parquet::file_ender_s *)(data + len - ender_len);
-    GDF_REQUIRE(data && len > header_len + ender_len, GDF_FILE_ERROR);
-    GDF_REQUIRE(header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
-                GDF_FILE_ERROR);
-    GDF_REQUIRE(ender->footer_len != 0 &&
-                    ender->footer_len <= len - header_len - ender_len,
-                GDF_FILE_ERROR);
+    CUDF_EXPECTS(
+        data && len > header_len + ender_len,
+        "Incorrect data source");
+    CUDF_EXPECTS(
+        header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+        "Corrupted header or footer");
+    CUDF_EXPECTS(
+        ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
+        "Incorrect footer length");
 
     parquet::CPReader cp;
     cp.init(data + len - ender->footer_len - ender_len, ender->footer_len);
-    GDF_REQUIRE(cp.read(this), GDF_FILE_ERROR);
-    GDF_REQUIRE(cp.InitSchema(this), GDF_FILE_ERROR);
+    CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+    CUDF_EXPECTS(cp.InitSchema(this), "Cannot parse metadata schema");
 
     print_metadata();
-
-    return GDF_SUCCESS;
   }
 
   inline int get_total_rows() const { return num_rows; }
@@ -663,10 +654,9 @@ gdf_error read_parquet(pq_read_arg *args) {
   const auto raw_size = input.size();
 
   // Init schema and metadata
-  ParquetMetadata md;
-  GDF_TRY(md.init(raw, raw_size));
-  GDF_REQUIRE(md.get_num_rowgroups() > 0, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(md.get_num_columns() > 0, GDF_DATASET_EMPTY);
+  ParquetMetadata md(raw, raw_size);
+  CUDF_EXPECTS(md.get_num_rowgroups() > 0, "No row groups found");
+  CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
   // Obtain the index column if available
   std::string index_col_name = md.get_index_column_name();
@@ -696,7 +686,7 @@ gdf_error read_parquet(pq_read_arg *args) {
       }
     }
   }
-  GDF_REQUIRE(not col_names.empty(), GDF_INVALID_API_CALL);
+  CUDF_EXPECTS(not col_names.empty(), "Filterd out all columns");
   num_columns = col_names.size();
 
   // Initialize gdf_columns
@@ -805,24 +795,23 @@ gdf_error read_parquet(pq_read_arg *args) {
 
   // Determine how many page headers to allocate
   size_t total_pages = 0;
-  GDF_TRY(count_page_headers(chunks, &total_pages));
+  CUDF_TRY(count_page_headers(chunks, &total_pages));
 
   if (total_pages > 0) {
     hostdevice_vector<parquet::gpu::PageInfo> pages(total_pages, total_pages);
 
-    // Parse the chunks to determine page info
-    GDF_TRY(decode_page_headers(chunks, pages));
+    CUDF_TRY(decode_page_headers(chunks, pages));
     if (total_decompressed_size > 0) {
-      GDF_TRY(decompress_page_data(chunks, pages, &page_data));
+      CUDF_TRY(decompress_page_data(chunks, pages, &page_data));
     }
     for (auto &column : columns) {
-      GDF_TRY(column.allocate());
+      CUDF_TRY(column.allocate());
     }
-    GDF_TRY(decode_page_data(chunks, pages, chunk_map, num_rows));
+    CUDF_TRY(decode_page_data(chunks, pages, chunk_map, num_rows));
   } else {
     // Columns are still expected to be allocated for an empty dataframe
     for (auto &column : columns) {
-      GDF_TRY(column.allocate());
+      CUDF_TRY(column.allocate());
     }
   }
 
