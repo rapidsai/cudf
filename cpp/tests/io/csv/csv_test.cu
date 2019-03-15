@@ -342,7 +342,8 @@ TEST(gdf_csv_test, QuotedStrings)
 		auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
 		for (size_t i = 0; i < stringCount; ++i) {
 			ASSERT_GT( stringLengths[i], 0 );
-			strings[i] = new char[stringLengths[i]];
+			strings[i] = new char[stringLengths[i]+1];
+            strings[i][stringLengths[i]] = 0;
 		}
 		EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
 		EXPECT_STREQ( strings[0], "abc,\ndef, ghi" );
