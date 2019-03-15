@@ -647,6 +647,9 @@ def test_string_join_values_nulls():
     expect = left_pdf.merge(right_pdf, how='left', on='b')
     got = left_gdf.merge(right_gdf, how='left', on='b')
 
+    expect = expect.sort_values(by=['a', 'b', 'c']).reset_index(drop=True)
+    got = got.sort_values(by=['a', 'b', 'c']).reset_index(drop=True)
+
     assert_eq(expect, got)
 
 
