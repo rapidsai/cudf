@@ -15,13 +15,13 @@
  */
 
 #include <thrust/scatter.h>
+#include <utilities/nvtx/nvtx_utils.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include "copying.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
-#include <utilities/nvtx/nvtx_utils.h>
 
 namespace cudf {
 
@@ -178,6 +178,7 @@ struct column_scatterer {
 namespace detail {
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table, cudaStream_t stream = 0) {
+  PUSH_RANGE("SCATTER", GDF_DARK_GREEN);
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 
@@ -195,6 +196,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
     // TODO: Each column could be scattered on a separate stream
     cudf::type_dispatcher(source->dtype, column_scatterer{}, source,
                           scatter_map, destination, stream);
+    POP_RANGE();
 
     return destination;
   };
@@ -208,8 +210,6 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table) {
-  PUSH_RANGE("SCATTER", GDF_DARK_GREEN);
   detail::scatter(source_table, scatter_map, destination_table);
-  POP_RANGE();
 }
 }  // namespace cudf

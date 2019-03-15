@@ -341,6 +341,7 @@ namespace detail {
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table, bool check_bounds, cudaStream_t stream) {
+  PUSH_RANGE("GATHER", GDF_DARK_GREEN);
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 
@@ -366,15 +367,14 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   std::transform(source_table->begin(), source_table->end(),
                  destination_table->begin(), destination_table->begin(),
                  gather_column);
+  POP_RANGE();
 }
 
 }  // namespace detail
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table) {
-  PUSH_RANGE("GATHER", GDF_DARK_GREEN);
   detail::gather(source_table, gather_map, destination_table);
-  POP_RANGE();
 }
 
 }  // namespace cudf
