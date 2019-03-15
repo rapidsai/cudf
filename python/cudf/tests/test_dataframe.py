@@ -494,8 +494,8 @@ def test_dataframe_iloc(nelem):
 
 
 @pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="cudf columnar iloc not supported"
+    raises=AssertionError,
+    reason="Series.index are different"
 )
 def test_dataframe_iloc_tuple():
     gdf = DataFrame()
@@ -508,11 +508,11 @@ def test_dataframe_iloc_tuple():
     pdf['a'] = ha
     pdf['b'] = hb
 
-    def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'])
-        np.testing.assert_equal(g['b'].to_array(), p['b'])
+    # We don't support passing the column names into the index quite yet
+    got = gdf.iloc[1, [1]]
+    expect = pdf.iloc[1, [1]]
 
-    assert_col(gdf.iloc[1, 2], pdf.iloc[1, 2])
+    assert_eq(got, expect)
 
 
 @pytest.mark.xfail(

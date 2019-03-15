@@ -246,7 +246,10 @@ class Series(object):
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
-            arg = Series(arg)
+            if len(arg) == 0:
+                arg = Series(np.array([], dtype='int32'))
+            else:
+                arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
                 if self.dtype == np.dtype('object'):
@@ -1482,46 +1485,9 @@ class Iloc(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._sr)
-
         if isinstance(arg, tuple):
-            for idx in arg:
-                rows.append(idx)
-
-        elif isinstance(arg, int):
-            rows.append(arg)
-
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
-
-        else:
-            raise TypeError(type(arg))
-
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
-
-        for i in range(len(rows)):
-            if rows[i] < 0:
-                rows[i] = len_idx+rows[i]
-
-        # returns the single elem similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            return self._sr[rows[0]]
-
-        ret_list = []
-        for idx in rows:
-            ret_list.append(self._sr[idx])
-
-        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
-                                       nan_as_null=True)
-
-        return Series(col_data, index=as_index(np.asarray(rows)))
+            arg = list(arg)
+        return self._sr[arg]
 
     def __setitem__(self, key, value):
         # throws an exception while updating
