@@ -38,7 +38,7 @@ struct ScanTest : public GdfTest
 {
     void examin(std::vector<int>& int_values,
         std::vector<int>& exact_values,
-        gdf_error reduction_error_code, gdf_scan_op op, bool inclusive)
+        gdf_scan_op op, bool inclusive)
     {
         bool do_print = false;
 
@@ -58,24 +58,18 @@ struct ScanTest : public GdfTest
         cudf::test::column_wrapper<T> col_out(col_size);
         gdf_column * raw_output = col_out.get();
 
-        gdf_error result_error{GDF_SUCCESS};
-        result_error = gdf_scan(raw_input, raw_output, op, inclusive);
-
-        EXPECT_EQ(reduction_error_code, result_error);
+        CUDF_EXPECT_NO_THROW( gdf_scan(raw_input, raw_output, op, inclusive) );
 
         using UnderlyingType = T;
+        auto tuple_host_result = col_out.to_host();
+        auto host_result = std::get<0>(tuple_host_result);
 
-        if( result_error == GDF_SUCCESS){
-            auto tuple_host_result = col_out.to_host();
-            auto host_result = std::get<0>(tuple_host_result);
+        this->val_check(host_result, do_print, "result = ");
 
-            this->val_check(host_result, do_print, "result = ");
-
-            std::equal(exact_values.begin(), exact_values.end(),
-                host_result.begin(), host_result.end(),
-                [](int x, UnderlyingType y) {
-                    EXPECT_EQ(UnderlyingType(x), y); return true; });
-        }
+        std::equal(exact_values.begin(), exact_values.end(),
+            host_result.begin(), host_result.end(),
+            [](int x, UnderlyingType y) {
+                EXPECT_EQ(UnderlyingType(x), y); return true; });
     }
 
     template <typename Ti>
@@ -118,7 +112,7 @@ TYPED_TEST(ScanTest, Min)
         }
     );
 
-    this->examin(v, exact, GDF_SUCCESS, GDF_SCAN_MIN, true);
+    this->examin(v, exact, GDF_SCAN_MIN, true);
 }
 
 TYPED_TEST(ScanTest, Max)
@@ -134,7 +128,7 @@ TYPED_TEST(ScanTest, Max)
         }
     );
 
-    this->examin(v, exact, GDF_SUCCESS, GDF_SCAN_MAX, true);
+    this->examin(v, exact, GDF_SCAN_MAX, true);
 }
 
 
@@ -147,7 +141,7 @@ TYPED_TEST(ScanTest, Product)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc *= i; exact.push_back(acc); });
 
-    this->examin(v, exact, GDF_SUCCESS, GDF_SCAN_PRODUCTION, true);
+    this->examin(v, exact, GDF_SCAN_PRODUCTION, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
@@ -159,7 +153,7 @@ TYPED_TEST(ScanTest, Sum)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc += i; exact.push_back(acc); });
 
-    this->examin(v, exact, GDF_SUCCESS, GDF_SCAN_SUM, true);
+    this->examin(v, exact, GDF_SCAN_SUM, true);
 }
 
 

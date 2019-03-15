@@ -144,7 +144,8 @@ struct ReductionDtypeTest : public GdfTest
     template <typename T_in, typename T_out>
     void examin(std::vector<int>& int_values,
         T_out exact_value, bool succeeded_condition,
-        gdf_reduction_op op, gdf_dtype out_dtype)
+        gdf_reduction_op op, gdf_dtype out_dtype,
+        bool expected_overflow = false)
     {
         gdf_size_type col_size = int_values.size();
         std::vector<T_in> input_values(col_size);
@@ -158,11 +159,13 @@ struct ReductionDtypeTest : public GdfTest
 
         auto statement = [&]() {
             gdf_scalar result = gdf_reduction(underlying_column, op,
-                                              underlying_column->dtype);
-            T_out host_result = getValueFromScalar<T_out>(result);
-            EXPECT_EQ(exact_value, host_result);
-            std::cout << "the value = <" << exact_value
-                << ", " << host_result << ">" << std::endl;
+                                             out_dtype);
+            if( result.is_valid && ! expected_overflow){
+                T_out host_result = getValueFromScalar<T_out>(result);
+                EXPECT_EQ(exact_value, host_result);
+                std::cout << "the value = <" << exact_value
+                    << ", " << host_result << ">" << std::endl;
+            }
         };
 
         if( succeeded_condition ){
@@ -176,6 +179,7 @@ struct ReductionDtypeTest : public GdfTest
 // test case for different output precision
 TEST_F(ReductionDtypeTest, different_precision)
 {
+    constexpr bool expected_overflow = true;
     std::vector<int> v({6, -14, 13, 109, -13, -20, 45, 98, 122, 123});
     int exact = std::accumulate(v.begin(), v.end(), 0);
 
@@ -183,7 +187,8 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // over flow
     this->examin<int8_t, int8_t>
-        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8);
+        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8,
+            expected_overflow);
 
     this->examin<int8_t, int64_t>
         (v, int64_t(exact), true, GDF_REDUCTION_SUM, GDF_INT64);
@@ -193,7 +198,8 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // down cast (over flow)
     this->examin<double, int8_t>
-        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8);
+        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8,
+            expected_overflow);
 
     // down cast (no over flow)
     this->examin<double, int16_t>

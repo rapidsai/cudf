@@ -738,12 +738,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @param[in] op The operation of prefix scan
  * @param[in] inclusive The flag for applying an inclusive prefix scan if true,
  * an exclusive prefix scan if false.
- *
- * @returns   GDF_SUCCESS if the operation was successful,
- * otherwise an appropriate error code.
- * GDF_UNSUPPORTED_DTYPE if input->dtype is not an arithmetic type.
  * ----------------------------------------------------------------------------**/
-gdf_error gdf_scan(const gdf_column *input, gdf_column *output,
+void gdf_scan(const gdf_column *input, gdf_column *output,
                    gdf_scan_op op, bool inclusive);
 
 /* unary operators */
