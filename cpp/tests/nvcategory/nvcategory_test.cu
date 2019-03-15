@@ -803,14 +803,17 @@ struct NVCategoryJoinTest : public GdfTest
   /**
    * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
    *
-   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
+   * @Param op The join operator
+   * @Param left_join_idx The vector of column indexes to join from left dataframe
+   * @Param right_join_idx The vector of column indexes to join from right dataframe
    * @Param print Option to print the result computed by the libgdf function
    * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_gdf_result(join_op op, bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<result_type> compute_gdf_result(join_op op, std::vector<int> left_join_idx, std::vector<int> right_join_idx, bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
   {
-	EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
+    EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
+    EXPECT_EQ(left_join_idx.size(), right_join_idx.size()) << "Mismatch join indexes size";
 
     gdf_column left_result;
     gdf_column right_result;
@@ -818,23 +821,22 @@ struct NVCategoryJoinTest : public GdfTest
     right_result.size = 0;
 
     size_t num_columns = gdf_raw_left_columns.size();
-    size_t result_num_cols = num_columns; //OR = num_left_cols + num_right_cols - num_cols_to_join 
+    size_t result_num_cols = gdf_raw_left_columns.size() + gdf_raw_right_columns.size() - left_join_idx.size();
 
     gdf_error result_error{GDF_SUCCESS};
 
     gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
     gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
     gdf_column ** result_columns = gdf_raw_result_columns.data();
-    std::vector<int> range;
-    for (size_t i = 0; i < num_columns; ++i) {range.push_back(i);}
+
     switch(op)
     {
       case join_op::LEFT:
         {
           result_error = gdf_left_join(
-                                       left_gdf_columns, num_columns, range.data(),
-                                       right_gdf_columns, num_columns, range.data(),
-                                       num_columns,
+                                       left_gdf_columns, num_columns, left_join_idx.data(),
+                                       right_gdf_columns, num_columns, right_join_idx.data(),
+                                       left_join_idx.size(),
                                        result_num_cols, result_columns,
                                        &left_result, &right_result,
                                        &ctxt);
@@ -843,9 +845,9 @@ struct NVCategoryJoinTest : public GdfTest
       case join_op::INNER:
         {
           result_error =  gdf_inner_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
+                                         left_gdf_columns, num_columns, left_join_idx.data(),
+                                         right_gdf_columns, num_columns, right_join_idx.data(),
+                                         left_join_idx.size(),
                                          result_num_cols, result_columns,
                                          &left_result, &right_result,
                                          &ctxt);
@@ -854,9 +856,9 @@ struct NVCategoryJoinTest : public GdfTest
       case join_op::FULL:
         {
           result_error =  gdf_full_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
+                                         left_gdf_columns, num_columns, left_join_idx.data(),
+                                         right_gdf_columns, num_columns, right_join_idx.data(),
+                                         left_join_idx.size(),
                                          result_num_cols, result_columns,
                                          &left_result, &right_result,
                                          &ctxt);
@@ -1014,7 +1016,10 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
-	std::vector<result_type> gdf_result = this->compute_gdf_result(op, print);
+  std::vector<int> left_join_idx={0};
+  std::vector<int> right_join_idx={0};
+
+	std::vector<result_type> gdf_result = this->compute_gdf_result(op, left_join_idx, right_join_idx, print);
 
 	ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -1054,7 +1059,10 @@ TEST_F(NVCategoryJoinTest, join_test_nulls){
 
   std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result(op, print);
+  std::vector<int> left_join_idx={0};
+  std::vector<int> right_join_idx={0};
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result(op, left_join_idx, right_join_idx, print);
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -1065,61 +1073,74 @@ TEST_F(NVCategoryJoinTest, join_test_nulls){
 }
 
 
-TEST_F(NVCategoryJoinTest, simple_category_join_test_first_column_ints){
-  size_t length = 1;
+TEST_F(NVCategoryJoinTest, join_test_bug){
 
-  const char * left_string_data[] = { "one", "two", "solitude!" };
-  const char * right_string_data[] = { "one", "two"};
+  bool print = false;
+  join_op op = join_op::LEFT;
 
-  const char * joined_string_data[] = {"one","two","solitude"};
-  int32_t joined_left_data[] = { 0, 1, 2};
-  int32_t joined_right_data[] = { 3, 2, 1};
+  const size_t left_size = 3;
+  const char *column_left_b[] = {"one  ", "two  ", "NO MATCH"};
+  int column_left_a[] = { 5, 14, 8 };
 
-  int32_t join_index[] = { 1 };
+  const size_t right_size = 2;
+  const char *column_right_b[] = {"two  ", "one  "};
+  int column_left_c[] = { 0, 1 };
 
-  gdf_column * left_column = create_nv_category_column_strings(left_string_data, 3);
-  gdf_column * right_column = create_nv_category_column_strings(right_string_data, 2);
+  left_string_column = std::vector<std::string> (column_left_b, column_left_b + left_size);
+  right_string_column = std::vector<std::string> (column_right_b, column_right_b + right_size);
+
+  gdf_column * left_column = create_nv_category_column_strings(column_left_b, left_size);
+  left_column->valid = nullptr;
+  gdf_column * left_non_join_column = create_column_ints(column_left_a, left_size);
+  left_non_join_column ->valid = nullptr;
+  gdf_column * right_column = create_nv_category_column_strings(column_right_b, right_size);
+  right_column->valid = nullptr;
+  gdf_column * right_non_join_column = create_column_ints(column_left_c, right_size);
+  right_non_join_column->valid = nullptr;
+
   left_column->valid = nullptr;
   right_column->valid = nullptr;
+  if(print){
+    std::cout<<"Raw string indexes:\n";
+    print_gdf_column(left_column);
+    print_gdf_column(right_column);
+  }
 
-
-  gdf_column * constant_2 = create_column_ints(joined_left_data, 3);;
-  constant_2->valid = nullptr;
-  gdf_column * constant_1= create_column_ints(joined_right_data, 2);;
-  constant_1->valid = nullptr;
-
-  gdf_column * joined_left_column = create_column_ints(joined_left_data, 3);
-  gdf_column * joined_right_column = create_column_ints(joined_right_data, 3);
-  gdf_column * result_column = create_column_ints(joined_right_data, 3);
-  result_column->dtype = GDF_STRING_CATEGORY;
-  result_column->dtype_info.category = nullptr;
-
-  gdf_column * joined_left_column_ref = create_column_ints(joined_left_data, 3);
-  gdf_column * joined_right_column_ref = create_column_ints(joined_right_data, 3);
-  gdf_column * result_column_ref = create_column_ints(joined_right_data, 3);
-  result_column_ref->dtype = GDF_STRING_CATEGORY;
-  result_column_ref->dtype_info.category = nullptr;
-  gdf_context ctxt = {0, GDF_HASH, 1};
-
-  gdf_raw_left_columns.push_back(constant_1);
+  gdf_raw_left_columns.push_back(left_non_join_column);
   gdf_raw_left_columns.push_back(left_column);
-  gdf_raw_right_columns.push_back(constant_2);
+  
+  gdf_raw_right_columns.push_back(right_non_join_column);
   gdf_raw_right_columns.push_back(right_column);
-  gdf_raw_result_columns.push_back(joined_left_column);
-  gdf_raw_result_columns.push_back(result_column);
-  gdf_raw_result_columns.push_back(joined_right_column);
 
-  gdf_left_join( gdf_raw_left_columns.data(), 2, join_index,
-                                         gdf_raw_right_columns.data(), 2, join_index,
-                                         1,
-                                         3, gdf_raw_result_columns.data(),
-                                         nullptr,nullptr,
-                                         &ctxt);
+  gdf_column * result_column_nonjoin_left = create_column_ints(column_left_a, left_size);
+  gdf_column * result_column_nonjoin_right = create_column_ints(column_left_a, left_size);
+  gdf_column * result_column_joined = create_nv_category_column_strings(column_left_b, left_size);
+  
+  gdf_raw_result_columns.push_back(result_column_nonjoin_left);
+  gdf_raw_result_columns.push_back(result_column_joined);
+  gdf_raw_result_columns.push_back(result_column_nonjoin_right);
 
+  std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
-  print_gdf_column(joined_left_column);
-  print_gdf_column(joined_right_column);
+  std::vector<int> left_join_idx={1};
+  std::vector<int> right_join_idx={1};
 
+  std::vector<result_type> gdf_result = this->compute_gdf_result(op, left_join_idx, right_join_idx, print);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+
+  if(print){
+    std::cout<<"Output columns:\n";
+    for(size_t i=0; i<gdf_raw_result_columns.size(); i++){
+      print_gdf_column(gdf_raw_result_columns[i]);
+      std::cout<<"\n-----\n";
+    }
+  }
 
 }
 
