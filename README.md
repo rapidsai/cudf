@@ -64,13 +64,13 @@ cuDF can also be installed from [PyPi](https://pypi.org/project/cudf/).
 
 ```bash
 # for CUDA 9.2
-python3.6 -m pip install cudf-cuda92==0.5
+python3.6 -m pip install cudf-cuda92==0.6
 
 # or, for CUDA 10.0
-python3.6 -m pip install cudf-cuda100==0.5
+python3.6 -m pip install cudf-cuda100==0.6
 ```
 
-Note: cuDF is supported only Linux, and with Python versions 3.6 or 3.7.
+Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
 
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
 
