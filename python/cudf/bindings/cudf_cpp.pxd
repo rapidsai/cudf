@@ -37,6 +37,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef long    gdf_date64
     ctypedef int     gdf_date32
     ctypedef int     gdf_category
+    ctypedef int     gdf_nvstring_category
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -51,6 +52,7 @@ cdef extern from "cudf.h" nogil:
         GDF_TIMESTAMP,
         GDF_CATEGORY,
         GDF_STRING,
+        GDF_STRING_CATEGORY,
         N_GDF_TYPES,
 
     ctypedef enum gdf_error:
@@ -94,6 +96,7 @@ cdef extern from "cudf.h" nogil:
 
     ctypedef struct gdf_dtype_extra_info:
         gdf_time_unit time_unit
+        void *category
 
     ctypedef struct gdf_column:
         void *data
@@ -328,7 +331,7 @@ cdef extern from "cudf.h" nogil:
                                          unsigned *d_begin_offsets,
                                          unsigned *d_end_offsets)
 
-    gdf_error gdf_inner_join(
+    cdef gdf_error gdf_inner_join(
                              gdf_column **left_cols,
                              int num_left_cols,
                              int left_join_cols[],
@@ -340,7 +343,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_left_join(
                              gdf_column **left_cols,
@@ -354,7 +357,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_full_join(
                              gdf_column **left_cols,
@@ -368,7 +371,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_hash_partition(int num_input_cols,
                                  gdf_column * input[],
