@@ -40,6 +40,15 @@ conda list
 # BUILD - Build libcudf and cuDF from source
 ################################################################################
 
+# Temporarily update nvstrings for testing
+CUDA_REL=${CUDA_VERSION:0:3}
+if [ "${CUDA_VERSION:0:2}" == '10' ]; then
+  # CUDA 10 release
+  CUDA_REL=${CUDA_VERSION:0:4}
+fi
+logger "conda install -c rapidsai -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*"
+conda install -c rapidsai -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*
+
 logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build

@@ -17,6 +17,7 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
+from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -584,6 +585,10 @@ def as_index(arbitrary, name=None):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, StringColumn):
+        raise NotImplementedError(
+            "Strings are not yet supported in the index"
+        )
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name

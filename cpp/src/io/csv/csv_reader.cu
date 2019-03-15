@@ -687,7 +687,7 @@ gdf_error read_csv(csv_read_arg *args)
 			if (h_ColumnData[col].countNULL == raw_csv->num_records){
 				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
 			} else if(h_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_CATEGORY); // For auto-detection, we are currently not supporting strings.
+				d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
 			} else if(h_ColumnData[col].countDateAndTime>0L){
 				d_detectedTypes.push_back(GDF_DATE64);
 			} else if(h_ColumnData[col].countFloat > 0L  ||  

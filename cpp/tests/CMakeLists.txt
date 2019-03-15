@@ -194,6 +194,7 @@ set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
+
 ###################################################################################################
 # - types tests -----------------------------------------------------------------------------------
 
@@ -202,6 +203,14 @@ set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+
+###################################################################################################
+# - nvcategory tests -------------------------------------------------------------------------------
+
+set(NVCATEGORY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+
+ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests -------------------------------------------------------------------------------------

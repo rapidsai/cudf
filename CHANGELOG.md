@@ -6,6 +6,7 @@
 
 ## Improvements
 
+- PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 
 ## Bug Fixes
@@ -53,9 +54,11 @@
 - PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #872 Adding NVCategory support to cudf apis
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
+- PR #1032 Add string support to cuDF python
 - PR #1136 Removed `gdf_concat`
 - PR #1153 Added function for getting the padded allocation size for valid bitmask
 - PR #1148 Add cudf.sqrt for dataframes and Series
@@ -104,6 +107,7 @@
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
 - PR #1183 Bump Arrow version to 0.12.1
+- PR #1208 Default to CXX11_ABI=ON
 
 ## Bug Fixes
 
@@ -154,6 +158,7 @@
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
 - PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
+- PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 
 
 # cuDF 0.5.1 (05 Feb 2019)
