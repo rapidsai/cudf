@@ -34,6 +34,12 @@
 #include <utility>
 #include <vector>
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #define GDF_TRY(call)                                                 \
   {                                                                   \
     gdf_error gdf_status = call;                                      \
@@ -46,43 +52,48 @@
     }                                                                 \
   }
 
-#if 1
+#if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
 #endif
 
-uint8_t *LoadFile(const char *input_fname, size_t *len) {
-  size_t file_size;
-  FILE *fin = nullptr;
-  uint8_t *raw = nullptr;
+/**
+ * @brief Helper class for memory mapping a file source
+ **/
+class DataSource {
+ public:
+  explicit DataSource(const char *filepath) {
+    fd = open(filepath, O_RDONLY);
+    CUDF_EXPECTS(fd > 0, "Failed file open");
 
-  *len = 0;
-  fin = (input_fname) ? fopen(input_fname, "rb") : nullptr;
-  if (!fin) {
-    printf("Could not open \"%s\"\n", input_fname);
-    return nullptr;
+    struct stat st {};
+    CUDF_EXPECTS(fstat(fd, &st) == 0, "Failed file size query");
+
+    mapped_size = st.st_size;
+    CUDF_EXPECTS(mapped_size > 0, "Found zero-sized file");
+
+    mapped_data = mmap(NULL, mapped_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Failed memory mapping file");
   }
-  fseek(fin, 0, SEEK_END);
-  file_size = ftell(fin);
-  fseek(fin, 0, SEEK_SET);
-  if (file_size <= 0) {
-    printf("Invalid file size: %zd\n", file_size);
-    fclose(fin);
-    return nullptr;
-  }
-  *len = file_size;
-  raw = new uint8_t[file_size];
-  if (raw) {
-    if (file_size != fread(raw, 1, file_size, fin)) {
-      printf("Failed to read %zd bytes\n", file_size);
-      delete[] raw;
-      raw = nullptr;
+
+  ~DataSource() {
+    if (mapped_data) {
+      munmap(mapped_data, mapped_size);
+    }
+    if (fd) {
+      close(fd);
     }
   }
-  fclose(fin);
-  return raw;
-}
+
+  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
+  size_t size() const { return mapped_size; }
+
+ private:
+  void *mapped_data = nullptr;
+  size_t mapped_size = 0;
+  int fd = 0;
+};
 
 /**
  * @brief Function that translates Parquet datatype to GDF dtype
@@ -488,6 +499,7 @@ gdf_error decompress_page_data(
   uint8_t *decompressed_pages = nullptr;
   RMM_TRY(RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0));
   page_data->emplace_back(decompressed_pages);
+
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
@@ -646,9 +658,9 @@ gdf_error read_parquet(pq_read_arg *args) {
   int num_rows = 0;
   int index_col = -1;
 
-  size_t raw_size;
-  std::unique_ptr<uint8_t[]> raw_owner(LoadFile(args->source, &raw_size));
-  const uint8_t *raw = raw_owner.get();
+  DataSource input(args->source);
+  const auto raw = input.data();
+  const auto raw_size = input.size();
 
   // Init schema and metadata
   ParquetMetadata md;
