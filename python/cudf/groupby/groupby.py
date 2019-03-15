@@ -367,7 +367,12 @@ class Groupby(object):
                     agg_type, result, add_col_values, ctx, self._val_columns,
                     val_columns_out, sort_result=sort_result)
                 add_col_values = False  # we only want to add them once
-
+            # TODO: Do multindex here
+            if(self._as_index) and 1 == len(self._by):
+                idx = index.as_index(result[self._by[0]])
+                idx.name = self._by[0]
+                result = result.set_index(idx)
+                result.drop_column(idx.name)
         elif isinstance(args, collections.abc.Mapping):
             if (len(args.keys()) == 1):
                 if(len(list(args.values())[0]) == 1):
@@ -392,18 +397,15 @@ class Groupby(object):
                                              add_col_values, ctx, [val],
                                              val_columns_out,
                                              sort_result=sort_result)
-
                 add_col_values = False  # we only want to add them once
-
+            # TODO: Do multindex here
+            if(self._as_index) and 1 == len(self._by):
+                idx = index.as_index(result[self._by[0]])
+                idx.name = self._by[0]
+                result = result.set_index(idx)
+                result.drop_column(idx.name)
         else:
             result = self.agg([args])
-
-        # TODO: Do multindex here
-        if(self._as_index) and 1 == len(self._by):
-            idx = index.as_index(result[self._by[0]])
-            idx.name = self._by[0]
-            result = result.set_index(idx)
-            result.drop_column(idx.name)
 
         nvtx_range_pop()
         return result

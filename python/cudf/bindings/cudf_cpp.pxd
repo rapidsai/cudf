@@ -5,6 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cudf.bindings.dlpack cimport DLManagedTensor
+
 from libcpp cimport bool
 from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
@@ -187,6 +189,28 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_COUNT,
         GDF_WINDOW_STDDEV,
         GDF_WINDOW_VA
+
+
+    ctypedef enum gdf_binary_operator:
+        GDF_ADD,
+        GDF_SUB,
+        GDF_MUL,
+        GDF_DIV,
+        GDF_TRUE_DIV,
+        GDF_FLOOR_DIV,
+        GDF_MOD,
+        GDF_POW,
+        GDF_EQUAL,
+        GDF_NOT_EQUAL,
+        GDF_LESS,
+        GDF_GREATER,
+        GDF_LESS_EQUAL,
+        GDF_GREATER_EQUAL
+
+
+    ctypedef struct gdf_scalar:
+        void *data
+        gdf_dtype dtype
 
 
     cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
@@ -450,6 +474,10 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output)
 
+    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope)
+
     cdef gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     cdef gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     cdef gdf_error gdf_add_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
@@ -556,7 +584,7 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
-    cdef gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
 
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
@@ -640,10 +668,23 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    gdf_column* old_values,
-                                   gdf_column* new_values);
+                                   gdf_column* new_values)
+
+
+    cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
+                                     const gdf_column* col_in)
 
 
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
-                                gdf_index_type* out_indices);
+                                gdf_index_type* out_indices)
+
+    cdef gdf_error gdf_from_dlpack(gdf_column** columns,
+                                   gdf_size_type *num_columns,
+                                   const DLManagedTensor * tensor) except +
+
+    cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
+                                 const gdf_column ** columns,
+                                 gdf_size_type num_columns) except +
+    

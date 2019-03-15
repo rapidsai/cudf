@@ -54,6 +54,12 @@ struct cuda_error : public std::runtime_error {
 /**---------------------------------------------------------------------------*
  * @brief Error checking macro that throws an exception when a condition is
  * violated.
+ * 
+ * Example usage:
+ * 
+ * @code
+ * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+ * @endcode
  *
  * Example usage:
  *

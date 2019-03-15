@@ -14,7 +14,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_BUILD_BENCHMARKS=OFF"
                      " -DARROW_IPC=ON"
                      " -DARROW_COMPUTE=OFF"
-                     " -DARROW_GPU=OFF"
+                     " -DARROW_CUDA=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
@@ -97,7 +97,7 @@ set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1200)
+add_definitions(-DARROW_VERSION=1210)
 
 
 

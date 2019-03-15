@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
@@ -176,10 +176,30 @@ class Series(object):
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
 
-    def to_frame(self):
-        """ Convert Series into a DataFrame """
+    def to_frame(self, name=None):
+        """Convert Series into a DataFrame
+
+        Parameters
+        ----------
+        name : str, default None
+            Name to be used for the column
+
+        Returns
+        -------
+        DataFrame
+            cudf DataFrame
+        """
+
         from cudf import DataFrame
-        return DataFrame({self.name or 0: self}, index=self.index)
+
+        if name is not None:
+            col = name
+        elif self.name is None:
+            col = 0
+        else:
+            col = self.name
+
+        return DataFrame({col: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -210,6 +230,13 @@ class Series(object):
         """
         return len(self._column)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__' and 'sqrt' == ufunc.__name__:
+            from cudf import sqrt
+            return sqrt(self)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -217,7 +244,10 @@ class Series(object):
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
-            arg = Series(arg)
+            if len(arg) == 0:
+                arg = Series(np.array([], dtype='int32'))
+            else:
+                arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
                 selvals, selinds = columnops.column_select_by_position(
@@ -402,11 +432,14 @@ class Series(object):
     def __rmul__(self, other):
         return self._rbinaryop(other, 'mul')
 
+    def __mod__(self, other):
+        return self._binaryop(other, 'mod')
+
+    def __rmod__(self, other):
+        return self._rbinaryop(other, 'mod')
+
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._binaryop(other, 'pow')
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
@@ -542,10 +575,20 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def fillna(self, value, method=None, limit=None, axis=None):
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
-        Returns a copy with null filled.
+        Parameters
+        ----------
+        value : scalar or Series-like
+            Value to use to fill nulls. If Series-like, null values
+            are filled with the values in corresponding indices of the
+            given Series.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
         """
         if method is not None:
             raise NotImplementedError("The method keyword is not supported")
@@ -554,9 +597,10 @@ class Series(object):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value)
+        data = self._column.fillna(value, inplace=inplace)
 
-        return self._copy_construct(data=data)
+        if not inplace:
+            return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -1325,6 +1369,12 @@ class Series(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
+
     def rename(self, index=None, copy=True):
         """
         Alter Series name.
@@ -1407,46 +1457,9 @@ class Iloc(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._sr)
-
         if isinstance(arg, tuple):
-            for idx in arg:
-                rows.append(idx)
-
-        elif isinstance(arg, int):
-            rows.append(arg)
-
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
-
-        else:
-            raise TypeError(type(arg))
-
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
-
-        for i in range(len(rows)):
-            if rows[i] < 0:
-                rows[i] = len_idx+rows[i]
-
-        # returns the single elem similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            return self._sr[rows[0]]
-
-        ret_list = []
-        for idx in rows:
-            ret_list.append(self._sr[idx])
-
-        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
-                                       nan_as_null=True)
-
-        return Series(col_data, index=as_index(np.asarray(rows)))
+            arg = list(arg)
+        return self._sr[arg]
 
     def __setitem__(self, key, value):
         # throws an exception while updating

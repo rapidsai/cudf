@@ -8,13 +8,12 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
 from cudf import _gdf
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 
 
@@ -241,7 +240,7 @@ class Column(object):
         """
         nelem = len(self)
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
+        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xff if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
@@ -568,3 +567,9 @@ class Column(object):
         device array
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)

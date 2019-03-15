@@ -24,6 +24,7 @@
 #include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "utilities/type_dispatcher.hpp"
+#include "bitmask/legacy_bitmask.hpp"
 #include <cuda_runtime_api.h>
 #include <algorithm>
 
@@ -120,7 +121,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type)) );
+                         gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
   }
   
   return GDF_SUCCESS;
@@ -185,10 +186,15 @@ namespace{
   };
 }
 
-// Returns the byte width of the data type of the gdf_column
+// returns the size in bytes of the specified gdf_dtype
+gdf_size_type gdf_dtype_size(gdf_dtype dtype) {
+  return cudf::type_dispatcher(dtype, get_type_size{});
+}
+
+// Returns the size in bytes of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  *width = cudf::type_dispatcher(col->dtype, get_type_size{});
+  *width = gdf_dtype_size(col->dtype);
 	return GDF_SUCCESS;
 }

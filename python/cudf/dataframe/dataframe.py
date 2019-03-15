@@ -284,6 +284,13 @@ class DataFrame(object):
         """
         return self._size
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__' and 'sqrt' == ufunc.__name__:
+            from cudf import sqrt
+            return sqrt(self)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -416,7 +423,10 @@ class DataFrame(object):
     def _call_op(self, other, internal_fn, fn):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if internal_fn == '_unaryop':
+            for col in self._cols:
+                result[col] = self._cols[col]._unaryop(fn)
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], internal_fn)(
                         other[k],
@@ -1315,7 +1325,7 @@ class DataFrame(object):
         else:
             lsuffix, rsuffix = suffixes
 
-        if left_on and right_on:
+        if left_on and right_on and left_on != right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
 
@@ -1361,6 +1371,11 @@ class DataFrame(object):
         # Essential parameters
         if on:
             on = [on] if isinstance(on, str) else list(on)
+        if left_on:
+            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
+        if right_on:
+            right_on = ([right_on] if isinstance(right_on, str)
+                        else list(right_on))
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1420,14 +1435,11 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = rhs[name].cat.categories
 
-        if right_on and left_on:
-            raise NotImplementedError("merge(left_on='x', right_on='y' not"
-                                      "supported by CUDF at this time.")
         if left_index and right_on:
-            lhs[right_on] = lhs.index
+            lhs[right_on[0]] = lhs.index
             left_on = right_on
         elif right_index and left_on:
-            rhs[left_on] = rhs.index
+            rhs[left_on[0]] = rhs.index
             right_on = left_on
 
         if on:
@@ -1499,14 +1511,14 @@ class DataFrame(object):
             df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
-                               index=RangeIndex(0, len(lhs[left_on])))
-            indexed = lhs[left_on][df[left_on]-1]
+                               index=RangeIndex(0, len(lhs[left_on[0]])))
+            indexed = lhs[left_on[0]][df[left_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
         elif left_index and right_on:
             new_index = Series(rhs.index,
-                               index=RangeIndex(0, len(rhs[right_on])))
-            indexed = rhs[right_on][df[right_on]-1]
+                               index=RangeIndex(0, len(rhs[right_on[0]])))
+            indexed = rhs[right_on[0]][df[right_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
 
@@ -1956,6 +1968,52 @@ class DataFrame(object):
 
         return outdf
 
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> gdf.fillna(4).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> gdf.fillna({'a': 3, 'b': 4}).to_pandas()
+        a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
+        if inplace:
+            outdf = {}  # this dict will just hold Nones
+        else:
+            outdf = self.copy()
+
+        if not is_dict_like(value):
+            value = dict.fromkeys(self.columns, value)
+
+        for k in value:
+            outdf[k] = self[k].fillna(value[k], method=method, axis=axis,
+                                      inplace=inplace, limit=limit)
+
+        if not inplace:
+            return outdf
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
@@ -2328,6 +2386,12 @@ class DataFrame(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
+
 
 class Loc(object):
     """
@@ -2399,63 +2463,28 @@ class Iloc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._df.index)
+        if isinstance(arg, (tuple)):
+            if len(arg) == 1:
+                arg = list(arg)
+            elif len(arg) == 2:
+                return self[arg[0]][arg[1]]
+            else:
+                return pd.core.indexing.IndexingError(
+                    "Too many indexers"
+                )
 
-        if isinstance(arg, tuple):
-            raise NotImplementedError('cudf columnar iloc not supported')
-
-        elif isinstance(arg, int):
-            rows.append(arg)
-
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
-
-        elif isinstance(arg, utils.list_types_tuple):
-            for idx in arg:
-                rows.append(idx)
-
+        if isinstance(arg, numbers.Integral):
+            rows = []
+            for col in self._df.columns:
+                rows.append(self._df[col][arg])
+            return Series(np.array(rows), name=arg)
         else:
-            raise TypeError(type(arg))
+            df = DataFrame()
+            for col in self._df.columns:
+                df[col] = self._df[col][arg]
+            df.index = self._df.index[arg]
 
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
-
-        # returns the series similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            ret_list = []
-            col_list = pd.Categorical(list(self._df.columns))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                    self._df[col][rows[0]].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in iloc"
-                    )
-                ret_list.append(self._df[col][rows[0]])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
-
-        df = DataFrame()
-
-        for col in self._df.columns:
-            sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)])
-
-        # 0-length rows can occur when when iloc[n=0]
-        # head(0)
-        if isinstance(arg, slice):
-            df.index = sr.index[arg]
-        else:
-            df.index = sr.index[rows]
-        return df
+            return df
 
     def __setitem__(self, key, value):
         # throws an exception while updating
