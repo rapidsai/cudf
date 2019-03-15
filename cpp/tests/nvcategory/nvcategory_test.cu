@@ -696,9 +696,10 @@ struct NVCategoryJoinTest : public GdfTest
   // input to the gdf_join functions
   std::vector<gdf_column*> gdf_raw_left_columns;
   std::vector<gdf_column*> gdf_raw_right_columns;
+  std::vector<gdf_column*> gdf_raw_result_columns;
 
-  std::vector<std::string> left_column;
-  std::vector<std::string> right_column;
+  std::vector<std::string> left_string_column;
+  std::vector<std::string> right_string_column;
 
   gdf_context ctxt{0, GDF_HASH, 0};
 
@@ -722,7 +723,7 @@ struct NVCategoryJoinTest : public GdfTest
     std::multimap<key_type, value_type> the_map;
 
     // Build hash table that maps the first right columns' values to their row index in the column
-	std::vector<key_type> const & build_column = right_column;
+	std::vector<key_type> const & build_column = right_string_column;
 
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index){
       the_map.insert(std::make_pair(build_column[right_index], right_index));
@@ -731,7 +732,7 @@ struct NVCategoryJoinTest : public GdfTest
     std::vector<result_type> reference_result;
 	
     // Probe hash table with first left column
-    std::vector<key_type> const & probe_column = left_column;
+    std::vector<key_type> const & probe_column = left_string_column;
 
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
@@ -747,7 +748,7 @@ struct NVCategoryJoinTest : public GdfTest
         {
           const auto right_index = i->second;
 
-		  if(left_column[left_index] == right_column[right_index]){
+		  if(left_string_column[left_index] == right_string_column[right_index]){
             reference_result.emplace_back(left_index, right_index);
             match = true;
           }
@@ -816,12 +817,14 @@ struct NVCategoryJoinTest : public GdfTest
     left_result.size = 0;
     right_result.size = 0;
 
-	size_t num_columns = gdf_raw_left_columns.size();
+    size_t num_columns = gdf_raw_left_columns.size();
+    size_t result_num_cols = num_columns; //OR = num_left_cols + num_right_cols - num_cols_to_join 
 
     gdf_error result_error{GDF_SUCCESS};
 
     gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
     gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
+    gdf_column ** result_columns = gdf_raw_result_columns.data();
     std::vector<int> range;
     for (size_t i = 0; i < num_columns; ++i) {range.push_back(i);}
     switch(op)
@@ -832,7 +835,7 @@ struct NVCategoryJoinTest : public GdfTest
                                        left_gdf_columns, num_columns, range.data(),
                                        right_gdf_columns, num_columns, range.data(),
                                        num_columns,
-                                       0, nullptr,
+                                       result_num_cols, result_columns,
                                        &left_result, &right_result,
                                        &ctxt);
           break;
@@ -843,7 +846,7 @@ struct NVCategoryJoinTest : public GdfTest
                                          left_gdf_columns, num_columns, range.data(),
                                          right_gdf_columns, num_columns, range.data(),
                                          num_columns,
-                                         0, nullptr,
+                                         result_num_cols, result_columns,
                                          &left_result, &right_result,
                                          &ctxt);
           break;
@@ -854,7 +857,7 @@ struct NVCategoryJoinTest : public GdfTest
                                          left_gdf_columns, num_columns, range.data(),
                                          right_gdf_columns, num_columns, range.data(),
                                          num_columns,
-                                         0, nullptr,
+                                         result_num_cols, result_columns,
                                          &left_result, &right_result,
                                          &ctxt);
           break;
@@ -919,33 +922,95 @@ struct NVCategoryJoinTest : public GdfTest
     }
     return host_pair_result;
   }
+
+  void check_output(join_op op, std::vector<result_type>& reference_result, size_t length, bool print=false, bool sort=true){
+    gdf_column* result_column = gdf_raw_result_columns[0];
+
+    if(print){
+      std::cout<<"Raw string result:\n";
+      print_gdf_column(result_column);
+    }
+    
+    size_t result_size = result_column->size;
+    if(result_size>0){
+      NVStrings * temp_strings = static_cast<NVCategory *>(result_column->dtype_info.category)->gather_strings( 
+        (nv_category_index_type *) result_column->data, result_size , DEVICE_ALLOCATED );
+
+      char** host_strings = new char*[result_size];
+      for(size_t i=0;i<result_size;i++){
+        host_strings[i]=new char[length+1];
+      }
+
+      temp_strings->to_host(host_strings, 0, result_size);
+
+      for(size_t i=0;i<result_size;i++){
+        host_strings[i][length]=0;
+      }
+
+      std::vector<std::string> result_output = std::vector<std::string>(host_strings, host_strings + result_size);
+      std::vector<std::string> reference_output;
+
+      for(size_t i=0; i<result_size; i++){
+        if(reference_result[i].first != -1)
+          reference_output.push_back(left_string_column[reference_result[i].first]);
+        else
+          reference_output.push_back(right_string_column[reference_result[i].second]);
+      }
+
+      EXPECT_EQ(reference_output.size(), result_size);
+
+      if(sort){
+        std::sort(result_output.begin(), result_output.end());
+        std::sort(reference_output.begin(), reference_output.end());
+      }
+
+      if(print){
+        for(auto str : result_output){
+          std::cout<<str<<"\t";
+        }
+        std::cout<<std::endl;
+      }
+
+      NVStrings::destroy(temp_strings);
+
+      for(size_t i = 0; i < result_size; i++){
+        delete host_strings[i];
+      }
+      delete host_strings;
+
+      for(size_t i=0; i<result_size; i++){
+        EXPECT_EQ(reference_output[i], result_output[i]);
+      }
+    }
+  }
 };
 
 TEST_F(NVCategoryJoinTest, join_test){
 
 	bool print = false;
-	size_t rows_size = 16;
-//	size_t max_int_value = 50;
+	size_t rows_size = 64;
 	join_op op = join_op::INNER;
 
 	size_t length = 1;
 	const char ** left_string_data = generate_string_data(rows_size, length, print);
 	const char ** right_string_data = generate_string_data(rows_size, length, print);
 
-	left_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
-	right_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
+	left_string_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
+	right_string_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
 
 	gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
-	gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+  gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+  gdf_column * result_column = create_nv_category_column_strings(right_string_data, rows_size);
 	
 	if(print){
 		std::cout<<"Raw string indexes:\n";
-		print_gdf_column(left_column);
+    print_gdf_column(left_column);
 		print_gdf_column(right_column);
 	}
 
 	gdf_raw_left_columns.push_back(left_column);
-	gdf_raw_right_columns.push_back(right_column);
+  gdf_raw_right_columns.push_back(right_column);
+  gdf_raw_result_columns.push_back(result_column);
 
 	std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 
@@ -956,22 +1021,23 @@ TEST_F(NVCategoryJoinTest, join_test){
 	// Compare the GDF and reference solutions
 	for(size_t i = 0; i < reference_result.size(); ++i){
 	  EXPECT_EQ(reference_result[i], gdf_result[i]);
-	}
+  }
+
+  this->check_output(op, reference_result, length, print);
 }
 
 TEST_F(NVCategoryJoinTest, join_test_nulls){
 
   bool print = false;
   size_t rows_size = 16;
-//  size_t max_int_value = 50;
   join_op op = join_op::INNER;
 
   size_t length = 1;
   const char ** left_string_data = generate_string_data(rows_size, length, print);
   const char ** right_string_data = generate_string_data(rows_size, length, print);
 
-  left_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
-  right_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
+  left_string_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
+  right_string_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
 
   gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
   gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
@@ -997,3 +1063,63 @@ TEST_F(NVCategoryJoinTest, join_test_nulls){
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
+
+
+TEST_F(NVCategoryJoinTest, simple_category_join_test_first_column_ints){
+  size_t length = 1;
+
+  const char * left_string_data[] = { "one", "two", "solitude!" };
+  const char * right_string_data[] = { "one", "two"};
+
+  const char * joined_string_data[] = {"one","two","solitude"};
+  int32_t joined_left_data[] = { 0, 1, 2};
+  int32_t joined_right_data[] = { 3, 2, 1};
+
+  int32_t join_index[] = { 1 };
+
+  gdf_column * left_column = create_nv_category_column_strings(left_string_data, 3);
+  gdf_column * right_column = create_nv_category_column_strings(right_string_data, 2);
+  left_column->valid = nullptr;
+  right_column->valid = nullptr;
+
+
+  gdf_column * constant_2 = create_column_ints(joined_left_data, 3);;
+  constant_2->valid = nullptr;
+  gdf_column * constant_1= create_column_ints(joined_right_data, 2);;
+  constant_1->valid = nullptr;
+
+  gdf_column * joined_left_column = create_column_ints(joined_left_data, 3);
+  gdf_column * joined_right_column = create_column_ints(joined_right_data, 3);
+  gdf_column * result_column = create_column_ints(joined_right_data, 3);
+  result_column->dtype = GDF_STRING_CATEGORY;
+  result_column->dtype_info.category = nullptr;
+
+  gdf_column * joined_left_column_ref = create_column_ints(joined_left_data, 3);
+  gdf_column * joined_right_column_ref = create_column_ints(joined_right_data, 3);
+  gdf_column * result_column_ref = create_column_ints(joined_right_data, 3);
+  result_column_ref->dtype = GDF_STRING_CATEGORY;
+  result_column_ref->dtype_info.category = nullptr;
+  gdf_context ctxt = {0, GDF_HASH, 1};
+
+  gdf_raw_left_columns.push_back(constant_1);
+  gdf_raw_left_columns.push_back(left_column);
+  gdf_raw_right_columns.push_back(constant_2);
+  gdf_raw_right_columns.push_back(right_column);
+  gdf_raw_result_columns.push_back(joined_left_column);
+  gdf_raw_result_columns.push_back(result_column);
+  gdf_raw_result_columns.push_back(joined_right_column);
+
+  gdf_left_join( gdf_raw_left_columns.data(), 2, join_index,
+                                         gdf_raw_right_columns.data(), 2, join_index,
+                                         1,
+                                         3, gdf_raw_result_columns.data(),
+                                         nullptr,nullptr,
+                                         &ctxt);
+
+
+  print_gdf_column(joined_left_column);
+  print_gdf_column(joined_right_column);
+
+
+}
+
