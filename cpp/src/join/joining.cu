@@ -584,7 +584,7 @@ gdf_error join_call_compute_df(
   //if the inputs are nvcategory we need to make the dictionaries comparable
   bool at_least_one_category_column = false;
   for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
-    at_least_one_category_column |= left_cols[join_column_index]->dtype == GDF_STRING_CATEGORY;
+    at_least_one_category_column |= left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY;
   }
 
   std::vector<gdf_column*> new_left_cols(left_cols, left_cols + num_left_cols);
