@@ -6,7 +6,7 @@
 
 ## Improvements
 
-- PR #1195 Simplify README.md
+- PR #1202 Simplify README.md
 
 ...
 
