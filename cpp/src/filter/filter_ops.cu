@@ -397,7 +397,7 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 			);
 			 
 		}
-	}else if(lhs->dtype == GDF_INT32){
+	}else if(lhs->dtype == GDF_INT32 || lhs->dtype == GDF_STRING_CATEGORY){
 		thrust::device_ptr<int32_t> left_ptr((int32_t *) lhs->data);
 		if(rhs->dtype == GDF_INT8){
 			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
@@ -419,7 +419,7 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 					lhs->null_count,rhs->null_count,output->null_count,stream
 			);
 
-		}else if(rhs->dtype == GDF_INT32){
+		}else if(rhs->dtype == GDF_INT32 || rhs->dtype == GDF_STRING_CATEGORY){
 			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
 			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
 			gpu_filter_op(

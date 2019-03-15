@@ -64,7 +64,8 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True,
+                 dtype=None):
         if isinstance(data, pd.Series):
             name = data.name
             index = as_index(data.index)
@@ -76,10 +77,11 @@ class Series(object):
             data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
-            data = columnops.as_column(data, nan_as_null=nan_as_null)
+            data = columnops.as_column(data, nan_as_null=nan_as_null,
+                                       dtype=dtype)
 
         if index is not None and not isinstance(index, Index):
-            raise TypeError('index not a Index type: got {!r}'.format(index))
+            index = as_index(index)
 
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
@@ -250,13 +252,24 @@ class Series(object):
                 arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                selvals, selinds = columnops.column_select_by_position(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
+                if self.dtype == np.dtype('object'):
+                    idx = arg.to_gpu_array()
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
+                    selvals, selinds = columnops.column_select_by_position(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
             elif arg.dtype in [np.bool, np.bool_]:
-                selvals, selinds = columnops.column_select_by_boolmask(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
+                if self.dtype == np.dtype('object'):
+                    idx = cudautils.boolean_array_to_index_array(
+                        arg.to_gpu_array())
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
+                    selvals, selinds = columnops.column_select_by_boolmask(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
@@ -279,6 +292,9 @@ class Series(object):
         if indices.size == 0:
             return self._copy_construct(data=self.data[:0],
                                         index=self.index[:0])
+
+        if self.dtype == np.dtype("object"):
+            return self[indices]
 
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
@@ -311,7 +327,10 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        out = ['' if v is None else str(v) for v in values]
+        if self.dtype == np.dtype('object'):
+            out = [str(v) for v in values]
+        else:
+            out = ['' if v is None else str(v) for v in values]
         return out
 
     def head(self, n=5):
@@ -346,8 +365,10 @@ class Series(object):
         if nrows is NOTSET:
             nrows = settings.formatting.get(nrows)
 
+        str_dtype = self.dtype
+
         if len(self) == 0:
-            return "<empty Series of dtype={}>".format(self.dtype)
+            return "<empty Series of dtype={}>".format(str_dtype)
 
         if nrows is None:
             nrows = len(self)
@@ -358,12 +379,15 @@ class Series(object):
 
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
+        dtypes = OrderedDict([('', self.dtype)])
         # Format into a table
         output = formatting.format(index=self.index,
-                                   cols=cols, more_rows=more_rows,
+                                   cols=cols, dtypes=dtypes,
+                                   more_rows=more_rows,
                                    series_spacing=True)
-        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
-            if self.name else output + "\ndtype: {}".format(self.dtype)
+        return output + "\nName: {}, dtype: {}".format(self.name, str_dtype)\
+            if self.name is not None else output + \
+            "\ndtype: {}".format(str_dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -511,6 +535,10 @@ class Series(object):
     @property
     def cat(self):
         return self._column.cat()
+
+    @property
+    def str(self):
+        return self._column.str(self.index)
 
     @property
     def dtype(self):

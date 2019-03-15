@@ -24,9 +24,10 @@
 #include "utilities/error_utils.hpp"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
+#include "string/nvcategory_util.hpp"
+#include <nvstrings/NVCategory.h>
 #include "copying/gather.hpp"
 #include "types.hpp"
-
 #include "joining.h"
 
 using namespace mgpu;
@@ -385,6 +386,8 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   return gdf_error_code;
 }
 
+
+
 template <JoinType join_type, typename size_type, typename index_type>
 gdf_error construct_join_output_df(
         std::vector<gdf_column*>& ljoincol,
@@ -434,6 +437,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
@@ -441,6 +445,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
     //create joined output column data buffers
     for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
@@ -450,6 +455,7 @@ gdf_error construct_join_output_df(
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
+        CHECK_STREAM(0);
     }
 
 
@@ -466,6 +472,10 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &left_destination_table, check_bounds);
+      CHECK_STREAM(0);
+      gdf_error update_err = nvcategory_gather_table(left_source_table,left_destination_table);
+      CHECK_STREAM(0);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     // Construct the right columns
@@ -477,7 +487,10 @@ gdf_error construct_join_output_df(
       cudf::detail::gather(&right_source_table,
                            static_cast<index_type const *>(right_indices->data),
                            &right_destination_table, check_bounds);
-
+      CHECK_STREAM(0);
+      gdf_error update_err = nvcategory_gather_table(right_source_table,right_destination_table);
+      CHECK_STREAM(0);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     // Construct the joined columns
@@ -495,12 +508,16 @@ gdf_error construct_join_output_df(
             &right_source_table,
             static_cast<index_type const *>(right_indices->data),
             &join_destination_table, check_bounds);
-
+        CHECK_STREAM(0);
       }
 
       cudf::detail::gather(&join_source_table,
                            static_cast<index_type const *>(left_indices->data),
                            &join_destination_table, check_bounds);
+      CHECK_STREAM(0);
+      gdf_error update_err = nvcategory_gather_table(join_source_table,join_destination_table);
+      CHECK_STREAM(0);
+      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
     }
 
     POP_RANGE();
@@ -528,6 +545,13 @@ gdf_error join_call_compute_df(
   GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
 
+  for(int column_index = 0; column_index  < num_left_cols; column_index++){
+    GDF_REQUIRE(left_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+  }
+  for(int column_index = 0; column_index  < num_right_cols; column_index++){
+    GDF_REQUIRE(right_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+  }
+
   // Determine if requested output is the indices of matching rows, the fully
   // constructed output dataframe, or both
   bool const construct_output_dataframe{nullptr != result_cols};
@@ -554,6 +578,77 @@ gdf_error join_call_compute_df(
   if ((JoinType::INNER_JOIN == join_type) &&
       ((0 == left_col_size) || (0 == right_col_size))) {
     return GDF_SUCCESS;
+  }
+
+
+  //if the inputs are nvcategory we need to make the dictionaries comparable
+  bool at_least_one_category_column = false;
+  for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
+    at_least_one_category_column |= left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY;
+  }
+
+  std::vector<gdf_column*> new_left_cols(left_cols, left_cols + num_left_cols);
+  std::vector<gdf_column*> new_right_cols(right_cols, right_cols + num_right_cols);
+  std::vector<gdf_column *> temp_columns_to_free;
+  if(at_least_one_category_column){
+    for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
+      if(left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY){
+        GDF_REQUIRE(right_cols[right_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY, GDF_DTYPE_MISMATCH);
+
+        gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
+        gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
+
+
+
+
+        gdf_column * new_left_column_ptr = new gdf_column;
+        gdf_column * new_right_column_ptr = new gdf_column;
+
+        temp_columns_to_free.push_back(new_left_column_ptr);
+        temp_columns_to_free.push_back(new_right_column_ptr);
+
+
+        gdf_column * input_join_columns_merge[2] = {left_original_column, right_original_column};
+        gdf_column * new_join_columns[2] = {new_left_column_ptr,
+            new_right_column_ptr};
+        gdf_column_view(new_left_column_ptr, nullptr, nullptr, left_original_column->size, GDF_STRING_CATEGORY);
+        gdf_column_view(new_right_column_ptr, nullptr, nullptr, right_original_column->size, GDF_STRING_CATEGORY);
+
+        int col_width;
+        get_column_byte_width(new_left_column_ptr, &col_width);
+        RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
+        if(left_original_column->valid != nullptr){
+          RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(left_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_left_column_ptr->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(left_original_column->size),cudaMemcpyDeviceToDevice) );
+        }else{
+          new_left_column_ptr->valid = nullptr;
+        }
+        new_left_column_ptr->null_count = left_original_column->null_count;
+
+
+        RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
+        if(right_original_column->valid != nullptr){
+          RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(right_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_right_column_ptr->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(right_original_column->size),cudaMemcpyDeviceToDevice) );
+        }else{
+          new_right_column_ptr->valid = nullptr;
+        }
+        new_right_column_ptr->null_count = right_original_column->null_count;
+        gdf_error err = sync_column_categories(input_join_columns_merge,
+            new_join_columns,
+            2);
+
+        GDF_REQUIRE(GDF_SUCCESS == err, err);
+
+        new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
+        new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
+        CHECK_STREAM(0);
+      }
+    }
+
+
+    left_cols = new_left_cols.data();
+    right_cols = new_right_cols.data();
   }
 
   // If index outputs are not requested, create columns to store them
@@ -597,7 +692,7 @@ gdf_error join_call_compute_df(
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
             join_context);
-
+    CHECK_STREAM(0);
     GDF_REQUIRE(GDF_SUCCESS == join_err, join_err);
 
     //If construct_output_dataframe is false then left_index_out or right_index_out
@@ -613,11 +708,22 @@ gdf_error join_call_compute_df(
             right_cols, num_right_cols, right_join_cols,
             num_cols_to_join, result_num_cols, result_cols,
             left_index_out, right_index_out);
-
+    CHECK_STREAM(0);
     l_index_temp.reset(nullptr);
     r_index_temp.reset(nullptr);
 
-    CUDA_CHECK_LAST();
+
+
+
+
+    //freeing up the temp column used to synch categories between columns
+    for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
+      NVCategory::destroy(static_cast<NVCategory *>(temp_columns_to_free[column_to_free]->dtype_info.category));
+      gdf_column_free(temp_columns_to_free[column_to_free]);
+      delete temp_columns_to_free[column_to_free];
+    }
+
+    CHECK_STREAM(0);
 
 
     return df_err;

@@ -21,7 +21,7 @@
 
 #include <cudf/types.h>
 
-#include <NVStrings.h>
+#include <nvstrings/NVStrings.h>
 
 #include <cassert>
 #include <utility>
@@ -131,6 +131,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
+    case GDF_STRING_CATEGORY:  { return f.template operator()< nvstring_category >(std::forward<Ts>(args)...); }
     default: {
 #ifdef __CUDA_ARCH__
       
@@ -223,6 +224,11 @@ inline constexpr gdf_dtype gdf_dtype_of<cudf::timestamp>() {
 template <>
 inline constexpr gdf_dtype gdf_dtype_of<cudf::category>() {
   return GDF_CATEGORY;
+};
+
+template <>
+inline constexpr gdf_dtype gdf_dtype_of<cudf::nvstring_category>() {
+  return GDF_STRING_CATEGORY;
 };
 
 template <>

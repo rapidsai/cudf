@@ -24,6 +24,7 @@
 #include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
 #include "utilities/type_dispatcher.hpp"
+#include "string/nvcategory_util.hpp"
 #include "bitmask/legacy_bitmask.hpp"
 #include <cuda_runtime_api.h>
 #include <algorithm>
@@ -56,7 +57,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     GDF_REQUIRE(current_column != nullptr, GDF_DATASET_EMPTY);
 
     if((current_column->size > 0) && (nullptr == current_column->data)){
-        return GDF_DATASET_EMPTY;
+      return GDF_DATASET_EMPTY;
     }
 
     GDF_REQUIRE(column_type == current_column->dtype, GDF_DTYPE_MISMATCH);
@@ -65,8 +66,8 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   }
 
   bool const at_least_one_mask_present{
-      std::any_of(columns_to_concat, columns_to_concat + num_columns,
-                  [](gdf_column *col) { return (nullptr != col->valid); })};
+    std::any_of(columns_to_concat, columns_to_concat + num_columns,
+                [](gdf_column *col) { return (nullptr != col->valid); })};
 
   GDF_REQUIRE(column_type == output_column->dtype, GDF_DTYPE_MISMATCH);
   GDF_REQUIRE(output_column->size == total_size, GDF_COLUMN_SIZE_MISMATCH);
@@ -87,13 +88,22 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   GDF_REQUIRE(GDF_SUCCESS == result, result);
 
   // copy data
-  for (int i = 0; i < num_columns; ++i) {   
-    gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
-    CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
-    target += bytes;
-    output_column->null_count += columns_to_concat[i]->null_count;
+
+  if(columns_to_concat[0]->dtype == GDF_STRING_CATEGORY){
+    concat_categories(columns_to_concat,output_column,num_columns);
+    for (int i = 0; i < num_columns; ++i) {
+      output_column->null_count += columns_to_concat[i]->null_count;
+    }
+  }else{
+    for (int i = 0; i < num_columns; ++i) {
+      gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
+      CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
+      target += bytes;
+      output_column->null_count += columns_to_concat[i]->null_count;
+    }
+
   }
-  
+
   if (at_least_one_mask_present) {
     gdf_valid_type** masks;
     gdf_size_type* column_lengths;
@@ -104,7 +114,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
       masks[i] = columns_to_concat[i]->valid;
       column_lengths[i] = columns_to_concat[i]->size;
     }
-  
+
     result = gdf_mask_concat(output_column->valid, 
                              output_column->size, 
                              masks, 
@@ -123,48 +133,48 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
                          0xff, 
                          gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
   }
-  
+
   return GDF_SUCCESS;
 }
 
 // Return the size of the gdf_column data type.
 gdf_size_type gdf_column_sizeof() {
-	return sizeof(gdf_column);
+  return sizeof(gdf_column);
 }
 
 // Constructor for the gdf_context struct
 gdf_error gdf_column_view(gdf_column *column,
                           void *data,
                           gdf_valid_type *valid,
-		                      gdf_size_type size,
+                          gdf_size_type size,
                           gdf_dtype dtype)
 {
-	column->data = data;
-	column->valid = valid;
-	column->size = size;
-	column->dtype = dtype;
-	column->null_count = 0;
-	return GDF_SUCCESS;
+  column->data = data;
+  column->valid = valid;
+  column->size = size;
+  column->dtype = dtype;
+  column->null_count = 0;
+  return GDF_SUCCESS;
 }
 
 
- // Create a GDF column given data and validity bitmask pointers, size, and
- //        datatype, and count of null (non-valid) elements
+// Create a GDF column given data and validity bitmask pointers, size, and
+//        datatype, and count of null (non-valid) elements
 gdf_error gdf_column_view_augmented(gdf_column *column,
                                     void *data,
                                     gdf_valid_type *valid,
-		                                gdf_size_type size,
+                                    gdf_size_type size,
                                     gdf_dtype dtype,
                                     gdf_size_type null_count,
                                     gdf_dtype_extra_info extra_info)
 {
-	column->data = data;
-	column->valid = valid;
-	column->size = size;
-	column->dtype = dtype;
-	column->null_count = null_count;
-	column->dtype_info = extra_info;
-	return GDF_SUCCESS;
+  column->data = data;
+  column->valid = valid;
+  column->size = size;
+  column->dtype = dtype;
+  column->null_count = null_count;
+  column->dtype_info = extra_info;
+  return GDF_SUCCESS;
 }
 
 // Free the CUDA device memory of a gdf_column
