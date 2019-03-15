@@ -75,11 +75,11 @@ Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
 
 ## Build/Install from Source
-See build [instructions](BUILD.md)
+See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
 
 ## Contributing
 
-Please use GitHub issues and pull requests to report bugs and add or request functionality.
+Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
 
 ## Contact
 

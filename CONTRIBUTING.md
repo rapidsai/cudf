@@ -22,7 +22,7 @@ into three categories:
 
 ### Your first issue
 
-1. Follow the guide at the bottom of this page for ```[Setting Up Your Build Environment](#setting-up-your-build-environment)```
+1. Follow the guide at the bottom of this page for [Setting Up Your Build Environment](#setting-up-your-build-environment)
 2. Find an issue to work on. The best way is to look for the [good first issue](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
     or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) labels
 3. Comment on the issue saying you are going to work on it
