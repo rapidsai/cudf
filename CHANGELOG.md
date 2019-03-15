@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #1195 Simplify README.md
+
 ...
 
 ## Bug Fixes
