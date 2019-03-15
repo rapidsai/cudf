@@ -8,7 +8,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
