@@ -84,8 +84,9 @@ void ReduceOp(const gdf_column *input,
     CUDA_CHECK_LAST();
 
     // read back the result to host memory
-    CUDA_TRY(cudaMemcpyAsync(&scalar->data, result,
-            sizeof(T_out), cudaMemcpyDeviceToHost, stream));
+    // TODO: asynchronous copy
+    CUDA_TRY(cudaMemcpy(&scalar->data, result,
+            sizeof(T_out), cudaMemcpyDeviceToHost));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
