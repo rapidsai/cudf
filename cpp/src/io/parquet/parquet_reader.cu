@@ -825,7 +825,7 @@ gdf_error read_parquet(pq_read_arg *args) {
     // into its own memory so the source memory must not be released yet
     if (args->data[i]->dtype == GDF_STRING) {
       using str_pair = std::pair<const char *, size_t>;
-      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s));
+      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s), "unexpected nvstrdesc_s size");
 
       auto str_list = static_cast<str_pair *>(args->data[i]->data);
       args->data[i]->data = NVStrings::create_from_index(str_list, num_rows);

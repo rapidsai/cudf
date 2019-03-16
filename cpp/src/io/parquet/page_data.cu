@@ -656,15 +656,8 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
         }
         else if (mode == BOOL_RLE)
         {
-            if (s->dict_bits > 0)
-            {
-                batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
-                dict_pos = s->scratch.dict_idx[t];
-            }
-            else
-            {
-                dict_pos = 0;
-            }
+            batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
+            dict_pos = s->scratch.dict_idx[t];
         }
         else // PLAIN_FIXED_LENGTH
         {
