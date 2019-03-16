@@ -7,9 +7,9 @@
 #include <string>
 #include <array>
 
-#ifdef USE_NVTX
+//#ifdef USE_NVTX
 #include "nvToolsExt.h"
-#endif
+//#endif
 
 // TODO: When we switch to a C++ Python interface, switch to using an
 // enum class instead of an enum that indexes into an array like this
