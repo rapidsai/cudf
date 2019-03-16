@@ -268,11 +268,9 @@ using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 class ParquetMetadata : public parquet::FileMetaData {
   static std::string to_dot_string(
       std::vector<std::string> const &path_in_schema) {
-    size_t n = path_in_schema.size();
-    std::string s = (n > 0) ? path_in_schema[0] : "";
-    for (size_t i = 1; i < n; i++) {
-      s += '.';
-      s += path_in_schema[i];
+    std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
+    for (size_t i = 1; i < path_in_schema.size(); i++) {
+      s += "." + path_in_schema[i];
     }
     return s;
   }
@@ -293,28 +291,32 @@ class ParquetMetadata : public parquet::FileMetaData {
         ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
         "Incorrect footer length");
 
-    parquet::CPReader cp;
-    cp.init(data + len - ender->footer_len - ender_len, ender->footer_len);
+    parquet::CPReader cp(data + len - ender->footer_len - ender_len,
+                         ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-    CUDF_EXPECTS(cp.InitSchema(this), "Cannot parse metadata schema");
+    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize chema");
 
     print_metadata();
   }
 
   inline int get_total_rows() const { return num_rows; }
+
   inline int get_num_rowgroups() const { return row_groups.size(); }
+
   inline int get_num_columns() const { return row_groups[0].columns.size(); }
 
   std::vector<std::string> get_column_names() {
     std::vector<std::string> col_names;
     for (auto &col : row_groups[0].columns) {
-      col_names.push_back(to_dot_string(col.meta_data.path_in_schema));
+      col_names.emplace_back(to_dot_string(col.meta_data.path_in_schema));
     }
     return col_names;
   }
+
   std::string get_column_name(const std::vector<std::string> &path_in_schema) {
     return to_dot_string(path_in_schema);
   }
+
   std::string get_index_column_name() {
     auto it =
         std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
@@ -613,6 +615,7 @@ gdf_error decode_page_data(
                            chunks.memory_size(), cudaMemcpyHostToDevice));
   if (total_str_dict_indexes > 0) {
     CUDA_TRY(BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size()));
+    CUDA_TRY(cudaStreamSynchronize(0));
   }
   CUDA_TRY(DecodePageData(pages.device_ptr(), pages.size(), chunks.device_ptr(),
                           chunks.size(), total_rows));
@@ -653,7 +656,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   const auto raw = input.data();
   const auto raw_size = input.size();
 
-  // Init schema and metadata
+  // Obtain data metadata
   ParquetMetadata md(raw, raw_size);
   CUDF_EXPECTS(md.get_num_rowgroups() > 0, "No row groups found");
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
@@ -663,7 +666,7 @@ gdf_error read_parquet(pq_read_arg *args) {
 
   // Select only columns required (if it exists), otherwise select all
   // For PANDAS behavior, always return index column unless there are no rows
-  std::vector<std::pair<int, std::string>> col_names;
+  std::vector<std::pair<int, std::string>> selected_cols;
   if (args->use_cols) {
     std::vector<std::string> use_names(args->use_cols,
                                        args->use_cols + args->use_cols_len);
@@ -674,7 +677,7 @@ gdf_error read_parquet(pq_read_arg *args) {
       size_t index = 0;
       for (const auto name : md.get_column_names()) {
         if (name == use_name) {
-          col_names.emplace_back(index, name);
+          selected_cols.emplace_back(index, name);
         }
         index++;
       }
@@ -682,28 +685,28 @@ gdf_error read_parquet(pq_read_arg *args) {
   } else {
     for (const auto& name : md.get_column_names()) {
       if (md.get_total_rows() > 0 || name != index_col_name) {
-        col_names.emplace_back(col_names.size(), name);
+        selected_cols.emplace_back(selected_cols.size(), name);
       }
     }
   }
-  CUDF_EXPECTS(not col_names.empty(), "Filterd out all columns");
-  num_columns = col_names.size();
+  num_columns = selected_cols.size();
+  CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
   // Initialize gdf_columns
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
-  for (const auto &name : col_names) {
-    auto &col_schema = md.schema[md.row_groups[0].columns[name.first].schema_idx];
+  for (const auto &col : selected_cols) {
+    auto &col_schema = md.schema[md.row_groups[0].columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type);
 
     columns.emplace_back(static_cast<gdf_size_type>(md.get_total_rows()),
-                         dtype_info.first, dtype_info.second, name.second);
+                         dtype_info.first, dtype_info.second, col.second);
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
                (size_t)columns.back()->size, columns.back()->dtype,
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
 
-    if (name.second == index_col_name) {
+    if (col.second == index_col_name) {
       index_col = columns.size() - 1;
     }
   }
@@ -718,15 +721,15 @@ gdf_error read_parquet(pq_read_arg *args) {
   size_t total_decompressed_size = 0;
   LOG_PRINTF("[+] Column Chunk Description\n");
   for (const auto &rowgroup : md.row_groups) {
-    for (size_t i = 0; i < col_names.size(); i++) {
-      auto name = col_names[i];
-      auto &col_meta = rowgroup.columns[name.first].meta_data;
-      auto &col_schema = md.schema[rowgroup.columns[name.first].schema_idx];
+    for (size_t i = 0; i < selected_cols.size(); i++) {
+      auto col = selected_cols[i];
+      auto &col_meta = rowgroup.columns[col.first].meta_data;
+      auto &col_schema = md.schema[rowgroup.columns[col.first].schema_idx];
       auto &gdf_column = columns[i];
 
       // Spec requires each row group to contain exactly one chunk for every
       // column. If there are too many or too few, continue with best effort
-      if (name.second != md.get_column_name(col_meta.path_in_schema)) {
+      if (col.second != md.get_column_name(col_meta.path_in_schema)) {
         std::cerr << "Detected mismatched column chunk" << std::endl;
         continue;
       }
@@ -766,21 +769,18 @@ gdf_error read_parquet(pq_read_arg *args) {
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%ld, codec=%d, "
-          "num_values=%ld\n",
-          name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
-          col_meta.codec, col_meta.num_values);
-      LOG_PRINTF("     total_compressed_size=%ld total_uncompressed_size=%ld\n",
-          col_meta.total_compressed_size, col_meta.total_uncompressed_size);
-      LOG_PRINTF(
-          "     schema_idx=%d, type=%d, type_width=%d, max_def_level=%d, "
-          "max_rep_level=%d\n",
-          rowgroup.columns[name.first].schema_idx, chunks[chunks.size()-1].data_type, type_width,
-          col_schema.max_definition_level, col_schema.max_repetition_level);
-      LOG_PRINTF(
-          "     data_page_offset=%zd, index_page_offset=%zd, "
+          "num_values=%ld\n     total_compressed_size=%ld "
+          "total_uncompressed_size=%ld\n     schema_idx=%d, type=%d, "
+          "type_width=%d, max_def_level=%d, "
+          "max_rep_level=%d\n     data_page_offset=%zd, index_page_offset=%zd, "
           "dict_page_offset=%zd\n",
-          (size_t)col_meta.data_page_offset,
-          (size_t)col_meta.index_page_offset,
+          name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
+          col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
+          col_meta.total_uncompressed_size,
+          rowgroup.columns[name.first].schema_idx,
+          chunks[chunks.size() - 1].data_type, type_width,
+          col_schema.max_definition_level, col_schema.max_repetition_level,
+          (size_t)col_meta.data_page_offset, (size_t)col_meta.index_page_offset,
           (size_t)col_meta.dictionary_page_offset);
 
       // Map each column chunk to its output gdf_column

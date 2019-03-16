@@ -218,27 +218,35 @@ bool CPReader::InitSchema(FileMetaData *md)
     for (size_t i = 0; i < md->row_groups.size(); i++)
     {
         RowGroup *g = &md->row_groups[i];
+        int cur = 0;
         for (size_t j = 0; j < g->columns.size(); j++)
         {
             ColumnChunk *col = &g->columns[j];
-            int cur = 0; // root of schema           
+            int parent = 0; // root of schema
             for (size_t k = 0; k < col->meta_data.path_in_schema.size(); k++)
             {
                 bool found = false;
-                for (int l = cur + 1; l < (int)md->schema.size(); l++)
+                int pos = cur + 1, maxpos = (int)md->schema.size();
+                for (int l = maxpos; l > 0; --l)
                 {
-                    if (md->schema[l].parent_idx == cur && md->schema[l].name == col->meta_data.path_in_schema[k])
+                    if (pos >= maxpos)
                     {
-                        cur = l;
+                        pos = 0; // wrap around
+                    }
+                    if (md->schema[pos].parent_idx == parent && md->schema[pos].name == col->meta_data.path_in_schema[k])
+                    {
+                        cur = pos;
                         found = true;
                         break;
                     }
+                    pos++;
                 }
                 if (!found)
                 {
                     return false;
                 }
                 col->schema_idx = cur;
+                parent = cur;
             }
         }
     }
