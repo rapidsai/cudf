@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
+#include "parquet.h"
+#include "parquet_gpu.h"
+
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
+#include <NVStrings.h>
 #include <cuda_runtime.h>
-#include "NVStrings.h"
-#include "rmm/rmm.h"
-#include "rmm/thrust_rmm_allocator.h"
-
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <array>
 #include <cstring>
 #include <iostream>
 #include <numeric>
-#include <utility>
 #include <vector>
 
 #include <fcntl.h>
@@ -39,8 +38,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#define CUDF_TRY(call) CUDF_EXPECTS(call == GDF_SUCCESS, "Failed call")
 
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
@@ -55,16 +52,16 @@ class DataSource {
  public:
   explicit DataSource(const char *filepath) {
     fd = open(filepath, O_RDONLY);
-    CUDF_EXPECTS(fd > 0, "Failed file open");
+    CUDF_EXPECTS(fd > 0, "Cannot open file");
 
     struct stat st {};
-    CUDF_EXPECTS(fstat(fd, &st) == 0, "Failed file size query");
+    CUDF_EXPECTS(fstat(fd, &st) == 0, "Cannot query file size");
 
     mapped_size = st.st_size;
-    CUDF_EXPECTS(mapped_size > 0, "Found zero-sized file");
+    CUDF_EXPECTS(mapped_size > 0, "Unexpected zero-sized file");
 
     mapped_data = mmap(NULL, mapped_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Failed memory mapping file");
+    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Cannot memory-mapping file");
   }
 
   ~DataSource() {
@@ -136,7 +133,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
 }
 
 /**
- * @brief Function that requires the number of bits to store a given value
+ * @brief Helper that returns the required the number of bits to store a value
  **/
 template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
@@ -146,10 +143,9 @@ T required_bits(uint32_t max_level) {
 /**
  * @brief A helper class that wraps a gdf_column and any associated memory.
  *
- * This abstraction provides functionality for initializing and managing a
- * gdf_column (its fields and its memory) while still allowing direct access.
- * Any free memory is automatically deallocated unless ownership is transferred
- * via releasing and assigning the raw pointer to the underlying gdf_column.
+ * This abstraction initializes and manages a gdf_column (fields and memory)
+ * while still allowing direct access. Memory is automatically deallocated
+ * unless ownership is transferred via releasing and assigning the raw pointer.
  **/
 class gdf_column_wrapper {
  public:
@@ -176,7 +172,8 @@ class gdf_column_wrapper {
   }
 
   gdf_error allocate() {
-    // For strings, just store the startpos + length for now
+    // For strings, just store the ptr + length. Eventually, column's data ptr
+    // is replaced with an NvString instance created from these pairs.
     const auto num_rows = std::max(col->size, 1);
     const auto column_byte_width = (col->dtype == GDF_STRING)
                                        ? sizeof(parquet::gpu::nvstrdesc_s)
@@ -202,8 +199,8 @@ class gdf_column_wrapper {
 };
 
 /**
- * @brief A type-templated helper class that wraps fixed-length device memory,
- * and a complementary host pinned memory of the same size.
+ * @brief A helper class that wraps fixed-length device memory for the GPU, and
+ * a mirror host pinned memory for the CPU.
  *
  * This abstraction allocates a specified fixed chunk of device memory that can
  * initialized upfront, or gradually initialized as required.
@@ -251,9 +248,10 @@ class hostdevice_vector {
 };
 
 /**
- * @brief A unique_ptr with a custom deleter that frees the associated device
- * memory back to RMM. Used to help automatically release device memory of
- * manually allocated pointers.
+ * @brief A unique_ptr and custom deleter that frees device memory back to RMM
+ *
+ * This ptr object is used to automatically release device memory of raw
+ * pointers manually allocated with RMM_ALLOC
  **/
 template <typename T>
 struct rmm_deleter {
@@ -263,19 +261,10 @@ template <typename T>
 using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
 /**
- * @brief A helper wrapper class for the Parquet file metadata
+ * @brief A helper wrapper for Parquet file metadata. Provides some additional
+ * convenience methods for initializing and accessing the metadata and schema
  **/
-class ParquetMetadata : public parquet::FileMetaData {
-  static std::string to_dot_string(
-      std::vector<std::string> const &path_in_schema) {
-    std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
-    for (size_t i = 1; i < path_in_schema.size(); i++) {
-      s += "." + path_in_schema[i];
-    }
-    return s;
-  }
-
- public:
+struct ParquetMetadata : public parquet::FileMetaData {
   explicit ParquetMetadata(const uint8_t *data, size_t len) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
@@ -294,49 +283,8 @@ class ParquetMetadata : public parquet::FileMetaData {
     parquet::CPReader cp(data + len - ender->footer_len - ender_len,
                          ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize chema");
+    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
-    print_metadata();
-  }
-
-  inline int get_total_rows() const { return num_rows; }
-
-  inline int get_num_rowgroups() const { return row_groups.size(); }
-
-  inline int get_num_columns() const { return row_groups[0].columns.size(); }
-
-  std::vector<std::string> get_column_names() {
-    std::vector<std::string> col_names;
-    for (auto &col : row_groups[0].columns) {
-      col_names.emplace_back(to_dot_string(col.meta_data.path_in_schema));
-    }
-    return col_names;
-  }
-
-  std::string get_column_name(const std::vector<std::string> &path_in_schema) {
-    return to_dot_string(path_in_schema);
-  }
-
-  std::string get_index_column_name() {
-    auto it =
-        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
-                     [](const auto &item) { return item.key == "pandas"; });
-
-    if (it != key_value_metadata.end()) {
-      const auto pos = it->value.find("index_columns");
-
-      if (pos != std::string::npos) {
-        const auto begin = it->value.find('[', pos);
-        const auto end = it->value.find(']', begin);
-        if ((end - begin) > 4) {
-          return it->value.substr(begin + 2, end - begin - 3);
-        }
-      }
-    }
-    return "";
-  }
-
-  void print_metadata() {
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" version = %d\n", version);
     LOG_PRINTF(" created_by = \"%s\"\n", created_by.c_str());
@@ -353,19 +301,57 @@ class ParquetMetadata : public parquet::FileMetaData {
     LOG_PRINTF(" num row groups = %zd\n", row_groups.size());
     LOG_PRINTF(" num columns = %zd\n", row_groups[0].columns.size());
   }
+
+  inline int get_total_rows() const { return num_rows; }
+  inline int get_num_rowgroups() const { return row_groups.size(); }
+  inline int get_num_columns() const { return row_groups[0].columns.size(); }
+
+  std::string get_column_name(const std::vector<std::string> &path_in_schema) {
+    std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
+    for (size_t i = 1; i < path_in_schema.size(); i++) {
+      s += "." + path_in_schema[i];
+    }
+    return s;
+  }
+
+  std::vector<std::string> get_column_names() {
+    std::vector<std::string> all_names;
+    for (const auto &chunk : row_groups[0].columns) {
+      all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+    }
+    return all_names;
+  }
+
+  std::string get_index_column_name() {
+    auto it =
+        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
+                     [](const auto &item) { return item.key == "pandas"; });
+
+    if (it != key_value_metadata.end()) {
+      const auto pos = it->value.find("index_columns");
+      if (pos != std::string::npos) {
+        const auto begin = it->value.find('[', pos);
+        const auto end = it->value.find(']', begin);
+        if ((end - begin) > 4) {
+          return it->value.substr(begin + 2, end - begin - 3);
+        }
+      }
+    }
+    return "";
+  }
 };
 
 /**
  * @brief Returns the number of total pages from the given column chunks
  * 
  * @param[in] chunks List of column chunk descriptors
- * @param[in,out] total_pages Total number of pages making up the column chunks
  *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
+ * @return size_t The total number of pages
  **/
-gdf_error count_page_headers(
-    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-    size_t *total_pages) {
+size_t count_page_headers(
+    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
+
+  size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
                            chunks.memory_size(), cudaMemcpyHostToDevice));
@@ -387,10 +373,10 @@ gdf_error count_page_headers(
         chunks[c].def_level_bits, chunks[c].rep_level_bits,
         chunks[c].num_data_pages, chunks[c].num_dict_pages,
         chunks[c].max_num_pages);
-    *total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
+    total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
   }
 
-  return GDF_SUCCESS;
+  return total_pages;
 }
 
 /**
@@ -398,10 +384,8 @@ gdf_error count_page_headers(
  *
  * @param[in] chunks List of column chunk descriptors
  * @param[in] pages List of page information
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
-gdf_error decode_page_headers(
+void decode_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -430,8 +414,6 @@ gdf_error decode_page_headers(
         pages[i].definition_level_encoding, pages[i].repetition_level_encoding,
         pages[i].valid_count);
   }
-
-  return GDF_SUCCESS;
 }
 
 /**
@@ -439,14 +421,12 @@ gdf_error decode_page_headers(
  *
  * @param[in] chunks List of column chunk descriptors
  * @param[in] pages List of page information
- * @param[in,out] page_data List of outstanding page data device allocations
  *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
+ * @return uint8_t* Device pointer to decompressed page data
  **/
-gdf_error decompress_page_data(
+uint8_t *decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<parquet::gpu::PageInfo> &pages,
-    std::vector<device_ptr<void>> *page_data) {
+    const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
@@ -490,8 +470,7 @@ gdf_error decompress_page_data(
 
   // Dispatch batches of pages to decompress for each codec
   uint8_t *decompressed_pages = nullptr;
-  RMM_TRY(RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0));
-  page_data->emplace_back(decompressed_pages);
+  RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0);
 
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
@@ -544,7 +523,7 @@ gdf_error decompress_page_data(
                                 debrotli_scratch.size(), argc - start_pos));
           break;
         default:
-          std::cerr << "This is a bug" << std::endl;
+          CUDF_EXPECTS(false, "Unexpected decompression dispatch");
           break;
       }
       CUDA_TRY(cudaMemcpyAsync(
@@ -561,7 +540,7 @@ gdf_error decompress_page_data(
   CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(), pages.host_ptr(),
                            pages.memory_size(), cudaMemcpyHostToDevice));
 
-  return GDF_SUCCESS;
+  return decompressed_pages;
 }
 
 /**
@@ -571,10 +550,8 @@ gdf_error decompress_page_data(
  * @param[in] pages List of page information
  * @param[in] chunk_map Mapping between column chunk and gdf_column
  * @param[in] total_rows Total number of rows to output
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
-gdf_error decode_page_data(
+void decode_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t total_rows) {
@@ -611,11 +588,11 @@ gdf_error decode_page_data(
     chunks[c].column_data_base = chunk_map[c]->data;
     page_count += chunks[c].max_num_pages;
   }
+
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
                            chunks.memory_size(), cudaMemcpyHostToDevice));
   if (total_str_dict_indexes > 0) {
     CUDA_TRY(BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size()));
-    CUDA_TRY(cudaStreamSynchronize(0));
   }
   CUDA_TRY(DecodePageData(pages.device_ptr(), pages.size(), chunks.device_ptr(),
                           chunks.size(), total_rows));
@@ -634,8 +611,6 @@ gdf_error decode_page_data(
       }
     }
   }
-
-  return GDF_SUCCESS;
 }
 
 /**
@@ -653,11 +628,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   int index_col = -1;
 
   DataSource input(args->source);
-  const auto raw = input.data();
-  const auto raw_size = input.size();
 
-  // Obtain data metadata
-  ParquetMetadata md(raw, raw_size);
+  ParquetMetadata md(input.data(), input.size());
   CUDF_EXPECTS(md.get_num_rowgroups() > 0, "No row groups found");
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
@@ -692,7 +664,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   num_columns = selected_cols.size();
   CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
-  // Initialize gdf_columns
+  // Initialize gdf_columns, but hold off on allocating storage space
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols) {
     auto &col_schema = md.schema[md.row_groups[0].columns[col.first].schema_idx];
@@ -711,15 +683,19 @@ gdf_error read_parquet(pq_read_arg *args) {
     }
   }
 
-  // Allocate column chunk descriptors
+  // Descriptors for all the chunks that make up the selected columns
   const auto num_column_chunks = md.get_num_rowgroups() * num_columns;
   hostdevice_vector<parquet::gpu::ColumnChunkDesc> chunks(0, num_column_chunks);
+
+  // Association between each column chunk and its gdf_column
   std::vector<gdf_column *> chunk_map(num_column_chunks);
+
+  // Tracker for eventually deallocating compressed and uncompressed data
   std::vector<device_ptr<void>> page_data;
 
   // Initialize column chunk info
-  size_t total_decompressed_size = 0;
   LOG_PRINTF("[+] Column Chunk Description\n");
+  size_t total_decompressed_size = 0;
   for (const auto &rowgroup : md.row_groups) {
     for (size_t i = 0; i < selected_cols.size(); i++) {
       auto col = selected_cols[i];
@@ -748,20 +724,20 @@ gdf_error read_parquet(pq_read_arg *args) {
       else if (gdf_column->dtype == GDF_CATEGORY)
         type_width = 4;  // str -> hash32
 
-      uint8_t *d_data = nullptr;
+      uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
         const auto offset = (col_meta.dictionary_page_offset != 0)
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        RMM_TRY(RMM_ALLOC(&d_data, col_meta.total_compressed_size, 0));
-        page_data.emplace_back(d_data);
-        CUDA_TRY(cudaMemcpyAsync(d_data, raw + offset,
+        RMM_TRY(RMM_ALLOC(&d_compdata, col_meta.total_compressed_size, 0));
+        page_data.emplace_back(d_compdata);
+        CUDA_TRY(cudaMemcpyAsync(d_compdata, input.data() + offset,
                                  col_meta.total_compressed_size,
                                  cudaMemcpyHostToDevice));
       }
       chunks.insert(parquet::gpu::ColumnChunkDesc(
-          col_meta.total_compressed_size, d_data, col_meta.num_values,
+          col_meta.total_compressed_size, d_compdata, col_meta.num_values,
           col_schema.type, type_width, num_rows, rowgroup.num_rows,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
@@ -793,25 +769,25 @@ gdf_error read_parquet(pq_read_arg *args) {
     num_rows += rowgroup.num_rows;
   }
 
-  // Determine how many page headers to allocate
-  size_t total_pages = 0;
-  CUDF_TRY(count_page_headers(chunks, &total_pages));
-
+  // Allocate output memory and convert Parquet format into cuDF format
+  const auto total_pages = count_page_headers(chunks);
   if (total_pages > 0) {
     hostdevice_vector<parquet::gpu::PageInfo> pages(total_pages, total_pages);
 
-    CUDF_TRY(decode_page_headers(chunks, pages));
+    decode_page_headers(chunks, pages);
     if (total_decompressed_size > 0) {
-      CUDF_TRY(decompress_page_data(chunks, pages, &page_data));
+      uint8_t* d_decomp_data = decompress_page_data(chunks, pages);
+      page_data.clear();
+      page_data.emplace_back(d_decomp_data);
     }
     for (auto &column : columns) {
-      CUDF_TRY(column.allocate());
+      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
-    CUDF_TRY(decode_page_data(chunks, pages, chunk_map, num_rows));
+    decode_page_data(chunks, pages, chunk_map, num_rows);
   } else {
-    // Columns are still expected to be allocated for an empty dataframe
+    // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
-      CUDF_TRY(column.allocate());
+      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
   }
 
@@ -820,12 +796,13 @@ gdf_error read_parquet(pq_read_arg *args) {
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
 
-    // For string dtype, allocate and return in an NvStrings container instance
-    // The container takes a list of string pointers and lengths, and copies
-    // into its own memory so the source memory must not be released yet
+    // For string dtype, allocate and return an NvStrings container instance.
+    // This container takes a list of string pointers and lengths, and copies
+    // into its own memory so the source memory must not be released yet.
     if (args->data[i]->dtype == GDF_STRING) {
       using str_pair = std::pair<const char *, size_t>;
-      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s), "unexpected nvstrdesc_s size");
+      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s),
+                    "Unexpected nvstrdesc_s size");
 
       auto str_list = static_cast<str_pair *>(args->data[i]->data);
       args->data[i]->data = NVStrings::create_from_index(str_list, num_rows);
