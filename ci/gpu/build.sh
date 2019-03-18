@@ -30,7 +30,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install -c rapidsai -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*
 
 logger "Check versions..."
 python --version
