@@ -6,8 +6,9 @@ Welcome to cuDF's documentation!
    :caption: Contents:
 
    api.rst
-   developer.rst
    10min.rst
+   dask-cudf.md
+   developer.rst
 
 Indices and tables
 ==================
