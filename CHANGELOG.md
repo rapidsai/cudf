@@ -67,6 +67,7 @@
 
 ## Improvements
 
+- PR #1218 Add dask-cudf page to API docs
 - PR #892 Add support for heterogeneous types in binary ops with JIT
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #561 Add Doxygen style comments to Join CUDA functions
