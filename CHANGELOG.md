@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #1202 Simplify README.md
+- PR #1217 Add nvstrings install instructions to build setup
 
 ...
 
