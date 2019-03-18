@@ -161,6 +161,7 @@
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
 
+
 # cuDF 0.5.1 (05 Feb 2019)
 
 ## Bug Fixes
