@@ -1985,3 +1985,14 @@ def test_array_ufunc():
 
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
+
+
+def test_array_protocol():
+    gs = pd.Series([1, 2, 3])
+    ps = gd.from_pandas(gs)
+
+    ga = np.asarray(gs)
+    pa = np.asarray(ps)
+
+    assert isinstance(ga, np.ndarray)
+    assert str(ga) == str(pa)

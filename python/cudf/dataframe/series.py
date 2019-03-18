@@ -239,6 +239,12 @@ class Series(object):
         else:
             return NotImplemented
 
+    def __array__(self, dtype=None, **kwargs):
+        out = self.to_array()
+        if dtype and out.dtype != dtype:
+            out = out.astype(dtype)
+        return out
+
     @property
     def empty(self):
         return not len(self)
