@@ -186,29 +186,26 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
     {
         if (cur + 4 < end)
         {
-            len = 4 + (cur[0]) | (cur[1] << 8) | (cur[2] << 16) | (cur[3] << 24);
-            if (len > 0)
+            uint32_t run;
+            len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
+            cur += 4;
+            run = get_vlq32(cur, end);
+            s->initial_rle_run[idx] = run;
+            if (!(run & 1))
             {
-                uint32_t run;
-                cur += 4;
-                run = get_vlq32(cur, end);
-                s->initial_rle_run[idx] = run;
-                if (!(run & 1))
+                int v = (cur < end) ? cur[0] : 0;
+                cur++;
+                if (level_bits > 8)
                 {
-                    int v = (cur < end) ? cur[0] : 0;
+                    v |= ((cur < end) ? cur[0] : 0) << 8;
                     cur++;
-                    if (level_bits > 8)
-                    {
-                        v |= ((cur < end) ? cur[0] : 0) << 8;
-                        cur++;
-                    }
-                    s->initial_rle_value[idx] = v;
                 }
-                s->lvl_start[idx] = cur;
-                if (cur > end)
-                {
-                    s->error = 2;
-                }
+                s->initial_rle_value[idx] = v;
+            }
+            s->lvl_start[idx] = cur;
+            if (cur > end)
+            {
+                s->error = 2;
             }
         }
         else
