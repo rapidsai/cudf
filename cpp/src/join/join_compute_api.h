@@ -79,6 +79,7 @@ create_missing_indices(
 			index_ptr,//Stencil - Check if index location is valid
 			invalid_index_map.begin(),//Output indices
 			bounds_checker);//Stencil Predicate
+	CHECK_STREAM(0);
 	size_type begin_counter = static_cast<size_type>(0);
 	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
 	//Create list of indices that have been marked as invalid
@@ -90,6 +91,7 @@ create_missing_indices(
 			unmatched_indices.begin(),
 			thrust::identity<index_type>()) -
 		unmatched_indices.begin();
+	CHECK_STREAM(0);
 	unmatched_indices.resize(compacted_size);
 	return unmatched_indices;
 }

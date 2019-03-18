@@ -1,235 +1,89 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](https://cudf.readthedocs.io/en/latest/)
-
-The [RAPIDS](https://rapids.ai) cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The RAPIDS GPU DataFrame provides a pandas-like API that will be familiar to data scientists, so they can now build GPU-accelerated workflows more easily.
+[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](https://rapidsai.github.io/projects/cudf/en/latest)
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
+
+Built based on the [Apache Arrow](http://arrow.apache.org/) columnar memory format, cuDF is a GPU DataFrame library for loading, joining, aggregating, filtering, and otherwise manipulating data.
+
+cuDF provides a pandas-like API that will be familiar to data engineers & data scientists, so they can use it to easily accelerate their workflows without going into the details of CUDA programming.
+
+For example, the following snippet downloads a CSV, then uses the GPU to parse it into rows and columns and run calculations:
+```python
+import cudf, io, requests
+from io import StringIO
+
+url="https://github.com/plotly/datasets/raw/master/tips.csv"
+content = requests.get(url).content.decode('utf-8')
+
+tips_df = cudf.read_csv(StringIO(content))
+tips_df['tip_percentage'] = tips_df['tip']/tips_df['total_bill']*100
+
+# display average tip by dining party size
+print(tips_df.groupby('size').tip_percentage.mean())
+```
+
+Output:
+```
+size
+1    21.729201548727808
+2    16.571919173482897
+3    15.215685473711837
+4    14.594900639351332
+5    14.149548965142023
+6    15.622920072028379
+Name: tip_percentage, dtype: float64
+```
+
+For additional examples, browse our complete [API documentation](https://rapidsai.github.io/projects/cudf/en/latest/index.html), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-extended).
 
 ## Quick Start
 
 Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
 
-## Install cuDF
+## Installation
 
 ### Conda
 
-It is easy to install cuDF using conda. You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
-
-Install and update cuDF using the conda command:
-
+cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 ```bash
-# CUDA 9.2
-conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
+# for CUDA 9.2
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
+    cudf=0.6 python=3.6
 
-# CUDA 10.0
-conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
+# or, for CUDA 10.0
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba \
+    -c conda-forge -c defaults cudf=0.6 python=3.6
 ```
 
-Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
+We also provide [nightly conda packages](https://anaconda.org/rapidsai-nightly) built from the tip of our latest development branch.
 
 ### Pip
 
-It is easy to install cuDF using pip. You must specify the CUDA version to ensure you install the right package.
+cuDF can also be installed from [PyPi](https://pypi.org/project/cudf/).
 
 ```bash
-# CUDA 9.2
-pip install cudf-cuda92
+# for CUDA 9.2
+python3.6 -m pip install cudf-cuda92==0.6
 
-# CUDA 10.0.
-pip install cudf-cuda100
+# or, for CUDA 10.0
+python3.6 -m pip install cudf-cuda100==0.6
 ```
 
-## Development Setup
+Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
 
-The following instructions are for developers and contributors to cuDF OSS development. These instructions are tested on Linux Ubuntu 16.04 & 18.04. Use these instructions to build cuDF from source and contribute to its development.  Other operatings systems may be compatible, but are not currently tested.
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
 
-### Get libcudf Dependencies
+## Build/Install from Source
+See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
 
-Compiler requirements:
+## Contributing
 
-* `gcc`     version 5.4+
-* `nvcc`    version 9.2+
-* `cmake`   version 3.12.4+
+Please see our [guide for contributing to cuDF](CONTRIBUTING.md).
 
-CUDA/GPU requirements:
+## Contact
 
-* CUDA 9.2+
-* NVIDIA driver 396.44+
-* Pascal architecture or better
-
-You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
-
-Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
-`cmake`:
-
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt-get install libboost-all-dev
-```
-
-or
-
-```bash
-# Install Boost C++ for Conda
-$ conda install -c conda-forge boost
-```
-
-## Script to build cuDF from source
-
-### Build from Source
-
-To install cuDF from source, ensure the dependencies are met and follow the steps below:
-
-- Clone the repository and submodules
-```bash
-CUDF_HOME=$(pwd)/cudf
-git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
-cd CUDF_HOME
-git submodule update --init --remote --recursive
-```
-- Create the conda development environment `cudf_dev`
-```bash
-# create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/cudf_dev.yml
-# activate the environment
-source activate cudf_dev
-```
-
-- Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
-```bash
-$ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
-$ mkdir build                                                             # make a build directory
-$ cd build                                                                # enter the build directory
-
-# CMake options:
-# -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to OFF. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=OFF     # configure cmake ...
-
-$ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
-$ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
-```
-
-- To run tests (Optional):
-```bash
-$ make test
-```
-
-- Build, install, and test cffi bindings:
-```bash
-$ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
-$ make install_python                               # build & install CFFI python bindings. Depends on cffi package from PyPi or Conda
-$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
-```
-
-- Build the `cudf` python package, in the `python` folder:
-```bash
-$ cd $CUDF_HOME/python
-$ python setup.py build_ext --inplace
-```
-
-- You will also need the following environment variables, including `$CUDA_HOME`.
-```bash
-NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
-NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
-```
-
-- To run Python tests (Optional):
-```bash
-$ py.test -v                                        # run python tests on cudf python bindings
-```
-
-- Finally, install the Python package to your Python path:
-```bash
-$ python setup.py install                           # install cudf python bindings
-```
-
-Done! You are ready to develop for the cuDF OSS project.
-
-## Debugging cuDF
-
-### Building Debug mode from source
-
-Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step. 
-
-For example:
-```bash
-$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX if you're using Anaconda
-```
-
-This builds `libcudf` in Debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
-
-All other steps for installing `libcudf` into your environment are the same.
-
-### Debugging with `cuda-gdb` and `cuda-memcheck`
-
-When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and `cuda-memcheck` is easy.
-
-If you are debugging a Python script, simply run the following:
-
-#### `cuda-gdb`
-
-```bash
-cuda-gdb -ex r --args python <program_name>.py <program_arguments>
-```
-
-#### `cuda-memcheck`
-
-```bash
-cuda-memcheck python <program_name>.py <program_arguments>
-```
-
-
-## Automated Build in Docker Container
-
-A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
-
-### Prerequisites
-
-* Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
-* Verify NVIDIA driver is `396.44` or higher
-* Ensure CUDA 9.2+ is installed
-
-### Usage
-
-From cudf project root run the following, to build with defaults:
-```bash
-$ docker build --tag cudf .
-```
-After the container is built run the container:
-```bash
-$ docker run --runtime=nvidia -it cudf bash
-```
-Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
-```
-root@3f689ba9c842:/# source activate cudf
-(cudf) root@3f689ba9c842:/# python -c "import cudf"
-(cudf) root@3f689ba9c842:/#
-```
-
-### Customizing the Build
-
-Several build arguments are available to customize the build process of the
-container. These are specified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
-flag. Below is a list of the available arguments and their purpose:
-
-| Build Argument | Default Value | Other Value(s) | Purpose |
-| --- | --- | --- | --- |
-| `CUDA_VERSION` | 9.2 | 10.0 | set CUDA version |
-| `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
-| `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
-| `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
-| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
-| `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
-| `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
-| `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.12.0 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
-| `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
-| `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
-
----
+Find out more details on the [RAPIDS site](https://rapids.ai/community.html)
 
 ## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
 
