@@ -158,6 +158,67 @@ namespace detail {
         }
     };
 
+    // the implementation of `typesAtomicCASImpl`
+    template <typename T, size_t n>
+    struct typesAtomicCASImpl;
+
+    template<typename T>
+    struct typesAtomicCASImpl<T, 4> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & compare, T const & update_value)
+        {
+            using T_int = unsigned int;
+
+            T_int ret = atomicCAS(
+                reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(compare),
+                type_reinterpret<T_int, T>(update_value));
+
+            return type_reinterpret<T, T_int>(ret);
+        }
+    };
+
+    // 8 bytes atomic operation
+    template<typename T>
+    struct typesAtomicCASImpl<T, 8> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & compare, T const & update_value)
+        {
+            using T_int = unsigned long long int;
+
+            T_int ret = atomicCAS(
+                reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(compare),
+                type_reinterpret<T_int, T>(update_value));
+
+            return type_reinterpret<T, T_int>(ret);
+        }
+    };
+
+    // call atomic function with type cast between same underlying type
+    template <typename T, typename Functor>
+    __forceinline__  __device__
+    T typesAtomicOperation32(T* addr, T val, Functor atomicFunc)
+    {
+        using T_int = int;
+        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
+            cudf::detail::type_reinterpret<T_int, T>(val));
+
+        return cudf::detail::type_reinterpret<T, T_int>(ret);
+    }
+
+    // call atomic function with type cast between same underlying type
+    template <typename T, typename Functor>
+    __forceinline__  __device__
+    T typesAtomicOperation64(T* addr, T val, Functor atomicFunc)
+    {
+        using T_int = long long int;
+        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
+            cudf::detail::type_reinterpret<T_int, T>(val));
+
+        return cudf::detail::type_reinterpret<T, T_int>(ret);
+    }
+
 } // namespace detail
 
 
@@ -169,32 +230,8 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
         (address, update_value, op);
 }
 
-// call atomic function with type cast between same precision
-template <typename T, typename Functor>
-__forceinline__  __device__
-T typesAtomicOperation32(T* addr, T val, Functor atomicFunc)
-{
-    using T_int = int;
-    T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-        cudf::detail::type_reinterpret<T_int, T>(val));
-
-    return cudf::detail::type_reinterpret<T, T_int>(ret);
-}
-
-
-template <typename T, typename Functor>
-__forceinline__  __device__
-T typesAtomicOperation64(T* addr, T val, Functor atomicFunc)
-{
-    using T_int = long long int;
-    T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-        cudf::detail::type_reinterpret<T_int, T>(val));
-
-    return cudf::detail::type_reinterpret<T, T_int>(ret);
-}
-
 // ------------------------------------------------------------------------
-// Binary ops for sum,
+// Binary ops for sum, min, max
 struct DeviceSum {
     template<typename T>
     __device__
@@ -259,7 +296,7 @@ inline  __device__
 cudf::date32 atomicAdd(cudf::date32* address, cudf::date32 val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicAdd(a, v);});
 }
 
@@ -267,7 +304,7 @@ __forceinline__ __device__
 cudf::category atomicAdd(cudf::category* address, cudf::category val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicAdd(a, v);});
 }
 
@@ -303,7 +340,7 @@ __forceinline__ __device__
 int64_t atomicMin(int64_t* address, int64_t val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
@@ -324,7 +361,7 @@ inline  __device__
 cudf::date32 atomicMin(cudf::date32* address, cudf::date32 val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
@@ -332,7 +369,7 @@ __forceinline__ __device__
 cudf::category atomicMin(cudf::category* address, cudf::category val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
@@ -340,7 +377,7 @@ __forceinline__ __device__
 cudf::date64 atomicMin(cudf::date64* address, cudf::date64 val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
@@ -348,7 +385,7 @@ __forceinline__ __device__
 cudf::timestamp atomicMin(cudf::timestamp* address, cudf::timestamp val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
@@ -372,7 +409,7 @@ __forceinline__ __device__
 int64_t atomicMax(int64_t* address, int64_t val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
@@ -393,7 +430,7 @@ inline  __device__
 cudf::date32 atomicMax(cudf::date32* address, cudf::date32 val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
@@ -401,7 +438,7 @@ __forceinline__ __device__
 cudf::category atomicMax(cudf::category* address, cudf::category val)
 {
     using T = int;
-    return cudf::typesAtomicOperation32
+    return cudf::detail::typesAtomicOperation32
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
@@ -409,7 +446,7 @@ __forceinline__ __device__
 cudf::date64 atomicMax(cudf::date64* address, cudf::date64 val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
@@ -417,6 +454,64 @@ __forceinline__ __device__
 cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
 {
     using T = long long int;
-    return cudf::typesAtomicOperation64
+    return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
+
+// ------------------------------------------------------------------------
+// Overloads for `atomicCAS`.
+// Cuda supports `sint32`, `uint32`, `uint64`
+// int8_t, int16_t are never supported as overloads
+
+__forceinline__ __device__
+int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
+{
+    using T = int64_t;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+__forceinline__ __device__
+float atomicCAS(float* address, float compare, float val)
+{
+    using T = float;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+__forceinline__ __device__
+double atomicCAS(double* address, double compare, double val)
+{
+    using T = double;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+// for wrappers
+inline  __device__
+cudf::date32 atomicCAS(cudf::date32* address, cudf::date32 compare, cudf::date32 val)
+{
+    using T = cudf::date32;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+__forceinline__ __device__
+cudf::category atomicCAS(cudf::category* address, cudf::category compare, cudf::category val)
+{
+    using T = cudf::category;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+__forceinline__ __device__
+cudf::date64 atomicCAS(cudf::date64* address, cudf::date64 compare, cudf::date64 val)
+{
+    using T = cudf::date64;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+__forceinline__ __device__
+cudf::timestamp atomicCAS(cudf::timestamp* address, cudf::timestamp compare, cudf::timestamp val)
+{
+    using T = cudf::timestamp;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+
+

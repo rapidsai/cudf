@@ -44,19 +44,32 @@ void gpu_atomic_test(T *result, T *data, size_t size)
     }
 }
 
+template<typename T>
+__global__
+void gpu_atomicCAS_test(T *result, T *data, size_t size)
+{
+    size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t step = blockDim.x * gridDim.x;
+
+    for (; id < size; id += step) {
+        T* addr = &result[0];
+        T update_value = data[id];
+
+        T old_value = *addr;
+        T assumed;
+
+        do {
+            assumed  = old_value;
+            const T new_value = old_value + update_value;
+
+            old_value = atomicCAS(addr, assumed, new_value);
+        } while (assumed != old_value);
+    }
+}
+
 // ---------------------------------------------
 
-template <typename T>
-struct AtomicsTest : public GdfTest {
-};
-
-using TestingTypes = ::testing::Types<
-    int8_t, int16_t, int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
-
-TYPED_TEST_CASE(AtomicsTest, TestingTypes);
-
+// tests for atomicAdd/Min/Max
 template <typename T>
 void AtomicsTest_atomicOps()
 {
@@ -85,7 +98,6 @@ void AtomicsTest_atomicOps()
     cudaDeviceSynchronize();
     CUDA_CHECK_LAST();
 
-
     gpu_atomic_test<T> <<<1, vec_size>>> (
         reinterpret_cast<T*>( dev_result.data().get() ),
         reinterpret_cast<T*>( dev_data.data().get() ),
@@ -105,6 +117,16 @@ void AtomicsTest_atomicOps()
     EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
 }
 
+template <typename T>
+struct AtomicsTest : public GdfTest {
+};
+
+using TestingTypes = ::testing::Types<
+    int8_t, int16_t, int32_t, int64_t, float, double,
+    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
+    >;
+
+TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 
 TYPED_TEST(AtomicsTest, atomicOps)
 {
@@ -119,3 +141,71 @@ TYPED_TEST(AtomicsTest, atomicOps)
     else if( std::is_same<TypeParam, cudf::timestamp>::value ){ AtomicsTest_atomicOps<cudf::timestamp>(); }
 
 }
+
+// ------------------------------------------------------------------------------------------------
+
+// tests for atomicCAS
+template <typename T>
+void AtomicsTest_atomicCAS()
+{
+    std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
+    int exact = std::accumulate(v.begin(), v.end(), 0);
+    size_t vec_size = v.size();
+
+    // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
+    // use transform from std::vector<int> instead.
+    std::vector<T> v_type(vec_size);
+    std::transform(v.begin(), v.end(), v_type.begin(),
+        [](int x) { T t(x) ; return t; } );
+
+    std::vector<T> result_init({T{0}});
+
+    thrust::device_vector<T> dev_result(result_init);
+    thrust::device_vector<T> dev_data(v_type);
+
+    cudaDeviceSynchronize();
+    CUDA_CHECK_LAST();
+
+    gpu_atomicCAS_test<T> <<<1, vec_size>>> (
+        reinterpret_cast<T*>( dev_result.data().get() ),
+        reinterpret_cast<T*>( dev_data.data().get() ),
+        vec_size);
+
+    cudaDeviceSynchronize();
+    CUDA_CHECK_LAST();
+
+    thrust::host_vector<T> host_result(dev_result);
+    cudaDeviceSynchronize();
+
+    CUDA_CHECK_LAST();
+
+    EXPECT_EQ(host_result[0], T(exact)) << "atomicCAS test failed";
+}
+
+template <typename T>
+struct AtomicsCASTest : public GdfTest {
+};
+
+// int8_t, int16_t are not supproted for atomicCAS
+using TestingTypesForCAS = ::testing::Types<
+    int32_t, int64_t, float, double,
+    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
+    >;
+
+TYPED_TEST_CASE(AtomicsCASTest, TestingTypesForCAS);
+
+TYPED_TEST(AtomicsCASTest, atomicCAS)
+{
+    // TODO: remove this workaround
+    // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be compiled,
+    // then kenrel call failed by `cudaErrorInvalidDeviceFunction`
+    // Explicit typename is requried at this point.
+    if( std::is_arithmetic<TypeParam>::value ){                 AtomicsTest_atomicCAS<TypeParam>(); }
+    else if( std::is_same<TypeParam, cudf::date32>::value ){    AtomicsTest_atomicCAS<cudf::date32>(); }
+    else if( std::is_same<TypeParam, cudf::date64>::value ){    AtomicsTest_atomicCAS<cudf::date64>(); }
+    else if( std::is_same<TypeParam, cudf::category>::value){   AtomicsTest_atomicCAS<cudf::category>(); }
+    else if( std::is_same<TypeParam, cudf::timestamp>::value ){ AtomicsTest_atomicCAS<cudf::timestamp>(); }
+
+}
+
+
