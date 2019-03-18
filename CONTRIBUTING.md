@@ -85,7 +85,7 @@ $ conda install -c conda-forge boost
 
 cuDF's string support is built on [cuStrings](https://github.com/rapidsai/custrings) & its nvStrings bindings.
 
-Install the latest [nvstrings nightly](https://anaconda.org/rapidsai-nightly/nvstrings) (CUDA 9.2 or CUDA 10.0):
+Either [build and install from source](https://github.com/rapidsai/custrings), or install the latest [nvstrings nightly](https://anaconda.org/rapidsai-nightly/nvstrings) (CUDA 9.2 or CUDA 10.0):
 ```bash
 $ conda install -c rapidsai-nightly/label/cuda9.2 nvstrings
 ```
