@@ -41,11 +41,8 @@ conda list
 ################################################################################
 
 # Temporarily update nvstrings for testing
-CUDA_REL=${CUDA_VERSION:0:3}
-if [ "${CUDA_VERSION:0:2}" == '10' ]; then
-  # CUDA 10 release
-  CUDA_REL=${CUDA_VERSION:0:4}
-fi
+export CUDA_REL=${CUDA_VERSION%.*}
+
 logger "conda install -c rapidsai -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*"
 conda install -c rapidsai -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*
 
