@@ -53,16 +53,27 @@ def read_parquet(path, engine='pyarrow', *args, **kwargs):
         if out == ffi.NULL:
             raise ValueError("Failed to parse data")
 
-        # Extract parsed columns and construct dataframe
+        # Extract parsed columns
         outcols = []
         new_names = []
         for i in range(pq_reader.num_cols_out):
-            newcol = Column.from_cffi_view(out[i])
-            new_names.append(ffi.string(out[i].col_name).decode())
-            if newcol.dtype == np.dtype('datetime64[ms]'):
-                outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
+            if out[i].dtype == libgdf.GDF_STRING:
+                ptr = int(ffi.cast("uintptr_t", out[i].data))
+                new_names.append(ffi.string(out[i].col_name).decode())
+                outcols.append(nvstrings.bind_cpointer(ptr))
             else:
-                outcols.append(newcol.view(NumericalColumn, dtype=newcol.dtype))
+                newcol = Column.from_cffi_view(out[i])
+                new_names.append(ffi.string(out[i].col_name).decode())
+                if newcol.dtype.type == np.datetime64:
+                    outcols.append(
+                        newcol.view(DatetimeColumn, dtype='datetime64[ms]')
+                    )
+                else:
+                    outcols.append(
+                        newcol.view(NumericalColumn, dtype=newcol.dtype)
+                    )
+        
+        # Construct dataframe from columns
         df = DataFrame()
         for k, v in zip(new_names, outcols):
             df[k] = v

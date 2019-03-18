@@ -22,8 +22,8 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
-#include <NVStrings.h>
 #include <cuda_runtime.h>
+#include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
