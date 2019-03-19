@@ -1,6 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 from libgdf_cffi import libgdf, ffi
+import nvstrings
 
 from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
@@ -8,12 +9,12 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.utils import ioutils
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
 
 import warnings
 import os
+import errno
 
 
 def _wrap_string(text):
@@ -72,7 +73,7 @@ def read_parquet(path, engine='pyarrow', *args, **kwargs):
                     outcols.append(
                         newcol.view(NumericalColumn, dtype=newcol.dtype)
                     )
-        
+
         # Construct dataframe from columns
         df = DataFrame()
         for k, v in zip(new_names, outcols):
