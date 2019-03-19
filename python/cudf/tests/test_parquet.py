@@ -73,17 +73,16 @@ def test_parquet_reader(parquet_file, columns, engine):
         if 'col_category' in expect.columns:
             expect['col_category'] = expect['col_category'].astype('category')
 
-    # cuDF currently handles bools, categories, and strings differently
-    # For categories, cuIO returns a hashed value rather than dictionary
+    # cuDF's default currently handles bools and categories differently
     # For bool, cuDF doesn't support it so convert it to int8
-    # For strings, we need to merge in dataframe support
+    # For categories, PANDAS originally returns as object whereas cuDF hashes
     if engine == 'cudf':
+        if 'col_bool' in expect.columns:
+            expect['col_bool'] = expect['col_bool'].astype('int8')
         if 'col_category' in expect.columns:
             expect = expect.drop(columns=['col_category'])
         if 'col_category' in got.columns:
             got = got.drop('col_category')
-        if 'col_bool' in expect.columns:
-            expect['col_bool'] = expect['col_bool'].astype('int8')
 
     assert_eq(expect, got, check_categorical=False)
 

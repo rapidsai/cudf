@@ -322,6 +322,13 @@ struct ParquetMetadata : public parquet::FileMetaData {
     return all_names;
   }
 
+  /**
+   * @brief Extracts the column name used for the row indexes in a dataframe
+   *
+   * PANDAS adds its own metadata to the key_value section when writing out the
+   * dataframe to a file to aid in exact reconstruction. The JSON-formatted
+   * metadata contains the index column(s) and PANDA-specific datatypes.
+   **/
   std::string get_index_column_name() {
     auto it =
         std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
@@ -441,7 +448,7 @@ uint8_t *decompress_page_data(
     }
   };
 
-  // Brotli scratch memory for decoding
+  // Brotli scratch memory for decompressing
   rmm::device_vector<uint8_t> debrotli_scratch;
 
   // Count the exact number of compressed pages
@@ -458,7 +465,7 @@ uint8_t *decompress_page_data(
       num_compressed_pages++;
     });
     if (codec.first == parquet::BROTLI && codec.second > 0) {
-      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second > 0));
+      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second));
     }
   }
 
