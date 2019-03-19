@@ -2,7 +2,7 @@
 
 ## New Features
 
-...
+- PR #1235 Add GPU-accelerated Parquet Reader
 
 ## Improvements
 
