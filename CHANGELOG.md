@@ -11,7 +11,7 @@
 
 ## Bug Fixes
 
-...
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 
 
 # cuDF 0.6.0 (Date TBD)
