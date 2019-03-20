@@ -91,9 +91,12 @@ git submodule update --init --remote --recursive
 - Create the conda development environment `cudf_dev`
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/cudf_dev.yml
-# activate the environment
-source activate cudf_dev
+# ./conda_prepare.sh depends on the `nvcc` executable being on your path.
+./conda_prepare.sh
+
+# Rerun ./conda_prepare.sh any time to update/clean your environment
+# for cudf dependencies. Beware, any additional pip or conda installs you
+# may have made will be removed by the above command.
 ```
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
