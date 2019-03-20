@@ -1,18 +1,3 @@
-# cuDF 0.7.0 (Date TBD)
-
-## New Features
-
-...
-
-## Improvements
-
-...
-
-## Bug Fixes
-
-...
-
-
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -160,6 +145,7 @@
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
 
 
 # cuDF 0.5.1 (05 Feb 2019)
