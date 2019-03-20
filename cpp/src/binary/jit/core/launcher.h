@@ -23,6 +23,9 @@
 #include "binary/jit/util/type.h"
 #include "binary/jit/util/operator.h"
 #include <jitify.hpp>
+#include <unordered_map>
+#include <string>
+#include <fstream>
 
 namespace cudf {
 namespace binops {
@@ -36,8 +39,11 @@ namespace jit {
      *---------------------------------------------------------------------------**/
     class Launcher {
     public:
-        static Launcher launch() {
-            return Launcher();
+        static Launcher& Instance() {
+            // Meyers' singleton is thread safe in C++11
+            // Link: https://stackoverflow.com/a/1661564
+            static Launcher l;
+            return l;
         }
 
     public:
@@ -54,13 +60,6 @@ namespace jit {
 
     public:
         /**---------------------------------------------------------------------------*
-         * @brief  Set the kernel name that this launcher will compile and launch
-         * 
-         * @param value  kernel name
-         *---------------------------------------------------------------------------**/
-        Launcher& kernel(std::string&& value);
-
-        /**---------------------------------------------------------------------------*
          * @brief Method to generate vector containing all template types for a JIT
          *  kernel. This vector is used to instantiate the kernel code for one set of types
          * 
@@ -70,9 +69,41 @@ namespace jit {
          * @return Launcher& ref to this launcehr object
          *---------------------------------------------------------------------------**/
         template <typename ... Args>
-        Launcher& instantiate(gdf_binary_operator ope, Operator::Type type, Args&& ... args) {
+        Launcher& kernelInstantiation(
+            std::string&& kernName,
+            gdf_binary_operator ope,
+            Operator::Type type,
+            Args&& ... args)
+        {
             Operator operatorSelector;
+            std::vector<std::string> arguments;
             arguments.assign({getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
+            
+            // Make instance name e.g. "kernel_v_v_int_int_long int_Add"
+            std::string kern_inst_name = kernName;
+            for ( auto&& arg : arguments ) kern_inst_name += '_' + arg;
+
+            // Find memory cached kernel instantiation
+            auto kern_inst_it = kernel_inst_map.find(kern_inst_name);
+            if ( kern_inst_it != kernel_inst_map.end()) {
+                kern_inst_string = kern_inst_it->second;
+            }
+            else { // Find file cached kernel instantiation
+                std::ifstream kern_file (kern_inst_name, std::ios::binary);
+                if (kern_file) {
+                    std::stringstream buffer;
+                    buffer << kern_file.rdbuf();
+                    kern_inst_string = buffer.str();
+                    kernel_inst_map[kern_inst_name] = kern_inst_string;
+                }
+                else { // JIT compile the kernel and write to file
+                    kern_inst_string = program.kernel(kernName).instantiate(arguments).serialize();
+                    std::ofstream kern_file(kern_inst_name, std::ios::binary);
+                    kern_file << kern_inst_string;
+                    kernel_inst_map[kern_inst_name] = kern_inst_string;
+                }
+            }
+
             return *this;
         }
 
@@ -103,11 +134,12 @@ namespace jit {
         static const std::vector<std::string> headersName;
 
     private:
-        jitify::Program program;
+        jitify_v2::Program program;
+        jitify_v2::Program getProgram();
 
     private:
-        std::string kernelName;
-        std::vector<std::string> arguments;
+        std::string kern_inst_string;
+        std::unordered_map<std::string, std::string> kernel_inst_map;
     };
 
 } // namespace jit

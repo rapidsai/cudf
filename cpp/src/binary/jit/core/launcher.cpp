@@ -21,22 +21,11 @@
 #include "binary/jit/code/code.h"
 #include "types.h.jit"
 #include <cstdint>
+#include <chrono>
 
 namespace cudf {
 namespace binops {
 namespace jit {
-
-/**---------------------------------------------------------------------------*
- * @brief Cache to hold previously compiled code. If JITIFY_THREAD_SAFE is
- *  defined, then the cache is held globally in the process, otherwise it is
- *  held locally in each thread
- * 
- *---------------------------------------------------------------------------**/
-#ifdef JITIFY_THREAD_SAFE
-    static jitify::JitCache JitCache;
-#else
-    static thread_local jitify::JitCache JitCache;
-#endif
 
     const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
     const std::vector<std::string> Launcher::headersName 
@@ -62,33 +51,55 @@ namespace jit {
         return nullptr;
     }
 
+    jitify_v2::Program Launcher::getProgram(std::string prog_file_name) {
+        std::ifstream prog_file (prog_file_name, std::ios::binary);
+
+        // Find file cached preprocessed program
+        if (prog_file) {
+            std::stringstream buffer;
+            buffer << prog_file.rdbuf();
+            return jitify_v2::Program::deserialize(buffer.str());
+        }
+        // JIT preprocess the program and write to file
+        else {
+            auto _program = jitify_v2::Program(code::kernel,
+                                            headersName,
+                                            compilerFlags,
+                                            headersCode);
+            std::ofstream prog_file(prog_file_name, std::ios::binary);
+            prog_file << _program.serialize();
+            return _program;
+        }
+    }
+
     Launcher::Launcher()
-     : program {JitCache.program(code::kernel, headersName, compilerFlags, headersCode)}
+     : program {getProgram("prog_binop.jit")}
     { }
 
     Launcher::Launcher(Launcher&& launcher)
      : program {std::move(launcher.program)}
     { }
 
-    Launcher& Launcher::kernel(std::string&& value) {
-        kernelName = value;
-        return *this;
-    }
-
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
-        program.kernel(kernelName.c_str())
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, lhs->data, rhs->data);
+        // program.kernel(kernelName.c_str())
+        //        .instantiate(arguments)
+        //        .configure_1d_max_occupancy()
+        //        .launch(out->size,
+        //                out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
-        program.kernel(kernelName.c_str())
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
+        auto startPointClock = std::chrono::high_resolution_clock::now();
+
+        auto kernel_inst = 
+            jitify_v2::KernelInstantiation::deserialize(kern_inst_string);
+        auto stopPointClock = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
+        std::cout << "Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
+
+        kernel_inst.configure_1d_max_occupancy()
                .launch(out->size,
                        out->data, lhs->data, rhs->data);
 
