@@ -108,6 +108,7 @@
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
+- PR #1247 Handle issues with NVStrings versions by creating conda_prepare.sh
 
 ## Bug Fixes
 
