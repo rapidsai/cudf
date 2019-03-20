@@ -146,6 +146,7 @@
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
 - PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 
 
 # cuDF 0.5.1 (05 Feb 2019)

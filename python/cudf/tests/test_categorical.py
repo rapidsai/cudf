@@ -68,12 +68,12 @@ def test_categorical_compare_unordered():
     out = sr == sr
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out)
+    assert np.all(out.to_array())
     assert np.all(pdsr == pdsr)
 
     # test inequal
     out = sr != sr
-    assert not np.any(out)
+    assert not np.any(out.to_array())
     assert not np.any(pdsr != pdsr)
 
     assert not pdsr.cat.ordered
@@ -105,12 +105,12 @@ def test_categorical_compare_ordered():
     out = sr1 == sr1
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out)
+    assert np.all(out.to_array())
     assert np.all(pdsr1 == pdsr1)
 
     # test inequal
     out = sr1 != sr1
-    assert not np.any(out)
+    assert not np.any(out.to_array())
     assert not np.any(pdsr1 != pdsr1)
 
     assert pdsr1.cat.ordered
