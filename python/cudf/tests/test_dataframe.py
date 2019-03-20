@@ -695,6 +695,25 @@ def test_dataframe_dtypes():
     assert df.dtypes.equals(dtypes)
 
 
+def test_dataframe_add_col_to_object_dataframe():
+    # Test for adding column to an empty object dataframe
+    cols = ['a', 'b', 'c']
+    df = pd.DataFrame(columns=cols, dtype='str')
+
+    data = {k: v for (k, v) in zip(cols, [['a'] for _ in cols])}
+
+    gdf = DataFrame(data)
+    gdf = gdf[:0]
+
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['a'] = [1]
+    df['a'] = [10]
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['b'] = [1.0]
+    df['b'] = [10.0]
+    assert gdf.dtypes.equals(df.dtypes)
+
+
 def test_dataframe_dir_and_getattr():
     df = DataFrame([('a', np.ones(10)),
                     ('b', np.ones(10)),

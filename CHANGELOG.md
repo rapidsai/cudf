@@ -11,6 +11,7 @@
 
 ## Bug Fixes
 
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 
 
@@ -161,6 +162,7 @@
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 
 
 # cuDF 0.5.1 (05 Feb 2019)
