@@ -58,6 +58,10 @@ CUDA/GPU requirements:
 * NVIDIA driver 396.44+
 * Pascal architecture or better
 
+Python requirements:
+
+* 3.6 or 3.7
+
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
 Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
@@ -85,13 +89,15 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 ```bash
 CUDF_HOME=$(pwd)/cudf
 git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
-cd CUDF_HOME
+cd $CUDF_HOME
 git submodule update --init --remote --recursive
 ```
 - Create the conda development environment `cudf_dev`
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/cudf_dev.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev.yml # for CUDA 9.2
+# or
+conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.yml # for CUDA 10.0/1
 # activate the environment
 source activate cudf_dev
 ```
@@ -105,7 +111,7 @@ $ cd build                                                                # ente
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 # -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to OFF. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=OFF     # configure cmake ...
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
 
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
