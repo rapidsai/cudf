@@ -1724,12 +1724,12 @@ void dataTypeDetection(char *raw_csv,
 						countDash++; break;
 					case '/':
 						countSlash++;break;
-						case ':':
-							countColon++;break;
-						case 'e':
-						case 'E':
-							if (!maybe_hex && startPos > start && startPos < tempPos) 
-								countExponent++;break;
+					case ':':
+						countColon++;break;
+					case 'e':
+					case 'E':
+						if (!maybe_hex && startPos > start && startPos < tempPos) 
+							countExponent++;break;
 					default:
 						countString++;
 						break;	
