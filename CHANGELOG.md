@@ -11,7 +11,7 @@
 
 ## Bug Fixes
 
-...
+- PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 
 
 # cuDF 0.6.0 (Date TBD)
