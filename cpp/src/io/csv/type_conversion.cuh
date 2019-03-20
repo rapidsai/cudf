@@ -83,18 +83,17 @@ __device__ void adjustForWhitespaceAndQuotes(const char* data, long* start,
  *---------------------------------------------------------------------------**/
 __device__ int32_t convertStrToHash(const char* key, long start, long end,
                                     uint32_t seed) {
-  auto getblock32 = [] __host__ __device__ (const uint32_t* p,
-                                            int i) -> uint32_t {
+  auto getblock32 = [] __device__(const uint32_t* p, int i) -> uint32_t {
     // Individual byte reads for possible unaligned accesses
     auto q = (const uint8_t*)(p + i);
     return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
   };
 
-  auto rotl32 = [] __host__ __device__ (uint32_t x, int8_t r) -> uint32_t {
+  auto rotl32 = [] __device__(uint32_t x, int8_t r) -> uint32_t {
     return (x << r) | (x >> (32 - r));
   };
 
-  auto fmix32 = [] __host__ __device__ (uint32_t h) -> uint32_t {
+  auto fmix32 = [] __device__(uint32_t h) -> uint32_t {
     h ^= h >> 16;
     h *= 0x85ebca6b;
     h ^= h >> 13;
