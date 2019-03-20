@@ -950,8 +950,8 @@ def test_csv_reader_pd_consistent_quotes(quoting):
 
 
 def test_csv_reader_scientific_type_detection():
-    buffer = '1.1, -1.1, 1E1, 1e1, -1e1, -1e-1, 1e-1, 1.1e1, 1.1e-1, -1.1e-1, -1.1e1'
-    expected = [1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+    buffer = '1., 1.1, -1.1, 1E1, 1e1, -1e1, -1e-1, 1e-1, 1.1e1, 1.1e-1, -1.1e-1, -1.1e1'
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
 
     df = read_csv(StringIO(buffer),
                   header=None)
