@@ -2,7 +2,7 @@
 
 ## New Features
 
-...
+- PR #1260 Added `Series.abs()` feature.
 
 ## Improvements
 
