@@ -1608,7 +1608,7 @@ bool isDigit(char c, bool is_hex){
 }
 
 /**
-* @brief Returns true if the counters indicate a ponentially valid float.
+* @brief Returns true if the counters indicate a potentially valid float.
 * False positives are possible because positions are not taken into account.
 * For example, field "e.123-" would match the pattern.
 */
