@@ -422,6 +422,10 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output)
 
+    cdef gdf_error gdf_abs_generic(gdf_column *input, gdf_column *output)
+    cdef gdf_error gdf_abs_f32(gdf_column *input, gdf_column *output)
+    cdef gdf_error gdf_abs_f64(gdf_column *input, gdf_column *output)
+
     cdef gdf_error gdf_ceil_generic(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_ceil_f32(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_ceil_f64(gdf_column *input, gdf_column *output)

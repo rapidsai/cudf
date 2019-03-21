@@ -49,6 +49,7 @@ _unary_impl = {
     'ceil': libgdf.gdf_ceil_generic,
     'floor': libgdf.gdf_floor_generic,
     'sqrt': libgdf.gdf_sqrt_generic,
+    'abs': libgdf.gdf_abs_generic,
 }
 
 
