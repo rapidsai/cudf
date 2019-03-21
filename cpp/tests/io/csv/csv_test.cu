@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
+#include <cudf.h>
+
+#include <nvstrings/NVStrings.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+#include <sys/stat.h>
+
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <sys/stat.h>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <cstdlib>
 
-#include <cudf.h>
-#include <NVStrings.h>
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {
@@ -270,15 +274,17 @@ TEST(gdf_csv_test, Strings)
 		auto stringCount = stringList->size();
 		ASSERT_EQ( stringCount, 3u );
 		auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
-		ASSERT_NE( stringList->len(stringLengths.get(), false), 0u );
+		ASSERT_NE( stringList->byte_count(stringLengths.get(), false), 0u );
 
 		// Check the actual strings themselves
 		auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
 		for (size_t i = 0; i < stringCount; ++i) {
 			ASSERT_GT( stringLengths[i], 0 );
-			strings[i] = new char[stringLengths[i]];
+			strings[i] = new char[stringLengths[i] + 1];
+			strings[i][stringLengths[i]] = 0;
 		}
 		EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
+
 		EXPECT_STREQ( strings[0], "abc def ghi" );
 		EXPECT_STREQ( strings[1], "\"jkl mno pqr\"" );
 		EXPECT_STREQ( strings[2], "stu \"\"vwx\"\" yz" );
@@ -336,7 +342,8 @@ TEST(gdf_csv_test, QuotedStrings)
 		auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
 		for (size_t i = 0; i < stringCount; ++i) {
 			ASSERT_GT( stringLengths[i], 0 );
-			strings[i] = new char[stringLengths[i]];
+			strings[i] = new char[stringLengths[i]+1];
+            strings[i][stringLengths[i]] = 0;
 		}
 		EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
 		EXPECT_STREQ( strings[0], "abc,\ndef, ghi" );
@@ -390,13 +397,14 @@ TEST(gdf_csv_test, IgnoreQuotes)
 		auto stringCount = stringList->size();
 		ASSERT_EQ( stringCount, 3u );
 		auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
-		ASSERT_NE( stringList->len(stringLengths.get(), false), 0u );
+		ASSERT_NE( stringList->byte_count(stringLengths.get(), false), 0u );
 
 		// Check the actual strings themselves
 		auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
 		for (size_t i = 0; i < stringCount; ++i) {
 			ASSERT_GT( stringLengths[i], 0 );
-			strings[i] = new char[stringLengths[i]];
+			strings[i] = new char[stringLengths[i] + 1];
+			strings[i][stringLengths[i]] = 0;
 		}
 		EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
 		EXPECT_STREQ( strings[0], "\"abcdef ghi\"" );

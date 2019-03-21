@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from libgdf_cffi import libgdf, ffi
+import nvstrings
 
 from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
@@ -161,10 +162,6 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     0  123 2018-11-13T12:00:00.000 5451
     1  456 2018-11-14T12:35:01.000 5784
     2  789 2018-11-15T18:02:59.000 6117
-
-    See Also
-    --------
-    .read_csv_strings
     """
 
     if delim_whitespace:
@@ -348,12 +345,21 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     outcols = []
     new_names = []
     for i in range(csv_reader.num_cols_out):
-        newcol = Column.from_cffi_view(out[i])
-        new_names.append(ffi.string(out[i].col_name).decode())
-        if(newcol.dtype == np.dtype('datetime64[ms]')):
-            outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
+        if out[i].dtype == libgdf.GDF_STRING:
+            ptr = int(ffi.cast("uintptr_t", out[i].data))
+            new_names.append(ffi.string(out[i].col_name).decode())
+            outcols.append(nvstrings.bind_cpointer(ptr))
         else:
-            outcols.append(newcol.view(NumericalColumn, dtype=newcol.dtype))
+            newcol = Column.from_cffi_view(out[i])
+            new_names.append(ffi.string(out[i].col_name).decode())
+            if(newcol.dtype.type == np.datetime64):
+                outcols.append(
+                    newcol.view(DatetimeColumn, dtype='datetime64[ms]')
+                )
+            else:
+                outcols.append(
+                    newcol.view(NumericalColumn, dtype=newcol.dtype)
+                )
 
     # Build dataframe
     df = DataFrame()
@@ -372,239 +378,3 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     nvtx_range_pop()
 
     return df
-
-
-def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting=0, doublequote=True,
-                     header='infer',
-                     sep=',', delimiter=None, delim_whitespace=False,
-                     skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False,
-                     compression='infer', thousands=None, decimal='.',
-                     true_values=None, false_values=None, nrows=None,
-                     byte_range=None, skip_blank_lines=True, comment=None,
-                     na_values=None, keep_default_na=True, na_filter=True,
-                     prefix=None, index_col=None):
-
-    """
-    **Experimental**: This function exists only as a beta way to use
-    `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_. with cudf.
-
-    Future versions of cuDF will provide cleaner integration.
-
-    Uses mostly same arguments as read_csv.
-    Note: Doesn't currently support auto-column detection, header, usecols
-    and mangle_dupe_cols args.
-
-    Returns
-    -------
-    columns : ordered list of cudf.dataframe.Series and nvstrings objects
-      numeric or date dtyped columns will be Series.
-
-      'str' dtyped columns will be
-      `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_.
-
-    Examples
-    --------
-
-    Create a test csv file
-
-    >>> import cudf
-    >>> filename = 'foo.csv'
-    >>> lines = [
-    ...   "num1,datetime,text",
-    ...   "123,2018-11-13T12:00:00,abc",
-    ...   "456,2018-11-14T12:35:01,def",
-    ...   "789,2018-11-15T18:02:59,ghi"
-    ... ]
-    >>> with open(filename, 'w') as fp:
-    ...     fp.write('\\n'.join(lines)+'\\n')
-
-    Read the file with cudf
-
-    >>> names = ['num1', 'datetime', 'text']
-    >>> dtypes = ['int', 'date', 'str']
-    >>> columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
-    ...                         names=names, dtype=dtypes,
-    ...                         skiprows=1)
-
-    Display results
-
-    >>> print(columns[0])
-    0  123
-    1  456
-    2  789
-    >>> print(columns[2])
-    ['abc', 'def', 'ghi']
-
-    See Also
-    --------
-    .read_csv
-    """
-    import nvstrings
-    from cudf.dataframe.series import Series
-
-    # Alias sep -> delimiter.
-    if delimiter is None:
-        delimiter = sep
-
-    if dtype is not None:
-        if isinstance(dtype, collections.abc.Mapping):
-            dtype_dict = True
-        elif isinstance(dtype, collections.abc.Iterable):
-            dtype_dict = False
-        else:
-            msg = '''dtype must be 'list like' or 'dict' '''
-            raise TypeError(msg)
-        if names is not None and len(dtype) != len(names):
-            msg = '''All column dtypes must be specified.'''
-            raise TypeError(msg)
-
-    csv_reader = ffi.new('csv_read_arg*')
-
-    # Populate csv_reader struct
-    if is_file_like(filepath_or_buffer):
-        buffer = filepath_or_buffer.read()
-        # check if StringIO is used
-        if hasattr(buffer, 'encode'):
-            buffer_as_bytes = buffer.encode()
-        else:
-            buffer_as_bytes = buffer
-        buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
-
-        csv_reader.input_data_form = libgdf.HOST_BUFFER
-        csv_reader.filepath_or_buffer = buffer_data_holder
-        csv_reader.buffer_size = len(buffer_as_bytes)
-    else:
-        if (not os.path.isfile(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        if (not os.path.exists(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        file_path = _wrap_string(filepath_or_buffer)
-
-        csv_reader.input_data_form = libgdf.FILE_PATH
-        csv_reader.filepath_or_buffer = file_path
-
-    if header == 'infer':
-        header = -1
-    header_infer = header
-    arr_names = []
-    arr_dtypes = []
-    if names is None:
-        if header is -1:
-            header_infer = 0
-        if header is None:
-            header_infer = -1
-        csv_reader.names = ffi.NULL
-        csv_reader.num_cols = 0
-    else:
-        if header is None:
-            header_infer = -1
-        csv_reader.num_cols = len(names)
-        for col_name in names:
-            arr_names.append(_wrap_string(col_name))
-            if dtype is not None:
-                if dtype_dict:
-                    arr_dtypes.append(_wrap_string(str(dtype[col_name])))
-        names_ptr = ffi.new('char*[]', arr_names)
-        csv_reader.names = names_ptr
-
-    if dtype is None:
-        csv_reader.dtype = ffi.NULL
-    else:
-        if not dtype_dict:
-            for col_dtype in dtype:
-                arr_dtypes.append(_wrap_string(str(col_dtype)))
-        dtype_ptr = ffi.new('char*[]', arr_dtypes)
-        csv_reader.dtype = dtype_ptr
-
-    if decimal == delimiter:
-        raise ValueError("decimal cannot be the same as delimiter")
-
-    if thousands == delimiter:
-        raise ValueError("thousands cannot be the same as delimiter")
-
-    if nrows is not None and skipfooter != 0:
-        raise ValueError("cannot use both nrows and skipfooter parameters")
-
-    if byte_range is not None:
-        if skipfooter != 0 or skiprows != 0 or nrows is not None:
-            raise ValueError("""cannot manually limit rows to be read when
-                                using the byte range parameter""")
-
-    # Start with default values recognized as boolean
-    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
-    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
-
-    for value in true_values or []:
-        arr_true_values.append(_wrap_string(str(value)))
-    arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
-    csv_reader.true_values = arr_true_values_ptr
-    csv_reader.num_true_values = len(arr_true_values)
-
-    for value in false_values or []:
-        arr_false_values.append(_wrap_string(str(value)))
-    false_values_ptr = ffi.new('char*[]', arr_false_values)
-    csv_reader.false_values = false_values_ptr
-    csv_reader.num_false_values = len(arr_false_values)
-
-    arr_na_values = []
-    for value in na_values or []:
-        arr_na_values.append(_wrap_string(str(value)))
-    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
-    csv_reader.na_values = arr_na_values_ptr
-    csv_reader.num_na_values = len(arr_na_values)
-
-    compression_bytes = _wrap_string(compression)
-    prefix_bytes = _wrap_string(prefix)
-
-    csv_reader.delimiter = delimiter.encode()
-    csv_reader.lineterminator = lineterminator.encode()
-    csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = _quoting_enum[quoting]
-    csv_reader.doublequote = doublequote
-    csv_reader.delim_whitespace = delim_whitespace
-    csv_reader.skipinitialspace = skipinitialspace
-    csv_reader.dayfirst = dayfirst
-    csv_reader.header = header_infer
-    csv_reader.skiprows = skiprows
-    csv_reader.skipfooter = skipfooter
-    csv_reader.compression = compression_bytes
-    csv_reader.decimal = decimal.encode()
-    csv_reader.thousands = thousands.encode() if thousands else b'\0'
-    csv_reader.nrows = nrows if nrows is not None else -1
-    if byte_range is not None:
-        csv_reader.byte_range_offset = byte_range[0]
-        csv_reader.byte_range_size = byte_range[1]
-    else:
-        csv_reader.byte_range_offset = 0
-        csv_reader.byte_range_size = 0
-    csv_reader.skip_blank_lines = skip_blank_lines
-    csv_reader.comment = comment.encode() if comment else b'\0'
-    csv_reader.keep_default_na = keep_default_na
-    csv_reader.na_filter = na_filter
-    csv_reader.prefix = prefix_bytes
-
-    # Call read_csv
-    libgdf.read_csv(csv_reader)
-
-    out = csv_reader.data
-    if out == ffi.NULL:
-        raise ValueError("Failed to parse CSV")
-
-    # Extract parsed columns
-
-    outcols = []
-    for i in range(csv_reader.num_cols_out):
-        if out[i].dtype == libgdf.GDF_STRING:
-            ptr = int(ffi.cast("uintptr_t", out[i].data))
-            outcols.append(nvstrings.bind_cpointer(ptr))
-        else:
-            newcol = Column.from_cffi_view(out[i])
-            if(newcol.dtype == np.dtype('datetime64[ms]')):
-                col = newcol.view(DatetimeColumn, dtype='datetime64[ms]')
-            else:
-                col = newcol.view(NumericalColumn, dtype=newcol.dtype)
-            outcols.append(Series(col))
-
-    return outcols

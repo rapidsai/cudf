@@ -396,15 +396,17 @@ class DataFrame(object):
 
         # Prepare cells
         cols = OrderedDict()
+        dtypes = OrderedDict()
         use_cols = list(self.columns[:ncols - 1])
         if ncols > 0:
             use_cols.append(self.columns[-1])
 
         for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
+            dtypes[h] = self[h].dtype
 
         # Format into a table
-        return formatting.format(index=self._index, cols=cols,
+        return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
                                  show_headers=True, more_cols=more_cols,
                                  more_rows=more_rows, min_width=2)
 
@@ -734,7 +736,10 @@ class DataFrame(object):
         series = Series(col)
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
-            arr = rmm.device_array(shape=len(ind), dtype=np.float64)
+            dtype = np.float64
+            if self[next(iter(self._cols))].dtype == np.dtype("object"):
+                dtype = np.dtype("object")
+            arr = rmm.device_array(shape=len(ind), dtype=dtype)
             size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
@@ -755,9 +760,13 @@ class DataFrame(object):
         SCALAR = np.isscalar(col)
 
         if len(self) > 0 and len(series) == 1 and SCALAR:
-            arr = rmm.device_array(shape=len(index), dtype=series.dtype)
-            cudautils.gpu_fill_value.forall(arr.size)(arr, col)
-            return Series(arr)
+            if series.dtype == np.dtype("object"):
+                gather_map = cudautils.zeros(len(index), 'int32')
+                return series[gather_map]
+            else:
+                arr = rmm.device_array(shape=len(index), dtype=series.dtype)
+                cudautils.gpu_fill_value.forall(arr.size)(arr, col)
+                return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
         return col
@@ -1308,6 +1317,7 @@ class DataFrame(object):
         4    3    13.0
         2    4    14.0    12.0
         """
+        import nvstrings
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
@@ -1325,7 +1335,7 @@ class DataFrame(object):
         else:
             lsuffix, rsuffix = suffixes
 
-        if left_on and right_on:
+        if left_on and right_on and left_on != right_on:
             raise NotImplementedError("left_on='x', right_on='y' not supported"
                                       "in CUDF at this time.")
 
@@ -1371,6 +1381,11 @@ class DataFrame(object):
         # Essential parameters
         if on:
             on = [on] if isinstance(on, str) else list(on)
+        if left_on:
+            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
+        if right_on:
+            right_on = ([right_on] if isinstance(right_on, str)
+                        else list(right_on))
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1430,14 +1445,11 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = rhs[name].cat.categories
 
-        if right_on and left_on:
-            raise NotImplementedError("merge(left_on='x', right_on='y' not"
-                                      "supported by CUDF at this time.")
         if left_index and right_on:
-            lhs[right_on] = lhs.index
+            lhs[right_on[0]] = lhs.index
             left_on = right_on
         elif right_index and left_on:
-            rhs[left_on] = rhs.index
+            rhs[left_on[0]] = rhs.index
             right_on = left_on
 
         if on:
@@ -1470,12 +1482,18 @@ class DataFrame(object):
                         key = on[idx]
                         categories = col_cats[key] if key in col_cats.keys()\
                             else None
-                        df[key] = columnops.build_column(
-                                Buffer(cols[on_idx]),
-                                dtype=cols[on_idx].dtype,
-                                mask=Buffer(valids[on_idx]),
-                                categories=categories,
-                                )
+                        if isinstance(cols[on_idx], nvstrings.nvstrings):
+                            df[key] = cols[on_idx]
+                        else:
+                            mask = None
+                            if valids[on_idx] is not None:
+                                mask = Buffer(valids[on_idx])
+                            df[key] = columnops.build_column(
+                                    Buffer(cols[on_idx]),
+                                    dtype=cols[on_idx].dtype,
+                                    mask=mask,
+                                    categories=categories,
+                            )
             else:  # not an `on`-column, `cpp_join` returns these after `on`
                 # but they need to be added to the result before `on` columns.
                 # on_count corrects gap for non-`on` columns
@@ -1483,12 +1501,18 @@ class DataFrame(object):
                 left_name = fix_name(name, lsuffix)
                 categories = col_cats[left_name] if left_name in\
                     col_cats.keys() else None
-                df[left_name] = columnops.build_column(
-                        Buffer(cols[left_column_idx]),
-                        dtype=cols[left_column_idx].dtype,
-                        mask=Buffer(valids[left_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[left_column_idx], nvstrings.nvstrings):
+                    df[left_name] = cols[left_column_idx]
+                else:
+                    mask = None
+                    if valids[left_column_idx] is not None:
+                        mask = Buffer(valids[left_column_idx])
+                    df[left_name] = columnops.build_column(
+                            Buffer(cols[left_column_idx]),
+                            dtype=cols[left_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
         rhs_column_idx = len(lhs.columns)
         for name in rhs.columns:
             if name not in on:
@@ -1496,12 +1520,18 @@ class DataFrame(object):
                 rhs_name = fix_name(name, rsuffix)
                 categories = col_cats[rhs_name] if rhs_name in\
                     col_cats.keys() else None
-                df[rhs_name] = columnops.build_column(
-                        Buffer(cols[rhs_column_idx]),
-                        dtype=cols[rhs_column_idx].dtype,
-                        mask=Buffer(valids[rhs_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[rhs_column_idx], nvstrings.nvstrings):
+                    df[rhs_name] = cols[rhs_column_idx]
+                else:
+                    mask = None
+                    if valids[rhs_column_idx] is not None:
+                        mask = Buffer(valids[rhs_column_idx])
+                    df[rhs_name] = columnops.build_column(
+                            Buffer(cols[rhs_column_idx]),
+                            dtype=cols[rhs_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
@@ -1509,14 +1539,14 @@ class DataFrame(object):
             df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
-                               index=RangeIndex(0, len(lhs[left_on])))
-            indexed = lhs[left_on][df[left_on]-1]
+                               index=RangeIndex(0, len(lhs[left_on[0]])))
+            indexed = lhs[left_on[0]][df[left_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
         elif left_index and right_on:
             new_index = Series(rhs.index,
-                               index=RangeIndex(0, len(rhs[right_on])))
-            indexed = rhs[right_on][df[right_on]-1]
+                               index=RangeIndex(0, len(rhs[right_on[0]])))
+            indexed = rhs[right_on[0]][df[right_on[0]]-1]
             new_index = new_index[indexed-1]
             df.index = new_index
 
@@ -2461,63 +2491,28 @@ class Iloc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._df.index)
+        if isinstance(arg, (tuple)):
+            if len(arg) == 1:
+                arg = list(arg)
+            elif len(arg) == 2:
+                return self[arg[0]][arg[1]]
+            else:
+                return pd.core.indexing.IndexingError(
+                    "Too many indexers"
+                )
 
-        if isinstance(arg, tuple):
-            raise NotImplementedError('cudf columnar iloc not supported')
-
-        elif isinstance(arg, int):
-            rows.append(arg)
-
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
-
-        elif isinstance(arg, utils.list_types_tuple):
-            for idx in arg:
-                rows.append(idx)
-
+        if isinstance(arg, numbers.Integral):
+            rows = []
+            for col in self._df.columns:
+                rows.append(self._df[col][arg])
+            return Series(np.array(rows), name=arg)
         else:
-            raise TypeError(type(arg))
+            df = DataFrame()
+            for col in self._df.columns:
+                df[col] = self._df[col][arg]
+            df.index = self._df.index[arg]
 
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
-
-        # returns the series similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            ret_list = []
-            col_list = pd.Categorical(list(self._df.columns))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                    self._df[col][rows[0]].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in iloc"
-                    )
-                ret_list.append(self._df[col][rows[0]])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
-
-        df = DataFrame()
-
-        for col in self._df.columns:
-            sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)])
-
-        # 0-length rows can occur when when iloc[n=0]
-        # head(0)
-        if isinstance(arg, slice):
-            df.index = sr.index[arg]
-        else:
-            df.index = sr.index[rows]
-        return df
+            return df
 
     def __setitem__(self, key, value):
         # throws an exception while updating

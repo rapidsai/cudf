@@ -6,9 +6,9 @@ set -e
 
 if [ "$BUILD_CUDF" == "1" ]; then
   if [ "$BUILD_ABI" == "1" ]; then
-    export UPLOADFILE=`conda build conda/recipes/cudf -c rapidsai -c nvidia -c numba -c conda-forge -c defaults --python=$PYTHON --output`
+    export UPLOADFILE=`conda build conda/recipes/cudf -c rapidsai -c rapidsai-nightly -c nvidia -c numba -c conda-forge -c defaults --python=$PYTHON --output`
   else
-    export UPLOADFILE=`conda build conda/recipes/cudf -c rapidsai/label/cf201901 -c nvidia/label/cf201901 -c numba -c conda-forge/label/cf201901 -c defaults --python=$PYTHON --output`
+    export UPLOADFILE=`conda build conda/recipes/cudf -c rapidsai/label/cf201901 -c rapidsai-nightly/label/cf201901 -c nvidia/label/cf201901 -c numba -c conda-forge/label/cf201901 -c defaults --python=$PYTHON --output`
   fi
 
   SOURCE_BRANCH=master

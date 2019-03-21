@@ -13,31 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstdlib>
+
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+
+#include <utilities/int_fastdiv.h>
+#include <dataframe/cudf_table.cuh>
+#include <hash/hash_functions.cuh>
+
+#include <cudf.h>
+
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
+#include <thrust/gather.h>
+
+#include <rmm/thrust_rmm_allocator.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <iostream>
 #include <vector>
 #include <map>
 #include <type_traits>
 #include <memory>
 
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/gather.h>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <dataframe/cudf_table.cuh>
-#include <hash/hash_functions.cuh>
-#include <utilities/int_fastdiv.h>
-#include <rmm/thrust_rmm_allocator.h>
-
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-
-
+#include <cstdlib>
 
 template <template <typename> class hash_function,
          typename size_type>

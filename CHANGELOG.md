@@ -6,11 +6,12 @@
 
 ## Improvements
 
-...
+- PR #1202 Simplify README.md
+- PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 
 ## Bug Fixes
 
-...
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 
 
 # cuDF 0.6.0 (Date TBD)
@@ -53,9 +54,11 @@
 - PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #872 Adding NVCategory support to cudf apis
 - PR #1052 Add left/right_index and left/right_on keywords to merge
 - PR #1091 Add `indicator=` and `suffixes=` keywords to merge
 - PR #1107 Add unsupported keywords to Series.fillna
+- PR #1032 Add string support to cuDF python
 - PR #1136 Removed `gdf_concat`
 - PR #1153 Added function for getting the padded allocation size for valid bitmask
 - PR #1148 Add cudf.sqrt for dataframes and Series
@@ -65,6 +68,7 @@
 
 ## Improvements
 
+- PR #1218 Add dask-cudf page to API docs
 - PR #892 Add support for heterogeneous types in binary ops with JIT
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #561 Add Doxygen style comments to Join CUDA functions
@@ -103,12 +107,14 @@
 - PR #1108 Sorting for datetime columns
 - PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
+- PR #1183 Bump Arrow version to 0.12.1
+- PR #1208 Default to CXX11_ABI=ON
 
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
@@ -144,11 +150,18 @@
 - PR #1090 Updating Doxygen Comments
 - PR #1080 Fix dtypes returned from loc / iloc because of lists
 - PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1174: Fix release script typo
 - PR #1137 Add prebuild script for CI
 - PR #1118 Enhanced the `DataFrame.from_records()` feature
 - PR #1129 Fix join performance with index parameter from using numpy array
 - PR #1145 Issue with .agg call on multi-column dataframes
+- PR #908 Some testing code cleanup
 - PR #1167 Fix issue with null_count not being set after inplace fillna()
+- PR #1184 Fix iloc performance regression
+- PR #1185 Support left_on/right_on and also on=str in merge
+- PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
+- PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 
 
 # cuDF 0.5.1 (05 Feb 2019)
