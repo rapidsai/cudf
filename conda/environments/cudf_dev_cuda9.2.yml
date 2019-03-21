@@ -1,7 +1,7 @@
 name: cudf_dev
 channels:
-- rapidsai
-- nvidia
+- rapidsai/label/cuda9.2
+- nvidia/label/cuda9.2
 - conda-forge
 dependencies:
 - cmake>=3.12
