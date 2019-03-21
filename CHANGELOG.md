@@ -1,18 +1,3 @@
-# cuDF 0.7.0 (Date TBD)
-
-## New Features
-
-...
-
-## Improvements
-
-...
-
-## Bug Fixes
-
-...
-
-
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -108,6 +93,7 @@
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
+- PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
 
 ## Bug Fixes
 
@@ -159,6 +145,9 @@
 - PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
+- PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 
 
