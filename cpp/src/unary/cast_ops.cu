@@ -71,7 +71,8 @@ struct CastDateTo_Dispatcher {
     // Cast to other date type
     template <typename TypeTo>
     typename std::enable_if_t<
-        std::is_same<TypeTo, cudf::date32>::value || std::is_same<TypeTo, cudf::date64>::value,
+        std::is_same<TypeTo, cudf::date32>::value ||
+        std::is_same<TypeTo, cudf::date64>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype == GDF_DATE64 && output->dtype == GDF_DATE32 ) 
@@ -108,10 +109,12 @@ struct CastDateTo_Dispatcher {
             return GDF_UNSUPPORTED_DTYPE;
     }
 
-    // cast to arithmetic or cudf::category
+    // Cast to arithmetic, cudf::category, or cudf::nvstring_category
     template <typename TypeTo>
     typename std::enable_if_t<
-        std::is_arithmetic<TypeTo>::value || std::is_same<TypeTo, cudf::category>::value,
+        std::is_arithmetic<TypeTo>::value ||
+        std::is_same<TypeTo, cudf::category>::value ||
+        std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
@@ -182,10 +185,12 @@ struct CastTimestampTo_Dispatcher {
             return GDF_TIMESTAMP_RESOLUTION_MISMATCH;
     }
 
-    // cast to arithmetic or cudf::category
+    // Cast to arithmetic, cudf::category, or cudf::nvstring_category
     template <typename TypeTo>
     typename std::enable_if_t<
-        std::is_arithmetic<TypeTo>::value || std::is_same<TypeTo, cudf::category>::value,
+        std::is_arithmetic<TypeTo>::value ||
+        std::is_same<TypeTo, cudf::category>::value ||
+        std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
@@ -216,10 +221,12 @@ struct CastFrom_Dispatcher
                                     input, output);
     }
     
-    // Arithmetic and cudf::category
+    // Cast from arithmetic, cudf::category, or cudf::nvstring_category
     template <typename TypeFrom>
     typename std::enable_if_t<
-        std::is_arithmetic<TypeFrom>::value || std::is_same<TypeFrom, cudf::category>::value,
+        std::is_arithmetic<TypeFrom>::value ||
+        std::is_same<TypeFrom, cudf::category>::value ||
+        std::is_same<TypeFrom, cudf::nvstring_category>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return cudf::type_dispatcher(output->dtype,
