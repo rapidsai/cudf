@@ -119,6 +119,13 @@ params_real_types = [
 ]
 
 
+params_num_types = [
+    (np.int32, 1),
+    (np.int64, 1),
+    (np.float64, 3),
+    (np.float32, 4),
+]
+
 # trig
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
@@ -174,7 +181,7 @@ def test_sqrt(dtype, ulp):
 
 # absolute
 
-@pytest.mark.parametrize('dtype,ulp', params_real_types)
+@pytest.mark.parametrize('dtype,ulp', params_num_types)
 def test_abs(dtype, ulp):
     math_op_test(dtype, ulp, np.abs, libgdf.gdf_abs_generic,
                  scale=100)

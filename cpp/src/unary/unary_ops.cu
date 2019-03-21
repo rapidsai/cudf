@@ -99,6 +99,18 @@ gdf_error F##_generic(gdf_column *input, gdf_column *output) {      \
     }                                                               \
 }
 
+#define DEF_UNARY_OP_NUM(F)                                         \
+gdf_error F##_generic(gdf_column *input, gdf_column *output) {      \
+    switch ( input->dtype ) {                                       \
+    case GDF_INT32:   return F##_i32(input, output);                \
+    case GDF_INT64:   return F##_i64(input, output);                \
+    case GDF_FLOAT32: return F##_f32(input, output);                \
+    case GDF_FLOAT64: return F##_f64(input, output);                \
+    default: return GDF_UNSUPPORTED_DTYPE;                          \
+    }                                                               \
+}
+
+
 #define DEF_CAST_OP(TO)                                                       \
 gdf_error gdf_cast_generic_to_##TO(gdf_column *input, gdf_column *output) {   \
     switch ( input->dtype ) {                                                 \
@@ -307,7 +319,15 @@ struct DeviceAbs {
     }
 };
 
-DEF_UNARY_OP_REAL(gdf_abs)
+DEF_UNARY_OP_NUM(gdf_abs)
+
+gdf_error gdf_abs_i32(gdf_column *input, gdf_column *output) {
+    return MathOp<int32_t, DeviceAbs<int32_t> >::launch(input, output);
+}
+
+gdf_error gdf_abs_i64(gdf_column *input, gdf_column *output) {
+    return MathOp<int64_t, DeviceAbs<int64_t> >::launch(input, output);
+}
 
 gdf_error gdf_abs_f32(gdf_column *input, gdf_column *output) {
     return MathOp<float, DeviceAbs<float> >::launch(input, output);
