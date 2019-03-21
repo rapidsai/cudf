@@ -148,6 +148,7 @@
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
 - PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
+- PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
 
 
