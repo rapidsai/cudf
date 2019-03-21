@@ -93,6 +93,7 @@
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
+- PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
 
 ## Bug Fixes
 
