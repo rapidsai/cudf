@@ -172,6 +172,14 @@ def test_sqrt(dtype, ulp):
                  positive_only=True)
 
 
+# absolute
+
+@pytest.mark.parametrize('dtype,ulp', params_real_types)
+def test_abs(dtype, ulp):
+    math_op_test(dtype, ulp, np.abs, libgdf.gdf_abs_generic,
+                 scale=100)
+
+
 # rounding
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)

@@ -297,6 +297,26 @@ gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output) {
     return MathOp<double, DeviceSqrt<double> >::launch(input, output);
 }
 
+// absolute functions
+
+template<typename T>
+struct DeviceAbs {
+    __device__
+    T apply(T data) {
+        return std::abs(data);
+    }
+};
+
+DEF_UNARY_OP_REAL(gdf_abs)
+
+gdf_error gdf_abs_f32(gdf_column *input, gdf_column *output) {
+    return MathOp<float, DeviceAbs<float> >::launch(input, output);
+}
+
+gdf_error gdf_abs_f64(gdf_column *input, gdf_column *output) {
+    return MathOp<double, DeviceAbs<double> >::launch(input, output);
+}
+
 // rounding functions
 
 template<typename T>

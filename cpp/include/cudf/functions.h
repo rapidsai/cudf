@@ -1078,6 +1078,39 @@ gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output);
 
 
+/* absolute */
+
+/**
+ * @brief  Computes the absolute value for any floating point data type
+ *
+ * @param[in] gdf_column of the input
+ * @param[out] output gdf_column. The output memory needs to be preallocated
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error gdf_abs_generic(gdf_column *input, gdf_column *output);
+
+/**
+ * @brief  Computes the absolute value for float data type
+ *
+ * @param[in] gdf_column of the input
+ * @param[out] output gdf_column. The output memory needs to be preallocated
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error gdf_abs_f32(gdf_column *input, gdf_column *output);
+
+/**
+ * @brief  Computes the absolute value for double data type
+ *
+ * @param[in] gdf_column of the input
+ * @param[out] output gdf_column. The output memory needs to be preallocated
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error gdf_abs_f64(gdf_column *input, gdf_column *output);
+
+
 /* rounding */
 
 /**
