@@ -535,14 +535,14 @@ class Series(object):
     def __invert__(self):
         """Bitwise invert (~)/(not) for each element
 
-        Returns a new Series. 
+        Returns a new Series.
         """
         return self._unaryop('not')
 
     def __neg__(self):
         """Bitwise invert (~)/(not) for each element
 
-        Returns a new Series. 
+        Returns a new Series.
         """
         return self.__mul__(-1)
 
