@@ -16,7 +16,9 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
+#include <utilities/wrapper_types.hpp>
 #include <cudf.h>
 
 #include <thrust/device_vector.h>
@@ -66,311 +68,230 @@ TEST_F(gdf_cast_test, usage_example) {
 		19382
 	};
 
-	std::vector<int32_t> inputDate32Data = {
-		-1528, // '1965-10-26'
-		17716, // '2018-07-04'
-		19382 // '2023-01-25'
+	std::vector<cudf::date32> inputDate32Data = {
+		cudf::date32{-1528}, // '1965-10-26'
+		cudf::date32{17716}, // '2018-07-04'
+		cudf::date32{19382} // '2023-01-25'
 	};
 
-	std::vector<int64_t> inputDate64Data = {
-		1528935590000, // '2018-06-14 00:19:50.000'
-		1528935599999, // '2018-06-14 00:19:59.999'
-		-1577923201000, // '1919-12-31 23:59:59.000'
+	std::vector<cudf::date64> inputDate64Data = {
+		cudf::date64{1528935590000}, // '2018-06-14 00:19:50.000'
+		cudf::date64{1528935599999}, // '2018-06-14 00:19:59.999'
+		cudf::date64{-1577923201000}, // '1919-12-31 23:59:59.000'
 	};
 
-	std::vector<int64_t> inputTimestampMilliData = {
-		1528935590000, // '2018-06-14 00:19:50.000'
-		1528935599999, // '2018-06-14 00:19:59.999'
-		-1577923201000, // '1919-12-31 23:59:59.000'
+	std::vector<cudf::timestamp> inputTimestampMilliData = {
+		cudf::timestamp{1528935590000}, // '2018-06-14 00:19:50.000'
+		cudf::timestamp{1528935599999}, // '2018-06-14 00:19:59.999'
+		cudf::timestamp{-1577923201000}, // '1919-12-31 23:59:59.000'
 	};
 
 	int colSize = 3;
 
 	// Input column for int32
-	rmm::device_vector<int32_t> inputInt32DataDev(inputInt32Data);
-	rmm::device_vector<gdf_valid_type> inputInt32ValidDev(1,255);
-
-	gdf_column inputInt32Col;
-	inputInt32Col.dtype = GDF_INT32;
-	inputInt32Col.size = colSize;
-
-	inputInt32Col.data = thrust::raw_pointer_cast(inputInt32DataDev.data());
-	inputInt32Col.valid = thrust::raw_pointer_cast(inputInt32ValidDev.data());
+	auto inputInt32Col = cudf::test::column_wrapper<int32_t>(inputInt32Data);
 
 	// Input column for float32
-	rmm::device_vector<float> inputFloat32DataDev(inputFloat32Data);
-	rmm::device_vector<gdf_valid_type> inputFloat32ValidDev(1,255);
-
-	gdf_column inputFloat32Col;
-	inputFloat32Col.dtype = GDF_FLOAT32;
-	inputFloat32Col.size = colSize;
-
-	inputFloat32Col.data = thrust::raw_pointer_cast(inputFloat32DataDev.data());
-	inputFloat32Col.valid = thrust::raw_pointer_cast(inputFloat32ValidDev.data());
+	auto inputFloat32Col = cudf::test::column_wrapper<float>(inputFloat32Data);
 
 	// Input column for int64
-	rmm::device_vector<int64_t> inputInt64DataDev(inputInt64Data);
-	rmm::device_vector<gdf_valid_type> inputInt64ValidDev(1,255);
-
-	gdf_column inputInt64Col;
-	inputInt64Col.dtype = GDF_INT64;
-	inputInt64Col.size = colSize;
-
-	inputInt64Col.data = thrust::raw_pointer_cast(inputInt64DataDev.data());
-	inputInt64Col.valid = thrust::raw_pointer_cast(inputInt64ValidDev.data());
+	auto inputInt64Col = cudf::test::column_wrapper<int64_t>(inputInt64Data);
 
 	// Input column for date32
-	rmm::device_vector<int32_t> inputDate32DataDev(inputDate32Data);
-	rmm::device_vector<gdf_valid_type> inputDate32ValidDev(1,255);
-
-	gdf_column inputDate32Col;
-	inputDate32Col.dtype = GDF_DATE32;
-	inputDate32Col.size = colSize;
-
-	inputDate32Col.data = thrust::raw_pointer_cast(inputDate32DataDev.data());
-	inputDate32Col.valid = thrust::raw_pointer_cast(inputDate32ValidDev.data());
+	auto inputDate32Col = cudf::test::column_wrapper<cudf::date32>(inputDate32Data);
 
 	// Input column for date64
-	rmm::device_vector<int64_t> inputDate64DataDev(inputDate64Data);
-	rmm::device_vector<gdf_valid_type> inputDate64ValidDev(1,255);
-
-	gdf_column inputDate64Col;
-	inputDate64Col.dtype = GDF_DATE64;
-	inputDate64Col.size = colSize;
-
-	inputDate64Col.data = thrust::raw_pointer_cast(inputDate64DataDev.data());
-	inputDate64Col.valid = thrust::raw_pointer_cast(inputDate64ValidDev.data());
+	auto inputDate64Col = cudf::test::column_wrapper<cudf::date64>(inputDate64Data);
 
 	// Input column for timestamp in ms
-	rmm::device_vector<int64_t> inputTimestampMilliDataDev(inputTimestampMilliData);
-	rmm::device_vector<gdf_valid_type> inputTimestampMilliValidDev(1,255);
-
-	gdf_column inputTimestampMilliCol;
-	inputTimestampMilliCol.dtype = GDF_TIMESTAMP;
-	inputTimestampMilliCol.size = colSize;
-	inputTimestampMilliCol.dtype_info.time_unit = TIME_UNIT_ms;
-
-	inputTimestampMilliCol.data = thrust::raw_pointer_cast(inputTimestampMilliDataDev.data());
-	inputTimestampMilliCol.valid = thrust::raw_pointer_cast(inputTimestampMilliValidDev.data());
+	auto inputTimestampMilliCol = cudf::test::column_wrapper<cudf::timestamp>(inputTimestampMilliData);
+	inputTimestampMilliCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 	gdf_error gdfError;
 
 	// example for gdf_cast generic to f32
 	{
 		// Output column
-		rmm::device_vector<float> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputFloat32Col;
-		outputFloat32Col.dtype = GDF_FLOAT32;
-		outputFloat32Col.size = colSize;
-
-		outputFloat32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputFloat32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<float> results(colSize);
+		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize, true);
+		auto results = cudf::test::column_wrapper<float>(std::vector<float>{
+			-1528.0,
+			1.0,
+			19382.0,});
 
 		// from int32
-		gdfError = gdf_cast(&inputInt32Col, &outputFloat32Col);
+		gdfError = gdf_cast(inputInt32Col, outputFloat32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528.0 );
-		EXPECT_TRUE( results[1] == 1.0 );
-		EXPECT_TRUE( results[2] == 19382.0 );
+		EXPECT_TRUE( results == outputFloat32Col );
 	}
 
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		rmm::device_vector<int32_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputInt32Col;
-		outputInt32Col.dtype = GDF_INT32;
-		outputInt32Col.size = colSize;
-
-		outputInt32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputInt32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int32_t> results(colSize);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
+			-1528,
+			1,
+			19382,});
 
 		// from float32
-		gdfError = gdf_cast(&inputFloat32Col, &outputInt32Col);
+		gdfError = gdf_cast(inputFloat32Col, outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528 );
-		EXPECT_TRUE( results[1] == 1 );
-		EXPECT_TRUE( results[2] == 19382 );
+		EXPECT_TRUE( results == outputInt32Col );
 	}
 
 	// example for gdf_cast generic to i64 - upcast
 	{
 		// Output column
-		rmm::device_vector<int64_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputInt64Col;
-		outputInt64Col.dtype = GDF_INT64;
-		outputInt64Col.size = colSize;
-
-		outputInt64Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputInt64Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int64_t> results(colSize);
+		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize, true);
+		auto results = cudf::test::column_wrapper<int64_t>(std::vector<int64_t>{
+			-1528,
+			1,
+			19382,
+		});
 
 		// from int32
-		gdfError = gdf_cast(&inputInt32Col, &outputInt64Col);
+		gdfError = gdf_cast(inputInt32Col, outputInt64Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528 );
-		EXPECT_TRUE( results[1] == 1 );
-		EXPECT_TRUE( results[2] == 19382 );
+		EXPECT_TRUE( results == outputInt64Col );
 	}
 
 	// example for gdf_cast generic to i32 - downcast
 	{
 		// Output column
-		rmm::device_vector<int32_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputInt32Col;
-		outputInt32Col.dtype = GDF_INT32;
-		outputInt32Col.size = colSize;
-
-		outputInt32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputInt32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int32_t> results(colSize);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
+			-1528,
+			1,
+			19382,
+		});
 
 		// from int64
-		gdfError = gdf_cast(&inputInt64Col, &outputInt32Col);
+		gdfError = gdf_cast(inputInt64Col, outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528 );
-		EXPECT_TRUE( results[1] == 1 );
-		EXPECT_TRUE( results[2] == 19382 );
+		EXPECT_TRUE( results == outputInt32Col );
 	}
 
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		rmm::device_vector<int32_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputInt32Col;
-		outputInt32Col.dtype = GDF_INT32;
-		outputInt32Col.size = colSize;
-
-		outputInt32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputInt32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int32_t> results(colSize);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
+			-1528,
+			17716,
+			19382,
+		});
 
 		// from date32
-		gdfError = gdf_cast(&inputDate32Col, &outputInt32Col);
+		gdfError = gdf_cast(inputDate32Col, outputInt32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528 );
-		EXPECT_TRUE( results[1] == 17716 );
-		EXPECT_TRUE( results[2] == 19382 );
+		EXPECT_TRUE( results == outputInt32Col );
 	}
 
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		rmm::device_vector<int32_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputDate32Col;
-		outputDate32Col.dtype = GDF_DATE32;
-		outputDate32Col.size = colSize;
-
-		outputDate32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputDate32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int32_t> results(colSize);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
+			cudf::date32{-1528},
+			cudf::date32{1},
+			cudf::date32{19382},
+		});
 
 		// from int32
-		gdfError = gdf_cast(&inputInt32Col, &outputDate32Col);
+		gdfError = gdf_cast(inputInt32Col, outputDate32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == -1528 );
-		EXPECT_TRUE( results[1] == 1 );
-		EXPECT_TRUE( results[2] == 19382 );
+		EXPECT_TRUE( results == outputDate32Col );
 	}
 
 	// example for gdf_cast generic to timestamp
 	{
 		// Output column
-		rmm::device_vector<int64_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputTimestampMicroCol;
-		outputTimestampMicroCol.dtype = GDF_TIMESTAMP;
-		outputTimestampMicroCol.dtype_info.time_unit = TIME_UNIT_us;
-		outputTimestampMicroCol.size = colSize;
-
-		outputTimestampMicroCol.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputTimestampMicroCol.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int64_t> results(colSize);
+		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize, true);
+		auto results = cudf::test::column_wrapper<cudf::timestamp>(std::vector<cudf::timestamp>{
+			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
+			cudf::timestamp{1528935599999000}, // '2018-06-14 00:19:59.999000'
+			cudf::timestamp{-1577923201000000},  // '1919-12-31 23:59:59.000000'
+		});
+		outputTimestampMicroCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		results.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		// from date64
-		gdfError = gdf_cast(&inputDate64Col, &outputTimestampMicroCol);
+		gdfError = gdf_cast(inputDate64Col, outputTimestampMicroCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == 1528935590000000 ); // '2018-06-14 00:19:50.000000'
-		EXPECT_TRUE( results[1] == 1528935599999000 ); // '2018-06-14 00:19:59.999000'
-		EXPECT_TRUE( results[2] == -1577923201000000 ); // '1919-12-31 23:59:59.000000'
+		EXPECT_TRUE( results == outputTimestampMicroCol );
 	}
 
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		rmm::device_vector<int32_t> outDataDev(colSize);
-		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
-
-		gdf_column outputDate32Col;
-		outputDate32Col.dtype = GDF_DATE32;
-		outputDate32Col.size = colSize;
-
-		outputDate32Col.data = thrust::raw_pointer_cast(outDataDev.data());
-		outputDate32Col.valid = thrust::raw_pointer_cast(outValidDev.data());
-
-		std::vector<int32_t> results(colSize);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
+			cudf::date32{17696}, // '2018-06-14'
+			cudf::date32{17696}, // '2018-06-14'
+			cudf::date32{-18264}, // '1919-12-31'
+		});
 
 		// from timestamp in ms
-		gdfError = gdf_cast(&inputTimestampMilliCol, &outputDate32Col);
+		gdfError = gdf_cast(inputTimestampMilliCol, outputDate32Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
-
-		results.clear();
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());
-
-		EXPECT_TRUE( results[0] == 17696 ); // '2018-06-14'
-		EXPECT_TRUE( results[1] == 17696 ); // '2018-06-14'
-		EXPECT_TRUE( results[2] == -18264 ); // '1919-12-31'
+		EXPECT_TRUE( results == outputDate32Col );
 	}
+}
+
+TEST_F(gdf_cast_test, inputFailureTest) {
+	// Pointer to input column is null
+	EXPECT_THROW(gdf_cast(nullptr, nullptr), cudf::logic_error);
+
+	std::vector<int32_t> inputData = { -1528, 1, 19382 };
+	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
+
+	// Pointer to output column is null
+	EXPECT_THROW(gdf_cast(inputCol, nullptr), cudf::logic_error);
+}
+
+TEST_F(gdf_cast_test, dataPtrFailureTest) {
+
+	std::vector<int32_t> inputData = { -1528, 1, 19382 };
+	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
+
+	size_t colSize = 3;
+	auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
+
+	auto indata = inputCol.get()->data;
+	inputCol.get()->data = nullptr;
+
+	// Pointer to data in input column is null
+	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
+
+	inputCol.get()->data = indata;
+	outputCol.get()->data = nullptr;
+
+	// Pointer to data in output column is null
+	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
+}
+
+TEST_F(gdf_cast_test, inputValidMaskFailureTest) {
+
+	std::vector<int32_t> inputData = { -1528, 1, 19382 };
+	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
+
+	size_t colSize = 3;
+	auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
+
+	inputCol.get()->null_count = 1;
+
+	// Pointer to input column's valid mask is null but null count > 0
+	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
+}
+
+TEST_F(gdf_cast_test, outputValidMaskFailureTest) {
+
+	size_t colSize = 3;
+	auto inputCol = cudf::test::column_wrapper<int32_t>(colSize, true);
+	auto outputCol = cudf::test::column_wrapper<float>(colSize, false);
+
+	// Input column has valid mask but output column does not
+	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
 }
 
 // Use partial template specialization to choose the uniform_real_distribution type without 
@@ -444,40 +365,22 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 	TEST_F(gdf_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {							\
 	{																			\
 		int colSize = 1024;														\
-		gdf_column inputCol;													\
-		gdf_column outputCol;													\
-																				\
-		inputCol.dtype = VVFROM;												\
-		inputCol.size = colSize;												\
-		outputCol.dtype = VVTO;													\
-		outputCol.size = colSize;												\
-																				\
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		rmm::device_vector<TFROM> inputDataDev(inputData);					\
-		rmm::device_vector<TTO> outputDataDev(colSize);						\
+		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
+		auto outputCol = cudf::test::column_wrapper<TTO>{colSize};				\
 																				\
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
-		inputCol.valid = nullptr;												\
-		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());		\
-		outputCol.valid = nullptr;												\
-																				\
-		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
+		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
-		std::vector<TTO> results(colSize);										\
-		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());	\
+		auto results = std::get<0>(outputCol.to_host());						\
 																				\
 		std::vector<TTO> outputData(colSize);									\
-		inputCol.data = inputData.data();										\
+		inputCol.get()->data = inputData.data();								\
+		outputCol.get()->data = outputData.data();								\
 																				\
-		gdf_column outputColHost;												\
-		outputColHost.dtype = VVTO;												\
-		outputColHost.size = colSize;											\
-		outputColHost.data = static_cast<void*>(outputData.data());				\
-																				\
-		gdfError = gdf_host_cast_##VFROM##_to_##VTO(&inputCol, &outputColHost);	\
+		gdfError = gdf_host_cast_##VFROM##_to_##VTO(inputCol, outputCol);		\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		for (int i = 0; i < colSize; i++){										\
@@ -520,38 +423,19 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 	TEST_F(gdf_cast_swap_TEST, VFROM##_to_##VTO) {								\
 	{																			\
 		int colSize = 1024;														\
-		gdf_column inputCol;													\
-		gdf_column outputCol;													\
-		gdf_column originalOutputCol;											\
-																				\
-		inputCol.dtype = VVFROM;												\
-		inputCol.size = colSize;												\
-		outputCol.dtype = VVTO;													\
-		outputCol.size = colSize;												\
-		originalOutputCol.dtype = VVFROM;										\
-		originalOutputCol.size = colSize;										\
-																				\
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		rmm::device_vector<TFROM> inputDataDev(inputData);					\
-		rmm::device_vector<TTO> outputDataDev(colSize);						\
-		rmm::device_vector<TFROM> origOutputDataDev(colSize);				\
+		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
+		auto outputCol = cudf::test::column_wrapper<TTO>{colSize};				\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>{colSize};	\
 																				\
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
-		inputCol.valid = nullptr;												\
-		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());		\
-		outputCol.valid = nullptr;												\
-		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
-		originalOutputCol.valid = nullptr;										\
-																				\
-		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
+		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast(&outputCol, &originalOutputCol);					\
+		gdfError = gdf_cast(outputCol, originalOutputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
-		std::vector<TFROM> results(colSize);									\
-		thrust::copy(origOutputDataDev.begin(), origOutputDataDev.end(), results.begin());\
+		auto results = std::get<0>(originalOutputCol.to_host());				\
 																				\
 		for (int i = 0; i < colSize; i++){										\
 			EXPECT_TRUE( results[i] == inputData[i] );							\
@@ -566,39 +450,22 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 	TEST_F(gdf_cast_swap_TEST, VFROM##_to_timestamp) {								\
 	{																			\
 		int colSize = 1024;														\
-		gdf_column inputCol;													\
-		gdf_column outputCol;													\
-		gdf_column originalOutputCol;											\
-																				\
-		inputCol.dtype = VVFROM;												\
-		inputCol.size = colSize;												\
-		outputCol.dtype = GDF_TIMESTAMP;													\
-		outputCol.size = colSize;												\
-		originalOutputCol.dtype = VVFROM;										\
-		originalOutputCol.size = colSize;										\
-																				\
 		std::vector<TFROM> inputData(colSize);									\
-		fill_with_random_values<int64_t, TFROM>(inputData, colSize);				\
+		fill_with_random_values<int64_t, TFROM>(inputData, colSize);			\
 																				\
-		rmm::device_vector<TFROM> inputDataDev(inputData);					\
-		rmm::device_vector<int64_t> outputDataDev(colSize);						\
-		rmm::device_vector<TFROM> origOutputDataDev(colSize);				\
+		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize};	\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>{colSize};	\
 																				\
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
-		inputCol.valid = nullptr;												\
-		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());		\
-		outputCol.valid = nullptr;												\
-		outputCol.dtype_info.time_unit = TIME_UNIT_ms;							\
-		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
-		originalOutputCol.valid = nullptr;										\
+		outputCol.get()->dtype = GDF_TIMESTAMP;									\
+		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;					\
 																				\
-		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);					\
+		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast(&outputCol, &originalOutputCol);					\
+		gdfError = gdf_cast(outputCol, originalOutputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
-		std::vector<TFROM> results(colSize);									\
-		thrust::copy(origOutputDataDev.begin(), origOutputDataDev.end(), results.begin());\
+		auto results = std::get<0>(originalOutputCol.to_host());				\
 																				\
 		for (int i = 0; i < colSize; i++){										\
 			EXPECT_TRUE( results[i] == inputData[i] );							\
@@ -643,26 +510,14 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 	//The output datatype is set by the casting function
 	{
 		const int colSize = 1024;
-		gdf_column inputCol;
-		gdf_column outputCol;
-
-		inputCol.dtype = GDF_FLOAT32;
-		inputCol.size = colSize;
-		outputCol.dtype = GDF_FLOAT64;
-		outputCol.size = colSize;
-
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<double, float>(inputData, colSize);
 
-		rmm::device_vector<float> inputDataDev(inputData);
-		rmm::device_vector<double> outputDataDev(colSize);
+		auto inputCol = cudf::test::column_wrapper<float>{inputData}; 
+		auto outputCol = cudf::test::column_wrapper<double>{colSize};
 
-		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
-		inputCol.valid = nullptr;
-		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
-		outputCol.valid = nullptr;
-
-		gdf_error gdfError = gdf_cast(&inputCol, &outputCol);
+		gdf_error gdfError;
+		EXPECT_NO_THROW( gdfError = gdf_cast(inputCol, outputCol) );
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 	}
 

@@ -120,7 +120,7 @@ template <typename F>
 struct MathOpDispatcher {
     template<typename T>
     static gdf_error launch(gdf_column *input, gdf_column *output) {
-        return UnaryOp<T, T, F>::launch(input, output);
+        return cudf::unary::Launcher<T, T, F>::launch(input, output);
     }
 
     template <typename T>
@@ -138,24 +138,7 @@ struct MathOpDispatcher {
 
 
 gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op) {
-    
-    // Check for null pointers in input
-    GDF_REQUIRE((output != nullptr) && (input != nullptr), GDF_DATASET_EMPTY)
-
-    // Check for null data pointer
-    GDF_REQUIRE((output->data != nullptr) && (input->data != nullptr), GDF_DATASET_EMPTY)
-
-    if (output->valid == nullptr && input->valid == nullptr) {
-        // if input column has no mask, then output column is allowed to have no mask
-        output->null_count = 0;
-    } else {
-        GDF_REQUIRE((output->valid != nullptr), GDF_VALIDITY_MISSING)
-
-        // Validity mask transfer
-        CUDA_TRY( cudaMemcpy(output->valid, input->valid, gdf_num_bitmask_elements( input->size ), cudaMemcpyDeviceToDevice) );
-        output->null_count = input->null_count;
-    }
-    
+    cudf::unary::handleChecksAndValidity(input, output);
 
     switch(op){
         case GDF_SIN:

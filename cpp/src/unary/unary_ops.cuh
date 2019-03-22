@@ -22,10 +22,13 @@
 #include "bitmask/legacy_bitmask.hpp"
 #include "cudf.h"
 
+namespace cudf {
+namespace unary {
+
 template<typename T, typename Tout, typename F>
 __global__
-void gpu_unary_op(const T *data, const gdf_valid_type *valid,
-                  gdf_size_type size, Tout *results, F functor) {
+void gpu_op_kernel(const T *data, const gdf_valid_type *valid,
+                   gdf_size_type size, Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;
     int blksz = blockDim.x;
@@ -46,7 +49,7 @@ void gpu_unary_op(const T *data, const gdf_valid_type *valid,
 }
 
 template<typename T, typename Tout, typename F>
-struct UnaryOp {
+struct Launcher {
     static
     gdf_error launch(gdf_column *input, gdf_column *output) {
 
@@ -65,14 +68,14 @@ struct UnaryOp {
         int mingridsize, blocksize;
         CUDA_TRY(
             cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
-                                               gpu_unary_op<T, Tout, F>)
+                                               gpu_op_kernel<T, Tout, F>)
         );
         // find needed gridsize
         int neededgridsize = (input->size + blocksize - 1) / blocksize;
         int gridsize = std::min(neededgridsize, mingridsize);
 
         F functor;
-        gpu_unary_op<<<gridsize, blocksize>>>(
+        gpu_op_kernel<<<gridsize, blocksize>>>(
             // input
             (const T*)input->data, input->valid, input->size,
             // output
@@ -85,5 +88,46 @@ struct UnaryOp {
         return GDF_SUCCESS;
     }
 };
+
+inline void handleChecksAndValidity(gdf_column *input, gdf_column *output) {
+    // Check for null pointers in input
+    CUDF_EXPECTS((input != nullptr), "Pointer to input column is null");
+    CUDF_EXPECTS((output != nullptr), "Pointer to output column is null");
+
+    // Check for null data pointer
+    CUDF_EXPECTS((input->data != nullptr),
+        "Pointer to data in input column is null");
+    CUDF_EXPECTS((output->data != nullptr),
+        "Pointer to data in output column is null");
+
+    // Check if input has valid mask if null_count > 0
+    CUDF_EXPECTS((input->null_count == 0 || input->valid != nullptr),
+        "Pointer to input column's valid mask is null but null count > 0");
+
+    if (input->valid == nullptr) {
+        if (output->valid == nullptr) {
+            // if input column has no mask, then output column is allowed to have no mask
+            output->null_count = 0;
+        }
+        else { // output->valid != nullptr
+            CUDA_TRY( cudaMemset(output->valid, 0xff,
+                                gdf_num_bitmask_elements( input->size )) );
+            output->null_count = 0;
+        }
+    }
+    else { // input->valid != nullptr
+        CUDF_EXPECTS((output->valid != nullptr),
+            "Input column has valid mask but output column does not");
+
+        // Validity mask transfer
+        CUDA_TRY( cudaMemcpy(output->valid, input->valid,
+                             gdf_num_bitmask_elements( input->size ),
+                             cudaMemcpyDeviceToDevice) );
+        output->null_count = input->null_count;
+    }
+}
+
+} // unary
+} // cudf
 
 #endif // UNARY_OPS_H

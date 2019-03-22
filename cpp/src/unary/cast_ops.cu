@@ -61,7 +61,7 @@ template <typename TypeFrom>
 struct CastTo_Dispatcher {
     template <typename TypeTo>
     gdf_error operator()(gdf_column *input, gdf_column *output) {
-        return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+        return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
     }
 };
 
@@ -76,11 +76,11 @@ struct CastDateTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype == GDF_DATE64 && output->dtype == GDF_DATE32 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && output->dtype == GDF_DATE64 ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
         else // both columns have same type
-            return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+            return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
     }
     
     // Cast to cudf::timestamp
@@ -90,21 +90,21 @@ struct CastDateTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s ) ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms ) ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us ) ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns ) ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms) 
-            return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+            return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else
             return GDF_UNSUPPORTED_DTYPE;
     }
@@ -117,7 +117,7 @@ struct CastDateTo_Dispatcher {
         std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+        return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
     }
 };
 
@@ -132,21 +132,21 @@ struct CastTimestampTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_s ) && output->dtype == GDF_DATE32 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ms ) && output->dtype == GDF_DATE32 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_us ) && output->dtype == GDF_DATE32 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ns ) && output->dtype == GDF_DATE32 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_s ) && output->dtype == GDF_DATE64 ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ms ) && output->dtype == GDF_DATE64 ) 
-            return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+            return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_us ) && output->dtype == GDF_DATE64 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ns ) && output->dtype == GDF_DATE64 ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else
             return GDF_UNSUPPORTED_DTYPE;
     }
@@ -158,29 +158,29 @@ struct CastTimestampTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return UnaryOp<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return UnaryOp<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
         else
             return GDF_TIMESTAMP_RESOLUTION_MISMATCH;
     }
@@ -193,7 +193,7 @@ struct CastTimestampTo_Dispatcher {
         std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return UnaryOp< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+        return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
     }
 };
 
@@ -237,9 +237,7 @@ struct CastFrom_Dispatcher
 
 
 gdf_error gdf_cast(gdf_column *input, gdf_column *output) {
-    if (input->valid && output->valid) {
-        thrust::copy(rmm::exec_policy()->on(0), input->valid, input->valid + gdf_num_bitmask_elements(input->size), output->valid);
-    }
+    cudf::unary::handleChecksAndValidity(input, output);
 
     return cudf::type_dispatcher(input->dtype,
                                 CastFrom_Dispatcher{},
