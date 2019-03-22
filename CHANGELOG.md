@@ -8,6 +8,7 @@
 
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
+- PR #1238 Improve performance of the CUDA trie used in the CSV reader
 
 ## Bug Fixes
 
