@@ -1,6 +1,4 @@
 
-import pytest
-
 import cudf
 from cudf.tests.utils import assert_eq
 

@@ -539,6 +539,13 @@ class Series(object):
         """
         return self._unaryop('not')
 
+    def __neg__(self):
+        """Bitwise invert (~)/(not) for each element
+
+        Returns a new Series. 
+        """
+        return self.__mul__(-1)
+
     @property
     def cat(self):
         return self._column.cat()
@@ -1160,14 +1167,14 @@ class Series(object):
     # Absolute
     def abs(self):
         """Absolute value of each element of the series.
-        
+
         Returns a new Series.
         """
         return self._unaryop('abs')
 
     def __abs__(self):
         return self.abs()
-    
+
     # Rounding
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
