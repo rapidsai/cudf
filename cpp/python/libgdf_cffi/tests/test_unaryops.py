@@ -102,7 +102,7 @@ def test_unsupported_dtype_error():
     col_result = new_column()
 
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
-                           libgdf.GDF_INT32)
+                           libgdf.GDF_DATE32)
 
     libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
                            nelem + 10, libgdf.GDF_FLOAT32)
@@ -183,6 +183,12 @@ def test_ceil(dtype, ulp):
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_floor(dtype, ulp):
     math_op_test(dtype, ulp, np.floor, libgdf.GDF_FLOOR,
+                 scale=100)
+
+
+@pytest.mark.parametrize('dtype,ulp', params_real_types)
+def test_abs(dtype, ulp):
+    math_op_test(dtype, ulp, np.abs, libgdf.GDF_ABS,
                  scale=100)
 
 

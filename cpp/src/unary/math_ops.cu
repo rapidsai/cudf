@@ -116,6 +116,14 @@ struct DeviceFloor {
     }
 };
 
+struct DeviceAbs {
+    template<typename T>
+    __device__
+    T apply(T data) {
+        return std::abs(data);
+    }
+};
+
 template <typename F>
 struct MathOpDispatcher {
     template<typename T>
@@ -124,13 +132,13 @@ struct MathOpDispatcher {
     }
 
     template <typename T>
-    typename std::enable_if_t<std::is_floating_point<T>::value, gdf_error>
+    typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return launch<T>(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!std::is_floating_point<T>::value, gdf_error>
+    typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return GDF_UNSUPPORTED_DTYPE;
     }
@@ -184,6 +192,10 @@ gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_o
         case GDF_FLOOR:
             return cudf::type_dispatcher(input->dtype,
                                         MathOpDispatcher<DeviceFloor>{},
+                                        input, output);
+        case GDF_ABS:
+            return cudf::type_dispatcher(input->dtype,
+                                        MathOpDispatcher<DeviceAbs>{},
                                         input, output);
         default:
             return GDF_INVALID_API_CALL;

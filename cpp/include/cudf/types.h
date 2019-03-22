@@ -237,6 +237,7 @@ typedef enum {
   GDF_SQRT,
   GDF_CEIL,
   GDF_FLOOR,
+  GDF_ABS,
 } gdf_unary_math_op;
 
 
