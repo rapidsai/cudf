@@ -1150,6 +1150,14 @@ class Series(object):
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
+    # Absolute
+    def abs(self):
+        """Absolute value of each element of the series.
+        
+        Returns a new Series.
+        """
+        return self._unaryop('abs')
+    
     # Rounding
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less

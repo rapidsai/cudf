@@ -10,6 +10,13 @@ from cudf.dataframe import Series
 from cudf.tests import utils
 
 
+@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+def test_series_abs(dtype):
+    arr = np.random.random(1000).astype(dtype)
+    sr = Series(arr)
+    np.testing.assert_equal(sr.abs().to_array(), np.abs(arr))
+
+
 def test_series_ceil():
     arr = np.random.random(100) * 100
     sr = Series(arr)
