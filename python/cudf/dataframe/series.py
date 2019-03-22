@@ -1164,6 +1164,9 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('abs')
+
+    def __abs__(self):
+        return self.abs()
     
     # Rounding
     def ceil(self):

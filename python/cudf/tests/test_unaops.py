@@ -12,9 +12,10 @@ from cudf.tests import utils
 
 @pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
 def test_series_abs(dtype):
-    arr = np.random.random(1000).astype(dtype)
+    arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
     np.testing.assert_equal(sr.abs().to_array(), np.abs(arr))
+    np.testing.assert_equal(abs(sr).to_array(), abs(arr))
 
 
 @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
