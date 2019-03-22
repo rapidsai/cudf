@@ -224,6 +224,7 @@ cdef extern from "cudf.h" nogil:
         GDF_CEIL,
         GDF_FLOOR,
         GDF_ABS,
+        GDF_BIT_INVERT,
 
 
     ctypedef struct gdf_scalar:

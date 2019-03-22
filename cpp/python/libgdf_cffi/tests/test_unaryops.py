@@ -192,6 +192,14 @@ def test_abs(dtype, ulp):
                  scale=100)
 
 
+# bitwise
+
+@pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
+def test_invert(dtype):
+    math_op_test(dtype, 1, np.invert, libgdf.GDF_BIT_INVERT,
+                 scale=100)
+
+
 # casting
 
 _cast_dtypes = [

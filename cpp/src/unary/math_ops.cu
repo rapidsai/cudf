@@ -124,21 +124,49 @@ struct DeviceAbs {
     }
 };
 
+// bitwise op
+
+struct DeviceInvert {
+    template<typename T>
+    __device__
+    T apply(T data) {
+        return ~data;
+    }
+};
+
+
+template<typename T, typename F>
+static gdf_error launch(gdf_column *input, gdf_column *output) {
+    return cudf::unary::Launcher<T, T, F>::launch(input, output);
+}
+
+
 template <typename F>
 struct MathOpDispatcher {
-    template<typename T>
-    static gdf_error launch(gdf_column *input, gdf_column *output) {
-        return cudf::unary::Launcher<T, T, F>::launch(input, output);
-    }
-
     template <typename T>
     typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return launch<T>(input, output);
+        return launch<T, F>(input, output);
     }
 
     template <typename T>
     typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
+    operator()(gdf_column *input, gdf_column *output) {
+        return GDF_UNSUPPORTED_DTYPE;
+    }
+};
+
+
+template <typename F>
+struct BitwiseOpDispatcher {
+    template <typename T>
+    typename std::enable_if_t<std::is_integral<T>::value, gdf_error>
+    operator()(gdf_column *input, gdf_column *output) {
+        return launch<T, F>(input, output);
+    }
+
+    template <typename T>
+    typename std::enable_if_t<!std::is_integral<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return GDF_UNSUPPORTED_DTYPE;
     }
@@ -196,6 +224,10 @@ gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_o
         case GDF_ABS:
             return cudf::type_dispatcher(input->dtype,
                                         MathOpDispatcher<DeviceAbs>{},
+                                        input, output);
+        case GDF_BIT_INVERT:
+            return cudf::type_dispatcher(input->dtype,
+                                        BitwiseOpDispatcher<DeviceInvert>{},
                                         input, output);
         default:
             return GDF_INVALID_API_CALL;

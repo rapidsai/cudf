@@ -28,6 +28,7 @@ _MATH_OP['sqrt']    = GDF_SQRT
 _MATH_OP['ceil']    = GDF_CEIL
 _MATH_OP['floor']   = GDF_FLOOR
 _MATH_OP['abs']     = GDF_ABS
+_MATH_OP['not']     = GDF_BIT_INVERT
 
 
 def apply_math_op(incol, outcol, op):

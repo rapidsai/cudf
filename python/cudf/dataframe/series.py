@@ -532,6 +532,13 @@ class Series(object):
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
 
+    def __invert__(self):
+        """Bitwise invert (~)/(not) for each element
+
+        Returns a new Series. 
+        """
+        return self._unaryop('not')
+
     @property
     def cat(self):
         return self._column.cat()
