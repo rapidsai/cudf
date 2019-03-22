@@ -22,6 +22,7 @@ tips_df['tip_percentage'] = tips_df['tip']/tips_df['total_bill']*100
 # display average tip by dining party size
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
+
 Output:
 ```
 size
