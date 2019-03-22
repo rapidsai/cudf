@@ -7,8 +7,7 @@
 ## Improvements
 
 - PR #1202 Simplify README.md
-
-...
+- PR #1216 Add Series.__array__ protocol
 
 ## Bug Fixes
 
