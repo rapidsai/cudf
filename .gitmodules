@@ -6,10 +6,6 @@
 	path = thirdparty/moderngpu
 	url = https://github.com/rapidsai/thirdparty-moderngpu.git
 	branch = cudf-moderngpu
-[submodule "thirdparty/rmm"]
-	path = thirdparty/rmm
-	url = https://github.com/rapidsai/rmm.git
-	branch = master
 [submodule "thirdparty/dlpack"]
 	path = thirdparty/dlpack
 	url = https://github.com/rapidsai/dlpack.git

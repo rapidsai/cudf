@@ -1,3 +1,19 @@
+# cuDF 0.7.0 (Date TBD)
+
+## New Features
+
+...
+
+## Improvements
+
+- PR #1202 Simplify README.md
+- PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
+
+## Bug Fixes
+
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
+
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -99,7 +115,7 @@
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
