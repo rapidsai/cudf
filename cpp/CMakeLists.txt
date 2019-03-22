@@ -89,16 +89,16 @@ include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
-include(ConfigureArrow)
-
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
+
+include(ConfigureArrow)
 
 if (ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-endif()
+endif(ARROW_FOUND)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -127,7 +127,7 @@ if(BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ###################################################################################################
-# - add RMM -------------------------------------------------------------------------------------
+# - add RMM ---------------------------------------------------------------------------------------
 
 add_subdirectory(thirdparty/rmm "${CMAKE_BINARY_DIR}/rmm")
 
@@ -230,6 +230,7 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
+            src/io/orc/orc_reader.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader.cu
@@ -296,7 +297,6 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-
 target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
@@ -338,9 +338,3 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(doc DEPENDS CUDF_DOXYGEN)
-
-
-
-
-
-

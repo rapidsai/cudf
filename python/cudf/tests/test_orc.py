@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2019, NVIDIA CORPORATION.
 
 import cudf
 
@@ -13,6 +13,7 @@ def datadir(datadir):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+@pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize(
     'orc_file',
     [
@@ -31,6 +32,12 @@ def test_orc_reader(datadir, orc_file):
     got = cudf.read_orc(path, columns=columns)\
               .to_arrow(preserve_index=False)\
               .replace_schema_metadata()
+
+    # cuDF's default currently handles bools differently
+    # For bool, cuDF doesn't support it so convert it to int8
+    if engine == 'cudf':
+        if 'boolean1' in expect.columns:
+            expect['boolean1'] = expect['boolean1'].astype('int8')
 
     assert pa.Table.equals(expect, got)
 

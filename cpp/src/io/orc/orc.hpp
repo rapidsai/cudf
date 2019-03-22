@@ -1,6 +1,5 @@
-
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,24 +14,7 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef ORC_HPP
+#define ORC_HPP
 
-/*
- * @brief Interface to parse CSV data to GDF columns
- */
-gdf_error read_csv(csv_read_arg *args);
-
-/*
- * @brief Interface to parse ORC data to GDF columns
- */
-gdf_error read_orc(orc_read_arg *args);
-
-/*
- * @brief Interface to parse Parquet data to GDF columns
- */
-gdf_error read_parquet(pq_read_arg *args);
-
-/*
- * @brief Interface to convert GDF Columns to Compressed Sparse Row
- */
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+#endif // ORC_HPP
