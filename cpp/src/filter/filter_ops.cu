@@ -1,7 +1,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "cudf/functions.h"
 #include "bitmask/bitmask_ops.h"
 #include "rmm/thrust_rmm_allocator.h"
@@ -140,8 +140,8 @@ void gpu_filter_op(IteratorTypeLeft begin_left, IteratorTypeRight begin_right, I
 	}else if(valid_right == valid_left){
 		//this is often the case if we are passing in the same column to operate on itself
 		//or when we are sending something like  a constant_iterator for the right hand side, allows us some shortcuts
-		gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-		cudaError_t error = cudaMemcpyAsync(valid_out,valid_left,num_chars_bitmask * sizeof(gdf_valid_type),cudaMemcpyDeviceToDevice,stream);
+		gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+		cudaError_t error = cudaMemcpyAsync(valid_out,valid_left,num_bitmask_elements * sizeof(gdf_valid_type),cudaMemcpyDeviceToDevice,stream);
 		out_null_count = left_null_count;
 
 	}else{
@@ -158,7 +158,7 @@ void gpu_filter_op(IteratorTypeLeft begin_left, IteratorTypeRight begin_right, I
 // stencil: plantilla! 
 // 
 template<typename T>
-gdf_error gpu_comparison_static_templated(gdf_column *lhs, T value, gdf_column *output,gdf_comparison_operator operation){
+gdf_error gdf_comparison_static_templated(gdf_column *lhs, T value, gdf_column *output,gdf_comparison_operator operation){
 	GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
 
 	GDF_REQUIRE(output->dtype == GDF_INT8, GDF_COLUMN_SIZE_MISMATCH);
@@ -228,34 +228,34 @@ gdf_error gpu_comparison_static_templated(gdf_column *lhs, T value, gdf_column *
 	return GDF_SUCCESS;
 }
 
-gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
-gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
-gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
-gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
-gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
-gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation){
-	return gpu_comparison_static_templated(lhs, value, output,operation);
+gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation){
+	return gdf_comparison_static_templated(lhs, value, output,operation);
 }
 
 
 
 
-gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation){
+gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation){
 	GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
 	GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
 
@@ -397,7 +397,7 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 			);
 			 
 		}
-	}else if(lhs->dtype == GDF_INT32){
+	}else if(lhs->dtype == GDF_INT32 || lhs->dtype == GDF_STRING_CATEGORY){
 		thrust::device_ptr<int32_t> left_ptr((int32_t *) lhs->data);
 		if(rhs->dtype == GDF_INT8){
 			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
@@ -419,7 +419,7 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 					lhs->null_count,rhs->null_count,output->null_count,stream
 			);
 
-		}else if(rhs->dtype == GDF_INT32){
+		}else if(rhs->dtype == GDF_INT32 || rhs->dtype == GDF_STRING_CATEGORY){
 			thrust::device_ptr<int32_t> right_ptr((int32_t *) rhs->data);
 			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
 			gpu_filter_op(

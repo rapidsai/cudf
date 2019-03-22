@@ -28,6 +28,7 @@
 #include "hash_groupby_kernels.cuh"
 #include "dataframe/cudf_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
+#include "types.hpp"
 
 
 
@@ -40,7 +41,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
 /* --------------------------------------------------------------------------*/
 /**
- * @Synopsis  This functor is used inside the hash table's insert function to 
+ * @brief  This functor is used inside the hash table's insert function to 
  * compare equality between two keys in the hash table. 
  * 
  * If comparing a key to the map's unused key, simply performs the 
@@ -59,12 +60,12 @@ struct row_comparator
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Constructs a row_comparator functor to check for equality between
+   * @brief  Constructs a row_comparator functor to check for equality between
    * keys in the hash table.
    * 
-   * @Param map The hash table
-   * @Param l_table The left gdf_table
-   * @Param r_table The right gdf_table
+   * @param map The hash table
+   * @param l_table The left gdf_table
+   * @param r_table The right gdf_table
    */
   /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
@@ -80,7 +81,7 @@ struct row_comparator
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis Used in the hash table's insert function to check for equality between
+   * @brief Used in the hash table's insert function to check for equality between
    * two keys. Two cases are possible:
    *
    * 1. If left_index OR right_index is equal to the map's unused_key, then the functor
@@ -90,10 +91,10 @@ struct row_comparator
    * 2. Else, the functor is being used to compare two rows of gdf_tables. In this case,
    * the gdf_table rows_equal function is used to check if the two rows are equal.
    * 
-   * @Param left_index The left table index to compare
-   * @Param right_index The right table index to compare
+   * @param left_index The left table index to compare
+   * @param right_index The right table index to compare
    * 
-   * @Returns   
+   * @returns   
    */
   /* ----------------------------------------------------------------------------*/
   __device__ bool operator()(key_type const & left_index, 
@@ -118,21 +119,21 @@ struct row_comparator
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis Performs the groupby operation for an arbtirary number of groupby columns and
+* @brief Performs the groupby operation for an arbtirary number of groupby columns and
 * and a single aggregation column.
 * 
-* @Param[in] groupby_input_table The set of columns to groupby
-* @Param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
-* @Param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
+* @param[in] groupby_input_table The set of columns to groupby
+* @param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
+* @param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
 * entry for every unique row in the input table.
-* @Param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
+* @param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
 *                                     corresponds to the out_groupby_column where entry 'i' is the aggregation 
 *                                     for the group out_groupby_column[i] 
-* @Param out_size The size of the output
-* @Param aggregation_op The aggregation operation to perform 
-* @Param sort_result Flag to optionally sort the output table
+* @param out_size The size of the output
+* @param aggregation_op The aggregation operation to perform 
+* @param sort_result Flag to optionally sort the output table
 * 
-* @Returns   
+* @returns   
 */
 /* ----------------------------------------------------------------------------*/
 template< typename aggregation_type,
@@ -208,11 +209,11 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
 
-      rmm::device_vector<int32_t> sorted_indices(*out_size);
+      rmm::device_vector<gdf_index_type> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy()->on(0), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
-      gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
+      gdf_error status = gdf_column_view(&sorted_indices_col, sorted_indices.data().get(), 
                             nullptr, *out_size, GDF_INT32);
       if (status != GDF_SUCCESS)
         return status;
@@ -225,14 +226,19 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
       if (status != GDF_SUCCESS)
         return status;
 
-      groupby_output_table.gather(sorted_indices);
+      // Reorder table according to indices from order_by
+      cudf::table result_table(groupby_output_table.get_columns(),
+                               groupby_output_table.get_num_columns());
+      cudf::detail::gather(&result_table, sorted_indices.data().get(), &result_table);
 
-      rmm::device_vector<aggregation_type> agg(*out_size);
+      rmm::device_vector<aggregation_type> temporary_aggregation_buffer(*out_size);
       thrust::gather(rmm::exec_policy()->on(0),
                sorted_indices.begin(), sorted_indices.end(),
                out_aggregation_column,
-               agg.begin());
-      thrust::copy(rmm::exec_policy()->on(0), agg.begin(), agg.end(), out_aggregation_column);
+               temporary_aggregation_buffer.begin());
+      thrust::copy(rmm::exec_policy()->on(0),
+                   temporary_aggregation_buffer.begin(),
+                   temporary_aggregation_buffer.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;

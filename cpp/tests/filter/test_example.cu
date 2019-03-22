@@ -15,20 +15,22 @@
  * limitations under the License.
  */
 
-#include "gtest/gtest.h"
-
-#include <iostream>
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
-
-#include <thrust/execution_policy.h>
-#include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
-#include <cudf.h>
-#include <cudf/functions.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cudf.h>
+
+#include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+#include <thrust/execution_policy.h>
+
+#include <gtest/gtest.h>
+
+#include <cuda_runtime.h>
+
+#include <iostream>
+
 struct Example : public GdfTest {};
 
 /*
@@ -63,22 +65,22 @@ TEST_F(Example, Equals)
 	gdf_valid_type *valid_out;
 	rmm_error = RMM_ALLOC((void **)&valid_out, 1, 0);
 	gdf_column lhs;
-	gdf_error error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
+	gdf_error error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0, { TIME_UNIT_ms });
 	gdf_column rhs;
-	error = gdf_column_view_augmented(&rhs, (void *)data_right, valid_device, num_elements, GDF_INT8, 0);
+	error = gdf_column_view_augmented(&rhs, (void *)data_right, valid_device, num_elements, GDF_INT8, 0, { TIME_UNIT_ms });
 	gdf_column output;
-	error = gdf_column_view_augmented(&output, (void *)data_out, valid_out, num_elements, GDF_INT8, 0);
+	error = gdf_column_view_augmented(&output, (void *)data_out, valid_out, num_elements, GDF_INT8, 0, { TIME_UNIT_ms });
 	ASSERT_EQ(error, GDF_SUCCESS);
 
 	std::cout << "Left" << std::endl;
 	print_column(&lhs);
 	std::cout << "Right" << std::endl;
 	print_column(&rhs);
-	error = gpu_comparison(&lhs, &rhs, &output, GDF_EQUALS); // gtest!
+	error = gdf_comparison(&lhs, &rhs, &output, GDF_EQUALS); // gtest!
 	std::cout << "Output" << std::endl;
 	print_column(&output);
 
-	error = gpu_comparison_static_i8(&lhs, 3, &output, GDF_EQUALS);
+	error = gdf_comparison_static_i8(&lhs, 3, &output, GDF_EQUALS);
 	ASSERT_EQ(error, GDF_SUCCESS);
  
 	std::cout << "Output static_i8" << std::endl;

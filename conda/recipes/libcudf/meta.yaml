@@ -27,14 +27,15 @@ requirements:
   # use channel:
   #   - nvidia
   #   - rapidsai
+  #   - rapidsai-nightly
   #   - conda-forge
   #   - defaults
   build:
-    - cmake>=3.12.4
-    - nvstrings
+    - cmake >=3.12.4
+    - nvstrings 0.3*
   run:
-    - pyarrow=0.12.0
-    - nvstrings
+    - pyarrow 0.12.1
+    - nvstrings 0.3*
 
 test:
   commands:

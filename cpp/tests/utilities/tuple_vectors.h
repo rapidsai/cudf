@@ -16,10 +16,16 @@
 #ifndef TUPLE_VECTORS_H
 #define TUPLE_VECTORS_H
 
+// See this header for all of the handling of valids' vectors
+// #include <tests/utilities/valid_vectors.h>
+
 #include <vector>
 #include <type_traits>
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
+#include <ostream>
+#include <iterator>
 
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
@@ -33,7 +39,7 @@ void initialize_vector(std::vector<T>& v, const size_t column_length, const size
  if (sorted) { std::sort(v.begin(), v.end()); }
 }
 
-// Initialize a vector with random data
+// Initialize a vector with an initializer lambda
 template<typename T, typename initializer_t>
 void initialize_vector(std::vector<T>& v, const size_t column_length, initializer_t the_initializer)
 {
