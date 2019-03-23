@@ -1607,6 +1607,31 @@ bool isDigit(char c, bool is_hex){
 	return false;
 }
 
+/**
+* @brief Returns true if the counters indicate a potentially valid float.
+* False positives are possible because positions are not taken into account.
+* For example, field "e.123-" would match the pattern.
+*/
+__device__ __forceinline__
+bool isLikeFloat(long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+	// Can't have more than one exponent and one decimal point
+	if (decimal_cnt > 1) return false;
+	if (exponent_cnt > 1) return false;
+	// Without the exponent or a decimal point, this is an integer, not a float
+	if (decimal_cnt == 0 && exponent_cnt == 0) return false;
+
+	// Can only have one '-' per component
+	if (dash_cnt > 1 + exponent_cnt) return false;
+
+	// If anything other than these characters is present, it's not a float
+	if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len) return false;
+
+	// Needs at least 1 digit, 2 if exponent is present
+	if (digit_cnt < 1 + exponent_cnt) return false;
+
+	return true;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -1675,6 +1700,7 @@ void dataTypeDetection(char *raw_csv,
 			long countDash=0;
 			long countColon=0;
 			long countString=0;
+			long countExponent=0;
 
 			// Modify start & end to ignore whitespace and quotechars
 			// This could possibly result in additional empty fields
@@ -1700,6 +1726,10 @@ void dataTypeDetection(char *raw_csv,
 						countSlash++;break;
 					case ':':
 						countColon++;break;
+					case 'e':
+					case 'E':
+						if (!maybe_hex && startPos > start && startPos < tempPos) 
+							countExponent++;break;
 					default:
 						countString++;
 						break;	
@@ -1742,8 +1772,7 @@ void dataTypeDetection(char *raw_csv,
 					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
 				}
 			}
-			// Floating point numbers are made up of numerical strings, have to have a decimal sign, and can have a minus sign.
-			else if((countNumber==(strLen-1) && countDecimal==1) || (strLen>2 && countNumber==(strLen-2) && raw_csv[start]=='-')){
+			else if(isLikeFloat(strLen, countNumber, countDecimal, countDash, countExponent)){
 					atomicAdd(& d_columnData[actual_col].countFloat, 1L);
 			}
 			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 

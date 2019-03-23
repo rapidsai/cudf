@@ -13,6 +13,7 @@
 ## Bug Fixes
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
+- PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 
 
 # cuDF 0.6.0 (Date TBD)
