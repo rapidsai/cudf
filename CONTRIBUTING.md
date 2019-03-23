@@ -96,13 +96,15 @@ git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd CUDF_HOME
 git submodule update --init --remote --recursive
 ```
-- Create the conda development environment `cudf_dev`
+- Create the conda development environment `cudf_dev`.
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/cudf_dev.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 source activate cudf_dev
 ```
+If you're using CUDA 9.2, you will need to create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
+
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
