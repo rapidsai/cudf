@@ -9,6 +9,7 @@
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
+- PR #1276 Update CONTRIBUTING for new conda environment yml naming conventions
 
 ## Bug Fixes
 
