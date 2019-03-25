@@ -27,6 +27,8 @@
  * @note atomicCAS never provides overloads for int8_t, int16_t
  * ---------------------------------------------------------------------------**/
 
+
+
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/wrapper_types.hpp"
@@ -291,7 +293,7 @@ int64_t atomicAdd(int64_t* address, int64_t val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
 
-#if __CUDA_ARCH__ < 600
+#if defined(__CUDA_ARCH__) && ( __CUDA_ARCH__ < 600 )
 __forceinline__ __device__
 double atomicAdd(double* address, double val)
 {
