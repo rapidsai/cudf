@@ -2042,6 +2042,42 @@ class DataFrame(object):
         if not inplace:
             return outdf
 
+    def describe(self, percentiles=None, include=None):
+        """
+        """
+
+        def _create_output_frame(data, percentiles=None):
+            out_df = DataFrame()
+
+            # hack because we don't support strings in indexes
+            columns = data.columns
+            out_df = data[columns[0]].describe(percentiles=percentiles)
+
+            for col in columns[1:]:
+                out_df[col] = data[col].describe(percentiles=percentiles)[col]
+
+            return out_df
+
+        if not include:
+            numeric_data = self.select_dtypes([np.number])
+            output_frame = _create_output_frame(numeric_data, percentiles)
+
+        elif include == 'all':
+            numeric_data = self.select_dtypes([np.number])
+            output_frame = _create_output_frame(numeric_data, percentiles)
+            logging.warning(
+                "Describe does not yet include StringColumns or DatetimeColumns."
+            )
+
+        else:
+            included_data = self.select_dtypes(include=include)
+            if included_data.empty:
+                raise ValueError("No data of included types.")
+
+            output_frame = _create_output_frame(included_data, percentiles)
+
+        return output_frame
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
