@@ -2004,3 +2004,27 @@ def test_array_ufunc():
 
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
+
+
+
+@pytest.mark.xfail(
+    raises=ValueError,
+    reason="Our describe result is a DataFrame, not a Series. " 
+           "Our quantile values do not perfectly match Pandas."
+)
+def test_series_describe_numeric():
+    pdf = pd.Series([0, 1, 2, 3])
+    gdf = Series.from_pandas(pdf)
+    gdf_describe = gdf.describe()
+    pdf_describe = gdf.to_pandas().describe()
+    assert_eq(gdf_describe, pdf_describe)
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_datetime():
+    pdf = pd.Series([0, 1, 2, 3]).astype('datetime64[ms]')
+    gdf = Series.from_pandas(pdf)
+    gdf_describe = gdf.describe()
+    pdf_describe = gdf.to_pandas().describe()
+    assert_eq(gdf_describe, pdf_describe)
