@@ -2011,7 +2011,7 @@ def test_array_ufunc():
     reason="Our describe result is a DataFrame, not a Series. "
            "Our quantile values do not perfectly match Pandas.")
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64',])
+                                   'float32', 'float64'])
 def test_series_describe_numeric(dtype):
     pdf = pd.Series([0, 1, 2, 3])
     gdf = Series.from_pandas(pdf).astype(dtype)

@@ -2063,9 +2063,9 @@ class DataFrame(object):
             all numeric columns.
 
         exclude: str, list-like, optional
-            The dtypes to be excluded fromthe output summary statistics. Columns
-            of dtypes included in this list will not be part of the output.
-            Default of None excludes no columns.
+            The dtypes to be excluded fromthe output summary statistics.
+            Columns of dtypes included in this list will not be part of the
+            output. Default of None excludes no columns.
 
         Returns
         -------
