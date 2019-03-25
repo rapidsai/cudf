@@ -22,6 +22,9 @@
  */
 #pragma once
 
+typedef unsigned long long int cu_reccnt_t;
+typedef unsigned long long int cu_recstart_t;
+
   /*
    * Enumerator for the supported forms of the input CSV file
    */
