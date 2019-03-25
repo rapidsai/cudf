@@ -2043,8 +2043,8 @@ def test_series_describe_exclude():
     df['x'] = df.x.astype('int64')
     df['y'] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=['float'])
-    pdf_results = pdf.describe(include=['float'])
+    gdf_results = df.describe(exclude=['float'])
+    pdf_results = pdf.describe(exclude=['float'])
 
     assert_eq(gdf_results, pdf_results)
 
