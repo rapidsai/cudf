@@ -1162,7 +1162,7 @@ gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
                                   raw_csv_t *csvData) {
 
 	char* d_chunk = nullptr;
-	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes, 0)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, min(max_chunk_bytes, h_size), 0)); 
 	
 	cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
