@@ -67,12 +67,37 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
     }
 }
 
+// TODO: remove these explicit instantiation for kernels
+// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated,
+// then kenrel call failed by `cudaErrorInvalidDeviceFunction`
+
+template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
+template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
+template  __global__ void gpu_atomic_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
+template  __global__ void gpu_atomic_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+
+template  __global__ void gpu_atomicCAS_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
+template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
+template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
+template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+
 // ---------------------------------------------
 
-// tests for atomicAdd/Min/Max
 template <typename T>
-void AtomicsTest_atomicOps()
+struct AtomicsTest : public GdfTest {
+};
+
+using TestingTypes = ::testing::Types<
+    int8_t, int16_t, int32_t, int64_t, float, double,
+    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
+    >;
+
+TYPED_TEST_CASE(AtomicsTest, TestingTypes);
+
+// tests for atomicAdd/Min/Max
+TYPED_TEST(AtomicsTest, atomicOps)
 {
+    using T = TypeParam;
     std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
     int exact[3];
     exact[0] = std::accumulate(v.begin(), v.end(), 0);
@@ -117,37 +142,24 @@ void AtomicsTest_atomicOps()
     EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
 }
 
+// ------------------------------------------------------------------------------------------------
+
 template <typename T>
-struct AtomicsTest : public GdfTest {
+struct AtomicsCASTest : public GdfTest {
 };
 
-using TestingTypes = ::testing::Types<
-    int8_t, int16_t, int32_t, int64_t, float, double,
+// TODO: add `int8_t`, `int16_t` if `atomicCAS` supports
+using TestingTypesForCAS = ::testing::Types<
+    int32_t, int64_t, float, double,
     cudf::date32, cudf::date64, cudf::timestamp, cudf::category
     >;
 
-TYPED_TEST_CASE(AtomicsTest, TestingTypes);
-
-TYPED_TEST(AtomicsTest, atomicOps)
-{
-    // TODO: remove this workaround
-    // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be compiled,
-    // then kenrel call failed by `cudaErrorInvalidDeviceFunction`
-    // Explicit typename is requried at this point.
-    if( std::is_arithmetic<TypeParam>::value ){                 AtomicsTest_atomicOps<TypeParam>(); }
-    else if( std::is_same<TypeParam, cudf::date32>::value ){    AtomicsTest_atomicOps<cudf::date32>(); }
-    else if( std::is_same<TypeParam, cudf::date64>::value ){    AtomicsTest_atomicOps<cudf::date64>(); }
-    else if( std::is_same<TypeParam, cudf::category>::value){   AtomicsTest_atomicOps<cudf::category>(); }
-    else if( std::is_same<TypeParam, cudf::timestamp>::value ){ AtomicsTest_atomicOps<cudf::timestamp>(); }
-
-}
-
-// ------------------------------------------------------------------------------------------------
+TYPED_TEST_CASE(AtomicsCASTest, TestingTypesForCAS);
 
 // tests for atomicCAS
-template <typename T>
-void AtomicsTest_atomicCAS()
+TYPED_TEST(AtomicsCASTest, atomicCAS)
 {
+    using T = TypeParam;
     std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
     int exact = std::accumulate(v.begin(), v.end(), 0);
     size_t vec_size = v.size();
@@ -180,32 +192,6 @@ void AtomicsTest_atomicCAS()
     CUDA_CHECK_LAST();
 
     EXPECT_EQ(host_result[0], T(exact)) << "atomicCAS test failed";
-}
-
-template <typename T>
-struct AtomicsCASTest : public GdfTest {
-};
-
-// int8_t, int16_t are not supproted for atomicCAS
-using TestingTypesForCAS = ::testing::Types<
-    int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
-
-TYPED_TEST_CASE(AtomicsCASTest, TestingTypesForCAS);
-
-TYPED_TEST(AtomicsCASTest, atomicCAS)
-{
-    // TODO: remove this workaround
-    // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be compiled,
-    // then kenrel call failed by `cudaErrorInvalidDeviceFunction`
-    // Explicit typename is requried at this point.
-    if( std::is_arithmetic<TypeParam>::value ){                 AtomicsTest_atomicCAS<TypeParam>(); }
-    else if( std::is_same<TypeParam, cudf::date32>::value ){    AtomicsTest_atomicCAS<cudf::date32>(); }
-    else if( std::is_same<TypeParam, cudf::date64>::value ){    AtomicsTest_atomicCAS<cudf::date64>(); }
-    else if( std::is_same<TypeParam, cudf::category>::value){   AtomicsTest_atomicCAS<cudf::category>(); }
-    else if( std::is_same<TypeParam, cudf::timestamp>::value ){ AtomicsTest_atomicCAS<cudf::timestamp>(); }
-
 }
 
 
