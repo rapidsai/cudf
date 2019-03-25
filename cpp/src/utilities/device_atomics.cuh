@@ -291,6 +291,15 @@ int64_t atomicAdd(int64_t* address, int64_t val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
 
+#if __CUDA_ARCH__ < 600
+__forceinline__ __device__
+double atomicAdd(double* address, double val)
+{
+    // `atomicAdd` for `double` is supported from Pascal
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
+}
+#endif
+
 // for wrappers
 inline  __device__
 cudf::date32 atomicAdd(cudf::date32* address, cudf::date32 val)
