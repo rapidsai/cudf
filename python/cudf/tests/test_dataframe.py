@@ -2008,7 +2008,7 @@ def test_array_ufunc():
 
 @pytest.mark.xfail(
     raises=ValueError,
-    reason="Our describe result is a DataFrame, not a Series. " 
+    reason="Our describe result is a DataFrame, not a Series. "
            "Our quantile values do not perfectly match Pandas."
 )
 def test_series_describe_numeric():
@@ -2017,6 +2017,7 @@ def test_series_describe_numeric():
     gdf_describe = gdf.describe()
     pdf_describe = gdf.to_pandas().describe()
     assert_eq(gdf_describe, pdf_describe)
+
 
 @pytest.mark.xfail(
     raises=NotImplementedError,
