@@ -2009,14 +2009,15 @@ def test_array_ufunc():
 @pytest.mark.xfail(
     raises=ValueError,
     reason="Our describe result is a DataFrame, not a Series. "
-           "Our quantile values do not perfectly match Pandas."
-)
-def test_series_describe_numeric():
+           "Our quantile values do not perfectly match Pandas.")
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64',])
+def test_series_describe_numeric(dtype):
     pdf = pd.Series([0, 1, 2, 3])
-    gdf = Series.from_pandas(pdf)
-    gdf_describe = gdf.describe()
-    pdf_describe = gdf.to_pandas().describe()
-    assert_eq(gdf_describe, pdf_describe)
+    gdf = Series.from_pandas(pdf).astype(dtype)
+    gdf_results = gdf.describe()
+    pdf_results = gdf.to_pandas().describe()
+    assert_eq(gdf_results, pdf_results)
 
 
 @pytest.mark.xfail(
@@ -2025,6 +2026,57 @@ def test_series_describe_numeric():
 def test_series_describe_datetime():
     pdf = pd.Series([0, 1, 2, 3]).astype('datetime64[ms]')
     gdf = Series.from_pandas(pdf)
-    gdf_describe = gdf.describe()
-    pdf_describe = gdf.to_pandas().describe()
-    assert_eq(gdf_describe, pdf_describe)
+    gdf_results = gdf.describe()
+    pdf_results = pdf.describe()
+    assert_eq(gdf_results, pdf_results)
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="Exclude is not yet supported in describe.")
+def test_series_describe_exclude():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include=['float'])
+    pdf_results = pdf.describe(include=['float'])
+
+    assert_eq(gdf_results, pdf_results)
+
+
+def test_series_describe_include():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include=['int']).to_pandas()
+    pdf_results = pdf.describe(include=['int'])
+
+    np.testing.assert_array_almost_equal(gdf_results[['x']].to_numpy(),
+                                         pdf_results[['x']].to_numpy(),
+                                         decimal=4)
+
+
+def test_dataframe_describe_numeric_values_correct():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe().to_pandas()
+    pdf_results = pdf.describe()
+
+    np.testing.assert_array_almost_equal(gdf_results[['x', 'y']].to_numpy(),
+                                         pdf_results[['x', 'y']].to_numpy(),
+                                         decimal=4)
