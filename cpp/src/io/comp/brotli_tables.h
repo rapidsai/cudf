@@ -251,10 +251,11 @@ CONSTANT uint8_t kContextLookup[2048] = {
 };
 
 /* typeof(MODE) == ContextType; returns ContextLut */
-#define BROTLI_CONTEXT_LUT(MODE) (&kContextLookup[(MODE) << 9])
+#define BROTLI_CONTEXT_LUT(MODE) ((MODE) << 9)
 
 /* typeof(LUT) == const uint8_t* */
-#define BROTLI_CONTEXT(P1, P2, LUT) ((LUT)[P1] | ((LUT) + 256)[P2])
+#define BROTLI_NEED_CONTEXT_LUT(MODE)   ((MODE) < (4 << 9))
+#define BROTLI_CONTEXT(P1, P2, LUT) (kContextLookup[(LUT)+(P1)] | kContextLookup[(LUT)+(P2)+256])
 
 
 typedef struct CmdLutElement {

@@ -194,7 +194,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                                     blen |= READ_BYTE(cur + 2) << 16;
                                     if (num_bytes > 3)
                                     {
-                                        blen |= READ_BYTE(cur + 3) << 16;
+                                        blen |= READ_BYTE(cur + 3) << 24;
                                         if (blen >= end)
                                             break;
                                     }

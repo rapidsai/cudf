@@ -147,10 +147,7 @@ struct debrotli_state_s
     uint16_t heap_used;
     uint16_t heap_limit;
     uint8_t *context_map;
-    uint8_t *context_map_slice;
     uint8_t *dist_context_map;
-    uint16_t *literal_htree;
-    const uint8_t *context_lookup;
     uint8_t *context_modes;
     uint8_t *fb_base;
     uint32_t fb_size;
@@ -1603,34 +1600,27 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s *s, uint8_t *fb_
 }
 
 
-static __device__ int PrepareLiteralDecoding(debrotli_state_s *s)
+static __device__ int PrepareLiteralDecoding(debrotli_state_s *s, const uint8_t *&context_map_slice)
 {
-    uint8_t context_mode;
+    int context_mode;
     uint32_t block_type = s->block_type_rb[1];
     uint32_t context_offset = block_type << 6;
-    int trivial_literal_context;
-    s->context_map_slice = s->context_map + context_offset;
+    context_map_slice = s->context_map + context_offset;
     context_mode = s->context_modes[block_type];
-    trivial_literal_context = (context_mode >> 2) & 1;
-    s->literal_htree = s->literal_hgroup->htrees[s->context_map_slice[0]];
-    context_mode = context_mode & 3;
-    s->context_lookup = BROTLI_CONTEXT_LUT(context_mode);
-    return trivial_literal_context;
+    return BROTLI_CONTEXT_LUT(context_mode);
 }
 
 // Decodes a command or literal and updates block type ring-buffer. Reads 3..54 bits.
 static __device__ uint32_t DecodeBlockTypeAndLength(debrotli_state_s *s, int tree_type)
 {
     uint32_t max_block_type = s->num_block_types[tree_type];
-    uint32_t block_len = 1 << 24;
-
     if (max_block_type > 1) {
         const uint16_t *len_tree = s->block_type_vlc[tree_type];
         const uint16_t *type_tree = len_tree + BROTLI_HUFFMAN_MAX_SIZE_26;
         uint8_t* ringbuffer = &s->block_type_rb[tree_type * 2];
         // Read 0..15 + 3..39 bits.
         uint32_t block_type = getvlc(s, type_tree);
-        block_len = getvlc(s, len_tree);
+        uint32_t block_len = getvlc(s, len_tree);
         block_len = kBlockLengthPrefixCodeOffset[block_len] + getbits(s, kBlockLengthPrefixCodeBits[block_len]);
         if (block_type == 1) {
             block_type = ringbuffer[1] + 1;
@@ -1646,8 +1636,11 @@ static __device__ uint32_t DecodeBlockTypeAndLength(debrotli_state_s *s, int tre
         }
         ringbuffer[0] = ringbuffer[1];
         ringbuffer[1] = (uint8_t)block_type;
+        return block_len;
     }
-    return block_len;
+    else {
+        return 0; // Can only get here because of bitstream error
+    }
 }
 
 
@@ -1669,15 +1662,13 @@ inline __device__ int ToUpperCase(uint8_t* p) {
 }
 
 
-static __device__ int TransformDictionaryWord(uint8_t* dst, uint8_t *dstend, const uint8_t* word, int len, int transform_idx) {
+static __device__ int TransformDictionaryWord(uint8_t* dst, const uint8_t* word, int len, int transform_idx) {
     int idx = 0;
     const uint8_t* prefix = BROTLI_TRANSFORM_PREFIX(transform_idx);
     uint8_t type = BROTLI_TRANSFORM_TYPE(transform_idx);
     const uint8_t* suffix = BROTLI_TRANSFORM_SUFFIX(transform_idx);
     {
         int prefix_len = *prefix++;
-        if (dst + prefix_len > dstend)
-            return 0;
         while (prefix_len--) { dst[idx++] = *prefix++; }
     }
     {
@@ -1692,8 +1683,6 @@ static __device__ int TransformDictionaryWord(uint8_t* dst, uint8_t *dstend, con
             word += skip;
             len -= skip;
         }
-        if (dst + len > dstend)
-            return 0;
         while (i < len) { dst[idx++] = word[i++]; }
         if (t == BROTLI_TRANSFORM_UPPERCASE_FIRST) {
             ToUpperCase(&dst[idx - len]);
@@ -1709,8 +1698,6 @@ static __device__ int TransformDictionaryWord(uint8_t* dst, uint8_t *dstend, con
     }
     {
         int suffix_len = *suffix++;
-        if (dst + suffix_len > dstend)
-            return 0;
         while (suffix_len--) { dst[idx++] = *suffix++; }
         return idx;
     }
@@ -1725,13 +1712,15 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
     int32_t pos = 0;
     int p1 = s->p1;
     int p2 = s->p2;
-    uint16_t *htree_command;
-    uint8_t *dist_context_map_slice;
-    int trivial_literal_context, dist_rb_idx;
+    const uint16_t *htree_command;
+    const uint8_t *context_map_slice, *dist_context_map_slice;
+    int dist_rb_idx;
     uint32_t blen_L, blen_I, blen_D;
+    uint8_t * const dict_scratch = (uint8_t *)&s->hs; // 24+13 bytes (max length of a dictionary word incuding prefix & suffix)
+    int context_mode;
 
     if (!t) {
-        trivial_literal_context = PrepareLiteralDecoding(s);
+        context_mode = PrepareLiteralDecoding(s, context_map_slice);
         dist_context_map_slice = s->dist_context_map;
         htree_command = s->insert_copy_hgroup->htrees[0];
         dist_rb_idx = s->dist_rb_idx;
@@ -1756,17 +1745,18 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
             // Read the insert/copy length in the command.
             {
                 uint32_t cmd_code = getvlc(s, htree_command);
-                const CmdLutElement *v = &kCmdLut[cmd_code];
-                int distance_context = v->context;
-                uint8_t dist_htree_index = dist_context_map_slice[distance_context];
-                uint32_t insert_length = v->insert_len_offset;
+                CmdLutElement v = kCmdLut[cmd_code];
+                uint8_t distance_context = v.context;
+                uint32_t insert_length = v.insert_len_offset;
                 int32_t max_distance;
-                distance_code = v->distance_code;
-                copy_length = v->copy_len_offset;
-                if (v->insert_len_extra_bits) {
-                    insert_length += getbits(s, v->insert_len_extra_bits);
+                distance_code = v.distance_code;
+                if (v.insert_len_extra_bits) {
+                    insert_length += getbits(s, v.insert_len_extra_bits);
                 }
-                copy_length += getbits(s, v->copy_len_extra_bits);
+                copy_length = v.copy_len_offset;
+                if (v.copy_len_extra_bits) {
+                    copy_length += getbits(s, v.copy_len_extra_bits);
+                }
                 --blen_I;
                 if (insert_length != 0) {
                     if (pos + insert_length > meta_block_len) {
@@ -1775,23 +1765,34 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
                     }
                     // Read the literals in the command.
                     else do {
-                        const uint16_t *hc;
+                        int len;
                         if (blen_L == 0) {
                             blen_L = DecodeBlockTypeAndLength(s, 0);
-                            trivial_literal_context = PrepareLiteralDecoding(s);
+                            context_mode = PrepareLiteralDecoding(s, context_map_slice);
                         }
-                        if (trivial_literal_context) {
-                            hc = s->literal_htree;
+                        len = min(blen_L, insert_length);
+                        insert_length -= len;
+                        blen_L -= len;
+                        if (BROTLI_NEED_CONTEXT_LUT(context_mode))
+                        {
+                            const debrotli_huff_tree_group_s *literal_hgroup = s->literal_hgroup;
+                            do {
+                                int context = BROTLI_CONTEXT(p1, p2, context_mode);
+                                p2 = p1;
+                                p1 = getvlc(s, literal_hgroup->htrees[context_map_slice[context]]);
+                                out[pos++] = p1;
+                            } while (--len);
                         }
-                        else {
-                            uint8_t context = BROTLI_CONTEXT(p1, p2, s->context_lookup);
-                            hc = s->literal_hgroup->htrees[s->context_map_slice[context]];
+                        else
+                        {
+                            const uint16_t *literal_htree = s->literal_hgroup->htrees[context_map_slice[0]];
+                            do {
+                                p2 = p1;
+                                p1 = getvlc(s, literal_htree);
+                                out[pos++] = p1;
+                            } while (--len);
                         }
-                        p2 = p1;
-                        p1 = (int)getvlc(s, hc);
-                        out[pos++] = (uint8_t)p1;
-                        --blen_L;
-                    } while (--insert_length);
+                    } while (insert_length);
                     if (pos == meta_block_len) {
                         copy_length = 0;
                     }
@@ -1800,9 +1801,9 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
                 if (pos < meta_block_len) {
                     if (distance_code >= 0) {
                         // Implicit distance case.
-                        distance_context = distance_code ? 0 : 1;
                         --dist_rb_idx;
                         distance_code = s->dist_rb[dist_rb_idx & 3];
+                        distance_context = 1;
                     }
                     else {
                         const uint16_t *distance_tree;
@@ -1811,9 +1812,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
                         if (blen_D == 0) {
                             blen_D = DecodeBlockTypeAndLength(s, 2);
                             dist_context_map_slice = s->dist_context_map + (s->block_type_rb[5] << 2);
-                            dist_htree_index = dist_context_map_slice[distance_context];
                         }
-                        distance_tree = s->distance_hgroup->htrees[dist_htree_index];
+                        distance_tree = s->distance_hgroup->htrees[dist_context_map_slice[distance_context]];
                         distance_code = getvlc(s, distance_tree);
                         // Convert the distance code to the actual distance by possibly looking up past distances from the s->ringbuffer.
                         distance_context = 0;
@@ -1878,10 +1878,6 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
                     }
                     // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is larger than the max LZ77 distance
                     if (distance_code > max_distance) {
-                        int address = distance_code - max_distance - 1;
-                        int offset, mask, word_idx, transform_idx;
-                        uint32_t shift;
-
                         // The maximum allowed distance is BROTLI_MAX_ALLOWED_DISTANCE = 0x7FFFFFFC.
                         // With this choice, no signed overflow can occur after decoding
                         // a special distance code (e.g., after adding 3 to the last distance).
@@ -1891,51 +1887,45 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
                             //printf("distance_code = %d/%d, copy_length = %d\n", distance_code, (int)(out - s->outbase), copy_length);
                             s->error = -1;
                             pos = meta_block_len;
+                            copy_length = 0;
                         }
                         else {
-                            offset = (int)words->offsets_by_length[copy_length];
-                            shift = words->size_bits_by_length[copy_length];
-                            mask = (int)((1 << shift) - 1);
-                            word_idx = address & mask;
-                            transform_idx = address >> shift;
+                            int32_t offset = (int32_t)words->offsets_by_length[copy_length];
+                            uint32_t shift = words->size_bits_by_length[copy_length];
+                            uint32_t address = distance_code - max_distance - 1;
+                            int32_t word_idx = address & ((1 << shift) - 1);
+                            uint32_t transform_idx = address >> shift;
                             // Compensate double distance-ring-buffer roll.
                             dist_rb_idx += distance_context;
                             offset += word_idx * copy_length;
-                            if (transform_idx < kNumTransforms) {
-                                const uint8_t* word = &words->data[offset];
-                                int len = copy_length;
-                                if (transform_idx == 0) {
-                                    if (pos + len > meta_block_len) {
-                                        s->error = 2;
-                                        pos = meta_block_len;
-                                        len = 0;
-                                    }
-                                    else {
-                                        memcpy(out + pos, word, len);
-                                    }
-                                }
-                                else {
-                                    len = TransformDictionaryWord(out + pos, out + meta_block_len, word, len, transform_idx);
-                                }
-                                pos += len;
-                                if (len >= 2)
+                            if (transform_idx == 0) {
+                                distance_code = -offset;
+                            }
+                            else if (transform_idx < kNumTransforms) {
+                                copy_length = TransformDictionaryWord(dict_scratch, &words->data[offset], copy_length, transform_idx);
+                                distance_code = 0;
+                                if (copy_length == 1)
                                 {
-                                    p2 = out[pos-2];
-                                    p1 = out[pos-1];
-                                }
-                                else if (len > 0)
-                                {
+                                    // Special case for single byte output
                                     p2 = p1;
-                                    p1 = out[pos-1];
+                                    p1 = dict_scratch[0];
+                                    out[pos++] = p1;
+                                    copy_length = 0;
                                 }
                             }
                             else {
                                 //printf("transform_idx=%d/%d, distance_code = %d/%d, copy_length = %d\n", transform_idx, kNumTransforms, distance_code, (int)(out - s->outbase), copy_length);
                                 s->error = -1;
                                 pos = meta_block_len;
+                                copy_length = 0;
+                            }
+                            if (pos + copy_length > meta_block_len)
+                            {
+                                s->error = -1;
+                                pos = meta_block_len;
+                                copy_length = 0;
                             }
                         }
-                        copy_length = 0;
                     }
                     else {
                         // Update the recent distances cache.
@@ -1956,10 +1946,25 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
         if (copy_length > 0) {
             uint8_t b;
             distance_code = SHFL0(distance_code);
-            for (uint32_t i = t; i < copy_length; i += 32) {
-                const uint8_t *src = out + pos + ((i >= (uint32_t)distance_code) ? (i % (uint32_t)distance_code) : i) - distance_code;
-                b = *src;
-                out[pos + i] = b;
+            if (distance_code > 0) {
+                // Copy
+                for (uint32_t i = t; i < copy_length; i += 32) {
+                    const uint8_t *src = out + pos + ((i >= (uint32_t)distance_code) ? (i % (uint32_t)distance_code) : i) - distance_code;
+                    b = *src;
+                    out[pos + i] = b;
+                }
+            }
+            else {
+                // Dictionary
+                const uint8_t *src = (distance_code < 0) ? &words->data[-distance_code] : dict_scratch;
+                if (t < copy_length) {
+                    b = src[t];
+                    out[pos + t] = b;
+                    if (32 + t < copy_length) {
+                        b = src[32 + t];
+                        out[pos + 32 + t] = b;
+                    }
+                }
             }
             p1 = SHFL((uint32_t)b, (copy_length - 1) & 0x1f);
             p2 = SHFL((uint32_t)b, (copy_length - 2) & 0x1f);
