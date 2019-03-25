@@ -1,3 +1,10 @@
+# cuDF 0.6.1 (Date TBD)
+
+## Bug Fixes
+
+- PR #1275 Fix CentOS exception in DataFrame.hash_partition from using value "returned" by a void function
+
+
 # cuDF 0.6.0 (22 Mar 2019)
 
 ## New Features
