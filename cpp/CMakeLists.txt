@@ -214,7 +214,7 @@ add_library(cudf SHARED
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
-            src/compaction/stream_compaction_ops.cu
+            src/compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
             src/hash/hash_ops.cu

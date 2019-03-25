@@ -67,8 +67,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -252,6 +251,13 @@ set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+
+# - stream compaction tests -------------------------------------------------------------------------------
+
+set(STREAM_COMPACTION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu")
+
+ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
 
 
 ###################################################################################################

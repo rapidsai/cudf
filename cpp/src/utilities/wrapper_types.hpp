@@ -60,7 +60,7 @@ struct wrapper
   value_type value;                                              ///< The wrapped value
 
   CUDA_HOST_DEVICE_CALLABLE
-  explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(T v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }
@@ -154,28 +154,28 @@ template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id> operator+(wrapper<T, type_id> const &lhs, wrapper<T, type_id> const &rhs)
 {
-  return wrapper<T, type_id>{lhs.value + rhs.value};
+  return wrapper<T, type_id>{ static_cast<T>(lhs.value + rhs.value) };
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id> operator-(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
 {
-  return wrapper<T, type_id>{lhs.value - rhs.value};
+  return wrapper<T, type_id>{ static_cast<T>(lhs.value - rhs.value) };
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id> operator*(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
 {
-  return wrapper<T, type_id>{lhs.value * rhs.value};
+  return wrapper<T, type_id>{ static_cast<T>(lhs.value * rhs.value) };
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
 {
-  return wrapper<T, type_id>{lhs.value / rhs.value};
+  return wrapper<T, type_id>{ static_cast<T>(lhs.value / rhs.value) };
 }
 
 // prefix increment operator
@@ -302,6 +302,20 @@ using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
 using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 
 using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
+
+using bool8 = detail::wrapper<gdf_bool, GDF_BOOL>;
+
+// This is necessary for global, constant, non-fundamental types
+// to be accessible in both host and device code
+#ifdef __CUDA_ARCH__
+__device__ __constant__ static bool8 true_v{gdf_bool{1}};
+
+__device__ __constant__ static bool8 false_v{gdf_bool{0}};
+#else
+static constexpr bool8 true_v{gdf_bool{1}};
+static constexpr bool8 false_v{gdf_bool{0}};
+#endif
+
 
 } // namespace cudf
 
