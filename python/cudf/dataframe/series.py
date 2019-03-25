@@ -1252,8 +1252,8 @@ class Series(object):
 
         Returns
         -------
-        output_frame : DataFrame
-            Summary statistics of relevant columns in the original dataframe.
+        A DataFrame containing summary statistics of relevant columns from
+        the input DataFrame.
 
         Examples
         --------
