@@ -29,16 +29,16 @@ requirements:
     - python x.x
     - cython >=0.29,<0.30
     - setuptools
-    - libcudf {{ version }}
-    - libcudf_cffi {{ version }}
+    - libcudf 0.6*
+    - libcudf_cffi 0.6*
     - numba >=0.40
     - nvstrings 0.3*
   run:
     - python x.x
     - cython >=0.29,<0.30
     - setuptools
-    - libcudf {{ version }}
-    - libcudf_cffi {{ version }}
+    - libcudf 0.6*
+    - libcudf_cffi 0.6*
     - pandas >=0.23.4
     - numba >=0.40
     - nvstrings 0.3*
