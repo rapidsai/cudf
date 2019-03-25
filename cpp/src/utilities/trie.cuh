@@ -43,12 +43,12 @@ struct SerialTrieNode {
 
 /**---------------------------------------------------------------------------*
  * @brief Create a serialized trie for cache-friendly string search
- * 
+ *
  * The resulting trie is a compact array - children array size is equal to the
  * actual number of children nodes, not the size of the alphabet
- * 
+ *
  * @param[in] keys Array of strings to insert into the trie
- * 
+ *
  * @return A host vector of nodes representing the serialized trie
  *---------------------------------------------------------------------------**/
 inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vector<std::string> &keys) {
@@ -70,10 +70,10 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
 		for (const char character : key) {
 			if (current_node->children[character] == nullptr)
 				current_node->children[character] = std::make_unique<TreeTrieNode>();
-		
+
 			current_node = current_node->children[character].get();
 		}
-		
+
 		current_node->is_end_of_word = true;
 	}
 
@@ -121,14 +121,14 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
 
 /**---------------------------------------------------------------------------*
  * @brief Searches for a string in a serialized trie
- * 
+ *
  * Can be executed on host or device, as long as the data is available
- * 
+ *
  * @param[in] trie Pointer to the array of nodes that make up the trie
  * @param[in] key Pointer to the start of the string to find
  * @param[in] key_len Length of the string to find
- * 
- * @return Boolean value, true if string is found, false otherwise 
+ *
+ * @return Boolean value, true if string is found, false otherwise
  *---------------------------------------------------------------------------**/
 __host__ __device__
 inline bool serializedTrieContains(const SerialTrieNode* trie, const char* key, size_t key_len) {
@@ -140,12 +140,13 @@ inline bool serializedTrieContains(const SerialTrieNode* trie, const char* key, 
 			curr_node += trie[curr_node].children_offset;
 		}
 		// Search for the next character in the array of children nodes
-		while (trie[curr_node].character != trie_terminating_character && 
-			trie[curr_node].character != key[i]) {
+		// Nodes are sorted - terminate search if the node is larger or equal
+		while (trie[curr_node].character != trie_terminating_character &&
+			trie[curr_node].character < key[i]) {
 			++curr_node;
 		}
 		// Could not find the next character, done with the search
-		if (trie[curr_node].character == trie_terminating_character) {
+		if (trie[curr_node].character != key[i]) {
 			return false;
 		}
 	}

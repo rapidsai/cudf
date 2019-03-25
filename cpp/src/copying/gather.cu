@@ -321,7 +321,8 @@ struct column_gatherer {
 
     // Copy temporary buffers used for in-place gather to destination column
     if (in_place) {
-      thrust::copy(temp_destination.begin(), temp_destination.end(),
+      thrust::copy(rmm::exec_policy(stream)->on(stream),
+                   temp_destination.begin(), temp_destination.end(),
                    static_cast<ColumnType*>(destination_column->data));
     }
 
