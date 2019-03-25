@@ -2097,15 +2097,15 @@ class DataFrame(object):
         >>> gdf['d'] = [1.0, 2.0, 3.0]
         >>> gdf['d'] = gdf['d'].astype('float32')
         >>> print(gdf.describe())
-           stats    a    b
-        0  count  3.0  3.0
-        1   mean  2.0  2.0
-        2    std  1.0  1.0
-        3    min  1.0  1.0
-        4    25%  1.5  1.5
-        5    50%  1.5  1.5
-        6    75%  2.5  2.5
-        7    max  3.0  3.0
+           stats    a    b    d
+        0  count  3.0  3.0  3.0
+        1   mean  2.0  2.0  2.0
+        2    std  1.0  1.0  1.0
+        3    min  1.0  1.0  1.0
+        4    25%  1.5  1.5  1.5
+        5    50%  1.5  1.5  1.5
+        6    75%  2.5  2.5  2.5
+        7    max  3.0  3.0  3.0
 
         Using the ``include`` keyword to describe only specific dtypes.
         >>> gdf = cudf.DataFrame()
@@ -2139,13 +2139,15 @@ class DataFrame(object):
         if not include:
             # temporary workaround of select_dtype handling of np.number
             numeric_data = self.select_dtypes(
-                [np.number, 'int8', 'int16', 'int32', 'int64']
+                [np.number, 'int8', 'int16', 'int32',
+                 'int64','float16', 'float32', 'float64']
             )
             output_frame = _create_output_frame(numeric_data, percentiles)
 
         elif include == 'all':
             numeric_data = self.select_dtypes(
-                [np.number, 'int8', 'int16', 'int32', 'int64']
+                [np.number, 'int8', 'int16', 'int32',
+                 'int64', 'float16', 'float32', 'float64']
             )
             output_frame = _create_output_frame(numeric_data, percentiles)
             logging.warning(
