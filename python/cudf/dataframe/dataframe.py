@@ -2063,7 +2063,7 @@ class DataFrame(object):
             all numeric columns.
 
         exclude: str, list-like, optional
-            The dtypes to be excluded fromthe output summary statistics.
+            The dtypes to be excluded from the output summary statistics.
             Columns of dtypes included in this list will not be part of the
             output. Default of None excludes no columns.
 
@@ -2137,15 +2137,20 @@ class DataFrame(object):
             raise NotImplementedError("Exclude is not yet supported.")
 
         if not include:
-            numeric_data = self.select_dtypes([np.number])
+            # temporary workaround of select_dtype handling of np.number
+            numeric_data = self.select_dtypes(
+                [np.number, 'int8', 'int16', 'int32', 'int64']
+            )
             output_frame = _create_output_frame(numeric_data, percentiles)
 
         elif include == 'all':
-            numeric_data = self.select_dtypes([np.number])
+            numeric_data = self.select_dtypes(
+                [np.number, 'int8', 'int16', 'int32', 'int64']
+            )
             output_frame = _create_output_frame(numeric_data, percentiles)
             logging.warning(
                 "Describe does not yet include StringColumns or "
-                "DatetimeColumns."
+                "DatetimeColumns. "
             )
 
         else:
