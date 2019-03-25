@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf.h"
-#include "gtest/gtest.h"
-#include "utilities/error_utils.hpp"
+#include <utilities/error_utils.hpp>
+#include <cudf.h>
 
-#include <cuda_runtime_api.h>
 #include <rmm/rmm.h>
+
+#include <gtest/gtest.h>
+
 #include <cstring>
 
 // If this test fails, it means an error code was added without

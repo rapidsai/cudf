@@ -21,30 +21,31 @@ requirements:
   # use channel:
   #   - nvidia
   #   - rapidsai
+  #   - rapidsai-nightly
   #   - numba
   #   - conda-forge
   #   - defaults
   build:
     - python x.x
-    - cython>=0.29,<0.30
+    - cython >=0.29,<0.30
     - setuptools
-    - libcudf={{ version }}
-    - libcudf_cffi={{ version }}
-    - numba>=0.40
-    - nvstrings
+    - libcudf {{ version }}
+    - libcudf_cffi {{ version }}
+    - numba >=0.40
+    - nvstrings 0.3*
   run:
     - python x.x
-    - cython>=0.29,<0.30
+    - cython >=0.29,<0.30
     - setuptools
-    - libcudf={{ version }}
-    - libcudf_cffi={{ version }}
-    - pandas>=0.23.4
-    - numba>=0.40
-    - nvstrings
+    - libcudf {{ version }}
+    - libcudf_cffi {{ version }}
+    - pandas >=0.23.4
+    - numba >=0.40
+    - nvstrings 0.3*
 
 test:
   requires:
-    - distributed>=1.22.1
+    - distributed >=1.23.0
     - pytest
   imports:
     - cudf

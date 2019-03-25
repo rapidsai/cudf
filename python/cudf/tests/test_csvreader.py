@@ -10,9 +10,7 @@ from io import StringIO
 from io import BytesIO
 
 from cudf import read_csv
-from cudf.io.csv import read_csv_strings
 import cudf
-import nvstrings
 from cudf.tests.utils import assert_eq
 import gzip
 import shutil
@@ -206,16 +204,16 @@ def test_csv_reader_strings(tmpdir):
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines))
 
-    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-                            decimal='.', thousands="'")
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+                  decimal='.', thousands="'")
 
-    assert(len(cols) == 2)
-    assert(type(cols[0]) == nvstrings.nvstrings)
-    assert(type(cols[1]) == cudf.Series)
-    assert(cols[0].sublist([0]).to_host()[0] == 'a')
-    assert(cols[0].sublist([1]).to_host()[0] == 'b')
-    assert(cols[0].sublist([2]).to_host()[0] == 'c')
-    assert(cols[0].sublist([3]).to_host()[0] == 'd')
+    assert(len(df.columns) == 2)
+    assert(df['text'].dtype == np.dtype('object'))
+    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['text'][0] == 'a')
+    assert(df['text'][1] == 'b')
+    assert(df['text'][2] == 'c')
+    assert(df['text'][3] == 'd')
 
 
 def test_csv_reader_strings_quotechars(tmpdir):
@@ -228,16 +226,16 @@ def test_csv_reader_strings_quotechars(tmpdir):
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines))
 
-    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-                            quotechar='\"', quoting=1)
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+                  quotechar='\"', quoting=1)
 
-    assert(len(cols) == 2)
-    assert(type(cols[0]) == nvstrings.nvstrings)
-    assert(type(cols[1]) == cudf.Series)
-    assert(cols[0].sublist([0]).to_host()[0] == 'a,\n')
-    assert(cols[0].sublist([1]).to_host()[0] == 'b "c" d')
-    assert(cols[0].sublist([2]).to_host()[0] == 'e')
-    assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
+    assert(len(df.columns) == 2)
+    assert(df['text'].dtype == np.dtype('object'))
+    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['text'][0] == 'a,\n')
+    assert(df['text'][1] == 'b "c" d')
+    assert(df['text'][2] == 'e')
+    assert(df['text'][3] == 'f,,!.,')
 
 
 def test_csv_reader_auto_column_detection(tmpdir):
@@ -421,25 +419,25 @@ def test_csv_reader_buffer_strings():
 
     buffer = '\n'.join(lines)
 
-    cols_str = read_csv_strings(StringIO(buffer),
-                                names=names, dtype=dtypes, skiprows=1)
-    assert(len(cols_str) == 2)
-    assert(type(cols_str[0]) == nvstrings.nvstrings)
-    assert(type(cols_str[1]) == cudf.Series)
-    assert(cols_str[0].sublist([0]).to_host()[0] == 'a')
-    assert(cols_str[0].sublist([1]).to_host()[0] == 'b')
-    assert(cols_str[0].sublist([2]).to_host()[0] == 'c')
-    assert(cols_str[0].sublist([3]).to_host()[0] == 'd')
+    df = read_csv(StringIO(buffer),
+                  names=names, dtype=dtypes, skiprows=1)
+    assert(len(df.columns) == 2)
+    assert(df['text'].dtype == np.dtype('object'))
+    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['text'][0] == 'a')
+    assert(df['text'][1] == 'b')
+    assert(df['text'][2] == 'c')
+    assert(df['text'][3] == 'd')
 
-    cols_bytes = read_csv_strings(BytesIO(str.encode(buffer)),
-                                  names=names, dtype=dtypes, skiprows=1)
-    assert(len(cols_bytes) == 2)
-    assert(type(cols_bytes[0]) == nvstrings.nvstrings)
-    assert(type(cols_bytes[1]) == cudf.Series)
-    assert(cols_bytes[0].sublist([0]).to_host()[0] == 'a')
-    assert(cols_bytes[0].sublist([1]).to_host()[0] == 'b')
-    assert(cols_bytes[0].sublist([2]).to_host()[0] == 'c')
-    assert(cols_bytes[0].sublist([3]).to_host()[0] == 'd')
+    df2 = read_csv(BytesIO(str.encode(buffer)),
+                   names=names, dtype=dtypes, skiprows=1)
+    assert(len(df2.columns) == 2)
+    assert(df2['text'].dtype == np.dtype('object'))
+    assert(df2['int'].dtype == np.dtype('int32'))
+    assert(df2['text'][0] == 'a')
+    assert(df2['text'][1] == 'b')
+    assert(df2['text'][2] == 'c')
+    assert(df2['text'][3] == 'd')
 
 
 def test_csv_reader_gzip_compression(tmpdir):
@@ -498,14 +496,14 @@ def test_csv_quotednumbers(tmpdir):
     integer_ref = [1, 2, 3, 4]
     decimal_ref = [3.14, 300, 10101.0101, 6.28318]
 
-    cols1 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
-    cols2 = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
+    df1 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
+    df2 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
-    assert(len(cols2) == 2)
-    np.testing.assert_allclose(integer_ref, cols1['integer'])
-    np.testing.assert_allclose(decimal_ref, cols1['decimal'])
-    np.testing.assert_allclose(integer_ref, cols2[0])
-    np.testing.assert_allclose(decimal_ref, cols2[1])
+    assert(len(df2.columns) == 2)
+    np.testing.assert_allclose(integer_ref, df1['integer'])
+    np.testing.assert_allclose(decimal_ref, df1['decimal'])
+    np.testing.assert_allclose(integer_ref, df2['integer'])
+    np.testing.assert_allclose(decimal_ref, df2['decimal'])
 
 
 def test_csv_reader_nrows(tmpdir):
@@ -587,16 +585,16 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
     with open(str(fname), 'rb') as f_in, gzip.open(str(fnamez), 'wb') as f_out:
         shutil.copyfileobj(f_in, f_out)
 
-    cols = read_csv_strings(str(fnamez), names=names, dtype=dtypes, skiprows=1,
-                            decimal='.', thousands="'", compression='gzip')
+    df = read_csv(str(fnamez), names=names, dtype=dtypes, skiprows=1,
+                  decimal='.', thousands="'", compression='gzip')
 
-    assert(len(cols) == 2)
-    assert(type(cols[0]) == nvstrings.nvstrings)
-    assert(type(cols[1]) == cudf.Series)
-    assert(cols[0].sublist([0]).to_host()[0] == 'a')
-    assert(cols[0].sublist([1]).to_host()[0] == 'b')
-    assert(cols[0].sublist([2]).to_host()[0] == 'c')
-    assert(cols[0].sublist([3]).to_host()[0] == 'd')
+    assert(len(df.columns) == 2)
+    assert(df['text'].dtype == np.dtype('object'))
+    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['text'][0] == 'a')
+    assert(df['text'][1] == 'b')
+    assert(df['text'][2] == 'c')
+    assert(df['text'][3] == 'd')
 
 
 @pytest.mark.parametrize('skip_rows', [0, 2, 4])
@@ -943,10 +941,22 @@ def test_csv_reader_pd_consistent_quotes(quoting):
 
     buffer = '\n'.join(lines)
 
-    cu_cols = read_csv_strings(StringIO(buffer),
-                               names=names, dtype=dtypes, quoting=quoting)
+    gd_df = read_csv(StringIO(buffer),
+                     names=names, dtype=dtypes, quoting=quoting)
     pd_df = pd.read_csv(StringIO(buffer),
                         names=names, quoting=quoting)
 
-    col = [str(elem) for elem in cu_cols[0].to_host()]
-    np.testing.assert_array_equal(pd_df['text'], col)
+    assert_eq(pd_df, gd_df)
+
+
+def test_csv_reader_scientific_type_detection():
+    buffer = '1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1'
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+
+    df = read_csv(StringIO(buffer),
+                  header=None)
+
+    for dt in df.dtypes:
+        assert(dt == 'float64')
+    for col in df:
+        assert(np.isclose(df[col][0], expected[int(col)]))

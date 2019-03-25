@@ -13,30 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "order_by_type_vectors.h"
+
+#include <tests/utilities/cudf_test_fixtures.h>
+
+// See this header for all of the handling of valids' vectors
+#include <tests/utilities/valid_vectors.h>
+
+// See this header for all of the recursive handling of tuples of vectors
+#include <tests/utilities/tuple_vectors.h>
+
+#include <utilities/bit_util.cuh>
+#include <bitmask/legacy_bitmask.hpp>
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <type_traits>
 #include <memory>
 #include <numeric>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <rmm/rmm.h>
-#include <cudf/functions.h>
-#include <utilities/bit_util.cuh>
-
-#include "tests/utilities/cudf_test_fixtures.h"
-
-// See this header for all of the recursive handling of tuples of vectors
-#include "tests/utilities/tuple_vectors.h"
-
-// See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
-
-#include "order_by_type_vectors.h"
 
 // A new instance of this class will be created for each *TEST(OrderbyTest, ...)
 // Put all repeated setup and validation stuff here
@@ -130,9 +131,8 @@ struct OrderByTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, gdf_num_bitmask_elements(host_vector.size()), cudaMemcpyHostToDevice), cudaSuccess);
       the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;

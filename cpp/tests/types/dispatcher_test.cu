@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-
-#include <cudf.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <utilities/type_dispatcher.hpp>
-#include "gtest/gtest.h"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cudf.h>
 
 #include <thrust/device_vector.h>
-#include <cstdint>
 
+#include <gtest/gtest.h>
+
+#include <cstdint>
 
 /**
  * @file dispatcher_test.cu
@@ -42,7 +42,8 @@ struct DispatcherTest : public GdfTest {
    *---------------------------------------------------------------------------**/
   std::vector<gdf_dtype> supported_dtypes{
       GDF_INT8,    GDF_INT16,  GDF_INT32,  GDF_INT64,     GDF_FLOAT32,
-      GDF_FLOAT64, GDF_DATE32, GDF_DATE64, GDF_TIMESTAMP, GDF_CATEGORY};
+      GDF_FLOAT64, GDF_DATE32, GDF_DATE64, GDF_TIMESTAMP, GDF_CATEGORY, 
+      GDF_STRING_CATEGORY};
 
   // These types are not supported by the type_dispatcher
   std::vector<gdf_dtype> unsupported_dtypes{GDF_invalid, GDF_STRING};
@@ -50,7 +51,8 @@ struct DispatcherTest : public GdfTest {
 
 using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
                                    double, cudf::date32, cudf::date64,
-                                   cudf::timestamp, cudf::category>;
+                                   cudf::timestamp, cudf::category, 
+                                   cudf::nvstring_category>;
 
 template <typename T>
 struct TypedDispatcherTest : DispatcherTest {};

@@ -15,6 +15,7 @@
  */
 
 #include <thrust/scatter.h>
+#include <bitmask/legacy_bitmask.hpp>
 #include "copying.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
@@ -82,20 +83,18 @@ void scatter_bitmask(gdf_valid_type const* source_mask,
 
   gdf_valid_type* output_bitmask{destination_mask};
 
-  const gdf_size_type num_destination_mask_elements{
-      gdf_get_num_chars_bitmask(num_destination_rows)};
-
   // Allocate temporary output bitmask if scattering in-place
   bool const in_place{source_mask == destination_mask};
   rmm::device_vector<gdf_valid_type> temp_bitmask;
   if (in_place) {
-    temp_bitmask.resize(num_destination_mask_elements);
+    temp_bitmask.resize(gdf_valid_allocation_size(num_destination_rows));
     output_bitmask = temp_bitmask.data().get();
   }
 
   // Ensure the output bitmask is initialized to zero
   CUDA_TRY(cudaMemsetAsync(
-      output_bitmask, 0, num_destination_mask_elements * sizeof(gdf_valid_type),
+      output_bitmask, 0,
+      gdf_num_bitmask_elements(num_destination_rows) * sizeof(gdf_valid_type),
       stream));
 
   scatter_bitmask_kernel<<<scatter_grid_size, BLOCK_SIZE, 0, stream>>>(
@@ -178,6 +177,16 @@ struct column_scatterer {
 namespace detail {
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table, cudaStream_t stream = 0) {
+  CUDF_EXPECTS(nullptr != source_table, "source table is null");
+  CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
+
+  // If the source table is empty, return immediately because there is nothing
+  // to scatter
+  if (0 == source_table->num_rows()) {
+    return;
+  }
+
+  CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
 

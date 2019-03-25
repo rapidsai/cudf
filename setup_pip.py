@@ -111,7 +111,7 @@ install_requires = [
     'pandas>=0.23.4',
     'numba>=0.40.0,<0.42',
     'pycparser==2.19',
-    'pyarrow==0.12.0',
+    'pyarrow==0.12.1',
     'cffi>=1.0.0',
     'cython>=0.29,<0.30',
     'numpy>=1.14'
@@ -127,7 +127,7 @@ extensions = [
     CMakeExtension('cudf', sourcedir='cpp'),
     Extension("*",
               sources=cython_files,
-              include_dirs=['cpp/include/'],
+              include_dirs=['cpp/include/', 'thirdparty/dlpack/include/dlpack'],
               library_dirs=[get_python_lib(), distutils_dir_name('lib')],
               libraries=['cudf'],
               language='c++',

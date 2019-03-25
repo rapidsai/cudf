@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
@@ -64,7 +64,8 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True,
+                 dtype=None):
         if isinstance(data, pd.Series):
             name = data.name
             index = as_index(data.index)
@@ -76,10 +77,11 @@ class Series(object):
             data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
-            data = columnops.as_column(data, nan_as_null=nan_as_null)
+            data = columnops.as_column(data, nan_as_null=nan_as_null,
+                                       dtype=dtype)
 
         if index is not None and not isinstance(index, Index):
-            raise TypeError('index not a Index type: got {!r}'.format(index))
+            index = as_index(index)
 
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
@@ -176,10 +178,30 @@ class Series(object):
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
 
-    def to_frame(self):
-        """ Convert Series into a DataFrame """
+    def to_frame(self, name=None):
+        """Convert Series into a DataFrame
+
+        Parameters
+        ----------
+        name : str, default None
+            Name to be used for the column
+
+        Returns
+        -------
+        DataFrame
+            cudf DataFrame
+        """
+
         from cudf import DataFrame
-        return DataFrame({self.name or 0: self}, index=self.index)
+
+        if name is not None:
+            col = name
+        elif self.name is None:
+            col = 0
+        else:
+            col = self.name
+
+        return DataFrame({col: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -210,6 +232,13 @@ class Series(object):
         """
         return len(self._column)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__' and 'sqrt' == ufunc.__name__:
+            from cudf import sqrt
+            return sqrt(self)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -217,16 +246,30 @@ class Series(object):
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
-            arg = Series(arg)
+            if len(arg) == 0:
+                arg = Series(np.array([], dtype='int32'))
+            else:
+                arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                selvals, selinds = columnops.column_select_by_position(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
+                if self.dtype == np.dtype('object'):
+                    idx = arg.to_gpu_array()
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
+                    selvals, selinds = columnops.column_select_by_position(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
             elif arg.dtype in [np.bool, np.bool_]:
-                selvals, selinds = columnops.column_select_by_boolmask(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
+                if self.dtype == np.dtype('object'):
+                    idx = cudautils.boolean_array_to_index_array(
+                        arg.to_gpu_array())
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
+                    selvals, selinds = columnops.column_select_by_boolmask(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
@@ -249,6 +292,9 @@ class Series(object):
         if indices.size == 0:
             return self._copy_construct(data=self.data[:0],
                                         index=self.index[:0])
+
+        if self.dtype == np.dtype("object"):
+            return self[indices]
 
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
@@ -281,7 +327,10 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        out = ['' if v is None else str(v) for v in values]
+        if self.dtype == np.dtype('object'):
+            out = [str(v) for v in values]
+        else:
+            out = ['' if v is None else str(v) for v in values]
         return out
 
     def head(self, n=5):
@@ -316,8 +365,10 @@ class Series(object):
         if nrows is NOTSET:
             nrows = settings.formatting.get(nrows)
 
+        str_dtype = self.dtype
+
         if len(self) == 0:
-            return "<empty Series of dtype={}>".format(self.dtype)
+            return "<empty Series of dtype={}>".format(str_dtype)
 
         if nrows is None:
             nrows = len(self)
@@ -328,12 +379,15 @@ class Series(object):
 
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
+        dtypes = OrderedDict([('', self.dtype)])
         # Format into a table
         output = formatting.format(index=self.index,
-                                   cols=cols, more_rows=more_rows,
+                                   cols=cols, dtypes=dtypes,
+                                   more_rows=more_rows,
                                    series_spacing=True)
-        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
-            if self.name else output + "\ndtype: {}".format(self.dtype)
+        return output + "\nName: {}, dtype: {}".format(self.name, str_dtype)\
+            if self.name is not None else output + \
+            "\ndtype: {}".format(str_dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -481,6 +535,10 @@ class Series(object):
     @property
     def cat(self):
         return self._column.cat()
+
+    @property
+    def str(self):
+        return self._column.str(self.index)
 
     @property
     def dtype(self):
@@ -1339,6 +1397,12 @@ class Series(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
+
     def rename(self, index=None, copy=True):
         """
         Alter Series name.
@@ -1421,46 +1485,9 @@ class Iloc(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        rows = []
-        len_idx = len(self._sr)
-
         if isinstance(arg, tuple):
-            for idx in arg:
-                rows.append(idx)
-
-        elif isinstance(arg, int):
-            rows.append(arg)
-
-        elif isinstance(arg, slice):
-            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
-            if sln > 0:
-                for idx in range(start, stop, step):
-                    rows.append(idx)
-
-        else:
-            raise TypeError(type(arg))
-
-        # To check whether all the indices are valid.
-        for idx in rows:
-            if abs(idx) > len_idx or idx == len_idx:
-                raise IndexError("positional indexers are out-of-bounds")
-
-        for i in range(len(rows)):
-            if rows[i] < 0:
-                rows[i] = len_idx+rows[i]
-
-        # returns the single elem similar to pandas
-        if isinstance(arg, int) and len(rows) == 1:
-            return self._sr[rows[0]]
-
-        ret_list = []
-        for idx in rows:
-            ret_list.append(self._sr[idx])
-
-        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
-                                       nan_as_null=True)
-
-        return Series(col_data, index=as_index(np.asarray(rows)))
+            arg = list(arg)
+        return self._sr[arg]
 
     def __setitem__(self, key, value):
         # throws an exception while updating

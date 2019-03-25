@@ -52,6 +52,7 @@
 #include "utilities/error_utils.hpp"
 #include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/cudf_utils.h" 
 
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
@@ -686,7 +687,7 @@ gdf_error read_csv(csv_read_arg *args)
 			if (h_ColumnData[col].countNULL == raw_csv->num_records){
 				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
 			} else if(h_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_CATEGORY); // For auto-detection, we are currently not supporting strings.
+				d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
 			} else if(h_ColumnData[col].countDateAndTime>0L){
 				d_detectedTypes.push_back(GDF_DATE64);
 			} else if(h_ColumnData[col].countFloat > 0L  ||  
@@ -1092,7 +1093,7 @@ gdf_error allocateGdfDataSpace(gdf_column *col) {
   // TODO: We should not need to allocate space if there is nothing to parse
   // Need to debug/refactor the code to eliminate this requirement
   const auto num_rows = std::max(col->size, 1);
-  const auto num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const auto num_masks = gdf_valid_allocation_size(num_rows);
 
   RMM_TRY(RMM_ALLOC(&col->valid, sizeof(gdf_valid_type) * num_masks, 0));
   CUDA_TRY(cudaMemset(col->valid, 0, sizeof(gdf_valid_type) * num_masks));
@@ -1372,13 +1373,12 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf,
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
-   * @brief Template specialization for operator() that handles integer types
-   * that additionally checks whether the parsed data value should be overridden
-   * with user-specified true/false matches.
+   * @brief Template specialization for operator() for types whose values can be
+   * convertible to a 0 or 1 to represent false/true. The converting is done by
+   * checking against the default and user-specified true/false values list.
    *
    * It is handled here rather than within convertStrToValue() as that function
-   * is already used to construct the true/false match list from user-provided
-   * strings at the start of parsing.
+   * is used by other types (ex. timestamp) that aren't 'booleable'.
    *---------------------------------------------------------------------------**/
   template <typename T,
             typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
@@ -1386,21 +1386,22 @@ struct ConvertFunctor {
       const char *csvData, void *gdfColumnData, long rowIndex, long start,
       long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
-    value = convertStrToValue<T>(csvData, start, end, opts);
 
-    // Check for user-specified true/false values where the output is
+    // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     const size_t field_len = end - start + 1;
     if (serializedTrieContains(opts.trueValuesTrie, csvData + start, field_len)) {
       value = 1;
     } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, field_len)) {
       value = 0;
+    } else {
+      value = convertStrToValue<T>(csvData, start, end, opts);
     }
   }
 
   /**---------------------------------------------------------------------------*
    * @brief Default template operator() dispatch specialization all data types
-   * (including wrapper types) that is not covered by integral specialization.
+   * (including wrapper types) that is not covered by above.
    *---------------------------------------------------------------------------**/
   template <typename T,
             typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
@@ -1606,6 +1607,31 @@ bool isDigit(char c, bool is_hex){
 	return false;
 }
 
+/**
+* @brief Returns true if the counters indicate a potentially valid float.
+* False positives are possible because positions are not taken into account.
+* For example, field "e.123-" would match the pattern.
+*/
+__device__ __forceinline__
+bool isLikeFloat(long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+	// Can't have more than one exponent and one decimal point
+	if (decimal_cnt > 1) return false;
+	if (exponent_cnt > 1) return false;
+	// Without the exponent or a decimal point, this is an integer, not a float
+	if (decimal_cnt == 0 && exponent_cnt == 0) return false;
+
+	// Can only have one '-' per component
+	if (dash_cnt > 1 + exponent_cnt) return false;
+
+	// If anything other than these characters is present, it's not a float
+	if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len) return false;
+
+	// Needs at least 1 digit, 2 if exponent is present
+	if (digit_cnt < 1 + exponent_cnt) return false;
+
+	return true;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -1674,6 +1700,7 @@ void dataTypeDetection(char *raw_csv,
 			long countDash=0;
 			long countColon=0;
 			long countString=0;
+			long countExponent=0;
 
 			// Modify start & end to ignore whitespace and quotechars
 			// This could possibly result in additional empty fields
@@ -1699,6 +1726,10 @@ void dataTypeDetection(char *raw_csv,
 						countSlash++;break;
 					case ':':
 						countColon++;break;
+					case 'e':
+					case 'E':
+						if (!maybe_hex && startPos > start && startPos < tempPos) 
+							countExponent++;break;
 					default:
 						countString++;
 						break;	
@@ -1741,8 +1772,7 @@ void dataTypeDetection(char *raw_csv,
 					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
 				}
 			}
-			// Floating point numbers are made up of numerical strings, have to have a decimal sign, and can have a minus sign.
-			else if((countNumber==(strLen-1) && countDecimal==1) || (strLen>2 && countNumber==(strLen-2) && raw_csv[start]=='-')){
+			else if(isLikeFloat(strLen, countNumber, countDecimal, countDash, countExponent)){
 					atomicAdd(& d_columnData[actual_col].countFloat, 1L);
 			}
 			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 

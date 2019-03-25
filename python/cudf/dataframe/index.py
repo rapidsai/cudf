@@ -11,12 +11,13 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
+from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -85,6 +86,12 @@ class Index(object):
 
     def to_arrow(self):
         return self.as_column().to_arrow()
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)
 
     @property
     def gpu_values(self):
@@ -578,6 +585,10 @@ def as_index(arbitrary, name=None):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, StringColumn):
+        raise NotImplementedError(
+            "Strings are not yet supported in the index"
+        )
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name

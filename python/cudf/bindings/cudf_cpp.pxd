@@ -5,6 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cudf.bindings.dlpack cimport DLManagedTensor
+
 from libcpp cimport bool
 from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
@@ -35,6 +37,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef long    gdf_date64
     ctypedef int     gdf_date32
     ctypedef int     gdf_category
+    ctypedef int     gdf_nvstring_category
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -49,6 +52,7 @@ cdef extern from "cudf.h" nogil:
         GDF_TIMESTAMP,
         GDF_CATEGORY,
         GDF_STRING,
+        GDF_STRING_CATEGORY,
         N_GDF_TYPES,
 
     ctypedef enum gdf_error:
@@ -92,6 +96,7 @@ cdef extern from "cudf.h" nogil:
 
     ctypedef struct gdf_dtype_extra_info:
         gdf_time_unit time_unit
+        void *category
 
     ctypedef struct gdf_column:
         void *data
@@ -339,7 +344,7 @@ cdef extern from "cudf.h" nogil:
                                          unsigned *d_begin_offsets,
                                          unsigned *d_end_offsets)
 
-    gdf_error gdf_inner_join(
+    cdef gdf_error gdf_inner_join(
                              gdf_column **left_cols,
                              int num_left_cols,
                              int left_join_cols[],
@@ -351,7 +356,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_left_join(
                              gdf_column **left_cols,
@@ -365,7 +370,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_full_join(
                              gdf_column **left_cols,
@@ -379,7 +384,7 @@ cdef extern from "cudf.h" nogil:
                              gdf_column **result_cols,
                              gdf_column * left_indices,
                              gdf_column * right_indices,
-                             gdf_context *join_context)
+                             gdf_context *join_context) except +
 
     cdef gdf_error gdf_hash_partition(int num_input_cols,
                                  gdf_column * input[],
@@ -635,6 +640,8 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
+    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
+
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
@@ -727,4 +734,13 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
-                                gdf_index_type* out_indices);
+                                gdf_index_type* out_indices)
+
+    cdef gdf_error gdf_from_dlpack(gdf_column** columns,
+                                   gdf_size_type *num_columns,
+                                   const DLManagedTensor * tensor) except +
+
+    cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
+                                 const gdf_column ** columns,
+                                 gdf_size_type num_columns) except +
+    
