@@ -2139,15 +2139,13 @@ class DataFrame(object):
         if not include:
             # temporary workaround of select_dtype handling of np.number
             numeric_data = self.select_dtypes(
-                [np.number, 'int8', 'int16', 'int32',
-                 'int64','float16', 'float32', 'float64']
+                ['int8', 'int16', 'int32', 'int64', 'float32', np.number]
             )
             output_frame = _create_output_frame(numeric_data, percentiles)
 
         elif include == 'all':
             numeric_data = self.select_dtypes(
-                [np.number, 'int8', 'int16', 'int32',
-                 'int64', 'float16', 'float32', 'float64']
+                ['int8', 'int16', 'int32', 'int64', 'float32', np.number]
             )
             output_frame = _create_output_frame(numeric_data, percentiles)
             logging.warning(
