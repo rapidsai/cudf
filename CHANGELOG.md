@@ -7,12 +7,14 @@
 ## Improvements
 
 - PR #1202 Simplify README.md
-
-...
+- PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
+- PR #1238 Improve performance of the CUDA trie used in the CSV reader
+- PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 
 ## Bug Fixes
 
-...
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
+- PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 
 
 # cuDF 0.6.0 (Date TBD)
@@ -69,6 +71,7 @@
 
 ## Improvements
 
+- PR #1218 Add dask-cudf page to API docs
 - PR #892 Add support for heterogeneous types in binary ops with JIT
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #561 Add Doxygen style comments to Join CUDA functions
@@ -109,12 +112,13 @@
 - PR #1128 CSV Reader: The last data row does not need to be line terminated
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
+- PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
 
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
@@ -161,6 +165,11 @@
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
 - PR #1213 Fix bug with csv reader requesting subset of columns using wrong dattype
+- PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
+- PR #1255 Fix overwriting conda package main label uploads
+- PR #1259 Add dlpack includes to pip build
 
 # cuDF 0.5.1 (05 Feb 2019)
 
