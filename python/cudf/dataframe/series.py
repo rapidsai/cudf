@@ -1236,7 +1236,7 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
-    def describe(self, percentiles=None):
+    def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
         data, the output includes the minimum, maximum, mean, median,
         standard deviation, and various quantiles. For object data, the output

@@ -2042,7 +2042,7 @@ class DataFrame(object):
         if not inplace:
             return outdf
 
-    def describe(self, percentiles=None, include=None):
+    def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a DataFrame's columns. For numeric
         data, the output includes the minimum, maximum, mean, median,
         standard deviation, and various quantiles. For object data, the output
@@ -2061,6 +2061,11 @@ class DataFrame(object):
             of dtypes not included in this list will not be part of the output.
             If include='all', all dtypes are included. Default of None includes
             all numeric columns.
+
+        exclude: str, list-like, optional
+            The dtypes to be excluded fromthe output summary statistics. Columns
+            of dtypes included in this list will not be part of the output.
+            Default of None excludes no columns.
 
         Returns
         -------
@@ -2127,6 +2132,9 @@ class DataFrame(object):
                 out_df[col] = data[col].describe(percentiles=percentiles)[col]
 
             return out_df
+
+        if exclude:
+            raise NotImplementedError("Exclude is not yet supported.")
 
         if not include:
             numeric_data = self.select_dtypes([np.number])
