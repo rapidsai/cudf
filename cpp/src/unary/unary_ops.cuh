@@ -27,8 +27,8 @@ namespace unary {
 
 template<typename T, typename Tout, typename F>
 __global__
-void gpu_op_kernel(const T *data, const gdf_valid_type *valid,
-                   gdf_size_type size, Tout *results, F functor) {
+void gpu_op_kernel(const T *data, gdf_size_type size,
+                   Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;
     int blksz = blockDim.x;
@@ -36,15 +36,8 @@ void gpu_op_kernel(const T *data, const gdf_valid_type *valid,
 
     int start = tid + blkid * blksz;
     int step = blksz * gridsz;
-    if ( valid ) {  // has valid mask
-        for (int i=start; i<size; i+=step) {
-            if ( gdf_is_valid(valid, i) )
-                results[i] = functor.apply(data[i]);
-        }
-    } else {        // no valid mask
-        for (int i=start; i<size; i+=step) {
-            results[i] = functor.apply(data[i]);
-        }
+    for (int i=start; i<size; i+=step) {
+        results[i] = functor.apply(data[i]);
     }
 }
 
@@ -77,7 +70,7 @@ struct Launcher {
         F functor;
         gpu_op_kernel<<<gridsize, blocksize>>>(
             // input
-            (const T*)input->data, input->valid, input->size,
+            (const T*)input->data, input->size,
             // output
             (Tout*)output->data,
             // action
