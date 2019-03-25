@@ -55,8 +55,8 @@ gdf_column apply_boolean_mask(gdf_column const *input,
                               gdf_column const *boolean_mask) {
   CUDF_EXPECTS(nullptr != input, "Null input");
   CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
-  CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mistmatch");
-  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL, "Mask must be boolean type");
+  CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
+  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL, "Mask must be Boolean type");
 
   // High Level Algorithm:
   // First, compute a `gather_map` from the boolean_mask that will gather
