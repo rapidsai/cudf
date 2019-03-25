@@ -64,7 +64,7 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
  * @return void
  *---------------------------------------------------------------------------**/
  __global__ void findAll(char *data, size_t size, size_t offset, const char key,
-	cu_reccnt_t* count, cu_recstart_t* positions) {
+	gdf_size_type* count, ll_uint_t* positions) {
 
 	// thread IDs range per block, so also need the block id
 	const long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -101,15 +101,15 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
-gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> keys, cu_recstart_t result_offset,
-	cu_recstart_t *positions) {
+gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> keys, ll_uint_t result_offset,
+	ll_uint_t *positions) {
 
 	char* d_chunk = nullptr;
 	RMM_TRY(RMM_ALLOC (&d_chunk, min(max_chunk_bytes, h_size), 0)); 
 	
-	cu_reccnt_t*	d_count;
-	RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(cu_reccnt_t), 0) );
-	CUDA_TRY(cudaMemsetAsync(d_count, 0ull, sizeof(cu_reccnt_t)));
+	gdf_size_type*	d_count;
+	RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(gdf_size_type), 0) );
+	CUDA_TRY(cudaMemsetAsync(d_count, 0ull, sizeof(gdf_size_type)));
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
