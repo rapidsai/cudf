@@ -160,7 +160,7 @@
 - PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
-
+- PR #1213 Fix bug with csv reader requesting subset of columns using wrong dattype
 
 # cuDF 0.5.1 (05 Feb 2019)
 
