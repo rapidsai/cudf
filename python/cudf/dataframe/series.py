@@ -1236,11 +1236,42 @@ class Series(object):
 			return Series(self._column.quantile(q, interpolation, exact),
 						  index=as_index(np.asarray(q)))
 
-	
+
 	def describe(self, percentiles=None):
-		"""Inspired/adapted from the analogus Pandas code:
-		https://github.com/pandas-dev/pandas/blob/master/pandas/core/generic.py
-		"""
+		"""Compute summary statistics of a Series. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        Returns
+        -------
+        output_frame : DataFrame
+            Summary statistics of relevant columns in the original dataframe.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+        """
 
 		from cudf import DataFrame
 
@@ -1252,7 +1283,7 @@ class Series(object):
 
 			# describe always includes 50th percentile
 			if 0.5 not in percentiles:
-				percentiles.append(0.5) 
+				percentiles.append(0.5)
 
 			percentiles = np.sort(percentiles)
 			return percentiles
@@ -1270,7 +1301,11 @@ class Series(object):
 			self.quantile(percentiles).to_array().tolist() + [self.max()]
 			data = _format_stats_values(data)
 
-			return DataFrame({'stats': names, self.name: data})
+			values_name = 'values'
+			if self.name:
+				values_name = self.name
+
+			return DataFrame({'stats': names, values_name: data})
 
 		def describe_categorical(self):
 			# blocked by StringColumn/DatetimeColumn support for value_counts/unique
@@ -1279,6 +1314,7 @@ class Series(object):
 		if percentiles is not None:
 			percentiles = _prepare_percentiles(percentiles)
 		else:
+            # pandas defaults
 			percentiles = np.array([0.25, 0.5, 0.75])
 
 		if np.issubdtype(self.dtype, np.number):

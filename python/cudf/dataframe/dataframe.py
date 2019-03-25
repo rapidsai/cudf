@@ -2043,16 +2043,86 @@ class DataFrame(object):
             return outdf
 
     def describe(self, percentiles=None, include=None):
-        """
+        """Compute summary statistics of a DataFrame's columns. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        include: str, list-like, optional
+            The dtypes to be included in the output summary statistics. Columns
+            of dtypes not included in this list will not be part of the output.
+            If include='all', all dtypes are included. Default of None includes
+            all numeric columns.
+
+        Returns
+        -------
+        output_frame : DataFrame
+            Summary statistics of relevant columns in the original dataframe.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+
+        Describing a ``DataFrame``. By default only float64 fields
+        are returned.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> gdf['d'] = [1.0, 2.0, 3.0]
+        >>> gdf['d'] = gdf['d'].astype('float32')
+        >>> print(gdf.describe())
+           stats    b
+        0  count  3.0
+        1   mean  2.0
+        2    std  1.0
+        3    min  1.0
+        4    25%  1.5
+        5    50%  1.5
+        6    75%  2.5
+        7    max  3.0
+
+        Using the ``include`` keyword to describe only specific dtypes.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> print(gdf.describe(include='int'))
+           stats    a
+        0  count  3.0
+        1   mean  2.0
+        2    std  1.0
+        3    min  1.0
+        4    25%  1.5
+        5    50%  1.5
+        6    75%  2.5
+        7    max  3.0
         """
 
         def _create_output_frame(data, percentiles=None):
-            out_df = DataFrame()
-
             # hack because we don't support strings in indexes
             columns = data.columns
             out_df = data[columns[0]].describe(percentiles=percentiles)
-
             for col in columns[1:]:
                 out_df[col] = data[col].describe(percentiles=percentiles)[col]
 
@@ -2066,14 +2136,14 @@ class DataFrame(object):
             numeric_data = self.select_dtypes([np.number])
             output_frame = _create_output_frame(numeric_data, percentiles)
             logging.warning(
-                "Describe does not yet include StringColumns or DatetimeColumns."
+                "Describe does not yet include StringColumns or "
+                "DatetimeColumns."
             )
 
         else:
             included_data = self.select_dtypes(include=include)
             if included_data.empty:
                 raise ValueError("No data of included types.")
-
             output_frame = _create_output_frame(included_data, percentiles)
 
         return output_frame
