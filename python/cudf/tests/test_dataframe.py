@@ -2006,7 +2006,6 @@ def test_array_ufunc():
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
 
 
-
 @pytest.mark.xfail(
     raises=ValueError,
     reason="Our describe result is a DataFrame, not a Series. " 
