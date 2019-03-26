@@ -1,9 +1,11 @@
 #ifndef GDF_CPPTYPES_H
 #define GDF_CPPTYPES_H
 
-#include "cudf/types.h"
+#include <cudf/types.h>
 #include "cudf_utils.h"
-#include <iostream>
+
+#include <iosfwd>
+#include <type_traits>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -176,13 +178,49 @@ wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> c
   return wrapper<T, type_id>{lhs.value / rhs.value};
 }
 
+// prefix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator++(wrapper<T,type_id> & w)
+{
+  w.value++;
+  return w;
+}
+
+// postfix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator++(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value++};
+}
+
+// prefix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator--(wrapper<T,type_id> & w)
+{
+  w.value--;
+  return w;
+}
+
+// postfix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator--(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value--};
+}
+
+
+
 /* --------------------------------------------------------------------------*/
 /** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
-     * @Param[in] wrapped A non-const reference to the wrapper struct to unwrap
+     * @param[in] wrapped A non-const reference to the wrapper struct to unwrap
      * 
-     * @Returns A reference to the underlying wrapped value  
+     * @returns A reference to the underlying wrapped value  
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
@@ -197,9 +235,9 @@ CUDA_HOST_DEVICE_CALLABLE
 /** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
-     * @Param[in] wrapped A const reference to the wrapper struct to unwrap
+     * @param[in] wrapped A const reference to the wrapper struct to unwrap
      * 
-     * @Returns A const reference to the underlying wrapped value  
+     * @returns A const reference to the underlying wrapped value  
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
@@ -218,9 +256,9 @@ CUDA_HOST_DEVICE_CALLABLE
      * code that is agnostic to whether or not the type being operated on is a wrapper
      * struct or a fundamental type
      * 
-     * @Param[in] value Reference to a fundamental type to passthrough
+     * @param[in] value Reference to a fundamental type to passthrough
      * 
-     * @Returns Reference to the value passed in
+     * @returns Reference to the value passed in
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
@@ -240,9 +278,9 @@ CUDA_HOST_DEVICE_CALLABLE
      * code that is agnostic to whether or not the type being operated on is a wrapper
      * struct or a fundamental type
      * 
-     * @Param[in] value const reference to a fundamental type to passthrough
+     * @param[in] value const reference to a fundamental type to passthrough
      * 
-     * @Returns const reference to the value passed in
+     * @returns const reference to the value passed in
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
@@ -256,6 +294,8 @@ CUDA_HOST_DEVICE_CALLABLE
 } // namespace detail
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
+
+using nvstring_category = detail::wrapper<gdf_nvstring_category, GDF_STRING_CATEGORY>;
 
 using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
 

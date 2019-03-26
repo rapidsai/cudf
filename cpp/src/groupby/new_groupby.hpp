@@ -16,22 +16,22 @@
  * from the input key columns and a set of aggregation columns that hold the specified
  * reduction among all identical keys.
  * 
- * @Param[in] in_key_columns[] The input key columns
- * @Param[in] num_key_columns The number of input columns to groupby
- * @Param[in] in_aggregation_columns[] The columns that will be aggregated
- * @Param[in] num_aggregation_columns The number of columns that will be aggregated
- * @Param[in] agg_ops[] The aggregation operations to perform. The number of aggregation
+ * @param[in] in_key_columns[] The input key columns
+ * @param[in] num_key_columns The number of input columns to groupby
+ * @param[in] in_aggregation_columns[] The columns that will be aggregated
+ * @param[in] num_aggregation_columns The number of columns that will be aggregated
+ * @param[in] agg_ops[] The aggregation operations to perform. The number of aggregation
  * operations must be equal to the number of aggregation columns, such that agg_op[i]
  * will be applied to in_aggregation_columns[i]
- * @Param[in,out] out_key_columns[] Preallocated buffers for the output key columns
+ * @param[in,out] out_key_columns[] Preallocated buffers for the output key columns
  * columns
- * @Param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
+ * @param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
  * aggregation columns
- * @Param[in] options Structure that controls behavior of groupby operation, i.e.,
+ * @param[in] options Structure that controls behavior of groupby operation, i.e.,
  * sort vs. hash-based implementation, whether or not the output will be sorted,
  * etc. See definition of gdf_context.
  * 
- * @Returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
+ * @returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by(gdf_column* in_key_columns[],

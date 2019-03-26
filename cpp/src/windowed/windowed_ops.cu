@@ -1,6 +1,6 @@
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
-#include <core/utilities/error_utils.h>
+#include <core/utilities/error_utils.hpp>
 #include <cudf/functions.h>
 
 #include <cuda_runtime.h>
@@ -74,7 +74,7 @@ gdf_error gpu_window_function(gdf_column ** window_order_columns, int num_window
 	gdf_column hashed_data;
 
 	if(num_window_partition_columns > 0){
-		gpu_hash_columns(window_partition_columns, num_window_partition_columns,
+		gdf_hash_columns(window_partition_columns, num_window_partition_columns,
 				&hashed_data, &stream);
 		gdf_column-view(&data, (void *) data,
 				(gdf_valid_type *) ( ((char *) data ) + (sizeof(unsigned long long) * num_rows))

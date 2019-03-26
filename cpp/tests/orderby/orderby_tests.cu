@@ -13,30 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "order_by_type_vectors.h"
+
+#include <tests/utilities/cudf_test_fixtures.h>
+
+// See this header for all of the handling of valids' vectors
+#include <tests/utilities/valid_vectors.h>
+
+// See this header for all of the recursive handling of tuples of vectors
+#include <tests/utilities/tuple_vectors.h>
+
+#include <utilities/bit_util.cuh>
+#include <bitmask/legacy_bitmask.hpp>
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <type_traits>
 #include <memory>
 #include <numeric>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <rmm/rmm.h>
-#include <cudf/functions.h>
-#include <utilities/bit_util.cuh>
-
-#include "tests/utilities/cudf_test_fixtures.h"
-
-// See this header for all of the recursive handling of tuples of vectors
-#include "tests/utilities/tuple_vectors.h"
-
-// See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
-
-#include "order_by_type_vectors.h"
 
 // A new instance of this class will be created for each *TEST(OrderbyTest, ...)
 // Put all repeated setup and validation stuff here
@@ -89,14 +90,14 @@ struct OrderByTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+  * @brief Creates a unique_ptr that wraps a gdf_column structure 
   *           initialized with a host vector
   *
-  * @Param host_vector vector containing data to be transfered to device side column
-  * @Param host_valid  vector containing valid masks associated with the supplied vector
-  * @Param n_count     null_count to be set for the generated column
+  * @param host_vector vector containing data to be transfered to device side column
+  * @param host_valid  vector containing valid masks associated with the supplied vector
+  * @param n_count     null_count to be set for the generated column
   *
-  * @Returns A unique_ptr wrapping the new gdf_column
+  * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
@@ -130,9 +131,8 @@ struct OrderByTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, gdf_num_bitmask_elements(host_vector.size()), cudaMemcpyHostToDevice), cudaSuccess);
       the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
@@ -185,16 +185,16 @@ struct OrderByTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Initializes a set of columns with random values for the order by
+   * @brief  Initializes a set of columns with random values for the order by
    *            operation.
    *
-   * @Param orderby_column_length The length of the orderby set of columns
-   * @Param orderby_column_range The upper bound of random values for the orderby
+   * @param orderby_column_length The length of the orderby set of columns
+   * @param orderby_column_range The upper bound of random values for the orderby
    *                          columns. Values are [0, orderby_column_range)
-   * @Param n_count The null count in the columns
-   * @Param random_order_type_values Randomly initialize the sort type for each
+   * @param n_count The null count in the columns
+   * @param random_order_type_values Randomly initialize the sort type for each
    *                                 column.
-   * @Param print Optionally print the set of columns for debug
+   * @param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
                      const gdf_size_type n_count = 0, bool random_order_type_values = true, bool print = false)
@@ -282,11 +282,11 @@ struct OrderByTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes a reference solution
+   * @brief  Computes a reference solution
    *
-   * @Param print Option to print the solution for debug
+   * @param print Option to print the solution for debug
    *
-   * @Returns A vector of 'size_t' sorted indices
+   * @returns A vector of 'size_t' sorted indices
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<size_t> compute_reference_solution(bool print = false)
@@ -311,10 +311,10 @@ struct OrderByTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of sorting the set of columns with the libgdf functions
+   * @brief  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @Param use_default_sort_order Whether or not to sort using the default ascending order 
-   * @Param print Option to print the result computed by the libgdf function
+   * @param use_default_sort_order Whether or not to sort using the default ascending order 
+   * @param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<size_t> compute_gdf_result(bool use_default_sort_order = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)

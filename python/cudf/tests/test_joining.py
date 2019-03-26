@@ -272,26 +272,43 @@ def test_dataframe_merge_on(on):
 
     # Test (from cuDF; doesn't check for ordering)
     join_result = df_left.merge(df_right, on=on, how='left')
+    join_result_cudf = cudf.merge(df_left, df_right, on=on, how='left')
 
     join_result['right_val'] = (join_result['right_val']
                                 .astype(np.float64)
                                 .fillna(np.nan))
+
+    join_result_cudf['right_val'] = (join_result_cudf['right_val']
+                                     .astype(np.float64)
+                                     .fillna(np.nan))
+
     for col in list(pddf_joined.columns):
         if(col.count('_y') > 0):
             join_result[col] = (join_result[col]
                                 .astype(np.float64)
                                 .fillna(np.nan))
+            join_result_cudf[col] = (join_result_cudf[col]
+                                     .astype(np.float64)
+                                     .fillna(np.nan))
 
     # Test dataframe equality (ignore order of rows and columns)
-    pd.util.testing.assert_frame_equal(
-        join_result
-        .to_pandas()
-        .sort_values(list(pddf_joined.columns))
-        .reset_index(drop=True),
-        pddf_joined
-        .sort_values(list(pddf_joined.columns))
-        .reset_index(drop=True),
-        check_like=True)
+    cdf_result = join_result.to_pandas() \
+                            .sort_values(list(pddf_joined.columns)) \
+                            .reset_index(drop=True)
+
+    pdf_result = pddf_joined.sort_values(list(pddf_joined.columns)) \
+                            .reset_index(drop=True)
+
+    pd.util.testing.assert_frame_equal(cdf_result, pdf_result,
+                                       check_like=True)
+
+    merge_func_result_cdf = join_result_cudf.to_pandas() \
+                                            .sort_values(
+                                                list(pddf_joined.columns)) \
+                                            .reset_index(drop=True)
+
+    pd.util.testing.assert_frame_equal(merge_func_result_cdf, cdf_result,
+                                       check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():
@@ -334,14 +351,6 @@ def test_dataframe_merge_no_common_column():
     with pytest.raises(ValueError) as raises:
         df_left.merge(df_right, how='left')
     raises.match('No common columns to perform merge on')
-
-
-def test_dataframe_merge_strings_not_supported():
-    pleft = pd.DataFrame({'x': [0, 1, 2, 3],
-                          'name': ['Alice', 'Bob', 'Charlie', 'Dan']})
-    with pytest.raises(NotImplementedError) as raises:
-        gleft = DataFrame.from_pandas(pleft)  # noqa:F841
-    raises.match('Strings are not yet supported')
 
 
 def test_dataframe_empty_merge():
@@ -461,3 +470,97 @@ def test_empty_joins(how, left_empty, right_empty):
     expected = left.merge(right, how=how)
     result = gleft.merge(gright, how=how)
     assert len(expected) == len(result)
+
+
+@pytest.mark.xfail(reason="left_on/right_on produces undefined results with 0"
+                          "index and is disabled")
+def test_merge_left_index_zero():
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[0, 1, 2, 3, 4, 6])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, left_on="x", right_on='y')
+    gd_merge = gleft.merge(gright, left_on="x", right_on='y')
+
+    assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+    {'left_index': True, 'right_index': True},
+])
+def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[0, 1, 2, 3, 4, 6])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, **kwargs)
+    if kwargs.get('left_on') and kwargs.get('right_on'):
+        with pytest.raises(NotImplementedError) as raises:
+            gd_merge = gleft.merge(gright, **kwargs)
+        raises.match("left_on='x', right_on='y' not supported")
+    else:
+        gd_merge = gleft.merge(gright, **kwargs)
+        assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+    {'left_index': True, 'right_index': True},
+])
+def test_merge_left_right_index_left_right_on_kwargs(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[1, 2, 3, 4, 5, 7])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, **kwargs)
+    if kwargs.get('left_on') and kwargs.get('right_on'):
+        with pytest.raises(NotImplementedError) as raises:
+            gd_merge = gleft.merge(gright, **kwargs)
+        raises.match("left_on='x', right_on='y' not supported")
+    else:
+        gd_merge = gleft.merge(gright, **kwargs)
+        assert_eq(pd_merge, gd_merge)
+
+
+def test_indicator():
+    gdf = cudf.DataFrame({'x': [1, 2, 1]})
+    gdf.merge(gdf, indicator=False)
+
+    with pytest.raises(NotImplementedError) as info:
+        gdf.merge(gdf, indicator=True)
+
+    assert "indicator=False" in str(info.value)
+
+
+def test_merge_suffixes():
+    pdf = cudf.DataFrame({'x': [1, 2, 1]})
+    gdf = cudf.DataFrame({'x': [1, 2, 1]})
+    assert_eq(gdf.merge(gdf, suffixes=('left', 'right')),
+              pdf.merge(pdf, suffixes=('left', 'right')))
+
+    with pytest.raises(ValueError) as info:
+        gdf.merge(gdf, lsuffix='left', rsuffix='right')
+
+    assert "suffixes=('left', 'right')" in str(info.value)
+
+
+def test_merge_left_on_right_on():
+    left = pd.DataFrame({'xx': [1, 2, 3, 4, 5, 6]})
+    right = pd.DataFrame({'xx': [10, 20, 30, 6, 5, 4]})
+
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
+
+    assert_eq(left.merge(right, on='xx'),
+              gleft.merge(gright, on='xx'))
+
+    assert_eq(left.merge(right, left_on='xx', right_on='xx'),
+              gleft.merge(gright, left_on='xx', right_on='xx'))

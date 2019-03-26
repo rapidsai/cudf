@@ -34,12 +34,12 @@ enum class JoinType {
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Builds a hash table from a gdf_table that maps the hash values of 
+* @brief  Builds a hash table from a gdf_table that maps the hash values of 
   each row to its respective row index.
 * 
-* @Param[in,out] multi_map The hash table to be built to insert rows into
-* @Param[in] build_table The table to build the hash table on
-* @Param[in] build_table_num_rows The number of rows in the build table
+* @param[in,out] multi_map The hash table to be built to insert rows into
+* @param[in] build_table The table to build the hash table on
+* @param[in] build_table_num_rows The number of rows in the build table
 * @tparam multimap_type The type of the hash table
 * 
 */
@@ -80,15 +80,15 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Adds a pair of indices to the shared memory cache
+* @brief  Adds a pair of indices to the shared memory cache
 * 
-* @Param[in] first The first index in the pair
-* @Param[in] second The second index in the pair
-* @Param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
+* @param[in] first The first index in the pair
+* @param[in] second The second index in the pair
+* @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
 memory cache the pair will be written
-* @Param[in] warp_id The ID of the warp of the calling the thread
-* @Param[out] joined_shared_l Pointer to the shared memory cache for left indices
-* @Param[out] joined_shared_r Pointer to the shared memory cache for right indices
+* @param[in] warp_id The ID of the warp of the calling the thread
+* @param[out] joined_shared_l Pointer to the shared memory cache for left indices
+* @param[out] joined_shared_r Pointer to the shared memory cache for right indices
 * 
 */
 /* ----------------------------------------------------------------------------*/
@@ -110,14 +110,14 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Computes the output size of joining the probe table to the build table
+* @brief  Computes the output size of joining the probe table to the build table
   by probing the hash map with the probe table and counting the number of matches.
 * 
-* @Param[in] multi_map The hash table built on the build table
-* @Param[in] build_table The build table
-* @Param[in] probe_table The probe table
-* @Param[in] probe_table_num_rows The number of rows in the probe table
-* @Param[out] output_size The resulting output size
+* @param[in] multi_map The hash table built on the build table
+* @param[in] build_table The build table
+* @param[in] probe_table The probe table
+* @param[in] probe_table_num_rows The number of rows in the probe table
+* @param[out] output_size The resulting output size
   @tparam join_type The type of join to be performed
   @tparam multimap_type The datatype of the hash table
   @tparam block_size The number of threads in a thread block for the kernel
@@ -237,18 +237,18 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Probes the hash map with the probe table to find all matching rows 
+ * @brief  Probes the hash map with the probe table to find all matching rows 
  between the probe and hash table and generate the output for the desired Join operation.
  * 
- * @Param[in] multi_map The hash table built from the build table
- * @Param[in] build_table The build table
- * @Param[in] probe_table The probe table
- * @Param[in] probe_table_num_rows The length of the columns in the probe table
- * @Param[out] join_output_l The left result of the join operation
- * @Param[out] join_output_r The right result of the join operation
- * @Param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
- * @Param[in] max_size The maximum size of the output
- * @Param[in] offset An optional offset
+ * @param[in] multi_map The hash table built from the build table
+ * @param[in] build_table The build table
+ * @param[in] probe_table The probe table
+ * @param[in] probe_table_num_rows The length of the columns in the probe table
+ * @param[out] join_output_l The left result of the join operation
+ * @param[out] join_output_r The right result of the join operation
+ * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
+ * @param[in] max_size The maximum size of the output
+ * @param[in] offset An optional offset
  * @tparam join_type The type of join to be performed
  * @tparam multimap_type The type of the hash table
  * @tparam output_index_type The datatype used for the indices in the output arrays

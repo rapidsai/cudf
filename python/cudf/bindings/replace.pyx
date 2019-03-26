@@ -7,14 +7,12 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
-cimport numpy as np
 
 from librmm_cffi import librmm as rmm
 
@@ -31,3 +29,12 @@ cpdef replace(col, old_values, new_values):
     cdef gdf_column* c_new_values = column_view_from_column(new_values)
 
     gdf_find_and_replace_all(c_col, c_old_values, c_new_values)
+
+cpdef replace_nulls(col, fill_values):
+    """
+        Call gdf_replace_nulls
+    """
+    cdef gdf_column* c_col = column_view_from_column(col)
+    cdef gdf_column* fill_values_col = column_view_from_column(fill_values)
+
+    gdf_replace_nulls(c_col, fill_values_col)

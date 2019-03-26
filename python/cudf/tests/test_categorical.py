@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import Series, DataFrame
+from cudf.tests.utils import assert_eq
 
 
 def test_categorical_basic():
@@ -52,6 +53,7 @@ def test_categorical_integer():
 2
 3 c
 4 a
+dtype: category
 """
     assert string.split() == expect_str.split()
 
@@ -66,12 +68,12 @@ def test_categorical_compare_unordered():
     out = sr == sr
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out)
+    assert np.all(out.to_array())
     assert np.all(pdsr == pdsr)
 
     # test inequal
     out = sr != sr
-    assert not np.any(out)
+    assert not np.any(out.to_array())
     assert not np.any(pdsr != pdsr)
 
     assert not pdsr.cat.ordered
@@ -103,12 +105,12 @@ def test_categorical_compare_ordered():
     out = sr1 == sr1
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out)
+    assert np.all(out.to_array())
     assert np.all(pdsr1 == pdsr1)
 
     # test inequal
     out = sr1 != sr1
-    assert not np.any(out)
+    assert not np.any(out.to_array())
     assert not np.any(pdsr1 != pdsr1)
 
     assert pdsr1.cat.ordered
@@ -316,7 +318,7 @@ def test_categorical_unique_count(nelem):
     # gdf
     gdf = DataFrame()
     gdf['a'] = Series.from_categorical(pd_cat)
-    gdf_unique_count = gdf['a'].unique_count()
+    gdf_unique_count = gdf['a'].nunique()
 
     # pandas
     pdf = pd.DataFrame()
@@ -341,3 +343,19 @@ def test_categorical_empty():
     np.testing.assert_array_equal(pdsr.cat.codes.values,
                                   sr.cat.codes.to_array())
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
+
+
+def test_categorical_set_categories():
+    cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
+    psr = pd.Series(cat)
+    sr = Series.from_categorical(cat)
+
+    # adding category
+    expect = psr.cat.set_categories(['a', 'b', 'c', 'd'])
+    got = sr.cat.set_categories(['a', 'b', 'c', 'd'])
+    assert_eq(expect, got)
+
+    # removing category
+    expect = psr.cat.set_categories(['a', 'b'])
+    got = sr.cat.set_categories(['a', 'b'])
+    assert_eq(expect, got)

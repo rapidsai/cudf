@@ -64,11 +64,15 @@
 
 #include "cudf.h"
 
-__host__ __device__ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
-__host__ __device__ bool extractTime(const char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
+__device__ bool extractDate(const char *data, long sIdx, long eIdx,
+                            bool dayfirst, int *year, int *month, int *day);
+__device__ void extractTime(const char *data, long start, long end, int *hour,
+                            int *minute, int *second, int *millisecond);
 
-__host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
-__host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
+__device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
+__device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day,
+                                               int hour, int minute,
+                                               int second);
 
 /**---------------------------------------------------------------------------*
  * @brief Simplified parsing function for use by date and time parsing
@@ -83,14 +87,15 @@ __host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__host__ __device__ T convertStrToInteger(const char *data, long start,
-                                          long end) {
+__device__ T convertStrToInteger(const char *data, long start, long end) {
   T value = 0;
 
   long index = start;
   while (index <= end) {
-    value *= 10;
-    value += data[index] - '0';
+    if (data[index] >= '0' && data[index] <= '9') {
+      value *= 10;
+      value += data[index] - '0';
+    }
     ++index;
   }
 
@@ -110,16 +115,15 @@ __host__ __device__ T convertStrToInteger(const char *data, long start,
  *
  * @return index into the string, or -1 if the character is not found
  */
-__host__ __device__
-long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c) {
+__device__ long findFirstOccurrence(const char *data, long start_idx,
+                                    long end_idx, char c) {
+  for (long i = start_idx; i <= end_idx; ++i) {
+    if (data[i] == c) {
+      return i;
+    }
+  }
 
-	for (long i = start_idx; i <= end_idx; ++i) {
-		if (data[i] == c) {
-			return i;
-		}
-	}
-
-	return -1;
+  return -1;
 }
 
 /**
@@ -135,7 +139,7 @@ long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c)
  *
  * @return returns the number of days since epoch
  */
-__host__ __device__
+__device__
 gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int day, month, year;
@@ -150,62 +154,59 @@ gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool 
 }
 
 /**
- * @brief Parse a Date string into a date64, milliseconds since epoch
- *
+ * @brief Parses a datetime character stream and computes the number of
+ * milliseconds since epoch. 
+ * 
  * This function takes a string and produces a date32 representation
  * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
  *
- * @param[in] data 		Pointer to the data block
- * @param[in] start_idx Starting index within the data block
- * @param[in] end_idx 	Ending index within the data block
- * @param[in] dayfirst 	Flag to indicate that day is the first field - DD/MM/YYYY
- *
- * @return milliseconds since epoch
+ * @param[in] data The character stream to parse
+ * @param[in] start The start index of the character stream
+ * @param[in] end The end index of the character stream
+ * @param[in] dayfirst Flag to indicate day/month or month/day order
+ * 
+ * @return Milliseconds since epoch
  */
-__host__ __device__
-gdf_date64 parseDateTimeFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
+__device__ gdf_date64 parseDateTimeFormat(const char *data, long start,
+                                          long end, bool dayfirst) {
+  int day, month, year;
+  int hour, minute, second, millisecond = 0;
+  gdf_date64 answer = -1;
 
-	int 		day, month, year;
-	int 		hour, minute, second;
-	gdf_date64 	answer = -1;
+  // Find end of the date portion
+  // TODO: Refactor all the date/time parsing to remove multiple passes over
+  // each character because of find() then convert(); that can also avoid the
+  // ugliness below.
+  auto sep_pos = findFirstOccurrence(data, start, end, 'T');
+  if (sep_pos == -1) {
+    // Attempt to locate the position between date and time, ignore premature
+    // space separators around the day/month/year portions
+    int count = 0;
+    for (long i = start; i <= end; ++i) {
+      if (count == 3 && data[i] == ' ') {
+        sep_pos = i;
+        break;
+      } else if ((data[i] == '/' || data[i] == '-') ||
+                 (count == 2 && data[i] != ' ')) {
+        count++;
+      }
+    }
+  }
 
-	// find the time separator between date and time
-	long t_pos = findFirstOccurrence(data, start_idx, end_idx, 'T');
+  // There is only date if there's no separator, otherwise it's malformed
+  if (sep_pos != -1) {
+    if (extractDate(data, start, sep_pos - 1, dayfirst, &year, &month, &day)) {
+      extractTime(data, sep_pos + 1, end, &hour, &minute, &second, &millisecond);
+      answer = secondsSinceEpoch(year, month, day, hour, minute, second) * 1000 + millisecond;
+    }
+  } else {
+    if (extractDate(data, start, end, dayfirst, &year, &month, &day)) {
+      answer = secondsSinceEpoch(year, month, day, 0, 0, 0) * 1000;
+    }
+  }
 
-	if ( t_pos == -1) {
-		t_pos = findFirstOccurrence(data, start_idx, end_idx, ' ');
-		if ( t_pos < 8 || t_pos > 10)
-			t_pos = -1;
-	}
-
-	// if the position was not found then we are in trouble, return -1 (error code)
-	if ( t_pos != -1 ) {
-
-		if ( extractDate(data, start_idx, (t_pos - 1), dayfirst, &year, &month, &day) )
-		{
-
-			if ( extractTime(data, (t_pos + 1), end_idx, &hour, &minute, &second) )
-				answer = secondsSinceEpoch(year, month, day, hour, minute, second);
-		}
-	} else {
-
-		if ( (end_idx - start_idx) < 11 ) {
-			// only have a date portion, no time
-			extractDate(data, start_idx, end_idx, dayfirst, &year, &month, &day);
-			answer = secondsSinceEpoch(year, month, day, 0, 0, 0);
-		} else {
-			answer = -1;
-		}
-	}
-
-	// convert to milliseconds
-	answer *= 1000;
-
-	return answer;
+  return answer;
 }
-
-
-
 
 /**
  * @brief Extract the Day, Month, and Year from a string
@@ -221,7 +222,7 @@ gdf_date64 parseDateTimeFormat(const char *data, long start_idx, long end_idx, b
  *
  * @return T/F - false indicates that an error occurred
  */
-__host__ __device__
+__device__
 bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
 
 	char sep = '/';
@@ -292,84 +293,81 @@ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *yea
 	return true;
 }
 
-
-
 /**
- * @brief Extract the Hour, Minute, Second from a string
+ * @brief Parse a character stream to extract the hour, minute, second and
+ * millisecond time field values.
+ * 
+ * Incoming format is expected to be HH:MM:SS.MS, with the latter second and
+ * millisecond fields optional. Each time field can be a single, double,
+ * or triple (in the case of milliseconds) digits. 12-hr and 24-hr time format
+ * is detected via the absence or presence of AM/PM characters at the end.
  *
- *  Formats are H:M to HH:MM, then with seconds H:M:S to HH:MM:SS
- *  Also handles 24 and 12-hours with AM/PM
- *
- * @param[in] data	Pointer to data block
- * @param[in] sIdx	String index within data block
- * @param[in] eIdx	Ending index within data block
- *
- * @param[out] hour
- * @param[out] minute
- * @param[out] second
- *
- * @return T/F - false indicates that an error occurred
+ * @param[in] data The character string time to parse
+ * @param[in] start The start index of the character stream
+ * @param[in] end The end index of the character stream
+ * @param[out] hour The hour value
+ * @param[out] minute The minute value
+ * @param[out] second The second value (0 if not present)
+ * @param[out] millisecond The millisecond (0 if not present)
  */
-__host__ __device__
-bool extractTime(const char *data, int sIdx, int eIdx, int *hour, int *minute, int *second) {
+__device__ void extractTime(const char *data, long start, long end, int *hour,
+                            int *minute, int *second, int *millisecond) {
+  constexpr char sep = ':';
 
-	char sep = ':';
+  // Adjust for AM/PM and any whitespace before
+  int hour_adjust = 0;
+  if (data[end] == 'M' || data[end] == 'm') {
+    if (data[end - 1] == 'P' || data[end - 1] == 'p') {
+      hour_adjust = 12;
+    }
+    end = end - 2;
+    while (data[end] == ' ') {
+      --end;
+    }
+  }
 
-	// is there AM/PM
-	int hour_adjust = 0;
+  // Find hour-minute separator
+  const auto hm_sep = findFirstOccurrence(data, start, end, sep);
+  *hour = convertStrToInteger<int>(data, start, hm_sep - 1) + hour_adjust;
 
-	if ( data[eIdx] == 'M' || data[eIdx] == 'm')
-	{
-		if ( data[eIdx - 1] == 'P' || data[eIdx -1] == 'p')
-			hour_adjust = 12;
+  // Find minute-second separator (if present)
+  const auto ms_sep = findFirstOccurrence(data, hm_sep + 1, end, sep);
+  if (ms_sep == -1) {
+    *minute = convertStrToInteger<int>(data, hm_sep + 1, end);
+    *second = 0;
+    *millisecond = 0;
+  } else {
+    *minute = convertStrToInteger<int>(data, hm_sep + 1, ms_sep - 1);
 
-		eIdx = eIdx - 2;
-
-		while (data[eIdx] == ' ')
-			--eIdx;
-	}
-
-
-	// Hour to Minute Separator
-	int hm_sep = findFirstOccurrence(data, sIdx, eIdx, sep);
-
-	*hour = convertStrToInteger<int>(data, sIdx, (hm_sep -1) );
-
-	*hour += hour_adjust;
-
-	// now minute
-	long ms_sep = findFirstOccurrence(data, (hm_sep + 1), eIdx, sep);
-
-	if (ms_sep == -1 ) {
-		//--- Data is just Hour and Minutes, no seconds
-		*minute = convertStrToInteger<int>(data, (hm_sep + 1), eIdx );
-		*second = 0;
-
-	} else {
-		*minute = convertStrToInteger<int>(data, (hm_sep + 1), (ms_sep -1) );
-		*second = convertStrToInteger<int>(data, (ms_sep + 1), eIdx);
-	}
-
-	return true;
+    // Find second-millisecond separator (if present)
+    const auto sms_sep = findFirstOccurrence(data, ms_sep + 1, end, '.');
+    if (sms_sep == -1) {
+      *second = convertStrToInteger<int>(data, ms_sep + 1, end);
+      *millisecond = 0;
+    } else {
+      *second = convertStrToInteger<int>(data, ms_sep + 1, sms_sep - 1);
+      *millisecond = convertStrToInteger<int>(data, sms_sep + 1, end);
+    }
+  }
 }
 
 // User-defined literals to clarify numbers and units for time calculation
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _days(unsigned long long int days) {
-	return days;
+  return days;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _erasInDays(unsigned long long int eras) {
-	// multiply by number of days within an era (400 year span)
-	return eras * 146097_days;
+  // multiply by number of days within an era (400 year span)
+  return eras * 146097_days;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _years(unsigned long long int years) {
-	return years;
+  return years;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _erasInYears(unsigned long long int eras) {
-	return (eras * 1_erasInDays) / 365_days;
+  return (eras * 1_erasInDays) / 365_days;
 }
 
 /**
@@ -385,25 +383,23 @@ constexpr uint32_t operator "" _erasInYears(unsigned long long int eras) {
  *
  * @return days since March 1, 0000
  */
-__host__ __device__
-constexpr int32_t daysSinceBaseline(int year, int month, int day) {
+__device__ constexpr int32_t daysSinceBaseline(int year, int month, int day) {
+  // More details of this formula are located in cuDF datetime_ops
+  // In brief, the calculation is split over several components:
+  //     era: a 400 year range, where the date cycle repeats exactly
+  //     yoe: year within the 400 range of an era
+  //     doy: day within the 364 range of a year
+  //     doe: exact day within the whole era
+  // The months are shifted so that March is the starting month and February
+  // (possible leap day in it) is the last month for the linear calculation
+  year -= (month <= 2) ? 1 : 0;
 
-    // More details of this formula are located in cuDF datetime_ops
-    // In brief, the calculation is split over several components:
-    //     era: a 400 year range, where the date cycle repeats exactly
-    //     yoe: year within the 400 range of an era
-    //     doy: day within the 364 range of a year
-    //     doe: exact day within the whole era
-    // The months are shifted so that March is the starting month and February
-    // (possible leap day in it) is the last month for the linear calculation
-    year -= (month <= 2) ? 1 : 0;
+  const int32_t era = (year >= 0 ? year : year - 399_years) / 1_erasInYears;
+  const int32_t yoe = year - era * 1_erasInYears;
+  const int32_t doy = (153_days * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  const int32_t doe = (yoe * 365_days) + (yoe / 4_years) - (yoe / 100_years) + doy;
 
-    const int32_t era = (year >= 0 ? year : year - 399_years) / 1_erasInYears;
-    const int32_t yoe = year - era * 1_erasInYears;
-    const int32_t doy = (153_days * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
-    const int32_t doe = (yoe * 365_days) + (yoe / 4_years) - (yoe / 100_years) + doy;
-
-    return (era * 1_erasInDays) + doe;
+  return (era * 1_erasInDays) + doe;
 }
 
 
@@ -419,14 +415,12 @@ constexpr int32_t daysSinceBaseline(int year, int month, int day) {
  *
  * @return days since epoch
  */
-__host__ __device__
-constexpr int32_t daysSinceEpoch(int year, int month, int day) {
+__device__ constexpr int32_t daysSinceEpoch(int year, int month, int day) {
+  // Shift the start date to epoch to match unix time
+  static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
+                "Baseline to epoch returns incorrect number of days");
 
-    // Shift the start date to epoch to match unix time
-    static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
-                  "Baseline to epoch returns incorrect number of days");
-
-    return daysSinceBaseline(year, month, day) - daysSinceBaseline(1970, 1, 1);
+  return daysSinceBaseline(year, month, day) - daysSinceBaseline(1970, 1, 1);
 }
 
 
@@ -445,12 +439,12 @@ constexpr int32_t daysSinceEpoch(int year, int month, int day) {
  *
  * @return seconds since epoch
  */
-__host__ __device__
-constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second) {
+__device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day,
+                                               int hour, int minute,
+                                               int second) {
+  // Leverage the function to find the days since epoch
+  const auto days = daysSinceEpoch(year, month, day);
 
-	// Leverage the function to find the days since epoch
-	const auto days = daysSinceEpoch(year, month, day);
-
-	// Return sum total seconds from each time portion
-	return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
+  // Return sum total seconds from each time portion
+  return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
 }

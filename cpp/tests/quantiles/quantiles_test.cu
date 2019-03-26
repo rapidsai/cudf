@@ -17,8 +17,19 @@
 //Quantile (percentile) testing
 
 
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
+#include <quantiles/quantiles.h>
+#include <cudf.h>
+
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+
+#include <gtest/gtest.h>
 
 #include <iostream>
 #include <vector>
@@ -27,16 +38,6 @@
 #include <cassert>
 #include <cmath>
 
-#include "gtest/gtest.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <utilities/cudf_utils.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <utilities/error_utils.h>
-#include <quantiles/quantiles.h>
-
-#include "tests/utilities/cudf_test_fixtures.h"
 
 
 
@@ -65,7 +66,7 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
     {
       VType res = 0;
       auto q = qvals[j];
-      gdf_error ret = gdf_quantile_aprrox(col_in, q, &res, &ctxt);
+      gdf_error ret = gdf_quantile_approx(col_in, q, &res, &ctxt);
       v_out_exact[j] = res;
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       
@@ -87,7 +88,7 @@ TEST_F(gdf_quantile, DoubleVector)
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();
@@ -135,7 +136,7 @@ TEST_F(gdf_quantile, IntegerVector)
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();
@@ -183,7 +184,7 @@ TEST_F(gdf_quantile, ReportValidMaskError)
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();

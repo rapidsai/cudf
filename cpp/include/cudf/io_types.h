@@ -22,7 +22,7 @@
  */
 #pragma once
 
- /*
+  /*
    * Enumerator for the supported forms of the input CSV file
    */
 typedef enum 
@@ -30,6 +30,17 @@ typedef enum
   FILE_PATH,								///< Indicates that the input is specified with a file path
   HOST_BUFFER								///< Indicates that the input is passed as a buffer in host memory
 } gdf_csv_input_form;
+
+  /*
+   * Enumerator describing the qoutation behavior for file readers/writers
+   */
+typedef enum 
+{
+  QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
+  QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
+  QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
+} gdf_csv_quote_style;
 
 /**---------------------------------------------------------------------------*
  * @brief  This struct contains all input parameters to the read_csv function.
@@ -77,16 +88,21 @@ typedef struct {
   gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
   gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
 
-  bool          skip_blank_lines;           // Whether or not to ignore blank lines
+  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
 
   const char    **true_values;              ///< List of values to recognize as boolean True
   int           num_true_values;            ///< Number of values in the true_values list
   const char    **false_values;             ///< List of values to recognize as boolean False
   int           num_false_values;           ///< Number of values in the true_values list
 
-  const char    **na_values;                // Array of strings that should be considered as NA
+  const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
+                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
+                                            'NaN', 'n/a', 'nan', 'null'. */
+  int           num_na_values;              ///< Number of values in the na_values list
+  bool          keep_default_na;            ///< Keep the default NA values
+  bool          na_filter;                  ///< Detect missing values (empty strings and the values in na_values). Passing false can improve performance.
 
-  char          *prefix;                    // If there is no header or names, append this to the column ID as the name
+  char          *prefix;                    ///< If there is no header or names, prepend this to the column ID as the name
   bool          mangle_dupe_cols;           ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names
 
   bool          parse_dates;                // Parse date field into date32 or date64.  If false then date fields are saved as a string. Specifying a date dtype overrides this
@@ -99,12 +115,12 @@ typedef struct {
   char          decimal;                    ///< The decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL
 
   char          quotechar;                  ///< Define the character used to denote start and end of a quoted item
-  bool          quoting;                    ///< Treat string fields as quoted item and remove the first and last quotechar
+  gdf_csv_quote_style quoting;              ///< Treat string fields as quoted item and remove the first and last quotechar
   bool          doublequote;                ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar
 
   char          escapechar;                 // Single character used as the escape character
 
-  char          comment;                    // Single character indicating that the remainder of line is a comment
+  char          comment;                    ///< The character used to denote start of a comment line. The rest of the line will not be parsed.
 
   char          *encoding;                  // the data encoding, NULL = UTF-8
 
@@ -120,8 +136,6 @@ typedef struct {
  *
  * squeeze          - data is always returned as a gdf_column array
  * engine           - this is the only engine
- * keep_default_na  - this has no meaning since the field is marked invalid and the value not seen
- * na_filter        - empty fields are automatically tagged as invalid
  * verbose
  * keep_date_col    - will not maintain raw data
  * date_parser      - there is only this parser
