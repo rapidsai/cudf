@@ -25,6 +25,26 @@ from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
+_REDUCTION_OP = {}
+_REDUCTION_OP['max'] = GDF_REDUCTION_MAX
+_REDUCTION_OP['min'] = GDF_REDUCTION_MIN
+_REDUCTION_OP['sum'] = GDF_REDUCTION_SUM
+_REDUCTION_OP['product'] = GDF_REDUCTION_PRODUCTION
+_REDUCTION_OP['sum_of_squares'] = GDF_REDUCTION_SUMOFSQUARES
+
+
+def get_scalar_value(scalar):
+    return {
+        GDF_FLOAT64: scalar.data.fp64,
+        GDF_FLOAT32: scalar.data.fp32,
+        GDF_INT64:   scalar.data.si64,
+        GDF_INT32:   scalar.data.si32,
+        GDF_INT16:   scalar.data.si16,
+        GDF_INT8:    scalar.data.si08,
+        GDF_DATE32:  scalar.data.dt32,
+        GDF_DATE64:  scalar.data.dt64,
+        GDF_TIMESTAMP: scalar.data.tmst,
+    }[scalar.dtype]
 
 
 def apply_reduce(reduction, col):
@@ -32,40 +52,22 @@ def apply_reduce(reduction, col):
       Call gdf reductions.
     """
 
-
-    outsz = gdf_reduction_get_intermediate_output_size()
-    out = rmm.device_array(outsz, dtype=col.dtype)
-    cdef uintptr_t out_ptr = get_ctype_ptr(out)
-
     check_gdf_compatibility(col)
     cdef gdf_column* c_col = column_view_from_column(col)
+    cdef gdf_scalr c_result
 
-    cdef gdf_error result
+    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction]
     with nogil:    
-        if reduction == 'max':
-            result = gdf_max(<gdf_column*>c_col, <void*>out_ptr, outsz)
-        elif reduction == 'min':
-            result = gdf_min(<gdf_column*>c_col, <void*>out_ptr, outsz)
-        elif reduction == 'sum':
-            result = gdf_sum(<gdf_column*>c_col, <void*>out_ptr, outsz)
-        elif reduction == 'sum_of_squares':
-            result = gdf_sum_of_squares(<gdf_column*>c_col,
-                                        <void*>out_ptr,
-                                        outsz)
-        elif reduction == 'product':
-            result = gdf_product(<gdf_column*>c_col, <void*>out_ptr, outsz)
-        else:
-            result = GDF_NOTIMPLEMENTED_ERROR
+        c_result = gdf_reduction(
+            <gdf_column*>c_col,
+            c_op,
+            c_col[0].dtype
+            )
+
 
     free(c_col)
+    result = get_scalar_value(c_result)
 
-    if result == GDF_DATASET_EMPTY:
-        if reduction == 'sum' or reduction == 'sum_of_squares':
-            return col.dtype.type(0)
-        if reduction == 'product' and pandas_version >= (0, 22):
-            return col.dtype.type(1)
-        return np.nan
+    return result
 
-    check_gdf_error(result)
 
-    return out[0]
