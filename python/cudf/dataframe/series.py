@@ -487,6 +487,54 @@ class Series(object):
 
     __div__ = __truediv__
 
+    def __and__(self, other):
+        """Performs vectorized bitwise and (&) on corresponding elements of two
+        series.
+
+        Difference from pandas:
+        Returned series has type np.result_type(lhs, rhs) instead of bool
+        """
+        if (np.issubdtype(self.dtype.type, np.integer) and
+            np.issubdtype(other.dtype.type, np.integer)):
+            return self._binaryop(other, 'and')
+        else:
+            raise TypeError(
+                "Operation & not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+    def __or__(self, other):
+        """Performs vectorized bitwise or (|) on corresponding elements of two
+        series.
+
+        Difference from pandas:
+        Returned series has type np.result_type(lhs, rhs) instead of bool
+        """
+        if (np.issubdtype(self.dtype.type, np.integer) and
+            np.issubdtype(other.dtype.type, np.integer)):
+            return self._binaryop(other, 'or')
+        else:
+            raise TypeError(
+                "Operation | not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+    def __xor__(self, other):
+        """Performs vectorized bitwise xor (^) on corresponding elements of two
+        series.
+
+        Difference from pandas:
+        Returned series has type np.result_type(lhs, rhs) instead of bool
+        """
+        if (np.issubdtype(self.dtype.type, np.integer) and
+            np.issubdtype(other.dtype.type, np.integer)):
+            return self._binaryop(other, 'xor')
+        else:
+            raise TypeError(
+                "Operation ^ not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
