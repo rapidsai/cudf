@@ -11,6 +11,7 @@
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1284 Update docs version
+- PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 
 ## Bug Fixes
 
