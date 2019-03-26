@@ -224,9 +224,22 @@ cdef extern from "cudf.h" nogil:
         GDF_GREATER_EQUAL
 
 
+    ctypedef union gdf_data:
+        char          si08
+        short         si16
+        int           si32
+        long          si64
+        float         fp32
+        double        fp64
+        gdf_date32    dt32
+        gdf_date64    dt64
+        gdf_timestamp tmst
+
+
     ctypedef struct gdf_scalar:
-        void *data
+        gdf_data  data
         gdf_dtype dtype
+        bool      is_valid
 
 
     cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
@@ -395,7 +408,7 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef void gdf_scan(gdf_column *inp, gdf_column *out, gdf_scan_op op, bool inclusive)
+    cdef void gdf_scan(gdf_column *inp, gdf_column *out, gdf_scan_op op, bool inclusive) except +
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
@@ -621,13 +634,7 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
-    cdef unsigned int gdf_reduction_get_intermediate_output_size()
-
-    cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    cdef gdf_scalar gdf_reduction(gdf_column *inp, gdf_reduction_op op, gdf_dtype output_dtype) except +
     
     cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
     cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
