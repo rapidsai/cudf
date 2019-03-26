@@ -30,6 +30,11 @@
 
 #include <cstdlib>
 
+#include "io/utilities/parsing_utils.cuh"
+
+using std::vector;
+using std::string;
+using std::cout;
 
 bool checkFile(std::string fname)
 {
@@ -45,7 +50,31 @@ std::vector<T> gdf_column_to_host(gdf_column* const col) {
 }
 
 
-TEST(gdf_json_test, stub)
+TEST(gdf_json_test, SquareBrackets)
 {
-	ASSERT_TRUE(true);
+	const string h_data("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
+		"\"index\":[\"row 1\",\"row 2\"] , "
+		"\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
+
+	char* d_data{};
+	cudaMalloc(&d_data, h_data.size()*sizeof(char));
+	cudaMemcpy(d_data, h_data.c_str(), h_data.size()*sizeof(char), cudaMemcpyDefault);
+
+	gdf_size_type count = 0;
+	auto error = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, count);
+	ASSERT_FALSE(error);
+
+	ll_uint_t* d_pos{};
+	vector<ll_uint_t> h_pos(count);
+	cudaMalloc(&d_pos, count*sizeof(ll_uint_t));
+
+	error = findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
+	ASSERT_FALSE(error);
+	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(ll_uint_t), cudaMemcpyDefault);
+
+	cudaFree(d_data);
+	cudaFree(d_pos);
+
+	for (auto pos: h_pos)
+		ASSERT_TRUE(h_data[pos] == '[' || h_data[pos] == ']');
 }
