@@ -66,7 +66,9 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set([val for o in objs for val in o.cat().categories]))
+            new_cats = tuple(set(
+                [val for o in objs for val in o.cat().categories]
+            ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
