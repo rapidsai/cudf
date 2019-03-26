@@ -8,6 +8,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/error_utils.hpp"
 
+constexpr size_t max_chunk_bytes = 256*1024*1024; // 256MB
 constexpr int bytes_per_find_thread = 64;
 
 /**---------------------------------------------------------------------------*
