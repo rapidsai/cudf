@@ -10,6 +10,7 @@
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
+- PR #1287 add exclude argument to cdf.select_dtype function
 
 ## Bug Fixes
 
