@@ -244,7 +244,7 @@ R"***(
     struct BitwiseAnd {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x & y);
+            return (static_cast<TypeOut>(x) & static_cast<TypeOut>(y));
         }
     };
 
@@ -253,7 +253,7 @@ R"***(
     struct BitwiseOr {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x | y);
+            return (static_cast<TypeOut>(x) | static_cast<TypeOut>(y));
         }
     };
 
@@ -262,7 +262,7 @@ R"***(
     struct BitwiseXor {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x ^ y);
+            return (static_cast<TypeOut>(x) ^ static_cast<TypeOut>(y));
         }
     };
 
