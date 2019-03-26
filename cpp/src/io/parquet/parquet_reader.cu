@@ -137,7 +137,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
  **/
 template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
-  return static_cast<T>(parquet::CPReader::NumRequiredBits(max_level));
+  return static_cast<T>(parquet::CompactProtocolReader::NumRequiredBits(max_level));
 }
 
 /**
@@ -280,8 +280,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
         ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
         "Incorrect footer length");
 
-    parquet::CPReader cp(data + len - ender->footer_len - ender_len,
-                         ender->footer_len);
+    parquet::CompactProtocolReader cp(
+        data + len - ender->footer_len - ender_len, ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 

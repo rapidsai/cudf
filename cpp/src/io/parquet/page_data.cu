@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include "parquet_gpu.h"
 
@@ -145,9 +145,14 @@ __device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed
     return h1;
 }
 
-
-// Read a 32-bit varint integer
-// NOTE: updates cur pointer passed in as reference
+/**
+ * @brief Read a 32-bit varint integer
+ *
+ * @param[in,out] cur The current data position, updated after the read
+ * @param[in] end The end data position
+ *
+ * @return The 32-bit value read
+ **/
 inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end)
 {
     uint32_t v = *cur++;
@@ -170,8 +175,17 @@ inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end)
     return v;
 }
 
-
-// Parse the beginning of the level section (definition or repetition), initializes the initial RLE run & value, and return the section length
+/**
+ * @brief Parse the beginning of the level section (definition or repetition),
+ * initializes the initial RLE run & value, and returns the section length
+ *
+ * @param[in,out] s The page state
+ * @param[in] cur The current data position
+ * @param[in] end The end of the data
+ * @param[in] encoding The encoding type
+ * @param[in] level_bits The bits required
+ * @param[in] idx The index into the output section
+ **/
 __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const uint8_t *end, int encoding, int level_bits, int idx)
 {
     int32_t len;
@@ -229,8 +243,12 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
     return (uint32_t)len;
 }
 
-
-// WARP0: Decode definition and repetition levels, outputs row indices
+/**
+ * @brief WARP0: Decode definition and repetition levels and outputs row indices
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] t Thread ID
+ **/
 __device__ void gpuDecodeLevels(page_state_s *s, int t)
 {
     const uint8_t *cur_def = s->lvl_start[0];
@@ -400,8 +418,15 @@ __device__ void gpuDecodeLevels(page_state_s *s, int t)
     }
 }
 
-
-// Perform RLE decoding of dictionary indices
+/**
+ * @brief Performs RLE decoding of dictionary indexes
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] batch_len Batch length
+ * @param[in] t Thread ID
+ *
+ * @return The batch length
+ **/
 __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int batch_len, int t)
 {
     const uint8_t *end = s->data_end;
@@ -499,8 +524,15 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int batch_le
     return batch_len;
 }
 
-
-// Same as the more generic gpuDecodeDictionaryIndices, but hardcoded for dict_size=1
+/**
+ * @brief Performs RLE decoding of dictionary indexes, for when dict_size=1
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] batch_len Batch length
+ * @param[in] t Thread ID
+ *
+ * @return The batch length
+ **/
 __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int batch_len, int t)
 {
     const uint8_t *end = s->data_end;
@@ -560,8 +592,14 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int batch_len, int
     return batch_len;
 }
 
-
-// Parse the length of strings in the batch and initializes the corresponding string descriptor
+/**
+ * @brief Parses the length of strings in the batch and initializes the
+ * corresponding string descriptor
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] batch_len Number of strings to process
+ * @param[in] t Thread ID
+ **/
 __device__ void gpuInitStringDescriptors(volatile page_state_s *s, int batch_len, int t)
 {
     // This step is purely serial
@@ -600,8 +638,12 @@ enum CodingMode {
     DICTIONARY_STR2HASH,    // String dictionary to 32-bit hash
 };
 
-
-// WARP1: Decode values and store the output at the row position given by WARP0
+/**
+ * @brief WARP1: Decodes and stores the output at the row position given by WARP0
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] t Thread ID
+ **/
 template<CodingMode mode>
 __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
 {
@@ -732,8 +774,21 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
     }
 }
 
-
-
+/**
+ * @brief Kernel for reading the column data stored in the pages
+ *
+ * This function will write the page data and the page data's validity to the
+ * output specified in the page's column chunk. If necessary, additional
+ * conversion will be perfomed to translate from the Parquet datatype to
+ * desired output datatype (ex. 32-bit to 16-bit, string to hash).
+ *
+ * @param[in] pages List of pages
+ * @param[in] num_pages Number of pages
+ * @param[in,out] chunks List of column chunks
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] num_rows Total number of rows to read
+ **/
 // blockDim {64,2,1}
 extern "C" __global__ void __launch_bounds__(128)
 gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, int32_t num_chunks, size_t min_row, size_t num_rows)
@@ -951,15 +1006,15 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
     }
 }
 
-
-cudaError_t __host__ DecodePageData(PageInfo *pages, int32_t num_pages, ColumnChunkDesc *chunks, int32_t num_chunks, size_t num_rows, size_t min_row, cudaStream_t stream)
-{
-    dim3 dim_block(64, 2);
-    dim3 dim_grid((num_pages + 1) >> 1, 1); // 2 warps per page, 4 warps per block
-    gpuDecodePageData << < dim_grid, dim_block, 0, stream >> >(pages, chunks, num_pages, num_chunks, min_row, num_rows);
-    return cudaSuccess;
+cudaError_t __host__ DecodePageData(PageInfo *pages, int32_t num_pages,
+                                    ColumnChunkDesc *chunks, int32_t num_chunks,
+                                    size_t num_rows, size_t min_row,
+                                    cudaStream_t stream) {
+  dim3 dim_block(64, 2);
+  dim3 dim_grid((num_pages + 1) >> 1, 1);  // 2 warps per page, 4 warps per block
+  gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(
+      pages, chunks, num_pages, num_chunks, min_row, num_rows);
+  return cudaSuccess;
 }
 
-
-
-};}; // parquet::gpu namespace
+}; }; // parquet::gpu namespace

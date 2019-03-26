@@ -1,25 +1,24 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include "parquet.h"
 
 namespace parquet {
 
-
-const uint8_t CPReader::g_list2struct[16] =
+const uint8_t CompactProtocolReader::g_list2struct[16] =
 {
     0, 1, 2, ST_FLD_BYTE,
     ST_FLD_DOUBLE, 5, ST_FLD_I16, 7,
@@ -27,7 +26,15 @@ const uint8_t CPReader::g_list2struct[16] =
     ST_FLD_STRUCT, ST_FLD_MAP, ST_FLD_SET, ST_FLD_LIST
 };
 
-bool CPReader::skip_struct_field(int t, int depth)
+/**
+ * @brief Skips the number of bytes according to the specified struct type
+ *
+ * @param[in] t Struct type enumeration
+ * @param[in] depth Level of struct nesting
+ *
+ * @return True if the struct type is recognized, false otherwise
+ **/
+bool CompactProtocolReader::skip_struct_field(int t, int depth)
 {
     switch (t)
     {
@@ -80,7 +87,7 @@ bool CPReader::skip_struct_field(int t, int depth)
 }
 
 #define PARQUET_BEGIN_STRUCT(st)                \
-    bool CPReader::read(st *s)                  \
+    bool CompactProtocolReader::read(st *s)     \
     {   /*printf(#st "\n");*/                   \
         int fld = 0;                            \
         for (;;)                                \
@@ -207,13 +214,20 @@ PARQUET_BEGIN_STRUCT(KeyValue)
     PARQUET_FLD_STRING(2, value)
 PARQUET_END_STRUCT()
 
-
-// Initialize the max_repetition_level and max_definition_level by walking the schema
-bool CPReader::InitSchema(FileMetaData *md)
+/**
+ * @brief Constructs the schema from the file-level metadata
+ *
+ * @param[in] md File metadata that was previously parsed
+ *
+ * @return True if schema constructed completely, false otherwise
+ **/
+bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
     int final_pos = WalkSchema(md->schema);
-    if (final_pos != md->schema.size())
+    if (final_pos != md->schema.size()) {
         return false;
+    }
+
     // Map columns to schema
     for (size_t i = 0; i < md->row_groups.size(); i++)
     {
@@ -253,8 +267,20 @@ bool CPReader::InitSchema(FileMetaData *md)
     return true;
 }
 
-// Initialize max definition & repetition levels
-int CPReader::WalkSchema(std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
+/**
+ * @brief Populates each node in the schema tree
+ *
+ * @param[out] schema Current node
+ * @param[in] idx Current node index
+ * @param[in] parent_idx Parent node index
+ * @param[in] max_def_level Max definition level
+ * @param[in] max_rep_level Max repetition level
+ *
+ * @return The node index that was populated
+ **/
+int CompactProtocolReader::WalkSchema(std::vector<SchemaElement> &schema,
+                                      int idx, int parent_idx,
+                                      int max_def_level, int max_rep_level)
 {
     if (idx >= 0 && (size_t)idx < schema.size())
     {
@@ -291,7 +317,5 @@ int CPReader::WalkSchema(std::vector<SchemaElement> &schema, int idx, int parent
         return -1;
     }
 }
-
-
 
 }; // namespace parquet

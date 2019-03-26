@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include "parquet_gpu.h"
 
@@ -221,11 +221,12 @@ PARQUET_BEGIN_STRUCT(gpuParsePageHeader)
     PARQUET_FLD_STRUCT(8, gpuParseDataPageHeaderV2)
 PARQUET_END_STRUCT()
 
-
-//
-// Output page header information
-//
-
+/**
+ * @brief Kernel for outputting page headers from the specified column chunks
+ *
+ * @param[in] chunks List of column chunks
+ * @param[in] num_chunks Number of column chunks
+ **/
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
@@ -328,12 +329,17 @@ gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
     }
 }
 
-
-//
-// Build an index to point to each dictionary entry (string format is 4-byte little-endian string length followed by character data)
-// the index is a 32-bit integer which contains the offset of each string relative to the beginning of the dictionary page data
-//
-
+/**
+ * @brief Kernel for building dictionary index for the specified column chunks
+ *
+ * This function builds an index to point to each dictionary entry
+ * (string format is 4-byte little-endian string length followed by character
+ * data). The index is a 32-bit integer which contains the offset of each string
+ * relative to the beginning of the dictionary page data.
+ *
+ * @param[in] chunks List of column chunks
+ * @param[in] num_chunks Number of column chunks
+ **/
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
@@ -387,21 +393,22 @@ gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
     }
 }
 
-
-cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks, cudaStream_t stream)
-{
-    dim3 dim_block(128, 1);
-    dim3 dim_grid((num_chunks + 3) >> 2, 1); // 1 chunk per warp, 4 warps per block
-    gpuDecodePageHeaders << < dim_grid, dim_block, 0, stream >> >(chunks, num_chunks);
-    return cudaSuccess;
+cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
+                                       int32_t num_chunks,
+                                       cudaStream_t stream) {
+  dim3 dim_block(128, 1);
+  dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
+  return cudaSuccess;
 }
 
-cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks, cudaStream_t stream)
-{
-    dim3 dim_block(128, 1);
-    dim3 dim_grid((num_chunks + 3) >> 2, 1); // 1 chunk per warp, 4 warps per block
-    gpuBuildStringDictionaryIndex << < dim_grid, dim_block, 0, stream >> >(chunks, num_chunks);
-    return cudaSuccess;
+cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
+                                                int32_t num_chunks,
+                                                cudaStream_t stream) {
+  dim3 dim_block(128, 1);
+  dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
+  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
+  return cudaSuccess;
 }
 
-};}; // parquet::gpu namespace
+}; }; // parquet::gpu namespace
