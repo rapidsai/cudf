@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #1194  Implement overloads for CUDA atomic operations
+
 ...
 
 ## Improvements
@@ -17,6 +19,7 @@
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
+- PR #1289 Fix looping over each value instead of each category in concatenation
 
 
 # cuDF 0.6.0 (Date TBD)
