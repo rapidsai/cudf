@@ -2061,8 +2061,8 @@ def test_series_describe_include():
     gdf_results = df.describe(include=['int']).to_pandas()
     pdf_results = pdf.describe(include=['int'])
 
-    np.testing.assert_array_almost_equal(gdf_results[['x']].to_numpy(),
-                                         pdf_results[['x']].to_numpy(),
+    np.testing.assert_array_almost_equal(gdf_results[['x']].values,
+                                         pdf_results[['x']].values,
                                          decimal=4)
 
 
@@ -2077,6 +2077,6 @@ def test_dataframe_describe_numeric_values_correct():
     gdf_results = df.describe().to_pandas()
     pdf_results = pdf.describe()
 
-    np.testing.assert_array_almost_equal(gdf_results[['x', 'y']].to_numpy(),
-                                         pdf_results[['x', 'y']].to_numpy(),
+    np.testing.assert_array_almost_equal(gdf_results[['x', 'y']].values,
+                                         pdf_results[['x', 'y']].values,
                                          decimal=4)
