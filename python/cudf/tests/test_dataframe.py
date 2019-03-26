@@ -2007,7 +2007,7 @@ def test_array_ufunc():
 
 
 @pytest.mark.xfail(
-    raises=ValueError,
+    raises=AssertionError,
     reason="Our describe result is a DataFrame, not a Series. "
            "Our quantile values do not perfectly match Pandas.")
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
