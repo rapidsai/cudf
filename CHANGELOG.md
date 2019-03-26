@@ -2,7 +2,7 @@
 
 ## New Features
 
-...
+- PR #1194  Implement overloads for CUDA atomic operations
 
 ## Improvements
 
@@ -11,11 +11,13 @@
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1163 Refactored UnaryOps. Reduced API to two functions: `gdf_unary_math` and `gdf_cast`. Added `abs`, `-`, and `~` ops. Changed bindings to Cython
+- PR #1284 Update docs version
 
 ## Bug Fixes
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
+- PR #1289 Fix looping over each value instead of each category in concatenation
 
 
 # cuDF 0.6.0 (Date TBD)
