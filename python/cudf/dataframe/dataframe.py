@@ -2388,7 +2388,7 @@ class DataFrame(object):
         selection = tuple(map(frozenset, (include, exclude)))
         include, exclude = map(
             lambda x: frozenset(
-                map(pd.core.dtypes.common.infer_dtype_from_object, x)),
+                map(pd.core.dtypes.common._get_dtype_from_object, x)),
             selection,
         )
 
@@ -2421,7 +2421,7 @@ class DataFrame(object):
                 if issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
-        include_all = set([pd.core.dtypes.common.infer_dtype_from_object(d)
+        include_all = set([pd.core.dtypes.common._get_dtype_from_object(d)
                            for d in self.dtypes])
 
         # remove all exclude types
@@ -2433,7 +2433,7 @@ class DataFrame(object):
 
         for x in self._cols.values():
             infered_type = pd.core.dtypes.common.\
-                           infer_dtype_from_object(x.dtype)
+                           _get_dtype_from_object(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 
