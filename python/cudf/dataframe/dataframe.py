@@ -2133,28 +2133,22 @@ class DataFrame(object):
 
             return out_df
 
-        if exclude:
-            raise NotImplementedError("Exclude is not yet supported.")
-
-        if not include:
-            # temporary workaround of select_dtype handling of np.number
-            numeric_data = self.select_dtypes(
-                ['int8', 'int16', 'int32', 'int64', 'float32', np.number]
-            )
+        if not include and not exclude:
+            numeric_data = self.select_dtypes(np.number)
             output_frame = _create_output_frame(numeric_data, percentiles)
 
         elif include == 'all':
-            numeric_data = self.select_dtypes(
-                ['int8', 'int16', 'int32', 'int64', 'float32', np.number]
-            )
-            output_frame = _create_output_frame(numeric_data, percentiles)
-            logging.warning(
-                "Describe does not yet include StringColumns or "
-                "DatetimeColumns. "
-            )
+            if exclude:
+                raise ValueError("Cannot exclude when include='all'.")
+
+            included_data = self.select_dtypes(np.number)
+            output_frame = _create_output_frame(included_data, percentiles)
+            logging.warning("Describe does not yet include StringColumns or "
+                            "DatetimeColumns.")
 
         else:
-            included_data = self.select_dtypes(include=include)
+            included_data = self.select_dtypes(include=include,
+                                               exclude=exclude)
             if included_data.empty:
                 raise ValueError("No data of included types.")
             output_frame = _create_output_frame(included_data, percentiles)
