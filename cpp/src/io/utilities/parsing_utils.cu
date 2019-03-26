@@ -36,7 +36,7 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 
 		// Copy chunk to device
-		CUDA_TRY(cudaMemcpyAsync(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault, (cudaStream_t)0));
+		CUDA_TRY(cudaMemcpyAsync(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		for (char key: keys) {
 			count += thrust::count(rmm::exec_policy()->on(0), d_chunk, d_chunk + chunk_bytes, key);

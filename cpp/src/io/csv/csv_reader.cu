@@ -334,7 +334,7 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 	auto* find_result_ptr = raw_csv->recStart;
 	if (raw_csv->byte_range_offset == 0) {
 		find_result_ptr++;
-		CUDA_TRY(cudaMemsetAsync(raw_csv->recStart, 0ull, sizeof(ll_uint_t), (cudaStream_t)0));
+		CUDA_TRY(cudaMemsetAsync(raw_csv->recStart, 0ull, sizeof(ll_uint_t)));
 	}
 	vector<char> chars_to_find{raw_csv->opts.terminator};
 	if (raw_csv->opts.quotechar != '\0') {
