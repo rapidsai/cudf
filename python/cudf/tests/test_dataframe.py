@@ -2015,9 +2015,12 @@ def test_array_ufunc():
 def test_series_describe_numeric(dtype):
     pdf = pd.Series([0, 1, 2, 3])
     gdf = Series.from_pandas(pdf).astype(dtype)
-    gdf_results = gdf.describe()
+    gdf_results = gdf.describe().to_pandas()
     pdf_results = gdf.to_pandas().describe()
-    assert_eq(gdf_results, pdf_results)
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
 
 
 @pytest.mark.xfail(
@@ -2028,7 +2031,10 @@ def test_series_describe_datetime():
     gdf = Series.from_pandas(pdf)
     gdf_results = gdf.describe()
     pdf_results = pdf.describe()
-    assert_eq(gdf_results, pdf_results)
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
 
 
 @pytest.mark.xfail(
@@ -2043,10 +2049,12 @@ def test_series_describe_exclude():
     df['x'] = df.x.astype('int64')
     df['y'] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=['float'])
+    gdf_results = df.describe(exclude=['float']).to_pandas()
     pdf_results = pdf.describe(exclude=['float'])
 
-    assert_eq(gdf_results, pdf_results)
+    np.testing.assert_array_almost_equal(gdf_results[['x']].values,
+                                         pdf_results[['x']].values,
+                                         decimal=4)
 
 
 def test_series_describe_include():
