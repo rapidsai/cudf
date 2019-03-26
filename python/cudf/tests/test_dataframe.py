@@ -2002,6 +2002,7 @@ def test_select_dtype():
     with pytest.raises(ValueError):
         gdf.select_dtypes(exclude=np.number, include=np.number)
 
+
 def test_array_ufunc():
     gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
     pdf = gdf.to_pandas()
