@@ -2037,9 +2037,7 @@ def test_series_describe_datetime():
                                          decimal=4)
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="Exclude is not yet supported in describe.")
+@pytest.mark.xfail(reason="Exclude is not yet supported in select_dtype.")
 def test_series_describe_exclude():
     np.random.seed(12)
     data_length = 10000
