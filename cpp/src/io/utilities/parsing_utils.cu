@@ -134,10 +134,14 @@ gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> ke
 		}
 	}
 
-	RMM_TRY( RMM_FREE( d_count, 0 ) ); 
-	RMM_TRY( RMM_FREE( d_chunk, 0 ) );
+	gdf_size_type h_count = 0;
+	CUDA_TRY(cudaMemcpy(&h_count, d_count, sizeof(gdf_size_type), cudaMemcpyDefault));
+	thrust::sort(rmm::exec_policy()->on(0), positions, positions + h_count);
 
-	CUDA_TRY( cudaGetLastError() );
+	RMM_TRY(RMM_FREE(d_count, 0)); 
+	RMM_TRY(RMM_FREE(d_chunk, 0));
+
+	CUDA_TRY(cudaGetLastError());
 
 	return GDF_SUCCESS;
 }

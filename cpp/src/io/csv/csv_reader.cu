@@ -344,11 +344,6 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 	const auto error = findAllFromSet(h_data, h_size, chars_to_find, 1, find_result_ptr);
 	checkError(error, "call to record initial position store");
 
-	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
-	// Sort the record positions as subsequent processing may require filtering
-	// certain rows or other processing on specific records
-	thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
-
 	// Currently, ignoring lineterminations within quotes is handled by recording
 	// the records of both, and then filtering out the records that is a quotechar
 	// or a linetermination within a quotechar pair. The future major refactoring
