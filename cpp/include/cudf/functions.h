@@ -2277,6 +2277,7 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *   to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size or number of
  *   observations can be specified for each element using an additional array.
+ * - support for user-defined aggregation functions.
  *
  * @param[out] output_col The output column
  * @param[in] input_col The input column
@@ -2302,6 +2303,8 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *		  forward_window_col[i] specifies forward window size for element i.
  *		  If forward_window_col = NULL, then forward_window is used as the
  * 		  static forward window size for all elements
+ * @param[in] agg_func The rolling window user-provided function. If agg_func =
+ * 		  NULL, then the basic type agg_type is used for aggregations.
  *
  * @return    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
@@ -2315,7 +2318,8 @@ gdf_error gdf_rolling_window(gdf_column *output_col,
 			     gdf_agg_op agg_type,
 			     const gdf_size_type *window_col,
 			     const gdf_size_type *min_periods_col,
-			     const gdf_size_type *forward_window_col);
+			     const gdf_size_type *forward_window_col,
+			     void *agg_func);
 
 
 /*
