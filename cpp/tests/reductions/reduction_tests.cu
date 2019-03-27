@@ -47,7 +47,7 @@ struct ReductionTest : public GdfTest
     ~ReductionTest(){}
 
     void reduction_test(std::vector<int>& int_values,
-        T exact_value, bool succeeded_condition,
+        T expected_value, bool succeeded_condition,
         gdf_reduction_op op)
     {
         gdf_size_type col_size = int_values.size();
@@ -66,7 +66,7 @@ struct ReductionTest : public GdfTest
             cudf::test::scalar_wrapper<T> result 
 		= gdf_reduction(underlying_column, op,
                                 underlying_column->dtype);
-              EXPECT_EQ(exact_value, result.value());
+              EXPECT_EQ(expected_value, result.value());
         };
 
         if( succeeded_condition ){
@@ -87,45 +87,45 @@ TYPED_TEST_CASE(ReductionTest, Types);
 TYPED_TEST(ReductionTest, MinMax)
 {
     std::vector<int> v({5, 0, -120, -111, 64, 63, 99, 123, -16});
-    int exact_min_result = *( std::min_element(v.begin(), v.end()) );
-    int exact_max_result = *( std::max_element(v.begin(), v.end()) );
+    int expected_min_result = *( std::min_element(v.begin(), v.end()) );
+    int expected_max_result = *( std::max_element(v.begin(), v.end()) );
 
     // Min/Max succeeds for any gdf types including
     // non-arithmetic types (date32, date64, timestamp, category)
     bool result_error(true);
 
-    this->reduction_test(v, TypeParam(exact_min_result),
+    this->reduction_test(v, TypeParam(expected_min_result),
         result_error, GDF_REDUCTION_MIN);
-    this->reduction_test(v, TypeParam(exact_max_result),
+    this->reduction_test(v, TypeParam(expected_max_result),
         result_error, GDF_REDUCTION_MAX);
 }
 
 TYPED_TEST(ReductionTest, Product)
 {
     std::vector<int> v({5, -1, 1, 3, 2, 4});
-    int exact = std::accumulate(v.begin(), v.end(), 1,
+    int expected_value = std::accumulate(v.begin(), v.end(), 1,
         [](int acc, int i) { return acc * i; });
 
-    this->reduction_test(v, TypeParam(exact),
+    this->reduction_test(v, TypeParam(expected_value),
         this->ret_non_arithmetic, GDF_REDUCTION_PRODUCTION);
 }
 
 TYPED_TEST(ReductionTest, Sum)
 {
     std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
-    int exact = std::accumulate(v.begin(), v.end(), 0);
+    int expected_value = std::accumulate(v.begin(), v.end(), 0);
 
-    this->reduction_test(v, TypeParam(exact),
+    this->reduction_test(v, TypeParam(expected_value),
         this->ret_non_arithmetic, GDF_REDUCTION_SUM);
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
 {
     std::vector<int> v({-3, 2,  1, 5, -3, -2});
-    int exact = std::accumulate(v.begin(), v.end(),  0,
+    int expected_value = std::accumulate(v.begin(), v.end(),  0,
         [](int acc, int i) { return acc + i * i; });
 
-    this->reduction_test(v, TypeParam(exact),
+    this->reduction_test(v, TypeParam(expected_value),
         this->ret_non_arithmetic, GDF_REDUCTION_SUMOFSQUARES);
 }
 
@@ -135,7 +135,7 @@ struct ReductionDtypeTest : public GdfTest
 {
     template <typename T_in, typename T_out>
     void reduction_test(std::vector<int>& int_values,
-        T_out exact_value, bool succeeded_condition,
+        T_out expected_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype out_dtype,
         bool expected_overflow = false)
     {
@@ -153,8 +153,8 @@ struct ReductionDtypeTest : public GdfTest
             cudf::test::scalar_wrapper<T_out> result =
             	gdf_reduction(underlying_column, op, out_dtype);
             if( result.is_valid() && ! expected_overflow){
-                EXPECT_EQ(exact_value, result.value());
-                std::cout << "the value = <" << exact_value
+                EXPECT_EQ(expected_value, result.value());
+                std::cout << "the value = <" << expected_value
                     << ", " << result.value() << ">" << std::endl;
             }
         };
@@ -172,44 +172,44 @@ TEST_F(ReductionDtypeTest, different_precision)
 {
     constexpr bool expected_overflow = true;
     std::vector<int> v({6, -14, 13, 109, -13, -20, 45, 98, 122, 123});
-    int exact = std::accumulate(v.begin(), v.end(), 0);
+    int expected_value = std::accumulate(v.begin(), v.end(), 0);
 
-    std::cout << "exact = " << exact << std::endl;
+    std::cout << "expected = " << expected_value << std::endl;
 
     // over flow
     this->reduction_test<int8_t, int8_t>
-        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8,
+        (v, int8_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT8,
             expected_overflow);
 
     this->reduction_test<int8_t, int64_t>
-        (v, int64_t(exact), true, GDF_REDUCTION_SUM, GDF_INT64);
+        (v, int64_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT64);
 
     this->reduction_test<int8_t, double>
-        (v, double(exact), true, GDF_REDUCTION_SUM, GDF_FLOAT64);
+        (v, double(expected_value), true, GDF_REDUCTION_SUM, GDF_FLOAT64);
 
     // down cast (over flow)
     this->reduction_test<double, int8_t>
-        (v, int8_t(exact), true, GDF_REDUCTION_SUM, GDF_INT8,
+        (v, int8_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT8,
             expected_overflow);
 
     // down cast (no over flow)
     this->reduction_test<double, int16_t>
-        (v, int16_t(exact), true, GDF_REDUCTION_SUM, GDF_INT16);
+        (v, int16_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT16);
 
     // not supported case:
     // any of wrapper classes is not convertible
     this->reduction_test<cudf::date64, cudf::timestamp>
-        (v, cudf::timestamp(exact), false, GDF_REDUCTION_SUM, GDF_TIMESTAMP);
+        (v, cudf::timestamp(expected_value), false, GDF_REDUCTION_SUM, GDF_TIMESTAMP);
 
     this->reduction_test<cudf::date32, cudf::category>
-        (v, cudf::category(exact), false, GDF_REDUCTION_SUM, GDF_CATEGORY);
+        (v, cudf::category(expected_value), false, GDF_REDUCTION_SUM, GDF_CATEGORY);
 
     this->reduction_test<cudf::date32, cudf::date64>
-        (v, cudf::date64(exact), false, GDF_REDUCTION_SUM, GDF_DATE64);
+        (v, cudf::date64(expected_value), false, GDF_REDUCTION_SUM, GDF_DATE64);
 
     // Though the underlying type of cudf::date64 is int64_t,
     // they are not convertible types.
     this->reduction_test<cudf::date64, int64_t>
-        (v, int64_t(exact), false, GDF_REDUCTION_SUM, GDF_INT64);
+        (v, int64_t(expected_value), false, GDF_REDUCTION_SUM, GDF_INT64);
 
 }
