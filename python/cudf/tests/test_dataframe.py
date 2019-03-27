@@ -2011,4 +2011,4 @@ def test_series_to_gpu_array(nan_value):
 
     s = Series([0, 1, None, 3])
     np.testing.assert_array_equal(s.to_array(nan_value),
-                                  s.to_gpu_array(nan_value).copy_to_host)
+                                  s.to_gpu_array(nan_value).copy_to_host())
