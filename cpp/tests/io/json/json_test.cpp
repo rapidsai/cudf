@@ -78,3 +78,40 @@ TEST(gdf_json_test, SquareBrackets)
 	for (auto pos: h_pos)
 		ASSERT_TRUE(h_data[pos] == '[' || h_data[pos] == ']');
 }
+
+TEST(gdf_json_test, BracketsLevels)
+{
+	// Generate square brackets consistent with 'split' json format
+	const int rows = 20;
+	const int file_size = rows * 4;
+	string h_data("\"columns\":[x],\"index\":[x],\"data\":[");
+	const int header_size = h_data.size();
+	h_data += string(file_size, 'x');
+	h_data[h_data.size() - 1] = ']';
+	for (int i = header_size; i < h_data.size() - 1; i += 4){
+		h_data[i] = '[';
+		h_data[i + 2] = ']';
+	}
+	cout << h_data << '\n';
+
+	char* d_data{};
+	cudaMalloc(&d_data, h_data.size()*sizeof(char));
+	cudaMemcpy(d_data, h_data.c_str(), h_data.size()*sizeof(char), cudaMemcpyDefault);
+
+	gdf_size_type count = 0;
+	auto error = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, count);
+	ASSERT_FALSE(error);
+
+	ll_uint_t* d_pos{};
+	cudaMalloc(&d_pos, count*sizeof(ll_uint_t));
+
+	error = findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
+	ASSERT_FALSE(error);
+
+
+
+
+	cudaFree(d_data);
+	cudaFree(d_pos);
+
+}
