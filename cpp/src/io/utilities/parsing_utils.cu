@@ -51,6 +51,15 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
 	return GDF_SUCCESS;
 }
 
+template<class T>
+__device__ T updatePos(ll_uint_t p, char k);
+
+template<>
+__device__ ll_uint_t updatePos<ll_uint_t>(ll_uint_t p, char k) {return p;}
+
+template<>
+__device__ thrust::pair<ll_uint_t,char> updatePos<thrust::pair<ll_uint_t,char>>(ll_uint_t p, char k) {return {p,k};}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that finds all occurences of a character in the given 
  * character array. The positions are stored in the output array.
@@ -64,8 +73,9 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
  * 
  * @return void
  *---------------------------------------------------------------------------**/
- __global__ void findAll(char *data, size_t size, size_t offset, const char key,
-	gdf_size_type* count, ll_uint_t* positions) {
+template<class T>
+ __global__ void findAll(char *data, size_t size, size_t offset, const char key, gdf_size_type* count,
+	T* positions) {
 
 	// thread IDs range per block, so also need the block id
 	const long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -81,7 +91,7 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
 	for (long i = 0; i < byteToProcess; i++) {
 		if (raw[i] == key) {
 			const auto pos = atomicAdd(count, 1ull);
-			positions[pos] = did + offset + i;
+			positions[pos] = updatePos<T>(did + offset + i, key);
 		}
 	}
 }
@@ -102,8 +112,9 @@ gdf_error countAllFromSet(const char *h_data, size_t h_size, std::vector<char> k
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
+template<class T>
 gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> keys, ll_uint_t result_offset,
-	ll_uint_t *positions) {
+	T *positions) {
 
 	char* d_chunk = nullptr;
 	RMM_TRY(RMM_ALLOC (&d_chunk, min(max_chunk_bytes, h_size), 0)); 
@@ -114,7 +125,7 @@ gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> ke
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
-	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, findAll) );
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, findAll<T>) );
 
 	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
 	for (size_t ci = 0; ci < chunk_count; ++ci) {	
@@ -128,7 +139,7 @@ gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> ke
 		CUDA_TRY(cudaMemcpyAsync(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		for (char key: keys) {
-			findAll <<< gridSize, blockSize >>> (
+			findAll<T> <<< gridSize, blockSize >>> (
 				d_chunk, chunk_bytes, chunk_offset + result_offset, key,
 				d_count, positions);
 		}
@@ -145,3 +156,9 @@ gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> ke
 
 	return GDF_SUCCESS;
 }
+
+template gdf_error findAllFromSet<ll_uint_t>(const char *h_data, size_t h_size, std::vector<char> keys, ll_uint_t result_offset,
+	ll_uint_t *positions);
+
+template gdf_error findAllFromSet<thrust::pair<ll_uint_t,char>>(const char *h_data, size_t h_size, std::vector<char> keys, ll_uint_t result_offset,
+	thrust::pair<ll_uint_t,char> *positions);
