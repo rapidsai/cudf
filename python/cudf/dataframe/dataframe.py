@@ -2156,12 +2156,11 @@ class DataFrame(object):
                             "DatetimeColumns.")
 
         else:
-            if include:
-                included_data = self.select_dtypes(include=include,
-                                                   exclude=exclude)
-            else:
-                included_data = self.select_dtypes(include=np.number,
-                                                   exclude=exclude)
+            if not include:
+                include = np.number
+
+            included_data = self.select_dtypes(include=include,
+                                               exclude=exclude)
             if included_data.empty:
                 raise ValueError("No data of included types.")
             output_frame = _create_output_frame(included_data, percentiles)
