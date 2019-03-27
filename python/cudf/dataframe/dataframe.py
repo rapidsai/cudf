@@ -16,6 +16,15 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
+try:
+    # pd 0.24.X
+    from pandas.core.dtypes.common import infer_dtype_from_object
+except ImportError:
+    # pd 0.23.X
+    from pandas.core.dtypes.common import \
+            _get_dtype_from_object as infer_dtype_from_object
+
+
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -2474,28 +2483,81 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def select_dtypes(self, include=None):
+    def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
 
         Parameters
         ----------
         include : str or list
             which columns to include based on dtypes
+        exclude : str or list
+            which columns to exclude based on dtypes
 
         """
 
+        # code modified from:
+        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+
         if not isinstance(include, (list, tuple)):
-            include = [include]
+            include = (include,) if include is not None else ()
+        if not isinstance(exclude, (list, tuple)):
+            exclude = (exclude,) if exclude is not None else ()
+
         df = DataFrame()
 
-        include = [pd.core.dtypes.common.pandas_dtype(d) for d in include]
+        # infer_dtype_from_object can distinguish between
+        # np.float and np.number
+        selection = tuple(map(frozenset, (include, exclude)))
+        include, exclude = map(
+            lambda x: frozenset(
+                map(infer_dtype_from_object, x)),
+            selection,
+        )
+
+        # can't both include AND exclude!
+        if not include.isdisjoint(exclude):
+            raise ValueError('include and exclude overlap on {inc_ex}'.format(
+                inc_ex=(include & exclude)))
+
+        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
+
+        # include all subtypes
+        include_subtypes = set()
+        for dtype in self.dtypes:
+            for i_dtype in include:
+                # category handling
+                if i_dtype is cat_type:
+                    include_subtypes.add(i_dtype)
+                    break
+                if issubclass(dtype.type, i_dtype):
+                    include_subtypes.add(dtype.type)
+
+        # exclude all subtypes
+        exclude_subtypes = set()
+        for dtype in self.dtypes:
+            for e_dtype in exclude:
+                # category handling
+                if e_dtype is cat_type:
+                    exclude_subtypes.add(e_dtype)
+                    break
+                if issubclass(dtype.type, e_dtype):
+                    exclude_subtypes.add(dtype.type)
+
+        include_all = set([infer_dtype_from_object(d)
+                           for d in self.dtypes])
+
+        # remove all exclude types
+        inclusion = include_all - exclude_subtypes
+
+        # keep only those included
+        if include_subtypes:
+            inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            try:
-                if x.dtype in include:
-                    df.add_column(x.name, x)
-            except TypeError:
-                pass
+            infered_type = infer_dtype_from_object(x.dtype)
+            if infered_type in inclusion:
+                df.add_column(x.name, x)
+
         return df
 
     @ioutils.doc_to_parquet()
