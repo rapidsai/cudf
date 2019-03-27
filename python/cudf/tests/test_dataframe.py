@@ -2054,9 +2054,10 @@ def test_dataframe_describe_exclude():
     gdf_results = df.describe(exclude=['float']).to_pandas()
     pdf_results = pdf.describe(exclude=['float'])
 
-    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
-                                         pdf_results.values,
-                                         decimal=4)
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
 
 
 def test_dataframe_describe_include():
@@ -2071,9 +2072,10 @@ def test_dataframe_describe_include():
     gdf_results = df.describe(include=['int']).to_pandas()
     pdf_results = pdf.describe(include=['int'])
 
-    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
-                                         pdf_results.values,
-                                         decimal=4)
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
 
 
 def test_dataframe_describe_default():
@@ -2087,9 +2089,10 @@ def test_dataframe_describe_default():
     gdf_results = df.describe().to_pandas()
     pdf_results = pdf.describe()
 
-    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
-                                         pdf_results.values,
-                                         decimal=4)
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
 
 
 @pytest.mark.xfail(
