@@ -427,15 +427,11 @@ class DataFrame(object):
         result.set_index(self.index)
         if isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
-                result[col] = getattr(self._cols[col], fn)(
-                        other[k]
-                )
+                result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             for col in other._cols:
                 if col in self._cols:
-                    result[col] = getattr(self._cols[col], fn)(
-                            other._cols[col]
-                    )
+                    result[col] = getattr(self._cols[col], fn)(other._cols[col])
                 else:
                     result[col] = Series(cudautils.full(self.shape[0],
                                          np.dtype('float64').type(np.nan),
@@ -452,9 +448,7 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], fn)(
-                        other
-                )
+                result[col] = getattr(self._cols[col], fn)(other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "

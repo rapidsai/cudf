@@ -1479,6 +1479,17 @@ def test_binops_df(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_df(pdf, gdf, binop):
+    d = binop(pdf, pdf + 1)
+    g = binop(gdf, gdf + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
     operator.floordiv,
@@ -1497,6 +1508,17 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_series(pdf, gdf, binop):
+    d = binop(pdf.x, pdf.y + 1)
+    g = binop(gdf.x, gdf.y + 1)
     assert_eq(d, g)
 
 
