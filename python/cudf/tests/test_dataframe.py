@@ -2042,8 +2042,7 @@ def test_series_describe_datetime():
                                          decimal=4)
 
 
-@pytest.mark.xfail(reason="Exclude is not yet supported in select_dtype.")
-def test_series_describe_exclude():
+def test_dataframe_describe_exclude():
     np.random.seed(12)
     data_length = 10000
 
@@ -2055,12 +2054,12 @@ def test_series_describe_exclude():
     gdf_results = df.describe(exclude=['float']).to_pandas()
     pdf_results = pdf.describe(exclude=['float'])
 
-    np.testing.assert_array_almost_equal(gdf_results[['x']].values,
-                                         pdf_results[['x']].values,
+    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
+                                         pdf_results.values,
                                          decimal=4)
 
 
-def test_series_describe_include():
+def test_dataframe_describe_include():
     np.random.seed(12)
     data_length = 10000
 
@@ -2072,12 +2071,12 @@ def test_series_describe_include():
     gdf_results = df.describe(include=['int']).to_pandas()
     pdf_results = pdf.describe(include=['int'])
 
-    np.testing.assert_array_almost_equal(gdf_results[['x']].values,
-                                         pdf_results[['x']].values,
+    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
+                                         pdf_results.values,
                                          decimal=4)
 
 
-def test_dataframe_describe_numeric_values_correct():
+def test_dataframe_describe_default():
     np.random.seed(12)
     data_length = 10000
 
@@ -2088,6 +2087,29 @@ def test_dataframe_describe_numeric_values_correct():
     gdf_results = df.describe().to_pandas()
     pdf_results = pdf.describe()
 
-    np.testing.assert_array_almost_equal(gdf_results[['x', 'y']].values,
-                                         pdf_results[['x', 'y']].values,
+    np.testing.assert_array_almost_equal(gdf_results.drop(['stats'],axis=1).values,
+                                         pdf_results.values,
                                          decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_include_all():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    df['animal'] = np.random.choice(['dog', 'cat', 'bird'], data_length)
+
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include='all').to_pandas()
+    pdf_results = pdf.describe(include='all')
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
