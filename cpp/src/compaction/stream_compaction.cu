@@ -19,6 +19,7 @@
 #include <thrust/copy.h>
 #include <cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <copying.hpp>
 #include <stream_compaction.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 #include <utilities/cudf_utils.h>
@@ -78,12 +79,40 @@ gdf_column apply_boolean_mask(gdf_column const *input,
   // Use the returned iterator to determine the size of the gather_map
   gdf_size_type output_size{
       static_cast<gdf_size_type>(end - gather_map.begin())};
+  gdf_column output;
+  gdf_column_view(&output, 0, 0, 0, input->dtype);
+  output.dtype_info = input->dtype_info;
 
-  // Allocate/initialize output column
-  gdf_size_type column_byte_width{gdf_dtype_size(input->dtype)};
+  if (output_size > 0) {
+    // have to do this because cudf::gather operates on cudf::tables and
+    // there seems to be no way to create a cudf::table from a const gdf_column!
+    gdf_column* input_view[1] = {new gdf_column};
+    CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(input_view[0], input->data,
+                                                input->valid, input->size,
+                                                input->dtype),
+                "cudf::apply_boolean_mask failed to create input column view");
 
-  gdf_column output{};
+     // Allocate/initialize output column
+    gdf_size_type column_byte_width{gdf_dtype_size(input->dtype)};
 
+    void *data = nullptr;
+    gdf_valid_type *valid = nullptr;
+    RMM_ALLOC(&data, output_size * column_byte_width, 0);
+    RMM_ALLOC(&valid, gdf_valid_allocation_size(output_size*column_byte_width), 0);
+
+    gdf_column* outputs[1] = {&output};
+    CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(outputs[0], data, valid,
+                                                output_size, input->dtype),
+                "cudf::apply_boolean_mask failed to create output column view");
+
+    cudf::table input_table{input_view, 1};
+    cudf::table output_table{outputs, 1};
+
+    cudf::gather(&input_table, thrust::raw_pointer_cast(gather_map.data()),
+                &output_table);
+
+    delete input_view[0];
+  }
   return output;
 }
 
