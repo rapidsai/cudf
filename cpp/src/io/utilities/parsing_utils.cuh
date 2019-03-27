@@ -26,8 +26,8 @@
 
 #include "cudf.h"
 
-gdf_size_type countAllFromSet(const char *h_data, size_t h_size, std::vector<char> keys);
+gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
 template<class T>
-gdf_error findAllFromSet(const char *h_data, size_t h_size, std::vector<char> keys, uint64_t result_offset,
+gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);

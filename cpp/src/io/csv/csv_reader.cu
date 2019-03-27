@@ -338,8 +338,7 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 		chars_to_find.push_back(raw_csv->opts.quotechar);
 	}
 	// Passing offset = 1 to return positions AFTER the found character
-	const auto error = findAllFromSet(h_data, h_size, chars_to_find, 1, find_result_ptr);
-	checkError(error, "call to record initial position store");
+	findAllFromSet(h_data, h_size, chars_to_find, 1, find_result_ptr);
 
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
