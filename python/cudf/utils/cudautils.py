@@ -11,7 +11,6 @@ from cudf import _gdf
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
 
-
 def optimal_block_count(minblkct):
     """Return the optimal block count for a CUDA kernel launch.
     """
@@ -269,17 +268,19 @@ def mask_assign_slot(size, mask):
     # expand bits into bytes
     expanded_mask = expand_mask_bits(size, mask)
     # compute prefixsum
-    slots = scan(expanded_mask)
+    slots = prefixsum(expanded_mask)
     sz = int(slots[slots.size - 1])
     return slots, sz
 
-
-def scan(vals, op=_gdf.GDF_SCAN_SUM):
+def prefixsum(vals):
     """Compute the full prefixsum.
 
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+
+    import cudf.bindings.reduce as cpp_reduce
+
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,
                              dtype=vals.dtype)
@@ -287,10 +288,9 @@ def scan(vals, op=_gdf.GDF_SCAN_SUM):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    _gdf.apply_scan(_gdf.columnview_from_devary(vals),
-                    _gdf.columnview_from_devary(slots[1:]),
-                    op, inclusive=True)
-
+    cpp_reduce.apply_scan(_gdf.columnview_from_devary(vals),
+                          _gdf.columnview_from_devary(slots[1:]),
+                          "sum", inclusive=True,)
     return slots
 
 
@@ -740,7 +740,7 @@ def find_segments(arr, segs=None, markers=None):
     if segs is not None and null_markers and segs.size > 0:
         gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
-    slots = scan(markers)
+    slots = prefixsum(markers)
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments

@@ -303,10 +303,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def apply_scan(col_inp, col_out, op, inclusive):
-    libgdf.gdf_scan(col_inp, col_out, op, inclusive)
-
-
 def apply_segsort(col_keys, col_vals, segments, descending=False,
                   plan=None):
     """Inplace segemented sort
