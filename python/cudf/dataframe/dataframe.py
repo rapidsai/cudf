@@ -431,7 +431,8 @@ class DataFrame(object):
         elif isinstance(other, DataFrame):
             for col in other._cols:
                 if col in self._cols:
-                    result[col] = getattr(self._cols[col], fn)(other._cols[col])
+                    result[col] = getattr(self._cols[col], fn)(
+                                          other._cols[col])
                 else:
                     result[col] = Series(cudautils.full(self.shape[0],
                                          np.dtype('float64').type(np.nan),

@@ -489,7 +489,7 @@ class Series(object):
 
     def _bitwise_binop(self, other, op):
         if (np.issubdtype(self.dtype.type, np.integer) and
-            np.issubdtype(other.dtype.type, np.integer)):
+                np.issubdtype(other.dtype.type, np.integer)):
             return self._binaryop(other, op)
         else:
             raise TypeError(

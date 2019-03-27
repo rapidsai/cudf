@@ -74,10 +74,11 @@ _int_types = [
     'int64',
 ]
 
+
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('binop', _bitwise_binops)
 @pytest.mark.parametrize('lhs_dtype,rhs_dtype',
-                         list(product(_int_types,_int_types)))
+                         list(product(_int_types, _int_types)))
 def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     arr1 = (np.random.random(100) * 100).astype(lhs_dtype)
     sr1 = Series(arr1)
