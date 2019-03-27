@@ -32,12 +32,12 @@ _REDUCTION_OP['product'] = GDF_REDUCTION_PRODUCTION
 _REDUCTION_OP['sum_of_squares'] = GDF_REDUCTION_SUMOFSQUARES
 
 _SCAN_OP = {}
-_SCAN_OP['max'] = GDF_SCAN_SUM
+_SCAN_OP['sum'] = GDF_SCAN_SUM
 _SCAN_OP['min'] = GDF_SCAN_MIN
-_SCAN_OP['sum'] = GDF_SCAN_MAX
+_SCAN_OP['max'] = GDF_SCAN_MAX
 _SCAN_OP['product'] = GDF_SCAN_PRODUCTION
 
-cdef object get_scalar_value(gdf_scalar scalar):
+cdef get_scalar_value(gdf_scalar scalar):
     return {
         GDF_FLOAT64: scalar.data.fp64,
         GDF_FLOAT32: scalar.data.fp32,
@@ -49,6 +49,7 @@ cdef object get_scalar_value(gdf_scalar scalar):
         GDF_DATE64:  scalar.data.dt64,
         GDF_TIMESTAMP: scalar.data.tmst,
     }[scalar.dtype]
+
 
 
 def apply_reduce(reduction_op, col):
@@ -69,7 +70,7 @@ def apply_reduce(reduction_op, col):
             )
 
     free(c_col)
-    result = get_scalar_value(c_result)
+    result = np.array([get_scalar_value(c_result)], dtype=col.dtype)
 
     return result
 

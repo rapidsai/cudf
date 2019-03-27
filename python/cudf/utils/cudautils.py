@@ -8,6 +8,7 @@ from math import isnan
 from librmm_cffi import librmm as rmm
 from cudf import _gdf
 
+from cudf.utils import cudautils, utils, ioutils
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
 
@@ -280,6 +281,8 @@ def prefixsum(vals):
     """
 
     import cudf.bindings.reduce as cpp_reduce
+    from cudf.dataframe.numerical import NumericalColumn
+    from cudf.dataframe.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,
@@ -288,9 +291,11 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    cpp_reduce.apply_scan(_gdf.columnview_from_devary(vals),
-                          _gdf.columnview_from_devary(slots[1:]),
-                          "sum", inclusive=True,)
+    in_col = NumericalColumn(data=Buffer(vals), mask=None,
+                             null_count=0, dtype=vals.dtype)
+    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None, 
+                              null_count=0, dtype=vals.dtype)
+    cpp_reduce.apply_scan(in_col, out_col, 'sum', inclusive=True)
     return slots
 
 
