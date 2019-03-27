@@ -281,7 +281,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None or scalar
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
@@ -297,7 +297,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None or scalar
+        fillna : scalar, 'pandas', or None
             Defaults to None, which will skip null values.
             If it equals "pandas", null values are filled with NaNs.
             Non integral dtype is promoted to np.float64.
@@ -482,7 +482,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None or scalar
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
