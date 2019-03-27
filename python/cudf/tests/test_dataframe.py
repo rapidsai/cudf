@@ -1989,13 +1989,18 @@ def test_select_dtype():
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=np.number))
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
     assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+    with pytest.raises(ValueError):
+        gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
 def test_array_ufunc():
