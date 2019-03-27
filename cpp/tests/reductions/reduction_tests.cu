@@ -34,15 +34,6 @@
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/scalar_wrapper.cuh"
 
-template <typename T>
-T getValueFromScalar(gdf_scalar& scalar)
-{
-    T val;
-    memcpy(&val, &scalar.data, sizeof(T));
-
-    return val;
-}
-
 // This is the main test feature
 template <typename T>
 struct ReductionTest : public GdfTest
