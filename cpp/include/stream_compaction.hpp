@@ -30,9 +30,15 @@ namespace cudf {
  *
  * The input and mask columns must be of equal size.
  *
- * @param input[in] The input column to filter
- * @param boolean_mask[in] A column of type GDF_BOOL used as a mask to filter
+ * The output column will have size equal to the number of elements in
+ * boolean_mask that are both non-null and `true`. Note that the output column
+ * memory is allocated by this function but must be freed by the caller when
+ * finished.
+ *
+ * @param[in] input The input column to filter
+ * @param[in] boolean_mask A column of type GDF_BOOL used as a mask to filter
  * the input column corresponding index passes the filter.
+ * @param[out] output The output column containing the filtered result
  * @return gdf_column Column containing copy of all elements of @p input passing
  * the filter defined by @p boolean_mask.
  */
