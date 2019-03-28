@@ -60,17 +60,14 @@ TEST(gdf_json_test, SquareBrackets)
 	cudaMalloc(&d_data, h_data.size()*sizeof(char));
 	cudaMemcpy(d_data, h_data.c_str(), h_data.size()*sizeof(char), cudaMemcpyDefault);
 
-	gdf_size_type count = 0;
-	auto error = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, count);
-	ASSERT_FALSE(error);
+	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'});
 
-	ll_uint_t* d_pos{};
-	vector<ll_uint_t> h_pos(count);
-	cudaMalloc(&d_pos, count*sizeof(ll_uint_t));
+	uint64_t* d_pos{};
+	vector<uint64_t> h_pos(count);
+	cudaMalloc(&d_pos, count*sizeof(uint64_t));
 
-	error = findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
-	ASSERT_FALSE(error);
-	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(ll_uint_t), cudaMemcpyDefault);
+	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
+	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(uint64_t), cudaMemcpyDefault);
 
 	cudaFree(d_data);
 	cudaFree(d_pos);
@@ -98,17 +95,14 @@ TEST(gdf_json_test, BracketsLevels)
 	cudaMalloc(&d_data, h_data.size()*sizeof(char));
 	cudaMemcpy(d_data, h_data.c_str(), h_data.size()*sizeof(char), cudaMemcpyDefault);
 
-	gdf_size_type count = 0;
-	auto error = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, count);
-	ASSERT_FALSE(error);
+	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'});
 
-	ll_uint_t* d_pos{};
-	cudaMalloc(&d_pos, count*sizeof(ll_uint_t));
+	uint64_t* d_pos{};
+	vector<uint64_t> h_pos(count);
+	cudaMalloc(&d_pos, count*sizeof(uint64_t));
 
-	error = findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
-	ASSERT_FALSE(error);
-
-
+	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
+	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(uint64_t), cudaMemcpyDefault);
 
 
 	cudaFree(d_data);
