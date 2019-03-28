@@ -59,7 +59,7 @@ namespace detail {
 
             T_int * address_uint32 = reinterpret_cast<T_int *>
                 (addr - (reinterpret_cast<size_t>(addr) & 3));
-            unsigned int shift = ((reinterpret_cast<size_t>(addr) & 3) * 8);
+            T_int shift = ((reinterpret_cast<size_t>(addr) & 3) * 8);
 
             T_int old = *address_uint32;
             T_int assumed ;
@@ -219,6 +219,61 @@ namespace detail {
             cudf::detail::type_reinterpret<T_int, T>(val));
 
         return cudf::detail::type_reinterpret<T, T_int>(ret);
+    }
+
+    // atomicCAS implementation for int8_t
+    __forceinline__  __device__
+    int8_t atomicCASImpl(int8_t* address, int8_t compare, int8_t val)
+    {
+        using T = int8_t;
+        using T_int = unsigned int;
+
+	T_int * address_uint32 = reinterpret_cast<T_int *>
+		(address - (reinterpret_cast<size_t>(address) & 3));
+	T_int shift = ((reinterpret_cast<size_t>(address) & 3) * 8);
+
+	T_int old = *address_uint32;
+	T_int assumed;
+        T target_value = T((old >> shift) & 0xff);
+        uint8_t new_value = type_reinterpret<uint8_t, T>(val);
+
+	do {
+           assumed = old;
+           old = (old & ~(0x000000ff << shift)) | (T_int(new_value) << shift);
+           old = atomicCAS(address_uint32, assumed, old);
+           target_value = T((old >> shift) & 0xff);
+           if( target_value != compare ) break;
+        } while (assumed != old);
+
+        return target_value;
+    }
+
+    // atomicCAS implementation for int16_t
+    __forceinline__  __device__
+    int16_t atomicCASImpl(int16_t* address, int16_t compare, int16_t val)
+    {
+        using T = int16_t;
+        using T_int = unsigned int;
+
+        bool is_32_align = (reinterpret_cast<size_t>(address) & 2) ? false : true;
+        T_int * address_uint32 = reinterpret_cast<T_int *>
+            (reinterpret_cast<size_t>(address) - (is_32_align ? 0 : 2));
+
+        T_int old = *address_uint32;
+        T_int assumed ;
+        T target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+        uint16_t new_value = type_reinterpret<uint16_t, T>(val);
+
+        do {
+            assumed = old;
+            old = (is_32_align) ? (old & 0xffff0000) | val
+                    : (old & 0xffff) | (T_int(new_value) << 16);
+            old = atomicCAS(address_uint32, assumed, old);
+            target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+            if( target_value != compare ) break;
+        } while (assumed != old);
+
+        return target_value;
     }
 
 } // namespace detail
@@ -580,12 +635,12 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
 /* Overloads for `atomicCAS` */
 /** --------------------------------------------------------------------------*
  * @brief reads the `old` located at the `address` in global or shared memory, 
- * computes the maximum of old and val, and stores the result back to memory
+ * computes (`old` == `compare` ? `val` : `old`), and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
  *
  * The supported cudf types for `atomicCAS` are:
- * int32_t, int64_t, float, double,
+ * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
  * int8_t, int16_t are not supported as overloads
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
@@ -595,9 +650,25 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- *
- * @note int8_t, int16_t are not supported as `atomicCAS` overloads 
  * -------------------------------------------------------------------------**/
+__forceinline__ __device__
+int8_t atomicCAS(int8_t* address, int8_t compare, int8_t val)
+{
+    return cudf::detail::atomicCASImpl(address, compare, val);
+}
+
+/**
+ * @overload int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
+ */
+__forceinline__ __device__
+int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
+{
+    return cudf::detail::atomicCASImpl(address, compare, val);
+}
+
+/**
+ * @overload int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
+ */
 __forceinline__ __device__
 int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
 {
