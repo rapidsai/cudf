@@ -14,6 +14,7 @@
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
+- PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 
 ## Bug Fixes
 
