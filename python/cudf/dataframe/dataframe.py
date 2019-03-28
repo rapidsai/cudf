@@ -24,6 +24,7 @@ from libgdf_cffi import libgdf
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.index import as_index, Index, RangeIndex
+from cudf.dataframe.multiindex import MultiIndex
 from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
@@ -638,6 +639,12 @@ class DataFrame(object):
 
     @index.setter
     def index(self, _index):
+        if isinstance(_index, MultiIndex):
+            self._index = _index
+            for k in self.columns:
+                self[k] = self[k].index = _index
+            return
+
         new_length = len(_index)
         old_length = len(self._index)
 

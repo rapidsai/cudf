@@ -49,7 +49,7 @@ def assert_eq(a, b, **kwargs):
         tm.assert_frame_equal(a, b, **kwargs)
     elif isinstance(a, pd.Series):
         tm.assert_series_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Index):
+    elif isinstance(a, (pd.Index, pd.MultiIndex)):
         tm.assert_index_equal(a, b, **kwargs)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         assert np.allclose(a, b, equal_nan=True)

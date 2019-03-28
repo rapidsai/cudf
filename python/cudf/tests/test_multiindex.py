@@ -12,23 +12,18 @@ import pandas as pd
 from cudf.tests.utils import assert_eq
 
 
-def test_multiindex_construction():
-    levels = [['a', 'b'], ['c', 'd']]
-    codes = [[0, 1], [1, 0]]
-    pmi = pd.MultiIndex(levels, codes)
-    mi = cudf.MultiIndex(levels, codes)
-    assert_eq(pmi, mi)
-    pmi = pd.MultiIndex(levels=levels, codes=codes)
-    mi = cudf.MultiIndex(levels=levels, codes=codes)
-
-
 def test_multiindex_levels_codes_validation():
     levels = [['a', 'b'], ['c', 'd']]
+    # Codes not a sequence of sequences
+    with pytest.raises(TypeError):
+        pd.MultiIndex(levels, [0, 1])
+    with pytest.raises(TypeError):
+        cudf.MultiIndex(levels, [0, 1])
     # Codes don't match levels
     with pytest.raises(ValueError):
-        pd.MultiIndex(levels, [0, 1])
+        pd.MultiIndex(levels, [[0], [1], [1]])
     with pytest.raises(ValueError):
-        cudf.MultiIndex(levels, [0, 1])
+        cudf.MultiIndex(levels, [[0], [1], [1]])
     # Largest code greater than number of levels
     with pytest.raises(ValueError):
         pd.MultiIndex(levels, [[0, 1], [0, 2]])
@@ -39,6 +34,19 @@ def test_multiindex_levels_codes_validation():
         pd.MultiIndex(levels, [[0, 1], [0]])
     with pytest.raises(ValueError):
         cudf.MultiIndex(levels, [[0, 1], [0]])
+
+
+def test_multiindex_construction():
+    levels = [['a', 'b'], ['c', 'd']]
+    codes = [[0, 1], [1, 0]]
+    pmi = pd.MultiIndex(levels, codes)
+    mi = cudf.MultiIndex(levels, codes)
+    print(pmi)
+    print(mi)
+    assert_eq(pmi, mi)
+    pmi = pd.MultiIndex(levels=levels, codes=codes)
+    mi = cudf.MultiIndex(levels=levels, codes=codes)
+    assert_eq(pmi, mi)
 
 
 def test_multiindex_types():
@@ -61,9 +69,9 @@ def test_multiindex_df_assignment():
     pdf = pd.DataFrame({'x': [1, 2, 3]})
     gdf = cudf.from_pandas(pdf)
     pdf.index = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                              codes=[[0, 1], [1, 0]])
+                              codes=[[0, 1, 0], [1, 0, 1]])
     gdf.index = cudf.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                                codes=[[0, 1], [1, 0]])
+                                codes=[[0, 1, 0], [1, 0, 1]])
     assert_eq(pdf, gdf)
 
 
