@@ -803,7 +803,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
 
-    // For string dtype, allocate and return an NvStrings container instance.
+    // For string dtype, allocate and return an NvStrings container instance,
+    // deallocating the original string list memory in the process.
     // This container takes a list of string pointers and lengths, and copies
     // into its own memory so the source memory must not be released yet.
     if (args->data[i]->dtype == GDF_STRING) {
@@ -812,7 +813,8 @@ gdf_error read_parquet(pq_read_arg *args) {
                     "Unexpected nvstrdesc_s size");
 
       auto str_list = static_cast<str_pair *>(args->data[i]->data);
-      args->data[i]->data = NVStrings::create_from_index(str_list, num_rows);
+      auto str_data = NVStrings::create_from_index(str_list, num_rows);
+      RMM_FREE(std::exchange(args->data[i]->data, str_data), 0);
     }
   }
   args->num_cols_out = num_columns;
