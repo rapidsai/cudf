@@ -76,6 +76,7 @@ TEST(gdf_json_test, SquareBrackets)
 		ASSERT_TRUE(h_data[pos] == '[' || h_data[pos] == ']');
 }
 
+using pos_key_pair = thrust::pair<uint64_t,char>;
 TEST(gdf_json_test, BracketsLevels)
 {
 	// Generate square brackets consistent with 'split' json format
@@ -85,7 +86,7 @@ TEST(gdf_json_test, BracketsLevels)
 	const int header_size = h_data.size();
 	h_data += string(file_size, 'x');
 	h_data[h_data.size() - 1] = ']';
-	for (int i = header_size; i < h_data.size() - 1; i += 4){
+	for (size_t i = header_size; i < h_data.size() - 1; i += 4){
 		h_data[i] = '[';
 		h_data[i + 2] = ']';
 	}
@@ -97,13 +98,13 @@ TEST(gdf_json_test, BracketsLevels)
 
 	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'});
 
-	uint64_t* d_pos{};
-	vector<uint64_t> h_pos(count);
-	cudaMalloc(&d_pos, count*sizeof(uint64_t));
+	pos_key_pair* d_pos{};
+	cudaMalloc(&d_pos, count*sizeof(pos_key_pair));
 
 	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
-	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(uint64_t), cudaMemcpyDefault);
 
+	for (auto pos: getBracketLevels(d_pos, count))
+		cout << pos.second << ' ';
 
 	cudaFree(d_data);
 	cudaFree(d_pos);

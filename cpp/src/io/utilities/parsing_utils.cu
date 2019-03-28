@@ -191,3 +191,15 @@ template gdf_size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_siz
 
 template gdf_size_type findAllFromSet<thrust::pair<uint64_t,char>>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	thrust::pair<uint64_t,char> *positions);
+
+
+using pos_key_pair = thrust::pair<uint64_t,char>;
+
+std::vector<pos_key_pair> getBracketLevels(thrust::pair<uint64_t,char>* brackets, int count){
+	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
+
+	std::vector<pos_key_pair> h_pos(count);
+	cudaMemcpy(h_pos.data(), brackets, count*sizeof(pos_key_pair), cudaMemcpyDefault);
+
+	return h_pos;
+}

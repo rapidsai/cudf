@@ -31,3 +31,12 @@ gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vect
 template<class T>
 gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
+
+#include <thrust/pair.h>
+#include <thrust/device_ptr.h>
+#include <thrust/execution_policy.h>
+
+#include "rmm/rmm.h"
+#include "rmm/thrust_rmm_allocator.h"
+
+std::vector<thrust::pair<uint64_t,char>> getBracketLevels(thrust::pair<uint64_t,char>* brackets, int count);
