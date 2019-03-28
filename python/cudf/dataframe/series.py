@@ -500,27 +500,18 @@ class Series(object):
     def __and__(self, other):
         """Performs vectorized bitwise and (&) on corresponding elements of two
         series.
-
-        Difference from pandas:
-        Returned series has type np.result_type(lhs, rhs) instead of bool
         """
         return self._bitwise_binop(other, 'and')
 
     def __or__(self, other):
         """Performs vectorized bitwise or (|) on corresponding elements of two
         series.
-
-        Difference from pandas:
-        Returned series has type np.result_type(lhs, rhs) instead of bool
         """
         return self._bitwise_binop(other, 'or')
 
     def __xor__(self, other):
         """Performs vectorized bitwise xor (^) on corresponding elements of two
         series.
-
-        Difference from pandas:
-        Returned series has type np.result_type(lhs, rhs) instead of bool
         """
         return self._bitwise_binop(other, 'xor')
 
