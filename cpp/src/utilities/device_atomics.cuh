@@ -22,12 +22,10 @@
  * where cudf's data types are, int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
- * `atomicCAS` (* see note).
- *
- * @note atomicCAS doesn't provides overloads for int8_t, int16_t
+ * `atomicCAS`.
+ * Also provides `cudf::genericAtomicOperation` which performs atomic operation 
+ * with the given binary operator.
  * ---------------------------------------------------------------------------**/
-
-
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
@@ -278,7 +276,21 @@ namespace detail {
 
 } // namespace detail
 
-
+/** -------------------------------------------------------------------------*
+ * @brief reads the `old` located at the `address` in global or shared memory, 
+ * computes 'BinaryOp'('old', 'update_value'),
+ * and stores the result back to memory at the same address.
+ * These three operations are performed in one atomic transaction.
+ *
+ * The supported cudf types for `genericAtomicOperation` are:
+ * int8_t, int16_t, int32_t, int64_t, float, double,
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be added
+ *
+ * @returns The old value at `address`
+ * -------------------------------------------------------------------------**/
 template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
