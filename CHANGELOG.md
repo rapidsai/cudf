@@ -12,12 +12,14 @@
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1284 Update docs version
+- PR #1287 add exclude argument to cudf.select_dtype function
 
 ## Bug Fixes
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
+- PR #1293 Fix Inaccurate error message in join.pyx
 
 
 # cuDF 0.6.0 (Date TBD)
