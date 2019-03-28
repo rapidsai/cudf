@@ -337,6 +337,8 @@ using unwrapped_type_t = typename unwrapped_type<T>::type;
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
 
+using nvstring_category = detail::wrapper<gdf_nvstring_category, GDF_STRING_CATEGORY>;
+
 using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
 
 using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;

@@ -9,8 +9,8 @@ if [ "$BUILD_CFFI" == '1' ]; then
   fi
 
   if [ "$BUILD_ABI" == "1" ]; then
-    conda build conda/recipes/libcudf_cffi -c nvidia/label/cuda${CUDA_REL} -c rapidsai/label/cuda${CUDA_REL} -c numba -c conda-forge -c defaults --python=$PYTHON
+    conda build conda/recipes/libcudf_cffi -c nvidia/label/cuda${CUDA_REL} -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} -c numba -c conda-forge -c defaults --python=$PYTHON
   else
-    conda build conda/recipes/libcudf_cffi -c nvidia/label/cf201901-cuda${CUDA_REL} -c rapidsai/label/cf201901-cuda${CUDA_REL} -c numba -c conda-forge/label/cf201901 -c defaults --python=$PYTHON
+    conda build conda/recipes/libcudf_cffi -c nvidia/label/cf201901-cuda${CUDA_REL} -c rapidsai/label/cf201901-cuda${CUDA_REL} -c rapidsai-nightly/label/cf201901-cuda${CUDA_REL} -c numba -c conda-forge/label/cf201901 -c defaults --python=$PYTHON
   fi
 fi

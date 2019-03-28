@@ -695,6 +695,25 @@ def test_dataframe_dtypes():
     assert df.dtypes.equals(dtypes)
 
 
+def test_dataframe_add_col_to_object_dataframe():
+    # Test for adding column to an empty object dataframe
+    cols = ['a', 'b', 'c']
+    df = pd.DataFrame(columns=cols, dtype='str')
+
+    data = {k: v for (k, v) in zip(cols, [['a'] for _ in cols])}
+
+    gdf = DataFrame(data)
+    gdf = gdf[:0]
+
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['a'] = [1]
+    df['a'] = [10]
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['b'] = [1.0]
+    df['b'] = [10.0]
+    assert gdf.dtypes.equals(df.dtypes)
+
+
 def test_dataframe_dir_and_getattr():
     df = DataFrame([('a', np.ones(10)),
                     ('b', np.ones(10)),
@@ -1202,18 +1221,22 @@ def test_to_from_arrow_nulls(data_type):
         s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0]),
-        gs1.nullmask.to_array()
+        np.array(s1.buffers()[0])[0],
+        gs1.nullmask.to_array()[0]
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
     s2 = pa.array([None, None, None, None, None], type=data_type)
     gs2 = gd.Series.from_arrow(s2)
     assert isinstance(gs2, gd.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0]),
-        gs2.nullmask.to_array()
+        np.array(s2.buffers()[0])[0],
+        gs2.nullmask.to_array()[0]
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1966,13 +1989,18 @@ def test_select_dtype():
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=np.number))
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
     assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+    with pytest.raises(ValueError):
+        gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
 def test_array_ufunc():

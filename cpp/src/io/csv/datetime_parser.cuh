@@ -64,15 +64,15 @@
 
 #include "cudf.h"
 
-__host__ __device__ bool extractDate(const char *data, long sIdx, long eIdx,
-                                     bool dayfirst, int *year, int *month,
-                                     int *day);
-__host__ __device__ void extractTime(const char *data, long start, long end,
-                                     int *hour, int *minute, int *second,
-                                     int *millisecond);
+__device__ bool extractDate(const char *data, long sIdx, long eIdx,
+                            bool dayfirst, int *year, int *month, int *day);
+__device__ void extractTime(const char *data, long start, long end, int *hour,
+                            int *minute, int *second, int *millisecond);
 
-__host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
-__host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
+__device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
+__device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day,
+                                               int hour, int minute,
+                                               int second);
 
 /**---------------------------------------------------------------------------*
  * @brief Simplified parsing function for use by date and time parsing
@@ -87,8 +87,7 @@ __host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__host__ __device__ T convertStrToInteger(const char *data, long start,
-                                          long end) {
+__device__ T convertStrToInteger(const char *data, long start, long end) {
   T value = 0;
 
   long index = start;
@@ -116,16 +115,15 @@ __host__ __device__ T convertStrToInteger(const char *data, long start,
  *
  * @return index into the string, or -1 if the character is not found
  */
-__host__ __device__
-long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c) {
+__device__ long findFirstOccurrence(const char *data, long start_idx,
+                                    long end_idx, char c) {
+  for (long i = start_idx; i <= end_idx; ++i) {
+    if (data[i] == c) {
+      return i;
+    }
+  }
 
-	for (long i = start_idx; i <= end_idx; ++i) {
-		if (data[i] == c) {
-			return i;
-		}
-	}
-
-	return -1;
+  return -1;
 }
 
 /**
@@ -141,7 +139,7 @@ long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c)
  *
  * @return returns the number of days since epoch
  */
-__host__ __device__
+__device__
 gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int day, month, year;
@@ -169,8 +167,8 @@ gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool 
  * 
  * @return Milliseconds since epoch
  */
-__host__ __device__ gdf_date64 parseDateTimeFormat(const char *data, long start,
-                                                   long end, bool dayfirst) {
+__device__ gdf_date64 parseDateTimeFormat(const char *data, long start,
+                                          long end, bool dayfirst) {
   int day, month, year;
   int hour, minute, second, millisecond = 0;
   gdf_date64 answer = -1;
@@ -224,7 +222,7 @@ __host__ __device__ gdf_date64 parseDateTimeFormat(const char *data, long start,
  *
  * @return T/F - false indicates that an error occurred
  */
-__host__ __device__
+__device__
 bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
 
 	char sep = '/';
@@ -312,9 +310,8 @@ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *yea
  * @param[out] second The second value (0 if not present)
  * @param[out] millisecond The millisecond (0 if not present)
  */
-__host__ __device__ void extractTime(const char *data, long start, long end,
-                                     int *hour, int *minute, int *second,
-                                     int *millisecond) {
+__device__ void extractTime(const char *data, long start, long end, int *hour,
+                            int *minute, int *second, int *millisecond) {
   constexpr char sep = ':';
 
   // Adjust for AM/PM and any whitespace before
@@ -355,22 +352,22 @@ __host__ __device__ void extractTime(const char *data, long start, long end,
 }
 
 // User-defined literals to clarify numbers and units for time calculation
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _days(unsigned long long int days) {
-	return days;
+  return days;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _erasInDays(unsigned long long int eras) {
-	// multiply by number of days within an era (400 year span)
-	return eras * 146097_days;
+  // multiply by number of days within an era (400 year span)
+  return eras * 146097_days;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _years(unsigned long long int years) {
-	return years;
+  return years;
 }
-__host__ __device__
+__device__
 constexpr uint32_t operator "" _erasInYears(unsigned long long int eras) {
-	return (eras * 1_erasInDays) / 365_days;
+  return (eras * 1_erasInDays) / 365_days;
 }
 
 /**
@@ -386,25 +383,23 @@ constexpr uint32_t operator "" _erasInYears(unsigned long long int eras) {
  *
  * @return days since March 1, 0000
  */
-__host__ __device__
-constexpr int32_t daysSinceBaseline(int year, int month, int day) {
+__device__ constexpr int32_t daysSinceBaseline(int year, int month, int day) {
+  // More details of this formula are located in cuDF datetime_ops
+  // In brief, the calculation is split over several components:
+  //     era: a 400 year range, where the date cycle repeats exactly
+  //     yoe: year within the 400 range of an era
+  //     doy: day within the 364 range of a year
+  //     doe: exact day within the whole era
+  // The months are shifted so that March is the starting month and February
+  // (possible leap day in it) is the last month for the linear calculation
+  year -= (month <= 2) ? 1 : 0;
 
-    // More details of this formula are located in cuDF datetime_ops
-    // In brief, the calculation is split over several components:
-    //     era: a 400 year range, where the date cycle repeats exactly
-    //     yoe: year within the 400 range of an era
-    //     doy: day within the 364 range of a year
-    //     doe: exact day within the whole era
-    // The months are shifted so that March is the starting month and February
-    // (possible leap day in it) is the last month for the linear calculation
-    year -= (month <= 2) ? 1 : 0;
+  const int32_t era = (year >= 0 ? year : year - 399_years) / 1_erasInYears;
+  const int32_t yoe = year - era * 1_erasInYears;
+  const int32_t doy = (153_days * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  const int32_t doe = (yoe * 365_days) + (yoe / 4_years) - (yoe / 100_years) + doy;
 
-    const int32_t era = (year >= 0 ? year : year - 399_years) / 1_erasInYears;
-    const int32_t yoe = year - era * 1_erasInYears;
-    const int32_t doy = (153_days * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
-    const int32_t doe = (yoe * 365_days) + (yoe / 4_years) - (yoe / 100_years) + doy;
-
-    return (era * 1_erasInDays) + doe;
+  return (era * 1_erasInDays) + doe;
 }
 
 
@@ -420,14 +415,12 @@ constexpr int32_t daysSinceBaseline(int year, int month, int day) {
  *
  * @return days since epoch
  */
-__host__ __device__
-constexpr int32_t daysSinceEpoch(int year, int month, int day) {
+__device__ constexpr int32_t daysSinceEpoch(int year, int month, int day) {
+  // Shift the start date to epoch to match unix time
+  static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
+                "Baseline to epoch returns incorrect number of days");
 
-    // Shift the start date to epoch to match unix time
-    static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
-                  "Baseline to epoch returns incorrect number of days");
-
-    return daysSinceBaseline(year, month, day) - daysSinceBaseline(1970, 1, 1);
+  return daysSinceBaseline(year, month, day) - daysSinceBaseline(1970, 1, 1);
 }
 
 
@@ -446,12 +439,12 @@ constexpr int32_t daysSinceEpoch(int year, int month, int day) {
  *
  * @return seconds since epoch
  */
-__host__ __device__
-constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second) {
+__device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day,
+                                               int hour, int minute,
+                                               int second) {
+  // Leverage the function to find the days since epoch
+  const auto days = daysSinceEpoch(year, month, day);
 
-	// Leverage the function to find the days since epoch
-	const auto days = daysSinceEpoch(year, month, day);
-
-	// Return sum total seconds from each time portion
-	return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
+  // Return sum total seconds from each time portion
+  return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
 }

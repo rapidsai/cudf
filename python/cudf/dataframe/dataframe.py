@@ -16,6 +16,15 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
+try:
+    # pd 0.24.X
+    from pandas.core.dtypes.common import infer_dtype_from_object
+except ImportError:
+    # pd 0.23.X
+    from pandas.core.dtypes.common import \
+            _get_dtype_from_object as infer_dtype_from_object
+
+
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -396,15 +405,17 @@ class DataFrame(object):
 
         # Prepare cells
         cols = OrderedDict()
+        dtypes = OrderedDict()
         use_cols = list(self.columns[:ncols - 1])
         if ncols > 0:
             use_cols.append(self.columns[-1])
 
         for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
+            dtypes[h] = self[h].dtype
 
         # Format into a table
-        return formatting.format(index=self._index, cols=cols,
+        return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
                                  show_headers=True, more_cols=more_cols,
                                  more_rows=more_rows, min_width=2)
 
@@ -734,7 +745,10 @@ class DataFrame(object):
         series = Series(col)
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
-            arr = rmm.device_array(shape=len(ind), dtype=np.float64)
+            dtype = np.float64
+            if self[next(iter(self._cols))].dtype == np.dtype("object"):
+                dtype = np.dtype("object")
+            arr = rmm.device_array(shape=len(ind), dtype=dtype)
             size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
@@ -755,9 +769,13 @@ class DataFrame(object):
         SCALAR = np.isscalar(col)
 
         if len(self) > 0 and len(series) == 1 and SCALAR:
-            arr = rmm.device_array(shape=len(index), dtype=series.dtype)
-            cudautils.gpu_fill_value.forall(arr.size)(arr, col)
-            return Series(arr)
+            if series.dtype == np.dtype("object"):
+                gather_map = cudautils.zeros(len(index), 'int32')
+                return series[gather_map]
+            else:
+                arr = rmm.device_array(shape=len(index), dtype=series.dtype)
+                cudautils.gpu_fill_value.forall(arr.size)(arr, col)
+                return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
         return col
@@ -1308,6 +1326,7 @@ class DataFrame(object):
         4    3    13.0
         2    4    14.0    12.0
         """
+        import nvstrings
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
@@ -1472,12 +1491,18 @@ class DataFrame(object):
                         key = on[idx]
                         categories = col_cats[key] if key in col_cats.keys()\
                             else None
-                        df[key] = columnops.build_column(
-                                Buffer(cols[on_idx]),
-                                dtype=cols[on_idx].dtype,
-                                mask=Buffer(valids[on_idx]),
-                                categories=categories,
-                                )
+                        if isinstance(cols[on_idx], nvstrings.nvstrings):
+                            df[key] = cols[on_idx]
+                        else:
+                            mask = None
+                            if valids[on_idx] is not None:
+                                mask = Buffer(valids[on_idx])
+                            df[key] = columnops.build_column(
+                                    Buffer(cols[on_idx]),
+                                    dtype=cols[on_idx].dtype,
+                                    mask=mask,
+                                    categories=categories,
+                            )
             else:  # not an `on`-column, `cpp_join` returns these after `on`
                 # but they need to be added to the result before `on` columns.
                 # on_count corrects gap for non-`on` columns
@@ -1485,12 +1510,18 @@ class DataFrame(object):
                 left_name = fix_name(name, lsuffix)
                 categories = col_cats[left_name] if left_name in\
                     col_cats.keys() else None
-                df[left_name] = columnops.build_column(
-                        Buffer(cols[left_column_idx]),
-                        dtype=cols[left_column_idx].dtype,
-                        mask=Buffer(valids[left_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[left_column_idx], nvstrings.nvstrings):
+                    df[left_name] = cols[left_column_idx]
+                else:
+                    mask = None
+                    if valids[left_column_idx] is not None:
+                        mask = Buffer(valids[left_column_idx])
+                    df[left_name] = columnops.build_column(
+                            Buffer(cols[left_column_idx]),
+                            dtype=cols[left_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
         rhs_column_idx = len(lhs.columns)
         for name in rhs.columns:
             if name not in on:
@@ -1498,12 +1529,18 @@ class DataFrame(object):
                 rhs_name = fix_name(name, rsuffix)
                 categories = col_cats[rhs_name] if rhs_name in\
                     col_cats.keys() else None
-                df[rhs_name] = columnops.build_column(
-                        Buffer(cols[rhs_column_idx]),
-                        dtype=cols[rhs_column_idx].dtype,
-                        mask=Buffer(valids[rhs_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[rhs_column_idx], nvstrings.nvstrings):
+                    df[rhs_name] = cols[rhs_column_idx]
+                else:
+                    mask = None
+                    if valids[rhs_column_idx] is not None:
+                        mask = Buffer(valids[rhs_column_idx])
+                    df[rhs_name] = columnops.build_column(
+                            Buffer(cols[rhs_column_idx]),
+                            dtype=cols[rhs_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
@@ -2333,28 +2370,81 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def select_dtypes(self, include=None):
+    def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
 
         Parameters
         ----------
         include : str or list
             which columns to include based on dtypes
+        exclude : str or list
+            which columns to exclude based on dtypes
 
         """
 
+        # code modified from:
+        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+
         if not isinstance(include, (list, tuple)):
-            include = [include]
+            include = (include,) if include is not None else ()
+        if not isinstance(exclude, (list, tuple)):
+            exclude = (exclude,) if exclude is not None else ()
+
         df = DataFrame()
 
-        include = [pd.core.dtypes.common.pandas_dtype(d) for d in include]
+        # infer_dtype_from_object can distinguish between
+        # np.float and np.number
+        selection = tuple(map(frozenset, (include, exclude)))
+        include, exclude = map(
+            lambda x: frozenset(
+                map(infer_dtype_from_object, x)),
+            selection,
+        )
+
+        # can't both include AND exclude!
+        if not include.isdisjoint(exclude):
+            raise ValueError('include and exclude overlap on {inc_ex}'.format(
+                inc_ex=(include & exclude)))
+
+        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
+
+        # include all subtypes
+        include_subtypes = set()
+        for dtype in self.dtypes:
+            for i_dtype in include:
+                # category handling
+                if i_dtype is cat_type:
+                    include_subtypes.add(i_dtype)
+                    break
+                if issubclass(dtype.type, i_dtype):
+                    include_subtypes.add(dtype.type)
+
+        # exclude all subtypes
+        exclude_subtypes = set()
+        for dtype in self.dtypes:
+            for e_dtype in exclude:
+                # category handling
+                if e_dtype is cat_type:
+                    exclude_subtypes.add(e_dtype)
+                    break
+                if issubclass(dtype.type, e_dtype):
+                    exclude_subtypes.add(dtype.type)
+
+        include_all = set([infer_dtype_from_object(d)
+                           for d in self.dtypes])
+
+        # remove all exclude types
+        inclusion = include_all - exclude_subtypes
+
+        # keep only those included
+        if include_subtypes:
+            inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            try:
-                if x.dtype in include:
-                    df.add_column(x.name, x)
-            except TypeError:
-                pass
+            infered_type = infer_dtype_from_object(x.dtype)
+            if infered_type in inclusion:
+                df.add_column(x.name, x)
+
         return df
 
     @ioutils.doc_to_parquet()
