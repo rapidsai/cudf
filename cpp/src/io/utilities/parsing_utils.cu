@@ -45,8 +45,6 @@ struct rmm_deleter {
 template <typename T>
 using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
-using position_key_pair = thrust::pair<uint64_t,char>;
-
 /**---------------------------------------------------------------------------*
  * @brief Sets the specified element of the array to the passed value
  *---------------------------------------------------------------------------**/
