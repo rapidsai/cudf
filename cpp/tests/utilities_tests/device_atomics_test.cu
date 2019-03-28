@@ -44,6 +44,23 @@ void gpu_atomic_test(T *result, T *data, size_t size)
     }
 }
 
+template<typename T, typename BinaryOp>
+__device__
+T atomic_op(T* addr, T const & value, BinaryOp op)
+{
+    T old_value = *addr;
+    T assumed;
+
+    do {
+        assumed  = old_value;
+        const T new_value = op(old_value, value);
+
+        old_value = atomicCAS(addr, assumed, new_value);
+    } while (assumed != old_value);
+
+    return old_value;
+}
+
 template<typename T>
 __global__
 void gpu_atomicCAS_test(T *result, T *data, size_t size)
@@ -52,23 +69,16 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
     size_t step = blockDim.x * gridDim.x;
 
     for (; id < size; id += step) {
-        T* addr = &result[0];
-        T update_value = data[id];
-
-        T old_value = *addr;
-        T assumed;
-
-        do {
-            assumed  = old_value;
-            const T new_value = old_value + update_value;
-
-            old_value = atomicCAS(addr, assumed, new_value);
-        } while (assumed != old_value);
+        atomic_op(&result[0], data[id], cudf::DeviceSum{});
+        atomic_op(&result[1], data[id], cudf::DeviceMin{});
+        atomic_op(&result[2], data[id], cudf::DeviceMax{});
+        atomic_op(&result[3], data[id], cudf::DeviceSum{});
     }
 }
 
 // TODO: remove these explicit instantiation for kernels
-// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated,
+// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
+// because `TypeParam` is a private member of class ::testing::Test
 // then kenrel call failed by `cudaErrorInvalidDeviceFunction`
 
 template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
@@ -144,24 +154,15 @@ TYPED_TEST(AtomicsTest, atomicOps)
 
 // ------------------------------------------------------------------------------------------------
 
-template <typename T>
-struct AtomicsCASTest : public GdfTest {
-};
-
-// TODO: add `int8_t`, `int16_t` if `atomicCAS` supports
-using TestingTypesForCAS = ::testing::Types<
-    int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
-
-TYPED_TEST_CASE(AtomicsCASTest, TestingTypesForCAS);
-
 // tests for atomicCAS
-TYPED_TEST(AtomicsCASTest, atomicCAS)
+TYPED_TEST(AtomicsTest, atomicCAS)
 {
     using T = TypeParam;
     std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
-    int exact = std::accumulate(v.begin(), v.end(), 0);
+    int exact[3];
+    exact[0] = std::accumulate(v.begin(), v.end(), 0);
+    exact[1] = *( std::min_element(v.begin(), v.end()) );
+    exact[2] = *( std::max_element(v.begin(), v.end()) );
     size_t vec_size = v.size();
 
     // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
@@ -170,7 +171,11 @@ TYPED_TEST(AtomicsCASTest, atomicCAS)
     std::transform(v.begin(), v.end(), v_type.begin(),
         [](int x) { T t(x) ; return t; } );
 
-    std::vector<T> result_init({T{0}});
+    std::vector<T> result_init(4);
+    result_init[0] = T{0};
+    result_init[1] = std::numeric_limits<T>::max();
+    result_init[2] = std::numeric_limits<T>::min();
+    result_init[3] = T{0};
 
     thrust::device_vector<T> dev_result(result_init);
     thrust::device_vector<T> dev_data(v_type);
@@ -191,7 +196,10 @@ TYPED_TEST(AtomicsCASTest, atomicCAS)
 
     CUDA_CHECK_LAST();
 
-    EXPECT_EQ(host_result[0], T(exact)) << "atomicCAS test failed";
+    EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAdd test failed";
+    EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
+    EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
+    EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
 }
 
 
