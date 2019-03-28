@@ -642,7 +642,7 @@ class DataFrame(object):
         if isinstance(_index, MultiIndex):
             self._index = _index
             for k in self.columns:
-                self[k] = self[k].index = _index
+                self[k].set_index(_index)
             return
 
         new_length = len(_index)
@@ -2529,7 +2529,9 @@ class Iloc(object):
 
 def from_pandas(obj):
     """
-    Convert a Pandas DataFrame or Series object into the cudf equivalent
+    Convert certain Pandas objects into the cudf equivalent.
+
+    Supports DataFrame, Series, or MultiIndex.
 
     Raises
     ------
@@ -2548,9 +2550,12 @@ def from_pandas(obj):
         return DataFrame.from_pandas(obj)
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj)
+    elif isinstance(obj, pd.MultiIndex):
+        return MultiIndex.from_pandas(obj)
     else:
         raise TypeError(
-            "from_pandas only accepts Pandas Dataframes and Series objects. "
+            "from_pandas only accepts Pandas Dataframes, Series, and "
+            "MultiIndex objects. "
             "Got %s" % type(obj)
         )
 

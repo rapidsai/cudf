@@ -686,6 +686,10 @@ class Series(object):
         """
         return self._index
 
+    @index.setter
+    def index(self, _index):
+        self._index = _index
+
     @property
     def iloc(self):
         """

@@ -79,9 +79,9 @@ def test_multiindex_series_assignment():
     ps = pd.Series([1, 2, 3])
     gs = cudf.from_pandas(ps)
     ps.index = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                             codes=[[0, 1], [1, 0]])
+                             codes=[[0, 1, 0], [1, 0, 1]])
     gs.index = cudf.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                               codes=[[0, 1], [1, 0]])
+                               codes=[[0, 1, 0], [1, 0, 1]])
     assert_eq(ps, gs)
 
 
