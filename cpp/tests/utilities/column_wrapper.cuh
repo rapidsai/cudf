@@ -321,8 +321,11 @@ struct column_wrapper {
     if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
       return false;
 
-    if (!(the_column.data && rhs.data))
-      return false;  // if one is null but not both
+    if ((the_column.data == nullptr) != (rhs.data == nullptr))
+      return false; // if one is null but not both
+    else if (rhs.data == nullptr)
+      return true; // logically, both are null
+    // both are non-null...
 
     if (not thrust::all_of(rmm::exec_policy()->on(0),
                            thrust::make_counting_iterator(0),
