@@ -170,14 +170,6 @@ cdef extern from "cudf.h" nogil:
         GDF_ORDER_ASC,
         GDF_ORDER_DESC
 
-    ctypedef enum gdf_comparison_operator:
-        GDF_EQUALS,
-        GDF_NOT_EQUALS,
-        GDF_LESS_THAN,
-        GDF_LESS_THAN_OR_EQUALS,
-        GDF_GREATER_THAN,
-        GDF_GREATER_THAN_OR_EQUALS
-
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -576,15 +568,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     
-    cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation)
-
-    cdef gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation)
-
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
