@@ -25,7 +25,7 @@ def _wrap_string(text):
 
 
 @ioutils.doc_read_parquet()
-def read_parquet(path, engine='pyarrow', *args, **kwargs):
+def read_parquet(path, engine='cudf', *args, **kwargs):
     """{docstring}"""
 
     if engine == 'cudf':

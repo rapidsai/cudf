@@ -9,15 +9,14 @@ Parameters
 ----------
 path : string or path object
     Path of file to be read
-engine : { 'pyarrow', 'cudf' }, optional
-    Parser engine to use. Unless specified, the 'pyarrow' engine is used.
+engine : { 'cudf', 'pyarrow' }, default='cudf'
+    Parser engine to use.
 columns : list, default=None
     If not None, only these columns will be read.
 
 Returns
 -------
-PANDAS ``DataFrame`` object if using the PyArrow parser engine.
-GPU ``DataFrame`` object if using the cudf parser engine.
+DataFrame
 
 Examples
 --------
