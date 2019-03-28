@@ -540,7 +540,7 @@ class Series(object):
         return self._unaryop('not')
 
     def __neg__(self):
-        """Bitwise invert (~)/(not) for each element
+        """Negatated value (-) for each element
 
         Returns a new Series.
         """

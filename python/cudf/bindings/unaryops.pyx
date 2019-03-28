@@ -15,21 +15,21 @@ from librmm_cffi import librmm as rmm
 from libc.stdlib cimport free
 
 
-_MATH_OP = {}
-_MATH_OP['sin']     = GDF_SIN
-_MATH_OP['cos']     = GDF_COS
-_MATH_OP['tan']     = GDF_TAN
-_MATH_OP['asin']    = GDF_ARCSIN
-_MATH_OP['acos']    = GDF_ARCCOS
-_MATH_OP['atan']    = GDF_ARCTAN
-_MATH_OP['exp']     = GDF_EXP
-_MATH_OP['log']     = GDF_LOG
-_MATH_OP['sqrt']    = GDF_SQRT
-_MATH_OP['ceil']    = GDF_CEIL
-_MATH_OP['floor']   = GDF_FLOOR
-_MATH_OP['abs']     = GDF_ABS
-_MATH_OP['not']     = GDF_BIT_INVERT
-
+_MATH_OP = {
+    'sin'   : GDF_SIN,
+    'cos'   : GDF_COS,
+    'tan'   : GDF_TAN,
+    'asin'  : GDF_ARCSIN,
+    'acos'  : GDF_ARCCOS,
+    'atan'  : GDF_ARCTAN,
+    'exp'   : GDF_EXP,
+    'log'   : GDF_LOG,
+    'sqrt'  : GDF_SQRT,
+    'ceil'  : GDF_CEIL,
+    'floor' : GDF_FLOOR,
+    'abs'   : GDF_ABS,
+    'not'   : GDF_BIT_INVERT,
+}
 
 def apply_math_op(incol, outcol, op):
     """
