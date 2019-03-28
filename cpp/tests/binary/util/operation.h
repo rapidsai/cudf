@@ -108,6 +108,27 @@ namespace operation {
         }
     };
 
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseAnd {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs & rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseOr {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs | rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseXor {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs ^ rhs);
+        }
+    };
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
