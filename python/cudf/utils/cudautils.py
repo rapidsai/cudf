@@ -6,11 +6,10 @@ from numba import cuda, int32, numpy_support
 from math import isnan
 
 from librmm_cffi import librmm as rmm
-from cudf import _gdf
 
-from cudf.utils import cudautils, utils, ioutils
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
+
 
 def optimal_block_count(minblkct):
     """Return the optimal block count for a CUDA kernel launch.
@@ -273,6 +272,7 @@ def mask_assign_slot(size, mask):
     sz = int(slots[slots.size - 1])
     return slots, sz
 
+
 def prefixsum(vals):
     """Compute the full prefixsum.
 
@@ -293,7 +293,7 @@ def prefixsum(vals):
     # Compute prefixsum on the mask
     in_col = NumericalColumn(data=Buffer(vals), mask=None,
                              null_count=0, dtype=vals.dtype)
-    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None, 
+    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None,
                               null_count=0, dtype=vals.dtype)
     cpp_reduce.apply_scan(in_col, out_col, 'sum', inclusive=True)
     return slots
