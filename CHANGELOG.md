@@ -14,6 +14,7 @@
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
+- PR #1311 CSV Reader: Use enums instead of gdf_dtype char* strings for specifying dtypes
 
 ## Bug Fixes
 
