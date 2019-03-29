@@ -2,8 +2,9 @@
 
 ## New Features
 
-- PR #1194  Implement overloads for CUDA atomic operations
+- PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
+- PR #1235 Add GPU-accelerated Parquet Reader
 
 ## Improvements
 
