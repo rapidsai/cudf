@@ -118,6 +118,96 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
+
+/**
+ * @brief Slices the row (including null values) of a column into a set
+ * of output columns according to a set of indices.
+ *
+ * The "slice" function divides part of the input row into multiple intervals
+ * using the indices values and it stores the interval into an output column.
+ * For the interval of indices (left-closed, right-open) is taken a pair of
+ * values from the indices array in a consecutive manner.
+ *
+ * The indices array ('indexes') is require to be a monotonic non-decreasing set.
+ * a <= b, where ('a' and 'b' belongs to 'indexes') and
+ * (position of 'a' in 'indexes' is less than position of 'b' in 'indexes').
+ *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function return an empty column.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, input column
+ * size), the outcome is undefined.
+ *
+ * It is required that the output columns will be preallocated. The size of each
+ * of the columns can be of different value. The number of columns must be equal
+ * to the number of indices in the array divided by two. The indices array must
+ * have an even size. The datatypes of the input column and the output columns
+ * must be the same.
+ *
+ * Example:
+ * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+ * indexes: {1, 3, 5, 9}
+ * output:  {{12, 14}, {20, 22, 24, 26}}
+ *
+ * @param[in] input_column The input column whose rows will be sliced.
+ * @param[in] indexes An array of indices that are used to take 'slices'
+ * of the input column.
+ * @param[out] output_columns A preallocated set of columns. Each column
+ * has a different number of rows that are equal to the difference of two
+ * consecutive indices in the indices array.
+ */
+void slice(gdf_column const*   input_column,
+           gdf_column const*   indexes,
+           cudf::column_array* output_columns);
+
+/**
+ * @brief Splits all the row (including null values) of a column into a set
+ * of output columns according to a set of indices.
+ *
+ * The "split" function divides all the input row into multiple intervals
+ * using the indices values and it stores the interval into an output
+ * column. For the interval of indices (left-closed, right-open) is
+ * taken a pair of values from the indices array in a consecutive manner.
+ *
+ * The indices array ('indexes') is require to be a monotonic non-decreasing set.
+ * a <= b, where ('a' and 'b' belongs to 'indexes') and
+ * (position of 'a' in 'indexes' is less than position of 'b' in 'indexes').
+ *
+ * The split function will take a pair of indices from the indices array
+ * ('indexes') in a consecutive manner. For the first pair, the function will
+ * take the value 0 and the first element of the indices array. For the last pair,
+ * the function will take the last element of the indices array and the size of
+ * the input column.
+ *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function return an empty column.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, input column
+ * size), the outcome is undefined.
+ *
+ * It is required that the output columns will be preallocated. The size of each
+ * of the columns can be of different value. The number of columns must be equal
+ * to the number of indices in the array plus one. The datatypes of the input
+ * column and the output columns must be the same.
+ *
+ * Example:
+ * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+ * indexes: {2, 5, 9}
+ * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+ *
+ * @param[in] input_column The input column whose rows will be split.
+ * @param[in] indexes An array of indices that are used to divide the input
+ * column into multiple columns.
+ * @param[out] output_columns A preallocated set of columns. Each column
+ * has a different number of rows that are equal to the difference of two
+ * consecutive indices in the indices array.
+ */
+void split(gdf_column const*   input_column,
+           gdf_column const*   indexes,
+           cudf::column_array* output_columns);
+
 }  // namespace cudf
 
 #endif  // COPYING_H
