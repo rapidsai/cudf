@@ -20,6 +20,7 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
+// #include "utilities/device_atomics.cuh"
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"
@@ -92,10 +93,7 @@ struct typed_groupby_functor
   template <typename TypeAgg, typename... Ts>
   gdf_error operator()(Ts&&... args)
   {
-    // TypeAgg can a wrapped type (e.g detail::wrapper<gdf_date32, GDF_DATE32>)
-    // in which case, we want to pass the underlying type (gdf_date32 = int)
-    using TypeAggUndl = cudf::detail::unwrapped_type_t<TypeAgg>;
-    return typed_groupby<TypeAggUndl, op>(std::forward<Ts>(args)...);    
+    return typed_groupby<TypeAgg, op>(std::forward<Ts>(args)...);    
   }
 };
 

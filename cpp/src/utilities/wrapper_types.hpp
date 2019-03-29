@@ -60,7 +60,7 @@ struct wrapper
   value_type value;                                              ///< The wrapped value
 
   CUDA_HOST_DEVICE_CALLABLE
-  explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(T v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }

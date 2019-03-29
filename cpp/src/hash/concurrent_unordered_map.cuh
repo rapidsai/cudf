@@ -32,6 +32,8 @@
 
 #include "helper_functions.cuh"
 
+#include "utilities/device_atomics.cuh"
+
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
  *
