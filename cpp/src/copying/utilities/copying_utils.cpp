@@ -1,9 +1,29 @@
 #include "copying/utilities/copying_utils.hpp"
 #include "cudf.h"
+#include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 
 namespace cudf {
 namespace utilities {
+
+CudaVariableScope::CudaVariableScope(cudaStream_t stream)
+: counter_{nullptr}, stream_{stream} {
+  RMM_ALLOC((void**)&counter_, sizeof(gdf_size_type), stream_);
+  CUDA_TRY(cudaMemsetAsync(counter_, 0, sizeof(gdf_size_type), stream_));
+}
+
+CudaVariableScope::~CudaVariableScope() {
+  RMM_FREE(counter_, stream_);
+}
+
+gdf_size_type* CudaVariableScope::get_pointer() {
+  return counter_;
+}
+
+void CudaVariableScope::load_value(gdf_size_type& value) {
+  CUDA_TRY(cudaMemcpyAsync(&value, counter_, sizeof(gdf_size_type), cudaMemcpyDeviceToHost, stream_));
+}
+
 
 BaseCopying::BaseCopying(gdf_column const*   input_column,
                          gdf_column const*   indexes,
@@ -60,6 +80,14 @@ bool BaseCopying::validate_inputs() {
   CUDF_EXPECTS(input_column_->valid != nullptr, "input column bitmask is null");
 
   return true;
+}
+
+void BaseCopying::update_column(gdf_column*        output_column,
+                                gdf_column const*  input_column,
+                                CudaVariableScope& variable) {
+  gdf_size_type value;
+  variable.load_value(value);
+  output_column->null_count = output_column->size - value;
 }
 
 } // namespace utilitites 
