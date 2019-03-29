@@ -241,7 +241,7 @@ namespace detail {
         do {
            assumed = old;
            target_value = T((old >> shift) & 0xff);
-           // have to compare target_value and compare before calling atomicCAS
+           // have to compare `target_value` and `compare` before calling atomicCAS
            // the `target_value` in `old` can be different with `compare`
            if( target_value != compare ) break;
 
@@ -273,7 +273,7 @@ namespace detail {
             target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
             if( target_value != compare ) break;
 
-            old = (is_32_align) ? (old & 0xffff0000) | val
+            old = (is_32_align) ? (old & 0xffff0000) | new_value
                     : (old & 0xffff) | (T_int(new_value) << 16);
             old = atomicCAS(address_uint32, assumed, old);
         } while (assumed != old);

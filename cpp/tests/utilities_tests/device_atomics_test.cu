@@ -96,7 +96,8 @@ template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *r
 template <typename T>
 struct AtomicsTest : public GdfTest
 {
-    void atomic_test(std::vector<int>& v, bool call_atomicCAS)
+    void atomic_test(std::vector<int>& v, bool is_cas_test,
+        int block_size=0, int grid_size=1)
     {
         int exact[3];
         exact[0] = std::accumulate(v.begin(), v.end(), 0);
@@ -119,27 +120,22 @@ struct AtomicsTest : public GdfTest
         thrust::device_vector<T> dev_result(result_init);
         thrust::device_vector<T> dev_data(v_type);
 
-        cudaDeviceSynchronize();
-        CUDA_CHECK_LAST();
+        if( block_size == 0) block_size = vec_size;
 
-        if( call_atomicCAS ){
-            gpu_atomicCAS_test<T> <<<1, vec_size>>> (
+        if( is_cas_test ){
+            gpu_atomicCAS_test<T> <<<grid_size, block_size>>> (
                 reinterpret_cast<T*>( dev_result.data().get() ),
                 reinterpret_cast<T*>( dev_data.data().get() ),
                 vec_size);
         }else{
-            gpu_atomic_test<T> <<<1, vec_size>>> (
+            gpu_atomic_test<T> <<<grid_size, block_size>>> (
                 reinterpret_cast<T*>( dev_result.data().get() ),
                 reinterpret_cast<T*>( dev_data.data().get() ),
                 vec_size);
         }
 
-        cudaDeviceSynchronize();
-        CUDA_CHECK_LAST();
-
         thrust::host_vector<T> host_result(dev_result);
         cudaDeviceSynchronize();
-
         CUDA_CHECK_LAST();
 
         EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAdd test failed";
@@ -159,21 +155,84 @@ TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
 {
+    bool is_cas_test = false;
     std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    this->atomic_test(input_array, false);
+    this->atomic_test(input_array, is_cas_test);
 
     std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
-    this->atomic_test(input_array2, false);
+    this->atomic_test(input_array2, is_cas_test);
 }
 
 // tests for atomicCAS
 TYPED_TEST(AtomicsTest, atomicCAS)
 {
+    bool is_cas_test = true;
     std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    this->atomic_test(input_array, true);
+    this->atomic_test(input_array, is_cas_test);
 
     std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
-    this->atomic_test(input_array2, false);
+    this->atomic_test(input_array2, is_cas_test);
+}
+
+// tests for atomicAdd/Min/Max
+TYPED_TEST(AtomicsTest, atomicOpsGrid)
+{
+    bool is_cas_test = false;
+    int block_size=3;
+    int grid_size=4;
+
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test, block_size, grid_size);
+}
+
+// tests for atomicCAS
+TYPED_TEST(AtomicsTest, atomicCASGrid)
+{
+    bool is_cas_test = true;
+    int block_size=3;
+    int grid_size=4;
+
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test, block_size, grid_size);
+}
+
+// tests for large array
+TYPED_TEST(AtomicsTest, atomicOpsRamdom)
+{
+    bool is_cas_test = false;
+    int block_size=256;
+    int grid_size=64;
+
+    std::vector<int> input_array(grid_size * block_size);
+
+    std::default_random_engine engine;
+    std::uniform_int_distribution<> dist(-10, 10);
+    std::generate(input_array.begin(), input_array.end(),
+      [&](){ return dist(engine);} );
+
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+}
+
+TYPED_TEST(AtomicsTest, atomicCASRamdom)
+{
+    bool is_cas_test = true;
+    int block_size=256;
+    int grid_size=64;
+
+    std::vector<int> input_array(grid_size * block_size);
+
+    std::default_random_engine engine;
+    std::uniform_int_distribution<> dist(-10, 10);
+    std::generate(input_array.begin(), input_array.end(),
+      [&](){ return dist(engine);} );
+
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
 
