@@ -1,5 +1,6 @@
 #include "copying/utilities/copying_utils.hpp"
 #include "cudf.h"
+#include "utilities/error_utils.hpp"
 
 namespace cudf {
 namespace utilities {
@@ -39,7 +40,26 @@ cudaStream_t BaseCopying::get_stream(gdf_index_type index) {
 }
 
 gdf_size_type BaseCopying::round_up_size(gdf_size_type size, gdf_size_type base) {
-    return (size + base - 1) / base;
+  return (size + base - 1) / base;
+}
+
+bool BaseCopying::validate_inputs() {
+  CUDF_EXPECTS(indexes_ != nullptr, "indexes array is null");
+  CUDF_EXPECTS(input_column_ != nullptr, "input column is null");
+  CUDF_EXPECTS(output_columns_ != nullptr, "output columns array is null");
+
+  if (indexes_->size == 0) {
+    return false;
+  }
+  if (input_column_->size == 0) {
+    return false;
+  }
+
+  CUDF_EXPECTS(indexes_->data != nullptr, "indexes data array is null");
+  CUDF_EXPECTS(input_column_->data != nullptr, "input column data is null");
+  CUDF_EXPECTS(input_column_->valid != nullptr, "input column bitmask is null");
+
+  return true;
 }
 
 } // namespace utilitites 

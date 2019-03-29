@@ -119,6 +119,18 @@ public:
   { }
 
 public:
+  bool validate_inputs() {
+    if (!BaseCopying::validate_inputs()) {
+      return false;
+    }
+
+    CUDF_EXPECTS((indexes_->size + 1) == output_columns_->num_columns(),
+                  "indexes size and output columns quantity mismath");
+
+    return true;
+  }
+
+public:
   template <typename ColumnType>
   void operator()() {
     // Perform operation
@@ -188,7 +200,15 @@ void split(gdf_column const*   input_column,
            cudf::column_array* output_columns,
            cudaStream_t*       streams,
            gdf_size_type       streams_size) {
+  // Create split helper class
   Split split(input_column, indexes, output_columns, streams, streams_size);
+
+  // Perform validation of the input arguments
+  if (!split.validate_inputs()) {
+    return;
+  }
+
+  // Perform cudf operation
   cudf::type_dispatcher(input_column->dtype, split);
 }
 
