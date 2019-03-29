@@ -49,20 +49,16 @@ def make_numpy_mixed_dataframe():
 def make_all_numeric_dtypes_dataframe():
     df = pd.DataFrame()
 
-    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
-                  "int32", "int64", "long"]
+    names = ["float", "float32", "float64", "double", "short", "int", "int32",
+             "int64", "long"]
 
     np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
                  np.int32, np.int32, np.int64, np.int64]
 
-    for i in range(len(gdf_dtypes)):
-        df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
+    for i in range(len(names)):
+        df[names[i]] = np.arange(10, dtype=np_dtypes[i])
 
-    return (
-        df,
-        OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
-        OrderedDict(zip(gdf_dtypes, np_dtypes))
-    )
+    return (df, OrderedDict(zip(names, np_dtypes)))
 
 
 dtypes = [np.float64, np.float32, np.int64, np.int32]
@@ -95,7 +91,7 @@ def test_csv_reader_datetime_data(tmpdir):
 
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
                          dayfirst=True)
-    dtypes = ['date', 'date']
+    dtypes = [np.datetime64, 'datetime64']
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
                    dayfirst=True)
 
@@ -119,10 +115,12 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     df.to_csv(fname, sep='|', index=False, header=False)
 
     gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dtype=['int64', 'datetime64', 'float64', 'int64',
+                           'category'],
                     dayfirst=True, **cudf_arg)
     gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dtype=['int64', 'datetime64', 'float64', 'int64',
+                           'category'],
                     dayfirst=True, **pandas_arg)
 
     pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
@@ -135,16 +133,15 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
 
-    # fname = os.path.abspath('cudf/tests/data/tmp_csvreader_file4.csv')
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
 
-    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
+    df, dtypes = make_all_numeric_dtypes_dataframe()
     df.to_csv(fname, sep=',', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter=',', names=list(gdf_dict.keys()),
-                   dtype=gdf_dict)
-    df_out = pd.read_csv(fname, delimiter=',', names=list(pd_dict.keys()),
-                         dtype=pd_dict, dayfirst=True)
+    out = read_csv(str(fname), delimiter=',', names=list(dtypes.keys()),
+                   dtype=dtypes)
+    df_out = pd.read_csv(fname, delimiter=',', names=list(dtypes.keys()),
+                         dtype=dtypes, dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
@@ -163,7 +160,7 @@ def test_csv_reader_skiprows_skipfooter(tmpdir):
                          dayfirst=True, skiprows=1, skipfooter=1,
                          engine='python')
     out = read_csv(str(fname), names=['1', '2', '3'],
-                   dtype=['int64', 'date', 'float64'], skiprows=1,
+                   dtype=['int64', 'datetime64', 'float64'], skiprows=1,
                    skipfooter=1, dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
@@ -197,8 +194,8 @@ def test_csv_reader_negative_vals(tmpdir):
 def test_csv_reader_strings(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
 
-    names = ['text', 'int']
-    dtypes = ['str', 'int']
+    names = ['text', 'number']
+    dtypes = ['str', 'int32']
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
     with open(str(fname), 'w') as fp:
@@ -209,7 +206,7 @@ def test_csv_reader_strings(tmpdir):
 
     assert(len(df.columns) == 2)
     assert(df['text'].dtype == np.dtype('object'))
-    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['number'].dtype == np.dtype('int32'))
     assert(df['text'][0] == 'a')
     assert(df['text'][1] == 'b')
     assert(df['text'][2] == 'c')
@@ -219,8 +216,8 @@ def test_csv_reader_strings(tmpdir):
 def test_csv_reader_strings_quotechars(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
 
-    names = ['text', 'int']
-    dtypes = ['str', 'int']
+    names = ['text', 'number']
+    dtypes = ['str', 'int32']
     lines = [','.join(names), '"a,\n",0', '"b ""c"" d",0', 'e,0', '"f,,!.,",0']
 
     with open(str(fname), 'w') as fp:
@@ -231,7 +228,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
 
     assert(len(df.columns) == 2)
     assert(df['text'].dtype == np.dtype('object'))
-    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['number'].dtype == np.dtype('int32'))
     assert(df['text'][0] == 'a,\n')
     assert(df['text'][1] == 'b "c" d')
     assert(df['text'][2] == 'e')
@@ -386,7 +383,7 @@ def test_csv_reader_thousands(tmpdir):
 
 def test_csv_reader_buffer():
 
-    names = dtypes = ["float32", "int32", "date"]
+    names = dtypes = ["float32", "int32", "datetime64"]
     lines = [','.join(names),
              "1234.5, 1234567, 11/22/1995",
              "12345.6, 12345, 1/2/2002"]
@@ -400,21 +397,21 @@ def test_csv_reader_buffer():
                       names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_str['float32'])
     np.testing.assert_allclose(int32_ref, df_str['int32'])
-    assert("1995-11-22T00:00:00.000" == str(df_str['date'][0]))
-    assert("2002-01-02T00:00:00.000" == str(df_str['date'][1]))
+    assert("1995-11-22T00:00:00.000" == str(df_str['datetime64'][0]))
+    assert("2002-01-02T00:00:00.000" == str(df_str['datetime64'][1]))
 
     df_bytes = read_csv(BytesIO(str.encode(buffer)),
                         names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_bytes['float32'])
     np.testing.assert_allclose(int32_ref, df_bytes['int32'])
-    assert("1995-11-22T00:00:00.000" == str(df_bytes['date'][0]))
-    assert("2002-01-02T00:00:00.000" == str(df_bytes['date'][1]))
+    assert("1995-11-22T00:00:00.000" == str(df_bytes['datetime64'][0]))
+    assert("2002-01-02T00:00:00.000" == str(df_bytes['datetime64'][1]))
 
 
 def test_csv_reader_buffer_strings():
 
-    names = ['text', 'int']
-    dtypes = ['str', 'int']
+    names = ['text', 'number']
+    dtypes = ['str', 'int32']
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
     buffer = '\n'.join(lines)
@@ -423,7 +420,7 @@ def test_csv_reader_buffer_strings():
                   names=names, dtype=dtypes, skiprows=1)
     assert(len(df.columns) == 2)
     assert(df['text'].dtype == np.dtype('object'))
-    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['number'].dtype == np.dtype('int32'))
     assert(df['text'][0] == 'a')
     assert(df['text'][1] == 'b')
     assert(df['text'][2] == 'c')
@@ -433,7 +430,7 @@ def test_csv_reader_buffer_strings():
                    names=names, dtype=dtypes, skiprows=1)
     assert(len(df2.columns) == 2)
     assert(df2['text'].dtype == np.dtype('object'))
-    assert(df2['int'].dtype == np.dtype('int32'))
+    assert(df2['number'].dtype == np.dtype('int32'))
     assert(df2['text'][0] == 'a')
     assert(df2['text'][1] == 'b')
     assert(df2['text'][2] == 'c')
@@ -449,7 +446,7 @@ def test_csv_reader_gzip_compression(tmpdir):
 
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
                          dayfirst=True, compression='gzip')
-    dtypes = ['date', 'date']
+    dtypes = ['datetime64', 'datetime64']
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
                    dayfirst=True, compression='gzip')
 
@@ -575,8 +572,8 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
     fname = fnamebase.join("tmp_csvreader_file15.csv")
     fnamez = fnamebase.join("tmp_csvreader_file15.csv.gz")
 
-    names = ['text', 'int']
-    dtypes = ['str', 'int']
+    names = ['text', 'number']
+    dtypes = ['str', 'int32']
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
 
     with open(str(fname), 'w') as fp:
@@ -590,7 +587,7 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
 
     assert(len(df.columns) == 2)
     assert(df['text'].dtype == np.dtype('object'))
-    assert(df['int'].dtype == np.dtype('int32'))
+    assert(df['number'].dtype == np.dtype('int32'))
     assert(df['text'][0] == 'a')
     assert(df['text'][1] == 'b')
     assert(df['text'][2] == 'c')
@@ -706,7 +703,7 @@ def test_csv_reader_bzip2_compression(tmpdir):
 
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
                          dayfirst=True, compression='bz2')
-    dtypes = ['date', 'date']
+    dtypes = ['datetime64', 'datetime64']
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
                    dayfirst=True, compression='bz2')
 

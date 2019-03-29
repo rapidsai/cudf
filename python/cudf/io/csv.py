@@ -7,7 +7,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.datetime import DatetimeColumn
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._gdf import nvtx_range_push, nvtx_range_pop, np_to_gdf_dtype
 
 import numpy as np
 import collections.abc
@@ -27,6 +27,17 @@ def is_file_like(obj):
     if not hasattr(obj, "__iter__"):
         return False
     return True
+
+
+def _cudf_dtype(dtype):
+    if isinstance(dtype, str):
+        if dtype == 'category':
+            # cuDF's categorical dtype maps to a 32-bit hash of the data
+            return libgdf.GDF_CATEGORY
+        elif dtype == 'str':
+            # CSV reader currently does not handle GDF_STRING_CATEGORY
+            return libgdf.GDF_STRING
+    return np_to_gdf_dtype(dtype)
 
 
 _quoting_enum = {
@@ -235,18 +246,18 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             arr_names.append(_wrap_string(col_name))
             if dtype is not None:
                 if dtype_dict:
-                    arr_dtypes.append(_wrap_string(str(dtype[col_name])))
+                    arr_dtypes.append(_cudf_dtype(dtype[col_name]))
         names_ptr = ffi.new('char*[]', arr_names)
         csv_reader.names = names_ptr
 
     if dtype is None:
-        csv_reader.dtype = ffi.NULL
+        csv_reader.dtypes = ffi.NULL
     else:
         if not dtype_dict:
             for col_dtype in dtype:
-                arr_dtypes.append(_wrap_string(str(col_dtype)))
-        dtype_ptr = ffi.new('char*[]', arr_dtypes)
-        csv_reader.dtype = dtype_ptr
+                arr_dtypes.append(_cudf_dtype(col_dtype))
+        dtype_ptr = ffi.new('gdf_dtype[]', arr_dtypes)
+        csv_reader.dtypes = dtype_ptr
 
     csv_reader.use_cols_int = ffi.NULL
     csv_reader.use_cols_int_len = 0

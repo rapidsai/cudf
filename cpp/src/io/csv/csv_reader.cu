@@ -115,14 +115,12 @@ using string_pair = std::pair<const char*,size_t>;
 //---------------create and process ---------------------------------------------
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
-// gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
 gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type);
 gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, 
 	const string& compression, 
 	vector<char>& h_uncomp_data);
 gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
 gdf_error allocateGdfDataSpace(gdf_column *);
-gdf_dtype convertStringToDtype(std::string &dtype);
 
 #define checkError(error, txt)  if ( error != GDF_SUCCESS) { std::cerr << "ERROR:  " << error <<  "  in "  << txt << std::endl;  return error; }
 
@@ -700,7 +698,7 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	if(args->dtype==NULL){
+	if (args->dtypes == nullptr) {
 		if (raw_csv->num_records == 0) {
 			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
 		}
@@ -716,9 +714,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		CUDA_TRY( cudaMemcpy(h_ColumnData,d_ColumnData, sizeof(column_data_t) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
 
-	    vector<gdf_dtype>	d_detectedTypes;			// host: array of dtypes (since gdf_columns are not created until end)
-
-		raw_csv->dtypes.clear();
+		vector<gdf_dtype>	d_detectedTypes;			// host: array of dtypes (since gdf_columns are not created until end)
 
 		for(int col = 0; col < raw_csv->num_active_cols; col++){
 			unsigned long long countInt = h_ColumnData[col].countInt8+h_ColumnData[col].countInt16+
@@ -746,19 +742,10 @@ gdf_error read_csv(csv_read_arg *args)
 		free(h_ColumnData);
 		RMM_TRY( RMM_FREE( d_ColumnData, 0 ) );
 	}
-	else{
-		for ( int x = 0; x < raw_csv->num_actual_cols; x++) {
-
-			std::string temp_type 	= args->dtype[x];
-			gdf_dtype col_dtype		= convertStringToDtype( temp_type );
-
-			if (col_dtype == GDF_invalid)
-				return GDF_UNSUPPORTED_DTYPE;
-
-			raw_csv->dtypes.push_back(col_dtype);
-		}
+	else {
+		raw_csv->dtypes = std::vector<gdf_dtype>(
+				args->dtypes, args->dtypes + raw_csv->num_actual_cols);
 	}
-
 
 	//-----------------------------------------------------------------------------
 	//--- allocate space for the results
@@ -905,33 +892,6 @@ gdf_error read_csv(csv_read_arg *args)
 	delete raw_csv;
 	return error;
 }
-
-
-
-/*
- * What is passed in is the data type as a string, need to convert that into gdf_dtype enum
- */
-gdf_dtype convertStringToDtype(std::string &dtype) {
-
-	if (dtype.compare( "str") == 0) 		return GDF_STRING;
-	if (dtype.compare( "date") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "date32") == 0) 		return GDF_DATE32;
-	if (dtype.compare( "date64") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "timestamp") == 0)	return GDF_TIMESTAMP;
-	if (dtype.compare( "category") == 0) 	return GDF_CATEGORY;
-	if (dtype.compare( "float") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float32") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float64") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "double") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "short") == 0)		return GDF_INT16;
-	if (dtype.compare( "int") == 0)			return GDF_INT32;
-	if (dtype.compare( "int32") == 0)		return GDF_INT32;
-	if (dtype.compare( "int64") == 0)		return GDF_INT64;
-	if (dtype.compare( "long") == 0)		return GDF_INT64;
-
-	return GDF_invalid;
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and 

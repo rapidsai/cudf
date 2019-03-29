@@ -62,9 +62,9 @@ typedef struct {
   /*
    * Input arguments - all data is in the host memory
    */
-  gdf_csv_input_form	input_data_form;	///< Type of source of CSV data
-  const char			*filepath_or_buffer; ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t				buffer_size;		///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
+  gdf_csv_input_form input_data_form;       ///< Type of source of CSV data
+  const char    *filepath_or_buffer;        ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
 
   bool          windowslinetermination;     ///< States if we should \r\n as our line termination
   char          lineterminator;             ///< define the line terminator character. Default is  '\n'
@@ -77,7 +77,7 @@ typedef struct {
 
   int           num_cols;                   ///< Number of columns in the names and dtype arrays
   const char    **names;                    ///< Ordered List of column names
-  const char    **dtype;                    ///< Ordered List of data types
+  const gdf_dtype *dtypes;                  ///< Ordered List of data types
 
   int           *index_col;                 ///< Indexes of columns to use as the row labels of the DataFrame.
   int           *use_cols_int;              ///< Indexes of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
