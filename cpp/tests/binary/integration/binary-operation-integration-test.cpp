@@ -265,6 +265,60 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
     ASSERT_BINOP(out, lhs, rhs, POW());
 }
 
+
+TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32) {
+    using AND = cudf::library::operation::BitwiseAnd<int16_t, int64_t, int32_t>;
+
+    auto lhs = cudf::test::column_wrapper<int16_t>{500,
+        [](gdf_size_type row) {return row;},
+        [](gdf_size_type row) {return (row % 6 > 0);}};
+    auto rhs = cudf::test::column_wrapper<int64_t>{500,
+        [](gdf_size_type row) {return 2;},
+        [](gdf_size_type row) {return (row % 4 > 0);}};
+    auto out = cudf::test::column_wrapper<int32_t>{lhs.get()->size, true};
+
+    auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_AND);
+    ASSERT_TRUE(result == GDF_SUCCESS);
+
+    ASSERT_BINOP(out, lhs, rhs, AND());
+}
+
+
+TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32) {
+    using OR = cudf::library::operation::BitwiseOr<int64_t, int16_t, int32_t>;
+
+    auto lhs = cudf::test::column_wrapper<int64_t>{500,
+        [](gdf_size_type row) {return row;},
+        [](gdf_size_type row) {return (row % 6 > 0);}};
+    auto rhs = cudf::test::column_wrapper<int16_t>{500,
+        [](gdf_size_type row) {return 2;},
+        [](gdf_size_type row) {return (row % 4 > 0);}};
+    auto out = cudf::test::column_wrapper<int32_t>{lhs.get()->size, true};
+
+    auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_OR);
+    ASSERT_TRUE(result == GDF_SUCCESS);
+
+    ASSERT_BINOP(out, lhs, rhs, OR());
+}
+
+
+TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
+    using XOR = cudf::library::operation::BitwiseXor<int32_t, int16_t, int64_t>;
+
+    auto lhs = cudf::test::column_wrapper<int32_t>{500,
+        [](gdf_size_type row) {return row;},
+        [](gdf_size_type row) {return (row % 6 > 0);}};
+    auto rhs = cudf::test::column_wrapper<int16_t>{500,
+        [](gdf_size_type row) {return 2;},
+        [](gdf_size_type row) {return (row % 4 > 0);}};
+    auto out = cudf::test::column_wrapper<int64_t>{lhs.get()->size, true};
+
+    auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_BITWISE_XOR);
+    ASSERT_TRUE(result == GDF_SUCCESS);
+
+    ASSERT_BINOP(out, lhs, rhs, XOR());
+}
+
 } // namespace binop
 } // namespace test
 } // namespace cudf

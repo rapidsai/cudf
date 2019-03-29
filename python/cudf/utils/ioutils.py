@@ -1,14 +1,18 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet = """
-Load a parquet object from the file path, returning a DataFrame.
+Read a Parquet file into DataFrame
 
 Parameters
 ----------
-path : string
-    File path
+path : string or path object
+    Path of file to be read
+engine : { 'cudf', 'pyarrow' }, default='cudf'
+    Parser engine to use.
 columns : list, default=None
-    If not None, only these columns will be read from the file.
+    If not None, only these columns will be read.
 
 Returns
 -------

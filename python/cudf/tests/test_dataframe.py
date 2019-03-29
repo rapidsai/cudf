@@ -1479,6 +1479,17 @@ def test_binops_df(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_df(pdf, gdf, binop):
+    d = binop(pdf, pdf + 1)
+    g = binop(gdf, gdf + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
     operator.floordiv,
@@ -1497,6 +1508,17 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_series(pdf, gdf, binop):
+    d = binop(pdf.x, pdf.y + 1)
+    g = binop(gdf.x, gdf.y + 1)
     assert_eq(d, g)
 
 
@@ -1989,13 +2011,18 @@ def test_select_dtype():
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=np.number))
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
     assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+    with pytest.raises(ValueError):
+        gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
 def test_array_ufunc():

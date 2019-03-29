@@ -208,7 +208,10 @@ cdef extern from "cudf.h" nogil:
         GDF_LESS,
         GDF_GREATER,
         GDF_LESS_EQUAL,
-        GDF_GREATER_EQUAL
+        GDF_GREATER_EQUAL,
+        GDF_BITWISE_AND,
+        GDF_BITWISE_OR,
+        GDF_BITWISE_XOR,
 
 
     ctypedef enum gdf_unary_math_op:
