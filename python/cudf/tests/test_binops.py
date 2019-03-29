@@ -60,6 +60,44 @@ def test_series_binop_scalar(nelem, binop, obj_class):
     np.testing.assert_almost_equal(result.to_array(), binop(arr, rhs))
 
 
+_bitwise_binops = [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+]
+
+
+_int_types = [
+    'int8',
+    'int16',
+    'int32',
+    'int64',
+]
+
+
+@pytest.mark.parametrize('obj_class', ['Series', 'Index'])
+@pytest.mark.parametrize('binop', _bitwise_binops)
+@pytest.mark.parametrize('lhs_dtype,rhs_dtype',
+                         list(product(_int_types, _int_types)))
+def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
+    arr1 = (np.random.random(100) * 100).astype(lhs_dtype)
+    sr1 = Series(arr1)
+
+    arr2 = (np.random.random(100) * 100).astype(rhs_dtype)
+    sr2 = Series(arr2)
+
+    if obj_class == 'Index':
+        sr1 = as_index(sr1)
+        sr2 = as_index(sr2)
+
+    result = binop(sr1, sr2)
+
+    if obj_class == 'Index':
+        result = Series(result)
+
+    np.testing.assert_almost_equal(result.to_array(), binop(arr1, arr2))
+
+
 _cmpops = [
     operator.lt,
     operator.gt,

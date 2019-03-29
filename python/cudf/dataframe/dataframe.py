@@ -430,26 +430,18 @@ class DataFrame(object):
             len(self),
         )
 
-    # binary, rbinary, unary, orderedcompare, unorderedcompare
-    def _call_op(self, other, internal_fn, fn):
+    # binary, rbinary, orderedcompare, unorderedcompare
+    def _apply_op(self, fn, other):
         result = DataFrame()
         result.set_index(self.index)
-        if internal_fn == '_unaryop':
-            for col in self._cols:
-                result[col] = self._cols[col]._unaryop(fn)
-        elif isinstance(other, Sequence):
+        if isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
-                result[col] = getattr(self._cols[col], internal_fn)(
-                        other[k],
-                        fn,
-                )
+                result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             for col in other._cols:
                 if col in self._cols:
-                    result[col] = getattr(self._cols[col], internal_fn)(
-                            other._cols[col],
-                            fn,
-                    )
+                    result[col] = getattr(self._cols[col], fn)(
+                                          other._cols[col])
                 else:
                     result[col] = Series(cudautils.full(self.shape[0],
                                          np.dtype('float64').type(np.nan),
@@ -466,42 +458,37 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], internal_fn)(
-                        other,
-                        fn,
-                )
+                result[col] = getattr(self._cols[col], fn)(other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "
                     "supported at this time.")
         return result
 
-    def _binaryop(self, other, fn):
-        return self._call_op(other, '_binaryop', fn)
-
-    def _rbinaryop(self, other, fn):
-        return self._call_op(other, '_rbinaryop', fn)
-
     def _unaryop(self, fn):
-        return self._call_op(self, '_unaryop', fn)
+        result = DataFrame()
+        result.set_index(self.index)
+        for col in self._cols:
+            result[col] = self._cols[col]._unaryop(fn)
+        return result
 
     def __add__(self, other):
-        return self._binaryop(other, 'add')
+        return self._apply_op('__add__', other)
 
     def __radd__(self, other):
-        return self._rbinaryop(other, 'add')
+        return self._apply_op('__radd__', other)
 
     def __sub__(self, other):
-        return self._binaryop(other, 'sub')
+        return self._apply_op('__sub__', other)
 
     def __rsub__(self, other):
-        return self._rbinaryop(other, 'sub')
+        return self._apply_op('__rsub__', other)
 
     def __mul__(self, other):
-        return self._binaryop(other, 'mul')
+        return self._apply_op('__mul__', other)
 
     def __rmul__(self, other):
-        return self._rbinaryop(other, 'mul')
+        return self._apply_op('__rmul__', other)
 
     def __pow__(self, other):
         if other == 2:
@@ -510,42 +497,45 @@ class DataFrame(object):
             return NotImplemented
 
     def __floordiv__(self, other):
-        return self._binaryop(other, 'floordiv')
+        return self._apply_op('__floordiv__', other)
 
     def __rfloordiv__(self, other):
-        return self._rbinaryop(other, 'floordiv')
+        return self._apply_op('__rfloordiv__', other)
 
     def __truediv__(self, other):
-        return self._binaryop(other, 'truediv')
+        return self._apply_op('__truediv__', other)
 
     def __rtruediv__(self, other):
-        return self._rbinaryop(other, 'truediv')
+        return self._apply_op('__rtruediv__', other)
 
     __div__ = __truediv__
 
-    def _unordered_compare(self, other, cmpops):
-        return self._call_op(other, '_unordered_compare', cmpops)
+    def __and__(self, other):
+        return self._apply_op('__and__', other)
 
-    def _ordered_compare(self, other, cmpops):
-        return self._call_op(other, '_ordered_compare', cmpops)
+    def __or__(self, other):
+        return self._apply_op('__or__', other)
+
+    def __xor__(self, other):
+        return self._apply_op('__xor__', other)
 
     def __eq__(self, other):
-        return self._unordered_compare(other, 'eq')
+        return self._apply_op('__eq__', other)
 
     def __ne__(self, other):
-        return self._unordered_compare(other, 'ne')
+        return self._apply_op('__ne__', other)
 
     def __lt__(self, other):
-        return self._ordered_compare(other, 'lt')
+        return self._apply_op('__lt__', other)
 
     def __le__(self, other):
-        return self._ordered_compare(other, 'le')
+        return self._apply_op('__le__', other)
 
     def __gt__(self, other):
-        return self._ordered_compare(other, 'gt')
+        return self._apply_op('__gt__', other)
 
     def __ge__(self, other):
-        return self._ordered_compare(other, 'ge')
+        return self._apply_op('__ge__', other)
 
     def __iter__(self):
         return iter(self.columns)

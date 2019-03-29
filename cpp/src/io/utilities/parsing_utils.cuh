@@ -1,9 +1,8 @@
-
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
+	 * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -15,19 +14,20 @@
  * limitations under the License.
  */
 
+/**
+ * @file parsing_utils.cuh Declarations of utility functions for parsing plain-text files
+ *
+ */
+
+
 #pragma once
 
-/*
- * @brief Interface to parse CSV data to GDF columns
- */
-gdf_error read_csv(csv_read_arg *args);
+#include <vector>
 
-/*
- * @brief Interface to parse Parquet data to GDF columns
- */
-gdf_error read_parquet(pq_read_arg *args);
+#include "cudf.h"
 
-/*
- * @brief Interface to convert GDF Columns to Compressed Sparse Row
- */
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
+
+template<class T>
+gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+	T *positions);
