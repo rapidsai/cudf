@@ -58,10 +58,20 @@ def apply_reduce(reduction_op, col):
     """
 
     check_gdf_compatibility(col)
+
+    # check empty case
+    if col.data.size <= col.null_count :
+        if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
+            return col.dtype.type(0)
+        if reduction_op == 'product' and pandas_version >= (0, 22):
+            return col.dtype.type(1)
+        return np.nan
+
+
     cdef gdf_column* c_col = column_view_from_column(col)
+    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_scalar c_result
 
-    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
     with nogil:    
         c_result = gdf_reduction(
             <gdf_column*>c_col,
