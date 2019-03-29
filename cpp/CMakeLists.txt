@@ -226,6 +226,7 @@ add_library(cudf SHARED
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
+            src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/parquet/page_data.cu
