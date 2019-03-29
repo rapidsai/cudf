@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc.hpp"
+#include "orc.h"
+#include "orc_gpu.h"
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"

@@ -231,6 +231,8 @@ add_library(cudf SHARED
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/orc/orc_reader.cu
+            src/io/orc/orc.cpp
+            src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader.cu
