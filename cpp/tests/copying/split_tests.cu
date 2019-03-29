@@ -3,6 +3,197 @@
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/copying/copying_test_helper.hpp"
 
+struct SplitInputTest : GdfTest {};
+
+TEST_F(SplitInputTest, IndexesNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column.get(), nullptr, &column_array));
+}
+
+TEST_F(SplitInputTest, InputColumnNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(nullptr, indexes.get(), &column_array));
+}
+
+TEST_F(SplitInputTest, OutputColumnNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes.get(), nullptr));
+}
+
+TEST_F(SplitInputTest, IndexesSizeNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+
+  // Create indexes
+  gdf_column indexes;
+  indexes.size = 0;
+
+  // Create output
+  gdf_column column;
+  gdf_column* source_columns[1] = { &column };
+  cudf::column_array column_array(source_columns, 1);
+
+  // Perform test
+  ASSERT_NO_THROW(cudf::split(input_column.get(), &indexes, &column_array));
+}
+
+TEST_F(SplitInputTest, InputColumnSizeNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  gdf_column input_column;
+  input_column.size = 0;
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Create output
+  gdf_column column;
+  gdf_column* source_columns[1] = { &column };
+  cudf::column_array column_array(source_columns, 1);
+
+  // Perform test
+  ASSERT_NO_THROW(cudf::split(&input_column, indexes.get(), &column_array));
+}
+
+TEST_F(SplitInputTest, IndexesDataNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+  gdf_column* indexes_test = indexes.get();
+  indexes_test->data = nullptr;
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes_test, &column_array));
+}
+
+TEST_F(SplitInputTest, InputColumnDataNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+  gdf_column* input_column_test = input_column.get();
+  input_column_test->data = nullptr;
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column_test, indexes.get(), &column_array));
+}
+
+TEST_F(SplitInputTest, InputColumnBitmaskNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+  gdf_column* input_column_test = input_column.get();
+  input_column_test->valid = nullptr;
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column_test, indexes.get(), &column_array));
+}
+
+TEST_F(SplitInputTest, OutputColumnsAndIndexesSizeMismatch) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
+
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+
+  // Create indexes
+  std::vector<gdf_index_type> indexes_host{SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+
+  // Create indexes for test
+  std::vector<gdf_index_type> indexes_host_test{SIZE / 4, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indexes_test(indexes_host_test);
+
+  // Create output
+  std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
+  auto source_columns =
+      allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+  cudf::column_array column_array(source_columns.data(), source_columns.size());
+
+  // Perform test
+  ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes_test.get(), &column_array));
+}
+
+
 template <typename ColumnType>
 struct SplitTest : GdfTest {};
 

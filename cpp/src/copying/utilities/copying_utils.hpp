@@ -2,8 +2,8 @@
 #define COPYING_UTILITIES_COPYING_UTILS_HPP
 
 #include <cstdint>
-#include "cudf/types.h"
 #include <cuda_runtime.h>
+#include "cudf/types.h"
 
 // Forward declaration
 namespace cudf {
@@ -39,6 +39,9 @@ protected:
 
 protected:
   gdf_size_type round_up_size(gdf_size_type size, gdf_size_type base);
+
+protected:
+  bool validate_inputs();
 
 protected:
   gdf_column const*   input_column_;

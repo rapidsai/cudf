@@ -101,6 +101,20 @@ public:
   { }
 
 public:
+  bool validate_inputs() {
+    if (!BaseCopying::validate_inputs()) {
+      return false;
+    }
+
+    CUDF_EXPECTS((indexes_->size % 2) == 0,
+                  "indexes size must be even");
+    CUDF_EXPECTS((indexes_->size / 2) == output_columns_->num_columns(),
+                  "indexes size and output columns quantity mismath");
+
+    return true;
+  }
+
+public:
   template <typename ColumnType>
   void operator()() {
     // Perform operation
@@ -168,7 +182,15 @@ void slice(gdf_column const*   input_column,
            cudf::column_array* output_columns,
            cudaStream_t*       streams,
            gdf_size_type       streams_size) {
+  // Create slice helper class
   Slice slice(input_column, indexes, output_columns, streams, streams_size);
+
+  // Perform validation of the input arguments
+  if (!slice.validate_inputs()) {
+    return;
+  }
+
+  // Perform cudf operation
   cudf::type_dispatcher(input_column->dtype, slice);
 }
 
