@@ -21,7 +21,6 @@ void calculate_data_params(data_partition_params* params,
                            gdf_index_type const*  indexes,
                            gdf_size_type const    indexes_size,
                            gdf_index_type const   indexes_position) {
-  //
   params->input_offset = gdf_index_type{0};
   if (indexes_position != 0) {
     params->input_offset = indexes[indexes_position - 1];
@@ -127,6 +126,8 @@ public:
     for (gdf_index_type index = 0; index < columns_quantity; ++index) {
       // Obtain the column
       gdf_column* output_column = output_columns_->get_column(index);
+
+      // Empty output column
       if (output_column->size == 0) {
         continue;
       }

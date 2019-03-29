@@ -109,6 +109,11 @@ public:
       // Gather column
       gdf_column* output_column = output_columns_->get_column(index);
 
+      // Empty output column
+      if (output_column->size == 0) {
+        continue;
+      }
+
       // Gather stream
       cudaStream_t stream = get_stream(index);
 
