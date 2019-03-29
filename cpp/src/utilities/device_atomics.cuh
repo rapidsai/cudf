@@ -280,7 +280,8 @@ struct DeviceMax{
  * The supported cudf types for `atomicAdd` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
- * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double`
+ * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double,
+ * cudf::nvstring_category
  * (`double` is supported after Pascal).
  * Other types are implemented by `atomicCAS`.
  *
@@ -366,6 +367,17 @@ cudf::timestamp atomicAdd(cudf::timestamp* address, cudf::timestamp val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
 
+/**
+ * @overload cudf::nvstring_category atomicAdd(cudf::nvstring_category* address, cudf::nvstring_category val)
+ */
+__forceinline__ __device__
+cudf::nvstring_category atomicAdd(cudf::nvstring_category* address, cudf::nvstring_category val)
+{
+    using T = int;
+    return cudf::detail::typesAtomicOperation32
+        (address, val, [](T* a, T v){return atomicAdd(a, v);});
+}
+
 /* Overloads for `atomicMin` */
 /** -------------------------------------------------------------------------*
  * @brief reads the `old` located at the `address` in global or shared memory, 
@@ -375,7 +387,8 @@ cudf::timestamp atomicAdd(cudf::timestamp* address, cudf::timestamp val)
  *
  * The supported cudf types for `atomicMin` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -472,6 +485,17 @@ cudf::timestamp atomicMin(cudf::timestamp* address, cudf::timestamp val)
         (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
+/**
+ * @overload cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstring_category val)
+ */
+__forceinline__ __device__
+cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstring_category val)
+{
+    using T = int;
+    return cudf::detail::typesAtomicOperation32
+        (address, val, [](T* a, T v){return atomicMin(a, v);});
+}
+
 /* Overloads for `atomicMax` */
 /** -------------------------------------------------------------------------*
  * @brief reads the `old` located at the `address` in global or shared memory, 
@@ -481,7 +505,8 @@ cudf::timestamp atomicMin(cudf::timestamp* address, cudf::timestamp val)
  *
  * The supported cudf types for `atomicMax` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -577,6 +602,17 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
+/**
+ * @overload cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstring_category val)
+ */
+__forceinline__ __device__
+cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstring_category val)
+{
+    using T = int;
+    return cudf::detail::typesAtomicOperation32
+        (address, val, [](T* a, T v){return atomicMax(a, v);});
+}
+
 /* Overloads for `atomicCAS` */
 /** --------------------------------------------------------------------------*
  * @brief reads the `old` located at the `address` in global or shared memory, 
@@ -586,7 +622,8 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
  *
  * The supported cudf types for `atomicCAS` are:
  * int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category
  * int8_t, int16_t are not supported as overloads
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
  * Other types are implemented by `atomicCAS`.
@@ -662,6 +699,16 @@ __forceinline__ __device__
 cudf::timestamp atomicCAS(cudf::timestamp* address, cudf::timestamp compare, cudf::timestamp val)
 {
     using T = cudf::timestamp;
+    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+/**
+ * @overload cudf::nvstring_category atomicCAS(cudf::nvstring_category* address, cudf::nvstring_category compare, cudf::nvstring_category val)
+ */
+__forceinline__ __device__
+cudf::nvstring_category atomicCAS(cudf::nvstring_category* address, cudf::nvstring_category compare, cudf::nvstring_category val)
+{
+    using T = cudf::nvstring_category;
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 

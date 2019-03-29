@@ -75,11 +75,13 @@ template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cu
 template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+template  __global__ void gpu_atomic_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
 
 template  __global__ void gpu_atomicCAS_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+template  __global__ void gpu_atomicCAS_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
 
 // ---------------------------------------------
 
@@ -89,8 +91,8 @@ struct AtomicsTest : public GdfTest {
 
 using TestingTypes = ::testing::Types<
     int8_t, int16_t, int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
+    cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+    cudf::nvstring_category>;
 
 TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 
