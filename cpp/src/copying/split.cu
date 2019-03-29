@@ -1,6 +1,5 @@
 #include "types.hpp"
 #include "copying/utilities/copying_utils.cuh"
-#include "copying/utilities/copying_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/error_utils.hpp"
 
@@ -80,6 +79,7 @@ void split_data_kernel(ColumnType*           output_data,
 
 __global__
 void split_bitmask_kernel(gdf_valid_type*       output_bitmask,
+                          gdf_size_type*        output_null_count,
                           gdf_valid_type const* input_bitmask,
                           gdf_size_type const   input_size,
                           gdf_index_type const* indexes,
@@ -95,7 +95,6 @@ void split_bitmask_kernel(gdf_valid_type*       output_bitmask,
                            indexes_size,
                            indexes_position);
 
-
   // Calculate kernel parameters
   gdf_size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
   gdf_size_type row_step = blockDim.x * gridDim.x;
@@ -103,6 +102,9 @@ void split_bitmask_kernel(gdf_valid_type*       output_bitmask,
   // Perform the copying operation
   while (row_index < bitmask_params.partition_block_length) {
     cudf::utilities::copy_bitmask(&bitmask_params, row_index);
+    cudf::utilities::perform_bitmask_null_count(&bitmask_params,
+                                                output_null_count,
+                                                row_index);
     row_index += row_step;
   }
 }
@@ -168,7 +170,10 @@ public:
 
       // Calculate kernel occupancy for bitmask
       auto kernel_bitmask_occupancy = calculate_kernel_bitmask_occupancy(output_column->size);
-      
+
+      // Create a new cuda variable for null count in the bitmask
+      cudf::utilities::CudaVariableScope bit_set_counter(stream);
+
       // Make a copy of the bitmask in the gdf_column
       split_bitmask_kernel
       <<<
@@ -178,6 +183,7 @@ public:
         stream
       >>>(
         output_column->valid,
+        bit_set_counter.get_pointer(),
         input_column_->valid,
         input_column_->size,
         reinterpret_cast<gdf_index_type const*>(indexes_->data),
@@ -186,6 +192,9 @@ public:
       );
 
       CHECK_STREAM(stream);
+
+      // Update the other fields in the output column
+      update_column(output_column, input_column_, bit_set_counter);
     }
   }
 };

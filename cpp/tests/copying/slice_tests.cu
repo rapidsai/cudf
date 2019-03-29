@@ -233,7 +233,7 @@ TYPED_TEST(SliceTest, MultipleSlices) {
   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
   // Create indexes
-  std::vector<gdf_index_type> indexes_host{7, 13, 17, 37, 17, INPUT_SIZE};
+  std::vector<gdf_index_type> indexes_host{7, 13, 17, 37, 43, 43, 17, INPUT_SIZE};
   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
 
   // Create output

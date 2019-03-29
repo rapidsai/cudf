@@ -45,6 +45,22 @@ struct bitmask_partition_params {
   //double_block_type mask_first;
 };
 
+__device__ __forceinline__
+std::uint32_t count_bits_set_32bits(std::uint32_t bitmask) {
+  bitmask = bitmask - ((bitmask >> 1) & 0x55555555);
+  bitmask = (bitmask & 0x33333333) + ((bitmask >> 2) & 0x33333333);
+  return (((bitmask + (bitmask >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
+}
+
+__device__ __forceinline__
+void perform_bitmask_null_count(bitmask_partition_params const* params,
+                                gdf_size_type*                  counter,
+                                gdf_index_type const            index) {
+  std::uint32_t bitmask = (std::uint32_t)params->block_output[index];
+  std::uint32_t null_count_value = count_bits_set_32bits(bitmask);
+  atomicAdd(counter, null_count_value);
+}
+
 template <typename ColumnType>
 __device__ __forceinline__
 void copy_data(data_partition_params* data_params,

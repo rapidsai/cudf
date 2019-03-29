@@ -16,6 +16,26 @@ namespace utilities {
 using block_type = std::uint32_t;
 using double_block_type = std::uint64_t;
 
+class CudaVariableScope {
+public:
+  CudaVariableScope(cudaStream_t stream);
+  ~CudaVariableScope();
+
+protected:
+  CudaVariableScope(CudaVariableScope&&) = delete;
+  CudaVariableScope(const CudaVariableScope&&) = delete;
+  CudaVariableScope& operator=(CudaVariableScope&&) = delete;
+  CudaVariableScope& operator=(const CudaVariableScope&) = delete;
+
+public:
+  gdf_size_type* get_pointer();
+  void load_value(gdf_size_type& value);
+
+private:
+  gdf_size_type* counter_;
+  cudaStream_t stream_;
+};
+
 class BaseCopying {
 protected:
   BaseCopying(gdf_column const*   input_column,
@@ -42,6 +62,10 @@ protected:
 
 protected:
   bool validate_inputs();
+
+  void update_column(gdf_column*        output,
+                     gdf_column const*  input_column,
+                     CudaVariableScope& variable);
 
 protected:
   gdf_column const*   input_column_;

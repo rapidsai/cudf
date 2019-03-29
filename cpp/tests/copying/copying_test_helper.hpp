@@ -120,6 +120,7 @@ std::vector<gdf_column*> allocate_split_output_columns(
  */ 
 template <typename ColumnType>
 struct HelperColumn {
+  gdf_size_type bit_set_count;
   std::vector<ColumnType> data;
   std::vector<gdf_valid_type> bitmask;
 };
@@ -133,6 +134,7 @@ HelperColumn<ColumnType> makeHelperColumn(
   auto column_host = column.to_host();
 
   HelperColumn<ColumnType> result;
+  result.bit_set_count = column.get()->null_count;
   result.data = std::get<0>(column_host);
   result.bitmask = std::get<1>(column_host);
 
@@ -149,7 +151,8 @@ std::vector<HelperColumn<ColumnType>> makeHelperColumn(
   for (auto& column_wrapper : columns) {
     auto column = column_wrapper->to_host();
     result.emplace_back(
-        HelperColumn<ColumnType>{.data = std::get<0>(column),
+        HelperColumn<ColumnType>{.bit_set_count = column_wrapper->get()->null_count,
+                                 .data = std::get<0>(column),
                                  .bitmask = std::get<1>(column)});
   }
   return result;
@@ -159,7 +162,8 @@ std::vector<HelperColumn<ColumnType>> makeHelperColumn(
  * 
  */
 template <gdf_size_type SIZE>
-std::vector<gdf_valid_type> slice_cpu_valids(std::vector<gdf_valid_type> const& input_valid,
+std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
+                                             std::vector<gdf_valid_type> const& input_valid,
                                              gdf_size_type index_start,
                                              gdf_size_type index_final) {
   // delta of the indexes
@@ -193,7 +197,8 @@ std::vector<gdf_valid_type> slice_cpu_valids(std::vector<gdf_valid_type> const& 
 
   // extract data from bitset
   bit_index = 0;
-  auto get_data_bitset = [&bitset, &bit_index, &bits_length]() {
+  bit_set_counter = 0;
+  auto get_data_bitset = [&bitset, &bit_index, &bits_length, &bit_set_counter]() {
     gdf_valid_type value = 0;
     for (int k = 0; k < 8; ++k) {
       if (bits_length <= bit_index) {
@@ -202,6 +207,9 @@ std::vector<gdf_valid_type> slice_cpu_valids(std::vector<gdf_valid_type> const& 
       gdf_valid_type tmp = bitset[bit_index];
       value |= (tmp << k);
       bit_index++;
+      if ((tmp & 1) == 0) {
+        bit_set_counter++;
+      }
     }
     return value;
   };
@@ -226,12 +234,21 @@ std::vector<HelperColumn<ColumnType>> slice_columns(
     gdf_size_type init_index = indexes[i];
     gdf_size_type end_index = indexes[i + 1];
 
+    if (init_index == end_index) {
+      HelperColumn<ColumnType> column {.bit_set_count = 0,
+                                       .data = std::vector<ColumnType>(),
+                                       .bitmask = std::vector<gdf_valid_type>() };
+      output_column_cpu.emplace_back(column);
+      continue;
+    }
+
     HelperColumn<ColumnType> helper_column;
     helper_column.data =
         std::vector<ColumnType>(input_column.data.begin() + init_index,
                                 input_column.data.begin() + end_index);
     helper_column.bitmask =
-        slice_cpu_valids<BITSET_SIZE>(input_column.bitmask,
+        slice_cpu_valids<BITSET_SIZE>(helper_column.bit_set_count,
+                                      input_column.bitmask,
                                       init_index,
                                       end_index);
 
@@ -259,12 +276,21 @@ std::vector<HelperColumn<ColumnType>> split_columns(
       end_index = indexes[i];
     }
 
+    if (init_index == end_index) {
+      HelperColumn<ColumnType> column {.bit_set_count = 0,
+                                       .data = std::vector<ColumnType>(),
+                                       .bitmask = std::vector<gdf_valid_type>() };
+      output_column_cpu.emplace_back(column);
+      continue;
+    }
+
     HelperColumn<ColumnType> helper_column;
     helper_column.data =
         std::vector<ColumnType>(input_column.data.begin() + init_index,
                                 input_column.data.begin() + end_index);
     helper_column.bitmask =
-        slice_cpu_valids<BITSET_SIZE>(input_column.bitmask,
+        slice_cpu_valids<BITSET_SIZE>(helper_column.bit_set_count,
+                                      input_column.bitmask,
                                       init_index,
                                       end_index);
 
@@ -278,10 +304,16 @@ std::vector<HelperColumn<ColumnType>> split_columns(
  */ 
 template <typename Type, template <typename> typename Column = HelperColumn>
 void verify(HelperColumn<Type> const& lhs, HelperColumn<Type> const& rhs) {
+  // Compare null count
+  ASSERT_EQ(lhs.bit_set_count, rhs.bit_set_count);
+
+  // Compare data
   ASSERT_EQ(lhs.data.size(), rhs.data.size());
   for (gdf_size_type i = 0; i < (gdf_size_type)lhs.data.size(); ++i) {
     ASSERT_EQ(lhs.data[i], rhs.data[i]);
   }
+
+  // Compare bitmask
   ASSERT_EQ(lhs.bitmask.size(), rhs.bitmask.size());
   for (gdf_size_type i = 0; i < (gdf_size_type)lhs.bitmask.size(); ++i) {
     ASSERT_EQ(lhs.bitmask[i], rhs.bitmask[i]);
