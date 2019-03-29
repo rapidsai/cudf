@@ -226,21 +226,27 @@ namespace detail {
         using T = int8_t;
         using T_int = unsigned int;
 
-	T_int * address_uint32 = reinterpret_cast<T_int *>
-		(address - (reinterpret_cast<size_t>(address) & 3));
-	T_int shift = ((reinterpret_cast<size_t>(address) & 3) * 8);
+        T_int shift = ((reinterpret_cast<size_t>(address) & 3) * 8);
+        T_int * address_uint32 = reinterpret_cast<T_int *>
+            (address - (reinterpret_cast<size_t>(address) & 3));
 
-	T_int old = *address_uint32;
-	T_int assumed;
-        T target_value = T((old >> shift) & 0xff);
+        // the 'target_value' in `old` can be different from `compare`
+        // because other thread may update the value
+        // before fetching a value from `address_uint32` in this function
+        T_int old = *address_uint32;
+        T_int assumed;
+        T target_value;
         uint8_t new_value = type_reinterpret<uint8_t, T>(val);
 
-	do {
+        do {
            assumed = old;
+           target_value = T((old >> shift) & 0xff);
+           // have to compare target_value and compare before calling atomicCAS
+           // the `target_value` in `old` can be different with `compare`
+           if( target_value != compare ) break;
+
            old = (old & ~(0x000000ff << shift)) | (T_int(new_value) << shift);
            old = atomicCAS(address_uint32, assumed, old);
-           target_value = T((old >> shift) & 0xff);
-           if( target_value != compare ) break;
         } while (assumed != old);
 
         return target_value;
@@ -258,17 +264,18 @@ namespace detail {
             (reinterpret_cast<size_t>(address) - (is_32_align ? 0 : 2));
 
         T_int old = *address_uint32;
-        T_int assumed ;
-        T target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+        T_int assumed;
+        T target_value;
         uint16_t new_value = type_reinterpret<uint16_t, T>(val);
 
         do {
             assumed = old;
+            target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+            if( target_value != compare ) break;
+
             old = (is_32_align) ? (old & 0xffff0000) | val
                     : (old & 0xffff) | (T_int(new_value) << 16);
             old = atomicCAS(address_uint32, assumed, old);
-            target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
-            if( target_value != compare ) break;
         } while (assumed != old);
 
         return target_value;

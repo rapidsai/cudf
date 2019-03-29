@@ -94,11 +94,10 @@ template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *r
 // ---------------------------------------------
 
 template <typename T>
-struct AtomicsTest : public GdfTest {
-
-    void atomic_test(bool call_atomicCAS)
+struct AtomicsTest : public GdfTest
+{
+    void atomic_test(std::vector<int>& v, bool call_atomicCAS)
     {
-        std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
         int exact[3];
         exact[0] = std::accumulate(v.begin(), v.end(), 0);
         exact[1] = *( std::min_element(v.begin(), v.end()) );
@@ -160,13 +159,21 @@ TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
 {
-    this->atomic_test(false);
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, false);
+
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, false);
 }
 
 // tests for atomicCAS
 TYPED_TEST(AtomicsTest, atomicCAS)
 {
-    this->atomic_test(true);
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, true);
+
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, false);
 }
 
 
