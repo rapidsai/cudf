@@ -79,6 +79,40 @@ TEST_F(FilterOperationsTest, check_remove_if) {
     EXPECT_TRUE(c_rhs == e_rhs);
 }
 
+TEST_F(FilterOperationsTest, check_gdf_apply_stencil) {
+    int column_size = 14;
+    int init_value = 10;
+
+    std::vector<gdf_valid_type> valid_masks(gdf_valid_allocation_size(column_size), 255);
+
+    std::cout << "Left" << std::endl;
+    std::vector<int16_t> l_data(column_size, init_value);
+    for(auto it  = l_data.begin(); it != l_data.end(); it++)
+    {
+        *it = ++init_value;
+    }
+    auto c_lhs = cudf::test::column_wrapper<int16_t>{l_data, valid_masks};
+    c_lhs.print();
+
+    std::cout << "Right" << std::endl;
+    std::vector<int16_t> r_data(column_size, init_value);
+    auto c_rhs = cudf::test::column_wrapper<int16_t>{r_data, valid_masks};
+    c_rhs.print();
+
+    std::cout << "Stencil" << std::endl;
+    std::vector<int8_t> o_data(column_size, 1);
+    valid_masks[1] = 0x0f;
+    auto c_stencil = cudf::test::column_wrapper<int8_t>{o_data, valid_masks};
+    c_stencil.print();
+
+    gdf_error err = gdf_apply_stencil(c_lhs, c_stencil, c_rhs);
+    EXPECT_EQ(err, GDF_SUCCESS);
+    std::cout << "Right [After stencil op]" << std::endl;
+    c_rhs.print();
+
+    check_column_for_stencil_operation<int16_t, int16_t>(c_lhs, c_stencil, c_rhs);
+}
+
 TEST_F(FilterOperationsTest, usage_example) {
 
     using LeftValueType = int16_t;

@@ -166,22 +166,25 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
 
 template <typename LeftValueType = int8_t, typename RightValueType = int8_t>
 void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil, gdf_column *output_op) {
-    gdf_column host_column = convert_to_host_gdf_column(column);
-    gdf_column host_stencil = convert_to_host_gdf_column(stencil);
-    gdf_column host_output_op = convert_to_host_gdf_column(output_op);
+    auto host_stencil_data = get_gdf_data_from_device<int8_t>(stencil);
+    auto host_stencil_valid_data = get_gdf_valid_from_device(stencil);
+    auto host_column_data = get_gdf_data_from_device<LeftValueType>(column);
+    auto host_out_data = get_gdf_data_from_device<RightValueType>(output_op);
+    auto host_output_op_valid = get_gdf_valid_from_device(output_op);
 
-    EXPECT_EQ(host_column.size, host_stencil.size);
+    EXPECT_EQ(column->size, stencil->size);
     //EXPECT_EQ(host_column.dtype == host_output_op.dtype);  // it must have the same type
 
     
     int  n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
     std::vector<int> indexes;
-    for(gdf_size_type i = 0; i < host_stencil.size; i++) {
-        int col_position =  i / 8;
-        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
-        int bit_offset =  (length_col - 1) - (i % 8);
-        bool valid = ((host_stencil.valid[col_position] >> bit_offset ) & 1) != 0;
-         if ( (int)( ((int8_t *)host_stencil.data)[i] ) == 1 && valid ) {
+    for(gdf_size_type i = 0; i < stencil->size; i++) {
+            int col_position =  i / 8;
+            int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+            int bit_offset =  (length_col - 1) - (i % 8);
+            bool valid = ((host_stencil_valid_data[col_position] >> bit_offset ) & 1) != 0;
+         if ( (int8_t)host_stencil_data[i] && valid) {
+             std::cout << "[" << i <<"]SHAKEEB here 2\n";
              indexes.push_back(i);
          }
     }
@@ -189,14 +192,14 @@ void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil,
     for(size_t i = 0; i < indexes.size(); i++) 
     {
         int index = indexes[i];
-        LeftValueType value = ((LeftValueType *)(host_column.data))[index];
+        LeftValueType value = host_column_data[index];
         std::cout << "filtered values: " << index  << "** "  << "\t value: " << (int)value << std::endl;
-        EXPECT_EQ( ((RightValueType*)host_output_op.data)[i], value);
+        EXPECT_EQ( host_out_data[i], value);
         
         int col_position =  i / 8;
         int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output_op->size - GDF_VALID_BITSIZE * (n_bytes - 1);
         int bit_offset =  (length_col - 1) - (i % 8);
-        bool valid = ((host_output_op.valid[col_position] >> bit_offset ) & 1) != 0;
+        bool valid = ((host_output_op_valid[col_position] >> bit_offset ) & 1) != 0;
         EXPECT_EQ(valid, true);
     }
 }

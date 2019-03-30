@@ -86,7 +86,7 @@ struct modulus_bit_width : public thrust::unary_function<gdf_size_type,gdf_size_
 	gdf_size_type n_bytes;
 	gdf_size_type column_size;
 	
-	modulus_bit_width (gdf_size_type b_nytes, gdf_size_type column_size) {
+	modulus_bit_width (gdf_size_type n_bytes, gdf_size_type column_size) {
 		this->n_bytes = n_bytes;
 		this->column_size = column_size;
 	}
