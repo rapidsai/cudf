@@ -166,6 +166,18 @@ struct is_stencil_true
 	}
 };
 
+template<typename stencil_type>
+struct is_stencil_false
+{
+	__host__ __device__
+	bool operator()(const thrust::tuple<stencil_type, gdf_valid_iterator::value_type, bit_position_iterator::value_type> value)
+	{
+		gdf_size_type position = thrust::get<2>(value);
+
+		return !(((thrust::get<1>(value) >> position) & 1) && (thrust::get<0>(value) != 0));
+	}
+};
+
 struct is_bit_set
 {
 	__host__ __device__
@@ -185,7 +197,7 @@ struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 			gdf_valid_type result = 0;
 			for(unsigned int i = 0; i < GDF_VALID_BITSIZE; i++){
 				// 0, 8, 16, ....,48,  56
-				unsigned char byte = (expanded >> ( (GDF_VALID_BITSIZE - 1 - i )  * 8));
+				unsigned char byte = (expanded >> ( i * 8));
 				result |= (byte & 1) << i;
 			}
 			return (result);
@@ -309,7 +321,7 @@ gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	thrust::copy(rmm::exec_policy(stream)->on(stream), bit_set_iter, bit_set_iter + num_values, valid_bit_mask.begin());
 
 	//remove the values that don't pass the stencil
-	thrust::remove_if(rmm::exec_policy(stream)->on(stream),valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+	thrust::remove_if(rmm::exec_policy(stream)->on(stream),valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_false<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 
 	//recompact the values and store them in the output bitmask
 	//we can group them into pieces of 8 because we aligned this earlier on when we made the device_vector
