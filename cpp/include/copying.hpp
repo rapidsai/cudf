@@ -90,17 +90,20 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
 
 /**
- * @brief Slices the row (including null values) of a column into a set
- * of output columns according to a set of indices.
+ * @brief Slices a column (including null values) into a set of columns
+ * according to a set of indices.
  *
- * The "slice" function divides part of the input row into multiple intervals
- * using the indices values and it stores the interval into an output column.
- * For the interval of indices (left-closed, right-open) is taken a pair of
- * values from the indices array in a consecutive manner.
+ * The "slice" function divides part of the input column into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * columns. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
  *
- * The indices array ('indexes') is require to be a monotonic non-decreasing set.
- * a <= b, where ('a' and 'b' belongs to 'indexes') and
- * (position of 'a' in 'indexes' is less than position of 'b' in 'indexes').
+ * The pairs of indices in the array are required to comply with the following
+ * conditions:
+ * a, b belongs to Range[0, input column size]
+ * a <= b, where the position of a is less or equal to the position of b.
+ * There is no relationship between the values of each pair of indices.
  *
  * Exceptional cases for the indices array are:
  * When the values in the pair are equal, the function return an empty column.
@@ -117,8 +120,8 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * indexes: {1, 3, 5, 9}
- * output:  {{12, 14}, {20, 22, 24, 26}}
+ * indexes: {1, 3, 5, 9, 2, 4, 8, 8}
+ * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
  * @param[in] input_column The input column whose rows will be sliced.
  * @param[in] indexes An array of indices that are used to take 'slices'
@@ -132,17 +135,19 @@ void slice(gdf_column const*   input_column,
            cudf::column_array* output_columns);
 
 /**
- * @brief Splits all the row (including null values) of a column into a set
- * of output columns according to a set of indices.
+ * @brief Splits all the column (including null values) into a set of columns
+ * according to a set of indices.
  *
- * The "split" function divides all the input row into multiple intervals
- * using the indices values and it stores the interval into an output
- * column. For the interval of indices (left-closed, right-open) is
- * taken a pair of values from the indices array in a consecutive manner.
+ * The "split" function divides all the input column into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * columns. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
  *
  * The indices array ('indexes') is require to be a monotonic non-decreasing set.
- * a <= b, where ('a' and 'b' belongs to 'indexes') and
- * (position of 'a' in 'indexes' is less than position of 'b' in 'indexes').
+ * The indices in the array are required to comply with the following conditions:
+ * a, b belongs to Range[0, input column size]
+ * a <= b, where the position of a is less or equal to the position of b.
  *
  * The split function will take a pair of indices from the indices array
  * ('indexes') in a consecutive manner. For the first pair, the function will
