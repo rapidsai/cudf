@@ -62,7 +62,7 @@ BaseCopying::KernelOccupancy BaseCopying::calculate_kernel_data_occupancy(gdf_si
 
 BaseCopying::KernelOccupancy BaseCopying::calculate_kernel_bitmask_occupancy(gdf_size_type size) {
   gdf_size_type bitmask_size = gdf_num_bitmask_elements(size);
-  bitmask_size = round_up_size(size, sizeof(block_type));
+  bitmask_size = round_up_size(bitmask_size, sizeof(block_type));
 
   int block_size{256};
   int grid_size = round_up_size(bitmask_size, block_size);
