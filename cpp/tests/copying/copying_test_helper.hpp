@@ -27,9 +27,7 @@
 constexpr gdf_size_type INPUT_SIZE{107};
 constexpr gdf_size_type BITSET_SIZE{128};
 
-/**
- * 
- */
+
 template <typename ColumnType, typename = void>
 struct VectorRandomGenerator;
 
@@ -61,9 +59,7 @@ struct VectorRandomGenerator
   std::uniform_real_distribution<ColumnType> generator;
 };
 
-/**
- * 
- */
+
 template <typename ColumnType>
 cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) {
   std::vector<ColumnType> data(size);
@@ -78,9 +74,7 @@ cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) 
   return cudf::test::column_wrapper<ColumnType>(std::move(data), std::move(bitmask));
 }
 
-/**
- *
- */  
+
 template <typename ColumnType>
 std::vector<gdf_column*> allocate_slice_output_columns(
       std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& output_columns,
@@ -102,9 +96,7 @@ std::vector<gdf_column*> allocate_slice_output_columns(
   return source_columns;
 }
 
-/**
- *
- */  
+
 template <typename ColumnType>
 std::vector<gdf_column*> allocate_split_output_columns(
       std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& output_columns,
@@ -132,9 +124,7 @@ std::vector<gdf_column*> allocate_split_output_columns(
   return source_columns;
 }
 
-/**
- *
- */ 
+
 template <typename ColumnType>
 struct HelperColumn {
   gdf_size_type bit_set_count;
@@ -142,9 +132,7 @@ struct HelperColumn {
   std::vector<gdf_valid_type> bitmask;
 };
 
-/**
- *
- */  
+
 template <typename ColumnType>
 HelperColumn<ColumnType> makeHelperColumn(
     cudf::test::column_wrapper<ColumnType>& column) {
@@ -158,9 +146,7 @@ HelperColumn<ColumnType> makeHelperColumn(
   return result;
 }
 
-/**
- *
- */  
+
 template <typename ColumnType>
 std::vector<HelperColumn<ColumnType>> makeHelperColumn(
     std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& columns) {
@@ -175,9 +161,7 @@ std::vector<HelperColumn<ColumnType>> makeHelperColumn(
   return result;
 }
 
-/**
- * 
- */
+
 template <gdf_size_type SIZE>
 std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
                                              std::vector<gdf_valid_type> const& input_valid,
@@ -239,9 +223,7 @@ std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
   return result;
 }
 
-/**
- * 
- */ 
+
 template <typename ColumnType>
 std::vector<HelperColumn<ColumnType>> slice_columns(
       HelperColumn<ColumnType>& input_column,
@@ -274,9 +256,7 @@ std::vector<HelperColumn<ColumnType>> slice_columns(
   return output_column_cpu;
 }
 
-/**
- * 
- */ 
+
 template <typename ColumnType>
 std::vector<HelperColumn<ColumnType>> split_columns(
       HelperColumn<ColumnType>& input_column,
@@ -316,9 +296,7 @@ std::vector<HelperColumn<ColumnType>> split_columns(
   return output_column_cpu;
 }
 
-/**
- *
- */ 
+
 template <typename Type, template <typename> typename Column = HelperColumn>
 void verify(HelperColumn<Type> const& lhs, HelperColumn<Type> const& rhs) {
   // Compare null count

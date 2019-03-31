@@ -219,14 +219,20 @@ using test_types =
 TYPED_TEST_CASE(SplitTest, test_types);
 
 /**
+ * It performs a parameterized type test, where the array of indices contains
+ * multiple values.
  *
+ * It tests:
+ * when the indices contain limit values (0 and INPUT_SIZE).
+ * when the indices are the same.
+ * when is less than 16 or greater than 64.
  */
 TYPED_TEST(SplitTest, MultipleSplits) {
   // Create input column
   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
   // Create indexes
-  std::vector<gdf_index_type> indexes_host{13, 23, 31, 31, 32, 79};
+  std::vector<gdf_index_type> indexes_host{0, 13, 31, 31, 32, INPUT_SIZE};
   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
 
   // Create output
@@ -256,7 +262,9 @@ TYPED_TEST(SplitTest, MultipleSplits) {
 }
 
 /**
- *
+ * It performs a parameterized type and a parameterized value test.
+ * The indices array contains only one value and that value goes from
+ * 0 to the size of the input column.
  */
 TYPED_TEST(SplitTest, RangeIndexPosition) {
   // Test parameters

@@ -243,7 +243,12 @@ using test_types =
 TYPED_TEST_CASE(SliceTest, test_types);
 
 /**
+ * It performs a parameterized type test, where the array of indices contains
+ * multiple values.
  *
+ * It tests:
+ * when the indices are the same.
+ * when is less than 16, less than 64 or greater than 64.
  */
 TYPED_TEST(SliceTest, MultipleSlices) {
   // Create input column
@@ -279,7 +284,9 @@ TYPED_TEST(SliceTest, MultipleSlices) {
 }
 
 /**
- *
+ * It performs a parameterized type and a parameterized value test. The
+ * indices array contains only two values with a fixed length between them.
+ * The interval iterates over all the values in the input column.
  */
 TYPED_TEST(SliceTest, RangeIndexPosition) {
   // Test parameters
