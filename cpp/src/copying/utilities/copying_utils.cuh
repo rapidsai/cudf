@@ -26,42 +26,57 @@
 namespace cudf {
 namespace utilities {
 
+/**
+ * @brief Improve the readability of the source code.
+ * Parameter for the CUDA kernel.
+ */
 constexpr std::size_t NO_DYNAMIC_MEMORY = 0;
 
+/**
+ * @brief Using limits in order to obtain the max value for the 'block_type' type.
+ */
 __constant__
 block_type BLOCK_MASK_VALUE = std::numeric_limits<block_type>::max();
 
+/**
+ * @brief Using limits in order to obtain the number of bits for the 'block_type' type.
+ */
 __constant__
 block_type BITS_PER_BLOCK = std::numeric_limits<block_type>::digits;
 
 /**
- * @brief A helper struct to to store information related to copy data.
+ * @brief A helper struct to store information related to the copy of the data.
  */
 struct data_partition_params {
-  gdf_index_type input_offset; /**< The start index position of the input data*/
-  gdf_size_type row_size;      /**< The total size of data to be copied*/
+  gdf_index_type input_offset;    /**< The start index position of the input data. */
+  gdf_size_type row_size;         /**< The total size of data that will be copied. */
 
-  // Not used in the implementation. It provide the start index position
-  // of the output data.
-  //gdf_index_type output_offset;
+  //gdf_index_type output_offset; /**< The start index of the output data. */
 };
 
+/**
+ * @brief A helper struct to store information related to the copy of the bitmask.
+ */
 struct bitmask_partition_params {
-  block_type* block_output;
-  block_type const* block_input;
+  block_type* block_output;             /**< An alias of the output bitmask pointer in 'block_type'. */
+  block_type const* block_input;        /**< An alias of the input bitmask pointer in 'block_type'. */
 
-  gdf_index_type input_offset;
-  block_type rotate_input;
-  double_block_type mask_last;
+  gdf_index_type input_offset;          /**< The start index of the input bitmask (pointer in 'block_type'). */
+  block_type rotate_input;              /**< The number of bits that the input bitmask will be rotated or discarded. */
+  double_block_type mask_last;          /**< The mask that will be applied to the last calculated bitmask. */
 
-  gdf_size_type input_block_length;
-  gdf_size_type partition_block_length;
+  gdf_size_type input_block_length;     /**< The size of the input data (gdf_column::size) in 'block_type' units. */
+  gdf_size_type partition_block_length; /**< The size of the interval to be copied in 'block_type' units. */
 
-  //gdf_index_type output_offset;
-  //block_type rotate_output;
-  //double_block_type mask_first;
+  //gdf_index_type output_offset;       /**< The start index of the output bitmask (pointer in 'block_type')*/
+  //block_type rotate_output;           /**< The number of bits that the output bitmask will be rotated or discarded. */
+  //double_block_type mask_first;       /**< The mask that will be applied to the first calculated bitmask. */
 };
 
+/**
+ * @brief Bit hack used to calculate the number of ones in 32 bits.
+ * The algorithm is optimized only for 32 bits.
+ */
 __device__ __forceinline__
 std::uint32_t count_bits_set_32bits(std::uint32_t bitmask) {
   bitmask = bitmask - ((bitmask >> 1) & 0x55555555);
@@ -69,6 +84,10 @@ std::uint32_t count_bits_set_32bits(std::uint32_t bitmask) {
   return (((bitmask + (bitmask >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
 }
 
+/**
+ * @brief A CUDA function used to perform the count of the null values.
+ * It counts the bits that are set in the bitmask.
+ */
 __device__ __forceinline__
 void perform_bitmask_null_count(bitmask_partition_params const* params,
                                 gdf_size_type*                  counter,
@@ -78,6 +97,9 @@ void perform_bitmask_null_count(bitmask_partition_params const* params,
   atomicAdd(counter, null_count_value);
 }
 
+/**
+ * @brief A CUDA function used to perform the copy of the data.
+ */
 template <typename ColumnType>
 __device__ __forceinline__
 void copy_data(data_partition_params* data_params,
@@ -94,6 +116,12 @@ void copy_data(data_partition_params* data_params,
   }
 }
 
+/**
+ * @brief A CUDA function used to perform the copy of the bitmask.
+ * The function reads a block of size 'double_block_type' from the input
+ * bitmask and process (apply rotation and logical operators) in order to
+ * store only a block of size 'block_type' into the output bitmask.
+ */
 __device__ __forceinline__
 void copy_bitmask(bitmask_partition_params const* params,
                   gdf_index_type const            index) {
@@ -109,7 +137,7 @@ void copy_bitmask(bitmask_partition_params const* params,
     bitmask_value = upper_value + lower_value;
   }
 
-  // Perform rotations in the 'bitmask_value'
+  // Perform rotation in the 'bitmask_value'
   bitmask_value >>= params->rotate_input;
 
   // Apply mask for the last value in the bitmask

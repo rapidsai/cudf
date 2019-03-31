@@ -37,10 +37,13 @@ void calculate_data_params(data_partition_params* params,
                            gdf_index_type const*  indexes,
                            gdf_size_type const    indexes_size,
                            gdf_index_type const   indexes_position) {
+  // Obtain the index start value.
   params->input_offset = gdf_index_type{0};
   if (indexes_position != 0) {
     params->input_offset = indexes[indexes_position - 1];
   }
+
+  // Obtain the length of the copying operation.
   if (indexes_size <= indexes_position) {
     params->row_size = input_size - params->input_offset;
   }
@@ -60,7 +63,7 @@ void calculate_bitmask_params(bitmask_partition_params* params,
   params->block_output = reinterpret_cast<block_type*>(output_bitmask);
   params->block_input = reinterpret_cast<block_type const*>(input_bitmask);
   
-  //
+  // Obtain the pair of indices
   gdf_index_type input_index_begin{0};
   if (indexes_position != 0) {
     input_index_begin = indexes[indexes_position - 1];
@@ -70,10 +73,12 @@ void calculate_bitmask_params(bitmask_partition_params* params,
     input_index_end = indexes[indexes_position];
   }
  
+  // Calculate the values for the bitmask operations
   params->input_offset = input_index_begin / BITS_PER_BLOCK;
   params->rotate_input = input_index_begin % BITS_PER_BLOCK;
   params->mask_last = (double_block_type{1} << ((input_index_end - input_index_begin) % BITS_PER_BLOCK)) - double_block_type{1};
 
+  // Calculate the different length
   params->input_block_length = (input_size + (BITS_PER_BLOCK - 1)) / BITS_PER_BLOCK;
   params->partition_block_length = ((input_index_end - input_index_begin) + (BITS_PER_BLOCK - 1)) / BITS_PER_BLOCK;
 }
@@ -102,7 +107,7 @@ void split_bitmask_kernel(gdf_valid_type*       output_bitmask,
                           gdf_index_type const* indexes,
                           gdf_size_type const   indexes_size,
                           gdf_index_type const  indexes_position) {
-  // Gather the indexes for copying
+  // Obtain the indexes for copying
   cudf::utilities::bitmask_partition_params bitmask_params;
   calculate_bitmask_params(&bitmask_params,
                            output_bitmask,
