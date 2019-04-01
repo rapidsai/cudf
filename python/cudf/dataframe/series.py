@@ -233,9 +233,13 @@ class Series(object):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        if (method == '__call__' and
+                ufunc.__name__ in ['sqrt', 'sin', 'cos', 'tan',
+                                   'arcsin', 'arccos', 'arctan',
+                                   'exp', 'log']):
+            import cudf
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
