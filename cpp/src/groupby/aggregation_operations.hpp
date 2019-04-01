@@ -17,8 +17,8 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
 
-#include <limits>
 #include "utilities/cudf_utils.h"
+#include "utilities/wrapper_types.hpp"
 
 
 /* --------------------------------------------------------------------------*/
@@ -34,7 +34,7 @@
 /* ----------------------------------------------------------------------------*/
 template<typename value_type>
 struct max_op{
-  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::lowest()};
+  constexpr static value_type IDENTITY{cudf::numeric_limits<value_type>::lowest()};
 
   CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
@@ -46,7 +46,7 @@ struct max_op{
 template<typename value_type>
 struct min_op 
 {
-  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::max()};
+  constexpr static value_type IDENTITY{cudf::numeric_limits<value_type>::max()};
 
   CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)

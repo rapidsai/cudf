@@ -6,6 +6,7 @@
 
 #include <iosfwd>
 #include <type_traits>
+#include <limits>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -334,6 +335,34 @@ template <typename T>
 using unwrapped_type_t = typename unwrapped_type<T>::type;
 
 } // namespace detail
+
+/**---------------------------------------------------------------------------*
+ * @brief Clone of std::numeric_limits that also works on wrapper types
+ * 
+ * @tparam T 
+ *---------------------------------------------------------------------------**/
+template <typename T>
+struct numeric_limits {
+  using TypeUndl = detail::unwrapped_type_t<T>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the maximum finite value representable by the numeric type T
+   * 
+   * @return constexpr T 
+   *---------------------------------------------------------------------------**/
+  static constexpr T max() noexcept {
+    return T{ std::numeric_limits<TypeUndl>::max() };
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the lowest finite value representable by the numeric type T
+   * 
+   * @return constexpr T 
+   *---------------------------------------------------------------------------**/
+  static constexpr T lowest() noexcept {
+    return T{ std::numeric_limits<TypeUndl>::lowest() };
+  }
+};
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
 
