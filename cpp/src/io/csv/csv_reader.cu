@@ -587,6 +587,14 @@ gdf_error read_csv(csv_read_arg *args)
 	checkError(error, "call to upload the CSV data to the device");
 
 	//-----------------------------------------------------------------------------
+	//---  done with host data
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		close(fd);
+		munmap(map_data, map_size);
+	}
+
+	//-----------------------------------------------------------------------------
 	//-- Populate the header
 
 	// Check if the user gave us a list of column names
@@ -691,15 +699,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 
 	//-----------------------------------------------------------------------------
-	//---  done with host data
-	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
-	{
-		close(fd);
-		munmap(map_data, map_size);
-	}
-
-
-	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
 	if(args->dtype==NULL){
@@ -759,15 +758,15 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//--- allocate space for the results
-	gdf_column **cols = (gdf_column **)malloc( sizeof(gdf_column *) * raw_csv.num_active_cols);
+	gdf_column **cols = new gdf_column*[raw_csv.num_active_cols];
 	auto deleteGdfColumns = [size=raw_csv.num_active_cols](gdf_column** cols) {
 		for (int i = 0; i < size; ++i) {
-			free(cols[i]->col_name);
 			RMM_TRY(RMM_FREE(cols[i]->valid, 0));
 			RMM_TRY(RMM_FREE(cols[i]->data, 0));
-			free(cols[i]);
+			delete[] cols[i]->col_name;
+			delete cols[i];
 		}
-		free(cols);
+		delete[] cols;
 		return GDF_SUCCESS;
 	};
 	unique_ptr<gdf_column*, decltype(deleteGdfColumns)> cols_owner(cols, deleteGdfColumns);
@@ -807,18 +806,13 @@ gdf_error read_csv(csv_read_arg *args)
 			continue;
 		col++;
 
-		cols[col] = (gdf_column *)malloc(sizeof(gdf_column));
+		cols[col] = new gdf_column();
 		cols[col]->size = raw_csv.num_records;
 		cols[col]->dtype = raw_csv.dtypes[col];
-		cols[col]->null_count = 0;
-		cols[col]->data = nullptr;
 
 		//--- column name
-		std::string str = raw_csv.col_names[acol];
-		int len = str.length() + 1;
-		cols[col]->col_name = (char *)malloc(sizeof(char) * len);
-		memcpy(cols[col]->col_name, str.c_str(), len);
-		cols[col]->col_name[len -1] = '\0';
+		cols[col]->col_name = new char[raw_csv.col_names[acol].length() + 1];
+		strcpy(cols[col]->col_name, raw_csv.col_names[acol].c_str());
 
 		error = allocateGdfDataSpace(cols[col]);
 		if (error != GDF_SUCCESS) {
