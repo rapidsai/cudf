@@ -128,7 +128,7 @@ struct GroupTest : public GdfTest {
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    int valid_size = gdf_get_num_bytes_for_valids_allocation(host_vector.size());
     EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
@@ -235,13 +235,10 @@ struct GroupTest : public GdfTest {
       gdf_raw_output_val_column = gdf_output_value_column.get();
   }
 
-
   int64_t hash_tuple_and_agg_val (const tuple_t& key, output_t &agg_val) {
-    int64_t hash_output = (int64_t)agg_val;
-
+    int64_t hash_output = (int64_t)(agg_val);
     tuple_each(key, [&hash_output](auto& lower_part) {
-      hash_output = lower_part + 0x9e3779b9 + (hash_output << 6) + (hash_output >> 2);
-
+        hash_output = (int64_t)(lower_part) + 0x9e3779b9 + (hash_output << 6) + (hash_output >> 2);
     });
     return hash_output;
   }
@@ -249,22 +246,7 @@ struct GroupTest : public GdfTest {
   map_t
   compute_reference_solution(bool print = false) {
       map_t key_val_map;
-      if (test_parameters::op == agg_op::CNT_DISTINCT) {
-        AggOp<test_parameters::op> agg;
-        std::set<int64_t> uniques;          
-        for (size_t i = 0; i < input_value.size(); ++i) {
-            auto l_key = extractKey(input_key, i);
-            //create a has based on input l_key and input_value[i]
-            int64_t hash_val =  hash_tuple_and_agg_val(l_key, input_value[i]);
-            if (uniques.find(hash_val) != uniques.end()) {
-              auto sch = key_val_map.find(l_key);
-              key_val_map[l_key] = agg(sch->second, input_value[i]);
-            } else {
-                key_val_map[l_key] = agg(input_value[i]);
-            }
-            uniques.insert(hash_val);
-        }
-      } else if (test_parameters::op != agg_op::AVG) {
+      if (test_parameters::op != agg_op::AVG) {
           AggOp<test_parameters::op> agg;
           for (size_t i = 0; i < input_value.size(); ++i) {
               auto l_key = extractKey(input_key, i);
@@ -410,22 +392,70 @@ struct GroupTest : public GdfTest {
   }
 
   void compare_gdf_result(map_t& reference_map) {
-      ASSERT_EQ(output_value.size(), reference_map.size()) <<
-          "Size of gdf result does not match reference result\n";
-      ASSERT_EQ(std::get<0>(output_key).size(), output_value.size()) <<
-          "Mismatch between aggregation and group by column size.";
-      for (size_t i = 0; i < output_value.size(); ++i) {
-          auto sch = reference_map.find(extractKey(output_key, i));
-          bool found = (sch != reference_map.end());
-          EXPECT_EQ(found, true);
-          if (!found) { continue; }
-          if (std::is_integral<output_t>::value) {
-              EXPECT_EQ(sch->second, output_value[i]);
+
+      if (test_parameters::op == agg_op::CNT_DISTINCT) {
+        using unique_key_type = std::vector<int64_t>;
+        std::map<unique_key_type, output_t> uniques;  
+        AggOp<test_parameters::op> agg;
+        for (size_t i = 0; i < input_value.size(); ++i) {
+          
+          auto l_key = extractKey(input_key, i);
+          unique_key_type unique_key;
+          tuple_each(l_key, [&unique_key](auto& lower_part) {
+              unique_key.push_back((int64_t)(lower_part));
+          });
+          unique_key.push_back((int64_t)(input_value[i]));
+          
+          auto csh = uniques.find(unique_key);
+          if (csh != uniques.end()) {
+            uniques[unique_key] = agg(csh->second, input_value[i]);
           } else {
-              EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
+            uniques[unique_key] = agg(input_value[i]);
           }
-          //ensure no duplicates in gdf output
-          reference_map.erase(sch);
+        }
+
+        // for (size_t i = 0; i < uniques.size(); ++i) {
+        //     auto l_key = extractKey(output_key, i);
+        //     unique_key_type unique_key;
+        //     tuple_each(l_key, [&unique_key](auto& lower_part) {
+        //         unique_key.push_back((int64_t)(lower_part));
+        //     });
+        //     unique_key.push_back((int64_t)(input_value[i]));
+        //     auto sch = uniques.find(unique_key);
+        //     bool found = (sch != uniques.end());
+        //     EXPECT_EQ(found, true);
+        //     if (!found) { continue; }
+        //     if (std::is_integral<output_t>::value) {
+        //       EXPECT_EQ(sch->second, output_value[i]);
+        //     } else {
+        //       EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
+        //     }
+        //     //ensure no duplicates in gdf output
+        //     uniques.erase(sch);
+        // }
+        ASSERT_EQ(output_value.size(), uniques.size()) <<
+            "Size of gdf result does not match reference result\n";
+        ASSERT_EQ(std::get<0>(output_key).size(), output_value.size()) <<
+            "Mismatch between aggregation and group by column size.";
+        
+      } else {
+        ASSERT_EQ(output_value.size(), reference_map.size()) <<
+            "Size of gdf result does not match reference result\n";
+        ASSERT_EQ(std::get<0>(output_key).size(), output_value.size()) <<
+            "Mismatch between aggregation and group by column size.";
+        for (size_t i = 0; i < output_value.size(); ++i) {
+            auto sch = reference_map.find(extractKey(output_key, i));
+            bool found = (sch != reference_map.end());
+            EXPECT_EQ(found, true);
+            if (!found) { continue; }
+            if (std::is_integral<output_t>::value) {
+              EXPECT_EQ(sch->second, output_value[i]);
+            } else {
+              EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
+            }
+            //ensure no duplicates in gdf output
+            reference_map.erase(sch);
+        }
       }
   }
 };
@@ -465,9 +495,9 @@ TYPED_TEST(GroupTest, AllKeysDifferent)
     const size_t max_key = num_keys*2;
     const size_t max_val = 1000;
     this->create_input(num_keys, num_values_per_key, max_key, max_val);
-    auto reference_map = this->compute_reference_solution();
     this->create_gdf_output_buffers(num_keys, num_values_per_key);
     this->compute_gdf_result();
+    auto reference_map = this->compute_reference_solution();
     this->compare_gdf_result(reference_map);
 }
 
