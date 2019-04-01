@@ -763,10 +763,21 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- allocate space for the results
 	gdf_column **cols = (gdf_column **)malloc( sizeof(gdf_column *) * raw_csv.num_active_cols);
+	auto deleteGdfColumns = [size=raw_csv.num_active_cols](gdf_column** cols) {
+		for (int i = 0; i < size; ++i) {
+			free(cols[i]->col_name);
+			RMM_TRY(RMM_FREE(cols[i]->valid, 0));
+			RMM_TRY(RMM_FREE(cols[i]->data, 0));
+			free(cols[i]);
+		}
+		free(cols);
+		return GDF_SUCCESS;
+	};
+	unique_ptr<gdf_column*, decltype(deleteGdfColumns)> cols_owner(cols, deleteGdfColumns);
 
 	vector<gdf_dtype> h_dtypes(raw_csv.num_active_cols);
-	vector<void*> h_data(raw_csv.num_active_cols));
-	vector<gdf_valid_type*> h_valid(raw_csv.num_active_cols));
+	vector<void*> h_data(raw_csv.num_active_cols);
+	vector<gdf_valid_type*> h_valid(raw_csv.num_active_cols);
 
 	void **d_data;
 	gdf_valid_type **d_valid;
@@ -785,17 +796,17 @@ gdf_error read_csv(csv_read_arg *args)
 			stringColCount++;
 	}
 
-	string_pair **h_str_cols = NULL, **d_str_cols = NULL;
+	string_pair **d_str_cols = nullptr;
+	vector<string_pair *> h_str_cols(stringColCount);
 
 	if (stringColCount > 0 ) {
-		h_str_cols = (string_pair**) malloc ((sizeof(string_pair *)	* stringColCount));
 		RMM_TRY( RMM_ALLOC((void**)&d_str_cols, 	(sizeof(string_pair *)		* stringColCount), 0) );
 
 		for (int col = 0; col < stringColCount; col++) {
-			RMM_TRY( RMM_ALLOC((void**)(h_str_cols + col), sizeof(string_pair) * (raw_csv.num_records), 0) );
+			RMM_TRY( RMM_ALLOC(&h_str_cols[col], sizeof(string_pair) * (raw_csv.num_records), 0) );
 		}
 
-		CUDA_TRY(cudaMemcpy(d_str_cols, h_str_cols, sizeof(string_pair *)	* stringColCount, cudaMemcpyHostToDevice));
+		CUDA_TRY(cudaMemcpy(d_str_cols, h_str_cols.data(), sizeof(string_pair *)	* stringColCount, cudaMemcpyHostToDevice));
 	}
 
 	for (int acol = 0,col=-1; acol < raw_csv.num_actual_cols; acol++) {
@@ -803,33 +814,32 @@ gdf_error read_csv(csv_read_arg *args)
 			continue;
 		col++;
 
-		gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
+		cols[col] = (gdf_column *)malloc(sizeof(gdf_column));
 
-		gdf->size		= raw_csv.num_records;
-		gdf->dtype		= raw_csv.dtypes[col];
-		gdf->null_count	= 0;						// will be filled in later
+		cols[col]->size		= raw_csv.num_records;
+		cols[col]->dtype		= raw_csv.dtypes[col];
+		cols[col]->null_count	= 0;						// will be filled in later
 
 		//--- column name
 		std::string str = raw_csv.col_names[acol];
 		int len = str.length() + 1;
-		gdf->col_name = (char *)malloc(sizeof(char) * len);
-		memcpy(gdf->col_name, str.c_str(), len);
-		gdf->col_name[len -1] = '\0';
+		cols[col]->col_name = (char *)malloc(sizeof(char) * len);
+		memcpy(cols[col]->col_name, str.c_str(), len);
+		cols[col]->col_name[len -1] = '\0';
 
-		error = allocateGdfDataSpace(gdf);
+		error = allocateGdfDataSpace(cols[col]);
 		if (error != GDF_SUCCESS) {
 			return error;
 		}
 
-		cols[col] 		= gdf;
-		h_dtypes[col] 	= gdf->dtype;
-		h_data[col] 	= gdf->data;
-		h_valid[col] 	= gdf->valid;
-    }
+		h_dtypes[col] 	= cols[col]->dtype;
+		h_data[col] 	= cols[col]->data;
+		h_valid[col] 	= cols[col]->valid;
+	}
 
-	CUDA_TRY( cudaMemcpy(d_dtypes,h_dtypes, sizeof(gdf_dtype) * (raw_csv.num_active_cols), cudaMemcpyHostToDevice));
-	CUDA_TRY( cudaMemcpy(d_data,h_data, sizeof(void*) * (raw_csv.num_active_cols), cudaMemcpyHostToDevice));
-	CUDA_TRY( cudaMemcpy(d_valid,h_valid, sizeof(gdf_valid_type*) * (raw_csv.num_active_cols), cudaMemcpyHostToDevice));
+	CUDA_TRY(cudaMemcpyAsync(d_dtypes, h_dtypes.data(), sizeof(gdf_dtype) * h_dtypes.size(), cudaMemcpyDefault));
+	CUDA_TRY(cudaMemcpyAsync(d_data, h_data.data(), sizeof(void*) * h_data.size(), cudaMemcpyDefault));
+	CUDA_TRY(cudaMemcpyAsync(d_valid, h_valid.data(), sizeof(gdf_valid_type*) * h_valid.size(), cudaMemcpyDefault));
 
 	if (raw_csv.num_records != 0) {
 		error = launch_dataConvertColumns(&raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
@@ -856,8 +866,8 @@ gdf_error read_csv(csv_read_arg *args)
 			if (gdf->dtype != gdf_dtype::GDF_STRING)
 				continue;
 
-			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv.num_records));
-			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount], size_t(raw_csv.num_records));
+			RMM_TRY( RMM_FREE(h_str_cols[stringColCount],0));
 
 			if ((raw_csv.opts.quotechar != '\0') && (raw_csv.opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
@@ -885,9 +895,9 @@ gdf_error read_csv(csv_read_arg *args)
 
 	// Free up remaining internal buffers
 	RMM_TRY( RMM_FREE( d_valid_count, 0 ) );
-
 	RMM_TRY( RMM_FREE ( raw_csv.data, 0) );
-
+	cols_owner.release();
+	
 	args->data 			= cols;
 	args->num_cols_out	= raw_csv.num_active_cols;
 	args->num_rows_out	= raw_csv.num_records;
