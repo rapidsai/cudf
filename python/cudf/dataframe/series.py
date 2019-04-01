@@ -565,7 +565,12 @@ class Series(object):
 
         Returns a new Series.
         """
-        return self._unaryop('not')
+        if np.issubdtype(self.dtype.type, np.integer):
+            return self._unaryop('not')
+        else:
+            raise TypeError(
+                f"Operation `~` not supported on {self.dtype.type.__name__}"
+            )
 
     def __neg__(self):
         """Negatated value (-) for each element
