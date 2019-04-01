@@ -66,7 +66,9 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set([val for o in objs for val in o]))
+            new_cats = tuple(set(
+                [val for o in objs for val in o.cat().categories]
+            ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
@@ -279,7 +281,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
@@ -295,7 +297,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             Defaults to None, which will skip null values.
             If it equals "pandas", null values are filled with NaNs.
             Non integral dtype is promoted to np.float64.
@@ -480,7 +482,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
@@ -489,7 +491,10 @@ class Column(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        if fillna not in {None, 'pandas'}:
+        if isinstance(fillna, Number):
+            if self.null_count > 0:
+                return self.fillna(fillna)
+        elif fillna not in {None, 'pandas'}:
             raise ValueError('invalid for fillna')
 
         if self.null_count > 0:

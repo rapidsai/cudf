@@ -33,7 +33,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef gdf_context* context = create_context_view(0, method, 0, 0, 0)
 
     if how not in ['left', 'inner', 'outer']:
-        msg = "new join api only supports left or inner"
+        msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
     result_col_names = []

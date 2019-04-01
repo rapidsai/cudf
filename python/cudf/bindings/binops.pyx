@@ -30,6 +30,9 @@ _BINARY_OP['lt'] = GDF_LESS
 _BINARY_OP['gt'] = GDF_GREATER
 _BINARY_OP['le'] = GDF_LESS_EQUAL
 _BINARY_OP['ge'] = GDF_GREATER_EQUAL
+_BINARY_OP['and'] = GDF_BITWISE_AND
+_BINARY_OP['or'] = GDF_BITWISE_OR
+_BINARY_OP['xor'] = GDF_BITWISE_XOR
 
 
 def apply_op(lhs, rhs, out, op):
