@@ -23,6 +23,7 @@
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
+- PR #1321 Fix out of bounds warning when checking Bzip2 header
 
 
 # cuDF 0.6.0 (Date TBD)
