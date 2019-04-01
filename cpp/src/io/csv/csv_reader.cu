@@ -60,66 +60,11 @@
 #include "io/comp/io_uncomp.h"
 
 #include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/memory_utils.hpp"
 
 using std::vector;
 using std::string;
 using std::unique_ptr;
-
-// DOXY
-template <class T>
-class rmm_unique_ptr {
-	T* ptr;
-
-public:
-	rmm_unique_ptr() {
-		//  if ((x) != RMM_SUCCESS) return GDF_MEMORYMANAGER_ERROR;
-		RMM_ALLOC(&ptr, sizeof(T), 0);
-	}
-	~rmm_unique_ptr() {
-		delete ptr;
-	}
-	T* get() {
-		return ptr;
-	}
-	rmm_unique_ptr& operator= (const rmm_unique_ptr &p) = delete;
-	rmm_unique_ptr& operator= (rmm_unique_ptr &&p) {
-		ptr = p.ptr;
-		p.ptr = nullptr;
-		return *this;
-	}
-};
-
-// DOXY
-template <class T>
-class rmm_unique_ptr<T[]> {
-	T* ptr = nullptr;
-
-public:
-	rmm_unique_ptr() = default;
-	explicit rmm_unique_ptr(size_t cnt) {
-		RMM_ALLOC(&ptr, sizeof(T)*cnt, 0);
-	}
-	~rmm_unique_ptr() {
-		RMM_FREE(ptr, 0);
-	}
-	T* get() {
-		return ptr;
-	}
-	void resize(size_t cnt) {
-		RMM_FREE(ptr, 0);
-		if (cnt != 0)
-			RMM_ALLOC(&ptr, sizeof(T)*cnt, 0);
-		else 
-			ptr = nullptr;
-	}
-	rmm_unique_ptr& operator= (const rmm_unique_ptr &p) = delete;
-	rmm_unique_ptr& operator= (rmm_unique_ptr &&p) {
-		ptr = p.ptr;
-		p.ptr = nullptr;
-		return *this;
-	}
-};
-
 
 /**---------------------------------------------------------------------------*
  * @brief Struct used for internal parsing state
