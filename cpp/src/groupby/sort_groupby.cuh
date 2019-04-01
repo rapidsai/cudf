@@ -203,7 +203,7 @@ gdf_error dispatch_aggregation_type(size_type ncols,
   // as the type of the aggregation column. This is required as there is a limitation 
   // Sort based groupby implementation where it's assumed the aggregation input column
   // and output column are the same type
-  if(is_same_functor<count_op, op>::value)
+  if(is_same_functor<count_op, op>::value || is_same_functor<count_distinct_op, op>::value)
   {
     aggregation_column_type = out_aggregation_column->dtype;
   }
