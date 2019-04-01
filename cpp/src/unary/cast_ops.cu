@@ -30,6 +30,15 @@
 #include <thrust/execution_policy.h>
 
 
+static constexpr int64_t METRIC_FACTOR = 1000;
+static constexpr int64_t METRIC_FACTOR_SQ = METRIC_FACTOR * METRIC_FACTOR;
+static constexpr int64_t METRIC_FACTOR_CUBE = METRIC_FACTOR_SQ * METRIC_FACTOR;
+
+static constexpr int64_t SECONDS_IN_DAY = 86400;
+static constexpr int64_t MILLISECONDS_IN_DAY = SECONDS_IN_DAY * METRIC_FACTOR;
+static constexpr int64_t MICROSECONDS_IN_DAY = MILLISECONDS_IN_DAY * METRIC_FACTOR;
+static constexpr int64_t NAN0SECONDS_IN_DAY = MICROSECONDS_IN_DAY * METRIC_FACTOR;
+
 template<typename TypeFrom, typename TypeTo>
 struct DeviceCast {
     __device__
@@ -76,9 +85,9 @@ struct CastDateTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype == GDF_DATE64 && output->dtype == GDF_DATE32 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, MILLISECONDS_IN_DAY> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && output->dtype == GDF_DATE64 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, MILLISECONDS_IN_DAY> >::launch(input, output);
         else // both columns have same type
             return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
     }
@@ -90,21 +99,21 @@ struct CastDateTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s ) ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, SECONDS_IN_DAY> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms ) ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, MILLISECONDS_IN_DAY> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us ) ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, MICROSECONDS_IN_DAY> >::launch(input, output);
         else if( input->dtype == GDF_DATE32 && ( output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns ) ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, NAN0SECONDS_IN_DAY> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms) 
             return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
         else if( input->dtype == GDF_DATE64 && output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else
             return GDF_UNSUPPORTED_DTYPE;
     }
@@ -132,21 +141,21 @@ struct CastTimestampTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_s ) && output->dtype == GDF_DATE32 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, SECONDS_IN_DAY> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ms ) && output->dtype == GDF_DATE32 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, MILLISECONDS_IN_DAY> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_us ) && output->dtype == GDF_DATE32 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, MICROSECONDS_IN_DAY> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ns ) && output->dtype == GDF_DATE32 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 86400000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, NAN0SECONDS_IN_DAY> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_s ) && output->dtype == GDF_DATE64 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ms ) && output->dtype == GDF_DATE64 ) 
             return cudf::unary::Launcher< TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_us ) && output->dtype == GDF_DATE64 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( ( input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ns ) && output->dtype == GDF_DATE64 ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else
             return GDF_UNSUPPORTED_DTYPE;
     }
@@ -158,29 +167,29 @@ struct CastTimestampTo_Dispatcher {
     gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR_CUBE> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_s ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR_CUBE> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_ns ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR_SQ> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ms ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_us ) 
-            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, 1000> >::launch(input, output);
+            return cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else
             return GDF_TIMESTAMP_RESOLUTION_MISMATCH;
     }
