@@ -5,13 +5,15 @@ import numpy as np
 
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
-import cudf.dataframe.index as index
+import cudf.dataframe.index as indexPackage
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-class MultiIndex(index.Index):
+
+class MultiIndex(indexPackage.Index):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
-    
+
     Properties
     ---
     levels: Labels for each category in the index hierarchy.
@@ -28,23 +30,28 @@ class MultiIndex(index.Index):
             column_names = list(range(len(levels)))
         else:
             column_names = names
-        for index, code in enumerate(codes):
-            self.codes.add_column(column_names[index],
-                    columnops.as_column(np.array(code)))
+        for idx, code in enumerate(codes):
+            self.codes.add_column(column_names[idx],
+                                  columnops.as_column(np.array(code)))
         self.names = names
 
     def _validate_levels_and_codes(self, levels, codes):
         levels = np.array(levels)
+        # from cudf import DataFrame
+        # if not isinstance(codes, DataFrame):
         codes = np.array(codes)
         if len(levels) != len(codes):
-            raise ValueError('MultiIndex has unequal number of levels and codes and is inconsistent!')
+            raise ValueError('MultiIndex has unequal number of levels and '
+                             'codes and is inconsistent!')
         code_length = len(codes[0])
         for index, code in enumerate(codes):
             if code_length != len(code):
-                raise ValueError('MultiIndex length of codes does not match and is inconsistent!')
+                raise ValueError('MultiIndex length of codes does not match '
+                                 'and is inconsistent!')
         for index, code in enumerate(codes):
             if code.max() > len(levels[index])-1:
-                raise ValueError('MultiIndex code %d contains value %d larger than maximum level size at this position')
+                raise ValueError('MultiIndex code %d contains value %d larger '
+                                 'than maximum level size at this position')
 
     def copy(self, deep=True):
         if(deep):
@@ -60,20 +67,42 @@ class MultiIndex(index.Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            # return a new MultiIndex with the sliced codes, same levels and names
+            # a new MultiIndex with the sliced codes, same levels and names
             None
         elif isinstance(index, int):
-            # return a tuple of the labels of the item defined by the set of codes
+            # a tuple of the labels of the item defined by the set of codes
             # at the ith positionjA
             None
         elif isinstance(index, (list, np.ndarray)):
-            # return a new MultiIndex constructed similarly to the slice case
-            None
+            print(self.levels)
+            print(self.codes.iloc[index])
+            result = MultiIndex(self.levels, self.codes.iloc[index])
+            result.names = self.names
+            return result
         if isinstance(index, (DeviceNDArray)):
             return self.take(index)
         else:
             raise IndexError('only integers, slices (`:`), ellipsis (`...`),'
-            'numpy.newaxis (`None`) and integer or boolean arrays are valid indices')
+            'numpy.newaxis (`None`) and integer or boolean arrays are valid '
+            'indices')  # noqa: E128
+
+    def get(self, df, row_tuple):
+        # Assume row is a tuple
+        validity_mask = []
+        for i, element in enumerate(row_tuple):
+            index_of_code_at_level = np.where(self.levels[i] == row_tuple[i])[0][0]  # noqa: E501
+            matches = []
+            for k, code in enumerate(self.codes[self.codes.columns[i]]):
+                print(element, code, index_of_code_at_level)
+                if code == index_of_code_at_level:
+                    matches.append(k)
+            # matches = self.codes.map([j if c[i] == index_of_code_at_level\
+            #       else None for j,c in codes])
+            print(matches)
+            if len(matches) != 0:
+                validity_mask = matches
+        print(validity_mask)
+        return df.iloc[validity_mask]
 
     def __eq__(self, other):
         return self.levels == other.levels and\

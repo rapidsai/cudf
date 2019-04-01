@@ -2447,6 +2447,8 @@ class Loc(object):
             col_slice = self._df.columns
 
         elif isinstance(arg, tuple):
+            if isinstance(self._df.index, MultiIndex):
+                return self._df._index.get(self._df, arg)
             arg_1, arg_2 = arg
             if isinstance(arg_1, int):
                 row_label = arg_1
