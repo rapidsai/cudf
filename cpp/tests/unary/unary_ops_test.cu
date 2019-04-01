@@ -517,7 +517,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		auto outputCol = cudf::test::column_wrapper<double>{colSize};
 
 		gdf_error gdfError;
-		EXPECT_NO_THROW( gdfError = gdf_cast(inputCol, outputCol) );
+		gdfError = gdf_cast(inputCol, outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 	}
 
