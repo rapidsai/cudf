@@ -24,6 +24,7 @@
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
+- PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 
 
 # cuDF 0.6.0 (Date TBD)
