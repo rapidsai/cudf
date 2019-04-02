@@ -223,6 +223,10 @@ add_library(cudf SHARED
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
+            src/sortedmerge/alloc_filtered_cols.cu
+            src/sortedmerge/pair_rtti.cu
+            src/sortedmerge/typed_sorted_merge.cu
+            src/sortedmerge/sortedmerge.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu

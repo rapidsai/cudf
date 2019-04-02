@@ -140,7 +140,7 @@ void print_gdf_column(gdf_column const *column, unsigned min_element_print_width
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
- * 
+ *
  * @param validity_mask The validity bitmask to print
  * @param length Length of the mask in bits
  *
@@ -190,7 +190,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
 
-  // If a validity bitmask vector was passed in, allocate device storage 
+  // If a validity bitmask vector was passed in, allocate device storage
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
   {
@@ -231,7 +231,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
 // a gdf_column and append it to a vector of gdf_columns
 template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, 
+convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t,
                              valid_initializer_t bit_initializer)
 {
   //bottom of compile-time recursion
@@ -255,7 +255,7 @@ convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tupl
 
 // Converts a tuple of host vectors into a vector of gdf_columns
 template<typename valid_initializer_t, typename... Tp>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns, 
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns,
                                                     valid_initializer_t bit_initializer)
 {
   std::vector<gdf_col_pointer> gdf_columns;
@@ -264,12 +264,12 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 }
 
 
-// Overload for default initialization of validity bitmasks which 
+// Overload for default initialization of validity bitmasks which
 // sets every element to valid
 template<typename... Tp>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns )
 {
-  return initialize_gdf_columns(host_columns, 
+  return initialize_gdf_columns(host_columns,
                                 [](const size_t row, const size_t col){return true;});
 }
 
@@ -281,7 +281,7 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
   std::vector<gdf_col_pointer> gdf_columns;
 
   size_t col = 0;
-  
+
   for (auto column : columns)
   {
     // Creates a gdf_column for the current vector and pushes it onto
@@ -324,6 +324,8 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
                      reinterpret_cast<T*>(left->data) + left->size,
                      reinterpret_cast<T*>(right->data)))
     return false;
+
+  if (left->null_count == 0 && right->null_count == 0) return true;
 
   if (!(left->valid && right->valid))
     return false;  // if one is null but not both
