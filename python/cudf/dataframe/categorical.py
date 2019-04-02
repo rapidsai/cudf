@@ -175,15 +175,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             # Necessary because PyArrow doesn't support from_buffers for
             # DictionaryArray yet
-            mask = pa.array(
-                # Why does expand_mask_bits return as int32?
-                cudautils.expand_mask_bits(
-                    len(self),
-                    self.nullmask.mem
-                )
-                .copy_to_host()
-                .astype(self.data.dtype)
-            )
+            # Why does expand_mask_bits return as int32?
+            mask = cudautils.expand_mask_bits(
+                len(self),
+                self.nullmask.mem
+            ) \
+            .copy_to_host() \
+            .astype('bool')
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
         dictionary = pa.array(self.cat().categories)
