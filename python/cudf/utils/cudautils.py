@@ -511,7 +511,7 @@ def compute_scale(arr, vmin, vmax):
 
 
 @cuda.jit
-def gpu_label(arr, cats, enc, na_sentinel, out):
+def gpu_label(arr, enc, cats, na_sentinel, out):
     i = cuda.grid(1)
     if i < out.size:
         val = arr[i]
