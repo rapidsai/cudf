@@ -6,6 +6,7 @@
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1310 Implemented the slice/split functionality.
+- PR #1335 Added local_dict arg in `DataFrame.query()`.
 
 ## Improvements
 
@@ -16,6 +17,7 @@
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
+- PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
 
 ## Bug Fixes
 
@@ -23,6 +25,10 @@
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
+- PR #1317 Fix catch polymorphic exception by reference in ipc.cu
+- PR #1325 Fix dtype of null bitmasks to int8
+- PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
+- PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 
 
 # cuDF 0.6.0 (Date TBD)
