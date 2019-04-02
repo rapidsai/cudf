@@ -1,11 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import atexit
-import multiprocessing as mp
-
 import numpy as np
 import pandas as pd
-from numba import cuda
 try:
     from distributed.protocol import serialize, deserialize
     _have_distributed = True
@@ -18,11 +14,6 @@ from cudf.tests import utils
 
 require_distributed = pytest.mark.skipif(not _have_distributed,
                                          reason='no distributed')
-support_ipc = False
-require_ipc = pytest.mark.skipIf(
-    support_ipc,
-    reason='only on linux and multiprocess has .get_context',
-    )
 
 
 @require_distributed
@@ -95,66 +86,6 @@ def test_serialize_groupby():
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
 
 
-def serialize_ipc(sr):
-    # Non-IPC
-    header, frames = serialize(sr)
-    assert header['column']['data_buffer']['kind'] == 'normal'
-    # IPC
-    hostport = 'tcp://0.0.0.0:8888'
-    fake_context = {
-        'recipient': hostport,
-        'sender': hostport,
-    }
-
-    assert sr._column.data._cached_ipch is None
-    header, frames = serialize(sr, context=fake_context)
-    assert header['column']['data_buffer']['kind'] == 'ipc'
-    # Check that _cached_ipch is set on the buffer
-    assert isinstance(sr._column.data._cached_ipch,
-                      cuda.cudadrv.devicearray.IpcArrayHandle)
-
-    # Spawn a new process to test the IPC handle deserialization
-    mpctx = mp.get_context('spawn')
-    result_queue = mpctx.Queue()
-
-    proc = mpctx.Process(target=_load_ipc, args=(header, frames, result_queue))
-    proc.start()
-    out = result_queue.get()
-    proc.join(3)
-    return out
-
-
-@require_distributed
-@require_ipc
-def test_serialize_ipc():
-    sr = cudf.Series(np.arange(10))
-    out = serialize_ipc(sr)
-    # Verify that the output array matches the source
-    np.testing.assert_array_equal(out.to_array(), sr.to_array())
-
-
-@require_distributed
-@require_ipc
-def test_serialize_ipc_slice():
-    sr = cudf.Series(np.arange(10))
-    # test with a slice to verify internal offset calculations work
-    out = serialize_ipc(sr[1:7])
-    # Verify that the output array matches the source
-    np.testing.assert_array_equal(out.to_array(), sr[1:7].to_array())
-
-
-def _load_ipc(header, frames, result_queue):
-    cudf._gdf.rmm_initialize()
-
-    try:
-        out = deserialize(header, frames)
-        result_queue.put(out)
-    except Exception as e:
-        result_queue.put(e)
-
-    atexit.register(cudf._gdf.rmm_finalize)
-
-
 @require_distributed
 def test_serialize_datetime():
     # Make frame with datetime column
@@ -167,3 +98,36 @@ def test_serialize_datetime():
     recreated = deserialize(*serialize(gdf))
     # Check
     pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
+
+
+@require_distributed
+def test_serialize_string():
+    # Make frame with string column
+    df = pd.DataFrame({'x': np.random.randint(0, 5, size=5),
+                       'y': np.random.normal(size=5)})
+    str_data = ['a', 'bc', 'def', 'ghij', 'klmno']
+    df['timestamp'] = str_data
+    gdf = cudf.DataFrame.from_pandas(df)
+    # (De)serialize roundtrip
+    recreated = deserialize(*serialize(gdf))
+    # Check
+    pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
+
+
+@require_distributed
+def test_serialize_empty_string():
+    pd_series = pd.Series([], dtype='str')
+    gd_series = cudf.Series([], dtype='str')
+
+    recreated = deserialize(*serialize(gd_series))
+    pd.util.testing.assert_series_equal(recreated.to_pandas(), pd_series)
+
+
+@require_distributed
+def test_serialize_all_null_string():
+    data = [None, None, None, None, None]
+    pd_series = pd.Series(data, dtype='str')
+    gd_series = cudf.Series(data, dtype='str')
+
+    recreated = deserialize(*serialize(gd_series))
+    pd.util.testing.assert_series_equal(recreated.to_pandas(), pd_series)

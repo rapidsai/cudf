@@ -55,6 +55,38 @@ gdf_error gdf_nvtx_range_pop();
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count);
 
+/**
+ * Calculates the number of bytes to allocate for a column's validity bitmask
+ *
+ * For a column with a specified number of elements, returns the required size
+ * in bytes of the validity bitmask to provide one bit per element.
+ *
+ * @note Note that this function assumes the bitmask needs to be allocated to be
+ * padded to a multiple of 64 bytes
+ * 
+ * @note This function assumes that the size of gdf_valid_type is 1 byte
+ *
+ * @param[in] column_size The number of elements
+ * @return the number of bytes necessary to allocate for validity bitmask
+ */
+gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
+
+/**
+ * @brief Computes the number of `gdf_valid_type` elements required to provide
+ * enough bits to represent the specified number of column elements.
+ *
+ * @note Note that this function assumes that the size of `gdf_valid_type` is 1
+ * byte
+ * @note This function is different gdf_valid_allocation_size
+ * because gdf_valid_allocation_size returns the number of bytes required to
+ * satisfy 64B padding. This function should be used when needing to access the
+ * last `gdf_valid_type` element in the validity bitmask.
+ *
+ * @param[in] column_size the number of elements
+ * @return The minimum number of `gdf_valid_type` elements to provide sufficient
+ * bits to represent elements in a column of size @p column_size
+ */
+gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 /* column operations */
 
@@ -2703,10 +2735,21 @@ typedef struct DLManagedTensor DLManagedTensor_;
 
 /**
  * @brief Convert a DLPack DLTensor into gdf_column(s)
- * 
- * Currently only 1D and 2D tensors are supported. This function makes copies
+ *
+ * 1D and 2D tensors are supported. This function makes copies
  * of the input DLPack data into the created output columns.
  * 
+ * Note: currently only supports column-major ("Fortran" order) memory layout
+ * Therefore row-major tensors should be transposed before calling 
+ * this function
+ * TODO: provide a parameter to select row- or column-major ordering (row major
+ * input will require a transpose)
+ *
+ * Note: this function does NOT call the input tensor's deleter currently
+ * because the caller of this function may still need it. Also, it is often
+ * packaged in a PyCapsule on the Python side, which (in the case of Cupy)
+ * may be set up to call the deleter in its own destructor
+ *
  * @param[out] columns The output column(s)
  * @param[out] num_columns The number of gdf_columns in columns
  * @param[in] tensor The input DLPack DLTensor
@@ -2718,11 +2761,16 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 
 /**
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
+ *
+ * 1D and 2D tensors are supported. This function allocates the DLPack tensor 
+ * data and copies the data from the input column(s) into the tensor.
  * 
- * Currently only 1D and 2D tensors are supported. This function allocates the
- * DLPack tensor data and copies the data from the input column(s) into the
- * tensor.
- * 
+ * Note: currently only supports column-major ("Fortran" order) memory layout
+ * Therefore the output of this function should be transposed if row-major is
+ * needed.
+ * TODO: provide a parameter to select row- or column-major ordering (row major
+ * output will require a transpose)
+ *
  * @param[out] tensor The output DLTensor
  * @param[in] columns An array of pointers to gdf_column 
  * @param[in] num_columns The number of input columns

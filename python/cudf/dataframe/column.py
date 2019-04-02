@@ -8,13 +8,13 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
 from cudf import _gdf
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 
 
@@ -40,6 +40,7 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
         if len(objs) == 0:
@@ -49,13 +50,25 @@ class Column(object):
                     null_count=0,
                     ordered=False
                 )
+            elif dtype == np.dtype('object'):
+                return StringColumn(
+                    data=nvstrings.to_device([]),
+                    null_count=0
+                )
             else:
                 dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
 
+        # Handle strings separately
+        if all(isinstance(o, StringColumn) for o in objs):
+            objs = [o._data for o in objs]
+            return StringColumn(data=nvstrings.from_strings(*objs))
+
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set([val for o in objs for val in o]))
+            new_cats = tuple(set(
+                [val for o in objs for val in o.cat().categories]
+            ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
@@ -86,13 +99,18 @@ class Column(object):
     def from_cffi_view(cffi_view):
         """Create a Column object from a cffi struct gdf_column*.
         """
+        from cudf.dataframe import columnops
+
         data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
-        data_buf = Buffer(data_mem)
-
-        if mask_mem is not None:
-            mask = Buffer(mask_mem)
-
-        return Column(data=data_buf, mask=mask)
+        dtype = _gdf.gdf_to_np_dtype(cffi_view.dtype)
+        if isinstance(data_mem, nvstrings.nvstrings):
+            return columnops.build_column(data_mem, dtype)
+        else:
+            data_buf = Buffer(data_mem)
+            mask = None
+            if mask_mem is not None:
+                mask = Buffer(mask_mem)
+            return columnops.build_column(data_buf, dtype, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """
@@ -203,11 +221,23 @@ class Column(object):
     def cffi_view(self):
         """LibGDF CFFI view
         """
-        return _gdf.columnview(size=self._data.size,
-                               data=self._data,
-                               mask=self._mask,
-                               dtype=self.dtype,
-                               null_count=self._null_count)
+        if self.dtype == np.dtype('object'):
+            return _gdf.columnview(
+                size=self.indices.size,
+                data=self.indices,
+                mask=self._mask,
+                dtype=self.dtype,
+                null_count=self._null_count,
+                nvcat=self.nvcategory
+            )
+        else:
+            return _gdf.columnview(
+                size=self._data.size,
+                data=self._data,
+                mask=self._mask,
+                dtype=self.dtype,
+                null_count=self._null_count
+            )
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
@@ -241,7 +271,7 @@ class Column(object):
         """
         nelem = len(self)
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
+        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xff if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
@@ -568,3 +598,9 @@ class Column(object):
         device array
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
+
+    @ioutils.doc_to_dlpack()
+    def to_dlpack(self):
+        """{docstring}"""
+        import cudf.io.dlpack as dlpack
+        return dlpack.to_dlpack(self)

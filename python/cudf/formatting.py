@@ -3,10 +3,10 @@
 """
 Define how data are formatted
 """
-import numbers
+import numpy as np
 
 
-def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
+def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
            min_width=4, series_spacing=False):
     """
     Format columnar data.
@@ -52,19 +52,22 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
 
     # compute column widths
     widths = {}
-    for k, vs in cols.items():
-        if k == 0 and not series_spacing:
-            widths[k] = 1
-        elif isinstance(k, numbers.Integral):
-            widths[k] = min_width
-        else:
-            widths[k] = max(len(k)+1, max(map(len, vs), default=0)+col0_offset,
-                            min_width)
-        for v in vs:
-            if len(v) == max(map(len, vs), default=0) and '-' in v and\
-                    len(v) > len(k):
-                widths[k] = widths[k]-2 if k == 0 else\
-                    max(min_width-1, widths[k]-1)
+    for k_idx, (k, vs) in enumerate(cols.items()):
+        widths[k] = max(len(str(k))+1,
+                        max(map(len, vs), default=0)+col0_offset,
+                        min_width)
+
+        for v_idx, v in enumerate(vs):
+            if len(str(v)) == max(map(len, vs), default=0) and '-' in v and\
+                    len(str(v)) > len(str(k)):
+                if dtypes[k] == np.dtype('object'):
+                    widths[k] = max(min_width, widths[k])
+                else:
+                    if v_idx == 0:
+                        widths[k] = widths[k] - 1
+                    else:
+                        widths[k] = max(min_width, widths[k])
+
     out = []
     widthkey = min(len(str(nrows)), len(str(headers[0])))
 

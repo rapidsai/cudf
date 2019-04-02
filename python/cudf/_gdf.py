@@ -12,6 +12,7 @@ import pyarrow as pa
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
+import nvcategory
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
@@ -32,35 +33,37 @@ def unwrap_mask(devary):
 def columnview_from_devary(devary, dtype=None):
     return _columnview(size=devary.size,  data=unwrap_devary(devary),
                        mask=ffi.NULL, dtype=dtype or devary.dtype,
-                       null_count=0)
+                       null_count=0, nvcat=None)
 
 
-def _columnview(size, data, mask, dtype, null_count):
+def _columnview(size, data, mask, dtype, null_count, nvcat):
     colview = ffi.new('gdf_column*')
     extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
     extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
-    if null_count is None:
-        libgdf.gdf_column_view(
-            colview,
-            data,
-            mask,
-            size,
-            np_to_gdf_dtype(dtype),
-            )
+    if nvcat is not None:
+        extra_dtype_info.category = ffi.cast('void*', nvcat.get_cpointer())
     else:
-        libgdf.gdf_column_view_augmented(
-            colview,
-            data,
-            mask,
-            size,
-            np_to_gdf_dtype(dtype),
-            null_count,
-            extra_dtype_info[0],
-            )
+        extra_dtype_info.category = ffi.NULL
+
+    if mask is None:
+        null_count = 0
+        mask = ffi.NULL
+
+    libgdf.gdf_column_view_augmented(
+        colview,
+        data,
+        mask,
+        size,
+        np_to_gdf_dtype(dtype),
+        null_count,
+        extra_dtype_info[0],
+    )
+
     return colview
 
 
-def columnview(size, data, mask=None, dtype=None, null_count=None):
+def columnview(size, data, mask=None, dtype=None, null_count=None,
+               nvcat=None):
     """
     Make a column view.
 
@@ -84,11 +87,13 @@ def columnview(size, data, mask=None, dtype=None, null_count=None):
 
     if mask is not None:
         assert null_count is not None
+
     dtype = dtype or data.dtype
     if pd.api.types.is_categorical_dtype(dtype):
         dtype = data.dtype
+
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
-                       dtype=dtype, null_count=null_count)
+                       dtype=dtype, null_count=null_count, nvcat=nvcat)
 
 
 def apply_binaryop(binop, lhs, rhs, out):
@@ -123,14 +128,18 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
-np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
-               np.float32: libgdf.GDF_FLOAT32,
-               np.int64:   libgdf.GDF_INT64,
-               np.int32:   libgdf.GDF_INT32,
-               np.int16:   libgdf.GDF_INT16,
-               np.int8:    libgdf.GDF_INT8,
-               np.bool_:   libgdf.GDF_INT8,
-               np.datetime64: libgdf.GDF_DATE64}
+np_gdf_dict = {
+    np.float64:      libgdf.GDF_FLOAT64,
+    np.float32:      libgdf.GDF_FLOAT32,
+    np.int64:        libgdf.GDF_INT64,
+    np.int32:        libgdf.GDF_INT32,
+    np.int16:        libgdf.GDF_INT16,
+    np.int8:         libgdf.GDF_INT8,
+    np.bool_:        libgdf.GDF_INT8,
+    np.datetime64:   libgdf.GDF_DATE64,
+    np.object_:      libgdf.GDF_STRING_CATEGORY,
+    np.str_:         libgdf.GDF_STRING_CATEGORY,
+    }
 
 
 def np_to_gdf_dtype(dtype):
@@ -152,6 +161,7 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_DATE64: np.datetime64,
          libgdf.N_GDF_TYPES: np.int32,
          libgdf.GDF_CATEGORY: np.int32,
+         libgdf.GDF_STRING_CATEGORY: np.object_,
      }[dtype])
 
 
@@ -167,6 +177,8 @@ def np_to_pa_dtype(dtype):
         np.int8:        pa.int8(),
         np.bool_:       pa.int8(),
         np.datetime64:  pa.date64(),
+        np.object_:     pa.string(),
+        np.str_:        pa.string(),
     }[np.dtype(dtype).type]
 
 
@@ -199,24 +211,48 @@ _null_sort_behavior_api = {
 
 
 def cffi_view_to_column_mem(cffi_view):
-    intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
-    data = rmm.device_array_from_ptr(intaddr,
-                                     nelem=cffi_view.size,
-                                     dtype=gdf_to_np_dtype(cffi_view.dtype),
-                                     finalizer=rmm._make_finalizer(intaddr, 0))
-
-    if cffi_view.valid:
-        intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
-        mask = rmm.device_array_from_ptr(intaddr,
-                                         nelem=calc_chunk_size(cffi_view.size,
-                                                               mask_bitsize),
-                                         dtype=mask_dtype,
-                                         finalizer=rmm._make_finalizer(intaddr,
-                                                                       0))
-    else:
+    gdf_dtype = cffi_view.dtype
+    if gdf_dtype == libgdf.GDF_STRING_CATEGORY:
+        data_ptr = int(ffi.cast("uintptr_t", cffi_view.data))
+        # We need to create this just to make sure the memory is properly freed
+        data = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=cffi_view.size,
+            dtype='int32',
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+        nvcat_ptr = int(ffi.cast("uintptr_t", cffi_view.dtype_info.category))
+        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+        nvstr_obj = nvcat_obj.to_strings()
         mask = None
+        if cffi_view.valid:
+            mask_ptr = int(ffi.cast("uintptr_t", cffi_view.valid))
+            mask = rmm.device_array_from_ptr(
+                    mask_ptr,
+                    nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(mask_ptr, 0)
+                )
+        return nvstr_obj, mask
+    else:
+        intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
+        data = rmm.device_array_from_ptr(
+            intaddr,
+            nelem=cffi_view.size,
+            dtype=gdf_to_np_dtype(cffi_view.dtype),
+            finalizer=rmm._make_finalizer(intaddr, 0)
+        )
+        mask = None
+        if cffi_view.valid:
+            intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
+            mask = rmm.device_array_from_ptr(
+                intaddr,
+                nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=rmm._make_finalizer(intaddr, 0)
+            )
 
-    return data, mask
+        return data, mask
 
 
 @contextlib.contextmanager
@@ -274,85 +310,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     libgdf.gdf_column_free(col_result_l)
     libgdf.gdf_column_free(col_result_r)
-
-
-def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
-    joiner = _join_how_api[how]
-    method_api = _join_method_api[method]
-    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
-    gdf_context = ffi.new('gdf_context*')
-
-    libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
-                              null_sort_behavior_api)
-
-    if how not in ['left', 'inner', 'outer']:
-        msg = "new join api only supports left or inner"
-        raise ValueError(msg)
-
-    list_lhs = []
-    list_rhs = []
-    result_cols = []
-
-    result_col_names = []
-
-    left_idx = []
-    right_idx = []
-    # idx = 0
-    for name, col in col_lhs.items():
-        list_lhs.append(col._column.cffi_view)
-        if name not in on:
-            result_cols.append(columnview(0, None, dtype=col._column.dtype))
-            result_col_names.append(name)
-
-    for name in on:
-        result_cols.append(columnview(0, None,
-                                      dtype=col_lhs[name]._column.dtype))
-        result_col_names.append(name)
-        left_idx.append(list(col_lhs.keys()).index(name))
-        right_idx.append(list(col_rhs.keys()).index(name))
-
-    for name, col in col_rhs.items():
-        list_rhs.append(col._column.cffi_view)
-        if name not in on:
-            result_cols.append(columnview(0, None, dtype=col._column.dtype))
-            result_col_names.append(name)
-
-    num_cols_to_join = len(on)
-    result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
-
-    joiner(list_lhs,
-           len(list_lhs),
-           left_idx,
-           list_rhs,
-           len(list_rhs),
-           right_idx,
-           num_cols_to_join,
-           result_num_cols,
-           result_cols,
-           ffi.NULL,
-           ffi.NULL,
-           gdf_context)
-
-    res = []
-    valids = []
-
-    for col in result_cols:
-
-        intaddr = int(ffi.cast("uintptr_t", col.data))
-        res.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                             nelem=col.size,
-                                             dtype=gdf_to_np_dtype(col.dtype),
-                                             finalizer=rmm._make_finalizer(
-                                                 intaddr, 0)))
-        intaddr = int(ffi.cast("uintptr_t", col.valid))
-        valids.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                                nelem=calc_chunk_size(
-                                                    col.size, mask_bitsize),
-                                                dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(
-                                                    intaddr, 0)))
-
-    return res, valids
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):

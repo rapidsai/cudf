@@ -58,27 +58,6 @@ __device__ void adjustForWhitespaceAndQuotes(const char* data, long* start,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Checks the given value is a user-defined boolean by checking against
- * a list of user-defined boolean values.
- * 
- * @tparam[in] value The value to check
- * @param[in] bool_values The list of user-defined boolean values against
- * @param[in] count The number of boolean values to check
- * 
- * @return True if the value is in the list, False otherwise
- *---------------------------------------------------------------------------**/
-template <typename T>
-__host__ __device__ bool isBooleanValue(T value, int32_t* bool_values,
-                                        int32_t count) {
-  for (int32_t i = 0; i < count; ++i) {
-    if (static_cast<int32_t>(value) == bool_values[i]) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**---------------------------------------------------------------------------*
  * @brief Computes a 32-bit hash when given a byte stream and range.
  * 
  * MurmurHash3_32 implementation from
@@ -102,21 +81,19 @@ __host__ __device__ bool isBooleanValue(T value, int32_t* bool_values,
  * 
  * @return The hash value
  *---------------------------------------------------------------------------**/
-__host__ __device__ int32_t convertStrToHash(const char* key, long start,
-                                             long end, uint32_t seed) {
-
-  auto getblock32 = [] __host__ __device__ (const uint32_t* p,
-                                            int i) -> uint32_t {
+__device__ int32_t convertStrToHash(const char* key, long start, long end,
+                                    uint32_t seed) {
+  auto getblock32 = [] __device__(const uint32_t* p, int i) -> uint32_t {
     // Individual byte reads for possible unaligned accesses
     auto q = (const uint8_t*)(p + i);
     return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
   };
 
-  auto rotl32 = [] __host__ __device__ (uint32_t x, int8_t r) -> uint32_t {
+  auto rotl32 = [] __device__(uint32_t x, int8_t r) -> uint32_t {
     return (x << r) | (x >> (32 - r));
   };
 
-  auto fmix32 = [] __host__ __device__ (uint32_t h) -> uint32_t {
+  auto fmix32 = [] __device__(uint32_t h) -> uint32_t {
     h ^= h >> 16;
     h *= 0x85ebca6b;
     h ^= h >> 13;
@@ -192,9 +169,9 @@ struct ParseOptions {
 * string represents a hex value and updates the starting position if it does.
 */
 template <typename T,
-typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__ 
-int determineBase(const char* data, long *start, long end) {
+          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+__device__ __forceinline__ int determineBase(const char* data, long* start,
+                                             long end) {
   // check if this is a hex number
   if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
     *start += 2;
@@ -204,39 +181,37 @@ int determineBase(const char* data, long *start, long end) {
 }
 
 /**
-* @brief Specialization of determineBase for non-integral numeric types.
-* Always returns 10, only decimal floating-point numbers are supported.
-*/
+ * @brief Specialization of determineBase for non-integral numeric types.
+ * Always returns 10, only decimal floating-point numbers are supported.
+ */
 template <typename T,
-typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__ 
-int determineBase(const char* data, long *start, long end) {
+          typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+__device__ __forceinline__ int determineBase(const char* data, long* start,
+                                             long end) {
   return 10;
 }
 
 /**
-* @brief Specialization of decodeAsciiDigit for integral types.
-* Handles hexadecimal digits, both uppercase and lowercase.
-*/
+ * @brief Specialization of decodeAsciiDigit for integral types.
+ * Handles hexadecimal digits, both uppercase and lowercase.
+ */
 template <typename T,
-typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
+          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+__device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
   if (base == 16) {
-    if (d >= 'a' && d <= 'f')
-      return d - 'a' + 10;
-    if (d >= 'A' && d <= 'F')
-      return d - 'A' + 10;
+    if (d >= 'a' && d <= 'f') return d - 'a' + 10;
+    if (d >= 'A' && d <= 'F') return d - 'A' + 10;
   }
   return d - '0';
 }
 
 /**
-* @brief Specialization of decodeAsciiDigit for non-integral numeric types.
-* Only handles decimal digits.
-*/
+ * @brief Specialization of decodeAsciiDigit for non-integral numeric types.
+ * Only handles decimal digits.
+ */
 template <typename T,
-typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
+          typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+__device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
   return d - '0';
 }
 
@@ -253,8 +228,8 @@ __host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__host__ __device__ T convertStrToValue(const char* data, long start, long end,
-                                        const ParseOptions& opts) {
+__device__ T convertStrToValue(const char* data, long start, long end,
+                               const ParseOptions& opts) {
   T value = 0;
 
   // Handle negative values if necessary
@@ -317,28 +292,37 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
 }
 
 template <>
-__host__ __device__ cudf::date32 convertStrToValue<cudf::date32>(
+__device__ cudf::date32 convertStrToValue<cudf::date32>(
     const char* data, long start, long end, const ParseOptions& opts) {
   return cudf::date32{parseDateFormat(data, start, end, opts.dayfirst)};
 }
 
 template <>
-__host__ __device__ cudf::date64 convertStrToValue<cudf::date64>(
+__device__ cudf::date64 convertStrToValue<cudf::date64>(
     const char* data, long start, long end, const ParseOptions& opts) {
   return cudf::date64{parseDateTimeFormat(data, start, end, opts.dayfirst)};
 }
 
 template <>
-__host__ __device__ cudf::category convertStrToValue<cudf::category>(
+__device__ cudf::category convertStrToValue<cudf::category>(
     const char* data, long start, long end, const ParseOptions& opts) {
   constexpr int32_t HASH_SEED = 33;
   return cudf::category{convertStrToHash(data, start, end + 1, HASH_SEED)};
 }
 
 template <>
-__host__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
+__device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
     const char* data, long start, long end, const ParseOptions& opts) {
   return cudf::timestamp{convertStrToValue<int64_t>(data, start, end, opts)};
+}
+
+//The purpose of this is merely to allow compilation
+//It should NOT be used
+template <>
+__host__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  assert(false);
+  return cudf::nvstring_category{0};
 }
 
 #endif

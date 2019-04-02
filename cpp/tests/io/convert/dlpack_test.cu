@@ -247,6 +247,7 @@ TEST_F(DLPackTest, ToDLPack_EmptyDataset)
   ASSERT_EQ(gdf_to_dlpack(tensor, nullptr, 1), GDF_DATASET_EMPTY);
 
   gdf_column **columns = new gdf_column*[2];
+  ASSERT_EQ(gdf_to_dlpack(nullptr, columns, 0), GDF_DATASET_EMPTY);
   ASSERT_EQ(gdf_to_dlpack(tensor, columns, 0), GDF_DATASET_EMPTY);
 
   columns[0] = new gdf_column;

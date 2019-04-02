@@ -1,14 +1,18 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet = """
-Load a parquet object from the file path, returning a DataFrame.
+Read a Parquet file into DataFrame
 
 Parameters
 ----------
-path : string
-    File path
+path : string or path object
+    Path of file to be read
+engine : { 'cudf', 'pyarrow' }, default='cudf'
+    Parser engine to use.
 columns : list, default=None
-    If not None, only these columns will be read from the file.
+    If not None, only these columns will be read.
 
 Returns
 -------
@@ -413,3 +417,25 @@ See Also
 cudf.io.feather.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
+
+_docstring_to_dlpack = """
+Converts a cuDF object into a DLPack tensor.
+
+DLPack is an open-source memory tensor structure:
+`dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+This function takes a cuDF object and converts it to a PyCapsule object
+which contains a pointer to a DLPack tensor. This function deep copies the
+data into the DLPack tensor from the cuDF object.
+
+Parameters
+----------
+cudf_obj : DataFrame, Series, Index, or Column
+
+Returns
+-------
+pycapsule_obj : PyCapsule
+    Output DLPack tensor pointer which is encapsulated in a PyCapsule
+    object.
+"""
+doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)

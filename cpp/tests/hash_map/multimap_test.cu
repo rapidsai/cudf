@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <thrust/device_vector.h>
+
+#include <cudf.h>
+#include <hash/concurrent_unordered_multimap.cuh>
+
+#include <gtest/gtest.h>
+
 #include <iostream>
 #include <vector>
 #include <limits>
 
-#include <thrust/device_vector.h>
-
-#include "gtest/gtest.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <hash/concurrent_unordered_multimap.cuh>
-
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cstdlib>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>

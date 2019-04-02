@@ -64,6 +64,7 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 # - filter tests ----------------------------------------------------------------------------------
 
 set(FILTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
@@ -88,6 +89,7 @@ ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
@@ -96,6 +98,7 @@ ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 # - orderby tests ---------------------------------------------------------------------------------
 
 set(ORDERBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
 
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
@@ -182,11 +185,14 @@ set(BINARY_TEST_SRC
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
 ###################################################################################################
-# - csv tests -------------------------------------------------------------------------------------
+# - io tests -------------------------------------------------------------------------------------
 
+set(DECOMPRESSION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
+ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
@@ -196,6 +202,7 @@ set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
+
 ###################################################################################################
 # - types tests -----------------------------------------------------------------------------------
 
@@ -204,6 +211,14 @@ set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+
+###################################################################################################
+# - nvcategory tests -------------------------------------------------------------------------------
+
+set(NVCATEGORY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+
+ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests -------------------------------------------------------------------------------------
@@ -226,6 +241,7 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")

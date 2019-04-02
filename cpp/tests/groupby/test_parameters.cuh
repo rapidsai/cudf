@@ -1,11 +1,16 @@
 #pragma once
+
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <cudf/types.h>
+
 #include <tuple>
 #include <algorithm>
 #include <random>
 #include <type_traits>
 #include <vector>
+#include <map>
 
-#include <cudf/types.h>
 
 // Selects the kind of join operation that is performed
 enum struct agg_op

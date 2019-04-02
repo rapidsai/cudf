@@ -16,16 +16,19 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <thrust/device_vector.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <cudf.h>
 #include <cudf/functions.h>
+
 #include <rmm/thrust_rmm_allocator.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <thrust/device_vector.h>
+
+#include <iostream>
+#include <vector>
+
+#include <cstdlib>
 
 
 struct gdf_extract_from_datetime_example_test : public GdfTest {};

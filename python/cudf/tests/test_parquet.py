@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2019, NVIDIA CORPORATION.
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -60,19 +60,29 @@ def parquet_file(request, tmp_path_factory, pdf):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+@pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
-                                     ['col_int32', 'col_float32'], None])
-def test_parquet_reader(parquet_file, columns):
+                                     ['col_int32', 'col_float32'],
+                                     ['col_int16', 'col_float64', 'col_int8'],
+                                     None])
+def test_parquet_reader(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
-    got = cudf.read_parquet(parquet_file, columns=columns)
+    got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
         expect = expect.reset_index(drop=True)
+        if 'col_category' in expect.columns:
+            expect['col_category'] = expect['col_category'].astype('category')
 
-    # Pandas parquet reader converts the Arrow Dictionary Array to an `object`
-    # dtype instead of a `categorical` dtype even though the metadata
-    # explicitly states pandas_dtype `categorical`
-    if 'col_category' in expect.columns:
-        expect['col_category'] = expect['col_category'].astype('category')
+    # cuDF's default currently handles bools and categories differently
+    # For bool, cuDF doesn't support it so convert it to int8
+    # For categories, PANDAS originally returns as object whereas cuDF hashes
+    if engine == 'cudf':
+        if 'col_bool' in expect.columns:
+            expect['col_bool'] = expect['col_bool'].astype('int8')
+        if 'col_category' in expect.columns:
+            expect = expect.drop(columns=['col_category'])
+        if 'col_category' in got.columns:
+            got = got.drop('col_category')
 
     assert_eq(expect, got, check_categorical=False)
 

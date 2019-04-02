@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 
-#include <thrust/device_vector.h>
 
-#include "gtest/gtest.h"
-
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 #include <cudf.h>
-#include <cudf/functions.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <thrust/device_vector.h>
 
+#include <gtest/gtest.h>
 
 template <class ColumnType>
 struct DigitizeTest : public GdfTest {

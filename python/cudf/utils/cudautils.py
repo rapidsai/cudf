@@ -97,7 +97,7 @@ def zeros(size, dtype):
 @cuda.jit
 def gpu_copy(inp, out):
     tid = cuda.grid(1)
-    if tid < out.size:
+    if tid < inp.size:
         out[tid] = inp[tid]
 
 
@@ -122,12 +122,13 @@ def astype(ary, dtype):
 def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)
-    assert out.size == arr.size
-    if arr.is_c_contiguous() and out.is_c_contiguous():
+
+    if (arr.is_c_contiguous() and out.is_c_contiguous() and
+            out.size == arr.size):
         out.copy_to_device(arr)
     else:
-        if out.size > 0:
-            gpu_copy.forall(out.size)(arr, out)
+        if arr.size > 0:
+            gpu_copy.forall(arr.size)(arr, out)
     return out
 
 
@@ -819,3 +820,13 @@ def modulo(arr, d):
     if arr.size > 0:
         gpu_modulo.forall(arr.size)(arr, out, d)
     return out
+
+
+def boolean_array_to_index_array(bool_array):
+    """ Converts a boolean array to an integer array to be used for gather /
+        scatter operations
+    """
+    boolbits = compact_mask_bytes(bool_array)
+    indices = arange(len(bool_array))
+    _, selinds = copy_to_dense(indices, mask=boolbits)
+    return selinds
