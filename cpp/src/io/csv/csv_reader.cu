@@ -506,6 +506,7 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.d_naTrie = createSerializedTrie(na_values);
 		raw_csv.opts.naValuesTrie = raw_csv.d_naTrie.data().get();
 	}
+	args->data = nullptr;
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -758,7 +759,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//--- allocate space for the results
-	gdf_column **cols = new gdf_column*[raw_csv.num_active_cols];
 	auto deleteGdfColumns = [size=raw_csv.num_active_cols](gdf_column** cols) {
 		for (int i = 0; i < size; ++i) {
 			RMM_FREE(cols[i]->valid, 0);
@@ -772,7 +772,7 @@ gdf_error read_csv(csv_read_arg *args)
 		delete[] cols;
 		return GDF_SUCCESS;
 	};
-	unique_ptr<gdf_column*, decltype(deleteGdfColumns)> cols_owner(cols, deleteGdfColumns);
+	unique_ptr<gdf_column*[], decltype(deleteGdfColumns)> cols(new gdf_column*[raw_csv.num_active_cols], deleteGdfColumns);
 
 	vector<gdf_dtype> h_dtypes(raw_csv.num_active_cols);
 	vector<void*> h_data(raw_csv.num_active_cols);
@@ -785,23 +785,23 @@ gdf_error read_csv(csv_read_arg *args)
 
 	CUDA_TRY(cudaMemsetAsync(d_valid_count.get(), 0, sizeof(unsigned long long) * raw_csv.num_active_cols));
 
-	int stringColCount=0;
+	int str_col_cnt=0;
 	for (int col = 0; col < raw_csv.num_active_cols; col++) {
 		if(raw_csv.dtypes[col]==gdf_dtype::GDF_STRING)
-			stringColCount++;
+			str_col_cnt++;
 	}
 
 	rmm_unique_ptr<string_pair*[]> d_str_cols;
-	vector<rmm_unique_ptr<string_pair[]>> h_str_cols(stringColCount);
+	vector<rmm_unique_ptr<string_pair[]>> h_str_cols(str_col_cnt);
 
-	if (stringColCount > 0 ) {
-		d_str_cols = rmm_unique_ptr<string_pair*[]>(stringColCount);
+	if (str_col_cnt > 0 ) {
+		d_str_cols = rmm_unique_ptr<string_pair*[]>(str_col_cnt);
 
 		for (auto& str_col: h_str_cols) {
 			str_col = rmm_unique_ptr<string_pair[]>(raw_csv.num_records);
 		}
 
-		CUDA_TRY(cudaMemcpy(d_str_cols.get(), h_str_cols.data(), sizeof(string_pair *) * stringColCount, cudaMemcpyHostToDevice));
+		CUDA_TRY(cudaMemcpy(d_str_cols.get(), h_str_cols.data(), sizeof(string_pair *) * str_col_cnt, cudaMemcpyHostToDevice));
 	}
 
 	for (int acol = 0,col=-1; acol < raw_csv.num_actual_cols; acol++) {
@@ -839,7 +839,7 @@ gdf_error read_csv(csv_read_arg *args)
 		// Sync with the default stream, just in case create_from_index() is asynchronous 
 		CUDA_TRY(cudaStreamSynchronize(0));
 
-		stringColCount=0;
+		int str_cols_idx = 0;
 		for (int col = 0; col < raw_csv.num_active_cols; col++) {
 
 			gdf_column *gdf = cols[col];
@@ -847,22 +847,24 @@ gdf_error read_csv(csv_read_arg *args)
 			if (gdf->dtype != gdf_dtype::GDF_STRING)
 				continue;
 
-			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount].get(), size_t(raw_csv.num_records));
-			h_str_cols[stringColCount].resize(0);
+			unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_col(
+				NVStrings::create_from_index(h_str_cols[str_cols_idx].get(), size_t(raw_csv.num_records)), 
+				&NVStrings::destroy);
+			h_str_cols[str_cols_idx].resize(0);
 
 			if ((raw_csv.opts.quotechar != '\0') && (raw_csv.opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
 				// quotechar in quote fields results in reduction to single
 				const string quotechar(1, raw_csv.opts.quotechar);
 				const string doublequotechar(2, raw_csv.opts.quotechar);
-				gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
-				NVStrings::destroy(stringCol);
+				gdf->data = str_col->replace(doublequotechar.c_str(), quotechar.c_str());
 			}
 			else {
-				gdf->data = stringCol;
+				// Take the ownership from the unique_ptr holding the column data
+				gdf->data = str_col.release();
 			}
 
-			stringColCount++;
+			str_cols_idx++;
 		}
 
 		vector<unsigned long long>	h_valid_count(raw_csv.num_active_cols);
@@ -874,11 +876,8 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 
-	// Nothing can fail after this point, release the ownership of the output columns
-	// This way the memory is not freed once we leave the function
-	cols_owner.release();
-
-	args->data 			= cols;
+	// Nothing can fail after this point, transfer the ownership of the output columns
+	args->data 			= cols.release();
 	args->num_cols_out	= raw_csv.num_active_cols;
 	args->num_rows_out	= raw_csv.num_records;
 
