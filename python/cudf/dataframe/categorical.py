@@ -179,9 +179,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             mask = cudautils.expand_mask_bits(
                 len(self),
                 self.nullmask.mem
-            ) \
-            .copy_to_host() \
-            .astype('bool')
+            ).copy_to_host().astype('bool')
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
         dictionary = pa.array(self.cat().categories)
