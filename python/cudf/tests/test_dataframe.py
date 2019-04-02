@@ -2031,3 +2031,11 @@ def test_array_ufunc():
 
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
+
+
+@pytest.mark.parametrize('nan_value', [-5, -5.0, 0, 5, 5.0, None, 'pandas'])
+def test_series_to_gpu_array(nan_value):
+
+    s = Series([0, 1, None, 3])
+    np.testing.assert_array_equal(s.to_array(nan_value),
+                                  s.to_gpu_array(nan_value).copy_to_host())
