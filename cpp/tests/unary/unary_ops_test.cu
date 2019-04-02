@@ -493,7 +493,7 @@ DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date64, GDF_DATE64, int64_t)
 
 struct generateValidRandom
 {
-    __device__
+    __host__ __device__
     gdf_valid_type operator () (int idx)
     {
         thrust::default_random_engine eng;
@@ -516,8 +516,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		auto inputCol = cudf::test::column_wrapper<float>{inputData}; 
 		auto outputCol = cudf::test::column_wrapper<double>{colSize};
 
-		gdf_error gdfError;
-		gdfError = gdf_cast(inputCol, outputCol);
+		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 	}
 
@@ -704,7 +703,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 			cudf::date64{0} // no operation
 		};
 
-		auto altValidFunctor = [](gdf_size_type row){return (row % 2 > 0);}; //01010101
+		auto altValidFunctor = [](gdf_size_type row){return (row % 2 == 0);}; //01010101
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>{inputData,  altValidFunctor}; 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>{colSize,    true};
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>{outputData, altValidFunctor};
@@ -750,6 +749,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -828,6 +828,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -906,6 +907,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -984,6 +986,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1083,6 +1086,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1179,6 +1183,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1257,6 +1262,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1335,6 +1341,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1465,6 +1472,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1551,6 +1559,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1637,6 +1646,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1723,6 +1733,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
@@ -1810,6 +1821,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1896,6 +1908,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -1982,6 +1995,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -2068,6 +2082,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -2154,6 +2169,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -2240,6 +2256,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -2326,6 +2343,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -2412,6 +2430,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
+		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
