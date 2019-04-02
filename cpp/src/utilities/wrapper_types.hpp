@@ -376,4 +376,45 @@ using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 
 } // namespace cudf
 
+namespace std
+{
+
+/**---------------------------------------------------------------------------*
+ * @brief Specialization of std::numeric_limits for wrapper types
+ *---------------------------------------------------------------------------**/
+template <typename T, gdf_dtype type_id>
+struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
+  
+  using wrapper_t = cudf::detail::wrapper<T, type_id>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the maximum finite value representable by the numeric type T
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t max() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::max() };
+  }
+  
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the lowest finite value representable by the numeric type T
+   * 
+   * Returns a finite value x such that there is no other finite value y where y < x
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t lowest() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::lowest() };
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the minimum finite value representable by the numeric type T
+   * 
+   * For floating-point types with denormalization, min returns the minimum
+   * positive normalized value.
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t min() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::min() };
+  }
+
+};
+
+} // std
+
 #endif
