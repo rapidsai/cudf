@@ -566,7 +566,6 @@ class StringIndex(GenericIndex):
     """
 
     def __init__(self, values, name=None):
-        # TODO: Write tests for these constructors
         if isinstance(values, StringColumn):
             self._values = values.copy()
             if name is None:
@@ -613,14 +612,12 @@ def as_index(arbitrary, name=None):
     # This function should probably be moved to Index.__new__
     if isinstance(arbitrary, Index):
         return arbitrary
-    elif isinstance(arbitrary,  (StringColumn, NumericalColumn)):
+    elif isinstance(arbitrary, (StringColumn, NumericalColumn)):
         return GenericIndex(arbitrary, name=name)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
-    elif isinstance(arbitrary, StringColumn):
-        return StringIndex(arbitrary, name=name)
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
