@@ -5,6 +5,7 @@
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
+- PR #1335 Added local_dict arg in `DataFrame.query()`.
 
 ## Improvements
 
@@ -24,6 +25,9 @@
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
+- PR #1325 Fix dtype of null bitmasks to int8
+- PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
+- PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1338 CSV Reader: Fix memory leaks on read_csv() failure
 
 

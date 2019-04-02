@@ -1737,7 +1737,7 @@ class DataFrame(object):
                              level=level)
             return result
 
-    def query(self, expr):
+    def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -1750,6 +1750,9 @@ class DataFrame(object):
             A boolean expression. Names in expression refer to columns.
 
             Names starting with `@` refer to Python variables
+
+        local_dict : dict
+            Containing the local variable to be used in query.
 
         Returns
         -------
@@ -1779,13 +1782,31 @@ class DataFrame(object):
         >>> print(df.query('datetimes==@search_date'))
                         datetimes
         1 2018-10-08T00:00:00.000
+
+        Using local_dict:
+
+        >>> import numpy as np
+        >>> import datetime
+        >>> df = cudf.DataFrame()
+        >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+        >>> df['datetimes'] = data
+        >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+        >>> print(df.query('datetimes==@search_date',
+        >>>         local_dict={'search_date':search_date2}))
+                        datetimes
+        1 2018-10-08T00:00:00.000
         """
+        if not isinstance(local_dict, dict):
+            raise TypeError("local_dict type: expected dict but found {!r}"
+                            .format(type(local_dict)))
+
         _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
             'locals': callframe.f_locals,
             'globals': callframe.f_globals,
+            'local_dict': local_dict,
         }
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
