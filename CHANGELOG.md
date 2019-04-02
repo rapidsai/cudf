@@ -25,6 +25,7 @@
 - PR #1293 Fix Inaccurate error message in join.pyx
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
 - PR #1325 Fix dtype of null bitmasks to int8
+- PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 
 
 # cuDF 0.6.0 (Date TBD)
