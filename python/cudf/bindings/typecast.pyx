@@ -10,30 +10,12 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 
-from librmm_cffi import librmm as rmm
-
 from libc.stdlib cimport free
 
 
-_MATH_OP = {
-    'sin'   : GDF_SIN,
-    'cos'   : GDF_COS,
-    'tan'   : GDF_TAN,
-    'asin'  : GDF_ARCSIN,
-    'acos'  : GDF_ARCCOS,
-    'atan'  : GDF_ARCTAN,
-    'exp'   : GDF_EXP,
-    'log'   : GDF_LOG,
-    'sqrt'  : GDF_SQRT,
-    'ceil'  : GDF_CEIL,
-    'floor' : GDF_FLOOR,
-    'abs'   : GDF_ABS,
-    'not'   : GDF_BIT_INVERT,
-}
-
-def apply_math_op(incol, outcol, op):
+def apply_cast(incol, outcol):
     """
-      Call Unary math ops.
+      Cast from incol.dtype to outcol.dtype
     """
 
     check_gdf_compatibility(incol)
@@ -43,14 +25,13 @@ def apply_math_op(incol, outcol, op):
     cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
     cdef gdf_error result
-    cdef gdf_unary_math_op c_op = _MATH_OP[op]
     with nogil:    
-        result = gdf_unary_math(
+        result = gdf_cast(
             <gdf_column*>c_incol,
-            <gdf_column*>c_outcol,
-            c_op)
+            <gdf_column*>c_outcol)
     
     free(c_incol)
     free(c_outcol)
 
     check_gdf_error(result)
+
