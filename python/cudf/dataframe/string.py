@@ -8,12 +8,35 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
+from libgdf_cffi import libgdf
+
 from cudf.dataframe import columnops, numerical
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
+from cudf import _gdf
+from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
+import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from librmm_cffi import librmm as rmm
+
+
+_binary_impl = {
+    # Unordered comparators
+    'eq': libgdf.gdf_eq_generic,
+    'ne': libgdf.gdf_ne_generic,
+    # Ordered comparators
+    'lt': libgdf.gdf_lt_generic,
+    'le': libgdf.gdf_le_generic,
+    'gt': libgdf.gdf_gt_generic,
+    'ge': libgdf.gdf_ge_generic,
+    # Binary operators
+    'add': libgdf.gdf_add_generic,
+    'sub': libgdf.gdf_sub_generic,
+    'mul': libgdf.gdf_mul_generic,
+    'floordiv': libgdf.gdf_floordiv_generic,
+    'truediv': libgdf.gdf_div_generic,
+}
 
 
 class StringMethods(object):
@@ -335,6 +358,9 @@ class StringColumn(columnops.TypedColumnBase):
         null_count : int; optional
             The number of null values in the mask.
         """
+        from collections.abc import Sequence
+        if isinstance(data, Sequence):
+            data = nvstrings.to_device(data)
         assert isinstance(data, nvstrings.nvstrings)
         self._data = data
         self._dtype = np.dtype("object")
@@ -521,3 +547,24 @@ class StringColumn(columnops.TypedColumnBase):
     def copy(self, deep=True):
         params = self._replace_defaults()
         return type(self)(**params)
+
+    def unordered_compare(self, cmpop, rhs):
+        return string_column_binop(self, rhs, op=cmpop)
+
+
+def string_column_binop(lhs, rhs, op):
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
+    # Allocate output
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
+    # Call and fix null_count
+    if lhs.dtype != rhs.dtype or op not in _binary_impl:
+        # Use JIT implementation
+        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    else:
+        # Use compiled implementation
+        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+
+    result = out.replace(null_count=null_count)
+    nvtx_range_pop()
+    return result

@@ -85,6 +85,28 @@ def test_multiindex_series_assignment():
     assert_eq(ps, gs)
 
 
+def test_string_index():
+    from cudf.dataframe.index import StringIndex, StringColumn
+    pdf = pd.DataFrame(np.random.rand(5, 5))
+    gdf = cudf.from_pandas(pdf)
+    stringIndex = ['a', 'b', 'c', 'd', 'e']
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = np.array(['a', 'b', 'c', 'd', 'e'])
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = StringIndex(['a', 'b', 'c', 'd', 'e'], name='name')
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = StringColumn(['a', 'b', 'c', 'd', 'e'], name='name')
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+
+
 def test_multiindex_loc():
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -99,8 +121,12 @@ def test_multiindex_loc():
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
+    assert_eq(pdf.loc[('a', 'store', 'storm')],
+              gdf.loc[('a', 'store', 'storm')])
     assert_eq(pdf.loc[('a', 'store')],
               gdf.loc[('a', 'store')])
+    assert_eq(pdf.loc[('a')],
+              gdf.loc[('a')])
     assert_eq(pdf.loc[('b', 'house')],
               gdf.loc[('b', 'house')])
     assert_eq(pdf.loc[('a', 'store'), ('b', 'house')],

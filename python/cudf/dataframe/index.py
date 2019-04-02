@@ -9,6 +9,7 @@ from copy import deepcopy, copy
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
@@ -555,6 +556,39 @@ class CategoricalIndex(GenericIndex):
         return self._values.categories
 
 
+class StringIndex(GenericIndex):
+    """String defined indices into another Column
+
+    Attributes
+    ---
+    _values: A StringColumn object or NDArray of strings
+    name: A string
+    """
+
+    def __init__(self, values, name=None):
+        # TODO: Write tests for these constructors
+        if isinstance(values, StringColumn):
+            self._values = values.copy()
+            if name is None:
+                name = values.name
+        elif isinstance(values, StringIndex):
+            if name is None:
+                name = values.name
+            self._values = values.values.copy()
+        else:
+            self._values = columnops.build_column(nvstrings.to_device(values),
+                                                  dtype='object')
+            self.name = name
+
+    @property
+    def codes(self):
+        return self._values.codes
+
+    @property
+    def categories(self):
+        return self._values.categories
+
+
 def as_index(arbitrary, name=None):
     """Create an Index from an arbitrary object
 
@@ -579,16 +613,14 @@ def as_index(arbitrary, name=None):
     # This function should probably be moved to Index.__new__
     if isinstance(arbitrary, Index):
         return arbitrary
-    elif isinstance(arbitrary, NumericalColumn):
+    elif isinstance(arbitrary,  (StringColumn, NumericalColumn)):
         return GenericIndex(arbitrary, name=name)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     elif isinstance(arbitrary, StringColumn):
-        raise NotImplementedError(
-            "Strings are not yet supported in the index"
-        )
+        return StringIndex(arbitrary, name=name)
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
