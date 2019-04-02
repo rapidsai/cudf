@@ -88,7 +88,8 @@ For more information on these sources, see the manual.
 #define bswap_32(v)    _byteswap_ulong(v)
 #define bswap_64(v)    _byteswap_uint64(v)
 #else
-#include <byteswap.h>
+#define bswap_32(v)    __builtin_bswap32(v)
+#define bswap_64(v)    __builtin_bswap64(v)
 #endif
 
 #include "unbz2.h"
