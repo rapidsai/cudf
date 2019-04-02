@@ -38,6 +38,8 @@ constexpr size_t max_chunk_bytes = 256*1024*1024; // 256MB
 
 constexpr int bytes_per_find_thread = 64;
 
+using pos_key_pair = thrust::pair<uint64_t,char>;
+
 template <typename T>
 struct rmm_deleter {
  void operator()(T *ptr) { RMM_FREE(ptr, 0); }
@@ -187,17 +189,24 @@ gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vect
 template gdf_size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	uint64_t *positions);
 
-template gdf_size_type findAllFromSet<thrust::pair<uint64_t,char>>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
-	thrust::pair<uint64_t,char> *positions);
+template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+	pos_key_pair *positions);
 
 
-using pos_key_pair = thrust::pair<uint64_t,char>;
 
-std::vector<pos_key_pair> getBracketLevels(thrust::pair<uint64_t,char>* brackets, int count){
+
+// DOXY
+int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
-	std::vector<pos_key_pair> h_pos(count);
-	cudaMemcpy(h_pos.data(), brackets, count*sizeof(pos_key_pair), cudaMemcpyDefault);
+	int16_t* lvls = nullptr;
+	RMM_ALLOC(&lvls, sizeof(int16_t) * count, 0);
+	CUDA_TRY(cudaMemsetAsync(lvls, 0, sizeof(int16_t) * count));
+	
 
-	return h_pos;
+
+
+	//cudaMemcpy(h_pos.data(), brackets, count*sizeof(pos_key_pair), cudaMemcpyDefault);
+
+	return lvls;
 }

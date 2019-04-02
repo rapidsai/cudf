@@ -103,8 +103,11 @@ TEST(gdf_json_test, BracketsLevels)
 
 	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
 
-	for (auto pos: getBracketLevels(d_pos, count))
-		cout << pos.second << ' ';
+	auto d_lvls = getBracketLevels(d_pos, count);
+	std::vector<int16_t> h_lvls(count);
+	cudaMemcpy(h_lvls.data(), d_lvls, count*sizeof(int16_t), cudaMemcpyDefault);
+	for (auto lvl: h_lvls)
+		cout << lvl << ' ';
 
 	cudaFree(d_data);
 	cudaFree(d_pos);
