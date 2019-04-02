@@ -761,8 +761,11 @@ gdf_error read_csv(csv_read_arg *args)
 	gdf_column **cols = new gdf_column*[raw_csv.num_active_cols];
 	auto deleteGdfColumns = [size=raw_csv.num_active_cols](gdf_column** cols) {
 		for (int i = 0; i < size; ++i) {
-			RMM_TRY(RMM_FREE(cols[i]->valid, 0));
-			RMM_TRY(RMM_FREE(cols[i]->data, 0));
+			RMM_FREE(cols[i]->valid, 0);
+			if (cols[i]->dtype != gdf_dtype::GDF_STRING)
+				RMM_FREE(cols[i]->data, 0);
+			else
+				NVStrings::destroy((NVStrings *)cols[i]->data);
 			delete[] cols[i]->col_name;
 			delete cols[i];
 		}
@@ -871,9 +874,10 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 
-	// TODO
+	// Nothing can fail after this point, release the ownership of the output columns
+	// This way the memory is not freed once we leave the function
 	cols_owner.release();
-	
+
 	args->data 			= cols;
 	args->num_cols_out	= raw_csv.num_active_cols;
 	args->num_rows_out	= raw_csv.num_records;
