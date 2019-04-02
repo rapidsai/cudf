@@ -25,6 +25,7 @@
 - PR #1293 Fix Inaccurate error message in join.pyx
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
+- PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 
 
 # cuDF 0.6.0 (Date TBD)
