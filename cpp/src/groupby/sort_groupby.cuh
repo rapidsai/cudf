@@ -159,8 +159,30 @@ gdf_error typed_groupby(size_type num_groupby_cols,
                                     ctxt);
     }
   } else {
-      // TODO< null version 
-      // call GroupbySortDisticnt 
+    // TODO< null version 
+    if (typeid(op_type) == typeid(count_distinct_op<aggregation_type>)) { // todo: check when the keys are the same as value
+      
+    } else {
+      // run order by and get new sort indexes
+      status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+                              nullptr,
+                              num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                              &sorted_indices_col,             //a gdf_column that is pre allocated for storing sorted indices
+                              ctxt);
+
+      if (status != GDF_SUCCESS) return status;
+      
+      int8_t** valids;
+      gdf_error_code = GroupbySortWithNulls<aggregation_type>(num_groupby_cols,
+                                    sorted_indices.data().get(), 
+                                    in_groupby_columns, 
+                                    in_aggregation_column, 
+                                    out_groupby_columns, 
+                                    out_aggregation_column, 
+                                    &output_size, 
+                                    op_type(),
+                                    ctxt);
+    }
   }
   if(in_agg_copy != nullptr) {
     RMM_TRY(RMM_FREE(in_agg_copy->data, 0));

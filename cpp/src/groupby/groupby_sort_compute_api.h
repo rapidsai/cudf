@@ -27,6 +27,7 @@
 
 #include "rmm/thrust_rmm_allocator.h"
 #include "dataframe/cudf_table.cuh"
+#include "utilities/bit_util.cuh"
 
 
 /* --------------------------------------------------------------------------*/
@@ -101,6 +102,114 @@ gdf_error GroupbySort(size_type num_groupby_cols,
 
   return GDF_SUCCESS;
 }
+
+
+struct GdfValidToBool {
+  gdf_valid_type* d_valid;
+
+  __device__
+  bool operator () (gdf_size_type idx)
+  {
+      return gdf_is_valid(d_valid, idx);
+  }
+};
+
+struct GdfBoolToValid {
+  gdf_valid_type* d_valid;
+  bool* d_bools;
+
+  __device__
+  void operator () (gdf_size_type idx)
+  {
+    if (d_bools[idx])
+      gdf::util::turn_bit_on(d_valid, idx);
+    else
+      gdf::util::turn_bit_off(d_valid, idx);
+  }
+};
+
+rmm::device_vector<bool> get_bools_from_gdf_valid(gdf_column* column) {
+  rmm::device_vector<bool> d_bools(column->size);
+  thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(column->size), d_bools.begin(), GdfValidToBool{column->valid});
+  return d_bools;
+}
+
+void set_bools_for_gdf_valid(gdf_column* column, rmm::device_vector<bool>& d_bools) {
+  thrust::for_each(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(column->size), GdfBoolToValid{column->valid, d_bools.data().get()});
+}
+
+template< typename aggregation_type,
+          typename size_type,
+          typename aggregation_operation>
+gdf_error GroupbySortWithNulls(size_type num_groupby_cols,
+                        int32_t* d_sorted_indices,
+                        gdf_column* in_groupby_columns[],       
+                        gdf_column* in_aggregation_column,
+                        gdf_column* out_groupby_columns[],
+                        gdf_column* out_aggregation_column,
+                        size_type * out_size,
+                        aggregation_operation aggregation_op,
+                        gdf_context* ctxt)
+{
+
+  int32_t nrows = in_groupby_columns[0]->size;
+  rmm::device_vector<void*> d_cols(num_groupby_cols);    
+  rmm::device_vector<gdf_valid_type*> d_cols_valid(num_groupby_cols);    
+  rmm::device_vector<int> d_types(num_groupby_cols, 0); 
+  void** d_col_data = d_cols.data().get();
+  gdf_valid_type** d_col_valid = d_cols_valid.data().get();
+  int* d_col_types = d_types.data().get();
+  bool nulls_are_smallest = ctxt->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST;
+  soa_col_info(in_groupby_columns, num_groupby_cols, d_col_data, d_col_valid, d_col_types);
+
+  // compute valids as 
+  LesserRTTI<int32_t> f(d_col_data, d_col_valid, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+
+  cudaStream_t stream;
+  cudaStreamCreate(&stream);
+  auto exec = rmm::exec_policy(stream)->on(stream);
+  rmm::device_vector<bool> d_in_agg_col_valids = get_bools_from_gdf_valid(in_aggregation_column);
+
+  auto agg_col_iter = thrust::make_permutation_iterator( (aggregation_type*)in_aggregation_column->data, d_sorted_indices);
+	auto agg_col_valid_iter = thrust::make_permutation_iterator(d_in_agg_col_valids.begin(), d_sorted_indices); 
+	auto agg_col_zip_iter = thrust::make_zip_iterator(thrust::make_tuple(agg_col_iter, agg_col_valid_iter));
+
+  rmm::device_vector<bool> d_out_agg_col_valids = get_bools_from_gdf_valid(out_aggregation_column);
+	auto out_agg_col_zip_iter = thrust::make_zip_iterator( thrust::make_tuple((aggregation_type*)out_aggregation_column->data, d_out_agg_col_valids.begin()));
+
+  using op_with_valids = typename aggregation_operation::with_valids;
+  op_with_valids agg_op;
+  auto ret =
+        thrust::reduce_by_key(exec,
+                              d_sorted_indices, d_sorted_indices+nrows, // input keys
+                              agg_col_zip_iter,                             // input values
+                              d_sorted_indices,                         // output keys
+                              out_agg_col_zip_iter,  // output values
+                              [f] __device__(int32_t key1, int32_t key2) {
+                                  return f.equal_with_nulls(key1, key2);
+                              },
+                              agg_op);
+  auto iter_tuple = ret.second.get_iterator_tuple();
+
+  size_type new_size = thrust::distance((aggregation_type*)out_aggregation_column->data, thrust::get<0>(iter_tuple));
+
+  *out_size = new_size;
+
+  // run gather operation to establish new order
+  cudf::table table_in(in_groupby_columns, num_groupby_cols);
+  cudf::table table_out(out_groupby_columns, num_groupby_cols);
+  
+  cudf::gather(&table_in, d_sorted_indices, &table_out);
+  
+	for (int i = 0; i < num_groupby_cols; i++) {
+		out_groupby_columns[i]->size = new_size;
+	}
+  out_aggregation_column->size = new_size;
+  set_bools_for_gdf_valid(out_aggregation_column, d_out_agg_col_valids);
+
+  return GDF_SUCCESS;
+}
+
 
 template< typename aggregation_type,
           typename size_type,

@@ -79,6 +79,12 @@ set(GROUPBY_TEST_SRC
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
+set(GROUPBY_VALIDS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_withvalids_test.cu")
+
+ConfigureTest(GROUPBY_VALIDS_TEST "${GROUPBY_VALIDS_TEST_SRC}")
+
+
 set(GROUPBY_WO_AGG_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
 

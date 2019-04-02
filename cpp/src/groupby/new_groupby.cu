@@ -419,6 +419,16 @@ gdf_error gdf_group_by_sort(gdf_column* in_key_columns[],
 
   switch(op)
   { 
+    case GDF_SUM:
+      {
+        gdf_error_code = group_by_sort::gdf_group_by_sort<sum_op>(num_key_columns,
+                                                   in_key_columns,
+                                                   in_aggregation_columns[0],
+                                                   out_key_columns,
+                                                   out_aggregation_columns[0],
+                                                   options);
+        break;
+      } 
     case GDF_COUNT_DISTINCT:
       {
         gdf_error_code = group_by_sort::gdf_group_by_sort<count_distinct_op>(num_key_columns,

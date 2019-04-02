@@ -67,10 +67,39 @@ struct count_op
   }
 };
 
+
+
+template<typename value_type>
+struct sum_op_valids
+{
+  constexpr static value_type IDENTITY{0};
+
+  using tuple_type = thrust::tuple<value_type, bool>;
+
+  CUDA_HOST_DEVICE_CALLABLE
+  tuple_type operator()(tuple_type tx, tuple_type ty) {
+
+		auto data_x = thrust::get<0>(tx);
+		auto valid_x = thrust::get<1>(tx);
+
+		auto data_y = thrust::get<0>(ty);
+		auto valid_y = thrust::get<1>(ty);
+
+		if (!valid_x)
+			return ty;
+
+		if (!valid_y)
+			return tx;
+
+		return thrust::make_tuple(data_x + data_y, true);
+	}
+};
+
 template<typename value_type>
 struct count_distinct_op   
 {
   constexpr static value_type IDENTITY{0};
+  using with_valids = sum_op_valids<value_type>;
 
   CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
@@ -79,16 +108,19 @@ struct count_distinct_op
   }
 };
 
+
 template<typename value_type>
 struct sum_op 
 {
   constexpr static value_type IDENTITY{0};
+  using with_valids = sum_op_valids<value_type>;
 
   CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return new_value + old_value;
   }
+
 };
 
 // Functor for AVG is empty. Used only for template specialization
