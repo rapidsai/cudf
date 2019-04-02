@@ -156,8 +156,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return self
         return self.as_numerical.astype(dtype)
 
-    def sort_by_values(self, ascending):
-        return self.as_numerical.sort_by_values(ascending)
+    def sort_by_values(self, ascending, na_position="last"):
+        return self.as_numerical.sort_by_values(ascending, na_position)
 
     def element_indexing(self, index):
         val = self.as_numerical.element_indexing(index)
