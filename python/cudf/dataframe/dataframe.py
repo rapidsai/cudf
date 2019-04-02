@@ -1797,10 +1797,8 @@ class DataFrame(object):
         1 2018-10-08T00:00:00.000
         """
         if not isinstance(local_dict, dict):
-            raise TypeError(
-                "local_dict type: expected dict but found {!r}" \
-                    .format(type(local_dict))
-            )
+            raise TypeError("local_dict type: expected dict but found {!r}"
+                            .format(type(local_dict)))
 
         _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
