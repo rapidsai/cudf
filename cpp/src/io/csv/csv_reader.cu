@@ -852,7 +852,8 @@ gdf_error read_csv(csv_read_arg *args)
 			unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_col(
 				NVStrings::create_from_index(h_str_cols[str_cols_idx], size_t(raw_csv.num_records)), 
 				&NVStrings::destroy);
-			//h_str_cols[str_cols_idx].reset();
+			// String columns consume a lot of memory; release as soon as it's not needed
+			h_str_cols_owner[str_cols_idx].reset();
 
 			if ((raw_csv.opts.quotechar != '\0') && (raw_csv.opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
