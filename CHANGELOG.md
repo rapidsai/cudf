@@ -17,6 +17,7 @@
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 - PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
+- PR #1349 Replace modernGPU sort join with thrust.
 
 ## Bug Fixes
 
