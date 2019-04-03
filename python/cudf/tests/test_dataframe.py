@@ -1479,6 +1479,17 @@ def test_binops_df(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_df(pdf, gdf, binop):
+    d = binop(pdf, pdf + 1)
+    g = binop(gdf, gdf + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
     operator.floordiv,
@@ -1497,6 +1508,17 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_series(pdf, gdf, binop):
+    d = binop(pdf.x, pdf.y + 1)
+    g = binop(gdf.x, gdf.y + 1)
     assert_eq(d, g)
 
 
@@ -2009,6 +2031,14 @@ def test_array_ufunc():
 
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
+
+
+@pytest.mark.parametrize('nan_value', [-5, -5.0, 0, 5, 5.0, None, 'pandas'])
+def test_series_to_gpu_array(nan_value):
+
+    s = Series([0, 1, None, 3])
+    np.testing.assert_array_equal(s.to_array(nan_value),
+                                  s.to_gpu_array(nan_value).copy_to_host())
 
 
 @pytest.mark.xfail(

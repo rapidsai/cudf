@@ -240,6 +240,34 @@ R"***(
             return (y >= x);
         }
     };
+    
+    struct BitwiseAnd {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<TypeOut>(x) & static_cast<TypeOut>(y));
+        }
+    };
+
+    using RBitwiseAnd = BitwiseAnd;
+
+    struct BitwiseOr {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<TypeOut>(x) | static_cast<TypeOut>(y));
+        }
+    };
+
+    using RBitwiseOr = BitwiseOr;
+
+    struct BitwiseXor {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<TypeOut>(x) ^ static_cast<TypeOut>(y));
+        }
+    };
+
+    using RBitwiseXor = BitwiseXor;
+
 )***";
 
 } // namespace code
