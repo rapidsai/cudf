@@ -169,6 +169,7 @@ static constexpr int copy_replace_nulls_blocksize = 1024;
 
 } // end anonymous namespace
 
+namespace cudf{
 
 void gdf_scan(const gdf_column *input, gdf_column *output,
     gdf_scan_op op, bool inclusive)
@@ -196,4 +197,6 @@ void gdf_scan(const gdf_column *input, gdf_column *output,
         CUDF_FAIL("The input enum `gdf_scan_op` is out of the range");
     }
 }
+
+} // end cudf namespace
 

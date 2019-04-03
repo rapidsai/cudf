@@ -24,7 +24,7 @@
 #include "gtest/gtest.h"
 
 #include <cudf.h>
-#include <cudf/functions.h>
+#include <reduction.hpp>
 
 #include <thrust/device_vector.h>
 
@@ -36,8 +36,8 @@
 template <typename T>
 struct ScanTest : public GdfTest
 {
-    void scan_test(std::vector<int>& const int_values,
-        std::vector<int>& exact_values,
+    void scan_test(std::vector<int> const & int_values,
+        std::vector<int> const & exact_values,
         gdf_scan_op op, bool inclusive)
     {
         bool do_print = false;
@@ -58,7 +58,7 @@ struct ScanTest : public GdfTest
         cudf::test::column_wrapper<T> col_out(col_size);
         gdf_column * raw_output = col_out.get();
 
-        CUDF_EXPECT_NO_THROW( gdf_scan(raw_input, raw_output, op, inclusive) );
+        CUDF_EXPECT_NO_THROW( cudf::gdf_scan(raw_input, raw_output, op, inclusive) );
 
         using UnderlyingType = T;
         auto tuple_host_result = col_out.to_host();
@@ -73,7 +73,7 @@ struct ScanTest : public GdfTest
     }
 
     template <typename Ti>
-    void val_check(std::vector<Ti> & v, bool do_print=false, const char* msg = nullptr){
+    void val_check(std::vector<Ti> const & v, bool do_print=false, const char* msg = nullptr){
         if( do_print ){
             std::cout << msg << " {";
             std::for_each(v.begin(), v.end(), [](Ti i){ std::cout << ", " <<  i;});
@@ -84,7 +84,7 @@ struct ScanTest : public GdfTest
 
     // make sure all elements in the range of sint8([-128, 127])
     template <typename Ti>
-    void range_check(std::vector<Ti> & v){
+    void range_check(std::vector<Ti> const & v){
         std::for_each(v.begin(), v.end(),
             [](Ti i){
                 ASSERT_GE(i, -128);

@@ -25,7 +25,7 @@
 #include "gtest/gtest.h"
 
 #include <cudf.h>
-#include <cudf/functions.h>
+#include <reduction.hpp>
 
 #include <thrust/device_vector.h>
 
@@ -64,7 +64,7 @@ struct ReductionTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T> result 
-		= gdf_reduction(underlying_column, op,
+		= cudf::gdf_reduction(underlying_column, op,
                                 underlying_column->dtype);
               EXPECT_EQ(expected_value, result.value());
         };
@@ -151,7 +151,7 @@ struct ReductionDtypeTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T_out> result =
-            	gdf_reduction(underlying_column, op, out_dtype);
+            	cudf::gdf_reduction(underlying_column, op, out_dtype);
             if( result.is_valid() && ! expected_overflow){
                 EXPECT_EQ(expected_value, result.value());
                 std::cout << "the value = <" << expected_value

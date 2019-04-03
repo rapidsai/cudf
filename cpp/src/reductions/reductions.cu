@@ -155,6 +155,7 @@ public:
 
 }   // anonymous namespace
 
+namespace cudf{
 
 gdf_scalar gdf_reduction(const gdf_column *col,
                   gdf_reduction_op op, gdf_dtype output_dtype)
@@ -191,4 +192,5 @@ gdf_scalar gdf_reduction(const gdf_column *col,
     return scalar;
 }
 
+}   // cudf namespace
 
