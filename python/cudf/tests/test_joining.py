@@ -106,7 +106,7 @@ def test_dataframe_join_how(aa, bb, how, method):
     # print(got.to_string(nrows=None))
 
     assert list(expect.columns) == list(got.columns)
-    # test disabled until libgdf sort join gets updated with new api
+    # test disabled until libcudf sort join gets updated with new api
     if method == 'hash':
         assert np.all(expect.index.values == got.index.values)
         if(how != 'outer'):

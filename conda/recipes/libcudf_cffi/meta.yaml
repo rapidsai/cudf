@@ -48,7 +48,7 @@ requirements:
 
 test:
   commands:
-    - python -c "import libgdf_cffi"
+    - python -c "import libcudf_cffi"
 
 about:
   home: http://rapids.ai/

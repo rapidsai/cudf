@@ -1,6 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from libgdf_cffi import libgdf, ffi
+from libcudf_cffi import libcudf, ffi
 import nvstrings
 
 from cudf.dataframe.column import Column
@@ -36,7 +36,7 @@ def read_parquet(path, engine='cudf', *args, **kwargs):
             raise FileNotFoundError(errno.ENOENT,
                                     os.strerror(errno.ENOENT), path)
         source_ptr = _wrap_string(str(path))
-        pq_reader.source_type = libgdf.FILE_PATH
+        pq_reader.source_type = libcudf.FILE_PATH
         pq_reader.source = source_ptr
 
         usecols = kwargs.get("columns")
@@ -49,7 +49,7 @@ def read_parquet(path, engine='cudf', *args, **kwargs):
             pq_reader.use_cols_len = len(usecols)
 
         # Call to libcudf
-        libgdf.read_parquet(pq_reader)
+        libcudf.read_parquet(pq_reader)
         out = pq_reader.data
         if out == ffi.NULL:
             raise ValueError("Failed to parse data")
@@ -58,7 +58,7 @@ def read_parquet(path, engine='cudf', *args, **kwargs):
         outcols = []
         new_names = []
         for i in range(pq_reader.num_cols_out):
-            if out[i].dtype == libgdf.GDF_STRING:
+            if out[i].dtype == libcudf.GDF_STRING:
                 ptr = int(ffi.cast("uintptr_t", out[i].data))
                 new_names.append(ffi.string(out[i].col_name).decode())
                 outcols.append(nvstrings.bind_cpointer(ptr))

@@ -14,7 +14,7 @@ from cudf.utils.cudautils import zeros
 from cudf._gdf import nvtx_range_pop
 import cudf.dataframe.index as index
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
 
@@ -64,11 +64,11 @@ class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 
-    _NAMED_FUNCTIONS = {'mean': libgdf.gdf_group_by_avg,
-                        'min': libgdf.gdf_group_by_min,
-                        'max': libgdf.gdf_group_by_max,
-                        'count': libgdf.gdf_group_by_count,
-                        'sum': libgdf.gdf_group_by_sum,
+    _NAMED_FUNCTIONS = {'mean': libcudf.gdf_group_by_avg,
+                        'min': libcudf.gdf_group_by_min,
+                        'max': libcudf.gdf_group_by_max,
+                        'count': libcudf.gdf_group_by_count,
+                        'sum': libcudf.gdf_group_by_sum,
                         }
 
     _LEVEL_0_INDEX_NAME = 'cudf_groupby_level_index'
@@ -84,7 +84,7 @@ class Groupby(object):
             - list
                 List of *str* of the column names to group on.
         method : str, optional
-            A string indicating the libgdf method to use to perform the
+            A string indicating the libcudf method to use to perform the
             group by. Valid values are "hash".
         """
         self.level = None
@@ -111,7 +111,7 @@ class Groupby(object):
                              if idx not in self._by]
         self._as_index = as_index
         if (method == "hash"):
-            self._method = libgdf.GDF_HASH
+            self._method = libcudf.GDF_HASH
         else:
             msg = "Method {!r} is not a supported group by method"
             raise NotImplementedError(msg.format(method))

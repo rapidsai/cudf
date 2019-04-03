@@ -5,10 +5,10 @@ import pytest
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libcudf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 
 def segsort_args():
@@ -55,13 +55,13 @@ def test_segradixsort(nelem, num_segments, descending, dtype):
     key = gen_rand(dtype, nelem)
     d_key = rmm.to_device(key)
     col_key = new_column()
-    libgdf.gdf_column_view(col_key, unwrap_devary(d_key), ffi.NULL,
+    libcudf.gdf_column_view(col_key, unwrap_devary(d_key), ffi.NULL,
                            nelem, get_dtype(d_key.dtype))
 
     val = np.arange(nelem, dtype=np.int64)
     d_val = rmm.to_device(val)
     col_val = new_column()
-    libgdf.gdf_column_view(col_val, unwrap_devary(d_val), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_val, unwrap_devary(d_val), ffi.NULL, nelem,
                            get_dtype(d_val.dtype))
 
     d_begin_offsets = rmm.to_device(begin_offsets)
@@ -73,18 +73,18 @@ def test_segradixsort(nelem, num_segments, descending, dtype):
     end_bit = sizeof_key * 8
 
     # Setup plan
-    plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
+    plan = libcudf.gdf_segmented_radixsort_plan(nelem, descending,
                                                begin_bit, end_bit)
-    libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
+    libcudf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
 
     # Sort
-    libgdf.gdf_segmented_radixsort_generic(plan, col_key, col_val,
+    libcudf.gdf_segmented_radixsort_generic(plan, col_key, col_val,
                                            num_segments,
                                            unwrap_devary(d_begin_offsets),
                                            unwrap_devary(d_end_offsets))
 
     # Cleanup
-    libgdf.gdf_segmented_radixsort_plan_free(plan)
+    libcudf.gdf_segmented_radixsort_plan_free(plan)
 
     # Check
     got_keys = d_key.copy_to_host()

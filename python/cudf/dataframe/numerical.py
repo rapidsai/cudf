@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 
 
-from libgdf_cffi import libgdf
+from libcudf_cffi import libcudf
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
@@ -29,26 +29,26 @@ from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 _binary_impl = {
     # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
+    'eq': libcudf.gdf_eq_generic,
+    'ne': libcudf.gdf_ne_generic,
     # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
+    'lt': libcudf.gdf_lt_generic,
+    'le': libcudf.gdf_le_generic,
+    'gt': libcudf.gdf_gt_generic,
+    'ge': libcudf.gdf_ge_generic,
     # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
+    'add': libcudf.gdf_add_generic,
+    'sub': libcudf.gdf_sub_generic,
+    'mul': libcudf.gdf_mul_generic,
+    'floordiv': libcudf.gdf_floordiv_generic,
+    'truediv': libcudf.gdf_div_generic,
 }
 
 #   Unary operators
 _unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
-    'sqrt': libgdf.gdf_sqrt_generic,
+    'ceil': libcudf.gdf_ceil_generic,
+    'floor': libcudf.gdf_floor_generic,
+    'sqrt': libcudf.gdf_sqrt_generic,
 }
 
 

@@ -199,7 +199,7 @@ class GpuArrowReader(Sequence):
     def _open(self):
         schema, layoutinfo, dataptr = self._parse_metdata()
         for fielddesc, layout in zip(schema['schema']['fields'], layoutinfo):
-            _logger.debug('reading data from libgdf IPCParser')
+            _logger.debug('reading data from libcudf IPCParser')
             nodedesc = _NodeDesc(
                 name=layout['name'],
                 length=layout['length'],
@@ -216,20 +216,20 @@ class GpuArrowReader(Sequence):
 
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
-        from libgdf_cffi import ffi, libgdf
+        from libcudf_cffi import ffi, libcudf
 
         @contextmanager
         def open_parser(schema_ptr, schema_len):
             "context to destroy the parser"
             _logger.debug('open IPCParser')
-            ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
+            ipcparser = libcudf.gdf_ipc_parser_open(schema_ptr, schema_len)
             yield ipcparser
             _logger.debug('close IPCParser')
-            libgdf.gdf_ipc_parser_close(ipcparser)
+            libcudf.gdf_ipc_parser_close(ipcparser)
 
         def check_error(ipcparser):
-            if libgdf.gdf_ipc_parser_failed(ipcparser):
-                raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
+            if libcudf.gdf_ipc_parser_failed(ipcparser):
+                raw_error = libcudf.gdf_ipc_parser_get_error(ipcparser)
                 error = ffi.string(raw_error).decode()
                 _logger.error('IPCParser failed: %s', error)
                 raise MetadataParsingError(error)
@@ -248,20 +248,20 @@ class GpuArrowReader(Sequence):
 
             gpu_addr = self._gpu_data.device_ctypes_pointer.value
             gpu_ptr = ffi.cast("void*", gpu_addr)
-            libgdf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
+            libcudf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
                                                      self._gpu_data.size)
             # check for failure in parsing the recordbatches
             check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
             schemadct = load_json(
-                libgdf.gdf_ipc_parser_get_schema_json(ipcparser))
+                libcudf.gdf_ipc_parser_get_schema_json(ipcparser))
             layoutdct = load_json(
-                libgdf.gdf_ipc_parser_get_layout_json(ipcparser))
+                libcudf.gdf_ipc_parser_get_layout_json(ipcparser))
 
             # get data offset
             _logger.debug('IPCParser data region offset')
-            dataoffset = libgdf.gdf_ipc_parser_get_data_offset(ipcparser)
+            dataoffset = libcudf.gdf_ipc_parser_get_data_offset(ipcparser)
             dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
 

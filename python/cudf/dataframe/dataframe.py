@@ -28,7 +28,7 @@ except ImportError:
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
-from libgdf_cffi import libgdf
+from libcudf_cffi import libcudf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
@@ -1240,7 +1240,7 @@ class DataFrame(object):
             for i in range(0, new_ncol)]
 
         # TODO (dm): move to _gdf.py
-        libgdf.gdf_transpose(
+        libcudf.gdf_transpose(
             ncols,
             cols,
             new_col_ptrs
@@ -1463,7 +1463,7 @@ class DataFrame(object):
         # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order on - left - rhs from libgdf
+        # Columns are returned in order on - left - rhs from libcudf
         # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`. The final order
         # is left columns, followed by non-join-key rhs columns.
@@ -1595,7 +1595,7 @@ class DataFrame(object):
             raise NotImplementedError('unsupported {!r} join'.format(how))
 
         if how == 'right':
-            # libgdf doesn't support right join directly, we will swap the
+            # libcudf doesn't support right join directly, we will swap the
             # dfs and use left join
             return other.join(self, other, how='left', lsuffix=rsuffix,
                               rsuffix=lsuffix, sort=sort, method='hash')
@@ -1608,7 +1608,7 @@ class DataFrame(object):
         lhs = DataFrame()
         rhs = DataFrame()
 
-        # Creating unique column name to use libgdf join
+        # Creating unique column name to use libcudf join
         idx_col_name = str(random.randint(2**29, 2**31))
 
         while idx_col_name in self.columns or idx_col_name in other.columns:

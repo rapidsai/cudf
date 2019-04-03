@@ -41,7 +41,7 @@ def test_series(data):
         )
 
 
-# libgdf doesn't respect timezones
+# libcudf doesn't respect timezones
 @pytest.mark.parametrize('data', [data1()])
 @pytest.mark.parametrize('field', fields)
 def test_dt_series(data, field):

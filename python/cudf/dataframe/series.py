@@ -1142,7 +1142,7 @@ class Series(object):
 
     def nunique(self, method='sort', dropna=True):
         """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libgdf
+        and exact version to be moved to libcudf
         """
         if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'

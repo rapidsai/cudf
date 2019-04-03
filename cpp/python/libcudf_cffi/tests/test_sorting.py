@@ -4,10 +4,10 @@ import pytest
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libcudf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 
 radixsort_args = list(product([2, 3, 10, 11, 100, 1000, 5000],
@@ -40,13 +40,13 @@ def test_radixsort(nelem, descending, dtype):
     key = gen_rand(dtype, nelem)
     d_key = rmm.to_device(key)
     col_key = new_column()
-    libgdf.gdf_column_view(col_key, unwrap_devary(d_key), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_key, unwrap_devary(d_key), ffi.NULL, nelem,
                            get_dtype(d_key.dtype))
 
     val = np.arange(nelem, dtype=np.int64)
     d_val = rmm.to_device(val)
     col_val = new_column()
-    libgdf.gdf_column_view(col_val, unwrap_devary(d_val), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_val, unwrap_devary(d_val), ffi.NULL, nelem,
                            get_dtype(d_val.dtype))
 
     sizeof_key = d_key.dtype.itemsize
@@ -55,12 +55,12 @@ def test_radixsort(nelem, descending, dtype):
     end_bit = sizeof_key * 8
 
     # Setup plan
-    plan = libgdf.gdf_radixsort_plan(nelem, descending, begin_bit, end_bit)
-    libgdf.gdf_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
+    plan = libcudf.gdf_radixsort_plan(nelem, descending, begin_bit, end_bit)
+    libcudf.gdf_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
     # Sort
-    libgdf.gdf_radixsort_generic(plan, col_key, col_val)
+    libcudf.gdf_radixsort_generic(plan, col_key, col_val)
     # Cleanup
-    libgdf.gdf_radixsort_plan_free(plan)
+    libcudf.gdf_radixsort_plan_free(plan)
 
     # Check
     got_keys = d_key.copy_to_host()
@@ -82,7 +82,7 @@ def test_digitize(num_rows, num_bins, right, dtype):
     col_data = gen_rand(dtype, num_rows)
     d_col_data = rmm.to_device(col_data)
     col_in = new_column()
-    libgdf.gdf_column_view(col_in, unwrap_devary(d_col_data), ffi.NULL,
+    libcudf.gdf_column_view(col_in, unwrap_devary(d_col_data), ffi.NULL,
                            num_rows, get_dtype(d_col_data.dtype))
 
     bin_data = gen_rand(dtype, num_bins)
@@ -90,13 +90,13 @@ def test_digitize(num_rows, num_bins, right, dtype):
     bin_data = np.unique(bin_data)
     d_bin_data = rmm.to_device(bin_data)
     bins = new_column()
-    libgdf.gdf_column_view(bins, unwrap_devary(d_bin_data), ffi.NULL,
+    libcudf.gdf_column_view(bins, unwrap_devary(d_bin_data), ffi.NULL,
                            len(bin_data), get_dtype(d_bin_data.dtype))
 
     out_ary = np.zeros(num_rows, dtype=np.int32)
     d_out = rmm.to_device(out_ary)
 
-    libgdf.gdf_digitize(col_in, bins, right, unwrap_devary(d_out))
+    libcudf.gdf_digitize(col_in, bins, right, unwrap_devary(d_out))
 
     result = d_out.copy_to_host()
     expected = np.digitize(col_data, bin_data, right)

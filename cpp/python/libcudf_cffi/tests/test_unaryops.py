@@ -5,10 +5,10 @@ import itertools
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf, GDFError
+from libcudf_cffi import ffi, libcudf, GDFError
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libcudf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 
 def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
@@ -23,10 +23,10 @@ def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
     gdf_dtype = get_dtype(dtype)
 
     # data column
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
     # result column
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
+    libcudf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
                            nelem, gdf_dtype)
 
     expect = expect_fn(h_data)
@@ -53,10 +53,10 @@ def cast_op_test(dtype, to_dtype, test_fn, nelem=128):
     col_result = new_column()
 
     # data column
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            get_dtype(dtype))
     # result column
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
+    libcudf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
                            nelem, get_dtype(to_dtype))
 
     expect = h_data.astype(to_dtype)
@@ -80,14 +80,14 @@ def test_col_mismatch_error():
     col_data = new_column()
     col_result = new_column()
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
-                           libgdf.GDF_FLOAT32)
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+                           libcudf.GDF_FLOAT32)
 
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
-                           nelem + 10, libgdf.GDF_FLOAT32)
+    libcudf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
+                           nelem + 10, libcudf.GDF_FLOAT32)
 
     with pytest.raises(GDFError) as excinfo:
-        libgdf.gdf_sin_generic(col_data, col_result)
+        libcudf.gdf_sin_generic(col_data, col_result)
 
     assert 'GDF_COLUMN_SIZE_MISMATCH' == str(excinfo.value)
 
@@ -101,14 +101,14 @@ def test_unsupported_dtype_error():
     col_data = new_column()
     col_result = new_column()
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
-                           libgdf.GDF_INT32)
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+                           libcudf.GDF_INT32)
 
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
-                           nelem + 10, libgdf.GDF_FLOAT32)
+    libcudf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL,
+                           nelem + 10, libcudf.GDF_FLOAT32)
 
     with pytest.raises(GDFError) as excinfo:
-        libgdf.gdf_sin_generic(col_data, col_result)
+        libcudf.gdf_sin_generic(col_data, col_result)
 
     assert 'GDF_UNSUPPORTED_DTYPE' == str(excinfo.value)
 
@@ -123,44 +123,44 @@ params_real_types = [
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_sin(dtype, ulp):
-    math_op_test(dtype, ulp, np.sin, libgdf.gdf_sin_generic)
+    math_op_test(dtype, ulp, np.sin, libcudf.gdf_sin_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_cos(dtype, ulp):
-    math_op_test(dtype, ulp, np.cos, libgdf.gdf_cos_generic)
+    math_op_test(dtype, ulp, np.cos, libcudf.gdf_cos_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_tan(dtype, ulp):
-    math_op_test(dtype, ulp, np.tan, libgdf.gdf_tan_generic)
+    math_op_test(dtype, ulp, np.tan, libcudf.gdf_tan_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_asin(dtype, ulp):
-    math_op_test(dtype, ulp, np.arcsin, libgdf.gdf_asin_generic)
+    math_op_test(dtype, ulp, np.arcsin, libcudf.gdf_asin_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_acos(dtype, ulp):
-    math_op_test(dtype, ulp, np.arccos, libgdf.gdf_acos_generic)
+    math_op_test(dtype, ulp, np.arccos, libcudf.gdf_acos_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_atan(dtype, ulp):
-    math_op_test(dtype, ulp, np.arctan, libgdf.gdf_atan_generic)
+    math_op_test(dtype, ulp, np.arctan, libcudf.gdf_atan_generic)
 
 
 # exponential
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_exp(dtype, ulp):
-    math_op_test(dtype, ulp, np.exp, libgdf.gdf_exp_generic)
+    math_op_test(dtype, ulp, np.exp, libcudf.gdf_exp_generic)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_log(dtype, ulp):
-    math_op_test(dtype, ulp, np.log, libgdf.gdf_log_generic,
+    math_op_test(dtype, ulp, np.log, libcudf.gdf_log_generic,
                  positive_only=True)
 
 
@@ -168,7 +168,7 @@ def test_log(dtype, ulp):
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_sqrt(dtype, ulp):
-    math_op_test(dtype, ulp, np.sqrt, libgdf.gdf_sqrt_generic,
+    math_op_test(dtype, ulp, np.sqrt, libcudf.gdf_sqrt_generic,
                  positive_only=True)
 
 
@@ -176,13 +176,13 @@ def test_sqrt(dtype, ulp):
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_ceil(dtype, ulp):
-    math_op_test(dtype, ulp, np.ceil, libgdf.gdf_ceil_generic,
+    math_op_test(dtype, ulp, np.ceil, libcudf.gdf_ceil_generic,
                  scale=100)
 
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_floor(dtype, ulp):
-    math_op_test(dtype, ulp, np.floor, libgdf.gdf_floor_generic,
+    math_op_test(dtype, ulp, np.floor, libcudf.gdf_floor_generic,
                  scale=100)
 
 
@@ -190,11 +190,11 @@ def test_floor(dtype, ulp):
 
 def _select_cast_fn(to_dtype):
     return {
-        np.float32: libgdf.gdf_cast_generic_to_f32,
-        np.float64: libgdf.gdf_cast_generic_to_f64,
-        np.int8: libgdf.gdf_cast_generic_to_i8,
-        np.int32: libgdf.gdf_cast_generic_to_i32,
-        np.int64: libgdf.gdf_cast_generic_to_i64,
+        np.float32: libcudf.gdf_cast_generic_to_f32,
+        np.float64: libcudf.gdf_cast_generic_to_f64,
+        np.int8: libcudf.gdf_cast_generic_to_i8,
+        np.int32: libcudf.gdf_cast_generic_to_i32,
+        np.int64: libcudf.gdf_cast_generic_to_i64,
     }[to_dtype]
 
 

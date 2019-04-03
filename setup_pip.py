@@ -2,7 +2,7 @@
 # This setup.py packages these modules together as one pip package:
 #   * librmm
 #   * libcudf
-#   * libgdf_cffi
+#   * libcudf_cffi
 #   * librmm_cffi
 #   * cudf
 
@@ -135,7 +135,7 @@ extensions = [
 ]
 
 packages = [
-    'libgdf_cffi',
+    'libcudf_cffi',
     'librmm_cffi',
 ]
 packages += find_packages(where='python')
@@ -159,7 +159,7 @@ setup(name=name,
       packages=packages,
       package_dir={
           'cudf': 'python/cudf',
-          'libgdf_cffi': 'cpp/python/libgdf_cffi',
+          'libcudf_cffi': 'cpp/python/libcudf_cffi',
           'librmm_cffi': 'cpp/thirdparty/rmm/python/librmm_cffi'
       },
       package_data={
@@ -169,7 +169,7 @@ setup(name=name,
       setup_requires=setup_requires,
       python_requires='>=3.6,<3.8',
       cffi_modules=[
-          'cpp/python/libgdf_cffi/libgdf_build.py:ffibuilder',
+          'cpp/python/libcudf_cffi/libcudf_build.py:ffibuilder',
           'cpp/thirdparty/rmm/python/librmm_cffi/librmm_build.py.in:ffibuilder'
       ],
       ext_modules=cythonize(extensions),

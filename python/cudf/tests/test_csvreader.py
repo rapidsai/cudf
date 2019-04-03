@@ -16,7 +16,7 @@ import gzip
 import shutil
 import os
 
-from libgdf_cffi import GDFError
+from libcudf_cffi import GDFError
 
 
 def make_numeric_dataframe(nrows, dtype):

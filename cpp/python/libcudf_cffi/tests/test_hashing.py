@@ -19,10 +19,10 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype
+from libcudf_cffi.tests.utils import new_column, unwrap_devary, get_dtype
 
 
 @contextmanager
@@ -34,7 +34,7 @@ def _make_hash_input(hash_input, ncols):
 
     for i in range(ncols):
         col_input = new_column()
-        libgdf.gdf_column_view(col_input, unwrap_devary(di[i]), ffi.NULL,
+        libcudf.gdf_column_view(col_input, unwrap_devary(di[i]), ffi.NULL,
                                hash_input[i].size,
                                get_dtype(hash_input[i].dtype))
         ci.append(col_input)
@@ -48,7 +48,7 @@ def _call_hash_multi(api, ncols, col_input, magic, initial_hash_values, nrows):
     out_ary = np.zeros(nrows, dtype=np.int32)
     d_out = rmm.to_device(out_ary)
     col_out = new_column()
-    libgdf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
+    libcudf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
                            out_ary.size, get_dtype(d_out.dtype))
 
     api(ncols, col_input, magic, initial_hash_values, col_out)
@@ -86,12 +86,12 @@ def test_hashing():
         hash_input.append(hi)
 
     ncols = len(hash_input)
-    magic = libgdf.GDF_HASH_MURMUR3
+    magic = libcudf.GDF_HASH_MURMUR3
 
     with _make_hash_input(hash_input, ncols) as (col_input, init_hash_values):
         # Hash
         for init_vals in [ffi.NULL, init_hash_values]:
-            hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols,
+            hashed_column = _call_hash_multi(libcudf.gdf_hash, ncols,
                                              col_input, magic, init_vals,
                                              nrows)
 

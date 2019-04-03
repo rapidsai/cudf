@@ -15,7 +15,7 @@ import pandas as pd
 import pyarrow as pa
 
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
 

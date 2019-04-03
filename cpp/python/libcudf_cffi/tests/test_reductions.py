@@ -5,10 +5,10 @@ from itertools import product
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import (new_column, unwrap_devary, get_dtype, gen_rand,
+from libcudf_cffi.tests.utils import (new_column, unwrap_devary, get_dtype, gen_rand,
                     buffer_as_bits)
 
 
@@ -29,16 +29,16 @@ params = list(product(params_dtype, params_sizes))
 def test_sum(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = dtype(data.sum())
 
@@ -61,16 +61,16 @@ def test_product(dtype, nelem):
 
     print('max', data.max(), 'min', data.min())
     d_data = rmm.to_device(data)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_product(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_product(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = np.product(data)
 
@@ -88,14 +88,14 @@ def test_sum_masked(nelem):
 
     d_data = rmm.to_device(data)
     d_mask = rmm.to_device(mask)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data),
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data),
                            unwrap_devary(d_mask), nelem, gdf_dtype)
-    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
 
     got = d_result.copy_to_host()[0]
     boolmask = buffer_as_bits(mask)[:nelem]
@@ -114,16 +114,16 @@ accuracy_for_dtype = {
 def test_sum_of_squares(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum_of_squares(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_sum_of_squares(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = (data ** 2).sum()
 
@@ -144,16 +144,16 @@ def test_sum_of_squares(dtype, nelem):
 def test_min(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_min(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_min(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.min()
 
@@ -167,16 +167,16 @@ def test_min(dtype, nelem):
 def test_max(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
-    d_result = rmm.device_array(libgdf.gdf_reduction_get_intermediate_output_size(),
+    d_result = rmm.device_array(libcudf.gdf_reduction_get_intermediate_output_size(),
                                 dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+    libcudf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_max(col_data, unwrap_devary(d_result), d_result.size)
+    libcudf.gdf_max(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.max()
 

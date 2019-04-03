@@ -1,7 +1,7 @@
 
 import numpy as np
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 
 
 def new_column():
@@ -18,13 +18,13 @@ def unwrap_devary(devary):
 
 def get_dtype(dtype):
     return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
+        np.float64: libcudf.GDF_FLOAT64,
+        np.float32: libcudf.GDF_FLOAT32,
+        np.int64:   libcudf.GDF_INT64,
+        np.int32:   libcudf.GDF_INT32,
+        np.int16:   libcudf.GDF_INT16,
+        np.int8:    libcudf.GDF_INT8,
+        np.bool_:   libcudf.GDF_INT8,
     }[np.dtype(dtype).type]
 
 
@@ -78,7 +78,7 @@ def count_nulls(mask, size):
     mask_ptr = unwrap_devary(mask)
 
     if mask_ptr != ffi.NULL:
-        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
+        libcudf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
 
     return (size - nnz[0])
 

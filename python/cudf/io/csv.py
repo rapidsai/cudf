@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from libgdf_cffi import libgdf, ffi
+from libcudf_cffi import libcudf, ffi
 import nvstrings
 
 from cudf.dataframe.column import Column
@@ -30,10 +30,10 @@ def is_file_like(obj):
 
 
 _quoting_enum = {
-    0: libgdf.QUOTE_MINIMAL,
-    1: libgdf.QUOTE_ALL,
-    2: libgdf.QUOTE_NONNUMERIC,
-    3: libgdf.QUOTE_NONE,
+    0: libcudf.QUOTE_MINIMAL,
+    1: libcudf.QUOTE_ALL,
+    2: libcudf.QUOTE_NONNUMERIC,
+    3: libcudf.QUOTE_NONE,
 }
 
 
@@ -202,7 +202,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             buffer_as_bytes = buffer
         buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
 
-        csv_reader.input_data_form = libgdf.HOST_BUFFER
+        csv_reader.input_data_form = libcudf.HOST_BUFFER
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
@@ -212,7 +212,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
-        csv_reader.input_data_form = libgdf.FILE_PATH
+        csv_reader.input_data_form = libcudf.FILE_PATH
         csv_reader.filepath_or_buffer = file_path
 
     if header == 'infer':
@@ -334,7 +334,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.prefix = prefix_bytes
 
     # Call read_csv
-    libgdf.read_csv(csv_reader)
+    libcudf.read_csv(csv_reader)
 
     out = csv_reader.data
     if out == ffi.NULL:
@@ -345,7 +345,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     outcols = []
     new_names = []
     for i in range(csv_reader.num_cols_out):
-        if out[i].dtype == libgdf.GDF_STRING:
+        if out[i].dtype == libcudf.GDF_STRING:
             ptr = int(ffi.cast("uintptr_t", out[i].data))
             new_names.append(ffi.string(out[i].col_name).decode())
             outcols.append(nvstrings.bind_cpointer(ptr))

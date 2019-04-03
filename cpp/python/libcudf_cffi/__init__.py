@@ -3,11 +3,11 @@ from __future__ import absolute_import
 import os
 import sys
 from itertools import chain
-from libgdf_cffi.wrapper import _libgdf_wrapper
-from libgdf_cffi.wrapper import GDFError         # noqa: F401  # re-exported
+from libcudf_cffi.wrapper import _libcudf_wrapper
+from libcudf_cffi.wrapper import GDFError         # noqa: F401  # re-exported
 
 try:
-    from .libgdf_cffi import ffi
+    from .libcudf_cffi import ffi
 except ImportError:
     pass
 else:
@@ -32,7 +32,7 @@ else:
                     return lib
             return path
 
-    libgdf_api = ffi.dlopen(_get_lib_name())
-    libgdf = _libgdf_wrapper(ffi, libgdf_api)
+    libcudf_api = ffi.dlopen(_get_lib_name())
+    libcudf = _libcudf_wrapper(ffi, libcudf_api)
 
-    del _libgdf_wrapper
+    del _libcudf_wrapper

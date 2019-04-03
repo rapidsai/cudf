@@ -4,7 +4,7 @@ import os
 include_dir = os.environ.get('CUDF_INCLUDE_DIR', '../../include/cudf/')
 
 ffibuilder = cffi.FFI()
-ffibuilder.set_source("libgdf_cffi.libgdf_cffi", None)
+ffibuilder.set_source("libcudf_cffi.libcudf_cffi", None)
 
 for fname in ['types.h', 'convert_types.h', 'functions.h',
               'io_types.h', 'io_functions.h']:

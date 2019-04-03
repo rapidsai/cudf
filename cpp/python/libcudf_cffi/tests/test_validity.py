@@ -3,11 +3,11 @@ from itertools import product
 
 import numpy as np
 
-from libgdf_cffi import libgdf
+from libcudf_cffi import libcudf
 from librmm_cffi import librmm as rmm
 
-from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
-from libgdf_cffi.tests.utils import buffer_as_bits
+from libcudf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libcudf_cffi.tests.utils import buffer_as_bits
 
 
 _dtypes = [np.int32]
@@ -17,7 +17,7 @@ _nelems = [1, 2, 7, 8, 9, 32, 128]
 @pytest.mark.parametrize('dtype,nelem', list(product(_dtypes, _nelems)))
 def test_validity_add(dtype, nelem):
     expect_fn = np.add
-    test_fn = libgdf.gdf_add_generic
+    test_fn = libcudf.gdf_add_generic
 
     # data
     h_lhs = gen_rand(dtype, nelem)
@@ -40,14 +40,14 @@ def test_validity_add(dtype, nelem):
     col_result = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+    libcudf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
                            unwrap_devary(d_lhs_valids), nelem, gdf_dtype)
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+    libcudf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
                            unwrap_devary(d_rhs_valids), nelem, gdf_dtype)
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+    libcudf.gdf_column_view(col_result, unwrap_devary(d_result),
                            unwrap_devary(d_result_valids), nelem, gdf_dtype)
 
-    libgdf.gdf_validity_and(col_lhs, col_rhs, col_result)
+    libcudf.gdf_validity_and(col_lhs, col_rhs, col_result)
 
     expect = expect_fn(h_lhs, h_rhs)
     test_fn(col_lhs, col_rhs, col_result)

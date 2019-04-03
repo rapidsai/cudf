@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 """
-This file provide binding to the libgdf library.
+This file provide binding to the libcudf library.
 """
 import contextlib
 import itertools
@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from libgdf_cffi import ffi, libgdf
+from libcudf_cffi import ffi, libcudf
 from librmm_cffi import librmm as rmm
 import nvcategory
 
@@ -39,7 +39,7 @@ def columnview_from_devary(devary, dtype=None):
 def _columnview(size, data, mask, dtype, null_count, nvcat):
     colview = ffi.new('gdf_column*')
     extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
-    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
+    extra_dtype_info.time_unit = libcudf.TIME_UNIT_NONE
     if nvcat is not None:
         extra_dtype_info.category = ffi.cast('void*', nvcat.get_cpointer())
     else:
@@ -49,7 +49,7 @@ def _columnview(size, data, mask, dtype, null_count, nvcat):
         null_count = 0
         mask = ffi.NULL
 
-    libgdf.gdf_column_view_augmented(
+    libcudf.gdf_column_view_augmented(
         colview,
         data,
         mask,
@@ -123,22 +123,22 @@ def apply_unaryop(unaop, inp, out):
 
 def apply_mask_and(col, mask, out):
     args = (col.cffi_view, mask.cffi_view, out.cffi_view)
-    libgdf.gdf_validity_and(*args)
+    libcudf.gdf_validity_and(*args)
     nnz = count_nonzero_mask(out.mask.mem, size=len(out))
     return len(out) - nnz
 
 
 np_gdf_dict = {
-    np.float64:      libgdf.GDF_FLOAT64,
-    np.float32:      libgdf.GDF_FLOAT32,
-    np.int64:        libgdf.GDF_INT64,
-    np.int32:        libgdf.GDF_INT32,
-    np.int16:        libgdf.GDF_INT16,
-    np.int8:         libgdf.GDF_INT8,
-    np.bool_:        libgdf.GDF_INT8,
-    np.datetime64:   libgdf.GDF_DATE64,
-    np.object_:      libgdf.GDF_STRING_CATEGORY,
-    np.str_:         libgdf.GDF_STRING_CATEGORY,
+    np.float64:      libcudf.GDF_FLOAT64,
+    np.float32:      libcudf.GDF_FLOAT32,
+    np.int64:        libcudf.GDF_INT64,
+    np.int32:        libcudf.GDF_INT32,
+    np.int16:        libcudf.GDF_INT16,
+    np.int8:         libcudf.GDF_INT8,
+    np.bool_:        libcudf.GDF_INT8,
+    np.datetime64:   libcudf.GDF_DATE64,
+    np.object_:      libcudf.GDF_STRING_CATEGORY,
+    np.str_:         libcudf.GDF_STRING_CATEGORY,
     }
 
 
@@ -152,16 +152,16 @@ def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
     return np.dtype({
-         libgdf.GDF_FLOAT64: np.float64,
-         libgdf.GDF_FLOAT32: np.float32,
-         libgdf.GDF_INT64: np.int64,
-         libgdf.GDF_INT32: np.int32,
-         libgdf.GDF_INT16: np.int16,
-         libgdf.GDF_INT8: np.int8,
-         libgdf.GDF_DATE64: np.datetime64,
-         libgdf.N_GDF_TYPES: np.int32,
-         libgdf.GDF_CATEGORY: np.int32,
-         libgdf.GDF_STRING_CATEGORY: np.object_,
+         libcudf.GDF_FLOAT64: np.float64,
+         libcudf.GDF_FLOAT32: np.float32,
+         libcudf.GDF_INT64: np.int64,
+         libcudf.GDF_INT32: np.int32,
+         libcudf.GDF_INT16: np.int16,
+         libcudf.GDF_INT8: np.int8,
+         libcudf.GDF_DATE64: np.datetime64,
+         libcudf.N_GDF_TYPES: np.int32,
+         libcudf.GDF_CATEGORY: np.int32,
+         libcudf.GDF_STRING_CATEGORY: np.object_,
      }[dtype])
 
 
@@ -184,7 +184,7 @@ def np_to_pa_dtype(dtype):
 
 def apply_reduce(fn, inp):
     # allocate output+temp array
-    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
+    outsz = libcudf.gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
@@ -193,20 +193,20 @@ def apply_reduce(fn, inp):
 
 
 _join_how_api = {
-    'inner': libgdf.gdf_inner_join,
-    'outer': libgdf.gdf_full_join,
-    'left': libgdf.gdf_left_join,
+    'inner': libcudf.gdf_inner_join,
+    'outer': libcudf.gdf_full_join,
+    'left': libcudf.gdf_left_join,
 }
 
 _join_method_api = {
-    'sort': libgdf.GDF_SORT,
-    'hash': libgdf.GDF_HASH
+    'sort': libcudf.GDF_SORT,
+    'hash': libcudf.GDF_HASH
 }
 
 
 def cffi_view_to_column_mem(cffi_view):
     gdf_dtype = cffi_view.dtype
-    if gdf_dtype == libgdf.GDF_STRING_CATEGORY:
+    if gdf_dtype == libcudf.GDF_STRING_CATEGORY:
         data_ptr = int(ffi.cast("uintptr_t", cffi_view.data))
         # We need to create this just to make sure the memory is properly freed
         data = rmm.device_array_from_ptr(
@@ -262,9 +262,9 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     gdf_context = ffi.new('gdf_context*')
 
     if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
+        libcudf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
     elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0)
+        libcudf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0)
     else:
         msg = "method not supported"
         raise ValueError(msg)
@@ -279,7 +279,7 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
             list_lhs.append(col_lhs[i].cffi_view)
             list_rhs.append(col_rhs[i].cffi_view)
 
-        # Call libgdf
+        # Call libcudf
 
         joiner(len(col_lhs), list_lhs, list_rhs, col_result_l,
                col_result_r, gdf_context)
@@ -299,12 +299,12 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     yield(left, right)
 
-    libgdf.gdf_column_free(col_result_l)
-    libgdf.gdf_column_free(col_result_r)
+    libcudf.gdf_column_free(col_result_l)
+    libcudf.gdf_column_free(col_result_r)
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
+    libcudf.gdf_prefixsum(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,
@@ -338,7 +338,7 @@ class SegmentedRadixortPlan(object):
         self.sizeof_key = key_dtype.itemsize
         self.sizeof_val = val_dtype.itemsize
         end_bit = self.sizeof_key * 8
-        plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
+        plan = libcudf.gdf_segmented_radixsort_plan(nelem, descending,
                                                    begin_bit, end_bit)
         self.plan = plan
         self.nelem = nelem
@@ -350,12 +350,12 @@ class SegmentedRadixortPlan(object):
             self.close()
 
     def close(self):
-        libgdf.gdf_segmented_radixsort_plan_free(self.plan)
+        libcudf.gdf_segmented_radixsort_plan_free(self.plan)
         self.is_closed = True
         self.plan = None
 
     def setup(self):
-        libgdf.gdf_segmented_radixsort_plan_setup(self.plan, self.sizeof_key,
+        libcudf.gdf_segmented_radixsort_plan_setup(self.plan, self.sizeof_key,
                                                   self.sizeof_val)
 
     def sort(self, segments, col_keys, col_vals):
@@ -377,7 +377,7 @@ class SegmentedRadixortPlan(object):
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
-            libgdf.gdf_segmented_radixsort_generic(self.plan,
+            libcudf.gdf_segmented_radixsort_generic(self.plan,
                                                    col_keys.cffi_view,
                                                    col_vals.cffi_view,
                                                    segsize,
@@ -397,12 +397,12 @@ def hash_columns(columns, result, initial_hash_values=None):
     col_input = [col.cffi_view for col in columns]
     col_out = result.cffi_view
     ncols = len(col_input)
-    hashfn = libgdf.GDF_HASH_MURMUR3
+    hashfn = libcudf.GDF_HASH_MURMUR3
     if initial_hash_values is None:
         initial_hash_values = ffi.NULL
     else:
         initial_hash_values = unwrap_devary(initial_hash_values)
-    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
+    libcudf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
     return result
 
 
@@ -427,9 +427,9 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
     col_inputs = [col.cffi_view for col in input_columns]
     col_outputs = [col.cffi_view for col in output_columns]
     offsets = ffi.new('int[]', nparts)
-    hashfn = libgdf.GDF_HASH_MURMUR3
+    hashfn = libcudf.GDF_HASH_MURMUR3
 
-    libgdf.gdf_hash_partition(
+    libcudf.gdf_hash_partition(
         len(col_inputs),
         col_inputs,
         key_indices,
@@ -446,7 +446,7 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
 def _column_concat(cols_to_concat, output_col):
     col_inputs = [col.cffi_view for col in cols_to_concat]
-    libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
+    libcudf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
     return output_col
 
 
@@ -457,21 +457,21 @@ def count_nonzero_mask(mask, size):
     mask_ptr, addr = unwrap_mask(mask)
 
     if addr != ffi.NULL:
-        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
+        libcudf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
 
     return nnz[0]
 
 
 _GDF_COLORS = {
-    'green':    libgdf.GDF_GREEN,
-    'blue':     libgdf.GDF_BLUE,
-    'yellow':   libgdf.GDF_YELLOW,
-    'purple':   libgdf.GDF_PURPLE,
-    'cyan':     libgdf.GDF_CYAN,
-    'red':      libgdf.GDF_RED,
-    'white':    libgdf.GDF_WHITE,
-    'darkgreen': libgdf.GDF_DARK_GREEN,
-    'orange':   libgdf.GDF_ORANGE,
+    'green':    libcudf.GDF_GREEN,
+    'blue':     libcudf.GDF_BLUE,
+    'yellow':   libcudf.GDF_YELLOW,
+    'purple':   libcudf.GDF_PURPLE,
+    'cyan':     libcudf.GDF_CYAN,
+    'red':      libcudf.GDF_RED,
+    'white':    libcudf.GDF_WHITE,
+    'darkgreen': libcudf.GDF_DARK_GREEN,
+    'orange':   libcudf.GDF_ORANGE,
 }
 
 
@@ -497,16 +497,16 @@ def nvtx_range_push(name, color='green'):
 
     try:
         color = int(color, 16)  # only works if color is a hex string
-        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
+        libcudf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
     except ValueError:
         color = str_to_gdf_color(color)
-        libgdf.gdf_nvtx_range_push(name_c, color)
+        libcudf.gdf_nvtx_range_push(name_c, color)
 
 
 def nvtx_range_pop():
     """ Demarcate the end of the inner-most range.
     """
-    libgdf.gdf_nvtx_range_pop()
+    libcudf.gdf_nvtx_range_pop()
 
 
 def rmm_initialize():
@@ -520,11 +520,11 @@ def rmm_finalize():
 
 
 _GDF_QUANTILE_METHODS = {
-    'linear': libgdf.GDF_QUANT_LINEAR,
-    'lower': libgdf.GDF_QUANT_LOWER,
-    'higher': libgdf.GDF_QUANT_HIGHER,
-    'midpoint': libgdf.GDF_QUANT_MIDPOINT,
-    'nearest': libgdf.GDF_QUANT_NEAREST,
+    'linear': libcudf.GDF_QUANT_LINEAR,
+    'lower': libcudf.GDF_QUANT_LOWER,
+    'higher': libcudf.GDF_QUANT_HIGHER,
+    'midpoint': libcudf.GDF_QUANT_MIDPOINT,
+    'nearest': libcudf.GDF_QUANT_NEAREST,
 }
 
 
@@ -540,20 +540,20 @@ def quantile(column, quant, method, exact):
     """
     gdf_context = ffi.new('gdf_context*')
     method_api = _join_method_api['sort']
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-    # libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    libcudf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
+    # libcudf.gdf_context_view(gdf_context, 0, method_api, 0)
     # px = ffi.new("double *")
     res = []
     for q in quant:
         px = ffi.new("double *")
         if exact:
-            libgdf.gdf_quantile_exact(column.cffi_view,
+            libcudf.gdf_quantile_exact(column.cffi_view,
                                       get_quantile_method(method),
                                       q,
                                       ffi.cast('void *', px),
                                       gdf_context)
         else:
-            libgdf.gdf_quantile_approx(column.cffi_view,
+            libcudf.gdf_quantile_approx(column.cffi_view,
                                        q,
                                        ffi.cast('void *', px),
                                        gdf_context)

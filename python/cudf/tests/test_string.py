@@ -12,7 +12,7 @@ from cudf import concat
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
-import libgdf_cffi
+import libcudf_cffi
 
 
 data_list = [
@@ -672,7 +672,7 @@ def test_string_groupby_key(str_data, str_data_raise, num_keys):
 
     expectation = raise_builder(
         [str_data_raise],
-        libgdf_cffi.wrapper.GDFError
+        libcudf_cffi.wrapper.GDFError
     )
 
     with expectation:
@@ -704,7 +704,7 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
 
     expectation = raise_builder(
         [str_data_raise],
-        libgdf_cffi.wrapper.GDFError
+        libcudf_cffi.wrapper.GDFError
     )
 
     with expectation:

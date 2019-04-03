@@ -8,7 +8,7 @@ from cudf.dataframe import columnops, numerical
 from cudf import _gdf
 from cudf.utils import utils, cudautils
 from cudf.dataframe.buffer import Buffer
-from libgdf_cffi import libgdf
+from libcudf_cffi import libcudf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
@@ -16,15 +16,15 @@ from cudf._sort import get_sorted_inds
 import cudf.bindings.replace as cpp_replace
 
 _unordered_impl = {
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
+    'eq': libcudf.gdf_eq_generic,
+    'ne': libcudf.gdf_ne_generic,
 }
 
 _ordered_impl = {
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
+    'lt': libcudf.gdf_lt_generic,
+    'le': libcudf.gdf_le_generic,
+    'gt': libcudf.gdf_gt_generic,
+    'ge': libcudf.gdf_ge_generic,
 }
 
 
@@ -34,12 +34,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # only after we move to arrow
     # we also need to support other formats besides Date64
     funcs = {
-        'year': libgdf.gdf_extract_datetime_year,
-        'month': libgdf.gdf_extract_datetime_month,
-        'day': libgdf.gdf_extract_datetime_day,
-        'hour': libgdf.gdf_extract_datetime_hour,
-        'minute': libgdf.gdf_extract_datetime_minute,
-        'second': libgdf.gdf_extract_datetime_second,
+        'year': libcudf.gdf_extract_datetime_year,
+        'month': libcudf.gdf_extract_datetime_month,
+        'day': libcudf.gdf_extract_datetime_day,
+        'hour': libcudf.gdf_extract_datetime_hour,
+        'minute': libcudf.gdf_extract_datetime_minute,
+        'second': libcudf.gdf_extract_datetime_second,
     }
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
 

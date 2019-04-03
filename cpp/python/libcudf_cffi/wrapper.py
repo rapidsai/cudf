@@ -4,7 +4,7 @@ class GDFError(Exception):
         super(GDFError, self).__init__(msg)
 
 
-class _libgdf_wrapper(object):
+class _libcudf_wrapper(object):
     def __init__(self, ffi, api):
         self._ffi = ffi
         self._api = api
