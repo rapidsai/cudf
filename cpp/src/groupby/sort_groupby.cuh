@@ -84,7 +84,7 @@ gdf_error typed_groupby(size_type num_groupby_cols,
     int width;
     get_column_byte_width(other, &width);
     gdf_size_type allocated_size_data = width *  other->size;
-    gdf_size_type allocated_size_valid =  gdf_get_num_bytes_for_valids_allocation(other->size); 
+    gdf_size_type allocated_size_valid =  gdf_valid_allocation_size(other->size); 
     
     //FIXME, add RMM_TRY, CUDA_TRY
     RMM_ALLOC((void**)&data_dev, allocated_size_data, 0);
