@@ -21,128 +21,51 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 
 #include "utilities/error_utils.hpp"
 
-/**---------------------------------------------------------------------------*
- * @brief Base class for pointers owning RMM allocated memory
- *---------------------------------------------------------------------------**/
-template <class T>
-class rmm_unique_ptr_base {
-protected:
-	/**
-	 * @brief Pointer to the owned memory
-	 */
+namespace rmm {
+
+// alias for the rmm unique pointer
+template<typename T>
+using unique_ptr = std::unique_ptr<T, std::function<void(std::remove_extent_t<T> *)>>;
+
+// creates a unique pointer holding a single object
+template<typename T, std::enable_if_t<!std::is_array<T>::value, int> = 0>
+unique_ptr<T> make_unique(cudaStream_t stream) {
 	T* ptr = nullptr;
-
-	/**
-	 * @brief Create an empty object - does not allocate any memory
-	 */
-	rmm_unique_ptr_base() noexcept = default;
-
-public:
-	/**
-	 * @brief Frees the owned memory on destruction
-	 */
-	~rmm_unique_ptr_base() {
-		RMM_FREE(ptr, 0);
+	const auto error = RMM_ALLOC(&ptr, sizeof(T), 0);
+	if(error != RMM_SUCCESS) {
+		cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
 	}
 
-	/**
-	 * @brief Delete the copy assignment operator to prevent object copying
-	 */
-	rmm_unique_ptr_base& operator= (const rmm_unique_ptr_base &p) = delete;
+	auto deleter = [stream](T *p) {
+		RMM_FREE(p, stream);
+	};
 
-	/**
-	 * @brief Takes over the ownership of the memory. Leaves the passed
-	 * object in an empty state
-	 */
-	rmm_unique_ptr_base& operator= (rmm_unique_ptr_base &&p) noexcept {
-		ptr = p.ptr;
-		p.ptr = nullptr;
-		return *this;
+	return { ptr, deleter };
+}
+
+// creates a unique pointer holding an array of objects
+template<typename T, std::enable_if_t<std::is_array<T>::value, int> = 0>
+unique_ptr<T> make_unique(size_t size, cudaStream_t stream) {
+	typedef std::remove_extent_t<T> Elem;
+
+	Elem* ptr = nullptr;
+	const auto error = RMM_ALLOC(&ptr, sizeof(Elem)*size, 0);
+	if(error != RMM_SUCCESS) {
+		cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
 	}
 
-	/**
-	 * @brief Delete the copy constructor to prevent object copying
-	 */
-	rmm_unique_ptr_base(rmm_unique_ptr_base &p) = delete;
+	auto deleter = [stream](Elem *p) {
+		RMM_FREE(p, stream);
+	};
 
-	/**
-	 * @brief Takes over the ownership of the memory. Leaves the passed
-	 * object in an empty state
-	 */
-	rmm_unique_ptr_base(rmm_unique_ptr_base &&p) noexcept {
-		ptr = p.ptr;
-		p.ptr = nullptr;
-	}
+	return { ptr, deleter };
+}
 
-	/**
-	 * @brief Getter method for the internal pointer
-	 */
-	T* get() noexcept {
-		return ptr;
-	}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Smart pointer class for a single element RMM allocation
- *---------------------------------------------------------------------------**/
-template <class T>
-class rmm_unique_ptr: public rmm_unique_ptr_base<T> {
-public:
-	/**
-	 * @brief Allocates a single element of the given type.
-	 * 
-	 * Throws if allocation fails.
-	 */
-	rmm_unique_ptr() {
-		const auto error = RMM_ALLOC(&this->ptr, sizeof(T), 0);
-		if(error != RMM_SUCCESS) {
-			cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
-		}
-	}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Smart pointer class for an RMM allocated device array
- *---------------------------------------------------------------------------**/
-template <class T>
-class rmm_unique_ptr<T[]>: public rmm_unique_ptr_base<T> {
-public:
-	/**
-	 * @brief Create an empty object - does not allocate any memory
-	 */
-	rmm_unique_ptr() = default;
-
-	/**
-	 * @brief Allocates an array of cnt elements
-	 * 
-	 * Throws if allocation fails.
-	 */
-	explicit rmm_unique_ptr(size_t cnt) {
-		resize(cnt);
-	}
-	
-	/**
-	 * @brief Resize the owned array
-	 * 
-	 * Does not retain the values in the owner memory.
-	 * Throws if allocation fails.
-	 */
-	void resize(size_t cnt) {
-		RMM_FREE(this->ptr, 0);
-
-		if (cnt != 0) {
-			const auto error = RMM_ALLOC(&this->ptr, sizeof(T)*cnt, 0);
-			if(error != RMM_SUCCESS) {
-				cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
-			}
-		}
-		else {
-			this->ptr = nullptr;
-		}
-	}
-};
+}  // namespace rmm

@@ -70,8 +70,8 @@ using std::unique_ptr;
  * @brief Struct used for internal parsing state
  *---------------------------------------------------------------------------**/
 typedef struct raw_csv_ {
-    rmm_unique_ptr<char[]>		data;		// on-device: the raw unprocessed CSV data - loaded as a large char * array
-    rmm_unique_ptr<uint64_t[]>	recStart;	// on-device: Starting position of the records.
+    rmm::unique_ptr<char[]>		data;		// on-device: the raw unprocessed CSV data - loaded as a large char * array
+    rmm::unique_ptr<uint64_t[]>	recStart;	// on-device: Starting position of the records.
 
     ParseOptions        opts;			// options to control parsing behavior
 
@@ -84,7 +84,7 @@ typedef struct raw_csv_ {
     vector<gdf_dtype>	dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
     vector<string>		col_names;		// host: array of column names
     unique_ptr<bool[]>	h_parseCol;		// host: array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
-    rmm_unique_ptr<bool[]> d_parseCol;	// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
+    rmm::unique_ptr<bool[]> d_parseCol;	// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
 
     long        byte_range_offset;  // offset into the data to start parsing
     long        byte_range_size;    // length of the data of interest to parse
@@ -329,7 +329,7 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 	const bool last_line_terminated = (h_data[h_size - 1] == raw_csv->opts.terminator);
 	// If the last line is not terminated, allocate space for the EOF entry (added later)
 	const gdf_size_type record_start_count = raw_csv->num_records + (last_line_terminated ? 0 : 1);
-	raw_csv->recStart = rmm_unique_ptr<uint64_t[]>(record_start_count);
+	raw_csv->recStart = rmm::make_unique<uint64_t[]>(record_start_count, 0);
 
 	auto* find_result_ptr = raw_csv->recStart.get();
 	if (raw_csv->byte_range_offset == 0) {
@@ -609,7 +609,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
 		raw_csv.h_parseCol = std::make_unique<bool[]>(h_num_cols);
-		raw_csv.d_parseCol = rmm_unique_ptr<bool[]>(h_num_cols);
+		raw_csv.d_parseCol = rmm::make_unique<bool[]>(h_num_cols, 0);
 		for (int i = 0; i<h_num_cols; i++)
 			raw_csv.h_parseCol[i]=true;		
 		// Rename empty column names to "Unnamed: col_index"
@@ -657,7 +657,7 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else {
 		raw_csv.h_parseCol = std::make_unique<bool[]>(args->num_cols);
-		raw_csv.d_parseCol = rmm_unique_ptr<bool[]>(args->num_cols);
+		raw_csv.d_parseCol = rmm::make_unique<bool[]>(args->num_cols, 0);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
 			raw_csv.h_parseCol[i]=true;
@@ -708,7 +708,7 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 
 		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-		rmm_unique_ptr <column_data_t[]> d_ColumnData(raw_csv.num_active_cols);
+		auto d_ColumnData = rmm::make_unique<column_data_t[]>(raw_csv.num_active_cols, 0);
 
 		CUDA_TRY(cudaMemset(d_ColumnData.get(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
 
@@ -778,10 +778,10 @@ gdf_error read_csv(csv_read_arg *args)
 	vector<void*> h_data(raw_csv.num_active_cols);
 	vector<gdf_valid_type*> h_valid(raw_csv.num_active_cols);
 
-	rmm_unique_ptr<void*[]> d_data(raw_csv.num_active_cols);
-	rmm_unique_ptr<gdf_valid_type*[]> d_valid(raw_csv.num_active_cols);
-	rmm_unique_ptr<unsigned long long[]> d_valid_count(raw_csv.num_active_cols);
-	rmm_unique_ptr<gdf_dtype[]> d_dtypes(raw_csv.num_active_cols);
+	auto d_data = rmm::make_unique<void*[]>(raw_csv.num_active_cols, 0);
+	auto d_valid = rmm::make_unique<gdf_valid_type*[]>(raw_csv.num_active_cols, 0);
+	auto d_valid_count = rmm::make_unique<unsigned long long[]>(raw_csv.num_active_cols, 0);
+	auto d_dtypes = rmm::make_unique<gdf_dtype[]>(raw_csv.num_active_cols, 0);
 
 	CUDA_TRY(cudaMemsetAsync(d_valid_count.get(), 0, sizeof(unsigned long long) * raw_csv.num_active_cols));
 
@@ -791,14 +791,16 @@ gdf_error read_csv(csv_read_arg *args)
 			str_col_cnt++;
 	}
 
-	rmm_unique_ptr<string_pair*[]> d_str_cols;
-	vector<rmm_unique_ptr<string_pair[]>> h_str_cols(str_col_cnt);
+	rmm::unique_ptr<string_pair*[]> d_str_cols;
+	vector<rmm::unique_ptr<string_pair[]>> h_str_cols_owner(str_col_cnt);
+	vector<string_pair*> h_str_cols(str_col_cnt);
 
 	if (str_col_cnt > 0 ) {
-		d_str_cols = rmm_unique_ptr<string_pair*[]>(str_col_cnt);
+		d_str_cols = rmm::make_unique<string_pair*[]>(str_col_cnt, 0);
 
-		for (auto& str_col: h_str_cols) {
-			str_col = rmm_unique_ptr<string_pair[]>(raw_csv.num_records);
+		for (size_t col = 0; col < h_str_cols.size(); ++col) {
+			h_str_cols_owner[col] = rmm::make_unique<string_pair[]>(raw_csv.num_records, 0);
+			h_str_cols[col] = h_str_cols_owner[col].get();
 		}
 
 		CUDA_TRY(cudaMemcpy(d_str_cols.get(), h_str_cols.data(), sizeof(string_pair *) * str_col_cnt, cudaMemcpyHostToDevice));
@@ -848,9 +850,9 @@ gdf_error read_csv(csv_read_arg *args)
 				continue;
 
 			unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_col(
-				NVStrings::create_from_index(h_str_cols[str_cols_idx].get(), size_t(raw_csv.num_records)), 
+				NVStrings::create_from_index(h_str_cols[str_cols_idx], size_t(raw_csv.num_records)), 
 				&NVStrings::destroy);
-			h_str_cols[str_cols_idx].resize(0);
+			//h_str_cols[str_cols_idx].reset();
 
 			if ((raw_csv.opts.quotechar != '\0') && (raw_csv.opts.doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
@@ -1072,13 +1074,13 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
   raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
 
   // Resize and upload the rows of interest
-  raw_csv->recStart.resize(raw_csv->num_records);
+  raw_csv->recStart = rmm::make_unique<uint64_t[]>(raw_csv->num_records, 0);
   CUDA_TRY(cudaMemcpy(raw_csv->recStart.get(), h_rec_starts.data(),
                       sizeof(uint64_t) * raw_csv->num_records,
                       cudaMemcpyDefault));
 
   // Upload the raw data that is within the rows of interest
-  raw_csv->data = rmm_unique_ptr<char[]>(raw_csv->num_bytes);
+  raw_csv->data = rmm::make_unique<char[]>(raw_csv->num_bytes, 0);
   CUDA_TRY(cudaMemcpy(raw_csv->data.get(), h_uncomp_data + start_offset,
                       raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
