@@ -14,26 +14,27 @@
  * limitations under the License.
  */
 
-/*
- * API
- *
- * gdf_error read_csv(csv_read_arg *args);
- *
- */
 #pragma once
 
-  /*
-   * Enumerator for the supported forms of the input CSV file
-   */
-typedef enum 
-{
-  FILE_PATH,								///< Indicates that the input is specified with a file path
-  HOST_BUFFER								///< Indicates that the input is passed as a buffer in host memory
-} gdf_csv_input_form;
+/*
+ * @brief Enumeration of supported input types for cudf reader interfaces
+ */
+typedef enum {
+  FILE_PATH,        ///< Source is specified as a file path
+  HOST_BUFFER,      ///< Source is specified as a buffer in host memory
+} gdf_input_type;
 
-  /*
-   * Enumerator describing the qoutation behavior for file readers/writers
-   */
+/*
+ * @brief Enumeration of supported input types for CSV reader
+ *
+ * TODO: Remove and use gdf_input_type directly. This typedef is to reduce the
+ * initial changes for Parquet review by not changing/including any CSV code.
+ */
+typedef gdf_input_type gdf_csv_input_form;
+
+/*
+ * @brief Enumeration of quoting behavior for CSV readers/writers
+ */
 typedef enum 
 {
   QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
@@ -49,6 +50,14 @@ typedef enum
  * Input parameters are all stored in host memory. The output dataframe is in 
  * the device memory.
  *
+ * Parameters in PANDAS that are unavailable in cudf:
+ *   squeeze          - data is always returned as a gdf_column array
+ *   engine           - this is the only engine
+ *   verbose
+ *   keep_date_col    - will not maintain raw data
+ *   date_parser      - there is only this parser
+ *   float_precision  - there is only one converter that will cover all specified values
+ *   dialect          - not used
  *---------------------------------------------------------------------------**/
 typedef struct {
 
@@ -127,19 +136,30 @@ typedef struct {
   size_t        byte_range_offset;          ///< offset of the byte range to read. 
   size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
-
 } csv_read_arg;
 
 
-/*
- * NOT USED
- *
- * squeeze          - data is always returned as a gdf_column array
- * engine           - this is the only engine
- * verbose
- * keep_date_col    - will not maintain raw data
- * date_parser      - there is only this parser
- * float_precision  - there is only one converter that will cover all specified values
- * dialect          - not used
- *
- */
+/**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_parquet interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+  int           *index_col;                 ///< Out: If available, column index to use as row labels
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  const char    **use_cols;                 ///< In: Columns of interest. Only these columns will be parsed and returned.
+  int           use_cols_len;               ///< In: Number of columns
+
+} pq_read_arg;

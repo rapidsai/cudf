@@ -487,6 +487,34 @@ class Series(object):
 
     __div__ = __truediv__
 
+    def _bitwise_binop(self, other, op):
+        if (np.issubdtype(self.dtype.type, np.integer) and
+                np.issubdtype(other.dtype.type, np.integer)):
+            return self._binaryop(other, op)
+        else:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+    def __and__(self, other):
+        """Performs vectorized bitwise and (&) on corresponding elements of two
+        series.
+        """
+        return self._bitwise_binop(other, 'and')
+
+    def __or__(self, other):
+        """Performs vectorized bitwise or (|) on corresponding elements of two
+        series.
+        """
+        return self._bitwise_binop(other, 'or')
+
+    def __xor__(self, other):
+        """Performs vectorized bitwise xor (^) on corresponding elements of two
+        series.
+        """
+        return self._bitwise_binop(other, 'xor')
+
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
