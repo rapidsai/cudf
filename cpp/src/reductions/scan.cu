@@ -12,8 +12,6 @@
 
 namespace { //anonymous
 
-static constexpr int copy_replace_nulls_blocksize = 1024;
-
     template <class T>
     __global__
         void gpu_copy_and_replace_nulls(
@@ -48,13 +46,13 @@ static constexpr int copy_replace_nulls_blocksize = 1024;
             const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity, cudaStream_t stream)
     {
-        int blocksize = (size < copy_replace_nulls_blocksize ?
-            size : copy_replace_nulls_blocksize);
-        int gridsize = (size + copy_replace_nulls_blocksize - 1) /
-            copy_replace_nulls_blocksize;
+        int blockSize=0, minGridSize, gridSize;
+        CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(
+            &minGridSize, &blockSize, gpu_copy_and_replace_nulls<T>, 0, 0) );
+        gridSize = (size + blockSize - 1) / blockSize; 
 
         // launch kernel
-        gpu_copy_and_replace_nulls << <gridsize, blocksize, 0, stream >> > (
+        gpu_copy_and_replace_nulls << <gridSize, blockSize, 0, stream >> > (
             data, mask, size, results, identity);
 
         CUDA_CHECK_LAST();
