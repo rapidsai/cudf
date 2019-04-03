@@ -98,7 +98,8 @@ gdf_column apply_boolean_mask(gdf_column const *input,
     void *data = nullptr;
     gdf_valid_type *valid = nullptr;
     RMM_ALLOC(&data, output_size * column_byte_width, 0);
-    RMM_ALLOC(&valid, gdf_valid_allocation_size(output_size*column_byte_width), 0);
+    if (input->valid != nullptr)
+      RMM_ALLOC(&valid, gdf_valid_allocation_size(output_size*column_byte_width), 0);
 
     gdf_column* outputs[1] = {&output};
     CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(outputs[0], data, valid,
