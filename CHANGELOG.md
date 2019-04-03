@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #982 Implement gdf_group_by_without_aggregations and gdf_unique_indices functions
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
