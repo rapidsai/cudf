@@ -78,13 +78,13 @@ struct GroupByCountDTest : public GdfTest
     key_column    = key_column_list;
     value_column = value_column_list;
   
-    auto even_bits_null = [](auto row) { return (row % 2); };
+    // auto even_bits_null = [](auto row) { return row > 5; };
 
-    gdf_key_column    = std::make_unique<cudf::test::column_wrapper<T>>(key_column, even_bits_null);
-    gdf_value_column  = std::make_unique<cudf::test::column_wrapper<T>>(value_column, even_bits_null);
+    gdf_key_column    = std::make_unique<cudf::test::column_wrapper<T>>(key_column);
+    gdf_value_column  = std::make_unique<cudf::test::column_wrapper<T>>(value_column);
     
-    gdf_output_key_column = std::make_unique<cudf::test::column_wrapper<T>>(key_column, even_bits_null);
-    gdf_output_val_column = std::make_unique<cudf::test::column_wrapper<T>>(value_column, even_bits_null);
+    gdf_output_key_column = std::make_unique<cudf::test::column_wrapper<T>>(key_column);
+    gdf_output_val_column = std::make_unique<cudf::test::column_wrapper<T>>(value_column);
 
     gdf_raw_key_column = gdf_key_column->get();
     gdf_raw_value_column = gdf_value_column->get();
@@ -144,7 +144,7 @@ struct GroupByCountDTest : public GdfTest
 		ctxt.flag_method = GDF_HASH;
 		ctxt.flag_sort_result = 1;
   
-    gdf_agg_op op{GDF_SUM};
+    gdf_agg_op op{GDF_AVG};
     gdf_error status  = gdf_group_by_sort(group_by_input_key,
                                     num_columns,
                                     &group_by_input_value,
@@ -175,13 +175,13 @@ struct GroupByCountDTest : public GdfTest
     std::tie(host_val_values, host_val_bitmask) = gdf_output_val_column->to_host();
 
     if(print){
+      std::cout << "keys:\n";
       gdf_output_key_column->print();
-      print_vector(host_key_values);
-      std::cout << "\n\n";
+      // print_vector(host_key_values);
       
+      std::cout << "values:\n";
       gdf_output_val_column->print();
-      print_vector(host_val_values);
-      std::cout << "\n";
+      // print_vector(host_val_values);
     }
 
     return host_key_values;
@@ -197,7 +197,8 @@ TYPED_TEST_CASE(GroupByCountDTest, TestingTypes);
 // The input sizes are small and has a large amount of debug printing enabled.
 TYPED_TEST(GroupByCountDTest, Sample)
 {
-  this->create_input({0, 1, 2, 3, 5, 14, 15, 16, 17, 24}, {0, 1, 1, 1, 0, 0, 0, 0, 1, 1},  true);
+  this->create_input({0, 1, 2, 0, 1, 2, 15, 16, 15, 16}, 
+                      {1, 1, 1, 1, 1, 1, 2, 2, 6, 6},  true);
 
   auto reference_result = this->compute_reference_solution(true);
   auto gdf_result = this->compute_gdf_result(true);

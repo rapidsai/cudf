@@ -115,8 +115,9 @@ gdf_error typed_groupby(size_type num_groupby_cols,
 
   //FIXME: switch here!! with valid and without valids
   if (ctxt->flag_groupby_include_nulls == 1 || !group_by_keys_contain_nulls){  // SQL style wihtout NULLS
-
-    if (typeid(op_type) == typeid(count_distinct_op<aggregation_type>)) { // todo: check when the keys are the same as value
+    auto is_count_distinct_op = typeid(op_type) == typeid(count_distinct_op<aggregation_type>);
+    auto is_count_op =  typeid(op_type) == typeid(count_op<aggregation_type>);
+    if (is_count_distinct_op) { // todo: check when the keys are the same as value
       in_agg_copy = clone(in_aggregation_column);
       orderby_cols_vect.push_back(in_agg_copy);  // NOTE: add another column, because for count_distinct we want to sort all including the agg_col
       auto in_groupby_columns_with_agg = orderby_cols_vect.data();
@@ -138,7 +139,27 @@ gdf_error typed_groupby(size_type num_groupby_cols,
                                   &output_size, 
                                   op_type(),
                                   ctxt);
-    } else {
+    } else if (is_count_op) {
+      auto in_groupby_columns_with_agg = orderby_cols_vect.data();
+      // run order by and get new sort indexes (sort all columns including agg_in)
+      status = gdf_order_by(in_groupby_columns_with_agg,             //input columns
+                              nullptr,
+                              num_groupby_cols,            //number of columns in the first parameter (e.g. number of columsn to sort by)
+                              &sorted_indices_col,             //a gdf_column that is pre allocated for storing sorted indices
+                              ctxt);
+
+       gdf_error_code = GroupbySortCount(num_groupby_cols,
+                                  sorted_indices.data().get(), 
+                                  in_groupby_columns,
+                                  in_groupby_columns_with_agg,
+                                  in_agg_col, 
+                                  out_groupby_columns, 
+                                  out_agg_col, 
+                                  &output_size, 
+                                  op_type(),
+                                  ctxt); 
+    } 
+    else {
       // run order by and get new sort indexes
       status = gdf_order_by(&orderby_cols_vect[0],             //input columns
                               nullptr,
@@ -161,7 +182,28 @@ gdf_error typed_groupby(size_type num_groupby_cols,
   } else {
     // TODO< null version 
     if (typeid(op_type) == typeid(count_distinct_op<aggregation_type>)) { // todo: check when the keys are the same as value
-      
+      in_agg_copy = clone(in_aggregation_column);
+      orderby_cols_vect.push_back(in_agg_copy);  // NOTE: add another column, because for count_distinct we want to sort all including the agg_col
+      auto in_groupby_columns_with_agg = orderby_cols_vect.data();
+
+      // run order by and get new sort indexes (sort all columns including agg_in)
+      status = gdf_order_by(in_groupby_columns_with_agg,             //input columns
+                              nullptr,
+                              num_groupby_cols + 1,            //number of columns in the first parameter (e.g. number of columsn to sort by)
+                              &sorted_indices_col,             //a gdf_column that is pre allocated for storing sorted indices
+                              ctxt);
+
+       gdf_error_code = GroupbySortCountDistinctWithNulls<aggregation_type>(
+                                  num_groupby_cols,
+                                  sorted_indices.data().get(), 
+                                  in_groupby_columns,
+                                  in_groupby_columns_with_agg,
+                                  in_aggregation_column, 
+                                  out_groupby_columns, 
+                                  out_aggregation_column, 
+                                  &output_size, 
+                                  op_type(),
+                                  ctxt);
     } else {
       // run order by and get new sort indexes
       status = gdf_order_by(&orderby_cols_vect[0],             //input columns
@@ -172,7 +214,6 @@ gdf_error typed_groupby(size_type num_groupby_cols,
 
       if (status != GDF_SUCCESS) return status;
       
-      int8_t** valids;
       gdf_error_code = GroupbySortWithNulls<aggregation_type>(num_groupby_cols,
                                     sorted_indices.data().get(), 
                                     in_groupby_columns, 
@@ -478,35 +519,37 @@ gdf_error multi_pass_avg(int ncols,
   const size_t output_size = out_aggregation_column->size;
 
   // Make sure the result is sorted so the output is in identical order
-  bool ctxt = true;
-
+  gdf_context ctxt;
+  ctxt.flag_distinct = false;
+  ctxt.flag_method = GDF_SORT;
+  ctxt.flag_sort_result = 1;
+  
   // FIXME Currently, Sort based groupby assumes the type of the input aggregation column and 
   // the output aggregation column are the same. This doesn't work for COUNT
 
-  //@alex, FIXME todo avg at the end
   // // Compute the counts for each key 
-  // gdf_column count_output = create_gdf_column<size_t>(output_size);
-  // gdf_group_by_sort<count_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &count_output, ctxt);
+  gdf_column count_output = create_gdf_column<size_t>(output_size);
+  gdf_group_by_sort<count_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &count_output, &ctxt);
 
   // // Compute the sum for each key. Should be okay to reuse the groupby column output
-  // gdf_column sum_output = create_gdf_column<sum_type>(output_size);
-  // gdf_group_by_sort<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, ctxt); 
+  gdf_column sum_output = create_gdf_column<sum_type>(output_size);
+  gdf_group_by_sort<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, &ctxt); 
 
   // // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
-  // const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
-  // switch(gdf_output_type){
-  //   case GDF_INT8:    { compute_average<sum_type, int8_t>( out_aggregation_column, count_output, sum_output); break; }
-  //   case GDF_INT16:   { compute_average<sum_type, int16_t>( out_aggregation_column, count_output, sum_output); break; }
-  //   case GDF_INT32:   { compute_average<sum_type, int32_t>( out_aggregation_column, count_output, sum_output); break; }
-  //   case GDF_INT64:   { compute_average<sum_type, int64_t>( out_aggregation_column, count_output, sum_output); break; }
-  //   case GDF_FLOAT32: { compute_average<sum_type, float>( out_aggregation_column, count_output, sum_output); break; }
-  //   case GDF_FLOAT64: { compute_average<sum_type, double>( out_aggregation_column, count_output, sum_output); break; }
-  //   default: return GDF_UNSUPPORTED_DTYPE;
-  // }
+  const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
+  switch(gdf_output_type){
+    case GDF_INT8:    { compute_average<sum_type, int8_t>( out_aggregation_column, count_output, sum_output); break; }
+    case GDF_INT16:   { compute_average<sum_type, int16_t>( out_aggregation_column, count_output, sum_output); break; }
+    case GDF_INT32:   { compute_average<sum_type, int32_t>( out_aggregation_column, count_output, sum_output); break; }
+    case GDF_INT64:   { compute_average<sum_type, int64_t>( out_aggregation_column, count_output, sum_output); break; }
+    case GDF_FLOAT32: { compute_average<sum_type, float>( out_aggregation_column, count_output, sum_output); break; }
+    case GDF_FLOAT64: { compute_average<sum_type, double>( out_aggregation_column, count_output, sum_output); break; }
+    default: return GDF_UNSUPPORTED_DTYPE;
+  }
 
   // Free intermediate storage
-  // RMM_TRY( RMM_FREE(count_output.data, 0) );
-  // RMM_TRY( RMM_FREE(sum_output.data, 0) );
+  RMM_TRY( RMM_FREE(count_output.data, 0) );
+  RMM_TRY( RMM_FREE(sum_output.data, 0) );
   
   return GDF_SUCCESS;
 }
