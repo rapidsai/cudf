@@ -30,24 +30,6 @@
 }
 #endif
 
-// TODO: can we do this more efficiently?
-__inline__ __device__ int8_t atomicCAS(int8_t* address, int8_t compare, int8_t val)
-{
-  int32_t *base_address = (int32_t*)((char*)address - ((size_t)address & 3));
-  int32_t int_val = (int32_t)val << (((size_t)address & 3) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 3) * 8);
-  return (int8_t)atomicCAS(base_address, int_comp, int_val);
-}
-
-// TODO: can we do this more efficiently?
-__inline__ __device__ int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
-{
-  int32_t *base_address = (int32_t*)((char*)address - ((size_t)address & 2));
-  int32_t int_val = (int32_t)val << (((size_t)address & 2) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 2) * 8);
-  return (int16_t)atomicCAS(base_address, int_comp, int_val);
-}
-
 __inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
 {
   return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
