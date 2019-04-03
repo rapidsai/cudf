@@ -135,14 +135,14 @@ cdef extern from "cudf.h" nogil:
       GDF_REDUCTION_SUM = 0,
       GDF_REDUCTION_MIN,
       GDF_REDUCTION_MAX,
-      GDF_REDUCTION_PRODUCTION,
+      GDF_REDUCTION_PRODUCT,
       GDF_REDUCTION_SUMOFSQUARES,
 
     ctypedef enum gdf_scan_op:
       GDF_SCAN_SUM = 0,
       GDF_SCAN_MIN,
       GDF_SCAN_MAX,
-      GDF_SCAN_PRODUCTION,
+      GDF_SCAN_PRODUCT,
 
     ctypedef enum gdf_color:
       GDF_GREEN = 0,
@@ -409,8 +409,6 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef void gdf_scan(gdf_column *inp, gdf_column *out, gdf_scan_op op, bool inclusive) except +
-
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
     cdef gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output)
@@ -634,8 +632,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
-
-    cdef gdf_scalar gdf_reduction(gdf_column *inp, gdf_reduction_op op, gdf_dtype output_dtype) except +
     
     cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
     cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
@@ -751,4 +747,11 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
+
+
+cdef extern from "reduction.hpp" namespace "cudf" nogil:
+
+    cdef gdf_scalar gdf_reduction(gdf_column *inp, gdf_reduction_op op, gdf_dtype output_dtype) except +
+    cdef void gdf_scan(gdf_column *inp, gdf_column *out, gdf_scan_op op, bool inclusive) except +
+
     

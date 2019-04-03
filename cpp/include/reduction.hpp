@@ -18,7 +18,6 @@
 #define REDUCTION_HPP
 
 #include "cudf.h"
-#include "types.hpp"
 
 namespace cudf {
 /** --------------------------------------------------------------------------*

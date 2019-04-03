@@ -28,14 +28,14 @@ _REDUCTION_OP = {}
 _REDUCTION_OP['max'] = GDF_REDUCTION_MAX
 _REDUCTION_OP['min'] = GDF_REDUCTION_MIN
 _REDUCTION_OP['sum'] = GDF_REDUCTION_SUM
-_REDUCTION_OP['product'] = GDF_REDUCTION_PRODUCTION
+_REDUCTION_OP['product'] = GDF_REDUCTION_PRODUCT
 _REDUCTION_OP['sum_of_squares'] = GDF_REDUCTION_SUMOFSQUARES
 
 _SCAN_OP = {}
 _SCAN_OP['sum'] = GDF_SCAN_SUM
 _SCAN_OP['min'] = GDF_SCAN_MIN
 _SCAN_OP['max'] = GDF_SCAN_MAX
-_SCAN_OP['product'] = GDF_SCAN_PRODUCTION
+_SCAN_OP['product'] = GDF_SCAN_PRODUCT
 
 cdef get_scalar_value(gdf_scalar scalar):
     return {
@@ -66,7 +66,6 @@ def apply_reduce(reduction_op, col):
         if reduction_op == 'product' and pandas_version >= (0, 22):
             return col.dtype.type(1)
         return np.nan
-
 
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
