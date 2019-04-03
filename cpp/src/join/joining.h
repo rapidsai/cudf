@@ -94,6 +94,10 @@ gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
                     gdf_column * const output_r,
                     bool flip_indices = false)
 {
+  if ((leftcol->null_count != 0) || (rightcol->null_count != 0)) {
+      return GDF_VALIDITY_UNSUPPORTED;
+  }
+
   compute_sort_join<join_type, output_index_type> join_call;
   return cudf::type_dispatcher(
           leftcol->dtype,
