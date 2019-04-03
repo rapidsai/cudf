@@ -191,8 +191,8 @@ def query_execute(df, expr, callenv):
     expr : str
         boolean expression
     callenv : dict
-        Contains keys 'locals' and 'globals' which are both dict.
-        They represent the local and global dictionaries of the caller.
+        Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
+        They represent the arg, local and global dictionaries of the caller.
     """
     # compile
     compiled = query_compile(expr)
@@ -201,6 +201,7 @@ def query_execute(df, expr, callenv):
     envargs = []
     envdict = callenv['globals'].copy()
     envdict.update(callenv['locals'])
+    envdict.update(callenv['local_dict'])
     for name in compiled['refnames']:
         name = name[len(ENVREF_PREFIX):]
         try:

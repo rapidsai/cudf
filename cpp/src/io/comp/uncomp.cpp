@@ -364,7 +364,8 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
         {
             const bz2_file_header_s *fhdr = (const bz2_file_header_s *)raw;
             // Check for BZIP2 file signature "BZh1" to "BZh9"
-            if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' && fhdr->sig[3] >= '1' && fhdr->sig[3] <= '9')
+            if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
+                fhdr->blksz >= '1' && fhdr->blksz <= '9')
             {
                 strm_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
                 comp_data = raw;
@@ -373,7 +374,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
             }
         }
         if (strm_type != IO_UNCOMP_STREAM_TYPE_INFER)
-            break; // Fall through for INFER     
+            break; // Fall through for INFER
     default:
         // Unsupported format
         break;
