@@ -494,8 +494,8 @@ def test_dataframe_iloc(nelem):
 
 
 @pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="cudf columnar iloc not supported"
+    raises=AssertionError,
+    reason="Series.index are different"
 )
 def test_dataframe_iloc_tuple():
     gdf = DataFrame()
@@ -508,11 +508,11 @@ def test_dataframe_iloc_tuple():
     pdf['a'] = ha
     pdf['b'] = hb
 
-    def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'])
-        np.testing.assert_equal(g['b'].to_array(), p['b'])
+    # We don't support passing the column names into the index quite yet
+    got = gdf.iloc[1, [1]]
+    expect = pdf.iloc[1, [1]]
 
-    assert_col(gdf.iloc[1, 2], pdf.iloc[1, 2])
+    assert_eq(got, expect)
 
 
 @pytest.mark.xfail(
@@ -693,6 +693,25 @@ def test_dataframe_dtypes():
     df = DataFrame([(k, np.ones(10, dtype=v))
                     for k, v in dtypes.iteritems()])
     assert df.dtypes.equals(dtypes)
+
+
+def test_dataframe_add_col_to_object_dataframe():
+    # Test for adding column to an empty object dataframe
+    cols = ['a', 'b', 'c']
+    df = pd.DataFrame(columns=cols, dtype='str')
+
+    data = {k: v for (k, v) in zip(cols, [['a'] for _ in cols])}
+
+    gdf = DataFrame(data)
+    gdf = gdf[:0]
+
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['a'] = [1]
+    df['a'] = [10]
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['b'] = [1.0]
+    df['b'] = [10.0]
+    assert gdf.dtypes.equals(df.dtypes)
 
 
 def test_dataframe_dir_and_getattr():
@@ -1202,18 +1221,22 @@ def test_to_from_arrow_nulls(data_type):
         s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0]),
-        gs1.nullmask.to_array()
+        np.array(s1.buffers()[0])[0],
+        gs1.nullmask.to_array()[0]
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
     s2 = pa.array([None, None, None, None, None], type=data_type)
     gs2 = gd.Series.from_arrow(s2)
     assert isinstance(gs2, gd.Series)
+    # We have 64B padded buffers for nulls whereas Arrow returns a minimal
+    # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0]),
-        gs2.nullmask.to_array()
+        np.array(s2.buffers()[0])[0],
+        gs2.nullmask.to_array()[0]
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1456,6 +1479,17 @@ def test_binops_df(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_df(pdf, gdf, binop):
+    d = binop(pdf, pdf + 1)
+    g = binop(gdf, gdf + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
     operator.floordiv,
@@ -1474,6 +1508,17 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_series(pdf, gdf, binop):
+    d = binop(pdf.x, pdf.y + 1)
+    g = binop(gdf.x, gdf.y + 1)
     assert_eq(d, g)
 
 
@@ -1669,6 +1714,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     assert_eq(expect, got)
 
 
+@pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
     from numba import cuda
     import cudf
@@ -1891,10 +1937,16 @@ def test_reset_index(pdf, gdf, drop):
 def test_to_frame(pdf, gdf):
     assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    s = pd.Series([1, 2, 3])
-    g = gd.from_pandas(s)
+    name = "foo"
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
-    assert_eq(s, g)
+    name = False
+    gdf_new_name = gdf.x.to_frame(name=name)
+    pdf_new_name = pdf.x.to_frame(name=name)
+    assert_eq(gdf_new_name, pdf_new_name)
+    assert gdf_new_name.columns[0] is name
 
 
 def test_dataframe_empty_sort_index():
@@ -1959,10 +2011,23 @@ def test_select_dtype():
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=np.number))
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
     assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+    with pytest.raises(ValueError):
+        gdf.select_dtypes(exclude=np.number, include=np.number)
+
+
+def test_array_ufunc():
+    gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(np.sqrt(gdf), np.sqrt(pdf))
+    assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))

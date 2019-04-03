@@ -21,28 +21,33 @@ from libc.stdlib cimport calloc, malloc, free
 
 
 
-dtypes = {np.float64:    GDF_FLOAT64,
-          np.float32:    GDF_FLOAT32,
-          np.int64:      GDF_INT64,
-          np.int32:      GDF_INT32,
-          np.int16:      GDF_INT16,
-          np.int8:       GDF_INT8,
-          np.bool_:      GDF_INT8,
-          np.datetime64: GDF_DATE64}
+dtypes = {
+    np.float64:    GDF_FLOAT64,
+    np.float32:    GDF_FLOAT32,
+    np.int64:      GDF_INT64,
+    np.int32:      GDF_INT32,
+    np.int16:      GDF_INT16,
+    np.int8:       GDF_INT8,
+    np.bool_:      GDF_INT8,
+    np.datetime64: GDF_DATE64,
+    np.object_:    GDF_STRING_CATEGORY,
+    np.str_:       GDF_STRING_CATEGORY,
+}
 
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
     return np.dtype({
-         GDF_FLOAT64: np.float64,
-         GDF_FLOAT32: np.float32,
-         GDF_INT64: np.int64,
-         GDF_INT32: np.int32,
-         GDF_INT16: np.int16,
-         GDF_INT8: np.int8,
-         GDF_DATE64: np.datetime64,
-         N_GDF_TYPES: np.int32,
-         GDF_CATEGORY: np.int32,
+         GDF_FLOAT64:           np.float64,
+         GDF_FLOAT32:           np.float32,
+         GDF_INT64:             np.int64,
+         GDF_INT32:             np.int32,
+         GDF_INT16:             np.int16,
+         GDF_INT8:              np.int8,
+         GDF_DATE64:            np.datetime64,
+         N_GDF_TYPES:           np.int32,
+         GDF_CATEGORY:          np.int32,
+         GDF_STRING_CATEGORY:   np.object_,
      }[dtype])
 
 def check_gdf_compatibility(col):
@@ -84,26 +89,39 @@ cdef gdf_column* column_view_from_column(col):
     cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
+    cdef uintptr_t category
 
-    if len(col) > 0:
-        data_ptr = get_column_data_ptr(col)
+    if pd.api.types.is_categorical_dtype(col.dtype):
+        g_dtype = dtypes[col.data.dtype.type]
     else:
-        data_ptr = 0
+        g_dtype = dtypes[col.dtype.type]
+
+    if g_dtype == GDF_STRING_CATEGORY:
+        category = col.nvcategory.get_cpointer()
+        if len(col) > 0:
+            data_ptr = get_ctype_ptr(col.indices.mem)
+        else:
+            data_ptr = 0
+    else:
+        category = 0
+
+        if len(col) > 0:
+            data_ptr = get_column_data_ptr(col)
+        else:
+            data_ptr = 0
 
     if col._mask is not None and col.null_count > 0:
         valid_ptr = get_column_valid_ptr(col)
     else:
         valid_ptr = 0
 
-    if pd.api.types.is_categorical_dtype(col.dtype):
-        g_dtype = GDF_INT8
-    else:
-        g_dtype = dtypes[col.dtype.type]
-
     cdef gdf_dtype c_dtype = g_dtype
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
-    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(time_unit = TIME_UNIT_NONE)
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
+        time_unit = TIME_UNIT_NONE,
+        category = <void*> category
+    )
 
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,
@@ -138,8 +156,6 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
 
-
-
     if data is not None:
         data_ptr = get_ctype_ptr(data)
     else:
@@ -152,11 +168,13 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
 
     if dtype is not None:
         if pd.api.types.is_categorical_dtype(dtype):
-            g_dtype = GDF_INT8
+            if data is None:
+                g_dtype = dtypes[np.int8]
+            else:
+                g_dtype = dtypes[data.dtype.type]
         elif dtype != np.bool_:
             g_dtype = dtypes[dtype.type]
         else:
-            print("HITHER ::::::")
             g_dtype = dtypes[dtype]
     else:
         g_dtype = dtypes[data.dtype]
@@ -167,7 +185,10 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef gdf_dtype c_dtype = g_dtype
     cdef gdf_size_type c_size = size
     cdef gdf_size_type c_null_count = null_count
-    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(time_unit = TIME_UNIT_NONE)
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
+        time_unit = TIME_UNIT_NONE,
+        category = <void*> 0
+    )
     
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,

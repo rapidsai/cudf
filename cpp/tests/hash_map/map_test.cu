@@ -14,23 +14,26 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <hash/concurrent_unordered_map.cuh>
+#include <groupby/aggregation_operations.hpp>
+
+#include <cudf.h>
+
+#include <thrust/device_vector.h>
+
+#include <rmm/thrust_rmm_allocator.h>
+
+#include <gtest/gtest.h>
+
+
 #include <iostream>
 #include <vector>
 #include <unordered_map>
 #include <random>
 
-#include <thrust/device_vector.h>
-
-#include "gtest/gtest.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <hash/concurrent_unordered_map.cuh>
-#include <groupby/aggregation_operations.hpp>
-
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cstdlib>
 
 
 // This is necessary to do a parametrized typed-test over multiple template arguments

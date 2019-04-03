@@ -1,10 +1,12 @@
 #ifndef GDF_UTILS_H
 #define GDF_UTILS_H
 
+#include <utilities/error_utils.hpp>
+#include <cudf.h>
+
 #include <cuda_runtime_api.h>
+
 #include <vector>
-#include "cudf.h"
-#include "error_utils.hpp"
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
@@ -26,52 +28,6 @@ inline gdf_error set_null_count(gdf_column* col) {
   col->null_count = col->size - valid_count;
 
   return GDF_SUCCESS;
-}
-
-CUDA_HOST_DEVICE_CALLABLE 
-bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
-	if ( valid )
-		return (valid[pos / GDF_VALID_BITSIZE] >> (pos % GDF_VALID_BITSIZE)) & 1;
-	else
-		return true;
-}
-
-/**
-  * Calculates the number of bytes used for a validity indicator pseudo-column for a given column's size.
-  *
-  * @node This function is different gdf_get_num_bytes_for_valids_allocation because it refers to bytes used as opposed to allocated
-  *
-  * @param[in] column_size the number of elements
-  * @return the number of bytes necessary to make available for the validity indicator pseudo-column
-  */
-CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type column_size) { 
-	static_assert(sizeof(gdf_valid_type) == sizeof(unsigned char),
-		"gdf_get_num_chars_bitmask assumed gdf_valid_type is unsigned char");
-	return (( column_size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
-}
-
-
-// Align on 4-byte boundaries in CUDF static 
-constexpr int32_t kCudfIpcAlignment = 4;
-
- //todo, enable arrow ipc utils, and remove this method 
-CUDA_HOST_DEVICE_CALLABLE
-static gdf_size_type PaddedLength(int64_t nbytes, int32_t alignment = kCudfIpcAlignment) {   
-	return ((nbytes + alignment - 1) / alignment) * alignment; 
-}
-
-/**
-  * Calculates the number of bytes to allocate for a validity indicator pseudo-column for a given column's size.
-  *
-  * @note Note that this function assumes the valids need to be allocated to be aligned with a 4 byte boundary
-  *
-  * @param[in] column_size the number of elements
-  * @return the number of bytes necessary to allocate for the validity indicator pseudo-column
-  */
-CUDA_HOST_DEVICE_CALLABLE
-gdf_size_type gdf_get_num_bytes_for_valids_allocation(gdf_size_type column_size) { 
-	return PaddedLength(( column_size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);	
 }
 
 /* --------------------------------------------------------------------------*/

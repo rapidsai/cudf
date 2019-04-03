@@ -16,9 +16,10 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include <utilities/error_utils.hpp>
+#include "cudf.h"
 #include <algorithm>
 #include <cassert>
-#include "cudf.h"
 
 namespace cudf {
 
@@ -35,13 +36,13 @@ struct table {
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols)
       : columns{cols}, _num_columns{num_cols} {
-    assert(nullptr != cols[0]);
+    CUDF_EXPECTS(nullptr != cols[0], "Null input column");
 
-    gdf_size_type const num_rows{cols[0]->size};
+    this->_num_rows = cols[0]->size;
 
-    std::for_each(columns, columns + _num_columns, [num_rows](gdf_column* col) {
-      assert(nullptr != col);
-      assert(num_rows == col->size);
+    std::for_each(columns, columns + _num_columns, [this](gdf_column* col) {
+      CUDF_EXPECTS(nullptr != col, "Null input column");
+      CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
     });
   }
 
@@ -98,9 +99,16 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_size_type num_columns() const { return _num_columns; }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of rows in the table
+   *
+   *---------------------------------------------------------------------------**/
+  gdf_size_type num_rows() const { return _num_rows; }
+
  private:
-  gdf_column** columns;             /**< The set of gdf_columns*/
-  gdf_size_type const _num_columns; /**< The number of columns in the set */
+  gdf_column** columns;              ///< The set of gdf_columns
+  gdf_size_type const _num_columns;  ///< The number of columns in the set
+  gdf_size_type _num_rows;     ///< The number of elements in each column
 };
 
 }  // namespace cudf

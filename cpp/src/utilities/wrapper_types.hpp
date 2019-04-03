@@ -1,9 +1,10 @@
 #ifndef GDF_CPPTYPES_H
 #define GDF_CPPTYPES_H
 
-#include "cudf/types.h"
+#include <cudf/types.h>
 #include "cudf_utils.h"
-#include <iostream>
+
+#include <iosfwd>
 #include <type_traits>
 
 /* --------------------------------------------------------------------------*/
@@ -293,6 +294,8 @@ CUDA_HOST_DEVICE_CALLABLE
 } // namespace detail
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
+
+using nvstring_category = detail::wrapper<gdf_nvstring_category, GDF_STRING_CATEGORY>;
 
 using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
 

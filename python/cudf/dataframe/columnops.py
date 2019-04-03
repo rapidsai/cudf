@@ -10,6 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
@@ -65,15 +66,15 @@ class TypedColumnBase(Column):
 
     def _mimic_inplace(self, result, inplace=False):
         """
-        Used to mimic an inplace operation by copying data from the
-        result of an out-of-place operation.
+        If `inplace=True`, used to mimic an inplace operation
+        by replacing data in ``self`` with data in ``result``.
 
-        If ``inplace`` is ``True``, copy data from ``result`` to ``self``.
-        Otherwise, return ``result`` unchanged.
+        Otherwise, returns ``result`` unchanged.
         """
         if inplace:
             self._data = result._data
             self._mask = result._mask
+            self._null_count = result._null_count
         else:
             return result
 
@@ -155,8 +156,8 @@ def column_select_by_position(column, positions):
 
 
 def build_column(buffer, dtype, mask=None, categories=None):
-    from cudf.dataframe import numerical, categorical, datetime
-    if dtype == 'datetime64[ms]':
+    from cudf.dataframe import numerical, categorical, datetime, string
+    if np.dtype(dtype).type == np.datetime64:
         return datetime.DatetimeColumn(data=buffer,
                                        dtype=np.dtype(dtype),
                                        mask=mask)
@@ -166,6 +167,10 @@ def build_column(buffer, dtype, mask=None, categories=None):
                                              categories=categories,
                                              ordered=False,
                                              mask=mask)
+    elif np.dtype(dtype).type in (np.object_, np.str_):
+        if not isinstance(buffer, nvstrings.nvstrings):
+            raise TypeError
+        return string.StringColumn(data=buffer)
     else:
         return numerical.NumericalColumn(data=buffer,
                                          dtype=dtype,
@@ -194,17 +199,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
-    from . import numerical, categorical, datetime
+    from cudf.dataframe import numerical, categorical, datetime, string
     from cudf.dataframe.series import Series
     from cudf.dataframe.index import Index
 
     if isinstance(arbitrary, Column):
-        if not isinstance(arbitrary, TypedColumnBase):
-            # interpret as numeric
-            data = arbitrary.view(numerical.NumericalColumn,
-                                  dtype=arbitrary.dtype)
-        else:
-            data = arbitrary
+        categories = None
+        if hasattr(arbitrary, "categories"):
+            categories = arbitrary.categories
+        data = build_column(
+            arbitrary.data,
+            arbitrary.dtype,
+            mask=arbitrary.mask,
+            categories=categories
+        )
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
@@ -214,6 +222,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
+
+    elif isinstance(arbitrary, nvstrings.nvstrings):
+        data = string.StringColumn(data=arbitrary)
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
@@ -242,15 +253,32 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ('O', 'U'):
-            raise NotImplementedError("Strings are not yet supported")
+            data = as_column(pa.Array.from_pandas(arbitrary))
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            warnings.warn("Strings are not yet supported, so converting to "
-                          "categorical")
-            data = as_column(arbitrary.dictionary_encode())
+            count = len(arbitrary)
+            null_count = arbitrary.null_count
+
+            buffers = arbitrary.buffers()
+            # Buffer of actual strings values
+            if buffers[2] is not None:
+                sbuf = np.frombuffer(buffers[2], dtype='int8')
+            else:
+                sbuf = np.empty(0, dtype='int8')
+            # Buffer of offsets values
+            obuf = np.frombuffer(buffers[1], dtype='int32')
+            # Buffer of null bitmask
+            nbuf = None
+            if null_count > 0:
+                nbuf = np.frombuffer(buffers[0], dtype='int8')
+
+            data = as_column(
+                nvstrings.from_offsets(sbuf, obuf, count, nbuf=nbuf,
+                                       ncount=null_count)
+            )
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = dtype
             if (type(dtype) == str and dtype == 'empty') or dtype is None:
@@ -264,10 +292,18 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 else:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
-                    arbitrary = utils.scalar_broadcast_to(
-                        np.nan,
-                        (len(arbitrary),),
-                        dtype=new_dtype)
+                    if new_dtype == np.dtype("object"):
+                        arbitrary = utils.scalar_broadcast_to(
+                            None,
+                            (len(arbitrary),),
+                            dtype=new_dtype
+                        )
+                    else:
+                        arbitrary = utils.scalar_broadcast_to(
+                            np.nan,
+                            (len(arbitrary),),
+                            dtype=new_dtype
+                        )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
@@ -391,18 +427,20 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 np_type = None
-                if dtype is not None:
-                    if pd.api.types.is_categorical_dtype(dtype):
-                        data = as_column(
-                            pd.Series(arbitrary, dtype='category'),
-                            nan_as_null=nan_as_null
-                        )
+                if pd.api.types.is_categorical_dtype(dtype):
+                    data = as_column(
+                        pd.Series(arbitrary, dtype='category'),
+                        nan_as_null=nan_as_null
+                    )
+                else:
+                    if dtype is None:
+                        np_type = None
                     else:
                         np_type = np.dtype(dtype)
-                        data = as_column(
-                            np.array(arbitrary, dtype=np_type),
-                            nan_as_null=nan_as_null
-                        )
+                    data = as_column(
+                        np.array(arbitrary, dtype=np_type),
+                        nan_as_null=nan_as_null
+                    )
 
     return data
 

@@ -17,6 +17,23 @@
  */
 #pragma once
 
+#include <cudf/types.h>
+
+#include <stdint.h>
+#include <string>
+
+#ifndef CUDA_HOST_DEVICE_CALLABLE
+#ifdef __CUDACC__
+#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
+#define CUDA_DEVICE_CALLABLE __device__ inline
+#define CUDA_LAUNCHABLE __global__
+#else
+#define CUDA_HOST_DEVICE_CALLABLE inline
+#define CUDA_DEVICE_CALLABLE inline
+#define CUDA_LAUNCHABLE
+#endif
+#endif
+
 namespace gdf {
 namespace util {
 
@@ -24,8 +41,8 @@ static constexpr int ValidSize = 32;
 using ValidType = uint32_t;
 
 
-// Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
-//__host__ __device__ __forceinline__
+// Instead of this function, use gdf_valid_allocation_size from legacy_bitmask.hpp
+//CUDA_HOST_DEVICE_CALLABLE
 //  size_t
 //  valid_size(size_t column_length)
 //{
@@ -34,12 +51,12 @@ using ValidType = uint32_t;
 //}
 
 // Instead of this function, use gdf_is_valid from gdf/utils.h
-///__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
+///CUDA_HOST_DEVICE_CALLABLE bool get_bit(const gdf_valid_type* const bits, size_t i)
 ///{
 ///  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
 ///}
 
-__host__ __device__ __forceinline__
+CUDA_HOST_DEVICE_CALLABLE
   uint8_t
   byte_bitmask(size_t i)
 {
@@ -47,7 +64,7 @@ __host__ __device__ __forceinline__
   return kBitmask[i];
 }
 
-__host__ __device__ __forceinline__
+CUDA_HOST_DEVICE_CALLABLE
   uint8_t
   flipped_bitmask(size_t i)
 {
@@ -55,17 +72,17 @@ __host__ __device__ __forceinline__
   return kFlippedBitmask[i];
 }
 
-__host__ __device__ __forceinline__ void turn_bit_on(uint8_t* const bits, size_t i)
+CUDA_HOST_DEVICE_CALLABLE void turn_bit_on(uint8_t* const bits, size_t i)
 {
   bits[i / 8] |= byte_bitmask(i % 8);
 }
 
-__host__ __device__ __forceinline__ void turn_bit_off(uint8_t* const bits, size_t i)
+CUDA_HOST_DEVICE_CALLABLE void turn_bit_off(uint8_t* const bits, size_t i)
 {
   bits[i / 8] &= flipped_bitmask(i % 8);
 }
 
-__host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
+CUDA_HOST_DEVICE_CALLABLE size_t last_byte_index(size_t column_size)
 {
   return (column_size + 8 - 1) / 8;
 }

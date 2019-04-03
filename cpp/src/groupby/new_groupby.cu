@@ -11,6 +11,7 @@
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 #include "groupby/sort_groupby.cuh"
+#include "string/nvcategory_util.hpp"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -132,6 +133,16 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
     sort_result = true;
   }
 
+  //Check that user is not trying to sum or avg string columns
+  for(int aggregation_index = 0; aggregation_index < num_aggregation_columns; aggregation_index++){
+	  if(( agg_ops[aggregation_index] == GDF_SUM ||
+		   agg_ops[aggregation_index] == GDF_AVG ) &&
+		   in_aggregation_columns[aggregation_index]->dtype == GDF_STRING_CATEGORY){
+		  return GDF_UNSUPPORTED_DTYPE;
+	  }
+
+  }
+
   // TODO: Only a single aggregator supported right now
   gdf_agg_op op{agg_ops[0]};
 
@@ -190,6 +201,24 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
     default:
       std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
       gdf_error_code = GDF_UNSUPPORTED_METHOD;
+  }
+
+  GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+  
+  //The following code handles propogating an NVCategory into columns which are of type nvcategory
+  for(int key_index = 0; key_index < num_key_columns; key_index++){
+    if(out_key_columns[key_index]->dtype == GDF_STRING_CATEGORY){
+      gdf_error_code = nvcategory_gather(out_key_columns[key_index],
+                                         static_cast<NVCategory *>(in_key_columns[key_index]->dtype_info.category));
+      GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+    }
+  }
+  for(int out_column_index = 0; out_column_index < num_aggregation_columns; out_column_index++){
+    if(out_aggregation_columns[out_column_index]->dtype == GDF_STRING_CATEGORY){
+      gdf_error_code = nvcategory_gather(out_aggregation_columns[out_column_index],
+                                         static_cast<NVCategory *>(in_aggregation_columns[out_column_index]->dtype_info.category));
+      GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+    }
   }
 
   POP_RANGE();
