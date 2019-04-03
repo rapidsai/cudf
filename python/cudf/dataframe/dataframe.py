@@ -304,6 +304,9 @@ class DataFrame(object):
     def empty(self):
         return not len(self)
 
+    def mean(self, *args, **kwargs):
+        raise NotImplementedError()
+
     def assign(self, **kwargs):
         """
         Assign columns to DataFrame from keyword arguments.
