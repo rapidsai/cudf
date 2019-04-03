@@ -1144,8 +1144,8 @@ class Series(object):
         if self.null_count != 0:
             msg = 'masked series not supported by this operation'
             raise NotImplementedError(msg)
-        vmin = self.min().astype(np.float64)
-        vmax = self.max().astype(np.float64)
+        vmin = self.min()[0]
+        vmax = self.max()[0]
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
