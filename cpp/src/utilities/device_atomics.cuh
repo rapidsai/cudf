@@ -65,10 +65,11 @@ namespace detail {
             do {
                 assumed = old;
                 T target_value = T((old >> shift) & 0xff);
-                uint8_t new_value = type_reinterpret<uint8_t, T>
+                uint8_t updating_value = type_reinterpret<uint8_t, T>
                     ( op(target_value, update_value) );
-                old = (old & ~(0x000000ff << shift)) | (T_int(new_value) << shift);
-                old = atomicCAS(address_uint32, assumed, old);
+                T_int new_value = (old & ~(0x000000ff << shift))
+                    | (T_int(updating_value) << shift);
+                old = atomicCAS(address_uint32, assumed, new_value);
             } while (assumed != old);
 
             return T((old >> shift) & 0xff);
@@ -92,12 +93,13 @@ namespace detail {
             do {
                 assumed = old;
                 T target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
-                uint16_t new_value = type_reinterpret<uint16_t, T>
+                uint16_t updating_value = type_reinterpret<uint16_t, T>
                     ( op(target_value, update_value) );
 
-                old = (is_32_align) ? (old & 0xffff0000) | new_value
-                                    : (old & 0xffff) | (T_int(new_value) << 16);
-                old = atomicCAS(address_uint32, assumed, old);
+                T_int new_value  = (is_32_align)
+                    ? (old & 0xffff0000) | updating_value
+                    : (old & 0xffff) | (T_int(updating_value) << 16);
+                old = atomicCAS(address_uint32, assumed, new_value);
             } while (assumed != old);
 
             return (is_32_align) ? T(old & 0xffff) : T(old >> 16);;
@@ -236,7 +238,7 @@ namespace detail {
         T_int old = *address_uint32;
         T_int assumed;
         T target_value;
-        uint8_t new_value = type_reinterpret<uint8_t, T>(val);
+        uint8_t u_val = type_reinterpret<uint8_t, T>(val);
 
         do {
            assumed = old;
@@ -245,8 +247,9 @@ namespace detail {
            // the `target_value` in `old` can be different with `compare`
            if( target_value != compare ) break;
 
-           old = (old & ~(0x000000ff << shift)) | (T_int(new_value) << shift);
-           old = atomicCAS(address_uint32, assumed, old);
+           T_int new_value = (old & ~(0x000000ff << shift))
+               | (T_int(u_val) << shift);
+           old = atomicCAS(address_uint32, assumed, new_value);
         } while (assumed != old);
 
         return target_value;
@@ -266,16 +269,16 @@ namespace detail {
         T_int old = *address_uint32;
         T_int assumed;
         T target_value;
-        uint16_t new_value = type_reinterpret<uint16_t, T>(val);
+        uint16_t u_val = type_reinterpret<uint16_t, T>(val);
 
         do {
             assumed = old;
             target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
             if( target_value != compare ) break;
 
-            old = (is_32_align) ? (old & 0xffff0000) | new_value
-                    : (old & 0xffff) | (T_int(new_value) << 16);
-            old = atomicCAS(address_uint32, assumed, old);
+            T_int new_value = (is_32_align) ? (old & 0xffff0000) | u_val
+                    : (old & 0xffff) | (T_int(u_val) << 16);
+            old = atomicCAS(address_uint32, assumed, new_value);
         } while (assumed != old);
 
         return target_value;
@@ -661,7 +664,6 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
  * The supported cudf types for `atomicCAS` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
- * int8_t, int16_t are not supported as overloads
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *

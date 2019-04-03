@@ -79,7 +79,7 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
 // TODO: remove these explicit instantiation for kernels
 // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
 // because `TypeParam` is a private member of class ::testing::Test
-// then kenrel call failed by `cudaErrorInvalidDeviceFunction`
+// then the kenrel call fails with `cudaErrorInvalidDeviceFunction`
 
 template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
@@ -91,12 +91,13 @@ template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result,
 template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
 
+
 // ---------------------------------------------
 
 template <typename T>
 struct AtomicsTest : public GdfTest
 {
-    void atomic_test(std::vector<int>& v, bool is_cas_test,
+    void atomic_test(std::vector<int> const & v, bool is_cas_test,
         int block_size=0, int grid_size=1)
     {
         int exact[3];
@@ -203,7 +204,7 @@ TYPED_TEST(AtomicsTest, atomicCASGrid)
 }
 
 // tests for large array
-TYPED_TEST(AtomicsTest, atomicOpsRamdom)
+TYPED_TEST(AtomicsTest, atomicOpsRandom)
 {
     bool is_cas_test = false;
     int block_size=256;
@@ -219,7 +220,7 @@ TYPED_TEST(AtomicsTest, atomicOpsRamdom)
     this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
-TYPED_TEST(AtomicsTest, atomicCASRamdom)
+TYPED_TEST(AtomicsTest, atomicCASRandom)
 {
     bool is_cas_test = true;
     int block_size=256;
