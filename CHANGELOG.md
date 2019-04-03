@@ -28,6 +28,7 @@
 - PR #1325 Fix dtype of null bitmasks to int8
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
+- PR #1321 Fix out of bounds warning when checking Bzip2 header
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
 
 # cuDF 0.6.0 (Date TBD)
