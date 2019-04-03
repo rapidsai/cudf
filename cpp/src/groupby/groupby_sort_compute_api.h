@@ -356,7 +356,7 @@ gdf_error GroupbySortCountDistinctWithNulls(size_type num_groupby_cols,
 
   rmm::device_vector<bool> d_in_agg_col_valids = get_bools_from_gdf_valid(in_aggregation_column);
 
-  auto agg_col_iter = thrust::make_permutation_iterator( (aggregation_type*)in_aggregation_column->data, d_sorted_indices);
+  auto agg_col_iter = thrust::make_constant_iterator<aggregation_type>(1);
 	auto agg_col_valid_iter = thrust::make_permutation_iterator(d_in_agg_col_valids.begin(), d_sorted_indices); 
 	auto agg_col_zip_iter = thrust::make_zip_iterator(thrust::make_tuple(agg_col_iter, agg_col_valid_iter));
 
@@ -433,7 +433,7 @@ gdf_error GroupbySortCountWithNulls(size_type num_groupby_cols,
 
   rmm::device_vector<bool> d_in_agg_col_valids = get_bools_from_gdf_valid(in_aggregation_column);
 
-  auto agg_col_iter = thrust::make_permutation_iterator( (aggregation_type*)in_aggregation_column->data, d_sorted_indices);
+  auto agg_col_iter = thrust::make_constant_iterator<aggregation_type>(1);
 	auto agg_col_valid_iter = thrust::make_permutation_iterator(d_in_agg_col_valids.begin(), d_sorted_indices); 
 	auto agg_col_zip_iter = thrust::make_zip_iterator(thrust::make_tuple(agg_col_iter, agg_col_valid_iter));
 
