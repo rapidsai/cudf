@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
