@@ -16,16 +16,21 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction(ConfigureTest)
 
+option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
+
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
-    add_executable(${CMAKE_BENCH_NAME}
-                   ${CMAKE_BENCH_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
-    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_BENCH_NAME} cudf)
-    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
-                            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
-    add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
+    if(CMAKE_ENABLE_BENCHMARKS)
+        add_executable(${CMAKE_BENCH_NAME}
+                    ${CMAKE_BENCH_SRC}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_link_libraries(${CMAKE_BENCH_NAME} cudf)
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
+                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
+        add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
+    endif(CMAKE_ENABLE_BENCHMARKS)
 endfunction(ConfigureBench)
+
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -40,7 +45,7 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
 
 ###################################################################################################
@@ -268,17 +273,12 @@ set(TABLE_TEST_SRC
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
 ###################################################################################################
-# - stream compaction tests -------------------------------------------------------------------------------
+# - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
-
-set(STREAM_COMPACTION_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
-
-ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 
 ###################################################################################################
@@ -288,6 +288,19 @@ ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 enable_testing()
 
 
+###################################################################################################
+### benchmarks ####################################################################################
+###################################################################################################
+
+# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
+
+###################################################################################################
+# - stream compaction benchmarks-------------------------------------------------------------------
+
+set(STREAM_COMPACTION_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 
 
