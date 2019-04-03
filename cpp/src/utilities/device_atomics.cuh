@@ -724,82 +724,19 @@ int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
 }
 
 /**
- * @overload int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
+ * @overload T atomicCAS(T* address, T compare, T val)
+ * T belongs to 
+ * { 
+ * int32_t, int64_t, float, double,
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category
+ * }
  */
+template <typename T>
 __forceinline__ __device__
-int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
+T atomicCAS(T* address, T compare, T val)
 {
-    using T = int64_t;
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-/**
- * @overload float atomicCAS(float* address, float compare, float val)
- */
-__forceinline__ __device__
-float atomicCAS(float* address, float compare, float val)
-{
-    using T = float;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload double atomicCAS(double* address, double compare, double val)
- */
-__forceinline__ __device__
-double atomicCAS(double* address, double compare, double val)
-{
-    using T = double;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload cudf::date32 atomicCAS(cudf::date32* address, cudf::date32 compare, cudf::date32 val)
- */
-inline  __device__
-cudf::date32 atomicCAS(cudf::date32* address, cudf::date32 compare, cudf::date32 val)
-{
-    using T = cudf::date32;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload cudf::category atomicCAS(cudf::category* address, cudf::category compare, cudf::category val)
- */
-__forceinline__ __device__
-cudf::category atomicCAS(cudf::category* address, cudf::category compare, cudf::category val)
-{
-    using T = cudf::category;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload cudf::date64 atomicCAS(cudf::date64* address, cudf::date64 compare, cudf::date64 val)
- */
-__forceinline__ __device__
-cudf::date64 atomicCAS(cudf::date64* address, cudf::date64 compare, cudf::date64 val)
-{
-    using T = cudf::date64;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload cudf::timestamp atomicCAS(cudf::timestamp* address, cudf::timestamp compare, cudf::timestamp val)
- */
-__forceinline__ __device__
-cudf::timestamp atomicCAS(cudf::timestamp* address, cudf::timestamp compare, cudf::timestamp val)
-{
-    using T = cudf::timestamp;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
-
-/**
- * @overload cudf::nvstring_category atomicCAS(cudf::nvstring_category* address, cudf::nvstring_category compare, cudf::nvstring_category val)
- */
-__forceinline__ __device__
-cudf::nvstring_category atomicCAS(cudf::nvstring_category* address, cudf::nvstring_category compare, cudf::nvstring_category val)
-{
-    using T = cudf::nvstring_category;
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
-}
 

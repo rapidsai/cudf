@@ -30,11 +30,6 @@
 }
 #endif
 
-__inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
-{
-  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
-}
-
 template<typename pair_type>
 __forceinline__
 __device__ pair_type load_pair_vectorized( const pair_type* __restrict__ const ptr )
