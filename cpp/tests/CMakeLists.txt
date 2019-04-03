@@ -16,6 +16,17 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction(ConfigureTest)
 
+function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
+    add_executable(${CMAKE_BENCH_NAME}
+                   ${CMAKE_BENCH_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_link_libraries(${CMAKE_BENCH_NAME} cudf)
+    set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
+                            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
+    add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
+endfunction(ConfigureBench)
+
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
@@ -256,6 +267,7 @@ set(TABLE_TEST_SRC
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
+###################################################################################################
 # - stream compaction tests -------------------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -263,12 +275,18 @@ set(STREAM_COMPACTION_TEST_SRC
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
 
+set(STREAM_COMPACTION_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################
 ###################################################################################################
 
 enable_testing()
+
 
 
 

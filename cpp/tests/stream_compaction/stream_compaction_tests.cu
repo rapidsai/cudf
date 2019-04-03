@@ -21,8 +21,6 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 
-#include <chrono>
-
 struct ApplyBooleanMaskErrorTest : GdfTest {};
 
 // Test ill-formed inputs
@@ -189,38 +187,3 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
     [](gdf_index_type row) { return false; });
 }
 
-#define BENCHMARK_APPLY_BOOLEAN_MASK
-#ifdef BENCHMARK_APPLY_BOOLEAN_MASK
-//TYPED_TEST(ApplyBooleanMaskTest, Benchmark)
-TEST_F(ApplyBooleanMaskErrorTest, Benchmark)
-{
-  using TypeParam = float;
-  constexpr gdf_size_type column_size{42000000};
-
-  auto bench = [column_size]() {
-    cudf::test::column_wrapper<TypeParam> source{
-      column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return row % 2 == 0; }};
-    cudf::test::column_wrapper<cudf::bool8> mask{
-      column_size,
-      [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return row % 2 == 1; }};
-
-    gdf_column result;
-    EXPECT_NO_THROW(result = cudf::apply_boolean_mask(source, mask));
-    gdf_column_free(&result);
-  };
-
-  auto start = std::chrono::high_resolution_clock::now();
-  int num = 100;
-  for (int i = 0; i < num; ++i) {
-    bench();
-  }
-  cudaDeviceSynchronize();
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> diff = end-start;
-  std::cout << "Time to apply_boolean_mask for " << column_size
-            << " elements: " << diff.count() / num << " s\n";
-}
-#endif // BENCHMARK_APPLY_BOOLEAN_MASK
