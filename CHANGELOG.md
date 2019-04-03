@@ -29,7 +29,7 @@
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
-- PR #1338 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1351 CSV Reader: Fix memory leaks on read_csv() failure
 
 
 # cuDF 0.6.0 (Date TBD)
