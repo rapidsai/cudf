@@ -188,7 +188,7 @@ void gdf_scan(const gdf_column *input, gdf_column *output,
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<DeviceMax>(), input, output, inclusive);
         return;
-    case GDF_SCAN_PRODUCTION:
+    case GDF_SCAN_PRODUCT:
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<DeviceProduct>(), input, output, inclusive);
         return;

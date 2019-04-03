@@ -2155,22 +2155,22 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /* reductions */
 /**
  * @brief  Computes the reduction of the values in all rows of a column
- * Though the overflow may happen at reduction,
- * there is no way to detect the overflow.
- * Specifing higher precision by `dtype` may prevent the overflow.
- * The reduction for non arithemetic types (date32, timestamp, category...)
- * is supported only at `min` and `max` operation.
+ * This function does not detect overflows in reductions.
+ * Using a higher precision `dtype` may prevent overflow.
+ * Only `min` and `max` ops are supported for reduction of non-arithmetic
+ * types (date32, timestamp, category...)
  *
  * @param[in] col Input column
  * @param[in] op  The operator applied by the reduction
  * @param[in] dtype The computation and output precision.
- *     `dtype` must be specified of the one of the convertible dtypes of input dtype.
- *     If the input column holds arithmetic type, any arithmetic types can be specified.
- *     If the input column holds non arithemetic type
- *     (date32, timestamp, category...), same type must be specified.
+ *     `dtype` must be a data type that is convertible from the input dtype.
+ *     If the input column has arithmetic type, any arithmetic type can be specified.
+ *     If the input column has non-arithmetic type
+ *     (date32, timestamp, category...), the same type must be specified.
  *
- * @returns  gdf_scalar value as the result.
- * if the operation is failed, the member is_valid has false value.
+ * @returns  gdf_scalar the result value
+ * If the reduction fails, the member is_valid of the output gdf_scalar
+ * will contain `false`.
  */
 gdf_scalar gdf_reduction(const gdf_column *col, gdf_reduction_op op,
                         gdf_dtype output_dtype);

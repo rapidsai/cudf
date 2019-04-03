@@ -36,7 +36,7 @@
 template <typename T>
 struct ScanTest : public GdfTest
 {
-    void examin(std::vector<int>& int_values,
+    void scan_test(std::vector<int>& const int_values,
         std::vector<int>& exact_values,
         gdf_scan_op op, bool inclusive)
     {
@@ -112,7 +112,7 @@ TYPED_TEST(ScanTest, Min)
         }
     );
 
-    this->examin(v, exact, GDF_SCAN_MIN, true);
+    this->scan_test(v, exact, GDF_SCAN_MIN, true);
 }
 
 TYPED_TEST(ScanTest, Max)
@@ -128,7 +128,7 @@ TYPED_TEST(ScanTest, Max)
         }
     );
 
-    this->examin(v, exact, GDF_SCAN_MAX, true);
+    this->scan_test(v, exact, GDF_SCAN_MAX, true);
 }
 
 
@@ -141,7 +141,7 @@ TYPED_TEST(ScanTest, Product)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc *= i; exact.push_back(acc); });
 
-    this->examin(v, exact, GDF_SCAN_PRODUCTION, true);
+    this->scan_test(v, exact, GDF_SCAN_PRODUCT, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
@@ -153,7 +153,7 @@ TYPED_TEST(ScanTest, Sum)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc += i; exact.push_back(acc); });
 
-    this->examin(v, exact, GDF_SCAN_SUM, true);
+    this->scan_test(v, exact, GDF_SCAN_SUM, true);
 }
 
 

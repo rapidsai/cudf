@@ -107,7 +107,7 @@ TYPED_TEST(ReductionTest, Product)
         [](int acc, int i) { return acc * i; });
 
     this->reduction_test(v, TypeParam(expected_value),
-        this->ret_non_arithmetic, GDF_REDUCTION_PRODUCTION);
+        this->ret_non_arithmetic, GDF_REDUCTION_PRODUCT);
 }
 
 TYPED_TEST(ReductionTest, Sum)

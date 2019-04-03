@@ -71,7 +71,7 @@ void ReduceOp(const gdf_column *input,
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(result, &identity,
             sizeof(T_out), cudaMemcpyHostToDevice, stream));
-    CUDA_CHECK_LAST();
+    CHECK_STREAM(stream);
 
     int blocksize = reduction_block_size;
     int gridsize = (input->size + reduction_block_size -1 )
@@ -82,7 +82,7 @@ void ReduceOp(const gdf_column *input,
         static_cast<const T_in*>(input->data), input->valid, input->size,
         static_cast<T_out*>(result),
         Op{}, identity, typename Op::Loader{});
-    CUDA_CHECK_LAST();
+    CHECK_STREAM(stream);
 
     // read back the result to host memory
     // TODO: asynchronous copy
@@ -91,6 +91,9 @@ void ReduceOp(const gdf_column *input,
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
+
+    // sync the stream
+    CUDA_TRY(cudaStreamSynchronize(stream));
 
     // set scalar is valid
     scalar->is_valid = true;
@@ -173,7 +176,7 @@ gdf_scalar gdf_reduction(const gdf_column *col,
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<DeviceMax>(), col, &scalar);
         break;
-    case GDF_REDUCTION_PRODUCTION:
+    case GDF_REDUCTION_PRODUCT:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<DeviceProduct>(), col, &scalar);
         break;
