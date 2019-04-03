@@ -15,7 +15,6 @@
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
-- PR #1282 Add Series and DataFrame.describe()
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 - PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
 - PR #1282 Add Series and DataFrame.describe()
