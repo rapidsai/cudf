@@ -70,6 +70,20 @@ class MultiIndex(indexPackage.Index):
         result.name = self.name
         return result
 
+    def _popn(self, n):
+        """ Returns a copy of this index without the left-most n values.
+
+        Removes n names, labels, and codes in order to build a new index
+        for results.
+        """
+        from cudf import DataFrame
+        codes = DataFrame()
+        for idx in self.codes.columns[n:]:
+            codes.add_column(idx, self.codes[idx])
+        result = MultiIndex(self.levels[n:], codes)
+        result.names = self.names[n:]
+        return result
+
     def __repr__(self):
         return "MultiIndex(levels=" + str(self.levels) +\
                ",\ncodes=" + str(self.codes) + ")"
@@ -95,15 +109,20 @@ class MultiIndex(indexPackage.Index):
 
     def get(self, df, row_tuple):
         # Assume row is a tuple
+        # Build new dataframe
+        # -------------------
         validity_mask = []
         for i, element in enumerate(row_tuple):
-            # index_of_code_at_level = np.where(self.levels[i] == row_tuple[i])[0][0]  # noqa: E501
             for level_index in range(len(self.levels)):
-                if self.levels[i][level_index] == row_tuple[i]:
+                if self.levels[level_index][i] == row_tuple[i]:
                     index_of_code_at_level = level_index
             matches = []
-            for k, code in enumerate(self.codes[self.codes.columns[i]]):
-                if k in validity_mask or len(validity_mask) == 0:
+            if len(validity_mask) == 0:
+                for k, code in enumerate(self.codes[self.codes.columns[i]]):
+                    if code == index_of_code_at_level:
+                        matches.append(k)
+            else:
+                for k in validity_mask:
                     if code == index_of_code_at_level:
                         matches.append(k)
             # matches = self.codes.map([j if c[i] == index_of_code_at_level\
@@ -112,20 +131,24 @@ class MultiIndex(indexPackage.Index):
                 validity_mask = matches
         result = df.iloc[validity_mask]
         # Build new index
+        # ---------------
         from cudf import DataFrame
         out_index = DataFrame()
         for k in range(len(row_tuple), len(df.index.codes.columns)):
             out_index.add_column(df.index.names[k],
                                  df.index.codes[df.index.codes.columns[k]])
+        print('popnpopn')
+        print(self._popn(len(row_tuple))[validity_mask])
         if len(out_index.columns) == 1:
-            print(result.index.codes)
             out_index = []
-            for val in result.index.codes[result.index.codes.columns[len(result.index.codes.columns)-1]]:
+            for val in result.index.codes[result.index.codes.columns[len(result.index.codes.columns)-1]]:  # noqa: E501
                 out_index.append(result.index.levels[
                         len(result.index.codes.columns)-1][val])
             out_index = StringIndex(out_index)
             out_index.name = result.index.names[len(result.index.names)-1]
             result.index = out_index
+        else:
+            result.index = self._popn(len(row_tuple))[validity_mask]
         return result
 
     def __len__(self):

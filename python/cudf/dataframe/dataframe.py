@@ -649,8 +649,7 @@ class DataFrame(object):
         old_length = len(self._index)
 
         if new_length != old_length:
-            msg = f'Length mismatch: Expected index has {old_length}' \
-                    ' elements, new values have {new_length} elements'
+            msg = f'Length mismatch: Expected index has {old_length} elements, new values have {new_length} elements'  # noqa: E501
             raise ValueError(msg)
 
         # try to build an index from generic _index
@@ -2440,6 +2439,9 @@ class Loc(object):
         row_slice = None
         row_label = None
 
+        if isinstance(self._df.index, MultiIndex):
+            return self._df._index.get(self._df, arg)
+
         if isinstance(arg, int):
             if arg < 0 or arg >= len(self._df):
                 raise IndexError("label scalar %s is out of bound" % arg)
@@ -2447,8 +2449,6 @@ class Loc(object):
             col_slice = self._df.columns
 
         elif isinstance(arg, tuple):
-            if isinstance(self._df.index, MultiIndex):
-                return self._df._index.get(self._df, arg)
             arg_1, arg_2 = arg
             if isinstance(arg_1, int):
                 row_label = arg_1

@@ -112,11 +112,13 @@ def test_multiindex_loc():
     gdf = cudf.from_pandas(pdf)
     pdfIndex = pd.MultiIndex([['a', 'b', 'c'],
                               ['house', 'store', 'forest'],
-                              ['clouds', 'clear', 'storm']],
+                              ['clouds', 'clear', 'storm'],
+                              ['fire', 'smoke', 'clear']],
                              [[0, 0, 1, 1, 2],
                               [1, 1, 0, 0, 2],
-                              [2, 2, 2, 0, 1]])
-    pdfIndex.names = ['alpha', 'location', 'weather']
+                              [2, 2, 2, 0, 1],
+                              [0, 1, 2, 0, 1]])
+    pdfIndex.names = ['alpha', 'location', 'weather', 'sign']
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
@@ -127,6 +129,10 @@ def test_multiindex_loc():
               gdf.loc[('a', 'store')])
     assert_eq(pdf.loc[('a')],
               gdf.loc[('a')])
+    print('pdf')
+    print(pdf.loc[('b', 'house')])
+    print('gdf')
+    print(gdf.loc[('b', 'house')].to_pandas())
     assert_eq(pdf.loc[('b', 'house')],
               gdf.loc[('b', 'house')])
     assert_eq(pdf.loc[('a', 'store'), ('b', 'house')],
