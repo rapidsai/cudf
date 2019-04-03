@@ -39,7 +39,7 @@ namespace cudf {
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar gdf_reduction(const gdf_column *col, gdf_reduction_op op,
+gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
                         gdf_dtype output_dtype);
 
 /** --------------------------------------------------------------------------*
@@ -53,7 +53,7 @@ gdf_scalar gdf_reduction(const gdf_column *col, gdf_reduction_op op,
  * @param[in] inclusive The flag for applying an inclusive scan if true,
  * an exclusive scan if false.
  * ----------------------------------------------------------------------------**/
-void gdf_scan(const gdf_column *input, gdf_column *output,
+void scan(const gdf_column *input, gdf_column *output,
                    gdf_scan_op op, bool inclusive);
 
 }  // namespace cudf

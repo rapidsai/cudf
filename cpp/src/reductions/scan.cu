@@ -171,10 +171,10 @@ static constexpr int copy_replace_nulls_blocksize = 1024;
 
 namespace cudf{
 
-void gdf_scan(const gdf_column *input, gdf_column *output,
+void scan(const gdf_column *input, gdf_column *output,
     gdf_scan_op op, bool inclusive)
 {
-    using namespace cudf::reduction;
+    using namespace cudf::reductions;
 
     switch(op){
     case GDF_SCAN_SUM:

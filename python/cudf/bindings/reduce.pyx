@@ -72,7 +72,7 @@ def apply_reduce(reduction_op, col):
     cdef gdf_scalar c_result
 
     with nogil:    
-        c_result = gdf_reduction(
+        c_result = reduction(
             <gdf_column*>c_col,
             c_op,
             c_col[0].dtype
@@ -98,7 +98,7 @@ def apply_scan(col_inp, col_out, scan_op, inclusive):
     cdef bool b_inclusive = <bool>inclusive;
 
     with nogil:    
-        gdf_scan(
+        scan(
             <gdf_column*>c_col_inp,
             <gdf_column*>c_col_out,
             c_op,

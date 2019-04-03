@@ -12,7 +12,7 @@
 
 #include "reduction_operators.cuh"
 
-using namespace cudf::reduction;
+using namespace cudf::reductions;
 
 namespace { // anonymous namespace
 
@@ -157,7 +157,7 @@ public:
 
 namespace cudf{
 
-gdf_scalar gdf_reduction(const gdf_column *col,
+gdf_scalar reduction(const gdf_column *col,
                   gdf_reduction_op op, gdf_dtype output_dtype)
 {
     gdf_scalar scalar;

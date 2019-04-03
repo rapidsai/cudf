@@ -58,7 +58,7 @@ struct ScanTest : public GdfTest
         cudf::test::column_wrapper<T> col_out(col_size);
         gdf_column * raw_output = col_out.get();
 
-        CUDF_EXPECT_NO_THROW( cudf::gdf_scan(raw_input, raw_output, op, inclusive) );
+        CUDF_EXPECT_NO_THROW( cudf::scan(raw_input, raw_output, op, inclusive) );
 
         using UnderlyingType = T;
         auto tuple_host_result = col_out.to_host();

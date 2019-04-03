@@ -64,9 +64,9 @@ struct ReductionTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T> result 
-		= cudf::gdf_reduction(underlying_column, op,
+                = cudf::reduction(underlying_column, op,
                                 underlying_column->dtype);
-              EXPECT_EQ(expected_value, result.value());
+            EXPECT_EQ(expected_value, result.value());
         };
 
         if( succeeded_condition ){
@@ -151,7 +151,7 @@ struct ReductionDtypeTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T_out> result =
-            	cudf::gdf_reduction(underlying_column, op, out_dtype);
+                cudf::reduction(underlying_column, op, out_dtype);
             if( result.is_valid() && ! expected_overflow){
                 EXPECT_EQ(expected_value, result.value());
                 std::cout << "the value = <" << expected_value

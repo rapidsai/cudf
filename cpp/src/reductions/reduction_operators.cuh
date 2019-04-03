@@ -4,7 +4,7 @@
 #include "utilities/error_utils.hpp"
 
 namespace cudf {
-namespace reduction {
+namespace reductions {
 
 // ------------------------------------------------------------------------
 // difinitions of device struct for binary operation
