@@ -233,11 +233,8 @@ class Series(object):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if (method == '__call__' and
-                ufunc.__name__ in ['sqrt', 'sin', 'cos', 'tan',
-                                   'arcsin', 'arccos', 'arctan',
-                                   'exp', 'log']):
-            import cudf
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
         else:
@@ -1228,6 +1225,42 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('floor')
+
+    # Math
+    def _float_math(self, op):
+        if np.issubdtype(self.dtype.type, np.floating):
+            return self._unaryop(op)
+        else:
+            raise TypeError(
+                f"Operation '{op}' not supported on {self.dtype.type.__name__}"
+            )
+
+    def sin(self):
+        return self._float_math('sin')
+
+    def cos(self):
+        return self._float_math('cos')
+
+    def tan(self):
+        return self._float_math('tan')
+
+    def asin(self):
+        return self._float_math('asin')
+
+    def acos(self):
+        return self._float_math('acos')
+
+    def atan(self):
+        return self._float_math('atan')
+
+    def exp(self):
+        return self._float_math('exp')
+
+    def log(self):
+        return self._float_math('log')
+
+    def sqrt(self):
+        return self._unaryop('sqrt')
 
     # Misc
 
