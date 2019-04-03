@@ -31,7 +31,6 @@
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
 - PR #1351 CSV Reader: Fix memory leaks on read_csv() failure
 
-
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
