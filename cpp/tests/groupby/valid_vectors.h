@@ -23,6 +23,7 @@
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
+#include <bitmask/legacy_bitmask.cpp>
 
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
 using host_valid_pointer = std::basic_string<uint8_t>;
@@ -30,7 +31,7 @@ using host_valid_pointer = std::basic_string<uint8_t>;
 // Create a valid pointer and init randomly the last half column
 static inline host_valid_pointer create_and_init_valid(size_t length)
 {
-    auto n_bytes = PaddedLength ( gdf_get_num_chars_bitmask(length) );
+    auto n_bytes = gdf_valid_allocation_size(length);
     uint8_t *ptr= new uint8_t[n_bytes];
     for (size_t i = 0; i < length; ++i) {
         // if (i < length / 2 || std::rand() % 2 == 1) {
