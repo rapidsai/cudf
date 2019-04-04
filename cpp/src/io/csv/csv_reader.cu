@@ -753,9 +753,9 @@ gdf_error read_csv(csv_read_arg *args)
 			gdf_dtype col_dtype;
 			if(temp_type.find(':') != std::string::npos){
 			    for (auto it = raw_csv->col_names.begin(); it != raw_csv->col_names.end(); it++){
-                    if(temp_type.find(*it)!= std::string::npos){
-                        std::size_t idx = temp_type.find(':') +1;
-                        std::string temp_dtype = temp_type.substr( idx);
+			        std::size_t idx = temp_type.find(':');
+                    if(temp_type.substr( 0, idx) == *it){
+                        std::string temp_dtype = temp_type.substr( idx +1);
                         col_dtype		= convertStringToDtype(temp_dtype);
                         break;
                     }
