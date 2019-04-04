@@ -26,6 +26,7 @@
 
 #include <vector>
 #include <memory>
+#include <iostream>
 
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
@@ -192,10 +193,76 @@ template gdf_size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_siz
 template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	pos_key_pair *positions);
 
+struct BlockSumArray{
+	int16_t* arr;
+	uint64_t len;
+	uint64_t block_size;
+	BlockSumArray(uint64_t l, uint64_t bs): len(l), block_size(bs) {
+		cudaMalloc(&arr, len*sizeof(int16_t));
+	}
+};
 
+__global__
+void sumBracketsKernel(pos_key_pair* brackets, int bracket_count, BlockSumArray sum_array){
+	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const uint64_t did = tid * sum_array.block_size;
+	
 
+	if (tid >= sum_array.len)
+		return;
 
-// DOXY
+	auto* start = brackets + did;
+	int16_t csum = 0;
+	for (int i = 0; i < sum_array.block_size; ++i)
+		csum += ((start + i)->second == '[') ? 1 : -1;
+	sum_array.arr[tid] = csum;
+}
+
+void sumBrackets(pos_key_pair* brackets, int bracket_count, BlockSumArray sum_array){
+	int blockSize;
+	int minGridSize;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+		sumBracketsKernel));
+
+	// Calculate actual block count to use based on records count
+	int gridSize = (sum_array.len + blockSize - 1) / blockSize;
+
+	sumBracketsKernel<<<gridSize, blockSize>>>(brackets, bracket_count, sum_array);
+
+	CUDA_TRY(cudaGetLastError());
+};
+
+__global__
+void aggregateSumKernel(BlockSumArray in, BlockSumArray aggregate){
+	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const int aggregate_group_size = aggregate.block_size / in.block_size;
+	const uint64_t did = tid * aggregate_group_size;
+
+	if (tid >= aggregate.len)
+		return;
+
+	int16_t sum = 0;
+	for (int i = did; i < did + aggregate_group_size; ++i)
+		sum += in.arr[i];
+
+	aggregate.arr[tid] = sum;
+}
+
+void aggregateSum(BlockSumArray in, BlockSumArray aggregate){
+	int blockSize;
+	int minGridSize;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+		aggregateSumKernel));
+
+	// Calculate actual block count to use based on records count
+	int gridSize = (aggregate.len + blockSize - 1) / blockSize;
+
+	aggregateSumKernel<<<gridSize, blockSize>>>(in, aggregate);
+
+	CUDA_TRY(cudaGetLastError());
+};
+
+// return a unique_ptr, once they are merged
 int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
@@ -203,10 +270,28 @@ int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	RMM_ALLOC(&lvls, sizeof(int16_t) * count, 0);
 	CUDA_TRY(cudaMemsetAsync(lvls, 0, sizeof(int16_t) * count));
 	
+	uint16_t agg_rate = 2;
+	std::vector<BlockSumArray> sum_pyramid;
 
+	sum_pyramid.emplace_back(count/agg_rate, agg_rate);
+	cudaMalloc(&sum_pyramid.back().arr, sum_pyramid[0].len*sizeof(int16_t));
 
+	while (sum_pyramid.back().len >= agg_rate) {
+		sum_pyramid.emplace_back(sum_pyramid.back().len/agg_rate, sum_pyramid.back().block_size*agg_rate);
+		cudaMalloc(&sum_pyramid.back().arr, sum_pyramid.back().len*sizeof(int16_t));
+	}
 
-	//cudaMemcpy(h_pos.data(), brackets, count*sizeof(pos_key_pair), cudaMemcpyDefault);
+	sumBrackets(brackets, count, sum_pyramid[0]);
+	for (size_t lvl = 1; lvl < sum_pyramid.size(); ++lvl)
+		aggregateSum(sum_pyramid[lvl - 1], sum_pyramid[lvl]);
+
+	for (auto& sm_lvl: sum_pyramid) {
+		std::vector<int16_t> h_sums(sm_lvl.len);
+		cudaMemcpy(h_sums.data(), sm_lvl.arr, sm_lvl.len*sizeof(int16_t), cudaMemcpyDefault);
+		for (auto sum: h_sums)
+			std::cout << sum << ' ';
+		std::cout << '\n';
+	}
 
 	return lvls;
 }
