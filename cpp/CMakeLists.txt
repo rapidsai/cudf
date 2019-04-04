@@ -204,6 +204,7 @@ add_library(cudf SHARED
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/rolling/rolling.cu
             src/binary/binary_ops.cu
             src/binary/jit/code/kernel.cpp
             src/binary/jit/code/operation.cpp
