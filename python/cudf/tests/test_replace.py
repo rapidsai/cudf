@@ -73,8 +73,10 @@ def test_dataframe_replace():
     pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
 
 
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
+@pytest.mark.parametrize('data_dtype', ['int8', 'int16', 'int32', 'int64',
+                                        'float32', 'float64'])
+@pytest.mark.parametrize('fill_dtype', ['int8', 'int16', 'int32', 'int64',
+                                        'float32', 'float64'])
 @pytest.mark.parametrize(
     'fill_type',
     ['scalar', 'series'])
@@ -84,26 +86,28 @@ def test_dataframe_replace():
 @pytest.mark.parametrize(
     'inplace',
     [True, False])
-def test_series_fillna_numerical(dtype, fill_type, null_value, inplace):
-    data = np.array([0, 1, null_value, 2, null_value], dtype='float64')
-    sr = Series(data).astype(dtype)
+def test_series_fillna_numerical(data_dtype, fill_dtype, fill_type, null_value, inplace):
+
+    if data_dtype.startswith('int'):
+        pd_data_dtype = data_dtype.capitalize() # e.g., "Int32"" is nullable int32 type in Pandas
+    else:
+        pd_data_dtype = data_dtype
 
     if fill_type == 'scalar':
         fill_value = np.random.randint(0, 5)
-        expect = np.array([0, 1, fill_value, 2, fill_value], dtype=dtype)
     elif fill_type == 'series':
-        fill_value = Series(np.random.randint(0, 5, (5,)))
-        expect = np.array([0, 1, fill_value[2], 2, fill_value[4]], dtype=dtype)
+        fill_value = pd.Series(np.random.randint(0, 5, (5,)))
 
+    psr = pd.Series([0, 1, null_value, 2, null_value], dtype=pd_data_dtype)
+    sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype).astype(data_dtype)
+
+    expect = psr.fillna(fill_value).astype(data_dtype) # back to non-nullable dtype
     got = sr.fillna(fill_value, inplace=inplace)
 
     if inplace:
         got = sr
-    else:
-        got = got.to_array()
 
-    np.testing.assert_equal(expect, got)
-
+    assert_eq(expect, got)
 
 @pytest.mark.parametrize(
     'fill_type',
