@@ -15,9 +15,20 @@
  */
 
 #include <chrono>
+#include <random>
 #include <stream_compaction.hpp>
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/column_wrapper.cuh>
+
+template <typename T>
+T random_int(T min, T max)
+{
+  static std::mt19937 engine{std::random_device{}};
+  static std::uniform_int_distribution<T> uniform;
+
+  return uniform(engine,
+                 typename std::uniform_int_distribution<T>::param_type{min, max});
+}
 
 // default implementation
 template <typename T>
@@ -41,6 +52,31 @@ void benchmark(Init init, Bench bench, int iters = 100)
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> diff = end-start;
   std::cout << TypeName<T>::Get() << ": " << diff.count() / iters << " s\n";
+}
+
+template <typename T, typename Bench>
+void benchmark_fraction_shmoo(Bench bench, gdf_size_type column_size,
+                              int pct_step = 5, int iters = 100)
+{
+  gdf_size_type fraction = 0;
+  auto init_fraction_true = [column_size](auto a, int fraction) {
+    using TypeParam = decltype(a);
+    cudf::test::column_wrapper<TypeParam> source{
+      column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }};
+    cudf::test::column_wrapper<gdf_bool> mask{
+      column_size,
+      [&](gdf_index_type row) { return gdf_bool{random_int(0, 100) < fraction}; },
+      [](gdf_index_type row) { return true; }};
+    
+    return std::make_tuple(source, mask);
+  };
+
+  for (fraction = 0; fraction <= 100; fraction += pct_step) {
+    std::cout << fraction << "% output ";
+    benchmark<T>(init_fraction_true, bench, iters);
+  }
 }
 
 template <typename Init, typename Bench>
