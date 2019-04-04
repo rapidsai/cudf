@@ -34,6 +34,8 @@ def test_multiindex_levels_codes_validation():
         pd.MultiIndex(levels, [[0, 1], [0]])
     with pytest.raises(ValueError):
         cudf.MultiIndex(levels, [[0, 1], [0]])
+    # Didn't pass levels and codes
+    # Didn't pass non zero levels and codes
 
 
 def test_multiindex_construction():
@@ -41,8 +43,6 @@ def test_multiindex_construction():
     codes = [[0, 1], [1, 0]]
     pmi = pd.MultiIndex(levels, codes)
     mi = cudf.MultiIndex(levels, codes)
-    print(pmi)
-    print(mi)
     assert_eq(pmi, mi)
     pmi = pd.MultiIndex(levels=levels, codes=codes)
     mi = cudf.MultiIndex(levels=levels, codes=codes)
@@ -129,14 +129,12 @@ def test_multiindex_loc():
               gdf.loc[('a', 'store')])
     assert_eq(pdf.loc[('a')],
               gdf.loc[('a')])
-    print('pdf')
-    print(pdf.loc[('b', 'house')])
-    print('gdf')
-    print(gdf.loc[('b', 'house')].to_pandas())
+    assert_eq(pdf.loc[('a', 'store', 'storm', 'smoke')],
+              gdf.loc[('a', 'store', 'storm', 'smoke')])
     assert_eq(pdf.loc[('b', 'house')],
               gdf.loc[('b', 'house')])
-    assert_eq(pdf.loc[('a', 'store'), ('b', 'house')],
-              gdf.loc[('a', 'store'), ('b', 'house')])
+    # assert_eq(pdf.loc[('a', 'store'): ('b', 'house')],
+    #           gdf.loc[('a', 'store'): ('b', 'house')])
 
 
 def test_multiindex_columns():
@@ -153,6 +151,9 @@ def test_multiindex_columns():
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
+    print(pdf)
+    print(gdf.columns)
+    print(dir(gdf))
     assert_eq(pdf[('a', 'store')],
               gdf[('a', 'store')])
     assert_eq(pdf[('b', 'house')],

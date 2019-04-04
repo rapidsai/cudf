@@ -113,16 +113,13 @@ class MultiIndex(indexPackage.Index):
         # -------------------
         validity_mask = []
         for i, element in enumerate(row_tuple):
-            for level_index in range(len(self.levels)):
-                if self.levels[level_index][i] == row_tuple[i]:
+            for level_index in range(len(self.levels[i])):
+                if self.levels[i][level_index] == element:
                     index_of_code_at_level = level_index
+                    break
             matches = []
-            if len(validity_mask) == 0:
-                for k, code in enumerate(self.codes[self.codes.columns[i]]):
-                    if code == index_of_code_at_level:
-                        matches.append(k)
-            else:
-                for k in validity_mask:
+            for k, code in enumerate(self.codes[self.codes.columns[i]]):
+                if k in validity_mask or len(validity_mask) == 0:
                     if code == index_of_code_at_level:
                         matches.append(k)
             # matches = self.codes.map([j if c[i] == index_of_code_at_level\
@@ -134,11 +131,12 @@ class MultiIndex(indexPackage.Index):
         # ---------------
         from cudf import DataFrame
         out_index = DataFrame()
-        for k in range(len(row_tuple), len(df.index.codes.columns)):
+        # this is hopelessly wrong: FIX
+        # If every level is homogeneous except the last do the out_index
+        # case below.
+        for k in range(len(row_tuple), len(df.index.levels)):
             out_index.add_column(df.index.names[k],
                                  df.index.codes[df.index.codes.columns[k]])
-        print('popnpopn')
-        print(self._popn(len(row_tuple))[validity_mask])
         if len(out_index.columns) == 1:
             out_index = []
             for val in result.index.codes[result.index.codes.columns[len(result.index.codes.columns)-1]]:  # noqa: E501
@@ -148,7 +146,12 @@ class MultiIndex(indexPackage.Index):
             out_index.name = result.index.names[len(result.index.names)-1]
             result.index = out_index
         else:
-            result.index = self._popn(len(row_tuple))[validity_mask]
+            if(len(out_index.columns)) > 0:
+                result.index = self._popn(len(row_tuple))[validity_mask]
+        if len(result) == 1:
+            from cudf.dataframe import Series
+            result = Series(result.iloc[0])
+            result.name = row_tuple
         return result
 
     def __len__(self):

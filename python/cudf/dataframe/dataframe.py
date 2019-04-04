@@ -210,6 +210,8 @@ class DataFrame(object):
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
+        if isinstance(self.columns, MultiIndex):
+            return self.columns.get(arg)
         if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
            isinstance(arg, tuple):
             s = self._cols[arg]
@@ -616,10 +618,16 @@ class DataFrame(object):
     def columns(self):
         """Returns a tuple of columns
         """
-        return pd.Index(self._cols)
+        if isinstance(self._cols, MultiIndex):
+            return self._cols
+        else:
+            return pd.Index(self._cols)
 
     @columns.setter
     def columns(self, columns):
+        if isinstance(columns, MultiIndex):
+            self._cols = columns
+            return
         old_cols = list(self._cols.keys())
         l_old_cols = len(old_cols)
         l_new_cols = len(columns)
