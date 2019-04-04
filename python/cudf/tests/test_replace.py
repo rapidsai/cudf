@@ -86,10 +86,12 @@ def test_dataframe_replace():
 @pytest.mark.parametrize(
     'inplace',
     [True, False])
-def test_series_fillna_numerical(data_dtype, fill_dtype, fill_type, null_value, inplace):
+def test_series_fillna_numerical(data_dtype, fill_dtype,
+                                 fill_type, null_value, inplace):
 
     if data_dtype.startswith('int'):
-        pd_data_dtype = data_dtype.capitalize() # e.g., "Int32"" is nullable int32 type in Pandas
+        pd_data_dtype = data_dtype.capitalize()
+        # e.g., "Int32"" is nullable int32 type in Pandas
     else:
         pd_data_dtype = data_dtype
 
@@ -99,15 +101,17 @@ def test_series_fillna_numerical(data_dtype, fill_dtype, fill_type, null_value, 
         fill_value = pd.Series(np.random.randint(0, 5, (5,)))
 
     psr = pd.Series([0, 1, null_value, 2, null_value], dtype=pd_data_dtype)
-    sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype).astype(data_dtype)
+    sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype)
 
-    expect = psr.fillna(fill_value).astype(data_dtype) # back to non-nullable dtype
+    expect = psr.fillna(fill_value)
+    expect = expect.astype(data_dtype)  # convert back to non-nullable dtype
     got = sr.fillna(fill_value, inplace=inplace)
 
     if inplace:
         got = sr
 
     assert_eq(expect, got)
+
 
 @pytest.mark.parametrize(
     'fill_type',
@@ -191,6 +195,7 @@ def test_fillna_dataframe(fill_type, inplace):
         got = gdf
 
     assert_eq(expect, got)
+
 
 def test_series_fillna_dtype():
     df = DataFrame()
