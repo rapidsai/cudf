@@ -44,6 +44,23 @@ void gpu_atomic_test(T *result, T *data, size_t size)
     }
 }
 
+template<typename T, typename BinaryOp>
+__device__
+T atomic_op(T* addr, T const & value, BinaryOp op)
+{
+    T old_value = *addr;
+    T assumed;
+
+    do {
+        assumed  = old_value;
+        const T new_value = op(old_value, value);
+
+        old_value = atomicCAS(addr, assumed, new_value);
+    } while (assumed != old_value);
+
+    return old_value;
+}
+
 template<typename T>
 __global__
 void gpu_atomicCAS_test(T *result, T *data, size_t size)
@@ -52,24 +69,17 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
     size_t step = blockDim.x * gridDim.x;
 
     for (; id < size; id += step) {
-        T* addr = &result[0];
-        T update_value = data[id];
-
-        T old_value = *addr;
-        T assumed;
-
-        do {
-            assumed  = old_value;
-            const T new_value = old_value + update_value;
-
-            old_value = atomicCAS(addr, assumed, new_value);
-        } while (assumed != old_value);
+        atomic_op(&result[0], data[id], cudf::DeviceSum{});
+        atomic_op(&result[1], data[id], cudf::DeviceMin{});
+        atomic_op(&result[2], data[id], cudf::DeviceMax{});
+        atomic_op(&result[3], data[id], cudf::DeviceSum{});
     }
 }
 
 // TODO: remove these explicit instantiation for kernels
-// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated,
-// then kenrel call failed by `cudaErrorInvalidDeviceFunction`
+// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
+// because `TypeParam` is a private member of class ::testing::Test
+// then the kenrel call fails with `cudaErrorInvalidDeviceFunction`
 
 template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
@@ -81,10 +91,59 @@ template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result,
 template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
 
+
 // ---------------------------------------------
 
 template <typename T>
-struct AtomicsTest : public GdfTest {
+struct AtomicsTest : public GdfTest
+{
+    void atomic_test(std::vector<int> const & v, bool is_cas_test,
+        int block_size=0, int grid_size=1)
+    {
+        int exact[3];
+        exact[0] = std::accumulate(v.begin(), v.end(), 0);
+        exact[1] = *( std::min_element(v.begin(), v.end()) );
+        exact[2] = *( std::max_element(v.begin(), v.end()) );
+        size_t vec_size = v.size();
+
+        // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
+        // use transform from std::vector<int> instead.
+        std::vector<T> v_type(vec_size);
+        std::transform(v.begin(), v.end(), v_type.begin(),
+            [](int x) { T t(x) ; return t; } );
+
+        std::vector<T> result_init(4);
+        result_init[0] = T{0};
+        result_init[1] = std::numeric_limits<T>::max();
+        result_init[2] = std::numeric_limits<T>::min();
+        result_init[3] = T{0};
+
+        thrust::device_vector<T> dev_result(result_init);
+        thrust::device_vector<T> dev_data(v_type);
+
+        if( block_size == 0) block_size = vec_size;
+
+        if( is_cas_test ){
+            gpu_atomicCAS_test<T> <<<grid_size, block_size>>> (
+                reinterpret_cast<T*>( dev_result.data().get() ),
+                reinterpret_cast<T*>( dev_data.data().get() ),
+                vec_size);
+        }else{
+            gpu_atomic_test<T> <<<grid_size, block_size>>> (
+                reinterpret_cast<T*>( dev_result.data().get() ),
+                reinterpret_cast<T*>( dev_data.data().get() ),
+                vec_size);
+        }
+
+        thrust::host_vector<T> host_result(dev_result);
+        cudaDeviceSynchronize();
+        CUDA_CHECK_LAST();
+
+        EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAdd test failed";
+        EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
+        EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
+        EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
+    }
 };
 
 using TestingTypes = ::testing::Types<
@@ -97,101 +156,84 @@ TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
 {
-    using T = TypeParam;
-    std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
-    int exact[3];
-    exact[0] = std::accumulate(v.begin(), v.end(), 0);
-    exact[1] = *( std::min_element(v.begin(), v.end()) );
-    exact[2] = *( std::max_element(v.begin(), v.end()) );
-    size_t vec_size = v.size();
+    bool is_cas_test = false;
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test);
 
-    // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
-    // use transform from std::vector<int> instead.
-    std::vector<T> v_type(vec_size);
-    std::transform(v.begin(), v.end(), v_type.begin(),
-        [](int x) { T t(x) ; return t; } );
-
-    std::vector<T> result_init(4);
-    result_init[0] = T{0};
-    result_init[1] = std::numeric_limits<T>::max();
-    result_init[2] = std::numeric_limits<T>::min();
-    result_init[3] = T{0};
-
-    thrust::device_vector<T> dev_result(result_init);
-    thrust::device_vector<T> dev_data(v_type);
-
-    cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
-
-    gpu_atomic_test<T> <<<1, vec_size>>> (
-        reinterpret_cast<T*>( dev_result.data().get() ),
-        reinterpret_cast<T*>( dev_data.data().get() ),
-        vec_size);
-
-    cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
-
-    thrust::host_vector<T> host_result(dev_result);
-    cudaDeviceSynchronize();
-
-    CUDA_CHECK_LAST();
-
-    EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAdd test failed";
-    EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
-    EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
-    EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test);
 }
 
-// ------------------------------------------------------------------------------------------------
+// tests for atomicCAS
+TYPED_TEST(AtomicsTest, atomicCAS)
+{
+    bool is_cas_test = true;
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test);
 
-template <typename T>
-struct AtomicsCASTest : public GdfTest {
-};
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test);
+}
 
-// TODO: add `int8_t`, `int16_t` if `atomicCAS` supports
-using TestingTypesForCAS = ::testing::Types<
-    int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
+// tests for atomicAdd/Min/Max
+TYPED_TEST(AtomicsTest, atomicOpsGrid)
+{
+    bool is_cas_test = false;
+    int block_size=3;
+    int grid_size=4;
 
-TYPED_TEST_CASE(AtomicsCASTest, TestingTypesForCAS);
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test, block_size, grid_size);
+}
 
 // tests for atomicCAS
-TYPED_TEST(AtomicsCASTest, atomicCAS)
+TYPED_TEST(AtomicsTest, atomicCASGrid)
 {
-    using T = TypeParam;
-    std::vector<int> v({6, -14, 13, 64, -13, -20, 45});
-    int exact = std::accumulate(v.begin(), v.end(), 0);
-    size_t vec_size = v.size();
+    bool is_cas_test = true;
+    int block_size=3;
+    int grid_size=4;
 
-    // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
-    // use transform from std::vector<int> instead.
-    std::vector<T> v_type(vec_size);
-    std::transform(v.begin(), v.end(), v_type.begin(),
-        [](int x) { T t(x) ; return t; } );
+    std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 
-    std::vector<T> result_init({T{0}});
+    std::vector<int> input_array2({6, -6, 13, 62, -11, -20, 33});
+    this->atomic_test(input_array2, is_cas_test, block_size, grid_size);
+}
 
-    thrust::device_vector<T> dev_result(result_init);
-    thrust::device_vector<T> dev_data(v_type);
+// tests for large array
+TYPED_TEST(AtomicsTest, atomicOpsRandom)
+{
+    bool is_cas_test = false;
+    int block_size=256;
+    int grid_size=64;
 
-    cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
+    std::vector<int> input_array(grid_size * block_size);
 
-    gpu_atomicCAS_test<T> <<<1, vec_size>>> (
-        reinterpret_cast<T*>( dev_result.data().get() ),
-        reinterpret_cast<T*>( dev_data.data().get() ),
-        vec_size);
+    std::default_random_engine engine;
+    std::uniform_int_distribution<> dist(-10, 10);
+    std::generate(input_array.begin(), input_array.end(),
+      [&](){ return dist(engine);} );
 
-    cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
+}
 
-    thrust::host_vector<T> host_result(dev_result);
-    cudaDeviceSynchronize();
+TYPED_TEST(AtomicsTest, atomicCASRandom)
+{
+    bool is_cas_test = true;
+    int block_size=256;
+    int grid_size=64;
 
-    CUDA_CHECK_LAST();
+    std::vector<int> input_array(grid_size * block_size);
 
-    EXPECT_EQ(host_result[0], T(exact)) << "atomicCAS test failed";
+    std::default_random_engine engine;
+    std::uniform_int_distribution<> dist(-10, 10);
+    std::generate(input_array.begin(), input_array.end(),
+      [&](){ return dist(engine);} );
+
+    this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
 

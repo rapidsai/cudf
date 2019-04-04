@@ -22,6 +22,7 @@ import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 
@@ -42,13 +43,6 @@ _binary_impl = {
     'mul': libgdf.gdf_mul_generic,
     'floordiv': libgdf.gdf_floordiv_generic,
     'truediv': libgdf.gdf_div_generic,
-}
-
-#   Unary operators
-_unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
-    'sqrt': libgdf.gdf_sqrt_generic,
 }
 
 
@@ -97,7 +91,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+        return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
@@ -473,7 +467,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 def numeric_column_unaryop(operand, op, out_dtype):
     out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    _gdf.apply_unaryop(op, operand, out)
+    cpp_unaryops.apply_math_op(operand, out, op)
     return out.view(NumericalColumn, dtype=out_dtype)
 
 

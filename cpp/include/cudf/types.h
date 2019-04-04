@@ -227,6 +227,26 @@ typedef enum {
 } gdf_binary_operator;
 
 
+/**
+ * @brief Types of unary math operations that can be performed on data.
+ */
+typedef enum {
+  GDF_SIN,          ///< Trigonometric sine
+  GDF_COS,          ///< Trigonometric cosine
+  GDF_TAN,          ///< Trigonometric tangent
+  GDF_ARCSIN,       ///< Trigonometric sine inverse
+  GDF_ARCCOS,       ///< Trigonometric cosine inverse
+  GDF_ARCTAN,       ///< Trigonometric tangent inverse
+  GDF_EXP,          ///< Exponential (base e, Euler number)
+  GDF_LOG,          ///< Natural Logarithm (base e)
+  GDF_SQRT,         ///< Square-root (x^0.5)
+  GDF_CEIL,         ///< Smallest integer value not less than arg
+  GDF_FLOOR,        ///< largest integer value not greater than arg
+  GDF_ABS,          ///< Absolute value
+  GDF_BIT_INVERT,   ///< Bitwise Not (~)
+} gdf_unary_math_op;
+
+
 /** 
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.

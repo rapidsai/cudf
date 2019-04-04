@@ -294,9 +294,10 @@ class DataFrame(object):
         return self._size
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
@@ -430,11 +431,15 @@ class DataFrame(object):
             len(self),
         )
 
-    # binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other):
+    # unary, binary, rbinary, orderedcompare, unorderedcompare
+    def _apply_op(self, fn, other=None):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if other is None:
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], fn)()
+            return result
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
@@ -465,13 +470,6 @@ class DataFrame(object):
                     "supported at this time.")
         return result
 
-    def _unaryop(self, fn):
-        result = DataFrame()
-        result.set_index(self.index)
-        for col in self._cols:
-            result[col] = self._cols[col]._unaryop(fn)
-        return result
-
     def __add__(self, other):
         return self._apply_op('__add__', other)
 
@@ -490,11 +488,14 @@ class DataFrame(object):
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
+
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._apply_op('__pow__', other)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
@@ -537,8 +538,44 @@ class DataFrame(object):
     def __ge__(self, other):
         return self._apply_op('__ge__', other)
 
+    def __invert__(self):
+        return self._apply_op('__invert__')
+
+    def __neg__(self):
+        return self._apply_op('__neg__')
+
+    def __abs__(self):
+        return self._apply_op('__abs__')
+
     def __iter__(self):
         return iter(self.columns)
+
+    def sin(self):
+        return self._apply_op('sin')
+
+    def cos(self):
+        return self._apply_op('cos')
+
+    def tan(self):
+        return self._apply_op('tan')
+
+    def asin(self):
+        return self._apply_op('asin')
+
+    def acos(self):
+        return self._apply_op('acos')
+
+    def atan(self):
+        return self._apply_op('atan')
+
+    def exp(self):
+        return self._apply_op('exp')
+
+    def log(self):
+        return self._apply_op('log')
+
+    def sqrt(self):
+        return self._apply_op('sqrt')
 
     def iteritems(self):
         """ Iterate over column names and series pairs """
@@ -1737,7 +1774,7 @@ class DataFrame(object):
                              level=level)
             return result
 
-    def query(self, expr):
+    def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -1750,6 +1787,9 @@ class DataFrame(object):
             A boolean expression. Names in expression refer to columns.
 
             Names starting with `@` refer to Python variables
+
+        local_dict : dict
+            Containing the local variable to be used in query.
 
         Returns
         -------
@@ -1779,13 +1819,31 @@ class DataFrame(object):
         >>> print(df.query('datetimes==@search_date'))
                         datetimes
         1 2018-10-08T00:00:00.000
+
+        Using local_dict:
+
+        >>> import numpy as np
+        >>> import datetime
+        >>> df = cudf.DataFrame()
+        >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+        >>> df['datetimes'] = data
+        >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+        >>> print(df.query('datetimes==@search_date',
+        >>>         local_dict={'search_date':search_date2}))
+                        datetimes
+        1 2018-10-08T00:00:00.000
         """
+        if not isinstance(local_dict, dict):
+            raise TypeError("local_dict type: expected dict but found {!r}"
+                            .format(type(local_dict)))
+
         _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
             'locals': callframe.f_locals,
             'globals': callframe.f_globals,
+            'local_dict': local_dict,
         }
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
