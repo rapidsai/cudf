@@ -272,7 +272,6 @@ gdf_error compute_hash_join(
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
-  // but moderngpu only provides cudaDeviceProp
   // (although should be possible once we move to Arrow)
   hash_table->prefetch(0);
 
