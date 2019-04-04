@@ -26,12 +26,13 @@ class MultiIndex(indexPackage.Index):
     """
 
     def __init__(self, levels, codes, names=None):
-        self.levels = levels
-        from cudf import DataFrame
         if names is None:
             column_names = list(range(len(codes)))
         else:
             column_names = names
+        if len(codes) == 0:
+            raise ValueError('MultiIndex codes can not be empty.')
+        from cudf import DataFrame
         if not isinstance(codes, DataFrame) and\
                 not isinstance(codes[0], (Sequence,
                                pd.core.indexes.frozen.FrozenNDArray)):
@@ -43,9 +44,10 @@ class MultiIndex(indexPackage.Index):
                                       columnops.as_column(code))
         else:
             self.codes = codes
+        self.levels = levels
+        self._validate_levels_and_codes(self.levels, self.codes)
         self.name = None
         self.names = names
-        self._validate_levels_and_codes(self.levels, self.codes)
 
     def _validate_levels_and_codes(self, levels, codes):
         levels = np.array(levels)
@@ -107,10 +109,9 @@ class MultiIndex(indexPackage.Index):
             'numpy.newaxis (`None`) and integer or boolean arrays are valid '
             'indices')  # noqa: E128
 
-    def get(self, df, row_tuple):
-        # Assume row is a tuple
-        # Build new dataframe
-        # -------------------
+    def _compute_validity_mask(self, df, row_tuple):
+        """ Computes the valid set of indices of values in the lookup
+        """
         validity_mask = []
         for i, element in enumerate(row_tuple):
             for level_index in range(len(self.levels[i])):
@@ -126,8 +127,12 @@ class MultiIndex(indexPackage.Index):
             #       else None for j,c in codes])
             if len(matches) != 0:
                 validity_mask = matches
-        result = df.iloc[validity_mask]
-        # Build new index
+        return validity_mask
+
+    def get(self, df, row_tuple):
+        valid_indices = self._compute_validity_mask(df, row_tuple)
+        result = df.iloc[valid_indices]
+        # Build new index - INDEX based MultiIndex
         # ---------------
         from cudf import DataFrame
         out_index = DataFrame()
@@ -147,7 +152,7 @@ class MultiIndex(indexPackage.Index):
             result.index = out_index
         else:
             if(len(out_index.columns)) > 0:
-                result.index = self._popn(len(row_tuple))[validity_mask]
+                result.index = self._popn(len(row_tuple))[valid_indices]
         if len(result) == 1:
             from cudf.dataframe import Series
             result = Series(result.iloc[0])

@@ -35,7 +35,15 @@ def test_multiindex_levels_codes_validation():
     with pytest.raises(ValueError):
         cudf.MultiIndex(levels, [[0, 1], [0]])
     # Didn't pass levels and codes
+    with pytest.raises(TypeError):
+        pd.MultiIndex()
+    with pytest.raises(TypeError):
+        cudf.MultiIndex()
     # Didn't pass non zero levels and codes
+    with pytest.raises(ValueError):
+        pd.MultiIndex([], [])
+    with pytest.raises(ValueError):
+        cudf.MultiIndex([], [])
 
 
 def test_multiindex_construction():
