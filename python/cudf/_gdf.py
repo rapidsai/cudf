@@ -339,7 +339,7 @@ class SegmentedRadixortPlan(object):
         self.sizeof_val = val_dtype.itemsize
         end_bit = self.sizeof_key * 8
         plan = libcudf.gdf_segmented_radixsort_plan(nelem, descending,
-                                                   begin_bit, end_bit)
+                                                    begin_bit, end_bit)
         self.plan = plan
         self.nelem = nelem
         self.is_closed = False
@@ -356,7 +356,7 @@ class SegmentedRadixortPlan(object):
 
     def setup(self):
         libcudf.gdf_segmented_radixsort_plan_setup(self.plan, self.sizeof_key,
-                                                  self.sizeof_val)
+                                                   self.sizeof_val)
 
     def sort(self, segments, col_keys, col_vals):
         seg_dtype = np.uint32
@@ -378,11 +378,11 @@ class SegmentedRadixortPlan(object):
         for s, e in zip(range0, range1):
             segsize = e - s
             libcudf.gdf_segmented_radixsort_generic(self.plan,
-                                                   col_keys.cffi_view,
-                                                   col_vals.cffi_view,
-                                                   segsize,
-                                                   unwrap_devary(d_begins[s:]),
-                                                   unwrap_devary(d_ends[s:]))
+                                                    col_keys.cffi_view,
+                                                    col_vals.cffi_view,
+                                                    segsize,
+                                                    unwrap_devary(d_begins[s:]),
+                                                    unwrap_devary(d_ends[s:]))
 
 
 def hash_columns(columns, result, initial_hash_values=None):
@@ -446,7 +446,9 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
 def _column_concat(cols_to_concat, output_col):
     col_inputs = [col.cffi_view for col in cols_to_concat]
-    libcudf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
+    libcudf.gdf_column_concat(output_col.cffi_view, 
+                              col_inputs, 
+                              len(col_inputs))
     return output_col
 
 
@@ -497,7 +499,8 @@ def nvtx_range_push(name, color='green'):
 
     try:
         color = int(color, 16)  # only works if color is a hex string
-        libcudf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
+        libcudf.gdf_nvtx_range_push_hex(name_c, 
+                                        ffi.cast('unsigned int', color))
     except ValueError:
         color = str_to_gdf_color(color)
         libcudf.gdf_nvtx_range_push(name_c, color)
@@ -548,14 +551,14 @@ def quantile(column, quant, method, exact):
         px = ffi.new("double *")
         if exact:
             libcudf.gdf_quantile_exact(column.cffi_view,
-                                      get_quantile_method(method),
-                                      q,
-                                      ffi.cast('void *', px),
-                                      gdf_context)
-        else:
-            libcudf.gdf_quantile_approx(column.cffi_view,
+                                       get_quantile_method(method),
                                        q,
                                        ffi.cast('void *', px),
                                        gdf_context)
+        else:
+            libcudf.gdf_quantile_approx(column.cffi_view,
+                                        q,
+                                        ffi.cast('void *', px),
+                                        gdf_context)
         res.append(px[0])
     return res

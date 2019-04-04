@@ -249,7 +249,7 @@ class GpuArrowReader(Sequence):
             gpu_addr = self._gpu_data.device_ctypes_pointer.value
             gpu_ptr = ffi.cast("void*", gpu_addr)
             libcudf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
-                                                     self._gpu_data.size)
+                                                      self._gpu_data.size)
             # check for failure in parsing the recordbatches
             check_error(ipcparser)
             # get schema as json
