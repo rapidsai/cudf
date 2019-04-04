@@ -378,7 +378,7 @@ class SegmentedRadixortPlan(object):
         for s, e in zip(range0, range1):
             segsize = e - s
             d_ptr_start = unwrap_devary(d_begins[s:])
-            d_ptr_end   = unwrap_devary(d_ends[s:])
+            d_ptr_end = unwrap_devary(d_ends[s:])
             libcudf.gdf_segmented_radixsort_generic(self.plan,
                                                     col_keys.cffi_view,
                                                     col_vals.cffi_view,
