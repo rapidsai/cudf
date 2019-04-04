@@ -24,12 +24,13 @@
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
-- PR #1308 Add atomicCAS overload for `int8_t`, `int16_t` 
+- PR #1308 Add atomicCAS overload for `int8_t`, `int16_t`
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
 - PR #1325 Fix dtype of null bitmasks to int8
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
+- PR #1345 Add a test for dask.dataframe.utils.is_dataframe_like
 
 # cuDF 0.6.0 (Date TBD)
 
