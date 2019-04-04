@@ -187,3 +187,10 @@ def test_fillna_dataframe(fill_type, inplace):
         got = gdf
 
     assert_eq(expect, got)
+
+def test_series_fillna_dtype():
+    df = DataFrame()
+    df['a'] = [1, 2, 3]
+    df['a'] = df['a'].astype(np.int16)
+    df['a'] = df['a'].fillna(1)
+    assert df['a'].dtype == np.int16
