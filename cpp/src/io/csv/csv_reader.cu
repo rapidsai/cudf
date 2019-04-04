@@ -767,7 +767,10 @@ gdf_error read_csv(csv_read_arg *args)
   // Alloc output; columns' data memory is still expected for empty dataframe
   for (int col = 0, active_col = 0; col < raw_csv->num_actual_cols; ++col) {
     if (raw_csv->h_parseCol[col]) {
-      columns.emplace_back(raw_csv->num_records, raw_csv->dtypes[active_col],
+      // When dtypes are inferred, it contains only active column values
+      auto dtype = raw_csv->dtypes[args->dtype == nullptr ? active_col : col];
+
+      columns.emplace_back(raw_csv->num_records, dtype,
                            gdf_dtype_extra_info{TIME_UNIT_NONE, nullptr},
                            raw_csv->col_names[col]);
       CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
