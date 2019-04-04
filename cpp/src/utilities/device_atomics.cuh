@@ -34,6 +34,56 @@
 
 namespace cudf {
 
+// ------------------------------------------------------------------------
+// Binary operators
+/* @brief binary `sum` operator */
+struct DeviceSum {
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs + rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
+
+/* @brief binary `min` operator */
+struct DeviceMin{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs <= rhs? lhs: rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
+};
+
+/* @brief binary `max` operator */
+struct DeviceMax{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs >= rhs? lhs: rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
+};
+
+/* @brief binary `product` operator */
+struct DeviceProduct {
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs * rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{1}; }
+};
+
 namespace detail {
 
     template <typename T_output, typename T_input>
@@ -157,6 +207,86 @@ namespace detail {
             } while (assumed != old_value);
 
             return old_value;
+        }
+    };
+
+    // specialized functions for operators
+    // `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
+    // `atomicMin`, `atomicMax` support int32_t, int64_t
+    template<>
+    struct genericAtomicOperationImpl<float, DeviceSum, 4> {
+        using T = float;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+
+#if defined(__CUDA_ARCH__) && ( __CUDA_ARCH__ >= 600 )
+    template<>
+    struct genericAtomicOperationImpl<double, DeviceSum, 8> {
+        using T = double;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+#endif
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceSum, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceMin, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMin op)
+        {
+            return atomicMin(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceMax, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMax op)
+        {
+            return atomicMax(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int64_t, DeviceMin, 8> {
+        using T = int64_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMin op)
+        {
+            using T_out = long long int;
+            T ret = atomicMin(reinterpret_cast<T_out*>(addr),
+                type_reinterpret<T_out, T>(update_value) );
+            return ret;        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int64_t, DeviceMax, 8> {
+        using T = int64_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMax op)
+        {
+            using T_out = long long int;
+            T ret = atomicMax(reinterpret_cast<T_out*>(addr),
+                type_reinterpret<T_out, T>(update_value) );
+            return ret;
         }
     };
 
@@ -284,6 +414,17 @@ namespace detail {
         return target_value;
     }
 
+    // intermediate functoin resolve underlying data type
+    template <typename T, typename BinaryOp>
+    __forceinline__  __device__
+    T genericAtomicOperationUnderlyingType(
+        T* address, T const & update_value, BinaryOp op)
+    {
+        T ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
+            (address, update_value, op);
+        return ret;
+    }
+
 } // namespace detail
 
 /** -------------------------------------------------------------------------*
@@ -305,44 +446,12 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
-    return cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
-        (address, update_value, op);
+    auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
+         &cudf::detail::unwrap(*address),
+         cudf::detail::unwrap(update_value),
+         op);
+    return T(ret);
 }
-
-// ------------------------------------------------------------------------
-// Binary ops for sum, min, max
-struct DeviceSum {
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceMin{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs <= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::max(); }
-};
-
-struct DeviceMax{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs >= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-};
 
 } // namespace cudf
 

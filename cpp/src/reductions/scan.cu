@@ -6,9 +6,9 @@
 #include "utilities/type_dispatcher.hpp"
 #include "bitmask/legacy_bitmask.hpp"
 
+#include "utilities/device_atomics.cuh"
 #include <cub/device/device_scan.cuh>
 
-#include "reduction_operators.cuh"
 
 namespace { //anonymous
 
@@ -172,24 +172,22 @@ namespace cudf{
 void scan(const gdf_column *input, gdf_column *output,
     gdf_scan_op op, bool inclusive)
 {
-    using namespace cudf::reductions;
-
     switch(op){
     case GDF_SCAN_SUM:
         cudf::type_dispatcher(input->dtype,
-            PrefixSumDispatcher<DeviceSum>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive);
         return;
     case GDF_SCAN_MIN:
         cudf::type_dispatcher(input->dtype,
-            PrefixSumDispatcher<DeviceMin>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive);
         return;
     case GDF_SCAN_MAX:
         cudf::type_dispatcher(input->dtype,
-            PrefixSumDispatcher<DeviceMax>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive);
         return;
     case GDF_SCAN_PRODUCT:
         cudf::type_dispatcher(input->dtype,
-            PrefixSumDispatcher<DeviceProduct>(), input, output, inclusive);
+            PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive);
         return;
     default:
         CUDF_FAIL("The input enum `gdf_scan_op` is out of the range");

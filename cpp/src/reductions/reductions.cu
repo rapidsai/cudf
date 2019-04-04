@@ -12,8 +12,6 @@
 
 #include "reduction_operators.cuh"
 
-using namespace cudf::reductions;
-
 namespace { // anonymous namespace
 
 static constexpr int reduction_block_size = 128;
@@ -54,7 +52,7 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
 
     // First thread of each block stores the result.
     if (tid == 0){
-        genericAtomicOperation(results[0], agg, functor);
+        cudf::genericAtomicOperation(&results[0], agg, functor);
     }
 }
 
@@ -62,7 +60,7 @@ template<typename T_in, typename T_out, typename Op>
 void ReduceOp(const gdf_column *input,
                    gdf_scalar* scalar, cudaStream_t stream)
 {
-    T_out identity = Op::template identity<T_out>();
+    T_out identity = Op::Op::template identity<T_out>();
 
     // allocate temporary memory for the result
     void *result = NULL;
@@ -81,7 +79,7 @@ void ReduceOp(const gdf_column *input,
     gpu_reduction_op<<<gridsize, blocksize, 0, stream>>>(
         static_cast<const T_in*>(input->data), input->valid, input->size,
         static_cast<T_out*>(result),
-        Op{}, identity, typename Op::Loader{});
+        typename Op::Op{}, identity, typename Op::Loader{});
     CHECK_STREAM(stream);
 
     // read back the result to host memory
@@ -128,8 +126,8 @@ private:
     static constexpr bool is_supported()
     {
         return std::is_arithmetic<T>::value ||
-               std::is_same<Op, DeviceMin>::value ||
-               std::is_same<Op, DeviceMax>::value ;
+               std::is_same<Op, cudf::reductions::ReductionMin>::value ||
+               std::is_same<Op, cudf::reductions::ReductionMax>::value ;
     }
 
 public:
@@ -167,23 +165,23 @@ gdf_scalar reduction(const gdf_column *col,
     switch(op){
     case GDF_REDUCTION_SUM:
         cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSum>(), col, &scalar);
+            ReduceDispatcher<cudf::reductions::ReductionSum>(), col, &scalar);
         break;
     case GDF_REDUCTION_MIN:
         cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMin>(), col, &scalar);
+            ReduceDispatcher<cudf::reductions::ReductionMin>(), col, &scalar);
         break;
     case GDF_REDUCTION_MAX:
         cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceMax>(), col, &scalar);
+            ReduceDispatcher<cudf::reductions::ReductionMax>(), col, &scalar);
         break;
     case GDF_REDUCTION_PRODUCT:
         cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceProduct>(), col, &scalar);
+            ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, &scalar);
         break;
     case GDF_REDUCTION_SUMOFSQUARES:
         cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<DeviceSumOfSquares>(), col, &scalar);
+            ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
         break;
     default:
         CUDF_FAIL("The input enum `gdf_reduction_op` is out of the range");
