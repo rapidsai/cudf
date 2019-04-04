@@ -377,12 +377,14 @@ class SegmentedRadixortPlan(object):
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
+            d_ptr_start = unwrap_devary(d_begins[s:])
+            d_ptr_end   = unwrap_devary(d_ends[s:])
             libcudf.gdf_segmented_radixsort_generic(self.plan,
                                                     col_keys.cffi_view,
                                                     col_vals.cffi_view,
                                                     segsize,
-                                                    unwrap_devary(d_begins[s:]),
-                                                    unwrap_devary(d_ends[s:]))
+                                                    d_ptr_start,
+                                                    d_ptr_end)
 
 
 def hash_columns(columns, result, initial_hash_values=None):
@@ -446,8 +448,8 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
 def _column_concat(cols_to_concat, output_col):
     col_inputs = [col.cffi_view for col in cols_to_concat]
-    libcudf.gdf_column_concat(output_col.cffi_view, 
-                              col_inputs, 
+    libcudf.gdf_column_concat(output_col.cffi_view,
+                              col_inputs,
                               len(col_inputs))
     return output_col
 
@@ -499,7 +501,7 @@ def nvtx_range_push(name, color='green'):
 
     try:
         color = int(color, 16)  # only works if color is a hex string
-        libcudf.gdf_nvtx_range_push_hex(name_c, 
+        libcudf.gdf_nvtx_range_push_hex(name_c,
                                         ffi.cast('unsigned int', color))
     except ValueError:
         color = str_to_gdf_color(color)
