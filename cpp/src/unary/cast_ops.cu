@@ -122,6 +122,7 @@ struct CastDateTo_Dispatcher {
     template <typename TypeTo>
     typename std::enable_if_t<
         std::is_arithmetic<TypeTo>::value ||
+        std::is_same<TypeTo, cudf::bool8>::value ||
         std::is_same<TypeTo, cudf::category>::value ||
         std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
@@ -198,6 +199,7 @@ struct CastTimestampTo_Dispatcher {
     template <typename TypeTo>
     typename std::enable_if_t<
         std::is_arithmetic<TypeTo>::value ||
+        std::is_same<TypeTo, cudf::bool8>::value ||
         std::is_same<TypeTo, cudf::category>::value ||
         std::is_same<TypeTo, cudf::nvstring_category>::value,
     gdf_error>
@@ -234,6 +236,7 @@ struct CastFrom_Dispatcher
     template <typename TypeFrom>
     typename std::enable_if_t<
         std::is_arithmetic<TypeFrom>::value ||
+        std::is_same<TypeFrom, cudf::bool8>::value ||
         std::is_same<TypeFrom, cudf::category>::value ||
         std::is_same<TypeFrom, cudf::nvstring_category>::value,
     gdf_error>
