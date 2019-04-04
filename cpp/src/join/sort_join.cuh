@@ -32,8 +32,6 @@ which has the following license:
 #ifndef SORT_JOIN_CUH
 #define SORT_JOIN_CUH
 
-/* Sort-based join using moderngpu */
-
 #include "cudf/functions.h"
 #include "cudf/types.h"
 #include "join_compute_api.h"
