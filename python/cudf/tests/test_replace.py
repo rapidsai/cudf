@@ -88,29 +88,31 @@ def test_dataframe_replace():
     [True, False])
 def test_series_fillna_numerical(data_dtype, fill_dtype,
                                  fill_type, null_value, inplace):
-
-    if data_dtype.startswith('int'):
-        pd_data_dtype = data_dtype.capitalize()
-        # e.g., "Int32"" is nullable int32 type in Pandas
-    else:
-        pd_data_dtype = data_dtype
+    # TODO: These tests should use Pandas' nullable int type
+    # when we support a recent enough version of Pandas
+    # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
 
     if fill_type == 'scalar':
         fill_value = np.random.randint(0, 5)
+        expect = np.array(
+            [0, 1, fill_value, 2, fill_value],
+            dtype=data_dtype)
     elif fill_type == 'series':
-        fill_value = pd.Series(np.random.randint(0, 5, (5,)))
+        data = np.random.randint(0, 5, (5,))
+        fill_value = pd.Series(data, dtype=data_dtype)
+        expect = np.array(
+            [0, 1, fill_value[2], 2, fill_value[4]],
+            dtype=data_dtype)
 
-    psr = pd.Series([0, 1, null_value, 2, null_value], dtype=pd_data_dtype)
     sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype)
-
-    expect = psr.fillna(fill_value)
-    expect = expect.astype(data_dtype)  # convert back to non-nullable dtype
-    got = sr.fillna(fill_value, inplace=inplace)
+    result = sr.fillna(fill_value, inplace=inplace)
 
     if inplace:
-        got = sr
+        result = sr
 
-    assert_eq(expect, got)
+    got = result.to_array()
+
+    np.testing.assert_equal(expect, got)
 
 
 @pytest.mark.parametrize(
