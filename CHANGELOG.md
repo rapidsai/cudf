@@ -2,7 +2,7 @@
 
 ## New Features
 
-- PR #732 Rolling windows
+- PR #1356 Rolling windows
 - PR #1194  Implement overloads for CUDA atomic operations
 
 ...
