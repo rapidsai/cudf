@@ -76,6 +76,21 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
     }
 }
 
+template<typename T>
+__global__
+void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
+{
+    size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t step = blockDim.x * gridDim.x;
+
+    for (; id < size; id += step) {
+        atomicAnd(&result[0], data[id]);
+        atomicAnd(&result[1], data[id]);
+        atomicAnd(&result[2], data[id]);
+        atomicAnd(&result[3], data[id]);
+    }
+}
+
 // TODO: remove these explicit instantiation for kernels
 // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
 // because `TypeParam` is a private member of class ::testing::Test
@@ -236,4 +251,59 @@ TYPED_TEST(AtomicsTest, atomicCASRandom)
     this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
+// ------------------------------------------------------------------
+
+template <typename T>
+struct AtomicsBitwiseOpTest : public GdfTest
+{
+    void atomic_test(std::vector<uint64_t> const & v,
+        int block_size=0, int grid_size=1)
+    {
+        T exact[3];
+        exact[0] = std::accumulate(v.begin(), v.end(), 0,
+            [](T acc, uint64_t i) { return acc & T(i); });
+
+        size_t vec_size = v.size();
+
+        std::vector<T> v_type(vec_size);
+        std::transform(v.begin(), v.end(), v_type.begin(),
+            [](int x) { T t(x) ; return t; } );
+
+        std::vector<T> result_init(4);
+        result_init[0] = T{0};
+
+        thrust::device_vector<T> dev_result(result_init);
+        thrust::device_vector<T> dev_data(v_type);
+
+        if( block_size == 0) block_size = vec_size;
+
+	gpu_atomic_bitwiseOp_test<T> <<<grid_size, block_size>>> (
+		reinterpret_cast<T*>( dev_result.data().get() ),
+		reinterpret_cast<T*>( dev_data.data().get() ),
+		vec_size);
+
+        thrust::host_vector<T> host_result(dev_result);
+        cudaDeviceSynchronize();
+        CUDA_CHECK_LAST();
+
+        EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAnd test failed";
+//        EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
+//        EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
+//        EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
+    }
+};
+
+using BitwiseOpTestingTypes = ::testing::Types<
+    int8_t, int16_t, int32_t, int64_t,
+    uint8_t, uint16_t, uint32_t, uint64_t
+    >;
+
+TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
+
+TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
+{
+    std::vector<uint64_t> input_array({0x01, 0x02, 0x0104, 0xfcfcfcfcfcfcfcfc});
+    this->atomic_test(input_array);
+
+}
 
