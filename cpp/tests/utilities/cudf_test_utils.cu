@@ -103,6 +103,14 @@ void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width
     cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width);
 }
 
+bool isDeviceType(cudaPointerAttributes attrib) {
+#if CUDART_VERSION >= 10000
+    return (attrib.type == cudaMemoryTypeDevice);
+#else
+    return (attrib.memoryType == cudaMemoryTypeDevice);
+#endif
+}
+
 void print_valid_data(const gdf_valid_type *validity_mask,
                       const size_t num_rows)
 {
@@ -112,7 +120,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   error = cudaGetLastError();
 
   std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows));
-  if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
+  if (error != cudaErrorInvalidValue && isDeviceType(attrib))
     cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows), cudaMemcpyDeviceToHost);
   else
     memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
