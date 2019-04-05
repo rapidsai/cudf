@@ -7,39 +7,7 @@ import numpy as np
 from itertools import product
 from cudf.dataframe import Series
 from cudf.tests import utils
-
-
-def gen_rand(dtype, size, **kwargs):
-    dtype = np.dtype(dtype)
-    if dtype.kind == 'f':
-        res = np.random.random(size=size).astype(dtype)
-        if kwargs.get('positive_only', False):
-            return res
-        else:
-            return (res * 2 - 1)
-    elif dtype == np.int8 or np.int16:
-        low = kwargs.get('low', -32)
-        high = kwargs.get('high', 32)
-        return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'i':
-        low = kwargs.get('low', -10000)
-        high = kwargs.get('high', 10000)
-        return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'b':
-        low = kwargs.get('low', 0)
-        high = kwargs.get('high', 1)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
-    raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
-
-
-def buffer_as_bits(data):
-    def fix_binary(x):
-        x = x[2:]
-        diff = 8 - len(x)
-        return ('0' * diff + x)[::-1]
-
-    binaries = ''.join(fix_binary(bin(x)) for x in bytearray(data))
-    return list(map(lambda x: x == '1', binaries))
+from cudf.tests.utils import gen_rand
 
 
 params_dtype = [

@@ -2,39 +2,15 @@ from __future__ import division
 
 import pytest
 import numpy as np
-import pandas as pd
 import cudf.bindings.reduce as cpp_reduce
 
 from itertools import product
-from cudf.dataframe import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.tests import utils
+from cudf.tests.utils import gen_rand
 
 from librmm_cffi import librmm as rmm
-
-
-def gen_rand(dtype, size, **kwargs):
-    dtype = np.dtype(dtype)
-    if dtype.kind == 'f':
-        res = np.random.random(size=size).astype(dtype)
-        if kwargs.get('positive_only', False):
-            return res
-        else:
-            return (res * 2 - 1)
-    elif dtype == np.int8 or np.int16:
-        low = kwargs.get('low', -32)
-        high = kwargs.get('high', 32)
-        return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'i':
-        low = kwargs.get('low', -10000)
-        high = kwargs.get('high', 10000)
-        return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'b':
-        low = kwargs.get('low', 0)
-        high = kwargs.get('high', 1)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
-    raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
 
 
 params_dtype = [
@@ -51,7 +27,7 @@ params_sizes = [1, 2, 13, 64, 100, 1000]
 
 def _gen_params():
     for t, n in product(params_dtype, params_sizes):
-        if (t == np.int8 or t ==  np.int16 ) and n > 20:
+        if (t == np.int8 or t == np.int16) and n > 20:
             # to keep data in range
             continue
         yield t, n
@@ -74,7 +50,7 @@ def test_prefixsum(dtype, nelem):
     in_col = NumericalColumn(data=Buffer(d_data), mask=None,
                              null_count=0, dtype=dtype)
     out_col = NumericalColumn(data=Buffer(d_result), mask=None,
-                              null_count=0, dtype=dtype)    
+                              null_count=0, dtype=dtype)
 
     # compute scan
     inclusive = True
@@ -114,8 +90,9 @@ def test_prefixsum_masked(dtype, nelem):
     # construct numerical columns
     in_col = NumericalColumn(data=Buffer(d_data), mask=Buffer(d_mask),
                              null_count=null_count, dtype=dtype)
-    out_col = NumericalColumn(data=Buffer(d_result), mask=Buffer(d_result_mask),
-                              null_count=null_count, dtype=dtype)    
+    out_col = NumericalColumn(data=Buffer(d_result),
+                              mask=Buffer(d_result_mask),
+                              null_count=null_count, dtype=dtype)
 
     # compute scan
     inclusive = True
@@ -133,5 +110,3 @@ def test_prefixsum_masked(dtype, nelem):
 
     decimal = 4 if dtype == np.float32 else 6
     np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
-
-
