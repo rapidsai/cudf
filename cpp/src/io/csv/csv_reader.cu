@@ -824,7 +824,13 @@ gdf_error read_csv(csv_read_arg *args)
 		gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
 
 		gdf->size		= raw_csv->num_records;
-		gdf->dtype		= raw_csv->dtypes[col];
+		// dtype when inferred only contain the active columns, if user specified
+		// it contains all actual columns
+		if (args->dtype==NULL) {
+			gdf->dtype	= raw_csv->dtypes[col];
+		} else {
+			gdf->dtype	= raw_csv->dtypes[acol];
+		}
 		gdf->null_count	= 0;						// will be filled in later
 
 		//--- column name
