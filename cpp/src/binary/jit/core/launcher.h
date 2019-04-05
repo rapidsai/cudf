@@ -20,12 +20,15 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 #define GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 
+#include "cache.h"
 #include "binary/jit/util/type.h"
 #include "binary/jit/util/operator.h"
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
 #include <fstream>
+#include <memory>
+#include <chrono>
 
 namespace cudf {
 namespace binops {
@@ -38,14 +41,6 @@ namespace jit {
      * 
      *---------------------------------------------------------------------------**/
     class Launcher {
-    public:
-        static Launcher& Instance() {
-            // Meyers' singleton is thread safe in C++11
-            // Link: https://stackoverflow.com/a/1661564
-            static Launcher l;
-            return l;
-        }
-
     public:
         Launcher();
 
@@ -69,7 +64,7 @@ namespace jit {
          * @return Launcher& ref to this launcehr object
          *---------------------------------------------------------------------------**/
         template <typename ... Args>
-        Launcher& kernelInstantiation(
+        Launcher& setKernelInst(
             std::string&& kernName,
             gdf_binary_operator ope,
             Operator::Type type,
@@ -79,33 +74,22 @@ namespace jit {
             std::vector<std::string> arguments;
             arguments.assign({getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
             
-            // Make instance name e.g. "kernel_v_v_int_int_long int_Add"
-            std::string kern_inst_name = kernName;
-            for ( auto&& arg : arguments ) kern_inst_name += '_' + arg;
+            {
+                auto startPointClock = std::chrono::high_resolution_clock::now();
 
-            // Find memory cached kernel instantiation
-            auto kern_inst_it = kernel_inst_map.find(kern_inst_name);
-            if ( kern_inst_it != kernel_inst_map.end()) {
-                kern_inst_string = kern_inst_it->second;
-            }
-            else { // Find file cached kernel instantiation
-                std::ifstream kern_file (kern_inst_name, std::ios::binary);
-                if (kern_file) {
-                    std::stringstream buffer;
-                    buffer << kern_file.rdbuf();
-                    kern_inst_string = buffer.str();
-                    kernel_inst_map[kern_inst_name] = kern_inst_string;
-                }
-                else { // JIT compile the kernel and write to file
-                    kern_inst_string = program.kernel(kernName).instantiate(arguments).serialize();
-                    std::ofstream kern_file(kern_inst_name, std::ios::binary);
-                    kern_file << kern_inst_string;
-                    kernel_inst_map[kern_inst_name] = kern_inst_string;
-                }
+                    kernel_inst = std::make_unique<jitify_v2::KernelInstantiation>(
+                        cacheInstance.getKernelInstantiation(kernName, *program, arguments)
+                    );
+
+                auto stopPointClock = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
+                std::cout << "Kernel Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
             }
 
             return *this;
         }
+
+        Launcher& setProgram(std::string prog_file_name);
 
         /**---------------------------------------------------------------------------*
          * @brief Handle the Jitify API to instantiate and launch using information 
@@ -134,12 +118,9 @@ namespace jit {
         static const std::vector<std::string> headersName;
 
     private:
-        jitify_v2::Program program;
-        jitify_v2::Program getProgram();
-
-    private:
-        std::string kern_inst_string;
-        std::unordered_map<std::string, std::string> kernel_inst_map;
+        cudf::jit::cudfJitCache& cacheInstance;
+        std::unique_ptr<jitify_v2::Program> program;
+        std::unique_ptr<jitify_v2::KernelInstantiation> kernel_inst;
     };
 
 } // namespace jit

@@ -209,6 +209,7 @@ add_library(cudf SHARED
             src/binary/jit/code/operation.cpp
             src/binary/jit/code/traits.cpp
             src/binary/jit/core/binop.cpp
+            src/binary/jit/core/cache.cpp
             src/binary/jit/core/launcher.cpp
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp

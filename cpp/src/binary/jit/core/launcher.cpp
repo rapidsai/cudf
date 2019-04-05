@@ -51,33 +51,33 @@ namespace jit {
         return nullptr;
     }
 
-    jitify_v2::Program Launcher::getProgram(std::string prog_file_name) {
-        std::ifstream prog_file (prog_file_name, std::ios::binary);
+    Launcher& Launcher::setProgram(std::string prog_file_name)
+    {
+        auto startPointClock = std::chrono::high_resolution_clock::now();
 
-        // Find file cached preprocessed program
-        if (prog_file) {
-            std::stringstream buffer;
-            buffer << prog_file.rdbuf();
-            return jitify_v2::Program::deserialize(buffer.str());
-        }
-        // JIT preprocess the program and write to file
-        else {
-            auto _program = jitify_v2::Program(code::kernel,
-                                            headersName,
-                                            compilerFlags,
-                                            headersCode);
-            std::ofstream prog_file(prog_file_name, std::ios::binary);
-            prog_file << _program.serialize();
-            return _program;
-        }
+            program = std::make_unique<jitify_v2::Program>(
+                cacheInstance.getProgram(prog_file_name,
+                                        code::kernel,
+                                        headersName,
+                                        compilerFlags,
+                                        headersCode)
+            );
+
+        auto stopPointClock = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
+        std::cout << "Program Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
     }
 
     Launcher::Launcher()
-     : program {getProgram("prog_binop.jit")}
-    { }
+     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
+    { 
+        this->setProgram("prog_binop2.jit");
+    }
 
     Launcher::Launcher(Launcher&& launcher)
      : program {std::move(launcher.program)}
+     , cacheInstance {cudf::jit::cudfJitCache::Instance()}
+     , kernel_inst {std::move(launcher.kernel_inst)}
     { }
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
@@ -91,17 +91,10 @@ namespace jit {
     }
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
-        auto startPointClock = std::chrono::high_resolution_clock::now();
 
-        auto kernel_inst = 
-            jitify_v2::KernelInstantiation::deserialize(kern_inst_string);
-        auto stopPointClock = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
-        std::cout << "Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
-
-        kernel_inst.configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, lhs->data, rhs->data);
+        (*kernel_inst).configure_1d_max_occupancy()
+                      .launch(out->size,
+                              out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }

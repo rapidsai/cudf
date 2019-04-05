@@ -205,8 +205,8 @@ namespace jit {
         
         binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
 
-        Launcher::Instance().kernelInstantiation("kernel_v_v", ope, Operator::Type::Direct, out, lhs, rhs)
-                            .launch(out, lhs, rhs);
+        Launcher().setKernelInst("kernel_v_v", ope, Operator::Type::Direct, out, lhs, rhs)
+                  .launch(out, lhs, rhs);
 
         return GDF_SUCCESS;
     }
