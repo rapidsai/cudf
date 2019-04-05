@@ -233,9 +233,10 @@ class Series(object):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
@@ -559,6 +560,25 @@ class Series(object):
 
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
+
+    def __invert__(self):
+        """Bitwise invert (~)/(not) for each element
+
+        Returns a new Series.
+        """
+        if np.issubdtype(self.dtype.type, np.integer):
+            return self._unaryop('not')
+        else:
+            raise TypeError(
+                f"Operation `~` not supported on {self.dtype.type.__name__}"
+            )
+
+    def __neg__(self):
+        """Negatated value (-) for each element
+
+        Returns a new Series.
+        """
+        return self.__mul__(-1)
 
     @property
     def cat(self):
@@ -1178,6 +1198,17 @@ class Series(object):
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
+    # Absolute
+    def abs(self):
+        """Absolute value of each element of the series.
+
+        Returns a new Series.
+        """
+        return self._unaryop('abs')
+
+    def __abs__(self):
+        return self.abs()
+
     # Rounding
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
@@ -1194,6 +1225,42 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('floor')
+
+    # Math
+    def _float_math(self, op):
+        if np.issubdtype(self.dtype.type, np.floating):
+            return self._unaryop(op)
+        else:
+            raise TypeError(
+                f"Operation '{op}' not supported on {self.dtype.type.__name__}"
+            )
+
+    def sin(self):
+        return self._float_math('sin')
+
+    def cos(self):
+        return self._float_math('cos')
+
+    def tan(self):
+        return self._float_math('tan')
+
+    def asin(self):
+        return self._float_math('asin')
+
+    def acos(self):
+        return self._float_math('acos')
+
+    def atan(self):
+        return self._float_math('atan')
+
+    def exp(self):
+        return self._float_math('exp')
+
+    def log(self):
+        return self._float_math('log')
+
+    def sqrt(self):
+        return self._unaryop('sqrt')
 
     # Misc
 

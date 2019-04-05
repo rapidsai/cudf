@@ -13,6 +13,7 @@
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
+- PR #1163 Refactored UnaryOps. Reduced API to two functions: `gdf_unary_math` and `gdf_cast`. Added `abs`, `-`, and `~` ops. Changed bindings to Cython
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
@@ -178,12 +179,12 @@
 - PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
+- PR #1213 Fix bug with csv reader requesting subset of columns using wrong datatype
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
 - PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
-
 
 # cuDF 0.5.1 (05 Feb 2019)
 
