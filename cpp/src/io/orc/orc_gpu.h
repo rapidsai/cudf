@@ -34,9 +34,110 @@ struct CompressedStreamInfo
 };
 
 
-// stripe_init.cu
+enum {
+    CI_DATA = 0,        // Primary data stream
+    CI_DATA2,           // Secondary/Length stream
+    CI_PRESENT,         // Present stream
+    CI_DICTIONARY,      // Dictionary stream
+    CI_NUM_STREAMS
+};
+
+
+/**
+ * @brief Struct to describe the output of a string datatype
+ **/
+struct nvstrdesc_s {
+    const char *ptr;
+    size_t count;
+};
+
+
+/**
+* @brief Struct to describe a single entry in the global dictionary
+**/
+struct DictionaryEntry {
+    uint32_t pos;   // Position in data stream
+    uint32_t len;   // Length in data stream
+};
+
+
+/**
+ * @brief Struct to describe per stripe's column information
+ **/
+struct ColumnDesc
+{
+    const uint8_t *streams[CI_NUM_STREAMS];     // ptr to data stream index
+    uint32_t strm_id[CI_NUM_STREAMS];           // stream ids
+    uint32_t strm_len[CI_NUM_STREAMS];          // stream length
+    uint32_t *valid_map_base;                   // base pointer of valid bit map for this column
+    void *column_data_base;                     // base pointer of column data
+    uint32_t start_row;                         // starting row of the stripe
+    uint32_t num_rows;                          // starting row of the stripe
+    uint32_t dictionary_start;                  // start position in global dictionary
+    uint32_t dict_len;                          // length of local dictionary
+    uint32_t null_count;                        // number of null values in this stripe's column
+    uint32_t skip_count;                        // number of non-null values to skip
+    uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
+    uint8_t type_kind;                          // column data type (orc::TypeKind)
+    uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
+    uint8_t pad[5];
+};
+
+
+/**
+ * @brief Launches kernel for parsing the compressed stripe data
+ *
+ * @param[in] strm_info List of compressed streams
+ * @param[in] num_streams Number of compressed streams
+ * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
+ * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from compressed size)
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
 cudaError_t ParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t num_streams, uint32_t compression_block_size, uint32_t log2maxcr = 24, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for re-assembling decompressed blocks into a single contiguous block
+ *
+ * @param[in] strm_info List of compressed streams
+ * @param[in] num_streams Number of compressed streams
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
 cudaError_t PostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_streams, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for decoding NULLs and building string dictionary index tables
+ *
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] global_dictionary Global dictionary device array
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] max_rows Maximum number of rows to load
+ * @param[in] first_row Crop all rows below first_row
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel for decoding column data
+ *
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] global_dictionary Global dictionary device array
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] max_rows Maximum number of rows to load
+ * @param[in] first_row Crop all rows below first_row
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
+
 
 
 };}; // orc::gpu namespace

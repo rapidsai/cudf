@@ -1,6 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import cudf
+from cudf.tests.utils import assert_eq
 
 import pytest
 import pyarrow as pa
@@ -13,25 +14,22 @@ def datadir(datadir):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
-@pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
+@pytest.mark.parametrize('engine', ['cudf'])
 @pytest.mark.parametrize(
     'orc_file',
     [
-        'TestOrcFile.emptyFile.orc',
+        #'TestOrcFile.emptyFile.orc',
         'TestOrcFile.test1.orc'
     ]
 )
-def test_orc_reader(datadir, orc_file):
-    columns = ['boolean1', 'byte1', 'short1', 'int1', 'long1', 'float1',
-               'double1']
-
+@pytest.mark.parametrize('columns', [['boolean1', 'byte1', 'short1',
+                                      'int1', 'long1', 'float1', 'double1']])
+def test_orc_reader(datadir, orc_file, engine, columns):
     path = datadir / orc_file
-
     orcfile = pa.orc.ORCFile(path)
-    expect = orcfile.read(columns=columns)
-    got = cudf.read_orc(path, columns=columns)\
-              .to_arrow(preserve_index=False)\
-              .replace_schema_metadata()
+
+    expect = orcfile.read(columns=columns).to_pandas()
+    got = cudf.read_orc(path, engine=engine, columns=columns)
 
     # cuDF's default currently handles bools differently
     # For bool, cuDF doesn't support it so convert it to int8
@@ -39,12 +37,7 @@ def test_orc_reader(datadir, orc_file):
         if 'boolean1' in expect.columns:
             expect['boolean1'] = expect['boolean1'].astype('int8')
 
-    assert pa.Table.equals(expect, got)
+    print(expect)
+    print(got)
 
-    for column in columns:
-        expect = orcfile.read(columns=[column])
-        got = cudf.read_orc(path, columns=[column])\
-                  .to_arrow(preserve_index=False)\
-                  .replace_schema_metadata()
-
-    assert pa.Table.equals(expect, got)
+    assert_eq(expect, got, check_categorical=False)

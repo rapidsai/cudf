@@ -45,7 +45,7 @@ def read_orc(path, engine='pyarrow', columns=None, **kwargs):
                 arr_cols.append(_wrap_string(col))
             use_cols_ptr = ffi.new('char*[]', arr_cols)
             orc_reader.use_cols = use_cols_ptr
-            orc_reader.use_cols_len = len(usecols)
+            orc_reader.use_cols_len = len(columns)
 
         # Call to libcudf
         libgdf.read_orc(orc_reader)

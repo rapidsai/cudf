@@ -19,7 +19,7 @@
 
 namespace orc {
 
-void PBReader::skip_struct_field(int t)
+void ProtobufReader::skip_struct_field(int t)
 {
     switch (t)
     {
@@ -43,7 +43,7 @@ void PBReader::skip_struct_field(int t)
 
 
 #define ORC_BEGIN_STRUCT(st)                \
-    bool PBReader::read(st *s, size_t maxlen)   \
+    bool ProtobufReader::read(st *s, size_t maxlen)   \
     {   /*printf(#st "\n");*/                   \
         const uint8_t *end = std::min(m_cur + maxlen, m_end); \
         while (m_cur < end)                     \
@@ -92,12 +92,15 @@ void PBReader::skip_struct_field(int t)
                 s->m.resize(s->m.size() + 1); if (!read(&s->m.back(), n)) return false; \
                 break; }                        \
 
-#define ORC_END_STRUCT()                        \
+#define ORC_END_STRUCT_(postproccond)           \
             default: /*printf("unknown fld %d of type %d\n", fld >> 3, fld & 7);*/ skip_struct_field(fld & 7); \
             }                                   \
         }                                       \
-        return (m_cur <= end);                  \
+        return (postproccond);                  \
     }                                           \
+
+#define ORC_END_STRUCT()                        ORC_END_STRUCT_(m_cur <= end)
+#define ORC_END_STRUCT_POSTPROC(fn)             ORC_END_STRUCT_(m_cur <= end && fn(s))
 
 
 ORC_BEGIN_STRUCT(PostScript)
@@ -116,7 +119,8 @@ ORC_BEGIN_STRUCT(FileFooter)
     ORC_FLD_REPEATED_STRUCT(4, types)
     ORC_FLD_REPEATED_STRUCT(5, metadata)
     ORC_FLD_UINT64(6, numberOfRows)
-ORC_END_STRUCT()
+    ORC_FLD_UINT32(8, rowIndexStride)
+ORC_END_STRUCT_POSTPROC(InitSchema)
 
 ORC_BEGIN_STRUCT(StripeInformation)
     ORC_FLD_UINT64(1, offset)
@@ -155,6 +159,66 @@ ORC_BEGIN_STRUCT(ColumnEncoding)
     ORC_FLD_ENUM(1, kind, ColumnEncodingKind)
     ORC_FLD_UINT32(2, dictionarySize)
 ORC_END_STRUCT()
+
+
+// return the column name
+std::string FileFooter::GetColumnName(uint32_t column_id)
+{
+    std::string s = "";
+    uint32_t parent_idx = column_id, idx, field_idx;
+    do
+    {
+        idx = parent_idx;
+        parent_idx = (idx < types.size()) ? (uint32_t)types[idx].parent_idx : ~0;
+        field_idx = (parent_idx < types.size()) ? (uint32_t)types[idx].field_idx : ~0;
+        if (parent_idx >= types.size())
+            break;
+        if (field_idx < types[parent_idx].fieldNames.size())
+        {
+            if (s.length() > 0)
+                s = types[parent_idx].fieldNames[field_idx] + "." + s;
+            else
+                s = types[parent_idx].fieldNames[field_idx];
+        }
+    } while (parent_idx != idx);
+    // If we have no name (root column), generate a name
+    if (s.length() == 0)
+    {
+        s = "col" + std::to_string(column_id);
+    }
+    return s;
+}
+
+// Initializes the parent_idx field in the schema
+bool ProtobufReader::InitSchema(FileFooter *ff)
+{
+    int32_t schema_size = (int32_t)ff->types.size();
+    for (int32_t i = 0; i < schema_size; i++)
+    {
+        int32_t num_children = (int32_t)ff->types[i].subtypes.size();
+        if (ff->types[i].parent_idx == -1) // Not initialized
+        {
+            ff->types[i].parent_idx = i; // set root node as its own parent
+        }
+        for (int32_t j = 0; j < num_children; j++)
+        {
+            uint32_t column_id = ff->types[i].subtypes[j];
+            if (column_id <= (uint32_t)i || column_id >= (uint32_t)schema_size)
+            {
+                // Invalid column id (or at least not a schema index)
+                return false;
+            }
+            if (ff->types[column_id].parent_idx != -1)
+            {
+                // Same node referenced twice
+                return false;
+            }
+            ff->types[column_id].parent_idx = i;
+            ff->types[column_id].field_idx = j;
+        }
+    }
+    return true;
+}
 
 
 /* ----------------------------------------------------------------------------*/

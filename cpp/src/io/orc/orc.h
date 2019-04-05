@@ -57,6 +57,9 @@ struct SchemaType
     uint32_t maximumLength = 0;                 // optional: the maximum length of the type for varchar or char in UTF-8 characters
     uint32_t precision = 0;                     // optional: the precision and scale for decimal
     uint32_t scale = 0;
+    // Inferred fields
+    int32_t parent_idx = -1;                    // parent node (equal to current node for root nodes)
+    int32_t field_idx = -1;                     // field index in parent's subtype vector
 };
 
 struct UserMetadataItem
@@ -73,6 +76,9 @@ struct FileFooter
     std::vector<SchemaType> types;              // the schema information
     std::vector<UserMetadataItem> metadata;     // the user metadata that was added
     uint64_t numberOfRows = 0;                  // the total number of rows in the file
+    uint32_t rowIndexStride = 0;                // the maximum number of rows in each index entry
+    // Helper methods
+    std::string GetColumnName(uint32_t column_id); // return the column name
 };
 
 struct Stream
@@ -100,7 +106,13 @@ struct StripeFooter
 #define DECL_ORC_STRUCT(st)     bool read(st *, size_t maxlen)
 
 // Minimal protobuf reader for orc metadata
-class PBReader
+
+/**
+ * @brief Class for parsing Orc's Protocol Buffers encoded metadata
+ *
+ **/
+
+class ProtobufReader
 {
 protected:
     enum { // Protobuf field types
@@ -114,14 +126,14 @@ protected:
         PB_TYPE_INVALID_7 = 7,
     };
 public:
-    PBReader() { m_base = m_cur = m_end = nullptr; }
-    PBReader(const uint8_t *base, size_t len) { init(base, len); }
+    ProtobufReader() { m_base = m_cur = m_end = nullptr; }
+    ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
     void init(const uint8_t *base, size_t len) { m_base = m_cur = base; m_end = base + len; }
     ptrdiff_t bytecount() const { return m_cur - m_base; }
     unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
     void skip_bytes(size_t bytecnt) { bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur)); m_cur += bytecnt; }
-    uint32_t get_u32() { uint32_t v = 0; for (uint32_t l = 0; ; l += 7) { uint32_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
-    uint64_t get_u64() { uint64_t v = 0; for (uint64_t l = 0; ; l += 7) { uint64_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
+    uint32_t get_u32() { uint32_t v = 0; for (uint32_t l = 0; ; l += 7) { uint32_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) return v; } }
+    uint64_t get_u64() { uint64_t v = 0; for (uint64_t l = 0; ; l += 7) { uint64_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) return v; } }
     int32_t get_i32() { uint32_t u = get_u32(); return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1)); }
     int64_t get_i64() { uint64_t u = get_u64(); return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1)); }
     void skip_struct_field(int t);
@@ -135,6 +147,8 @@ public:
     DECL_ORC_STRUCT(StripeFooter);
     DECL_ORC_STRUCT(Stream);
     DECL_ORC_STRUCT(ColumnEncoding);
+protected:
+    bool InitSchema(FileFooter *);
 
 protected:
     const uint8_t *m_base;
@@ -142,6 +156,11 @@ protected:
     const uint8_t *m_end;
 };
 
+
+/**
+ * @brief Class for decompressing Orc data blocks using the CPU
+ *
+ **/
 
 class OrcDecompressor
 {
