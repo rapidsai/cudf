@@ -33,7 +33,7 @@
 
 namespace {
 bool isPtrManager(cudaPointerAttributes attr) {
-#if CUDA_VERSION >= 10000
+#if CUDART_VERSION >= 10000
     return (attr.type == cudaMemoryTypeManaged);
 #else
     return attr.isManaged;
