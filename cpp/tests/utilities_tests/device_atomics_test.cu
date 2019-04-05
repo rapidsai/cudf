@@ -28,6 +28,7 @@
 #include <bitset>
 #include <cstdint>
 #include <random>
+#include <iostream>
 
 template<typename T>
 __global__
@@ -40,7 +41,7 @@ void gpu_atomic_test(T *result, T *data, size_t size)
         atomicAdd(&result[0], data[id]);
         atomicMin(&result[1], data[id]);
         atomicMax(&result[2], data[id]);
-        atomicAdd(&result[3], data[id]);
+        cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
     }
 }
 
@@ -85,9 +86,9 @@ void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
 
     for (; id < size; id += step) {
         atomicAnd(&result[0], data[id]);
-        atomicAnd(&result[1], data[id]);
-        atomicAnd(&result[2], data[id]);
-        atomicAnd(&result[3], data[id]);
+        atomicOr(&result[1], data[id]);
+        atomicXor(&result[2], data[id]);
+        cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceAnd{});
     }
 }
 
@@ -259,18 +260,24 @@ struct AtomicsBitwiseOpTest : public GdfTest
     void atomic_test(std::vector<uint64_t> const & v,
         int block_size=0, int grid_size=1)
     {
-        T exact[3];
-        exact[0] = std::accumulate(v.begin(), v.end(), 0,
+        std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull)};
+        T exact[4];
+        exact[0] = std::accumulate(v.begin(), v.end(), identity[0],
             [](T acc, uint64_t i) { return acc & T(i); });
+        exact[1] = std::accumulate(v.begin(), v.end(), identity[1],
+            [](T acc, uint64_t i) { return acc | T(i); });
+        exact[2] = std::accumulate(v.begin(), v.end(), identity[2],
+            [](T acc, uint64_t i) { return acc ^ T(i); });
+        exact[3] = exact[0];
 
         size_t vec_size = v.size();
 
         std::vector<T> v_type(vec_size);
         std::transform(v.begin(), v.end(), v_type.begin(),
-            [](int x) { T t(x) ; return t; } );
+            [](uint64_t x) { T t(x) ; return t; } );
 
-        std::vector<T> result_init(4);
-        result_init[0] = T{0};
+        std::vector<T> result_init(identity);
+
 
         thrust::device_vector<T> dev_result(result_init);
         thrust::device_vector<T> dev_data(v_type);
@@ -286,11 +293,25 @@ struct AtomicsBitwiseOpTest : public GdfTest
         cudaDeviceSynchronize();
         CUDA_CHECK_LAST();
 
-        EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAnd test failed";
-//        EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
-//        EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
-//        EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
+        print_exact(exact, "exact");
+        print_exact(host_result.data(), "result");
+
+
+        EXPECT_EQ(host_result[0], exact[0]) << "atomicAnd test failed";
+        EXPECT_EQ(host_result[1], exact[1]) << "atomicOr test failed";
+        EXPECT_EQ(host_result[2], exact[2]) << "atomicXor test failed";
+        EXPECT_EQ(host_result[3], exact[0]) << "atomicAnd test(2) failed";
     }
+
+    void print_exact(const T *v, const char* msg){
+        std::cout << std::hex << std::showbase;
+        std::cout << "The " << msg << " = {" 
+            << +v[0] << ", "
+            << +v[1] << ", "
+            << +v[2] << "}"
+            << std::endl;
+    }
+
 };
 
 using BitwiseOpTestingTypes = ::testing::Types<
@@ -302,8 +323,15 @@ TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
 
 TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
 {
-    std::vector<uint64_t> input_array({0x01, 0x02, 0x0104, 0xfcfcfcfcfcfcfcfc});
-    this->atomic_test(input_array);
-
+    { // test for AND, XOR
+        std::vector<uint64_t> input_array(
+            {0xfcfcfcfcfcfcfc7f, 0x7f7f7f7f7f7ffc, 0xfffddffddffddfdf, 0x7f7f7f7f7f7ffc});
+        this->atomic_test(input_array);
+    }
+    { // test for OR, XOR
+        std::vector<uint64_t> input_array(
+            {0x01, 0xfc02, 0x1dff03, 0x1100a0b0801d0003, 0x8000000000000000, 0x1dff03});
+        this->atomic_test(input_array);
+    }
 }
 
