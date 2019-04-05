@@ -109,6 +109,12 @@ namespace jit {
                 return "LessEqual";
             case GDF_GREATER_EQUAL:
                 return "GreaterEqual";
+            case GDF_BITWISE_AND:
+                return "BitwiseAnd";
+            case GDF_BITWISE_OR:
+                return "BitwiseOr";
+            case GDF_BITWISE_XOR:
+                return "BitwiseXor";
             default:
                 return "None";
         }

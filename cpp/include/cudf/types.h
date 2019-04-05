@@ -203,23 +203,46 @@ typedef enum {
  * @brief Types of binary operations that can be performed on data.
  */
 typedef enum {
-  GDF_ADD,            /**< operator + */
-  GDF_SUB,            /**< operator - */
-  GDF_MUL,            /**< operator * */
-  GDF_DIV,            /**< operator / using common type of lhs and rhs */
-  GDF_TRUE_DIV,       /**< operator / after promoting type to floating point*/
-  GDF_FLOOR_DIV,      /**< operator / after promoting to float and then flooring the result */
-  GDF_MOD,            /**< operator %  */
-  GDF_POW,            /**< lhs ^ rhs   */
-  GDF_EQUAL,          /**< operator == */
-  GDF_NOT_EQUAL,      /**< operator != */
-  GDF_LESS,           /**< operator <  */
-  GDF_GREATER,        /**< operator >  */
-  GDF_LESS_EQUAL,     /**< operator <= */
-  GDF_GREATER_EQUAL,  /**< operator >= */
+  GDF_ADD,            ///< operator +
+  GDF_SUB,            ///< operator -
+  GDF_MUL,            ///< operator *
+  GDF_DIV,            ///< operator / using common type of lhs and rhs
+  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
+  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
+  GDF_MOD,            ///< operator %
+  GDF_POW,            ///< lhs ^ rhs
+  GDF_EQUAL,          ///< operator ==
+  GDF_NOT_EQUAL,      ///< operator !=
+  GDF_LESS,           ///< operator <
+  GDF_GREATER,        ///< operator >
+  GDF_LESS_EQUAL,     ///< operator <=
+  GDF_GREATER_EQUAL,  ///< operator >=
+  GDF_BITWISE_AND,    ///< operator &
+  GDF_BITWISE_OR,     ///< operator |
+  GDF_BITWISE_XOR,    ///< operator ^
   GDF_COALESCE,       ///< operator x,y  x is null ? y : x
   GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
+
+
+/**
+ * @brief Types of unary math operations that can be performed on data.
+ */
+typedef enum {
+  GDF_SIN,          ///< Trigonometric sine
+  GDF_COS,          ///< Trigonometric cosine
+  GDF_TAN,          ///< Trigonometric tangent
+  GDF_ARCSIN,       ///< Trigonometric sine inverse
+  GDF_ARCCOS,       ///< Trigonometric cosine inverse
+  GDF_ARCTAN,       ///< Trigonometric tangent inverse
+  GDF_EXP,          ///< Exponential (base e, Euler number)
+  GDF_LOG,          ///< Natural Logarithm (base e)
+  GDF_SQRT,         ///< Square-root (x^0.5)
+  GDF_CEIL,         ///< Smallest integer value not less than arg
+  GDF_FLOOR,        ///< largest integer value not greater than arg
+  GDF_ABS,          ///< Absolute value
+  GDF_BIT_INVERT,   ///< Bitwise Not (~)
+} gdf_unary_math_op;
 
 
 /** 
