@@ -16,6 +16,8 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
+cdef gdf_dtype get_dtype(dtype)
+
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)

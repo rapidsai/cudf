@@ -54,7 +54,7 @@ cdef get_scalar_value(gdf_scalar scalar):
     }[scalar.dtype]
 
 
-def apply_reduce(reduction_op, col):
+def apply_reduce(reduction_op, col, dtype=None):
     """
       Call gdf reductions.
     """
@@ -69,12 +69,14 @@ def apply_reduce(reduction_op, col):
             return col.dtype.type(1)
         return np.nan
 
-    col_dtype = col.dtype
+    col_dtype = dtype if dtype != None else col.dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
-    cdef gdf_dtype c_out_dtype = c_col[0].dtype
+    cdef gdf_dtype c_out_dtype = get_dtype(col_dtype.type if dtype is None else col_dtype)
     cdef gdf_scalar c_result
+
+    print('c_out_dtype:', c_out_dtype)
 
     with nogil:    
         c_result = reduction(

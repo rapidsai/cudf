@@ -67,6 +67,9 @@ cpdef get_column_data_ptr(obj):
 cpdef get_column_valid_ptr(obj):
     return get_ctype_ptr(obj._mask.mem)
 
+cdef gdf_dtype get_dtype(dtype):
+    return dtypes[dtype]
+
 
 # gdf_column functions
 

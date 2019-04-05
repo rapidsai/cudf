@@ -136,3 +136,14 @@ def test_sum_masked(nelem):
 
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
+
+
+def test_sum_boolean():
+    s = Series(np.arange(100000))
+    got = (s > 1).sum(dtype=np.int32)
+    expect = 99998
+
+    print('expect:', expect)
+    print('got:', got)
+
+    assert expect == got
