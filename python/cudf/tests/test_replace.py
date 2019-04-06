@@ -199,9 +199,15 @@ def test_fillna_dataframe(fill_type, inplace):
     assert_eq(expect, got)
 
 
-def test_series_fillna_dtype():
-    df = DataFrame()
-    df['a'] = [1, 2, 3]
-    df['a'] = df['a'].astype(np.int16)
-    df['a'] = df['a'].fillna(1)
-    assert df['a'].dtype == np.int16
+@pytest.mark.parametrize(
+    'data_dtype',
+    ['int8', 'int16', 'int32', 'int64'])
+def test_series_fillna_invalid_dtype(data_dtype):
+    gdf = Series([1, 2, None, 3], dtype=data_dtype)
+    fill_value = 2.5
+    with pytest.raises(TypeError) as raises:
+        gdf.fillna(fill_value)
+    raises.match("Cannot safely cast non-equivalent {} to {}".format(
+        np.dtype(type(fill_value)).type.__name__,
+        gdf.dtype.type.__name__
+    ))
