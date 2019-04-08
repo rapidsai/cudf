@@ -16,17 +16,15 @@
  * limitations under the License.
  */
 
-#include <thrust/copy.h>
 #include <cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <copying.hpp>
 #include <stream_compaction.hpp>
 #include <bitmask/legacy_bitmask.hpp>
+#include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
-
-namespace cudf {
 
 namespace {
 struct nonnull_and_true {
@@ -38,8 +36,8 @@ struct nonnull_and_true {
     CUDF_EXPECTS(boolean_mask.valid != nullptr, "Null boolean_mask bitmask");
   }
 
-  __device__ bool operator()(gdf_index_type i) {
-    return (cudf::true_v == data[i]) && gdf_is_valid(bitmask, i);
+  __device__ int operator()(gdf_index_type i) {
+    return ((cudf::true_v == data[i]) && gdf_is_valid(bitmask, i));
   }
 
  private:
@@ -48,12 +46,14 @@ struct nonnull_and_true {
 };
 }  // namespace
 
+namespace cudf {
+
 /**
  * @brief Filters a column using a column of boolean values as a mask.
  *
  */
-gdf_column apply_boolean_mask(gdf_column const *input,
-                              gdf_column const *boolean_mask) {
+/*gdf_column apply_boolean_mask_old(gdf_column const *input,
+                                  gdf_column const *boolean_mask) {
   CUDF_EXPECTS(nullptr != input, "Null input");
   CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
   CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
@@ -115,6 +115,165 @@ gdf_column apply_boolean_mask(gdf_column const *input,
     delete input_view[0];
   }
   return output;
+}*/
+
+struct scatter_functor 
+{
+  template <typename T>
+  __host__ __device__
+  void operator()(gdf_column *out, int out_index, 
+                  gdf_column const *in, int in_index) {
+    static_cast<T*>(out->data)[out_index] = 
+      static_cast<T const*>(in->data)[in_index];
+  }
+};
+
+__device__ void atomicSetValidBit(gdf_valid_type *valid_mask, gdf_index_type i)
+{
+  const gdf_index_type index = gdf_valid_mask_index(i);
+  const gdf_index_type bit   = gdf_valid_bit_index(i);
+  atomicOr( &valid_mask[index], gdf_valid_type(1 << bit) );
 }
+
+__device__ void atomicClearValidBit(gdf_valid_type *valid_mask, gdf_index_type i)
+{
+  const gdf_index_type index = gdf_valid_mask_index(i);
+  const gdf_index_type bit   = gdf_valid_bit_index(i);
+  atomicAnd( &valid_mask[index], gdf_valid_type(~(1 << bit)) );
+}
+
+template <int block_size, typename MaskFunc>
+__global__ void scatter_foo(gdf_column *output_column,
+                            gdf_column const * input_column,
+                            gdf_index_type const *scatter_map,
+                            gdf_size_type scatter_size,
+                            gdf_size_type num_columns,
+                            bool has_valid,
+                            MaskFunc mask)
+{
+  int tid = threadIdx.x + blockIdx.x * block_size;
+                    
+  if (tid < scatter_size) {
+    if (mask(tid)) {
+
+      const gdf_index_type in_index = tid;
+      const gdf_index_type out_index = scatter_map[tid];
+
+      //for (int c = 0; c < num_columns; c++) {
+      //static_cast<T*>(out->data)[out_index] = 
+      //  static_cast<T const*>(in->data)[in_index];
+      cudf::type_dispatcher(output_column->dtype, scatter_functor{},
+                            output_column, out_index,
+                            input_column, in_index);
+
+      if (has_valid) {
+        // Scatter the valid bit
+        if (gdf_is_valid(input_column->valid, in_index)) {
+          //printf("Setting bit for index %d\n", out_index);
+          atomicSetValidBit(output_column->valid, out_index);
+        }
+        else {
+          atomicAdd(&(output_column->null_count), 1);
+          //printf("Clearing bit for index %d\n", out_index);
+          atomicClearValidBit(output_column->valid, out_index);
+        }
+      }
+    }
+  }
+}
+
+template <typename MaskFunc>
+__global__ void get_output_size(gdf_size_type  *output_size, 
+                                gdf_index_type *scatter_map,
+                                gdf_size_type   mask_size,
+                                MaskFunc        mask)
+{
+  *output_size = scatter_map[mask_size-1] + gdf_index_type{mask(mask_size-1)};
+}
+
+gdf_column apply_boolean_mask(gdf_column const *input,
+                              gdf_column const *boolean_mask) {
+  CUDF_EXPECTS(nullptr != input, "Null input");
+  CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
+  CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
+  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL, "Mask must be Boolean type");
+
+  // High Level Algorithm:
+  // First, compute a `scatter_map` from the boolean_mask that will scatter
+  // input[i] if boolean_mask[i] is non-null and "true". This is simply an exclusive
+  // scan of nonnull_and_true
+  // Second, use the `scatter_map` to scatter elements from the `input` column
+  // into the `output` column
+
+  rmm::device_vector<gdf_index_type> scatter_map(boolean_mask->size);
+
+  auto xform = thrust::make_transform_iterator(thrust::make_counting_iterator(0), 
+                                               nonnull_and_true{*boolean_mask});
+  thrust::exclusive_scan(rmm::exec_policy(0)->on(0),
+                         xform, 
+                         xform+boolean_mask->size, 
+                         scatter_map.begin(), 
+                         gdf_index_type{0});
+
+  // Last element of scan contains size if the last element of the mask is 0,
+  // or size-1 if it is 1.
+  gdf_size_type *output_size = nullptr;
+  cudaMallocHost(&output_size, sizeof(gdf_size_type));
+  get_output_size<<<1, 1>>>(output_size, 
+                            thrust::raw_pointer_cast(scatter_map.data()), 
+                            boolean_mask->size, 
+                            nonnull_and_true{*boolean_mask});
+  
+  gdf_column output;
+  gdf_column_view(&output, 0, 0, 0, input->dtype);
+  output.dtype_info = input->dtype_info;
+
+  cudaDeviceSynchronize();
+
+  if (*output_size > 0) {
+    // have to do this because cudf::scatter operates on cudf::tables and
+    // there seems to be no way to create a cudf::table from a const gdf_column!
+    //gdf_column const * inputs[1] = {input};
+    
+    // Allocate/initialize output column
+    gdf_size_type column_byte_width{gdf_dtype_size(input->dtype)};
+
+    void *data = nullptr;
+    gdf_valid_type *valid = nullptr;
+    RMM_ALLOC(&data, *output_size * column_byte_width, 0);
+    if (input->valid != nullptr) {
+      gdf_size_type bytes = gdf_valid_allocation_size(*output_size);
+      RMM_ALLOC(&valid, bytes, 0);
+    }
+    
+    CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, data, valid,
+                                                *output_size, input->dtype),
+                "cudf::apply_boolean_mask failed to create output column view");
+    gdf_column *d_input = nullptr, *d_output = nullptr;
+    RMM_ALLOC(&d_input, sizeof(gdf_column), 0);
+    RMM_ALLOC(&d_output, sizeof(gdf_column), 0);
+    cudaMemcpy(d_input, input, sizeof(gdf_column), cudaMemcpyDefault);
+    cudaMemcpy(d_output, &output, sizeof(gdf_column), cudaMemcpyDefault);
+    
+    //gdf_column* outputs[1] = {&output};
+
+    constexpr int block_size = 256;
+    scatter_foo<block_size><<<1024, block_size>>>(d_output, 
+                                                  d_input, 
+                                                  thrust::raw_pointer_cast(scatter_map.data()),
+                                                  boolean_mask->size, 
+                                                  gdf_size_type{1},
+                                                  input->valid != nullptr, 
+                                                  nonnull_and_true{*boolean_mask});
+
+    CHECK_STREAM(0);
+
+    cudaMemcpy(&output, d_output, sizeof(gdf_column), cudaMemcpyDefault);
+    RMM_FREE(d_input, 0);
+    RMM_FREE(d_output, 0);
+  }
+  return output;
+}
+
 
 }  // namespace cudf

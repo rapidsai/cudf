@@ -74,36 +74,28 @@ TYPED_TEST_CASE(ApplyBooleanMaskTest, test_types);
 
 // Test computation
 
-template<typename T>
-using ValueInitializer = std::function< T (gdf_index_type) >;
-using BitInitializer   = ValueInitializer<bool>;
-
-
-/* Helper function that takes initializer functions / lambdas for the data
- * and valid bits of an input column and a boolean mask column, as well as a
- * initializers for the expected value and bitmask of the output of
- * cudf::apply_boolean_mask. Runs apply_boolean_mask checking for errors,
- * and compares the result column to the expected result column.
+/*
+ * Runs apply_boolean_mask checking for errors, and compares the result column 
+ * to the specified expected result column.
  */
 template <typename T>
-void BooleanMaskTest(gdf_size_type                 in_size,
-                     ValueInitializer<T>           in_data,
-                     BitInitializer                in_valid,
-                     ValueInitializer<cudf::bool8> mask_data,
-                     BitInitializer                mask_valid,
-                     gdf_size_type                 expected_size,
-                     ValueInitializer<T>           expected_data,
-                     BitInitializer                expected_valid)
+void BooleanMaskTest(cudf::test::column_wrapper<T> source,
+                     cudf::test::column_wrapper<cudf::bool8> mask,
+                     cudf::test::column_wrapper<T> expected)
 {
-  cudf::test::column_wrapper<T> source{in_size, in_data, in_valid};
-  cudf::test::column_wrapper<cudf::bool8> mask{in_size, mask_data, mask_valid};
-  cudf::test::column_wrapper<T> expected{expected_size, 
-                                         expected_data, expected_valid};
-
   gdf_column result;
   EXPECT_NO_THROW(result = cudf::apply_boolean_mask(source, mask));
 
   EXPECT_TRUE(expected == result);
+
+  /*std::cout << "expected\n";
+  expected.print();
+  std::cout << expected.get()->null_count << "\n";
+  fflush(stdout);
+  std::cout << "result\n";
+  print_gdf_column(&result);
+  std::cout << result.null_count << "\n";
+  fflush(stdout);*/
 
   gdf_column_free(&result);
 }
@@ -113,14 +105,15 @@ TYPED_TEST(ApplyBooleanMaskTest, Identity)
   constexpr gdf_size_type column_size{1000};
 
   BooleanMaskTest<TypeParam>(
-    column_size,
-    [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-    [](gdf_index_type row) { return true; },
-    [](gdf_index_type row) { return cudf::bool8{true}; },
-    [](gdf_index_type row) { return true; },
-    column_size,
-    [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-    [](gdf_index_type row) { return true; });
+    cudf::test::column_wrapper<TypeParam>{column_size,                             
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }});
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
@@ -128,14 +121,13 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
   constexpr gdf_size_type column_size{1000};
 
   BooleanMaskTest<TypeParam>(
-    column_size,
-    [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-    [](gdf_index_type row) { return true; },
-    [](gdf_index_type row) { return cudf::bool8{false}; },
-    [](gdf_index_type row) { return true; },
-    0,
-    [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-    [](gdf_index_type row) { return true; });
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{false}; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<TypeParam>{0, false});
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
@@ -143,14 +135,13 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
   constexpr gdf_size_type column_size{1000};
 
   BooleanMaskTest<TypeParam>(
-    column_size,
-    [](gdf_index_type row) { return row; },
-    [](gdf_index_type row) { return true; },
-    [](gdf_index_type row) { return cudf::bool8{true}; },
-    [](gdf_index_type row) { return false; },
-    0,
-    [](gdf_index_type row) { return row; },
-    [](gdf_index_type row) { return true; });
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size, 
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return false; }},
+    cudf::test::column_wrapper<TypeParam>{0, false});
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
@@ -158,14 +149,15 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
   constexpr gdf_size_type column_size{1000};
 
   BooleanMaskTest<TypeParam>(
-    column_size,
-    [](gdf_index_type row) { return row; },
-    [](gdf_index_type row) { return true; },
-    [](gdf_index_type row) { return cudf::bool8{row % 2 == 1}; },
-    [](gdf_index_type row) { return true; },
-    (column_size + 1) / 2,
-    [](gdf_index_type row) { return 2 * row + 1;  },
-    [](gdf_index_type row) { return true; });
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{row % 2 == 1}; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<TypeParam>{(column_size + 1) / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return true; }});
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
@@ -177,13 +169,31 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
   // vector should have all values nulled
 
   BooleanMaskTest<TypeParam>(
-    column_size,
-    [](gdf_index_type row) { return row; },
-    [](gdf_index_type row) { return row % 2 == 0; },
-    [](gdf_index_type row) { return cudf::bool8{true}; },
-    [](gdf_index_type row) { return row % 2 == 1; },
-    (column_size + 1) / 2,
-    [](gdf_index_type row) { return 2 * row + 1;  },
-    [](gdf_index_type row) { return false; });
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2 == 0; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return row % 2 == 1; }},
+    cudf::test::column_wrapper<TypeParam>{(column_size + 1) / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return false; }});
 }
 
+TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
+{
+  constexpr gdf_size_type column_size{1000};
+
+  std::vector<TypeParam> source(column_size, TypeParam{0});
+  std::vector<TypeParam> expected((column_size + 1) / 2, TypeParam{0});
+  std::iota(source.begin(), source.end(), TypeParam{0});
+  std::generate(expected.begin(), expected.end(), 
+                [n = -1] () mutable { return n+=2; });
+
+  BooleanMaskTest<TypeParam>(
+    cudf::test::column_wrapper<TypeParam>{source},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return row % 2 == 1; }},
+    cudf::test::column_wrapper<TypeParam> {expected});
+}

@@ -21,6 +21,30 @@
 #include <utilities/cudf_utils.h>
 
 /**---------------------------------------------------------------------------*
+ * @brief Returns the index of the valid mask word that contains the valid bit
+ * for the specified element index of a column
+ *
+ * @param pos element / row index
+ * @return the index of the valid mask word corresponding to pos
+ *---------------------------------------------------------------------------**/
+CUDA_HOST_DEVICE_CALLABLE
+gdf_index_type gdf_valid_mask_index(gdf_index_type pos) {
+  return pos / GDF_VALID_BITSIZE;
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns the bit index of of the specified element within its valid 
+ * mask word
+ *
+ * @param pos element / row index
+ * @return the index of the valid mask bit corresponding to pos
+ *---------------------------------------------------------------------------**/
+CUDA_HOST_DEVICE_CALLABLE
+gdf_index_type gdf_valid_bit_index(gdf_index_type pos) {
+  return pos % GDF_VALID_BITSIZE;
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Returns true if the specified bit in a validity bit mask is set.
  *
  * @param valid The validity bitmask. If equal to `nullptr`, this function
@@ -32,7 +56,7 @@
 CUDA_HOST_DEVICE_CALLABLE
 bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
   if (valid)
-    return (valid[pos / GDF_VALID_BITSIZE] >> (pos % GDF_VALID_BITSIZE)) & 1;
+    return (valid[gdf_valid_mask_index(pos)] >> gdf_valid_bit_index(pos)) & 1;
   else
     return true;
 }
