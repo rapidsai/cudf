@@ -398,7 +398,7 @@ gdf_error read_orc(orc_read_arg *args) {
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
   }
 
-  if (num_columns > 0) {
+  if (num_rows > 0 && num_columns > 0) {
     // Allocate row index: essentially 2D array indexed by stripe id & gdf column index
     cudaMallocHost((void **)&chunks, ff.stripes.size() * num_columns * sizeof(chunks[0]));
     RMM_ALLOC((void **)&chunks_dev, ff.stripes.size() * num_columns * sizeof(chunks_dev[0]), 0);

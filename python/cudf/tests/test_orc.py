@@ -18,7 +18,7 @@ def datadir(datadir):
 @pytest.mark.parametrize(
     'orc_file',
     [
-        #'TestOrcFile.emptyFile.orc',
+        'TestOrcFile.emptyFile.orc',
         'TestOrcFile.test1.orc'
     ]
 )
