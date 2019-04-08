@@ -207,25 +207,39 @@ inline __device__ uint64_t bytestream_readu64(volatile orc_bytestream_s *bs, int
     return v;
 }
 
-inline __device__ uint32_t bytestream_readbe32(volatile orc_bytestream_s *bs, int pos, uint32_t numbits)
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint32_t &result)
 {
-    uint32_t a = __byte_perm(bs->buf.u32[(pos & (BYTESTREAM_BFRSZ - 1)) >> 2], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((pos + 4) & (BYTESTREAM_BFRSZ - 1)) >> 2], 0, 0x0123);
-    return __funnelshift_l(b, a, (pos & 3) * 8) >> (32 - numbits);
+    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
+    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
+    result = __funnelshift_l(b, a, bitpos & 0x1f) >> (32 - numbits);
 }
 
-inline __device__ uint32_t bytestream_readbe64(volatile orc_bytestream_s *bs, int pos, uint32_t numbits)
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int32_t &result)
 {
-    uint32_t a = __byte_perm(bs->buf.u32[(pos & (BYTESTREAM_BFRSZ - 1)) >> 2], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((pos + 4) & (BYTESTREAM_BFRSZ - 1)) >> 2], 0, 0x0123);
-    uint32_t c = __byte_perm(bs->buf.u32[((pos + 8) & (BYTESTREAM_BFRSZ - 1)) >> 2], 0, 0x0123);
-    uint32_t hi32 = __funnelshift_l(b, a, (pos & 3) * 8);
-    uint32_t lo32 = __funnelshift_l(c, b, (pos & 3) * 8);
+    uint32_t u;
+    bytestream_readbe(bs, bitpos, numbits, u);
+    result = (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
+}
+
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint64_t &result)
+{
+    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1)*8)) >> 5], 0, 0x0123);
+    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
+    uint32_t c = __byte_perm(bs->buf.u32[((bitpos + 64) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
+    uint32_t hi32 = __funnelshift_l(b, a, bitpos & 0x1f);
+    uint32_t lo32 = __funnelshift_l(c, b, bitpos & 0x1f);
     uint64_t v = hi32;
     v <<= 32;
     v |= lo32;
     v >>= (64 - numbits);
-    return v;
+    result = v;
+}
+
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int64_t &result)
+{
+    uint64_t u;
+    bytestream_readbe(bs, bitpos, numbits, u);
+    result = (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
 }
 
 inline __device__ uint32_t bytestream_readbits(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits)
@@ -248,6 +262,7 @@ inline __device__ uint64_t bytestream_readbits64(volatile orc_bytestream_s *bs, 
     v >>= (64 - numbits);
     return v;
 }
+
 
 /**
  * @brief Return the length of a base-128 varint
@@ -570,16 +585,18 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
             mode = byte0 >> 6;
             if (mode == 0)
             {
+                T baseval;
                 // 00lllnnn: short repeat encoding
                 w = 8 + (byte0 & 0x38); // 8 to 64 bits
                 n = 3 + (byte0 & 7); // 3 to 10 values
+                bytestream_readbe(bs, pos*8, w, baseval);
                 if (sizeof(T) <= 4)
                 {
-                    rle->baseval.u32[r] = bytestream_readbe32(bs, pos, w);
+                    rle->baseval.u32[r] = baseval;
                 }
                 else
                 {
-                    rle->baseval.u64[r] = bytestream_readbe64(bs, pos, w);
+                    rle->baseval.u64[r] = baseval;
                 }
             }
             else
@@ -597,19 +614,27 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                         uint32_t pw = kRLEv2_W[byte2 & 0x1f]; // patch width, 1 to 64 bits
                         if (sizeof(T) <= 4)
                         {
-                            rle->baseval.u32[r] = bytestream_readbe32(bs, pos, bw * 8); // TODO: signed support
+                            uint32_t baseval, mask;
+                            bytestream_readbe(bs, pos * 8, bw * 8, baseval);
+                            mask = (1 << (bw*8-1)) - 1;
+                            rle->baseval.u32[r] = (baseval > mask) ? (-(int32_t)(baseval & mask)) : baseval;
                         }
                         else
                         {
-                            rle->baseval.u64[r] = bytestream_readbe64(bs, pos, bw * 8); // TODO: signed support
+                            uint64_t baseval, mask;
+                            bytestream_readbe(bs, pos * 8, bw * 8, baseval);
+                            mask = 2;
+                            mask <<= (bw*8) - 1;
+                            mask -= 1;
+                            rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
                         }
                         rle->m2_pw_byte3[r] = (pw << 8) | byte3;
                         pos += bw;
                     }
                     else
                     {
-                        // Delta
                         T baseval;
+                        // Delta
                         pos = decode_varint<T>(bs, pos, baseval);
                         if (sizeof(T) <= 4)
                         {
@@ -640,7 +665,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else if (mode == 1)
                 {
-                    vals[base + i] = bytestream_readbits(bs, pos * 8 + i*w, w);
+                    T v;
+                    bytestream_readbe(bs, pos * 8 + i*w, w, v);
+                    vals[base + i] = v;
                 }
                 else if (mode == 2)
                 {
@@ -662,7 +689,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else if (mode == 1)
                 {
-                    vals[base + i] = bytestream_readbits64(bs, pos * 8 + i*w, w);
+                    T v;
+                    bytestream_readbe(bs, pos * 8 + i*w, w, v);
+                    vals[base + i] = v;
                 }
                 else if (mode == 2)
                 {
