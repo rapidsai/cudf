@@ -16,168 +16,225 @@
  * limitations under the License.
  */
 
-#include "helper/utils.cuh"
+#include "test_filter_ops.cuh"
 
-#include <tests/utilities/cudf_test_fixtures.h>
+template <typename DataColumnElement>
+struct ApplyBooleanMaskTest : public GdfTest {
 
-#include <cudf.h>
+    using element_type = DataColumnElement;
 
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
+    ApplyBooleanMaskTest() = default;
+    ~ApplyBooleanMaskTest() = default;
 
-#include <gtest/gtest.h>
+};
 
-#include <cuda_runtime.h>
+typedef ::testing::Types<
+    int8_t,
+    int32_t,
+    int64_t,
+    float,
+    double
+  > Implementations;
 
-#include <iostream>
-#include <tuple>
+TYPED_TEST_CASE(ApplyBooleanMaskTest, Implementations);
 
-/*
- ============================================================================
- Description : Compute gdf_comparison and apply_stencil of gdf_columns using Thrust on GPU
- ============================================================================
- */
+//Todo: usage_example
+//TYPED_TEST(ApplyBooleanMaskTest, usage_example) {
 
-struct FilterOperationsTest : public GdfTest {};
 
-TEST_F(FilterOperationsTest, usage_example) {
+TYPED_TEST(ApplyBooleanMaskTest, all_multiple_32) {
+    using element_type = typename TestFixture::element_type;
 
-    using LeftValueType = int16_t;
-    using RightValueType = int16_t;
-    int column_size = 10;
-    int init_value = 10;
-    int max_size = 4;
-    gdf_comparison_operator gdf_operator = GDF_EQUALS;
+    constexpr const auto size =  column_sizes::short_round;
 
-    gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
-    
-    gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
 
-    gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},    fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, &constant<gdf_bool, gdf_true>,            fully_valid);
+    auto output  = column_wrapper<element_type>(size, &zero<element_type>,                      fully_valid);
 
-    gdf_error error = gdf_comparison(&lhs, &rhs, &output, gdf_operator);
-    EXPECT_TRUE(error == GDF_SUCCESS);
+    auto expected_output = compute_expected_output(data, stencil);
 
-    std::cout << "Left" << std::endl;
-    print_column<LeftValueType>(&lhs);
-
-    std::cout << "Right" << std::endl;
-    print_column<RightValueType>(&rhs);
-
-    std::cout << "Output" << std::endl;
-    print_column<int8_t>(&output);
-
-    check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
-
-    /// lhs.dtype === rhs.dtype
-    gdf_apply_stencil(&lhs, &output, &rhs);
-
-    check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
-
-    delete_gdf_column(&lhs);
-    delete_gdf_column(&rhs);
-    delete_gdf_column(&output);
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    expect_columns_are_equal(output, expected_output);
 }
 
+TYPED_TEST(ApplyBooleanMaskTest, all_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{}, fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_true>,          fully_valid);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                    fully_valid);
 
-template <typename LeftValueType, typename RightValueType>
-void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_EQUALS)
-{
-    //0, ..., 100,
-    //100, 10000, 10000, 100000
-    for (int column_size = 0; column_size < 10; column_size += 1)
-    {
-        const int max_size = 8;
-        for (int init_value = 0; init_value <= 1; init_value++)
-        {
-            gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
-            // lhs.null_count = 2;
-
-            gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
-            // rhs.null_count = 1;
-
-            gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
-
-            gdf_error error = gdf_comparison(&lhs, &rhs, &output, gdf_operator);
-            EXPECT_TRUE(error == GDF_SUCCESS);
-
-            check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
-
-            if (lhs.dtype == rhs.dtype ) {
-                gdf_apply_stencil(&lhs, &output, &rhs);
-                check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
-            }
-
-            delete_gdf_column(&lhs);
-            delete_gdf_column(&rhs);
-            delete_gdf_column(&output);
-        }
-    }
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithInt8AndOthers)
-{
-    test_filterops_using_templates<int8_t, int8_t>();
-    test_filterops_using_templates<int8_t, int16_t>();
-    
-    test_filterops_using_templates<int8_t, int32_t>();
-    test_filterops_using_templates<int8_t, int64_t>();
-    test_filterops_using_templates<int8_t, float>(); 
-    test_filterops_using_templates<int8_t, double>();
+TYPED_TEST(ApplyBooleanMaskTest, half_all_third_multiple_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{}, first_half{size});
+    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_true>,          first_of_every<3>{});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                    fully_valid);
+
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithInt16AndOthers)
-{
-    test_filterops_using_templates<int16_t, int8_t>();
-    test_filterops_using_templates<int16_t, int16_t>();
-    test_filterops_using_templates<int16_t, int32_t>();
-    test_filterops_using_templates<int16_t, int64_t>();
-    test_filterops_using_templates<int16_t, float>();
-    test_filterops_using_templates<int16_t, double>();
-   
+TYPED_TEST(ApplyBooleanMaskTest, half_all_third_non_multiple_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{}, first_half{size});
+    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_true>,          first_of_every<3>{});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                    fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithInt32AndOthers)
-{
-    test_filterops_using_templates<int32_t, int8_t>();
-    test_filterops_using_templates<int32_t, int16_t>();
-    test_filterops_using_templates<int32_t, int32_t>();
-    test_filterops_using_templates<int32_t, int64_t>();
-    test_filterops_using_templates<int32_t, float>();
-    test_filterops_using_templates<int32_t, double>();
-   
+TYPED_TEST(ApplyBooleanMaskTest, all_half_all_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{}, fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, first_half{size},                    fully_valid);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                    fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithInt64AndOthers)
-{
-    test_filterops_using_templates<int64_t, int8_t>();
-    test_filterops_using_templates<int64_t, int16_t>();
-    test_filterops_using_templates<int64_t, int32_t>();
-    test_filterops_using_templates<int64_t, int64_t>();
-    test_filterops_using_templates<int64_t, float>();
-    test_filterops_using_templates<int64_t, double>();
-   
+TYPED_TEST(ApplyBooleanMaskTest, all_random_all_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, uniformly_distributed<gdf_bool>{0,1},   fully_valid);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithFloat32AndOthers)
-{
-    test_filterops_using_templates<float, int8_t>();
-    test_filterops_using_templates<float, int16_t>();
-    test_filterops_using_templates<float, int32_t>();
-    test_filterops_using_templates<float, int64_t>();
-    test_filterops_using_templates<float, float>();
-    test_filterops_using_templates<float, double>();
-   
+TYPED_TEST(ApplyBooleanMaskTest, all_third_random_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, first_of_every<3>{},                    uniformly_distributed<char>{0,1});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
 
-TEST_F(FilterOperationsTest, WithFloat64AndOthers)
-{
-    test_filterops_using_templates<double, int8_t>();
-    test_filterops_using_templates<double, int16_t>();
-    test_filterops_using_templates<double, int32_t>();
-    test_filterops_using_templates<double, int64_t>();
-    test_filterops_using_templates<double, float>();
-    test_filterops_using_templates<double, double>();
-   
+TYPED_TEST(ApplyBooleanMaskTest, random_random_random_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  uniformly_distributed<char>{0,1});
+    auto stencil = column_wrapper<gdf_bool    >(size, uniformly_distributed<gdf_bool>{0, 1},  uniformly_distributed<char>{0,1});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+
+    expect_columns_are_equal(output, expected_output);
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, non_nullable_all_all_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+//    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  non_nullable);
+
+    auto data { make_non_nullable_column_wrapper(size, uniformly_distributed<element_type>{}) };
+    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_true>,           fully_valid);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+
+    expect_columns_are_equal(output, expected_output);
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, all_none_all_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_false>,          fully_valid);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+
+    expect_columns_are_equal(output, expected_output);
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, all_all_none_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+//    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_true>,           non_nullable);
+    auto stencil = make_non_nullable_column_wrapper(size, constant<gdf_bool, gdf_true>);
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, none_none_none_non_multiple_of_32) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::short_non_round;
+
+//    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  non_nullable);
+//    auto stencil = column_wrapper<gdf_bool    >(size, constant<gdf_bool, gdf_false>{},        non_nullable);
+    auto data    = make_non_nullable_column_wrapper(size, uniformly_distributed<element_type>{});
+    auto stencil = make_non_nullable_column_wrapper(size, constant<gdf_bool, gdf_false>);
+
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, all_random_random_big_input) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size =  column_sizes::long_non_round;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, uniformly_distributed<gdf_bool>{},      uniformly_distributed<char>{0,1});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
+
+}
+
+TYPED_TEST(ApplyBooleanMaskTest, all_random_random_empty_input) {
+    using element_type = typename TestFixture::element_type;
+    constexpr const auto size = 0;
+
+    auto data    = column_wrapper<element_type>(size, uniformly_distributed<element_type>{},  fully_valid);
+    auto stencil = column_wrapper<gdf_bool    >(size, uniformly_distributed<gdf_bool>{},      uniformly_distributed<char>{0,1});
+    auto output  = column_wrapper<element_type>(size, zero<element_type>,                     fully_valid);
+
+    ASSERT_CUDF_SUCCESS( gdf_apply_boolean_mask(data.get(), stencil.get(), output.get()) );
+    auto expected_output = compute_expected_output(data, stencil);
+    expect_columns_are_equal(output, expected_output);
 }
