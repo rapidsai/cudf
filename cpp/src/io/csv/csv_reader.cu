@@ -401,8 +401,6 @@ gdf_error read_csv(csv_read_arg *args)
 {
   gdf_error error = gdf_error::GDF_SUCCESS;
 
-  std::vector<gdf_column_wrapper> columns;
-
 	//-----------------------------------------------------------------------------
 	// create the CSV data structure - this will be filled in as the CSV data is processed.
 	// Done first to validate data types
@@ -765,20 +763,21 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
   // Alloc output; columns' data memory is still expected for empty dataframe
+  std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < raw_csv->num_actual_cols; ++col) {
     if (raw_csv->h_parseCol[col]) {
       // When dtypes are inferred, it contains only active column values
       auto dtype = raw_csv->dtypes[args->dtype == nullptr ? active_col : col];
 
       columns.emplace_back(raw_csv->num_records, dtype,
-                           gdf_dtype_extra_info{TIME_UNIT_NONE, nullptr},
+                           gdf_dtype_extra_info{TIME_UNIT_NONE},
                            raw_csv->col_names[col]);
       CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
       active_col++;
     }
   }
 
-  // Convert CSV input into cuDF output
+  // Convert CSV input to cuDF output
   if (raw_csv->num_records != 0) {
     thrust::host_vector<gdf_dtype> h_dtypes(raw_csv->num_active_cols);
     thrust::host_vector<void*> h_data(raw_csv->num_active_cols);

@@ -509,7 +509,6 @@ void decode_page_data(
  **/
 gdf_error read_parquet(pq_read_arg *args) {
 
-  std::vector<gdf_column_wrapper> columns;
   int num_columns = 0;
   int num_rows = 0;
   int index_col = -1;
@@ -552,6 +551,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
   // Initialize gdf_columns, but hold off on allocating storage space
+  std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols) {
     auto &col_schema = md.schema[md.row_groups[0].columns[col.first].schema_idx];
@@ -637,10 +637,10 @@ gdf_error read_parquet(pq_read_arg *args) {
           "type_width=%d, max_def_level=%d, "
           "max_rep_level=%d\n     data_page_offset=%zd, index_page_offset=%zd, "
           "dict_page_offset=%zd\n",
-          name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
+          col.first, col.second.c_str(), num_rows, rowgroup.num_rows,
           col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
           col_meta.total_uncompressed_size,
-          rowgroup.columns[name.first].schema_idx,
+          rowgroup.columns[col.first].schema_idx,
           chunks[chunks.size() - 1].data_type, type_width,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           (size_t)col_meta.data_page_offset, (size_t)col_meta.index_page_offset,
@@ -702,6 +702,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   if (index_col != -1) {
     args->index_col = (int *)malloc(sizeof(int));
     *args->index_col = index_col;
+  } else {
+    args->index_col = nullptr;
   }
 
   return GDF_SUCCESS;
