@@ -37,7 +37,13 @@ def test_orc_reader(datadir, orc_file, engine, columns):
         if 'boolean1' in expect.columns:
             expect['boolean1'] = expect['boolean1'].astype('int8')
 
+    print("")
+    print("")
+    print("Pyarrow:")
     print(expect)
+    print("")
+    print("cuDF:")
     print(got)
+    print("")
 
     assert_eq(expect, got, check_categorical=False)
