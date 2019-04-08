@@ -32,6 +32,8 @@
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
 - PR #1359 Add atomicAnd/Or/Xor for integers
+- PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
+
 
 # cuDF 0.6.0 (Date TBD)
 
