@@ -77,9 +77,7 @@ namespace jit {
             {
                 auto startPointClock = std::chrono::high_resolution_clock::now();
 
-                    kernel_inst = std::make_unique<jitify_v2::KernelInstantiation>(
-                        cacheInstance.getKernelInstantiation(kernName, *program, arguments)
-                    );
+                    kernel_inst = cacheInstance.getKernelInstantiation(kernName, *program, arguments);
 
                 auto stopPointClock = std::chrono::high_resolution_clock::now();
                 std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
@@ -119,8 +117,8 @@ namespace jit {
 
     private:
         cudf::jit::cudfJitCache& cacheInstance;
-        std::unique_ptr<jitify_v2::Program> program;
-        std::unique_ptr<jitify_v2::KernelInstantiation> kernel_inst;
+        std::shared_ptr<jitify_v2::Program> program;
+        std::shared_ptr<jitify_v2::KernelInstantiation> kernel_inst;
     };
 
 } // namespace jit

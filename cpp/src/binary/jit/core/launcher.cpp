@@ -55,13 +55,11 @@ namespace jit {
     {
         auto startPointClock = std::chrono::high_resolution_clock::now();
 
-            program = std::make_unique<jitify_v2::Program>(
-                cacheInstance.getProgram(prog_file_name,
-                                        code::kernel,
-                                        headersName,
-                                        compilerFlags,
-                                        headersCode)
-            );
+            program = cacheInstance.getProgram(prog_file_name,
+                                                code::kernel,
+                                                headersName,
+                                                compilerFlags,
+                                                headersCode);
 
         auto stopPointClock = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;

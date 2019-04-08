@@ -20,6 +20,8 @@
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
+#include <memory>
+#include <mutex>
 
 namespace cudf {
 namespace jit {
@@ -37,12 +39,12 @@ public:
     cudfJitCache();
     ~cudfJitCache();
 
-    jitify_v2::KernelInstantiation getKernelInstantiation(
+    std::shared_ptr<jitify_v2::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
         jitify_v2::Program const& program,
         std::vector<std::string> const& arguments);
 
-    jitify_v2::Program getProgram(
+    std::shared_ptr<jitify_v2::Program> getProgram(
         std::string prog_file_name, 
         std::string const& cuda_source,
         std::vector<std::string> const& given_headers,
@@ -50,8 +52,11 @@ public:
         jitify_v2::file_callback_type file_callback);
 
 private:
-    std::unordered_map<std::string, std::string> kernel_inst_map;
-    std::unordered_map<std::string, std::string> program_map;
+    template <typename Tv>
+    using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
+
+    umap_str_shptr<jitify_v2::KernelInstantiation>  kernel_inst_map;
+    umap_str_shptr<jitify_v2::Program>              program_map;
 
     std::mutex _kernel_cache_mutex;
     std::mutex _program_cache_mutex;

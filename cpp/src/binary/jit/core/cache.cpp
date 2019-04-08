@@ -15,6 +15,11 @@
  */
 
 #include "cache.h"
+#include <jitify.hpp>
+#include <unordered_map>
+#include <string>
+#include <memory>
+#include <mutex>
 
 namespace cudf {
 namespace jit {
@@ -23,31 +28,23 @@ cudfJitCache::cudfJitCache() { }
 
 cudfJitCache::~cudfJitCache() { }
 
-/**---------------------------------------------------------------------------*
- * @brief Get 
- * 
- * @param prog_file_name 
- * @param cuda_source 
- * @param given_headers 
- * @param given_options 
- * @param file_callback 
- * @return jitify_v2::Program 
- *---------------------------------------------------------------------------**/
-jitify_v2::Program cudfJitCache::getProgram(
+std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
     std::string prog_file_name, 
     std::string const& cuda_source = "",
     std::vector<std::string> const& given_headers = {},
     std::vector<std::string> const& given_options = {},
     jitify_v2::file_callback_type file_callback = nullptr)
 {
-    std::string prog_string;
+    // Lock for thread safety
+    std::lock_guard<std::mutex> lock(_program_cache_mutex);
 
     // Find memory cached preprocessed program
     auto prog_it = program_map.find(prog_file_name);
     if ( prog_it != program_map.end()) {
-        prog_string = prog_it->second;
+        return prog_it->second;
     }
     else { // Find file cached preprocessed program
+        std::string prog_string;
         std::ifstream prog_file (prog_file_name, std::ios::binary);
         if (prog_file) {
             std::stringstream buffer;
@@ -63,17 +60,22 @@ jitify_v2::Program cudfJitCache::getProgram(
             std::ofstream prog_file(prog_file_name, std::ios::binary);
             prog_file << prog_string;
         }
+        // Add deserialized program to cache and return
+        auto program = std::make_shared<jitify_v2::Program>(
+            jitify_v2::Program::deserialize(prog_string));
+        program_map[prog_file_name] = program;
+        return program;
     }
-
-    return jitify_v2::Program::deserialize(prog_string);
 }
 
-jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
+// todo: try auto return type
+std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
     jitify_v2::Program const& program,
     std::vector<std::string> const& arguments)
 {
-    std::string kern_inst_string;
+    // Lock for thread safety
+    std::lock_guard<std::mutex> lock(_kernel_cache_mutex);
 
     // Make instance name e.g. "kernel_v_v_int_int_long int_Add"
     std::string kern_inst_name = kern_name;
@@ -82,15 +84,15 @@ jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
     // Find memory cached kernel instantiation
     auto kern_inst_it = kernel_inst_map.find(kern_inst_name);
     if ( kern_inst_it != kernel_inst_map.end()) {
-        kern_inst_string = kern_inst_it->second;
+        return kern_inst_it->second;
     }
     else { // Find file cached kernel instantiation
+        std::string kern_inst_string;
         std::ifstream kern_file (kern_inst_name, std::ios::binary);
         if (kern_file) {
             std::stringstream buffer;
             buffer << kern_file.rdbuf();
             kern_inst_string = buffer.str();
-            kernel_inst_map[kern_inst_name] = kern_inst_string;
         }
         else { // JIT compile the kernel and write to file
             kern_inst_string = program.kernel(kern_name)
@@ -98,11 +100,13 @@ jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
                                       .serialize();
             std::ofstream kern_file(kern_inst_name, std::ios::binary);
             kern_file << kern_inst_string;
-            kernel_inst_map[kern_inst_name] = kern_inst_string;
         }
+        // Add deserialized kernel to cache and return
+        auto kernel = std::make_shared<jitify_v2::KernelInstantiation>(
+            jitify_v2::KernelInstantiation::deserialize(kern_inst_string));
+        kernel_inst_map[kern_inst_name] = kernel;
+        return kernel;
     }
-
-    return jitify_v2::KernelInstantiation::deserialize(kern_inst_string);
 }
 
 // Another overload for getKernelInstantiation which might be useful to get
