@@ -16,17 +16,18 @@ def datadir(datadir):
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('engine', ['cudf'])
 @pytest.mark.parametrize(
-    'orc_file',
+    'orc_args',
     [
-        'TestOrcFile.emptyFile.orc',
-        'TestOrcFile.test1.orc'
+        ['TestOrcFile.emptyFile.orc', None],
+        ['TestOrcFile.test1.orc', ['boolean1', 'byte1', 'short1',
+                                   'int1', 'long1', 'float1', 'double1']]
+        #['TestOrcFile.testSnappy.orc', None],
     ]
 )
-@pytest.mark.parametrize('columns', [['boolean1', 'byte1', 'short1',
-                                      'int1', 'long1', 'float1', 'double1']])
-def test_orc_reader(datadir, orc_file, engine, columns):
-    path = datadir / orc_file
+def test_orc_reader(datadir, orc_args, engine):
+    path = datadir / orc_args[0]
     orcfile = pa.orc.ORCFile(path)
+    columns = orc_args[1]
 
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(path, engine=engine, columns=columns)
