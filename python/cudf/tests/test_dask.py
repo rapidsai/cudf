@@ -3,11 +3,11 @@
 import pytest
 import cudf
 
+dask = pytest.importorskip('dask')
+
 from dask.dataframe.utils import (
     is_dataframe_like, is_series_like, is_index_like
-)
-
-dask = pytest.importorskip('dask')
+)  # noqa: E402
 
 
 def test_is_dataframe_like():
