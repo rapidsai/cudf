@@ -25,6 +25,19 @@
 #define GDF_REQUIRE(F, S) \
   if (!(F)) return (S);
 
+/**---------------------------------------------------------------------------*
+ * @brief a version of GDF_REQUIRE for expressions of type `gdf_error` rather
+ * than booleans
+ *
+ * This macro is sort-of DEPRECATED.
+ *
+ *---------------------------------------------------------------------------**/
+#define GDF_TRY(...) do { \
+    gdf_error _gdf_try_result = (__VA_ARGS__) ; \
+    if (_gdf_try_result != GDF_SUCCESS) return _gdf_try_result ; \
+} while(0)
+
+
 namespace cudf {
 /**---------------------------------------------------------------------------*
  * @brief Exception thrown when logical precondition is violated.
@@ -147,3 +160,5 @@ inline void check_stream(cudaStream_t stream, const char* file,
 #else
 #define CHECK_STREAM(stream) static_cast<void>(0)
 #endif
+
+

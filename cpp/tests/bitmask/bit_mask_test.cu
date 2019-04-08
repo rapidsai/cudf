@@ -17,6 +17,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <bitmask/bit_mask.cuh>
+#include <bitmask/BitMask.cuh>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -48,7 +49,7 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
     //
     //  Special case... last word is only partial
     //
-    int bits_used = bits.length() % bit_mask::detail::BITS_PER_ELEMENT;
+    int bits_used = bits.length() % bit_mask::bits_per_element;
     if (bits_used == 0) {
       //
       //  The whole word is used
@@ -77,17 +78,17 @@ __global__ void test_safe_set_clear_g(BitMask bits) {
   int index = threadIdx.x;
 
   if ((index % 2) == 0) {
-    for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+    for (int i = index ; i < bits.length() ; i += bit_mask::bits_per_element) {
       bits.set_bit(i);
     }
   }
 
-  for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+  for (int i = index ; i < bits.length() ; i += bit_mask::bits_per_element) {
     bits.clear_bit(i);
   }
 
   if ((index % 2) == 0) {
-    for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+    for (int i = index ; i < bits.length() ; i += bit_mask::bits_per_element) {
       bits.set_bit(i);
     }
   }
@@ -379,7 +380,7 @@ TEST_F(BitMaskTest, CudaThreadingTest)
 
   BitMask bit_mask(bits, num_rows);
 
-  test_safe_set_clear_g<<<1,bit_mask::detail::BITS_PER_ELEMENT>>>(bit_mask);
+  test_safe_set_clear_g<<<1,bit_mask::bits_per_element>>>(bit_mask);
 
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));

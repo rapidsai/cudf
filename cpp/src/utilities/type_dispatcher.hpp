@@ -113,7 +113,7 @@ namespace cudf {
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
 template <class functor_t, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
+CUDA_HOST_DEVICE_CALLABLE constexpr auto type_dispatcher(gdf_dtype dtype,
                                                          functor_t f,
                                                          Ts&&... args) {
   switch(dtype)

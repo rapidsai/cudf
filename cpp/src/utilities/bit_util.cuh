@@ -2,6 +2,7 @@
 /*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +18,16 @@
  */
 #pragma once
 
+#include <utilities/cudf_utils.h>
+#include "integer_utils.hpp"
+
 #include <cudf/types.h>
 
-#include <stdint.h>
+#include <cstdint>
+#include <climits>
 #include <string>
+
+#include "cudf_utils.h"
 
 #ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
@@ -41,20 +48,81 @@ static constexpr int ValidSize = 32;
 using ValidType = uint32_t;
 
 
-// Instead of this function, use gdf_valid_allocation_size from legacy_bitmask.hpp
-//CUDA_HOST_DEVICE_CALLABLE
-//  size_t
-//  valid_size(size_t column_length)
-//{
-//  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-//  return n_ints * sizeof(ValidType);
-//}
+template <typename T>
+constexpr inline std::size_t size_in_bits() { return sizeof(T) * CHAR_BIT; }
 
-// Instead of this function, use gdf_is_valid from gdf/utils.h
-///CUDA_HOST_DEVICE_CALLABLE bool get_bit(const gdf_valid_type* const bits, size_t i)
-///{
-///  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
-///}
+template <typename T>
+constexpr inline std::size_t size_in_bits(const T&) { return size_in_bits<T>(); }
+
+namespace detail {
+
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE
+Size intra_container_index(Size bit_index) { return bit_index % size_in_bits<BitContainer>(); }
+
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE
+Size bit_container_index(Size bit_index) { return bit_index / size_in_bits<BitContainer>(); }
+
+
+} // namespace detail
+
+
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE
+void turn_bit_on(BitContainer* bits, Size bit_index)
+{
+    auto container_index = detail::bit_container_index<BitContainer, Size>(bit_index);
+    auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
+    bits[container_index] |= (BitContainer{1} << intra_container_index);
+}
+
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE
+void turn_bit_off(BitContainer* bits, Size bit_index)
+{
+    auto container_index = detail::bit_container_index<BitContainer, Size>(bit_index);
+    auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
+    bits[container_index] &= ~((BitContainer{1} << intra_container_index));
+}
+
+/**
+ * Checks if a bit is set within a bit-container, in which the bits
+ * are ordered LSB to MSB
+ *
+ * @param bits[in] a bit container
+ * @param bit_index[in] index within the sequence of bits in the container
+ * @return true iff the bit is set
+ */
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer& bit_container, Size bit_index)
+{
+    auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
+    return bit_container & (BitContainer{1} << intra_container_index);
+}
+
+/**
+ * Checks if a bit is set in a sequence of bits in container types,
+ * such that within each container the bits are ordered LSB to MSB
+ *
+ * @param bits[in] pointer to the beginning of the sequence of bits
+ * @param bit_index[in] index to bit check in the sequence
+ * @return true iff the bit is set
+ */
+template <typename BitContainer, typename Size>
+constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer* bits, Size bit_index)
+{
+    auto container_index = detail::bit_container_index<BitContainer, Size>(bit_index);
+    return bit_is_set<BitContainer, Size>(bits[container_index], bit_index);
+}
+
+template <typename BitContainer, typename Size>
+inline constexpr gdf_size_type packed_bit_sequence_size_in_bytes (Size num_bits) {
+    return cudf::util::div_rounding_up_safe<Size>(num_bits, size_in_bits<BitContainer>());
+}
+
+
+// TODO: Check whether the following 5 functions (up to chartobin) are actually used anywhere.
 
 CUDA_HOST_DEVICE_CALLABLE
   uint8_t
