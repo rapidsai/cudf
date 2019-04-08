@@ -106,8 +106,8 @@ TEST(gdf_json_test, BracketsLevels)
 	auto d_lvls = getBracketLevels(d_pos, count);
 	std::vector<int16_t> h_lvls(count);
 	cudaMemcpy(h_lvls.data(), d_lvls, count*sizeof(int16_t), cudaMemcpyDefault);
-	//for (auto lvl: h_lvls)
-		//cout << lvl << ' ';
+	for (auto lvl: h_lvls)
+		cout << lvl << ' ';
 
 	cudaFree(d_data);
 	cudaFree(d_pos);

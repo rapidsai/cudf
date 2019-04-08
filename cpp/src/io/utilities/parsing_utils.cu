@@ -262,15 +262,59 @@ void aggregateSum(BlockSumArray in, BlockSumArray aggregate){
 	CUDA_TRY(cudaGetLastError());
 };
 
+__global__
+void assignLevelsKernel(pos_key_pair* brackets, uint64_t count, BlockSumArray* sum_pyramid, int pheight, int16_t* lvls){
+	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const auto agg_rate = sum_pyramid[0].block_size;
+	const uint64_t did = tid * agg_rate;
+
+	if (did >= count)
+		return;
+
+	// find the previous sum
+	int lvl = pheight - 1;
+	int sum = 0;
+	int lo = 0;
+	int o = did;
+	while(o) {
+		while(o < sum_pyramid[lvl].block_size && lvl > 0) {
+			--lvl; lo *= agg_rate;
+		}
+		while(o >= sum_pyramid[lvl].block_size) {
+			o -= sum_pyramid[lvl].block_size;
+			sum += sum_pyramid[lvl].arr[lo];
+			++lo;
+		}
+	}
+
+	for (int i = did; i < min(did + agg_rate, count); ++i){
+		if(brackets[i].second == '[')
+			lvls[i] = ++sum;
+		else
+			lvls[i] = sum--;
+	}
+}
+
+void assignLevels(pos_key_pair* brackets, uint64_t count, BlockSumArray* sum_pyramid, int agg_rate, int pheight, int16_t* lvls){
+	int blockSize;
+	int minGridSize;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+		assignLevelsKernel));
+
+	// Calculate actual block count to use based on records count
+	const int gridSize = ((count + agg_rate - 1) / agg_rate + blockSize - 1) / blockSize;
+
+	assignLevelsKernel<<<gridSize, blockSize>>>(brackets, count, sum_pyramid, pheight, lvls);
+
+	CUDA_TRY(cudaGetLastError());
+};
+
+
 // return a unique_ptr, once they are merged
 int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
-	int16_t* lvls = nullptr;
-	RMM_ALLOC(&lvls, sizeof(int16_t) * count, 0);
-	CUDA_TRY(cudaMemsetAsync(lvls, 0, sizeof(int16_t) * count));
-	
-	uint16_t agg_rate = 2;
+	uint16_t agg_rate = 4;
 	std::vector<BlockSumArray> sum_pyramid;
 
 	sum_pyramid.emplace_back(count/agg_rate, agg_rate);
@@ -284,6 +328,16 @@ int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	sumBrackets(brackets, count, sum_pyramid[0]);
 	for (size_t lvl = 1; lvl < sum_pyramid.size(); ++lvl)
 		aggregateSum(sum_pyramid[lvl - 1], sum_pyramid[lvl]);
+
+	BlockSumArray* d_sum_pyramid;
+	cudaMalloc(&d_sum_pyramid, sum_pyramid.size()*sizeof(BlockSumArray));
+	cudaMemcpyAsync(d_sum_pyramid, sum_pyramid.data(), sum_pyramid.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
+
+	int16_t* lvls = nullptr;
+	RMM_ALLOC(&lvls, sizeof(int16_t) * count, 0);
+	CUDA_TRY(cudaMemsetAsync(lvls, 0, sizeof(int16_t) * count));
+
+	assignLevels(brackets, count, d_sum_pyramid, agg_rate, sum_pyramid.size(), lvls);
 
 	for (auto& sm_lvl: sum_pyramid) {
 		std::vector<int16_t> h_sums(sm_lvl.len);
