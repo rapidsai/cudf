@@ -20,7 +20,7 @@
 #include "cudf_test_utils.cuh"
 #include <nvstrings/NVCategory.h>
 
-namespace {
+#include <algorithm>
 
 namespace detail {
 
@@ -40,9 +40,61 @@ int promote_for_streaming(const signed char& x)   { return x; }
 } // namespace detail
 
 
+// Note: For an empty column, prints a single empty line below the title
+template<typename Element>
+void print_host_side_column_copy(
+    gdf_size_type num_elements,
+    gdf_dtype_extra_info dtype_info,
+    const Element* host_side_data,
+    const gdf_valid_type* host_side_validity,
+    unsigned min_element_printing_width)
+{
+    gdf_size_type const num_masks { gdf_valid_allocation_size(num_elements) };
+
+    for (gdf_size_type i = 0; i < num_elements; ++i) {
+        std::cout << std::setw(min_element_printing_width);
+        if (gdf_is_valid(host_side_validity, i)) {
+            std::cout << detail::promote_for_streaming(host_side_data[i]);
+        }
+        else {
+            std::cout << null_representative;
+        }
+        std::cout << ' ';
+    }
+    std::cout << std::endl;
+
+    if(cudf::gdf_dtype_of<Element>() == GDF_STRING_CATEGORY){
+        std::cout<<"Data on category:\n";
+        size_t length = 1;
+
+        if(dtype_info.category != nullptr){
+            size_t keys_size = static_cast<NVCategory *>(dtype_info.category)->keys_size();
+            if(keys_size>0){
+                char ** data = new char *[keys_size];
+                for(size_t i=0; i<keys_size; i++){
+                    data[i]=new char[length+1];
+                }
+
+                static_cast<NVCategory *>(dtype_info.category)->get_keys()->to_host(data, 0, keys_size);
+
+                for(size_t i=0; i<keys_size; i++){
+                    data[i][length]=0;
+                }
+
+                for(size_t i=0; i<keys_size; i++){
+                    std::cout<<"("<<data[i]<<"|"<<i<<")\t";
+                }
+                std::cout<<std::endl;
+            }
+        }
+    }
+}
+
+namespace {
+
 struct column_printer {
     template<typename Element>
-    void operator()(gdf_column const* the_column, unsigned min_printing_width)
+    void operator()(gdf_column const* the_column, unsigned min_element_printing_width)
     {
         gdf_size_type num_rows { the_column->size };
 
@@ -52,55 +104,19 @@ struct column_printer {
         cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element), cudaMemcpyDeviceToHost);
 
         gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
-        std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
+        std::vector<gdf_valid_type> host_side_validity(num_masks, ~gdf_valid_type { 0 });
         if (nullptr != the_column->valid) {
-            cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+            cudaMemcpy(host_side_validity.data(), the_column->valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
         }
-
-        for (gdf_size_type i = 0; i < num_rows; ++i) {
-            std::cout << std::setw(min_printing_width);
-            if (gdf_is_valid(h_mask.data(), i)) {
-                std::cout << detail::promote_for_streaming(host_side_data[i]);
-            }
-            else {
-                std::cout << null_representative;
-            }
-            std::cout << ' ';
-        }
-        std::cout << std::endl;
-
-        if(the_column->dtype == GDF_STRING_CATEGORY){
-            std::cout<<"Data on category:\n";
-            size_t length = 1;
-
-            if(the_column->dtype_info.category != nullptr){
-                size_t keys_size = static_cast<NVCategory *>(the_column->dtype_info.category)->keys_size();
-                if(keys_size>0){
-                    char ** data = new char *[keys_size];
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i]=new char[length+1];
-                    }
-
-                    static_cast<NVCategory *>(the_column->dtype_info.category)->get_keys()->to_host(data, 0, keys_size);
-
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i][length]=0;
-                    }
-
-                    for(size_t i=0; i<keys_size; i++){
-                        std::cout<<"("<<data[i]<<"|"<<i<<")\t";
-                    }
-                    std::cout<<std::endl;
-                }
-            }
-        }
+        print_host_side_column_copy<Element>(num_rows, the_column->dtype_info, host_side_data.data(), the_column->valid ? host_side_validity.data() : nullptr, min_element_printing_width);
     }
-};
+}; // struct column_printer
+
 } // namespace
 
-void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width)
+void print_gdf_column(gdf_column const * the_column, unsigned min_element_printing_width)
 {
-    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width);
+    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_element_printing_width);
 }
 
 void print_valid_data(const gdf_valid_type *validity_mask,
@@ -117,10 +133,12 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   else
     memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
 
+  // Note: This also prints any "slack" bits at the end of the last bit container/
+  // bit set, when the column length is not a multiple of GDF_VALID_BITSIZE.
   std::transform(
       h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
       std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
-        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@');
+        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string(null_representative);
         return std::string(bits.rbegin(), bits.rend());
       });
   std::cout << std::endl;

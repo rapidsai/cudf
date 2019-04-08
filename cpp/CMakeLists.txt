@@ -235,7 +235,8 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
-            src/utilities/cuda_utils.cu
+            src/cuda_errors/cuda_error_info.cpp
+            src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/gather.cu

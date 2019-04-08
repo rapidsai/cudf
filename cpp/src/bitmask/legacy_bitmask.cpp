@@ -17,6 +17,7 @@
 #include "legacy_bitmask.hpp"
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
+#include <utilities/integer_utils.hpp>
 
 namespace {
 
@@ -33,12 +34,17 @@ static constexpr int32_t kArrowIpcAlignment = 8;
 static constexpr int32_t kCudfIpcAlignment = 4;
 
 // todo, enable arrow ipc utils, and remove this method
-static gdf_size_type PaddedLength(int64_t nbytes,
+static gdf_size_type PaddedLength(gdf_size_type nbytes,
                                   int32_t alignment = kArrowAlignment) {
-  return ((nbytes + alignment - 1) / alignment) * alignment;
+  return cudf::util::round_up_safe<gdf_size_type>(nbytes, alignment);
 }
 
 }  // namespace
+
+
+gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size) {
+  return cudf::util::div_rounding_up_safe<gdf_size_type>(column_size, GDF_VALID_BITSIZE);
+}
 
 // Calculates number of bytes for valid bitmask for a column of a specified
 // size
@@ -46,10 +52,7 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size) {
   static_assert(sizeof(gdf_valid_type) == 1,
                 "gdf_valid_type assumed to be 1 byte");
   return PaddedLength(
-      (column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE,
+      gdf_num_bitmask_elements(column_size) * sizeof(gdf_valid_type),
       kArrowAlignment);
 }
 
-gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size) {
-  return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
-}

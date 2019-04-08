@@ -7,6 +7,7 @@
 #include <cuda_runtime_api.h>
 
 #include <vector>
+#include <cassert>
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
@@ -19,15 +20,15 @@
 #endif
 
 inline gdf_error set_null_count(gdf_column* col) {
-  gdf_size_type valid_count{};
-  gdf_error result =
-      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
-
-  GDF_REQUIRE(GDF_SUCCESS == result, result);
-
-  col->null_count = col->size - valid_count;
-
-  return GDF_SUCCESS;
+    assert(col != nullptr);
+    if (col->valid == nullptr) {
+        col->null_count = 0;
+        return GDF_SUCCESS;
+    }
+    gdf_size_type valid_count{};
+    GDF_TRY (gdf_count_nonzero_mask(col->valid, col->size, &valid_count) );
+    col->null_count = col->size - valid_count;
+    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/

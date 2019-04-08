@@ -29,6 +29,7 @@
 #include <thrust/logical.h>
 
 #include <string>
+#include <tuple>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -212,6 +213,23 @@ struct column_wrapper {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
+/*  template <typename ValueInitializerType>
+  column_wrapper(gdf_size_type column_size,
+                 ValueInitializerType value_initalizer)
+  {
+    const size_t num_masks = gdf_valid_allocation_size(column_size);
+
+    // Initialize the values and bitmask using the initializers
+    std::vector<ColumnType> host_data(column_size);
+    std::vector<gdf_valid_type> host_bitmask;
+
+    for (gdf_index_type row = 0; row < column_size; ++row) {
+      host_data[row] = value_initalizer(row);
+
+    }
+    initialize_with_host_data(host_data, host_bitmask);
+  }*/
+
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_column.
    *
@@ -259,10 +277,10 @@ struct column_wrapper {
    * @brief Prints the values of the underlying gdf_column.
    *
    *---------------------------------------------------------------------------**/
-  void print() const {
+  void print(unsigned min_element_printing_width = 1) const {
     // TODO Move the implementation of `print_gdf_column` here once it's removed
     // from usage elsewhere
-    print_gdf_column(&the_column);
+    print_gdf_column(&the_column, min_element_printing_width);
   }
 
   /**---------------------------------------------------------------------------*

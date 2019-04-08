@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <ostream>
 #include <iterator>
+#include <algorithm>
 
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;

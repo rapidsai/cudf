@@ -67,7 +67,7 @@ void print_typed_column(
     const Element *    __restrict__  col_data,
     gdf_valid_type *   __restrict__  validity_mask,
     const size_t                     size_in_elements,
-    unsigned                         min_element_print_width = 1)
+    unsigned                         min_element_printing_width = 1)
 {
   static_assert(not std::is_same<Element, void>::value, "Can't print void* columns - a concrete type is needed");
   if (col_data == nullptr) {
@@ -91,7 +91,7 @@ void print_typed_column(
 
   for(size_t i = 0; i < size_in_elements; ++i)
   {
-      std::cout << std::setw(min_element_print_width);
+      std::cout << std::setw(min_element_printing_width);
       if ((validity_mask == nullptr) or gdf_is_valid(h_mask.data(), i))
       {
           if (sizeof(Element) < sizeof(int)) {
@@ -110,23 +110,36 @@ void print_typed_column(
 }
 
 /**
+ * @brief Similar to @ref print_typed_column, but applies to a host-side copy of the column
+ */
+template<typename Element>
+void print_host_side_column_copy(
+    gdf_size_type num_elements,
+    gdf_dtype_extra_info dtype_info,
+    const Element* host_side_data,
+    const gdf_valid_type* host_side_validity,
+    unsigned min_element_printing_width = 1);
+
+
+
+/**
  * @brief No-frills, single-line printing of a gdf_column's (typed) data to the
  * standard output stream, while accounting for nulls
  *
  * @todo More bells and whistles here would be nice to have.
  *
  * @param column[in] a @ref gdf_column to print.
- * @param min_element_print_width[in] Every element will take up this any
+ * @param min_element_printing_width[in] Every element will take up this any
  * characters when printed.
  */
 template <typename Element>
-inline void print_typed_column(const gdf_column& column, unsigned min_element_print_width = 1)
+inline void print_typed_column(const gdf_column& column, unsigned min_element_printing_width = 1)
 {
     print_typed_column<Element>(
         static_cast<const Element*>(column.data),
         column.valid,
         column.size,
-        min_element_print_width);
+        min_element_printing_width);
 }
 
 /**
@@ -135,19 +148,21 @@ inline void print_typed_column(const gdf_column& column, unsigned min_element_pr
  *
  * @note See the @ref gdf_column variant
  */
-void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1);
+void print_gdf_column(gdf_column const *column, unsigned min_element_printing_width = 1);
 
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
  * 
  * @param validity_mask The validity bitmask to print
- * @param length Length of the mask in bits
+ * @param size_in_elements The length of the column (not the bitmask) in elements
  *
  * @note the mask may have more space allocated for it than is necessary 
  * for the specified length; in particular, it will have "slack" bits
- * in the last byte, if length % 8 != 0. Such slack bits are ignored and
- * not printed. Usually, length is the number of elements of a gdf_column.
+ * in the last gdf_valid_type, if length % CHAR_BITS * sizeof(gdf_valid_type) != 0.
+ * Such slack bits currently printed (!). Usually, length is the number
+ * of elements of a gdf_column.
+ *
  * ---------------------------------------------------------------------------**/
 void print_valid_data(const gdf_valid_type *validity_mask, 
                       const size_t length);
