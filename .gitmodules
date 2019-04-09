@@ -2,10 +2,6 @@
 	path = thirdparty/cub
 	url = https://github.com/rapidsai/thirdparty-cub.git
 	branch = cudf-cub
-[submodule "thirdparty/moderngpu"]
-	path = thirdparty/moderngpu
-	url = https://github.com/rapidsai/thirdparty-moderngpu.git
-	branch = cudf-moderngpu
 [submodule "thirdparty/rmm"]
 	path = thirdparty/rmm
 	url = https://github.com/rapidsai/rmm.git
