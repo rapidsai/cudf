@@ -235,22 +235,30 @@ public:
 
 
 __global__
-void sumBracketsKernel(pos_key_pair* brackets, int bracket_count, BlockSumArray sum_array){
+void sumBracketsKernel(
+	pos_key_pair* brackets, int bracket_count,
+	char open_bracket, char closed_bracket,
+	BlockSumArray sum_array) {
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
 	const uint64_t did = tid * sum_array.block_size;
-	
+
 
 	if (tid >= sum_array.length)
 		return;
 
 	auto* start = brackets + did;
 	int16_t csum = 0;
-	for (int i = 0; i < sum_array.block_size; ++i)
-		csum += ((start + i)->second == '[') ? 1 : -1;
+	for (int i = 0; i < sum_array.block_size; ++i) {
+		if ((start + i)->second == open_bracket) ++csum;
+		if ((start + i)->second == closed_bracket) --csum;
+	}
 	sum_array.d_sums[tid] = csum;
 }
 
-void sumBrackets(pos_key_pair* brackets, int bracket_count, const BlockSumArray& sum_array){
+void sumBrackets(
+	pos_key_pair* brackets, int bracket_count,
+	char open_bracket, char closed_bracket,
+	const BlockSumArray& sum_array) {
 	int blockSize;
 	int minGridSize;
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
@@ -259,7 +267,7 @@ void sumBrackets(pos_key_pair* brackets, int bracket_count, const BlockSumArray&
 	// Calculate actual block count to use based on records count
 	int gridSize = (sum_array.length + blockSize - 1) / blockSize;
 
-	sumBracketsKernel<<<gridSize, blockSize>>>(brackets, bracket_count, sum_array);
+	sumBracketsKernel<<<gridSize, blockSize>>>(brackets, bracket_count, open_bracket, closed_bracket, sum_array);
 
 	CUDA_TRY(cudaGetLastError());
 };
@@ -295,7 +303,11 @@ void aggregateSum(const BlockSumArray& in, const BlockSumArray& aggregate){
 };
 
 __global__
-void assignLevelsKernel(pos_key_pair* brackets, uint64_t count, BlockSumArray* sum_pyramid, int pheight, int16_t* lvls){
+void assignLevelsKernel(
+	pos_key_pair* brackets, uint64_t count,
+	BlockSumArray* sum_pyramid, int pyramid_height,
+	char open_bracket, char closed_bracket,
+	int16_t* lvls) {
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
 	const auto aggregation_rate = sum_pyramid[0].block_size;
 	const uint64_t did = tid * aggregation_rate;
@@ -304,7 +316,7 @@ void assignLevelsKernel(pos_key_pair* brackets, uint64_t count, BlockSumArray* s
 		return;
 
 	// find the previous sum
-	int lvl = pheight - 1;
+	int lvl = pyramid_height - 1;
 	int sum = 0;
 	int block_idx = 0;
 	int offset = did;
@@ -320,30 +332,38 @@ void assignLevelsKernel(pos_key_pair* brackets, uint64_t count, BlockSumArray* s
 	}
 
 	for (int i = did; i < min(did + aggregation_rate, count); ++i){
-		if(brackets[i].second == '[')
+		if (brackets[i].second == open_bracket)
 			lvls[i] = ++sum;
-		else
+		else if (brackets[i].second == closed_bracket)
 			lvls[i] = sum--;
 	}
 }
 
-void assignLevels(pos_key_pair* brackets, uint64_t count, BlockSumArray* sum_pyramid, int aggregation_rate, int pheight, int16_t* lvls){
+void assignLevels(pos_key_pair* brackets, uint64_t count,
+	const BlockSumPyramid& sum_pyramid,
+	char open_bracket, char closed_bracket,
+	int16_t* lvls) {
 	int blockSize;
 	int minGridSize;
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
 		assignLevelsKernel));
 
 	// Calculate actual block count to use based on records count
-	const int gridSize = ((count + aggregation_rate - 1) / aggregation_rate + blockSize - 1) / blockSize;
+	const int threadCnt = (count + sum_pyramid.getAggregationRate() - 1) / sum_pyramid.getAggregationRate();
+	const int gridSize = (threadCnt + blockSize - 1) / blockSize;
 
-	assignLevelsKernel<<<gridSize, blockSize>>>(brackets, count, sum_pyramid, pheight, lvls);
+	assignLevelsKernel<<<gridSize, blockSize>>>(
+		brackets, count,
+		sum_pyramid.deviceGetLevels(), sum_pyramid.getHeigth(),
+		open_bracket, closed_bracket,
+		lvls);
 
 	CUDA_TRY(cudaGetLastError());
 };
 
 
 // return a unique_ptr, once they are merged
-int16_t* getBracketLevels(pos_key_pair* brackets, int count){
+int16_t* getBracketLevels(pos_key_pair* brackets, int count, char open_bracket, char closed_bracket){
 	// Probably should be done outside of this function
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
@@ -351,14 +371,14 @@ int16_t* getBracketLevels(pos_key_pair* brackets, int count){
 	BlockSumPyramid aggregated_sums(count);
 	
 	// aggregate sums
-	sumBrackets(brackets, count, aggregated_sums[0]);
+	sumBrackets(brackets, count, open_bracket, closed_bracket, aggregated_sums[0]);
 	for (size_t level_idx = 1; level_idx < aggregated_sums.getHeigth(); ++level_idx)
 		aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
 
 	// assign levels
 	int16_t* d_levels = nullptr;
 	RMM_ALLOC(&d_levels, sizeof(int16_t) * count, 0);
-	assignLevels(brackets, count, aggregated_sums.deviceGetLevels(), aggregated_sums.getAggregationRate(), aggregated_sums.getHeigth(), d_levels);
+	assignLevels(brackets, count, aggregated_sums, open_bracket, closed_bracket, d_levels);
 
 	return d_levels;
 }
