@@ -1323,6 +1323,7 @@ class Series(object):
             return list(map(lambda x: round(x, 6), stats_data))
 
         def describe_numeric(self):
+            # mimicking pandas
             names = ['count', 'mean', 'std', 'min'] + \
                     _format_percentile_names(percentiles) + ['max']
             data = [self.count(), self.mean(), self.std(), self.min()] + \

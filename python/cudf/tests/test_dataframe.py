@@ -2146,3 +2146,21 @@ def test_series_describe_include_all():
         gdf_results.drop(['stats'], axis=1).values,
         pdf_results.values,
         decimal=4)
+
+
+def test_dataframe_describe_percentiles():
+    np.random.seed(12)
+    data_length = 10000
+    sample_percentiles = [0.0, 0.1, 0.33, 0.84, 0.4, 0.99]
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(percentiles=sample_percentiles).to_pandas()
+    pdf_results = pdf.describe(percentiles=sample_percentiles)
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
