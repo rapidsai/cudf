@@ -753,7 +753,9 @@ gdf_error read_csv(csv_read_arg *args)
 		for ( int x = 0; x < raw_csv->num_actual_cols; x++) {
 
 			std::string temp_type 	= args->dtype[x];
-                        // Initialize col_dtype as GDF_invalid
+                        // by default col_dtype is set to GDF_invalid to ensure
+                        // GDF_UNSUPPORTED_DTYPE is returned to caller in case of the
+                        // nonoccurence of ":" in csv format data.
                         gdf_dtype col_dtype = GDF_invalid;
 			if(temp_type.find(':') != std::string::npos){
 				for (auto it = raw_csv->col_names.begin(); it != raw_csv->col_names.end(); it++){
