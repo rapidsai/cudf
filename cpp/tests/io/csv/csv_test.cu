@@ -72,6 +72,89 @@ private:
 	std::vector<T> m_hostdata;
 };
 
+TEST(gdf_csv_test, DetectColumns)
+{
+	const char* fname	= "/tmp/DetectColumnsTest.csv";
+	const char* names[]	= { "A", "B", "C" };
+	const char* use_cols[]	= { "A", "C" };
+
+	// types are  { "int", "float64", "int" };
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << " 20, 0.40, 100\n"\
+	           "-21,-0.41, 101\n"\
+	           " 22, 0.42, 102\n"\
+	           "-23,-0.43, 103\n";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form    = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
+		args.num_cols = std::extent<decltype(names)>::value;
+		args.names = names;
+		args.dtype = NULL;
+		args.delimiter = ',';
+		args.lineterminator = '\n';
+		args.decimal = '.';
+		args.skip_blank_lines = true;
+		args.header = -1;
+		args.nrows = -1;
+		args.use_cols_char = use_cols;
+		args.use_cols_char_len = 2;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		// cudf auto detect type code uses INT64
+		ASSERT_EQ( args.data[0]->dtype, GDF_INT64 );
+		ASSERT_EQ( args.data[1]->dtype, GDF_INT64 );
+		auto ACol = gdf_host_column<int64_t>(args.data[0]);
+		auto BCol = gdf_host_column<int64_t>(args.data[1]);
+		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int64_t>(20, -21, 22, -23) );
+		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int64_t>(100, 101, 102, 103) );
+	}
+}
+
+TEST(gdf_csv_test, UseColumns)
+{
+	const char* fname	= "/tmp/UseColumnsTest.csv";
+	const char* names[]	= { "A", "B", "C" };
+	const char* types[]	= { "int", "float64", "int" };
+	const char* use_cols[]	= { "A", "C" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << " 20, 0.40, 100\n"\
+	           "-21,-0.41, 101\n"\
+	           " 22, 0.42, 102\n"\
+	           "-23,-0.43, 103\n";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form    = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
+		args.num_cols = std::extent<decltype(names)>::value;
+		args.names = names;
+		args.dtype = types;
+		args.delimiter = ',';
+		args.lineterminator = '\n';
+		args.decimal = '.';
+		args.skip_blank_lines = true;
+		args.header = -1;
+		args.nrows = -1;
+		args.use_cols_char = use_cols;
+		args.use_cols_char_len = 2;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
+		ASSERT_EQ( args.data[1]->dtype, GDF_INT32 );
+		auto ACol = gdf_host_column<int32_t>(args.data[0]);
+		auto BCol = gdf_host_column<int32_t>(args.data[1]);
+		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
+		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(100, 101, 102, 103) );
+	}
+}
+
 TEST(gdf_csv_test, Numbers)
 {
 	const char* fname	= "/tmp/CsvNumbersTest.csv";
