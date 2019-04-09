@@ -18,7 +18,8 @@
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 - PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
-- PR 1005 generic `reduction` and `scan` support
+- PR #1005 generic `reduction` and `scan` support
+- PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 
 ## Bug Fixes
 
@@ -32,6 +33,8 @@
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
+- PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
+
 
 # cuDF 0.6.0 (Date TBD)
 
