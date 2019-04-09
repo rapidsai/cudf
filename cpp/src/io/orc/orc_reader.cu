@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
+#include "io/utilities/wrapper_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
@@ -82,99 +83,8 @@ class DataSource {
   int fd = 0;
 };
 
-size_t GetGDFTypeLength(gdf_dtype dtype)
-{
-    size_t dtype_len = 0;
-    switch (dtype)
-    {
-    case GDF_INT8:
-        dtype_len = 1;
-        break;
-    case GDF_INT16:
-        dtype_len = 2;
-        break;
-    case GDF_INT32:
-    case GDF_FLOAT32:
-    case GDF_DATE32:
-    case GDF_CATEGORY: // NOTE: Category type converts the underlying string type into a 32-bit hash
-        dtype_len = 4;
-        break;
-    case GDF_INT64:
-    case GDF_FLOAT64:
-    case GDF_DATE64:
-    case GDF_TIMESTAMP:
-        dtype_len = 8;
-        break;
-    // NOTE: String returns the size of the std::pair needed to create the nvStrings array
-    case GDF_STRING:
-        dtype_len = sizeof(std::pair<char *,size_t>); // For now, just the index
-        break;
-    default:
-        return 0;
-    }
-    return dtype_len;
-}
-
 /**
- * @brief A helper class that wraps a gdf_column and any associated memory.
- *
- * This abstraction initializes and manages a gdf_column (fields and memory)
- * while still allowing direct access. Memory is automatically deallocated
- * unless ownership is transferred via releasing and assigning the raw pointer.
- **/
-class gdf_column_wrapper {
- public:
-  gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
-                     gdf_dtype_extra_info dtype_info, const std::string name) {
-    col = (gdf_column *)malloc(sizeof(gdf_column));
-    col->col_name = (char *)malloc(name.length() + 1);
-    strcpy(col->col_name, name.c_str());
-    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info);
-  }
-
-  ~gdf_column_wrapper() {
-    if (col) {
-      RMM_FREE(col->data, 0);
-      RMM_FREE(col->valid, 0);
-      free(col->col_name);
-    }
-    free(col);
-  };
-
-  gdf_column_wrapper(const gdf_column_wrapper &other) = delete;
-  gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) {
-    other.col = nullptr;
-  }
-
-  gdf_error allocate() {
-    // For strings, just store the ptr + length. Eventually, column's data ptr
-    // is replaced with an NvString instance created from these pairs.
-    const auto num_rows = std::max(col->size, 1);
-    const auto column_byte_width = (col->dtype == GDF_STRING)
-                                       ? sizeof(std::pair<const char*, int>)
-                                       : gdf_dtype_size(col->dtype);
-
-    RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
-    RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
-    CUDA_TRY(cudaMemset(col->valid, 0, gdf_valid_allocation_size(num_rows)));
-
-    return GDF_SUCCESS;
-  }
-
-  gdf_column *operator->() const { return col; }
-  gdf_column *get() const { return col; }
-  gdf_column *release() {
-    auto temp = col;
-    col = nullptr;
-    return temp;
-  }
-
- private:
-  gdf_column *col = nullptr;
-};
-
-/**
- * @brief Function that translates Parquet datatype to GDF dtype
+ * @brief Function that translates ORC datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     const orc::SchemaType &schema) {
@@ -211,7 +121,9 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   return std::make_pair(GDF_invalid, gdf_dtype_extra_info{TIME_UNIT_NONE});
 }
 
-// Map orc streams to columns
+/**
+ * @brief Struct that maps ORC streams to columns
+ **/
 struct OrcStrmInfo
 {
     uint64_t offset;        // offset in file
@@ -700,7 +612,9 @@ gdf_error read_orc(orc_read_arg *args) {
             orc::gpu::ColumnDesc *ck = &chunks[i * num_columns + j];
             ck->valid_map_base = reinterpret_cast<uint32_t *>(columns[j]->valid);
             ck->column_data_base = columns[j]->data;
-            ck->dtype_len = (uint8_t)GetGDFTypeLength(columns[j]->dtype);
+            ck->dtype_len = (columns[j]->dtype == GDF_STRING)
+                                ? sizeof(std::pair<const char *, size_t>)
+                                : gdf_dtype_size(columns[j]->dtype);
         }
     }
 
