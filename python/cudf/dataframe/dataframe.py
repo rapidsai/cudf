@@ -16,6 +16,15 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
+try:
+    # pd 0.24.X
+    from pandas.core.dtypes.common import infer_dtype_from_object
+except ImportError:
+    # pd 0.23.X
+    from pandas.core.dtypes.common import \
+            _get_dtype_from_object as infer_dtype_from_object
+
+
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -285,9 +294,10 @@ class DataFrame(object):
         return self._size
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
@@ -396,15 +406,17 @@ class DataFrame(object):
 
         # Prepare cells
         cols = OrderedDict()
+        dtypes = OrderedDict()
         use_cols = list(self.columns[:ncols - 1])
         if ncols > 0:
             use_cols.append(self.columns[-1])
 
         for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
+            dtypes[h] = self[h].dtype
 
         # Format into a table
-        return formatting.format(index=self._index, cols=cols,
+        return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
                                  show_headers=True, more_cols=more_cols,
                                  more_rows=more_rows, min_width=2)
 
@@ -419,26 +431,22 @@ class DataFrame(object):
             len(self),
         )
 
-    # binary, rbinary, unary, orderedcompare, unorderedcompare
-    def _call_op(self, other, internal_fn, fn):
+    # unary, binary, rbinary, orderedcompare, unorderedcompare
+    def _apply_op(self, fn, other=None):
         result = DataFrame()
         result.set_index(self.index)
-        if internal_fn == '_unaryop':
+        if other is None:
             for col in self._cols:
-                result[col] = self._cols[col]._unaryop(fn)
+                result[col] = getattr(self._cols[col], fn)()
+            return result
         elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
-                result[col] = getattr(self._cols[col], internal_fn)(
-                        other[k],
-                        fn,
-                )
+                result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             for col in other._cols:
                 if col in self._cols:
-                    result[col] = getattr(self._cols[col], internal_fn)(
-                            other._cols[col],
-                            fn,
-                    )
+                    result[col] = getattr(self._cols[col], fn)(
+                                          other._cols[col])
                 else:
                     result[col] = Series(cudautils.full(self.shape[0],
                                          np.dtype('float64').type(np.nan),
@@ -455,89 +463,119 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], internal_fn)(
-                        other,
-                        fn,
-                )
+                result[col] = getattr(self._cols[col], fn)(other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "
                     "supported at this time.")
         return result
 
-    def _binaryop(self, other, fn):
-        return self._call_op(other, '_binaryop', fn)
-
-    def _rbinaryop(self, other, fn):
-        return self._call_op(other, '_rbinaryop', fn)
-
-    def _unaryop(self, fn):
-        return self._call_op(self, '_unaryop', fn)
-
     def __add__(self, other):
-        return self._binaryop(other, 'add')
+        return self._apply_op('__add__', other)
 
     def __radd__(self, other):
-        return self._rbinaryop(other, 'add')
+        return self._apply_op('__radd__', other)
 
     def __sub__(self, other):
-        return self._binaryop(other, 'sub')
+        return self._apply_op('__sub__', other)
 
     def __rsub__(self, other):
-        return self._rbinaryop(other, 'sub')
+        return self._apply_op('__rsub__', other)
 
     def __mul__(self, other):
-        return self._binaryop(other, 'mul')
+        return self._apply_op('__mul__', other)
 
     def __rmul__(self, other):
-        return self._rbinaryop(other, 'mul')
+        return self._apply_op('__rmul__', other)
+
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
 
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._apply_op('__pow__', other)
 
     def __floordiv__(self, other):
-        return self._binaryop(other, 'floordiv')
+        return self._apply_op('__floordiv__', other)
 
     def __rfloordiv__(self, other):
-        return self._rbinaryop(other, 'floordiv')
+        return self._apply_op('__rfloordiv__', other)
 
     def __truediv__(self, other):
-        return self._binaryop(other, 'truediv')
+        return self._apply_op('__truediv__', other)
 
     def __rtruediv__(self, other):
-        return self._rbinaryop(other, 'truediv')
+        return self._apply_op('__rtruediv__', other)
 
     __div__ = __truediv__
 
-    def _unordered_compare(self, other, cmpops):
-        return self._call_op(other, '_unordered_compare', cmpops)
+    def __and__(self, other):
+        return self._apply_op('__and__', other)
 
-    def _ordered_compare(self, other, cmpops):
-        return self._call_op(other, '_ordered_compare', cmpops)
+    def __or__(self, other):
+        return self._apply_op('__or__', other)
+
+    def __xor__(self, other):
+        return self._apply_op('__xor__', other)
 
     def __eq__(self, other):
-        return self._unordered_compare(other, 'eq')
+        return self._apply_op('__eq__', other)
 
     def __ne__(self, other):
-        return self._unordered_compare(other, 'ne')
+        return self._apply_op('__ne__', other)
 
     def __lt__(self, other):
-        return self._ordered_compare(other, 'lt')
+        return self._apply_op('__lt__', other)
 
     def __le__(self, other):
-        return self._ordered_compare(other, 'le')
+        return self._apply_op('__le__', other)
 
     def __gt__(self, other):
-        return self._ordered_compare(other, 'gt')
+        return self._apply_op('__gt__', other)
 
     def __ge__(self, other):
-        return self._ordered_compare(other, 'ge')
+        return self._apply_op('__ge__', other)
+
+    def __invert__(self):
+        return self._apply_op('__invert__')
+
+    def __neg__(self):
+        return self._apply_op('__neg__')
+
+    def __abs__(self):
+        return self._apply_op('__abs__')
 
     def __iter__(self):
         return iter(self.columns)
+
+    def sin(self):
+        return self._apply_op('sin')
+
+    def cos(self):
+        return self._apply_op('cos')
+
+    def tan(self):
+        return self._apply_op('tan')
+
+    def asin(self):
+        return self._apply_op('asin')
+
+    def acos(self):
+        return self._apply_op('acos')
+
+    def atan(self):
+        return self._apply_op('atan')
+
+    def exp(self):
+        return self._apply_op('exp')
+
+    def log(self):
+        return self._apply_op('log')
+
+    def sqrt(self):
+        return self._apply_op('sqrt')
 
     def iteritems(self):
         """ Iterate over column names and series pairs """
@@ -734,7 +772,10 @@ class DataFrame(object):
         series = Series(col)
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
-            arr = rmm.device_array(shape=len(ind), dtype=np.float64)
+            dtype = np.float64
+            if self[next(iter(self._cols))].dtype == np.dtype("object"):
+                dtype = np.dtype("object")
+            arr = rmm.device_array(shape=len(ind), dtype=dtype)
             size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
@@ -755,9 +796,13 @@ class DataFrame(object):
         SCALAR = np.isscalar(col)
 
         if len(self) > 0 and len(series) == 1 and SCALAR:
-            arr = rmm.device_array(shape=len(index), dtype=series.dtype)
-            cudautils.gpu_fill_value.forall(arr.size)(arr, col)
-            return Series(arr)
+            if series.dtype == np.dtype("object"):
+                gather_map = cudautils.zeros(len(index), 'int32')
+                return series[gather_map]
+            else:
+                arr = rmm.device_array(shape=len(index), dtype=series.dtype)
+                cudautils.gpu_fill_value.forall(arr.size)(arr, col)
+                return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
         return col
@@ -1308,6 +1353,7 @@ class DataFrame(object):
         4    3    13.0
         2    4    14.0    12.0
         """
+        import nvstrings
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
@@ -1472,12 +1518,18 @@ class DataFrame(object):
                         key = on[idx]
                         categories = col_cats[key] if key in col_cats.keys()\
                             else None
-                        df[key] = columnops.build_column(
-                                Buffer(cols[on_idx]),
-                                dtype=cols[on_idx].dtype,
-                                mask=Buffer(valids[on_idx]),
-                                categories=categories,
-                                )
+                        if isinstance(cols[on_idx], nvstrings.nvstrings):
+                            df[key] = cols[on_idx]
+                        else:
+                            mask = None
+                            if valids[on_idx] is not None:
+                                mask = Buffer(valids[on_idx])
+                            df[key] = columnops.build_column(
+                                    Buffer(cols[on_idx]),
+                                    dtype=cols[on_idx].dtype,
+                                    mask=mask,
+                                    categories=categories,
+                            )
             else:  # not an `on`-column, `cpp_join` returns these after `on`
                 # but they need to be added to the result before `on` columns.
                 # on_count corrects gap for non-`on` columns
@@ -1485,12 +1537,18 @@ class DataFrame(object):
                 left_name = fix_name(name, lsuffix)
                 categories = col_cats[left_name] if left_name in\
                     col_cats.keys() else None
-                df[left_name] = columnops.build_column(
-                        Buffer(cols[left_column_idx]),
-                        dtype=cols[left_column_idx].dtype,
-                        mask=Buffer(valids[left_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[left_column_idx], nvstrings.nvstrings):
+                    df[left_name] = cols[left_column_idx]
+                else:
+                    mask = None
+                    if valids[left_column_idx] is not None:
+                        mask = Buffer(valids[left_column_idx])
+                    df[left_name] = columnops.build_column(
+                            Buffer(cols[left_column_idx]),
+                            dtype=cols[left_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
         rhs_column_idx = len(lhs.columns)
         for name in rhs.columns:
             if name not in on:
@@ -1498,12 +1556,18 @@ class DataFrame(object):
                 rhs_name = fix_name(name, rsuffix)
                 categories = col_cats[rhs_name] if rhs_name in\
                     col_cats.keys() else None
-                df[rhs_name] = columnops.build_column(
-                        Buffer(cols[rhs_column_idx]),
-                        dtype=cols[rhs_column_idx].dtype,
-                        mask=Buffer(valids[rhs_column_idx]),
-                        categories=categories,
-                        )
+                if isinstance(cols[rhs_column_idx], nvstrings.nvstrings):
+                    df[rhs_name] = cols[rhs_column_idx]
+                else:
+                    mask = None
+                    if valids[rhs_column_idx] is not None:
+                        mask = Buffer(valids[rhs_column_idx])
+                    df[rhs_name] = columnops.build_column(
+                            Buffer(cols[rhs_column_idx]),
+                            dtype=cols[rhs_column_idx].dtype,
+                            mask=mask,
+                            categories=categories,
+                    )
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
@@ -1710,7 +1774,7 @@ class DataFrame(object):
                              level=level)
             return result
 
-    def query(self, expr):
+    def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -1723,6 +1787,9 @@ class DataFrame(object):
             A boolean expression. Names in expression refer to columns.
 
             Names starting with `@` refer to Python variables
+
+        local_dict : dict
+            Containing the local variable to be used in query.
 
         Returns
         -------
@@ -1752,13 +1819,31 @@ class DataFrame(object):
         >>> print(df.query('datetimes==@search_date'))
                         datetimes
         1 2018-10-08T00:00:00.000
+
+        Using local_dict:
+
+        >>> import numpy as np
+        >>> import datetime
+        >>> df = cudf.DataFrame()
+        >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+        >>> df['datetimes'] = data
+        >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+        >>> print(df.query('datetimes==@search_date',
+        >>>         local_dict={'search_date':search_date2}))
+                        datetimes
+        1 2018-10-08T00:00:00.000
         """
+        if not isinstance(local_dict, dict):
+            raise TypeError("local_dict type: expected dict but found {!r}"
+                            .format(type(local_dict)))
+
         _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
             'locals': callframe.f_locals,
             'globals': callframe.f_globals,
+            'local_dict': local_dict,
         }
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
@@ -2333,28 +2418,110 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def select_dtypes(self, include=None):
+    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+        """Return the mean of the values for the requested axis.
+
+        Parameters
+        ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on.
+
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        level : int or level name, default None
+            If the axis is a MultiIndex (hierarchical), count along a
+            particular level, collapsing into a Series.
+
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data. Not implemented for
+            Series.
+
+        **kwargs
+            Additional keyword arguments to be passed to the function.
+
+        Returns
+        -------
+        mean : Series or DataFrame (if level specified)
+        """
+        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
+
+    def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
 
         Parameters
         ----------
         include : str or list
             which columns to include based on dtypes
+        exclude : str or list
+            which columns to exclude based on dtypes
 
         """
 
+        # code modified from:
+        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+
         if not isinstance(include, (list, tuple)):
-            include = [include]
+            include = (include,) if include is not None else ()
+        if not isinstance(exclude, (list, tuple)):
+            exclude = (exclude,) if exclude is not None else ()
+
         df = DataFrame()
 
-        include = [pd.core.dtypes.common.pandas_dtype(d) for d in include]
+        # infer_dtype_from_object can distinguish between
+        # np.float and np.number
+        selection = tuple(map(frozenset, (include, exclude)))
+        include, exclude = map(
+            lambda x: frozenset(
+                map(infer_dtype_from_object, x)),
+            selection,
+        )
+
+        # can't both include AND exclude!
+        if not include.isdisjoint(exclude):
+            raise ValueError('include and exclude overlap on {inc_ex}'.format(
+                inc_ex=(include & exclude)))
+
+        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
+
+        # include all subtypes
+        include_subtypes = set()
+        for dtype in self.dtypes:
+            for i_dtype in include:
+                # category handling
+                if i_dtype is cat_type:
+                    include_subtypes.add(i_dtype)
+                    break
+                if issubclass(dtype.type, i_dtype):
+                    include_subtypes.add(dtype.type)
+
+        # exclude all subtypes
+        exclude_subtypes = set()
+        for dtype in self.dtypes:
+            for e_dtype in exclude:
+                # category handling
+                if e_dtype is cat_type:
+                    exclude_subtypes.add(e_dtype)
+                    break
+                if issubclass(dtype.type, e_dtype):
+                    exclude_subtypes.add(dtype.type)
+
+        include_all = set([infer_dtype_from_object(d)
+                           for d in self.dtypes])
+
+        # remove all exclude types
+        inclusion = include_all - exclude_subtypes
+
+        # keep only those included
+        if include_subtypes:
+            inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            try:
-                if x.dtype in include:
-                    df.add_column(x.name, x)
-            except TypeError:
-                pass
+            infered_type = infer_dtype_from_object(x.dtype)
+            if infered_type in inclusion:
+                df.add_column(x.name, x)
+
         return df
 
     @ioutils.doc_to_parquet()

@@ -131,6 +131,7 @@ gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_t
                                           out_aggregation_column, 
                                           sort_result);
       }
+    case GDF_STRING_CATEGORY:
     case GDF_INT32:  
       { 
         return typed_groupby<int32_t, op>(groupby_input_table, 

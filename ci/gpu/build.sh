@@ -13,6 +13,7 @@ function logger() {
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=4
+export CUDA_REL=${CUDA_VERSION%.*}
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
@@ -29,6 +30,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=0.3*
 
 logger "Check versions..."
 python --version

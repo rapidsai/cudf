@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 
-    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" OFF)
+    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
         message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
     else()
@@ -62,10 +62,6 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
-
-# suppress SHFL warnings caused by Modern GPU
-# TODO: remove this when Modern GPU is removed or fixed to use shfl_sync
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
@@ -142,7 +138,6 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ZLIB_INCLUDE_DIRS}")
@@ -160,18 +155,31 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 find_file(NVSTRINGS_INCLUDE "NVStrings.h"
           HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include/nvstrings"
                 "$ENV{CONDA_PREFIX}/include")
+                
+find_file(NVCATEGORY_INCLUDE "NVCategory.h"
+          HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include/nvstrings"
+                "$ENV{CONDA_PREFIX}/include")                
+                
 find_library(NVSTRINGS_LIBRARY "NVStrings"
+             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+                   "$ENV{CONDA_PREFIX}/lib")
+
+find_library(NVCATEGORY_LIBRARY "NVCategory"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
                    "$ENV{CONDA_PREFIX}/lib")
 
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include
+                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include/nvstrings
                     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
-                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/nvstrings/NVStrings.h
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVCATEGORY_INCLUDE} ${CMAKE_BINARY_DIR}/include/nvstrings/NVCategory.h
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVCATEGORY_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVCategory.so)
 endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
 
 ###################################################################################################
@@ -181,6 +189,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
+            src/string/nvcategory_util.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -209,13 +218,23 @@ add_library(cudf SHARED
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
-            src/unary/unary_ops.cu
+            src/unary/math_ops.cu
+            src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
+            src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
-            src/io/comp/uncomp.cpp
+            src/io/parquet/page_data.cu
+            src/io/parquet/page_hdr.cu
+            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
+            src/io/comp/uncomp.cpp
+            src/io/comp/brotli_dict.cpp
+            src/io/comp/debrotli.cu
+            src/io/comp/unsnap.cu
+            src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
@@ -272,8 +291,8 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-# TODO: better nvrtc linking with optional variables
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings nvrtc)
+
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

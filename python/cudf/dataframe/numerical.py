@@ -5,12 +5,13 @@ from __future__ import print_function, division
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api.types import is_integer_dtype
 
 
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from cudf.dataframe import columnops, datetime
+from cudf.dataframe import columnops, datetime, string
 from cudf.utils import cudautils, utils
 from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
@@ -22,6 +23,9 @@ import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
+from cudf.bindings.cudf_cpp import get_ctype_ptr
+
 
 # Operator mappings
 
@@ -40,13 +44,6 @@ _binary_impl = {
     'mul': libgdf.gdf_mul_generic,
     'floordiv': libgdf.gdf_floordiv_generic,
     'truediv': libgdf.gdf_div_generic,
-}
-
-#   Unary operators
-_unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
-    'sqrt': libgdf.gdf_sqrt_generic,
 }
 
 
@@ -95,7 +92,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+        return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
@@ -120,6 +117,50 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif (dtype == np.dtype('object') or
+              np.issubdtype(dtype, np.dtype('U').type)):
+            import nvstrings
+            if np.issubdtype(self.dtype, np.signedinteger):
+                if len(self) > 0:
+                    dev_array = self.astype('int32').data.mem
+                    dev_ptr = get_ctype_ptr(dev_array)
+                    null_ptr = None
+                    if self.mask is not None:
+                        null_ptr = get_ctype_ptr(self.mask.mem)
+                    return string.StringColumn(
+                        data=nvstrings.itos(
+                            dev_ptr,
+                            count=len(self),
+                            nulls=null_ptr,
+                            bdevmem=True
+                        )
+                    )
+                else:
+                    return string.StringColumn(
+                        data=nvstrings.to_device(
+                            []
+                        )
+                    )
+            elif np.issubdtype(self.dtype, np.floating):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # dev_array = self.astype('float32').data.mem
+                # dev_ptr = get_ctype_ptr(self.data.mem)
+                # return string.StringColumn(
+                #     data=nvstrings.ftos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
+            elif self.dtype == np.dtype('bool'):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # return string.StringColumn(
+                #     data=nvstrings.btos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
@@ -399,8 +440,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         Fill null values with *fill_value*
         """
         result = self.copy()
-        fill_value_col, result = numeric_normalize_types(
-            columnops.as_column(fill_value, nan_as_null=False), result)
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        if is_integer_dtype(result.dtype):
+            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        else:
+            fill_value_col = fill_value_col.astype(result.dtype)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
@@ -427,7 +471,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 def numeric_column_unaryop(operand, op, out_dtype):
     out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    _gdf.apply_unaryop(op, operand, out)
+    cpp_unaryops.apply_math_op(operand, out, op)
     return out.view(NumericalColumn, dtype=out_dtype)
 
 
@@ -443,6 +487,24 @@ def numeric_normalize_types(*args):
     if dtype == np.dtype('int16'):
         dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
+
+
+def safe_cast_to_int(col, dtype):
+    """
+    Cast given NumericalColumn to given integer dtype safely.
+    """
+    assert is_integer_dtype(dtype)
+
+    if col.dtype == dtype:
+        return col
+
+    new_col = col.astype(dtype)
+    if new_col.unordered_compare('eq', col).all():
+        return new_col
+    else:
+        raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
+            col.dtype.type.__name__,
+            np.dtype(dtype).type.__name__))
 
 
 def column_hash_values(column0, *other_columns, initial_hash_values=None):
