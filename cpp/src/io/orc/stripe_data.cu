@@ -34,6 +34,7 @@
 #define LOG2_BYTESTREAM_BFRSZ   13  // Must be able to handle 512x 8-byte values
 
 #define BYTESTREAM_BFRSZ        (1 << LOG2_BYTESTREAM_BFRSZ)
+#define BYTESTREAM_BFRMASK32    ((BYTESTREAM_BFRSZ-1) >> 3)
 #define LOG2_NWARPS             5   // Log2 of number of warps per threadblock
 #define LOG2_NTHREADS           (LOG2_NWARPS+5)
 #define NWARPS                  (1 << LOG2_NWARPS)
@@ -147,8 +148,15 @@ struct orcdec_state_s
 };
 
 
-// Initializes byte stream, modifying length and start position to keep the read pointer 8-byte aligned
-// Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7] is valid
+/**
+ * @brief Initializes byte stream, modifying length and start position to keep the read pointer 8-byte aligned
+ *        Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7] is valid
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] base Pointer to raw byte stream data
+ * @param[in] len Stream length in bytes
+ *
+ **/
 static __device__ void bytestream_init(volatile orc_bytestream_s *bs, const uint8_t *base, uint32_t len)
 {
     uint32_t pos = static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base));
@@ -157,7 +165,13 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs, const uint
     bs->len = (len + pos + 7) & ~7;
 }
 
-// Increment the read position, returns number of 64-bit slots to fill
+/**
+ * @brief Increment the read position, returns number of 64-bit slots to fill
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bytes_consumed Number of bytes that were consumed
+ *
+ **/
 static __device__ uint32_t bytestream_flush_bytes(volatile orc_bytestream_s *bs, uint32_t bytes_consumed)
 {
     uint32_t pos = bs->pos;
@@ -166,7 +180,15 @@ static __device__ uint32_t bytestream_flush_bytes(volatile orc_bytestream_s *bs,
     return (pos_new >> 3) - (pos >> 3);
 }
 
-// Fill byte buffer
+/**
+ * @brief Refill the byte stream buffer
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] pos Starting byte position
+ * @param[in] count Number of 64-bit slits to fill
+ * @param[in] t thread id
+ *
+ **/
 static __device__ void bytestream_fill(orc_bytestream_s *bs, uint32_t pos, uint32_t count, int t)
 {
     if ((uint32_t)t < count)
@@ -176,17 +198,39 @@ static __device__ void bytestream_fill(orc_bytestream_s *bs, uint32_t pos, uint3
     }
 }
 
-// Initial buffer fill
+/**
+ * @brief Initial buffer fill
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] t thread id
+ *
+ **/
 static __device__ void bytestream_initbuf(orc_bytestream_s *bs, int t)
 {
     bytestream_fill(bs, 0, min(bs->len, BYTESTREAM_BFRSZ) >> 3, t);
 }
 
+/**
+ * @brief Read a byte from the byte stream (byte aligned)
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] pos Position in byte stream
+ * @return byte
+ *
+ **/
 inline __device__ uint8_t bytestream_readbyte(volatile orc_bytestream_s *bs, int pos)
 {
     return bs->buf.u8[pos & (BYTESTREAM_BFRSZ - 1)];
 }
 
+/**
+ * @brief Read 32 bits from a byte stream (little endian, byte aligned)
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] pos Position in byte stream
+ * @result bits
+ *
+ **/
 inline __device__ uint32_t bytestream_readu32(volatile orc_bytestream_s *bs, int pos)
 {
     uint32_t a = bs->buf.u32[(pos & (BYTESTREAM_BFRSZ - 1)) >> 2];
@@ -194,6 +238,15 @@ inline __device__ uint32_t bytestream_readu32(volatile orc_bytestream_s *bs, int
     return __funnelshift_r(a, b, (pos & 3) * 8);
 }
 
+/**
+ * @brief Read 64 bits from a byte stream (little endian, byte aligned)
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] pos Position in byte stream
+ * @param[in] numbits number of bits
+ * @return bits
+ *
+ **/
 inline __device__ uint64_t bytestream_readu64(volatile orc_bytestream_s *bs, int pos)
 {
     uint32_t a = bs->buf.u32[(pos & (BYTESTREAM_BFRSZ - 1)) >> 2];
@@ -207,53 +260,38 @@ inline __device__ uint64_t bytestream_readu64(volatile orc_bytestream_s *bs, int
     return v;
 }
 
-inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint32_t &result)
-{
-    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    result = __funnelshift_l(b, a, bitpos & 0x1f) >> (32 - numbits);
-}
-
-inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int32_t &result)
-{
-    uint32_t u;
-    bytestream_readbe(bs, bitpos, numbits, u);
-    result = (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
-}
-
-inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint64_t &result)
-{
-    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1)*8)) >> 5], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    uint32_t c = __byte_perm(bs->buf.u32[((bitpos + 64) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    uint32_t hi32 = __funnelshift_l(b, a, bitpos & 0x1f);
-    uint32_t lo32 = __funnelshift_l(c, b, bitpos & 0x1f);
-    uint64_t v = hi32;
-    v <<= 32;
-    v |= lo32;
-    v >>= (64 - numbits);
-    result = v;
-}
-
-inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int64_t &result)
-{
-    uint64_t u;
-    bytestream_readbe(bs, bitpos, numbits, u);
-    result = (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
-}
-
+/**
+ * @brief Read up to 32-bits from a byte stream (big endian)
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @return decoded value
+ *
+ **/
 inline __device__ uint32_t bytestream_readbits(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits)
 {
-    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1)*8)) >> 5], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1)*8)) >> 5], 0, 0x0123);
+    int idx = bitpos >> 5;
+    uint32_t a = __byte_perm(bs->buf.u32[(idx + 0) & BYTESTREAM_BFRMASK32], 0, 0x0123);
+    uint32_t b = __byte_perm(bs->buf.u32[(idx + 1) & BYTESTREAM_BFRMASK32], 0, 0x0123);
     return __funnelshift_l(b, a, bitpos & 0x1f) >> (32 - numbits);
 }
 
+/**
+ * @brief Read up to 64-bits from a byte stream (big endian)
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @return decoded value
+ *
+ **/
 inline __device__ uint64_t bytestream_readbits64(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits)
 {
-    uint32_t a = __byte_perm(bs->buf.u32[(bitpos & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    uint32_t b = __byte_perm(bs->buf.u32[((bitpos + 32) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
-    uint32_t c = __byte_perm(bs->buf.u32[((bitpos + 64) & ((BYTESTREAM_BFRSZ - 1) * 8)) >> 5], 0, 0x0123);
+    int idx = bitpos >> 5;
+    uint32_t a = __byte_perm(bs->buf.u32[(idx + 0) & BYTESTREAM_BFRMASK32], 0, 0x0123);
+    uint32_t b = __byte_perm(bs->buf.u32[(idx + 1) & BYTESTREAM_BFRMASK32], 0, 0x0123);
+    uint32_t c = __byte_perm(bs->buf.u32[(idx + 2) & BYTESTREAM_BFRMASK32], 0, 0x0123);
     uint32_t hi32 = __funnelshift_l(b, a, bitpos & 0x1f);
     uint32_t lo32 = __funnelshift_l(c, b, bitpos & 0x1f);
     uint64_t v = hi32;
@@ -261,6 +299,64 @@ inline __device__ uint64_t bytestream_readbits64(volatile orc_bytestream_s *bs, 
     v |= lo32;
     v >>= (64 - numbits);
     return v;
+}
+
+/**
+ * @brief Decode a big-endian unsigned 32-bit value
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @param[out] result decoded value
+ *
+ **/
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint32_t &result)
+{
+    result = bytestream_readbits(bs, bitpos, numbits);
+}
+
+/**
+ * @brief Decode a big-endian signed 32-bit value
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @param[out] result decoded value
+ *
+ **/
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int32_t &result)
+{
+    uint32_t u = bytestream_readbits(bs, bitpos, numbits);
+    result = (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
+}
+
+/**
+ * @brief Decode a big-endian unsigned 64-bit value
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @param[out] result decoded value
+ *
+ **/
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, uint64_t &result)
+{
+    result = bytestream_readbits64(bs, bitpos, numbits);
+}
+
+/**
+ * @brief Decode a big-endian signed 64-bit value
+ *
+ * @param[in] bs Byte stream input
+ * @param[in] bitpos Position in byte stream
+ * @param[in] numbits number of bits
+ * @param[out] result decoded value
+ *
+ **/
+inline __device__ void bytestream_readbe(volatile orc_bytestream_s *bs, int bitpos, uint32_t numbits, int64_t &result)
+{
+    uint64_t u = bytestream_readbits64(bs, bitpos, numbits);
+    result = (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
 }
 
 
@@ -382,7 +478,15 @@ inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, int6
 }
 
 
-// Convert lengths into positions
+/**
+ * @brief In-place conversion from lengths to positions
+ *
+ * @param[in] vals input values
+ * @param[in] numvals number of values
+ * @param[in] t thread id
+ *
+ * @return number of values decoded
+ **/
 template<class T>
 inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, unsigned int t)
 {
@@ -395,7 +499,17 @@ inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, 
 }
 
 
-// Integer RLEv1 for 32-bit values
+/**
+ * @brief ORC Integer RLEv1 decoding
+ *
+ * @param[in] bs input byte stream
+ * @param[in] rle RLE state
+ * @param[in] vals buffer for output values (uint32_t, int32_t, uint64_t or int64_t)
+ * @param[in] maxvals maximum number of values to decode
+ * @param[in] t thread id
+ *
+ * @return number of values decoded
+ **/
 template <class T>
 static __device__ uint32_t Integer_RLEv1(orc_bytestream_s *bs, volatile orc_rlev1_state_s *rle, volatile T *vals, uint32_t maxvals, int t)
 {
@@ -488,14 +602,27 @@ static __device__ uint32_t Integer_RLEv1(orc_bytestream_s *bs, volatile orc_rlev
 }
 
 
-// Maps the 5-bit code to 6-bit length
+/**
+ * @brief Maps the RLEv2 5-bit length code to 6-bit length
+ *
+ **/
 static const __device__ __constant__ uint8_t kRLEv2_W[32] =
 {
     1,2,3,4,        5,6,7,8,        9,10,11,12,     13,14,15,16,
     17,18,19,20,    21,22,23,24,    26,28,30,32,    40,48,56,64
 };
 
-// Integer RLEv2 for 32-bit values
+/**
+ * @brief ORC Integer RLEv2 decoding
+ *
+ * @param[in] bs input byte stream
+ * @param[in] rle RLE state
+ * @param[in] vals buffer for output values (uint32_t, int32_t, uint64_t or int64_t)
+ * @param[in] maxvals maximum number of values to decode
+ * @param[in] t thread id
+ *
+ * @return number of values decoded
+ **/
 template <class T>
 static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev2_state_s *rle, volatile T *vals, uint32_t maxvals, int t)
 {
@@ -758,6 +885,14 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
 }
 
 
+/**
+ * @brief Reads a 32-bit value at an arbitrary bit position
+ *
+ * @param[in] vals 32-bit array of values
+ * @param[in] bitpos bit position
+ *
+ * @return 32-bit value
+ **/
 inline __device__ uint32_t rle8_read_u32(volatile uint32_t *vals, uint32_t bitpos)
 {
     uint32_t a = vals[(bitpos >> 5) + 0];
@@ -765,7 +900,18 @@ inline __device__ uint32_t rle8_read_u32(volatile uint32_t *vals, uint32_t bitpo
     return __funnelshift_r(a, b, bitpos & 0x1f);
 }
 
-// Integer RLEv1 for 32-bit values
+
+/**
+ * @brief ORC Byte RLE decoding
+ *
+ * @param[in] bs Input byte stream
+ * @param[in] rle RLE state
+ * @param[in] vals output buffer for decoded 8-bit values
+ * @param[in] maxvals Maximum number of values to decode
+ * @param[in] t thread id
+ *
+ * @return number of values decoded
+ **/
 static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_state_s *rle, volatile uint8_t *vals, uint32_t maxvals, int t)
 {
     uint32_t numvals, numruns;
@@ -838,6 +984,17 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
 }
 
 
+/**
+ * @brief Decoding NULLs and builds string dictionary index tables
+ *
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] global_dictionary Global dictionary device array
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] max_num_rows Maximum number of rows to load
+ * @param[in] first_row Crop all rows below first_row
+ *
+ **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
 gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row)
@@ -1069,7 +1226,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
 
 
 /**
- * @brief Trailing zeroes Decodes column data
+ * @brief Trailing zeroes for decoding timestamp nanoseconds
  *
  **/
 static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
@@ -1457,6 +1614,19 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
 }
 
 
+/**
+ * @brief Launches kernel for decoding NULLs and building string dictionary index tables
+ *
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] global_dictionary Global dictionary device array
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] max_rows Maximum number of rows to load
+ * @param[in] first_row Crop all rows below first_row
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
 cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row, cudaStream_t stream)
 {
     dim3 dim_block(NTHREADS, 1);
@@ -1465,6 +1635,19 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, Dictio
     return cudaSuccess;
 }
 
+/**
+ * @brief Launches kernel for decoding column data
+ *
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] global_dictionary Global dictionary device array
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] max_rows Maximum number of rows to load
+ * @param[in] first_row Crop all rows below first_row
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
 cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row, cudaStream_t stream)
 {
     uint32_t num_chunks = num_columns * num_stripes;
