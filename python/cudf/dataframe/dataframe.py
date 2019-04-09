@@ -305,6 +305,13 @@ class DataFrame(object):
     def empty(self):
         return not len(self)
 
+    def _get_numeric_data(self):
+        """ Return a dataframe with only numeric data types """
+        columns = [c for c, dt in self.dtypes.items()
+                   if dt != object and
+                   not pd.api.types.is_categorical_dtype(dt)]
+        return self[columns]
+
     def assign(self, **kwargs):
         """
         Assign columns to DataFrame from keyword arguments.
