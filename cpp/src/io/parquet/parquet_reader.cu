@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
+#include "io/utilities/wrapper_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
@@ -28,7 +29,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <array>
-#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <vector>
@@ -139,126 +139,6 @@ template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
   return static_cast<T>(parquet::CompactProtocolReader::NumRequiredBits(max_level));
 }
-
-/**
- * @brief A helper class that wraps a gdf_column and any associated memory.
- *
- * This abstraction initializes and manages a gdf_column (fields and memory)
- * while still allowing direct access. Memory is automatically deallocated
- * unless ownership is transferred via releasing and assigning the raw pointer.
- **/
-class gdf_column_wrapper {
- public:
-  gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
-                     gdf_dtype_extra_info dtype_info, const std::string name) {
-    col = (gdf_column *)malloc(sizeof(gdf_column));
-    col->col_name = (char *)malloc(name.length() + 1);
-    strcpy(col->col_name, name.c_str());
-    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info);
-  }
-
-  ~gdf_column_wrapper() {
-    if (col) {
-      RMM_FREE(col->data, 0);
-      RMM_FREE(col->valid, 0);
-      free(col->col_name);
-    }
-    free(col);
-  };
-
-  gdf_column_wrapper(const gdf_column_wrapper &other) = delete;
-  gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) {
-    other.col = nullptr;
-  }
-
-  gdf_error allocate() {
-    // For strings, just store the ptr + length. Eventually, column's data ptr
-    // is replaced with an NvString instance created from these pairs.
-    const auto num_rows = std::max(col->size, 1);
-    const auto column_byte_width = (col->dtype == GDF_STRING)
-                                       ? sizeof(parquet::gpu::nvstrdesc_s)
-                                       : gdf_dtype_size(col->dtype);
-
-    RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
-    RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
-    CUDA_TRY(cudaMemset(col->valid, 0, gdf_valid_allocation_size(num_rows)));
-
-    return GDF_SUCCESS;
-  }
-
-  gdf_column *operator->() const { return col; }
-  gdf_column *get() const { return col; }
-  gdf_column *release() {
-    auto temp = col;
-    col = nullptr;
-    return temp;
-  }
-
- private:
-  gdf_column *col = nullptr;
-};
-
-/**
- * @brief A helper class that wraps fixed-length device memory for the GPU, and
- * a mirror host pinned memory for the CPU.
- *
- * This abstraction allocates a specified fixed chunk of device memory that can
- * initialized upfront, or gradually initialized as required.
- * The host-side memory can be used to manipulate data on the CPU before and
- * after operating on the same data on the GPU.
- **/
-template <typename T>
-class hostdevice_vector {
- public:
-  using value_type = T;
-
-  explicit hostdevice_vector(size_t initial_size, size_t max_size)
-      : num_elements(initial_size), max_elements(max_size) {
-    CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
-    RMM_ALLOC(&d_data, sizeof(T) * max_elements, 0);
-  }
-
-  ~hostdevice_vector() {
-    RMM_FREE(d_data, 0);
-    CUDA_TRY(cudaFreeHost(h_data));
-  }
-
-  bool insert(const T &data) {
-    if (num_elements < max_elements) {
-      h_data[num_elements] = data;
-      num_elements++;
-      return true;
-    }
-    return false;
-  }
-
-  size_t max_size() const { return max_elements; }
-  size_t size() const { return num_elements; }
-  size_t memory_size() const { return sizeof(T) * num_elements; }
-
-  T &operator[](size_t i) const { return h_data[i]; }
-  T *host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T *device_ptr(size_t offset = 0) const { return d_data + offset; }
-
- private:
-  size_t max_elements = 0;
-  size_t num_elements = 0;
-  T *h_data = nullptr;
-  T *d_data = nullptr;
-};
-
-/**
- * @brief A unique_ptr and custom deleter that frees device memory back to RMM
- *
- * This ptr object is used to automatically release device memory of raw
- * pointers manually allocated with RMM_ALLOC
- **/
-template <typename T>
-struct rmm_deleter {
-  void operator()(T *ptr) { RMM_FREE(ptr, 0); }
-};
-template <typename T>
-using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
 /**
  * @brief A helper wrapper for Parquet file metadata. Provides some additional
@@ -629,7 +509,6 @@ void decode_page_data(
  **/
 gdf_error read_parquet(pq_read_arg *args) {
 
-  std::vector<gdf_column_wrapper> columns;
   int num_columns = 0;
   int num_rows = 0;
   int index_col = -1;
@@ -672,6 +551,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
   // Initialize gdf_columns, but hold off on allocating storage space
+  std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols) {
     auto &col_schema = md.schema[md.row_groups[0].columns[col.first].schema_idx];
@@ -757,10 +637,10 @@ gdf_error read_parquet(pq_read_arg *args) {
           "type_width=%d, max_def_level=%d, "
           "max_rep_level=%d\n     data_page_offset=%zd, index_page_offset=%zd, "
           "dict_page_offset=%zd\n",
-          name.first, name.second.c_str(), num_rows, rowgroup.num_rows,
+          col.first, col.second.c_str(), num_rows, rowgroup.num_rows,
           col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
           col_meta.total_uncompressed_size,
-          rowgroup.columns[name.first].schema_idx,
+          rowgroup.columns[col.first].schema_idx,
           chunks[chunks.size() - 1].data_type, type_width,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           (size_t)col_meta.data_page_offset, (size_t)col_meta.index_page_offset,
@@ -822,6 +702,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   if (index_col != -1) {
     args->index_col = (int *)malloc(sizeof(int));
     *args->index_col = index_col;
+  } else {
+    args->index_col = nullptr;
   }
 
   return GDF_SUCCESS;

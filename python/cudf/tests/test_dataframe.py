@@ -1461,8 +1461,8 @@ def test_reductions(pdf, gdf, accessor, func):
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1494,8 +1494,8 @@ def test_bitwise_binops_df(pdf, gdf, binop):
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1519,6 +1519,17 @@ def test_binops_series(pdf, gdf, binop):
 def test_bitwise_binops_series(pdf, gdf, binop):
     d = binop(pdf.x, pdf.y + 1)
     g = binop(gdf.x, gdf.y + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('unaryop', [
+    operator.neg,
+    operator.inv,
+    operator.abs,
+])
+def test_unaryops_df(pdf, gdf, unaryop):
+    d = unaryop(pdf - 5)
+    g = unaryop(gdf - 5)
     assert_eq(d, g)
 
 
