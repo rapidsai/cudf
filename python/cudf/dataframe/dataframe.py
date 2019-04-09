@@ -294,9 +294,10 @@ class DataFrame(object):
         return self._size
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
@@ -430,11 +431,15 @@ class DataFrame(object):
             len(self),
         )
 
-    # binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other):
+    # unary, binary, rbinary, orderedcompare, unorderedcompare
+    def _apply_op(self, fn, other=None):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if other is None:
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], fn)()
+            return result
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
@@ -465,13 +470,6 @@ class DataFrame(object):
                     "supported at this time.")
         return result
 
-    def _unaryop(self, fn):
-        result = DataFrame()
-        result.set_index(self.index)
-        for col in self._cols:
-            result[col] = self._cols[col]._unaryop(fn)
-        return result
-
     def __add__(self, other):
         return self._apply_op('__add__', other)
 
@@ -490,11 +488,14 @@ class DataFrame(object):
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
+
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._apply_op('__pow__', other)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
@@ -537,8 +538,44 @@ class DataFrame(object):
     def __ge__(self, other):
         return self._apply_op('__ge__', other)
 
+    def __invert__(self):
+        return self._apply_op('__invert__')
+
+    def __neg__(self):
+        return self._apply_op('__neg__')
+
+    def __abs__(self):
+        return self._apply_op('__abs__')
+
     def __iter__(self):
         return iter(self.columns)
+
+    def sin(self):
+        return self._apply_op('sin')
+
+    def cos(self):
+        return self._apply_op('cos')
+
+    def tan(self):
+        return self._apply_op('tan')
+
+    def asin(self):
+        return self._apply_op('asin')
+
+    def acos(self):
+        return self._apply_op('acos')
+
+    def atan(self):
+        return self._apply_op('atan')
+
+    def exp(self):
+        return self._apply_op('exp')
+
+    def log(self):
+        return self._apply_op('log')
+
+    def sqrt(self):
+        return self._apply_op('sqrt')
 
     def iteritems(self):
         """ Iterate over column names and series pairs """
@@ -2380,6 +2417,35 @@ class DataFrame(object):
                                          exact=exact,
                                          quant_index=False)
         return result
+
+    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+        """Return the mean of the values for the requested axis.
+
+        Parameters
+        ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on.
+
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        level : int or level name, default None
+            If the axis is a MultiIndex (hierarchical), count along a
+            particular level, collapsing into a Series.
+
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data. Not implemented for
+            Series.
+
+        **kwargs
+            Additional keyword arguments to be passed to the function.
+
+        Returns
+        -------
+        mean : Series or DataFrame (if level specified)
+        """
+        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
