@@ -103,14 +103,6 @@ void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width
     cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width);
 }
 
-bool isDeviceType(cudaPointerAttributes attrib) {
-#if CUDART_VERSION >= 10000
-    return (attrib.type == cudaMemoryTypeDevice);
-#else
-    return (attrib.memoryType == cudaMemoryTypeDevice);
-#endif
-}
-
 void print_valid_data(const gdf_valid_type *validity_mask,
                       const size_t num_rows)
 {

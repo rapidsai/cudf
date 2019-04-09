@@ -296,13 +296,4 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
     return !lhs.equal(rhs);
 }
 
-template <typename PointerAttrib>
-bool isPtrManaged(PointerAttrib attr) {
-#if CUDART_VERSION >= 10000
-    return (attr.type == cudaMemoryTypeManaged);
-#else
-    return attr.isManaged;
-#endif
-}
-
 #endif // HELPER_FUNCTIONS_CUH
