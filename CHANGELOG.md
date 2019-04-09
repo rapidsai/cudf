@@ -21,6 +21,7 @@
 - PR #1349 Replace modernGPU sort join with thrust.
 - PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
+- PR #1376 Change series quantile default to linear
 
 ## Bug Fixes
 
