@@ -32,16 +32,6 @@
 
 #include "helper_functions.cuh"
 
-namespace {
-bool isPtrManaged(cudaPointerAttributes attr) {
-#if CUDART_VERSION >= 10000
-    return (attr.type == cudaMemoryTypeManaged);
-#else
-    return attr.isManaged;
-#endif
-}
-}
-
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
  *
