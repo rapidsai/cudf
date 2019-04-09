@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api.types import is_integer_dtype
 
 
 from libgdf_cffi import libgdf
@@ -22,6 +23,7 @@ import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 
@@ -42,13 +44,6 @@ _binary_impl = {
     'mul': libgdf.gdf_mul_generic,
     'floordiv': libgdf.gdf_floordiv_generic,
     'truediv': libgdf.gdf_div_generic,
-}
-
-#   Unary operators
-_unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
-    'sqrt': libgdf.gdf_sqrt_generic,
 }
 
 
@@ -97,7 +92,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+        return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
@@ -445,8 +440,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         Fill null values with *fill_value*
         """
         result = self.copy()
-        fill_value_col, result = numeric_normalize_types(
-            columnops.as_column(fill_value, nan_as_null=False), result)
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        if is_integer_dtype(result.dtype):
+            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        else:
+            fill_value_col = fill_value_col.astype(result.dtype)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
@@ -473,7 +471,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 def numeric_column_unaryop(operand, op, out_dtype):
     out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    _gdf.apply_unaryop(op, operand, out)
+    cpp_unaryops.apply_math_op(operand, out, op)
     return out.view(NumericalColumn, dtype=out_dtype)
 
 
@@ -489,6 +487,24 @@ def numeric_normalize_types(*args):
     if dtype == np.dtype('int16'):
         dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
+
+
+def safe_cast_to_int(col, dtype):
+    """
+    Cast given NumericalColumn to given integer dtype safely.
+    """
+    assert is_integer_dtype(dtype)
+
+    if col.dtype == dtype:
+        return col
+
+    new_col = col.astype(dtype)
+    if new_col.unordered_compare('eq', col).all():
+        return new_col
+    else:
+        raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
+            col.dtype.type.__name__,
+            np.dtype(dtype).type.__name__))
 
 
 def column_hash_values(column0, *other_columns, initial_hash_values=None):

@@ -6,6 +6,7 @@
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
+- PR #1381 Add DataFrame._get_numeric_data
 
 ## Improvements
 
@@ -13,10 +14,15 @@
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
+- PR #1163 Refactored UnaryOps. Reduced API to two functions: `gdf_unary_math` and `gdf_cast`. Added `abs`, `-`, and `~` ops. Changed bindings to Cython
 - PR #1284 Update docs version
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 - PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
+- PR #1349 Replace modernGPU sort join with thrust.
+- PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
+- PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
+- PR #1376 Change series quantile default to linear
 
 ## Bug Fixes
 
@@ -24,12 +30,18 @@
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
 - PR #1293 Fix Inaccurate error message in join.pyx
+- PR #1308 Add atomicCAS overload for `int8_t`, `int16_t`
 - PR #1317 Fix catch polymorphic exception by reference in ipc.cu
 - PR #1325 Fix dtype of null bitmasks to int8
 - PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
 - PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
 - PR #1321 Fix out of bounds warning when checking Bzip2 header
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1359 Add atomicAnd/Or/Xor for integers
+- PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
+- PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
+- PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
+
 
 # cuDF 0.6.0 (Date TBD)
 
@@ -178,12 +190,12 @@
 - PR #1184 Fix iloc performance regression
 - PR #1185 Support left_on/right_on and also on=str in merge
 - PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
+- PR #1213 Fix bug with csv reader requesting subset of columns using wrong datatype
 - PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
 - PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
-
 
 # cuDF 0.5.1 (05 Feb 2019)
 
