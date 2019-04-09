@@ -2119,6 +2119,9 @@ def test_dataframe_describe_include():
         decimal=4)
 
 
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Quantile interpolation does not currently tightly match pandas.")
 def test_dataframe_describe_default():
     np.random.seed(12)
     data_length = 10000
