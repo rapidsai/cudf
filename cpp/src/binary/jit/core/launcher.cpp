@@ -69,7 +69,7 @@ namespace jit {
     Launcher::Launcher()
      : cacheInstance{cudf::jit::cudfJitCache::Instance()}
     { 
-        this->setProgram("prog_binop2.jit");
+        this->setProgram("prog_binop.jit");
     }
 
     Launcher::Launcher(Launcher&& launcher)

@@ -15,11 +15,31 @@
  */
 
 #include "cache.h"
-#include <jitify.hpp>
-#include <unordered_map>
-#include <string>
-#include <memory>
-#include <mutex>
+
+std::string getTempDir()
+{
+    char const *tmpdir_path;
+    
+    #if defined(__unix__)
+        tmpdir_path = getenv("TMPDIR");
+        if (tmpdir_path != 0)
+            return std::string(tmpdir_path) + '/';
+        tmpdir_path = getenv("TMP");
+        if (tmpdir_path != 0)
+            return std::string(tmpdir_path) + '/';
+        tmpdir_path = getenv("TEMP");
+        if (tmpdir_path != 0)
+            return std::string(tmpdir_path) + '/';
+        tmpdir_path = getenv("TEMPDIR");
+        if (tmpdir_path != 0)
+            return std::string(tmpdir_path) + '/';
+        
+        tmpdir_path = "/tmp";
+        return std::string(tmpdir_path) + '/';
+    #elif
+        #error Only unix is supported
+    #endif // __unix__
+}
 
 namespace cudf {
 namespace jit {
@@ -29,7 +49,7 @@ cudfJitCache::cudfJitCache() { }
 cudfJitCache::~cudfJitCache() { }
 
 std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
-    std::string prog_file_name, 
+    std::string prog_name, 
     std::string const& cuda_source = "",
     std::vector<std::string> const& given_headers = {},
     std::vector<std::string> const& given_options = {},
@@ -39,19 +59,20 @@ std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
     std::lock_guard<std::mutex> lock(_program_cache_mutex);
 
     // Find memory cached preprocessed program
-    auto prog_it = program_map.find(prog_file_name);
+    auto prog_it = program_map.find(prog_name);
     if ( prog_it != program_map.end()) {
         return prog_it->second;
     }
     else { // Find file cached preprocessed program
         std::string prog_string;
+        std::string prog_file_name = getTempDir() + prog_name;
         std::ifstream prog_file (prog_file_name, std::ios::binary);
         if (prog_file) {
             std::stringstream buffer;
             buffer << prog_file.rdbuf();
             prog_string = buffer.str();
         }
-        else { // JIT preprocess the program and write to file
+        else { // JIT preprocess the program and write to file if possible
             prog_string = jitify_v2::Program(cuda_source,
                                             given_headers,
                                             given_options,
@@ -63,12 +84,11 @@ std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
         // Add deserialized program to cache and return
         auto program = std::make_shared<jitify_v2::Program>(
             jitify_v2::Program::deserialize(prog_string));
-        program_map[prog_file_name] = program;
+        program_map[prog_name] = program;
         return program;
     }
 }
 
-// todo: try auto return type
 std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
     jitify_v2::Program const& program,
@@ -88,17 +108,18 @@ std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantia
     }
     else { // Find file cached kernel instantiation
         std::string kern_inst_string;
-        std::ifstream kern_file (kern_inst_name, std::ios::binary);
+        std::string kern_file_name = getTempDir() + kern_inst_name;
+        std::ifstream kern_file (kern_file_name, std::ios::binary);
         if (kern_file) {
             std::stringstream buffer;
             buffer << kern_file.rdbuf();
             kern_inst_string = buffer.str();
         }
-        else { // JIT compile the kernel and write to file
+        else { // JIT compile the kernel and write to file if possible
             kern_inst_string = program.kernel(kern_name)
                                       .instantiate(arguments)
                                       .serialize();
-            std::ofstream kern_file(kern_inst_name, std::ios::binary);
+            std::ofstream kern_file(kern_file_name, std::ios::binary);
             kern_file << kern_inst_string;
         }
         // Add deserialized kernel to cache and return
