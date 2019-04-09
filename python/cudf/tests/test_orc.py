@@ -18,7 +18,7 @@ def datadir(datadir):
 @pytest.mark.parametrize(
     'orc_args',
     [
-        ['TestOrcFile.emptyFile.orc', None],
+        ['TestOrcFile.emptyFile.orc', ['boolean1']],
         ['TestOrcFile.test1.orc', ['boolean1', 'byte1', 'short1',
                                    'int1', 'long1', 'float1', 'double1']]
         #['TestOrcFile.testSnappy.orc', None],
