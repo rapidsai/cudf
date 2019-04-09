@@ -227,6 +227,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             header_infer = -1
         csv_reader.names = ffi.NULL
         csv_reader.num_cols = 0
+        if dtype is not None:
+            if dtype_dict:
+                for k, v in dtype.items():
+                    arr_dtypes.append(_wrap_string(str(str(k)+":"+str(v))))
     else:
         if header is None:
             header_infer = -1

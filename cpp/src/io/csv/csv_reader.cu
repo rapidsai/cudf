@@ -753,7 +753,20 @@ gdf_error read_csv(csv_read_arg *args)
 		for ( int x = 0; x < raw_csv->num_actual_cols; x++) {
 
 			std::string temp_type 	= args->dtype[x];
-			gdf_dtype col_dtype		= convertStringToDtype( temp_type );
+			gdf_dtype col_dtype;
+			if(temp_type.find(':') != std::string::npos){
+				for (auto it = raw_csv->col_names.begin(); it != raw_csv->col_names.end(); it++){
+				std::size_t idx = temp_type.find(':');
+				if(temp_type.substr( 0, idx) == *it){
+					std::string temp_dtype = temp_type.substr( idx +1);
+					col_dtype	= convertStringToDtype(temp_dtype);
+					break;
+					}
+				}
+			}
+			else{
+				col_dtype	= convertStringToDtype( temp_type );
+			}
 
 			if (col_dtype == GDF_invalid)
 				return GDF_UNSUPPORTED_DTYPE;
