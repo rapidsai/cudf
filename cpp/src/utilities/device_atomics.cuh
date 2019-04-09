@@ -344,6 +344,30 @@ struct DeviceMax{
     static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
 };
 
+struct DeviceAnd{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs & rhs );
+    }
+};
+
+struct DeviceOr{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs | rhs );
+    }
+};
+
+struct DeviceXor{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs ^ rhs );
+    }
+};
+
 } // namespace cudf
 
 
@@ -755,5 +779,217 @@ cudf::timestamp atomicCAS(cudf::timestamp* address, cudf::timestamp compare, cud
 {
     using T = cudf::timestamp;
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+}
+
+
+/* Overloads for `atomicAnd` */
+/** -------------------------------------------------------------------------*
+ * @brief reads the `old` located at the `address` in global or shared memory, 
+ * computes (old & val), and stores the result back to memory at the same
+ * address. These three operations are performed in one atomic transaction.
+ *
+ * The supported types for `atomicAnd` are:
+ *   singed/unsigned integer 8/16/32/64 bits
+ * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be computed
+ *
+ * @returns The old value at `address`
+ * -------------------------------------------------------------------------**/
+__forceinline__ __device__
+int8_t atomicAnd(int8_t* address, int8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
+}
+
+/**
+ * @overload uint8_t atomicAnd(uint8_t* address, uint8_t val)
+ */
+__forceinline__ __device__
+uint8_t atomicAnd(uint8_t* address, uint8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
+}
+
+/**
+ * @overload int16_t atomicAnd(int16_t* address, int16_t val)
+ */
+__forceinline__ __device__
+int16_t atomicAnd(int16_t* address, int16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
+}
+
+/**
+ * @overload uint16_t atomicAnd(uint16_t* address, uint16_t val)
+ */
+__forceinline__ __device__
+uint16_t atomicAnd(uint16_t* address, uint16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
+}
+
+/**
+ * @overload int64_t atomicAnd(int64_t* address, int64_t val)
+ */
+__forceinline__ __device__
+int64_t atomicAnd(int64_t* address, int64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicAnd(a, v);});
+}
+
+/**
+ * @overload uint64_t atomicAnd(uint64_t* address, uint64_t val)
+ */
+__forceinline__ __device__
+uint64_t atomicAnd(uint64_t* address, uint64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicAnd(a, v);});
+}
+
+/* Overloads for `atomicOr` */
+/** -------------------------------------------------------------------------*
+ * @brief reads the `old` located at the `address` in global or shared memory, 
+ * computes (old | val), and stores the result back to memory at the same
+ * address. These three operations are performed in one atomic transaction.
+ *
+ * The supported types for `atomicOr` are:
+ *   singed/unsigned integer 8/16/32/64 bits
+ * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be computed
+ *
+ * @returns The old value at `address`
+ * -------------------------------------------------------------------------**/
+__forceinline__ __device__
+int8_t atomicOr(int8_t* address, int8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
+}
+
+/**
+ * @overload uint8_t atomicOr(uint8_t* address, uint8_t val)
+ */
+__forceinline__ __device__
+uint8_t atomicOr(uint8_t* address, uint8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
+}
+
+/**
+ * @overload int16_t atomicOr(int16_t* address, int16_t val)
+ */
+__forceinline__ __device__
+int16_t atomicOr(int16_t* address, int16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
+}
+
+/**
+ * @overload uint16_t atomicOr(uint16_t* address, uint16_t val)
+ */
+__forceinline__ __device__
+uint16_t atomicOr(uint16_t* address, uint16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
+}
+
+/**
+ * @overload int64_t atomicOr(int64_t* address, int64_t val)
+ */
+__forceinline__ __device__
+int64_t atomicOr(int64_t* address, int64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicOr(a, v);});
+}
+
+/**
+ * @overload uint64_t atomicOr(uint64_t* address, uint64_t val)
+ */
+__forceinline__ __device__
+uint64_t atomicOr(uint64_t* address, uint64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicOr(a, v);});
+}
+
+
+/* Overloads for `atomicXor` */
+/** -------------------------------------------------------------------------*
+ * @brief reads the `old` located at the `address` in global or shared memory, 
+ * computes (old ^ val), and stores the result back to memory at the same
+ * address. These three operations are performed in one atomic transaction.
+ *
+ * The supported types for `atomicXor` are:
+ *   singed/unsigned integer 8/16/32/64 bits
+ * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be computed
+ *
+ * @returns The old value at `address`
+ * -------------------------------------------------------------------------**/
+__forceinline__ __device__
+int8_t atomicXor(int8_t* address, int8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
+}
+
+/**
+ * @overload uint8_t atomicXor(uint8_t* address, uint8_t val)
+ */
+__forceinline__ __device__
+uint8_t atomicXor(uint8_t* address, uint8_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
+}
+
+/**
+ * @overload int16_t atomicXor(int16_t* address, int16_t val)
+ */
+__forceinline__ __device__
+int16_t atomicXor(int16_t* address, int16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
+}
+
+/**
+ * @overload uint16_t atomicXor(uint16_t* address, uint16_t val)
+ */
+__forceinline__ __device__
+uint16_t atomicXor(uint16_t* address, uint16_t val)
+{
+    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
+}
+
+/**
+ * @overload int64_t atomicXor(int64_t* address, int64_t val)
+ */
+__forceinline__ __device__
+int64_t atomicXor(int64_t* address, int64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicXor(a, v);});
+}
+
+/**
+ * @overload uint64_t atomicXor(uint64_t* address, uint64_t val)
+ */
+__forceinline__ __device__
+uint64_t atomicXor(uint64_t* address, uint64_t val)
+{
+    using T = long long int;
+    return cudf::detail::typesAtomicOperation64
+        (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
 
