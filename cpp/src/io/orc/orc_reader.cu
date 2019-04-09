@@ -288,97 +288,82 @@ struct OrcStrmInfo
  **/
 gdf_error read_orc(orc_read_arg *args) {
 
-  std::vector<gdf_column_wrapper> columns;
-  //int num_columns = 0;
-  //int num_rows = 0;
-  int index_col = -1;
+  int num_columns = 0;
+  int num_rows = 0;
 
   DataSource input(args->source);
 
   OrcMetadata md(input.data(), input.size());
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
-  // Select columns
-  size_t total_compressed_size;
-  int num_streams, num_columns, num_rows;
-  orc::gpu::CompressedStreamInfo *strm_desc = nullptr, *strm_desc_dev = nullptr;
-  std::vector<OrcStrmInfo> stream_info;
-  std::vector<uint8_t *> compressed_stripe_data, uncompressed_stripe_data;
-  std::vector<int32_t> gdf2orc;       // Map gdf columns to orc columns
-  std::vector<int32_t> orc2gdf;       // Map orc columns to gdf columns
-  orc::gpu::ColumnDesc *chunks = nullptr, *chunks_dev = nullptr;
-  orc::gpu::DictionaryEntry *global_dictionary = nullptr;
-  size_t stripe_start_row;
-  uint32_t num_dictionary_entries;
+  static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
+                    !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
+                "Unexpected sizeof(CompressedStreamInfo)");
+  static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
+                    !(sizeof(orc::gpu::ColumnDesc) & 7),
+                "Unexpected sizeof(ColumnDesc)");
 
-  static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 && !(sizeof(orc::gpu::CompressedStreamInfo) & 7), "Unexpected sizeof(CompressedStreamInfo)");
-  static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 && !(sizeof(orc::gpu::ColumnDesc) & 7), "Unexpected sizeof(ColumnDesc)");
-
-  // Select rowgroups
+  // Select only rowgroups required
   md.select_stripes(0, 0x7fffffff);
 
-  // Select columns
-  orc2gdf.resize(md.get_num_columns(), -1);
-  if (args->use_cols_len > 0)
-  {
-      // Find columns by name
-      gdf2orc.resize(args->use_cols_len);
-      for (int i = 0, column_id = 0; i < args->use_cols_len; i++)
-      {
-          int num_orc_columns = md.get_num_columns();
-          gdf2orc[i] = -1;
-          for (int j = 0; j < num_orc_columns; j++, column_id++)
-          {
-              if (column_id >= num_orc_columns)
-              {
-                  column_id = 0;
-              }
-              if (md.ff.GetColumnName(column_id) == args->use_cols[i])
-              {
-                  gdf2orc[i] = column_id;
-                  orc2gdf[column_id] = i;
-                  column_id++;
-                  break;
-              }
-          }
-          if (gdf2orc[i] < 0)
-          {
-              printf("Column not found: \"%s\"\n", args->use_cols[i]);
-              return GDF_FILE_ERROR;
-          }
+  // Select only columns required (if it exists), otherwise select all
+  std::vector<int32_t> gdf2orc;                           // Map gdf columns to orc columns
+  std::vector<int32_t> orc2gdf(md.get_num_columns(), -1); // Map orc columns to gdf columns
+  if (args->use_cols) {
+    std::vector<std::string> use_names(args->use_cols,
+                                       args->use_cols + args->use_cols_len);
+    int index = 0;
+    for (const auto &use_name : use_names) {
+      for (int i = 0; i < md.get_num_columns(); ++i, ++index) {
+        if (index >= md.get_num_columns()) {
+          index = 0;
+        }
+        if (md.ff.GetColumnName(index) == use_name) {
+          orc2gdf[index] = gdf2orc.size();
+          gdf2orc.emplace_back(index);
+          index++;
+        }
       }
-  }
-  else
-  {
-      // Select all columns
-      for (int i = 0; i < md.get_num_columns(); i++)
-      {
-          bool col_en = (md.ff.types[i].subtypes.size() == 0); // For now, select all leaf nodes in the schema
-          if (col_en)
-          {
-              int32_t gdf_idx = (int32_t)gdf2orc.size();
-              gdf2orc.resize(gdf_idx + 1);
-              gdf2orc[gdf_idx] = i;
-              orc2gdf[i] = gdf_idx;
-          }
+    }
+  } else {
+    // For now, only select all leaf nodes
+    for (int i = 0; i < md.get_num_columns(); ++i) {
+      if (md.ff.types[i].subtypes.size() == 0) {
+        orc2gdf[i] = gdf2orc.size();
+        gdf2orc.emplace_back(i);
       }
+    }
   }
 
-  // Allocate gdf columns
-  num_rows = md.get_total_rows();
-  num_columns = (int)gdf2orc.size();
-  for (int i = 0; i < num_columns; ++i) {
-    auto dtype_info = to_dtype(md.ff.types[gdf2orc[i]]);
+  // Initialize gdf_columns, but hold off on allocating storage space
+  std::vector<gdf_column_wrapper> columns;
+  LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
+  for (const auto &col : gdf2orc) {
+    auto dtype_info = to_dtype(md.ff.types[col]);
 
     columns.emplace_back(static_cast<gdf_size_type>(md.ff.numberOfRows),
                          dtype_info.first, dtype_info.second,
-                         md.ff.GetColumnName(gdf2orc[i]));
+                         md.ff.GetColumnName(col));
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
                (size_t)columns.back()->size, columns.back()->dtype,
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
   }
+
+  num_rows = md.get_total_rows();
+  num_columns = (int)gdf2orc.size();
+
+  // Select columns
+  size_t total_compressed_size;
+  int num_streams;
+  orc::gpu::CompressedStreamInfo *strm_desc = nullptr, *strm_desc_dev = nullptr;
+  std::vector<OrcStrmInfo> stream_info;
+  std::vector<uint8_t *> compressed_stripe_data, uncompressed_stripe_data;
+  orc::gpu::ColumnDesc *chunks = nullptr, *chunks_dev = nullptr;
+  orc::gpu::DictionaryEntry *global_dictionary = nullptr;
+  size_t stripe_start_row;
+  uint32_t num_dictionary_entries;
 
   if (num_rows > 0 && num_columns > 0) {
     // Allocate row index: essentially 2D array indexed by stripe id & gdf column index
@@ -727,12 +712,7 @@ gdf_error read_orc(orc_read_arg *args) {
   }
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
-  if (index_col != -1) {
-    args->index_col = (int *)malloc(sizeof(int));
-    *args->index_col = index_col;
-  } else {
-    args->index_col = nullptr;
-  }
+  args->index_col = nullptr;
 
 error_exit:
   for (size_t i = 0; i < compressed_stripe_data.size(); i++)
