@@ -172,6 +172,9 @@ namespace cudf{
 void scan(const gdf_column *input, gdf_column *output,
     gdf_scan_op op, bool inclusive)
 {
+    CUDF_EXPECTS(input  != nullptr, "Input column is null");
+    CUDF_EXPECTS(output != nullptr, "Output column is null");
+
     switch(op){
     case GDF_SCAN_SUM:
         cudf::type_dispatcher(input->dtype,
