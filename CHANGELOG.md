@@ -23,6 +23,7 @@
 - PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
+- PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
 
 ## Bug Fixes
 
