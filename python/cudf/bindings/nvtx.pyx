@@ -54,7 +54,7 @@ def nvtx_range_push(name, color='green'):
 
 def nvtx_range_pop():
     """
-    Denarcate the end of a user-defined NVTX range.
+    Demarcate the end of a user-defined NVTX range.
     """
     result = gdf_nvtx_range_pop()
     check_gdf_error(result)
