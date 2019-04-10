@@ -25,18 +25,18 @@ from libcpp.string  cimport string as cstring
 
 
 _REDUCTION_OP = {
-  'sum': ReductionOp.Sum,
-  'min': ReductionOp.Min,
-  'max': ReductionOp.Max,
-  'product': ReductionOp.Product,
-  'sum_of_squares': ReductionOp.SumOfSquares,
+  'max': GDF_REDUCTION_MAX,
+  'min': GDF_REDUCTION_MIN,
+  'sum': GDF_REDUCTION_SUM,
+  'product': GDF_REDUCTION_PRODUCT,
+  'sum_of_squares': GDF_REDUCTION_SUMOFSQUARES,
 }
 
 _SCAN_OP = {
-  'sum': ScanOp.Sum,
-  'min': ScanOp.Min,
-  'max': ScanOp.Max,
-  'product': ScanOp.Product,
+  'sum': GDF_SCAN_SUM,
+  'min': GDF_SCAN_MIN,
+  'max': GDF_SCAN_MAX,
+  'product': GDF_SCAN_PRODUCT,
 }
 
 
@@ -72,7 +72,7 @@ def apply_reduce(reduction_op, col, dtype=None):
     col_dtype = dtype if dtype != None else col.dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
-    cdef ReductionOp c_op = _REDUCTION_OP[reduction_op]
+    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_dtype c_out_dtype = get_dtype(col_dtype.type if dtype is None else col_dtype)
     cdef gdf_scalar c_result
 
@@ -101,7 +101,7 @@ def apply_scan(col_inp, col_out, scan_op, inclusive):
 
     cdef gdf_column* c_col_inp = column_view_from_column(col_inp)
     cdef gdf_column* c_col_out = column_view_from_column(col_out)
-    cdef ScanOp c_op = _SCAN_OP[scan_op]
+    cdef gdf_scan_op c_op = _SCAN_OP[scan_op]
     cdef bool b_inclusive = <bool>inclusive;
 
     with nogil:    

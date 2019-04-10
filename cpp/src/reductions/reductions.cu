@@ -10,7 +10,6 @@
 #include <limits>
 #include <type_traits>
 
-#include <reduction.hpp>
 #include "reduction_operators.cuh"
 
 namespace { // anonymous namespace
@@ -156,7 +155,7 @@ public:
 namespace cudf{
 
 gdf_scalar reduction(const gdf_column *col,
-                  cudf::ReductionOp op, gdf_dtype output_dtype)
+                  gdf_reduction_op op, gdf_dtype output_dtype)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
@@ -167,23 +166,23 @@ gdf_scalar reduction(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
-    case cudf::ReductionOp::Sum:
+    case GDF_REDUCTION_SUM:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionSum>(), col, &scalar);
         break;
-    case cudf::ReductionOp::Min:
+    case GDF_REDUCTION_MIN:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionMin>(), col, &scalar);
         break;
-    case cudf::ReductionOp::Max:
+    case GDF_REDUCTION_MAX:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionMax>(), col, &scalar);
         break;
-    case cudf::ReductionOp::Product:
+    case GDF_REDUCTION_PRODUCT:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, &scalar);
         break;
-    case cudf::ReductionOp::SumOfSquares:
+    case GDF_REDUCTION_SUMOFSQUARES:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
         break;
