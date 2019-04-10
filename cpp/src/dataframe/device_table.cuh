@@ -26,47 +26,43 @@
 #include "copying/gather.hpp"
 #include "sqls/sqls_rtti_comp.h"
 #include "bitmask/legacy_bitmask.hpp"
+#include "utilities/type_dispatcher.hpp"
+#include <utilities/error_utils.hpp>
 
 #include <thrust/tabulate.h>
-#include <cassert>
-#include "utilities/type_dispatcher.hpp"
 
-
-
-/** 
+namespace {
+/**
  * @brief  Computes the validity mask for the rows in the device_table.
 
-   If a single value in a row of the table is NULL, then the entire row is 
+   If a single value in a row of the table is NULL, then the entire row is
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
    column together to get a bitmask for the validity of each row.
  */
 template <typename size_type>
-struct row_masker
-{
-  row_masker(gdf_valid_type ** column_masks, const size_type num_cols)
-    : column_valid_masks{column_masks}, num_columns(num_cols)
-    { }
-   
-  /** 
+struct row_masker {
+  row_masker(gdf_valid_type** column_masks, const size_type num_cols)
+      : column_valid_masks{column_masks}, num_columns(num_cols) {}
+
+  /**
    * @brief Computes the bit-wise AND across all columns for the specified mask
-   * 
-   * @param mask_number The index of the mask to compute the bit-wise AND across all columns
-   * 
+   *
+   * @param mask_number The index of the mask to compute the bit-wise AND across
+   * all columns
+   *
    * @returns The bit-wise AND across all columns for the specified mask number
    */
-  __device__ __forceinline__
-  gdf_valid_type operator()(const size_type mask_number)
-  {
+  __device__ __forceinline__ gdf_valid_type
+  operator()(const size_type mask_number) {
     // Intialize row validity mask with all bits set to 1
     gdf_valid_type row_valid_mask{0};
     row_valid_mask = ~(row_valid_mask);
 
-    for(size_type i = 0; i < num_columns; ++i) 
-    {
-      const gdf_valid_type * current_column_mask = column_valid_masks[i];
+    for (size_type i = 0; i < num_columns; ++i) {
+      const gdf_valid_type* current_column_mask = column_valid_masks[i];
 
       // The column validity mask is optional and can be nullptr
-      if(nullptr != current_column_mask){
+      if (nullptr != current_column_mask) {
         row_valid_mask &= current_column_mask[mask_number];
       }
     }
@@ -74,8 +70,10 @@ struct row_masker
   }
 
   const size_type num_columns;
-  gdf_valid_type ** column_valid_masks;
+  gdf_valid_type** column_valid_masks;
 };
+
+}  // namespace
 
 /** 
  * @brief Provides row-level device functions for operating on a set of columns.
@@ -91,15 +89,13 @@ public:
   device_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
   {
-    assert(num_cols > 0);
-    assert(nullptr != host_columns[0]);
+    CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
+    CUDF_EXPECTS(nullptr != host_columns[0], "Attempt to create table with a null column.");
     _num_rows = host_columns[0]->size;
 
-    if(_num_rows > 0)
-    {
-      assert(nullptr != host_columns[0]->data);
+    if(_num_rows > 0) {
+      CUDF_EXPECTS(nullptr != host_columns[0]->data, "Column missing data");
     }
-
 
     // Copy pointers to each column's data, types, and validity bitmasks 
     // to contiguous host vectors (AoS to SoA conversion)
@@ -111,11 +107,10 @@ public:
     for(size_type i = 0; i < num_cols; ++i)
     {
       gdf_column * const current_column = host_columns[i];
-      assert(nullptr != current_column);
-      assert(_num_rows == current_column->size);
-      if(_num_rows > 0)
-      {
-        assert(nullptr != current_column->data);
+      CUDF_EXPECTS(nullptr != current_column, "Column is null");
+      CUDF_EXPECTS(_num_rows == current_column->size, "Column size mismatch");
+      if(_num_rows > 0) {
+        CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
       }
 	
       // Compute the size of a row in the table in bytes
