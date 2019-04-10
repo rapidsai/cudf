@@ -270,13 +270,20 @@ public:
 /**
  * @brief Struct that maps ORC streams to columns
  **/
-struct OrcStrmInfo
-{
-    uint64_t offset;        // offset in file
-    size_t dst_pos;         // offset in memory relative to the beginning of the compressed stripe data
-    uint32_t length;        // length in file
-    uint32_t gdf_idx;       // gdf column index
-    uint32_t stripe_idx;    // stripe index
+struct OrcStreamInfo {
+  OrcStreamInfo() = default;
+  explicit OrcStreamInfo(uint64_t offset_, size_t dst_pos_, uint32_t length_,
+                         uint32_t gdf_idx_, uint32_t stripe_idx_)
+      : offset(offset_),
+        dst_pos(dst_pos_),
+        length(length_),
+        gdf_idx(gdf_idx_),
+        stripe_idx(stripe_idx_) {}
+  uint64_t offset;      // offset in file
+  size_t dst_pos;       // offset in memory relative to the beginning of the compressed stripe data
+  uint32_t length;      // length in file
+  uint32_t gdf_idx;     // gdf column index
+  uint32_t stripe_idx;  // stripe index
 };
 
 /**
@@ -357,7 +364,7 @@ gdf_error read_orc(orc_read_arg *args) {
   // Select columns
   size_t total_compressed_size;
   int num_streams;
-  std::vector<OrcStrmInfo> stream_info;
+  std::vector<OrcStreamInfo> stream_info;
   std::vector<uint8_t *> compressed_stripe_data, uncompressed_stripe_data;
   orc::gpu::DictionaryEntry *global_dictionary = nullptr;
   size_t stripe_start_row;
@@ -444,13 +451,8 @@ gdf_error read_orc(orc_read_arg *args) {
             }
             if (gdf_idx >= 0)
             {
-                OrcStrmInfo info;
-                info.offset = md.ff.stripes[i].offset + src_offset;
-                info.length = strm_length;
-                info.dst_pos = dst_offset;
-                info.gdf_idx = gdf_idx;
-                info.stripe_idx = i;
-                stream_info.push_back(info); // FIXME: Use emplace_back
+                stream_info.emplace_back(md.ff.stripes[i].offset + src_offset,
+                                         dst_offset, strm_length, gdf_idx, i);
                 dst_offset += strm_length;
             }
             src_offset += strm_length;
