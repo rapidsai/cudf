@@ -203,21 +203,23 @@ struct BlockSumArray {
 class BlockSumPyramid {
 	const uint16_t aggregation_rate = 32;
 	std::vector<BlockSumArray> levels;
-	BlockSumArray* d_levels;
+	BlockSumArray* d_levels = nullptr;
 
 public:
 	BlockSumPyramid(int count){
-		levels.emplace_back(count/aggregation_rate, aggregation_rate);
-		RMM_ALLOC(&levels.back().d_sums, levels.back().length*sizeof(BlockSumArray), 0);
-
-		while (levels.back().length >= aggregation_rate) {
-			const auto& prev_level = levels.back();
-			levels.emplace_back(prev_level.length/aggregation_rate, prev_level.block_size*aggregation_rate);
-			RMM_ALLOC(&levels.back().d_sums, levels.back().length*sizeof(BlockSumArray), 0);
+		int prev_lvl_cnt = count;
+		int prev_lvl_block_size = 1;
+		while (prev_lvl_cnt >= aggregation_rate) {
+			levels.emplace_back(prev_lvl_cnt/aggregation_rate, prev_lvl_block_size*aggregation_rate);
+			RMM_ALLOC(&levels.back().d_sums, levels.back().length*sizeof(int16_t), 0);
+			prev_lvl_cnt = levels.back().length;
+			prev_lvl_block_size = levels.back().block_size;
 		}
-	
-		RMM_ALLOC(&d_levels, levels.size()*sizeof(BlockSumArray), 0);
-		cudaMemcpyAsync(d_levels, levels.data(), levels.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
+
+		if (!levels.empty()) {	
+			RMM_ALLOC(&d_levels, levels.size()*sizeof(BlockSumArray), 0);
+			cudaMemcpyAsync(d_levels, levels.data(), levels.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
+		}
 	}
 
 	auto operator[](int lvl) const {return levels[lvl];}
@@ -320,30 +322,34 @@ void assignLevelsKernel(
 	BlockSumArray* sum_pyramid, int pyramid_height,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
 	int16_t* lvls) {
+	// Process the number of elements equal to the aggregation rate, if the pyramid is used
+	// Process all elements otherwise
+	const auto to_process = pyramid_height != 0 ? sum_pyramid[0].block_size : count;
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-	const auto aggregation_rate = sum_pyramid[0].block_size;
-	const uint64_t did = tid * aggregation_rate;
+	const uint64_t did = tid * to_process;
 
 	if (did >= count)
 		return;
 
 	// find the previous sum
-	int lvl = pyramid_height - 1;
 	int sum = 0;
-	int block_idx = 0;
-	int offset = did;
-	while(offset) {
-		while(offset < sum_pyramid[lvl].block_size && lvl > 0) {
-			--lvl; block_idx *= aggregation_rate;
-		}
-		while(offset >= sum_pyramid[lvl].block_size) {
-			offset -= sum_pyramid[lvl].block_size;
-			sum += sum_pyramid[lvl].d_sums[block_idx];
-			++block_idx;
+	if (pyramid_height != 0) {
+		const auto aggregation_rate = sum_pyramid[0].block_size;
+		int lvl = pyramid_height - 1;
+		int block_idx = 0;
+		int offset = did;
+		while(offset) {
+			while(offset < sum_pyramid[lvl].block_size && lvl > 0) {
+				--lvl; block_idx *= aggregation_rate;
+			}
+			while(offset >= sum_pyramid[lvl].block_size) {
+				offset -= sum_pyramid[lvl].block_size;
+				sum += sum_pyramid[lvl].d_sums[block_idx];
+				++block_idx;
+			}
 		}
 	}
-
-	for (int i = did; i < min(did + aggregation_rate, count); ++i){
+	for (int i = did; i < min(did + to_process, count); ++i){
 		for (int bi = 0; bi < bracket_char_cnt; ++bi) {
 			if (brackets[i].second == open_chars[bi]) {
 				lvls[i] = ++sum;
@@ -406,9 +412,11 @@ int16_t* getBracketLevels(
 		close_chars.size() * sizeof(char), cudaMemcpyDefault));
 
 	// aggregate sums
-	sumBrackets(brackets, count, d_open_chars, d_close_chars, open_chars.size(), aggregated_sums[0]);
-	for (size_t level_idx = 1; level_idx < aggregated_sums.getHeigth(); ++level_idx)
-		aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
+	if (aggregated_sums.getHeigth() != 0) {
+		sumBrackets(brackets, count, d_open_chars, d_close_chars, open_chars.size(), aggregated_sums[0]);
+		for (size_t level_idx = 1; level_idx < aggregated_sums.getHeigth(); ++level_idx)
+			aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
+	}
 
 	// assign levels
 	int16_t* d_levels = nullptr;
