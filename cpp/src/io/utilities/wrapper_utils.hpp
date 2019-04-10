@@ -146,3 +146,39 @@ struct rmm_deleter {
 };
 template <typename T>
 using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
+
+// DOXY
+template <typename T>
+class rmm_device_buffer {
+	T* d_data = nullptr;
+
+public:
+	rmm_device_buffer() noexcept = default;
+	rmm_device_buffer(size_t cnt) {
+		const auto error = RMM_ALLOC(&d_data, cnt*sizeof(T), 0);
+		if(error != RMM_SUCCESS) {
+			cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
+		}
+	}
+
+	T* get() const noexcept {return d_data;}
+
+	void resize(size_t cnt) {
+		const auto error = RMM_REALLOC(&d_data, cnt*sizeof(T), 0);
+		if(error != RMM_SUCCESS) {
+			cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
+		}
+	}
+	// TODO: do we want to enable copy assignment?
+	rmm_device_buffer& operator=(rmm_device_buffer& ) = delete;
+	rmm_device_buffer& operator=(rmm_device_buffer&& rh) {
+		d_data = rh.d_data; 
+		rh.d_data = nullptr;
+		return *this;
+	}
+
+	~rmm_device_buffer() {
+		RMM_FREE(d_data, 0);
+	}
+
+};
