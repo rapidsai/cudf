@@ -80,7 +80,6 @@ struct row_masker
 /** 
  * @brief Provides row-level device functions for operating on a set of columns.
  */
-/* ----------------------------------------------------------------------------*/
 template <typename T, typename byte_t = unsigned char>
 class device_table : public managed
 {
@@ -168,13 +167,11 @@ public:
   ~device_table() = default;
 
 
-  /* --------------------------------------------------------------------------*/
   /** 
    * @brief  Updates the size of the gdf_columns in the table
    * 
    * @param new_length The new length
    */
-  /* ----------------------------------------------------------------------------*/
   void set_num_rows(const size_type new_length)
   {
     _num_rows = new_length;
@@ -217,21 +214,18 @@ public:
   }
 
 
-  /* --------------------------------------------------------------------------*/
   /** 
    * @brief  Gets the size in bytes of a row in the device_table, i.e., the sum of 
    * the byte widths of all columns in the table
    * 
    * @returns The size in bytes of the row in the table
    */
-  /* ----------------------------------------------------------------------------*/
   byte_type get_row_size_bytes() const
   {
     return row_size_bytes;
   }
 
 
-  /* --------------------------------------------------------------------------*/
   /** 
    * @brief  Packs the elements of a specified row into a contiguous byte-buffer
    *
@@ -244,8 +238,6 @@ public:
       row of the table 
    * 
    */
-  /* ----------------------------------------------------------------------------*/
-  // TODO Is there a less hacky way to do this? 
   __device__
   gdf_error pack_row(size_type row_index, void * row_byte_buffer) const
   {
@@ -280,9 +272,8 @@ public:
 
   };
 
-  /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Packs the validity mask of a specified row into a contiguous byte-buffer 
+   * @brief Packs the validity mask of a specified row into a contiguous byte-buffer 
    * 
    * This function is called by a single thread, and the thread will copy each element
    * of the row into a single contiguous buffer.
@@ -291,7 +282,6 @@ public:
    * @param row_valid_byte_buffer A pointer to a preallocated buffer large enough to hold
       the validity bitmask of a row of the table
    */
-  /* ----------------------------------------------------------------------------*/
   __device__
   gdf_error get_row_valids(size_type row_index, gdf_valid_type * row_valid_byte_buffer) const
   {
@@ -309,7 +299,6 @@ public:
     return GDF_SUCCESS;
   }
 
-    /* --------------------------------------------------------------------------*/
     /** 
      * @brief  Copies a row from a source table to a target row in this table
      *  
@@ -321,7 +310,6 @@ public:
      * @param my_row_index The index of the row in this table that will be written to
      * @param other_row_index The index of the row from the other table that will be copied from
      */
-    /* ----------------------------------------------------------------------------*/
   __device__ 
   gdf_error copy_row(device_table const & source,
                      const size_type target_row_index,
@@ -361,7 +349,6 @@ public:
     }
   };
 
-  /* --------------------------------------------------------------------------*/
   /** 
    * @brief  Checks for equality between a target row in this table and a source 
    * row in another table.
@@ -372,7 +359,6 @@ public:
    * 
    * @returns True if the elements in both rows are equivalent, otherwise False
    */
-  /* ----------------------------------------------------------------------------*/
   __device__
   bool rows_equal(device_table const & rhs, 
                   const size_type this_row_index, 
