@@ -3,9 +3,37 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/wrapper_types.hpp"
 
 
 #include <cub/device/device_segmented_radix_sort.cuh>
+
+namespace cub
+{
+    
+template <> struct NumericTraits<cudf::date32> :           
+    BaseTraits<SIGNED_INTEGER, true, false, 
+        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date32>>,
+        cudf::detail::unwrapped_type_t<cudf::date32>> {};
+template <> struct NumericTraits<cudf::timestamp> :        
+    BaseTraits<SIGNED_INTEGER, true, false, 
+        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::timestamp>>,
+        cudf::detail::unwrapped_type_t<cudf::timestamp>> {};
+template <> struct NumericTraits<cudf::date64> :           
+    BaseTraits<SIGNED_INTEGER, true, false, 
+        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date64>>,
+        cudf::detail::unwrapped_type_t<cudf::date64>> {};
+template <> struct NumericTraits<cudf::category> :         
+    BaseTraits<SIGNED_INTEGER, true, false, 
+        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::category>>,
+        cudf::detail::unwrapped_type_t<cudf::category>> {};
+template <> struct NumericTraits<cudf::nvstring_category> :
+    BaseTraits<SIGNED_INTEGER, true, false, 
+        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
+        cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
+
+} // cub
+
 
 
 struct SegmentedRadixSortPlan{
@@ -197,19 +225,7 @@ template <typename Tv>
 struct gdf_segmented_radixsort_functor
 {
     template <typename Tk>
-    typename std::enable_if_t<!std::is_arithmetic<Tk>::value, gdf_error>
-    operator()( gdf_segmented_radixsort_plan_type *hdl,
-                gdf_column *keycol,
-                gdf_column *valcol,
-                unsigned num_segments,
-                unsigned *d_begin_offsets,
-                unsigned *d_end_offsets)
-    {
-        return GDF_UNSUPPORTED_DTYPE;
-    }
-
-    template <typename Tk>
-    typename std::enable_if_t<std::is_arithmetic<Tk>::value, gdf_error>
+    gdf_error
     operator()( gdf_segmented_radixsort_plan_type *hdl,
                 gdf_column *keycol,
                 gdf_column *valcol,
