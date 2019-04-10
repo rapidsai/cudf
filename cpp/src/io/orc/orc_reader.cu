@@ -143,7 +143,9 @@ class OrcMetadata {
     LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
     LOG_PRINTF(" compression = %d\n", ps.compression);
     LOG_PRINTF(" compressionBlockSize = %d\n", ps.compressionBlockSize);
-    LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(), (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1, (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
+    LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(),
+               (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1,
+               (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
     LOG_PRINTF(" metadataLength = %zd\n", (size_t)ps.metadataLength);
     LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
 
@@ -219,8 +221,7 @@ class OrcMetadata {
 
     // Read stripefooter metadata
     sf.resize(ff.stripes.size());
-    for (size_t i = 0; i < ff.stripes.size(); ++i)
-    {
+    for (size_t i = 0; i < ff.stripes.size(); ++i) {
       const auto stripe = ff.stripes[i];
       const auto sf_comp_offset =
           stripe.offset + stripe.indexLength + stripe.dataLength;
@@ -237,17 +238,17 @@ class OrcMetadata {
       CUDF_EXPECTS(pb.read(&sf[i], sf_length), "Cannot read stripefooter");
 
 #if VERBOSE_OUTPUT
-        printf("StripeFooter(%d/%zd):\n", 1+i, ff.stripes.size());
-        printf(" %d streams:\n", (int)sf.streams.size());
-        for (int j = 0; j < (int)sf.streams.size(); j++)
-        {
-            printf(" [%d] column=%d, kind=%d, len=%zd\n", j, sf.streams[j].column, sf.streams[j].kind, (size_t)sf.streams[j].length);
-        }
-        printf(" %d columns:\n", (int)sf.columns.size());
-        for (int j = 0; j < (int)sf.columns.size(); j++)
-        {
-            printf(" [%d] kind=%d, dictionarySize=%d\n", j, sf.columns[j].kind, sf.columns[j].dictionarySize);
-        }
+      printf("StripeFooter(%d/%zd):\n", 1 + i, ff.stripes.size());
+      printf(" %d streams:\n", (int)sf.streams.size());
+      for (int j = 0; j < (int)sf.streams.size(); j++) {
+        printf(" [%d] column=%d, kind=%d, len=%zd\n", j, sf.streams[j].column,
+               sf.streams[j].kind, (size_t)sf.streams[j].length);
+      }
+      printf(" %d columns:\n", (int)sf.columns.size());
+      for (int j = 0; j < (int)sf.columns.size(); j++) {
+        printf(" [%d] kind=%d, dictionarySize=%d\n", j, sf.columns[j].kind,
+               sf.columns[j].dictionarySize);
+      }
 #endif
     }
   }
@@ -256,7 +257,7 @@ class OrcMetadata {
   inline int get_num_rowgroups() const { return ff.stripes.size(); }
   inline int get_num_columns() const { return ff.types.size(); }
 
-public:
+ public:
   orc::PostScript ps;
   orc::FileFooter ff;
   std::vector<orc::StripeFooter> sf;
@@ -285,6 +286,175 @@ struct OrcStreamInfo {
   uint32_t gdf_idx;     // gdf column index
   uint32_t stripe_idx;  // stripe index
 };
+
+/**
+ * @brief Decompresses the stripe data, at stream granularity
+ *
+ * @param[in] chunks List of column chunk descriptors
+ * @param[in] pages List of page information
+ *
+ * @return uint8_t* Device pointer to decompressed page data
+ **/
+uint8_t *decompress_stripe_data(
+    const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+    const std::vector<device_ptr<uint8_t>> &stripe_data,
+    const orc::OrcDecompressor *decompressor,
+    std::vector<OrcStreamInfo> &stream_info, size_t num_stripes) {
+
+  // Parse the columns' compressed info
+  hostdevice_vector<orc::gpu::CompressedStreamInfo> streams(0,
+                                                            stream_info.size());
+  for (size_t i = 0; i < streams.max_size(); ++i) {
+    streams.insert(orc::gpu::CompressedStreamInfo(
+        stripe_data[stream_info[i].stripe_idx].get() + stream_info[i].dst_pos,
+        stream_info[i].length));
+  }
+  CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
+                           streams.memory_size(), cudaMemcpyHostToDevice));
+  CUDA_TRY(ParseCompressedStripeData(
+      streams.device_ptr(), streams.size(), decompressor->GetBlockSize(),
+      decompressor->GetLog2MaxCompressionRatio()));
+  CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
+                           streams.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaStreamSynchronize(0));
+
+  // Count the exact number of compressed blocks
+  size_t num_compressed_blocks = 0;
+  size_t total_decompressed_size = 0;
+  for (size_t i = 0; i < streams.size(); ++i) {
+    num_compressed_blocks += streams[i].num_compressed_blocks;
+    total_decompressed_size += streams[i].max_uncompressed_size;
+  }
+  CUDF_EXPECTS(total_decompressed_size > 0, "No decompressible data found");
+
+  LOG_PRINTF(
+      "[+] Compression\n Total compressed size: %zd\n Number of "
+      "compressed blocks: %zd\n Codec: %d\n",
+      total_decompressed_size, num_compressed_blocks, decompressor->GetKind());
+
+  uint8_t *decompressed_data = nullptr;
+  RMM_ALLOC(&decompressed_data, total_decompressed_size, 0);
+  rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks);
+  rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
+
+  // Parse again to populate the decompression input/output buffers
+  size_t decompressed_ofs = 0;
+  uint32_t start_pos = 0;
+  for (size_t i = 0; i < streams.size(); ++i) {
+    streams[i].uncompressed_data = decompressed_data + decompressed_ofs;
+    streams[i].decctl = inflate_in.data().get() + start_pos;
+    streams[i].decstatus = inflate_out.data().get() + start_pos;
+    streams[i].max_compressed_blocks = streams[i].num_compressed_blocks;
+
+    stream_info[i].dst_pos = decompressed_ofs;
+    decompressed_ofs += streams[i].max_uncompressed_size;
+    start_pos += streams[i].num_compressed_blocks;
+  }
+  CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
+                           streams.memory_size(), cudaMemcpyHostToDevice));
+  CUDA_TRY(ParseCompressedStripeData(
+      streams.device_ptr(), streams.size(), decompressor->GetBlockSize(),
+      decompressor->GetLog2MaxCompressionRatio()));
+
+  // Dispatch batches of blocks to decompress
+  switch (decompressor->GetKind()) {
+    case orc::ZLIB:
+      CUDA_TRY(gpuinflate(inflate_in.data().get(), inflate_out.data().get(),
+                          num_compressed_blocks, 0));
+      break;
+    case orc::SNAPPY:
+      CUDA_TRY(gpu_unsnap(inflate_in.data().get(), inflate_out.data().get(),
+                          num_compressed_blocks));
+      break;
+    default:
+      CUDF_EXPECTS(false, "Unexpected decompression dispatch");
+      break;
+  }
+  CUDA_TRY(PostDecompressionReassemble(streams.device_ptr(), streams.size()));
+
+  // Update the stream information with the updated uncompressed info
+  // TBD: We could update the value from the information we already
+  // have in stream_info[], but using the gpu results also updates
+  // max_uncompressed_size to the actual uncompressed size, or zero if
+  // decompression failed.
+  CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
+                           streams.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaStreamSynchronize(0));
+
+  // const auto num_stripes = md.ff.stripes.size();
+  const size_t num_columns = chunks.size() / num_stripes;
+
+  for (size_t i = 0; i < num_stripes; ++i) {
+    for (size_t j = 0; j < num_columns; ++j) {
+      auto &desc = chunks[i * num_columns + j];
+
+      using IndexType = std::underlying_type<orc::gpu::StreamType>::type;
+      for (IndexType k = 0; k < orc::gpu::CI_NUM_STREAMS; ++k) {
+        uint32_t strm_id = desc.strm_id[k];
+        if (desc.strm_len[k] > 0 && strm_id < streams.size()) {
+          desc.streams[k] = streams[strm_id].uncompressed_data;
+          desc.strm_len[k] = (uint32_t)streams[strm_id].max_uncompressed_size;
+        }
+      }
+    }
+  }
+
+  return decompressed_data;
+}
+
+/**
+ * @brief Converts the stripe column data and outputs to gdf_columns
+ *
+ * @param[in] chunks List of column chunk descriptors
+ * @param[in] num_dicts Number of dictionary entries required
+ * @param[in,out] columns List of gdf_columns
+ **/
+void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+                        size_t num_dicts,
+                        const std::vector<gdf_column_wrapper> &columns) {
+
+  const size_t num_columns = columns.size();
+  const size_t num_stripes = chunks.size() / columns.size();
+  const size_t num_rows = columns[0]->size;
+
+  // Update chunks with pointers to column data
+  for (size_t i = 0; i < num_stripes; ++i) {
+    for (size_t j = 0; j < num_columns; ++j) {
+      auto &chunk = chunks[i * num_columns + j];
+      chunk.valid_map_base = reinterpret_cast<uint32_t *>(columns[j]->valid);
+      chunk.column_data_base = columns[j]->data;
+      chunk.dtype_len = (columns[j]->dtype == GDF_STRING)
+                           ? sizeof(std::pair<const char *, size_t>)
+                           : gdf_dtype_size(columns[j]->dtype);
+    }
+  }
+
+  // Allocate global dictionary for deserializing
+  rmm::device_vector<orc::gpu::DictionaryEntry> global_dict(num_dicts);
+
+  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
+                           chunks.memory_size(), cudaMemcpyHostToDevice));
+  CUDA_TRY(DecodeNullsAndStringDictionaries(
+      chunks.device_ptr(), global_dict.data().get(), num_columns, num_stripes,
+      num_rows, 0));
+  CUDA_TRY(DecodeOrcColumnData(chunks.device_ptr(), global_dict.data().get(),
+                               num_columns, num_stripes, num_rows, 0));
+  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
+                           chunks.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaStreamSynchronize(0));
+
+  LOG_PRINTF("[+] Decoded Column Information\n");
+  for (size_t i = 0; i < num_columns; ++i) {
+    for (size_t j = 0; j < num_stripes; ++j) {
+      columns[i]->null_count += chunks[j * num_columns + i].null_count;
+    }
+    LOG_PRINTF(
+        "columns[%zd].null_count = %d/%d (start_row=%d, nrows=%d, "
+        "strm_len=%d)\n",
+        i, columns[i]->null_count, columns[i]->size, chunks[i].start_row,
+        chunks[i].num_rows, chunks[i].strm_len[orc::gpu::CI_PRESENT]);
+  }
+}
 
 /**
  * @brief Reads Apache ORC data and returns an array of gdf_columns.
@@ -361,323 +531,150 @@ gdf_error read_orc(orc_read_arg *args) {
   num_rows = md.get_total_rows();
   num_columns = (int)gdf2orc.size();
 
-  // Select columns
-  size_t total_compressed_size;
-  int num_streams;
+  // Logically view streams as columns
   std::vector<OrcStreamInfo> stream_info;
-  std::vector<uint8_t *> compressed_stripe_data, uncompressed_stripe_data;
-  orc::gpu::DictionaryEntry *global_dictionary = nullptr;
-  size_t stripe_start_row;
-  uint32_t num_dictionary_entries;
+
+  // Tracker for eventually deallocating compressed and uncompressed data
+  std::vector<device_ptr<uint8_t>> stripe_data;
 
   if (num_rows > 0 && num_columns > 0) {
-    // Allocate row index: essentially 2D array indexed by stripe id & gdf column index
     const auto num_column_chunks = md.ff.stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
 
     // Read stripe footers
-    total_compressed_size = 0;
-    stripe_start_row = 0;
-    num_dictionary_entries = 0;
-    for (int i = 0; i < (int)md.sf.size(); i++)
-    {
-        size_t strm_count;
-        uint64_t src_offset, dst_offset, index_length;
-        uint8_t *data_dev = nullptr;
+    size_t total_compressed_size = 0;
+    size_t stripe_start_row = 0;
+    uint32_t num_dictionary_entries = 0;
 
-        // Read stream data
-        src_offset = 0;
-        dst_offset = 0;
-        index_length = md.ff.stripes[i].indexLength;
-        strm_count = stream_info.size();
-        for (int j = 0; j < (int)md.sf[i].streams.size(); j++)
-        {
-            uint32_t strm_length = (uint32_t)md.sf[i].streams[j].length;
-            uint32_t column_id = md.sf[i].streams[j].column;
-            int32_t gdf_idx = -1;
-            if (column_id < orc2gdf.size())
-            {
-                gdf_idx = orc2gdf[column_id];
-                if (gdf_idx < 0 && md.ff.types[column_id].subtypes.size() != 0)
-                {
-                    // This column may be a parent column, in which case the PRESENT stream may be needed
-                    bool needed = (md.ff.types[column_id].kind == orc::STRUCT && md.sf[i].streams[j].kind == orc::PRESENT);
-                    if (needed)
-                    {
-                        for (int k = 0; k < (int)md.ff.types[column_id].subtypes.size(); k++)
-                        {
-                            uint32_t idx = md.ff.types[column_id].subtypes[k];
-                            int32_t child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
-                            if (child_idx >= 0)
-                            {
-                                gdf_idx = child_idx;
-                                chunks[i * num_columns + gdf_idx].strm_id[orc::gpu::CI_PRESENT] = (uint32_t)stream_info.size();
-                                chunks[i * num_columns + gdf_idx].strm_len[orc::gpu::CI_PRESENT] = strm_length;
-                            }
-                        }
-                    }
+    for (size_t i = 0; i < md.sf.size(); i++) {
+      size_t strm_count;
+      uint64_t src_offset, dst_offset, index_length;
+      uint8_t *data_dev = nullptr;
+
+      // Read stream data
+      src_offset = 0;
+      dst_offset = 0;
+      index_length = md.ff.stripes[i].indexLength;
+      strm_count = stream_info.size();
+      for (int j = 0; j < (int)md.sf[i].streams.size(); j++) {
+        uint32_t strm_length = (uint32_t)md.sf[i].streams[j].length;
+        uint32_t column_id = md.sf[i].streams[j].column;
+        int32_t gdf_idx = -1;
+        if (column_id < orc2gdf.size()) {
+          gdf_idx = orc2gdf[column_id];
+          if (gdf_idx < 0 && md.ff.types[column_id].subtypes.size() != 0) {
+            // This column may be a parent column, in which case the PRESENT
+            // stream may be needed
+            bool needed = (md.ff.types[column_id].kind == orc::STRUCT &&
+                           md.sf[i].streams[j].kind == orc::PRESENT);
+            if (needed) {
+              for (int k = 0; k < (int)md.ff.types[column_id].subtypes.size();
+                   k++) {
+                uint32_t idx = md.ff.types[column_id].subtypes[k];
+                int32_t child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
+                if (child_idx >= 0) {
+                  gdf_idx = child_idx;
+                  chunks[i * num_columns + gdf_idx]
+                      .strm_id[orc::gpu::CI_PRESENT] =
+                      (uint32_t)stream_info.size();
+                  chunks[i * num_columns + gdf_idx]
+                      .strm_len[orc::gpu::CI_PRESENT] = strm_length;
                 }
+              }
             }
-            if (src_offset >= index_length && gdf_idx >= 0)
-            {
-                int ci_kind = orc::gpu::CI_NUM_STREAMS;
-                switch (md.sf[i].streams[j].kind)
-                {
-                case orc::DATA:
-                    ci_kind = orc::gpu::CI_DATA;
-                    break;
-                case orc::LENGTH:
-                case orc::SECONDARY:
-                    ci_kind = orc::gpu::CI_DATA2;
-                    break;
-                case orc::DICTIONARY_DATA:
-                    ci_kind = orc::gpu::CI_DICTIONARY;
-                    chunks[i * num_columns + gdf_idx].dictionary_start = num_dictionary_entries;
-                    chunks[i * num_columns + gdf_idx].dict_len = md.sf[i].columns[column_id].dictionarySize;
-                    num_dictionary_entries += md.sf[i].columns[column_id].dictionarySize;
-                    break;
-                case orc::PRESENT:
-                    ci_kind = orc::gpu::CI_PRESENT;
-                    break;
-                default:
-                    // TBD: Could skip loading this stream
-                    break;
-                }
-                if (ci_kind < orc::gpu::CI_NUM_STREAMS)
-                {
-                    chunks[i * num_columns + gdf_idx].strm_id[ci_kind] = (uint32_t)stream_info.size();
-                    chunks[i * num_columns + gdf_idx].strm_len[ci_kind] = strm_length;
-                }
-            }
-            if (gdf_idx >= 0)
-            {
-                stream_info.emplace_back(md.ff.stripes[i].offset + src_offset,
-                                         dst_offset, strm_length, gdf_idx, i);
-                dst_offset += strm_length;
-            }
-            src_offset += strm_length;
+          }
         }
-        if (dst_offset > 0)
-        {
-            RMM_ALLOC((void **)&data_dev, dst_offset, 0);
-            if (!data_dev)
-                goto error_exit;
-            while (strm_count < stream_info.size())
-            {
-                // Coalesce consecutive streams into one read
-                uint64_t len = stream_info[strm_count].length;
-                uint64_t offset = stream_info[strm_count].offset;
-                void *dst = data_dev + stream_info[strm_count].dst_pos;
-                strm_count++;
-                while (strm_count < stream_info.size() && stream_info[strm_count].offset == offset + len)
-                {
-                    len += stream_info[strm_count].length;
-                    strm_count++;
-                }
-                cudaMemcpyAsync(dst, input.data() + offset, len, cudaMemcpyHostToDevice, 0); // TODO: datasource::gpuread
-                total_compressed_size += len;
-            }
-            // Update stream pointers
-            for (int j = 0; j < num_columns; j++)
-            {
-                for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++)
-                {
-                    if (chunks[i * num_columns + j].strm_len[k] > 0)
-                    {
-                        uint32_t strm_id = chunks[i * num_columns + j].strm_id[k];
-                        chunks[i * num_columns + j].streams[k] = data_dev + stream_info[strm_id].dst_pos;
-                    }
-                }
-                chunks[i * num_columns + j].start_row = (uint32_t)stripe_start_row;
-                chunks[i * num_columns + j].num_rows = md.ff.stripes[i].numberOfRows;
-                chunks[i * num_columns + j].encoding_kind = md.sf[i].columns[gdf2orc[j]].kind;
-                chunks[i * num_columns + j].type_kind = md.ff.types[gdf2orc[j]].kind;
-            }
+        if (src_offset >= index_length && gdf_idx >= 0) {
+          int ci_kind = orc::gpu::CI_NUM_STREAMS;
+          switch (md.sf[i].streams[j].kind) {
+            case orc::DATA:
+              ci_kind = orc::gpu::CI_DATA;
+              break;
+            case orc::LENGTH:
+            case orc::SECONDARY:
+              ci_kind = orc::gpu::CI_DATA2;
+              break;
+            case orc::DICTIONARY_DATA:
+              ci_kind = orc::gpu::CI_DICTIONARY;
+              chunks[i * num_columns + gdf_idx].dictionary_start =
+                  num_dictionary_entries;
+              chunks[i * num_columns + gdf_idx].dict_len =
+                  md.sf[i].columns[column_id].dictionarySize;
+              num_dictionary_entries +=
+                  md.sf[i].columns[column_id].dictionarySize;
+              break;
+            case orc::PRESENT:
+              ci_kind = orc::gpu::CI_PRESENT;
+              break;
+            default:
+              // TBD: Could skip loading this stream
+              break;
+          }
+          if (ci_kind < orc::gpu::CI_NUM_STREAMS) {
+            chunks[i * num_columns + gdf_idx].strm_id[ci_kind] =
+                (uint32_t)stream_info.size();
+            chunks[i * num_columns + gdf_idx].strm_len[ci_kind] = strm_length;
+          }
         }
-        compressed_stripe_data.push_back(data_dev);
-        stripe_start_row += md.ff.stripes[i].numberOfRows;
+        if (gdf_idx >= 0) {
+          stream_info.emplace_back(md.ff.stripes[i].offset + src_offset,
+                                   dst_offset, strm_length, gdf_idx, i);
+          dst_offset += strm_length;
+        }
+        src_offset += strm_length;
+      }
+      if (dst_offset > 0) {
+        RMM_TRY(RMM_ALLOC((void **)&data_dev, dst_offset, 0));
+
+        while (strm_count < stream_info.size()) {
+          // Coalesce consecutive streams into one read
+          uint64_t len = stream_info[strm_count].length;
+          uint64_t offset = stream_info[strm_count].offset;
+          void *dst = data_dev + stream_info[strm_count].dst_pos;
+          strm_count++;
+          while (strm_count < stream_info.size() &&
+                 stream_info[strm_count].offset == offset + len) {
+            len += stream_info[strm_count].length;
+            strm_count++;
+          }
+          cudaMemcpyAsync(dst, input.data() + offset, len,
+                          cudaMemcpyHostToDevice,
+                          0);  // TODO: datasource::gpuread
+          total_compressed_size += len;
+        }
+        // Update stream pointers
+        for (int j = 0; j < num_columns; j++) {
+          for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
+            if (chunks[i * num_columns + j].strm_len[k] > 0) {
+              uint32_t strm_id = chunks[i * num_columns + j].strm_id[k];
+              chunks[i * num_columns + j].streams[k] =
+                  data_dev + stream_info[strm_id].dst_pos;
+            }
+          }
+          chunks[i * num_columns + j].start_row = (uint32_t)stripe_start_row;
+          chunks[i * num_columns + j].num_rows = md.ff.stripes[i].numberOfRows;
+          chunks[i * num_columns + j].encoding_kind =
+              md.sf[i].columns[gdf2orc[j]].kind;
+          chunks[i * num_columns + j].type_kind = md.ff.types[gdf2orc[j]].kind;
+        }
+      }
+      stripe_data.emplace_back(data_dev);
+      stripe_start_row += md.ff.stripes[i].numberOfRows;
     }
 
-    printf("[CPU] Read %zd bytes\n", total_compressed_size);
-    // Allocate global dictionary
-    if (num_dictionary_entries > 0)
-    {
-        RMM_ALLOC((void **)&global_dictionary, num_dictionary_entries * sizeof(orc::gpu::DictionaryEntry), 0);
+    // Deallocate and replace compressed data with decompressed data
+    if (md.ps.compression != orc::NONE) {
+      uint8_t *d_decomp_data =
+          decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
+                                 stream_info, md.ff.stripes.size());
+      stripe_data.clear();
+      stripe_data.emplace_back(d_decomp_data);
     }
 
-    // Setup decompression
-    num_streams = (int)stream_info.size();
-    printf(" %d data streams, %d dictionary entries\n", num_streams, num_dictionary_entries);
-    if (md.ps.compression != orc::NONE)
-    {
-        uint32_t total_compressed_blocks;
-        size_t total_uncompressed_size;
-        double decompression_time = 0;
-
-        hostdevice_vector<orc::gpu::CompressedStreamInfo> streams(0, num_streams);
-        for (int i = 0; i < num_streams; i++) {
-          streams.insert(orc::gpu::CompressedStreamInfo(
-              compressed_stripe_data[stream_info[i].stripe_idx] +
-                  stream_info[i].dst_pos,
-              stream_info[i].length));
-        }
-        CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
-                                 streams.memory_size(),
-                                 cudaMemcpyHostToDevice));
-        CUDA_TRY(ParseCompressedStripeData(streams.device_ptr(), streams.size(),
-                                           md.ps.compressionBlockSize,
-                                           md.decompressor->GetLog2MaxCompressionRatio()));
-        CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
-                                 streams.memory_size(),
-                                 cudaMemcpyDeviceToHost));
-        CUDA_TRY(cudaStreamSynchronize(0));
-
-        total_compressed_blocks = 0;
-        total_uncompressed_size = 0;
-        for (int i = 0; i < num_streams; i++)
-        {
-            total_compressed_blocks += streams[i].num_compressed_blocks;
-            total_uncompressed_size += streams[i].max_uncompressed_size;
-        }
-        if (total_uncompressed_size > 0)
-        {
-            uint8_t *uncompressed_data = nullptr;
-
-            size_t uncomp_ofs;
-            printf("%d compressed blocks, max_uncompressed_size=%zd\n", total_compressed_blocks, total_uncompressed_size);
-            RMM_ALLOC((void **)&uncompressed_data, total_uncompressed_size, 0);
-            if (!uncompressed_data)
-                goto error_exit;
-            uncompressed_stripe_data.push_back(uncompressed_data);
-
-            rmm::device_vector<gpu_inflate_input_s> inflate_in(total_compressed_blocks);
-            rmm::device_vector<gpu_inflate_status_s> inflate_out(total_compressed_blocks);
-
-            uncomp_ofs = 0;
-            for (int i = 0, pos = 0; i < num_streams; i++)
-            {
-                streams[i].uncompressed_data = uncompressed_data + uncomp_ofs;
-                streams[i].decctl = inflate_in.data().get() + pos;
-                streams[i].decstatus = inflate_out.data().get() + pos;
-                streams[i].max_compressed_blocks = streams[i].num_compressed_blocks;
-                stream_info[i].dst_pos = uncomp_ofs; // Now indicates the offset relative to base uncompressed data
-                uncomp_ofs += streams[i].max_uncompressed_size;
-                pos += streams[i].num_compressed_blocks;
-            }
-
-            // Parse again, this time populating the decompression input/output buffers
-            CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
-                                     streams.memory_size(),
-                                     cudaMemcpyHostToDevice));
-            CUDA_TRY(ParseCompressedStripeData(
-                streams.device_ptr(), streams.size(),
-                md.ps.compressionBlockSize,
-                md.decompressor->GetLog2MaxCompressionRatio()));
-            switch (md.ps.compression) {
-              case orc::ZLIB:
-                CUDA_TRY(gpuinflate(inflate_in.data().get(),
-                                    inflate_out.data().get(),
-                                    total_compressed_blocks, 0));
-                break;
-              case orc::SNAPPY:
-                CUDA_TRY(gpu_unsnap(inflate_in.data().get(),
-                                    inflate_out.data().get(),
-                                    total_compressed_blocks));
-                break;
-              default:
-                CUDF_EXPECTS(false, "Unexpected decompression dispatch");
-                break;
-            }
-            CUDA_TRY(PostDecompressionReassemble(streams.device_ptr(),
-                                                 streams.size()));
-
-            // Update the stream information in device memory with the updated
-            // pointers to the uncompressed data buffer
-            // TBD: We could update the value from the information we already
-            // have in stream_info[], but using the gpu results also updates
-            // max_uncompressed_size to the actual uncompressed size, or zero if
-            // decompression failed.
-            CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
-                                     streams.memory_size(),
-                                     cudaMemcpyDeviceToHost));
-            CUDA_TRY(cudaStreamSynchronize(0));
-            for (int i = 0; i < (int)md.ff.stripes.size(); i++)
-            {
-                for (int j = 0; j < num_columns; j++)
-                {
-                    orc::gpu::ColumnDesc *ck = &chunks[i * num_columns + j];
-                    for (uint32_t k = 0; k < orc::gpu::CI_NUM_STREAMS; k++)
-                    {
-                        uint32_t len = ck->strm_len[k];
-                        uint32_t strm_id = ck->strm_id[k];
-                        if (len > 0 && strm_id < (uint32_t)num_streams)
-                        {
-                            ck->streams[k] = streams[strm_id].uncompressed_data;
-                            ck->strm_len[k] = (uint32_t)streams[strm_id].max_uncompressed_size;
-                        }
-                    }
-                }
-            }
-            printf("[GPU] Decompressed %zd bytes in %.1fms (%.2fMB/s)\n", total_uncompressed_size, decompression_time * 1000.0, 1.e-6 * total_uncompressed_size / decompression_time);
-
-        }
-        // Free compressed slice data after decompression (not needed any further)
-        for (size_t i = 0; i < compressed_stripe_data.size(); i++)
-        {
-            RMM_FREE(compressed_stripe_data[i], 0);
-            compressed_stripe_data[i] = nullptr;
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < compressed_stripe_data.size(); i++)
-        {
-            uncompressed_stripe_data.push_back(compressed_stripe_data[i]);
-            compressed_stripe_data[i] = nullptr;
-        }
-    }
-
-    // Allocate column data
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
-
-    // Finalize column chunk initialization
-    for (int i = 0; i < (int)md.ff.stripes.size(); i++) {
-      for (int j = 0; j < num_columns; j++) {
-        auto &chunk = chunks[i * num_columns + j];
-        chunk.valid_map_base = reinterpret_cast<uint32_t *>(columns[j]->valid);
-        chunk.column_data_base = columns[j]->data;
-        chunk.dtype_len = (columns[j]->dtype == GDF_STRING)
-                              ? sizeof(std::pair<const char *, size_t>)
-                              : gdf_dtype_size(columns[j]->dtype);
-      }
-    }
-
-    CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
-                             chunks.memory_size(), cudaMemcpyHostToDevice));
-    CUDA_TRY(DecodeNullsAndStringDictionaries(chunks.device_ptr(),
-                                              global_dictionary, num_columns,
-                                              md.get_num_rowgroups(), num_rows,
-                                              0));
-    CUDA_TRY(DecodeOrcColumnData(chunks.device_ptr(), global_dictionary,
-                                 num_columns, md.get_num_rowgroups(), num_rows,
-                                 0));
-    CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
-                             chunks.memory_size(), cudaMemcpyDeviceToHost));
-    CUDA_TRY(cudaStreamSynchronize(0));
-
-    printf("[GPU] Decoded bytes\n");
-    for (int i = 0; i < num_columns; i++) {
-      for (int j = 0; j < (int)md.ff.stripes.size(); j++) {
-        columns[i]->null_count += chunks[j * num_columns + i].null_count;
-      }
-      LOG_PRINTF(
-          "columns[%d].null_count = %d/%d (start_row=%d, nrows=%d, "
-          "strm_len=%d)\n",
-          i, columns[i]->null_count, columns[i]->size, chunks[i].start_row,
-          chunks[i].num_rows, chunks[i].strm_len[orc::gpu::CI_PRESENT]);
-    }
+    decode_stream_data(chunks, num_dictionary_entries, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
@@ -705,19 +702,6 @@ gdf_error read_orc(orc_read_arg *args) {
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
   args->index_col = nullptr;
-
-error_exit:
-  for (size_t i = 0; i < compressed_stripe_data.size(); i++)
-  {
-      RMM_FREE(compressed_stripe_data[i], 0);
-      compressed_stripe_data[i] = nullptr;
-  }
-  for (size_t i = 0; i < uncompressed_stripe_data.size(); i++)
-  {
-      RMM_FREE(uncompressed_stripe_data[i], 0);
-      uncompressed_stripe_data[i] = nullptr;
-  }
-  RMM_FREE(global_dictionary, 0);
 
   return GDF_SUCCESS;
 }

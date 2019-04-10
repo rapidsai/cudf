@@ -171,6 +171,8 @@ public:
     uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
     uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
         { return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio : m_blockSize; }
+    CompressionKind GetKind() const { return m_kind; }
+    uint32_t GetBlockSize() const { return m_blockSize; }
 
 protected:
     CompressionKind m_kind;
@@ -179,8 +181,6 @@ protected:
     HostDecompressor *m_decompressor;
     std::vector<uint8_t> m_buf;
 };
-
-
 
 }; // namespace orc
 

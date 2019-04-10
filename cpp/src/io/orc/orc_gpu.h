@@ -44,7 +44,7 @@ struct CompressedStreamInfo {
 };
 
 
-enum {
+enum StreamType {
     CI_DATA = 0,        // Primary data stream
     CI_DATA2,           // Secondary/Length stream
     CI_PRESENT,         // Present stream
