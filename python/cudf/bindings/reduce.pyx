@@ -86,7 +86,7 @@ def apply_reduce(reduction_op, col, dtype=None):
             )
 
     free(c_col)
-    result = np.array([get_scalar_value(c_result)], dtype=col_dtype)
+    result = get_scalar_value(c_result)
 
     return result
 
