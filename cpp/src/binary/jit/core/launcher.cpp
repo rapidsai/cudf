@@ -79,11 +79,10 @@ namespace jit {
     { }
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
-        // program.kernel(kernelName.c_str())
-        //        .instantiate(arguments)
-        //        .configure_1d_max_occupancy()
-        //        .launch(out->size,
-        //                out->data, lhs->data, rhs->data);
+
+        (*kernel_inst).configure_1d_max_occupancy()
+                      .launch(out->size,
+                              out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }

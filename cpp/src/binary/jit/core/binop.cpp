@@ -155,9 +155,8 @@ namespace jit {
 
         scalar_col_valid_mask_and(out->null_count, out->valid, rhs->valid, lhs->is_valid, rhs->size);
 
-        // Launcher::launch().kernel("kernel_v_s")
-        //                   .instantiate(ope, Operator::Type::Reverse, out, rhs, lhs)
-        //                   .launch(out, rhs, lhs);
+        Launcher().setKernelInst("kernel_v_s", ope, Operator::Type::Reverse, out, rhs, lhs)
+                  .launch(out, rhs, lhs);
 
         return GDF_SUCCESS;
     }
@@ -180,9 +179,8 @@ namespace jit {
 
         scalar_col_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->is_valid, lhs->size);
 
-        // Launcher::launch().kernel("kernel_v_s")
-        //                   .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
-        //                   .launch(out, lhs, rhs);
+        Launcher().setKernelInst("kernel_v_s", ope, Operator::Type::Direct, out, lhs, rhs)
+                  .launch(out, lhs, rhs);
 
         return GDF_SUCCESS;
     }
