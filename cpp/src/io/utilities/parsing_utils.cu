@@ -223,7 +223,7 @@ public:
 	auto operator[](int lvl) const {return levels[lvl];}
 	auto deviceGetLevels() const noexcept {return d_levels;}
 	size_t getHeigth() const noexcept {return levels.size();}
-	constexpr int getAggregationRate() const noexcept {return aggregation_rate;}
+	constexpr int getAggregationRate() const {return aggregation_rate;}
 
 	~BlockSumPyramid() {
 		for (auto& lvl: levels) {
@@ -237,7 +237,7 @@ public:
 __global__
 void sumBracketsKernel(
 	pos_key_pair* brackets, int bracket_count,
-	char open_bracket, char closed_bracket,
+	const char* open_chars, const char* close_chars, int bracket_char_cnt,
 	BlockSumArray sum_array) {
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
 	const uint64_t did = tid * sum_array.block_size;
@@ -246,18 +246,27 @@ void sumBracketsKernel(
 	if (tid >= sum_array.length)
 		return;
 
-	auto* start = brackets + did;
+	const auto* start = brackets + did;
 	int16_t csum = 0;
 	for (int i = 0; i < sum_array.block_size; ++i) {
-		if ((start + i)->second == open_bracket) ++csum;
-		if ((start + i)->second == closed_bracket) --csum;
+		const auto curr_elem = (start + i)->second;
+		for (int bi = 0; bi < bracket_char_cnt; ++bi) {
+			if (curr_elem == open_chars[bi]) {
+				++csum; 
+				break;
+			}
+			if (curr_elem == close_chars[bi]) {
+				--csum; 
+				break;
+			}
+		}
 	}
 	sum_array.d_sums[tid] = csum;
 }
 
 void sumBrackets(
 	pos_key_pair* brackets, int bracket_count,
-	char open_bracket, char closed_bracket,
+	char* open_chars, char* close_chars, int bracket_char_cnt,
 	const BlockSumArray& sum_array) {
 	int blockSize;
 	int minGridSize;
@@ -267,7 +276,10 @@ void sumBrackets(
 	// Calculate actual block count to use based on records count
 	int gridSize = (sum_array.length + blockSize - 1) / blockSize;
 
-	sumBracketsKernel<<<gridSize, blockSize>>>(brackets, bracket_count, open_bracket, closed_bracket, sum_array);
+	sumBracketsKernel<<<gridSize, blockSize>>>(
+		brackets, bracket_count,
+		open_chars, close_chars, bracket_char_cnt,
+		sum_array);
 
 	CUDA_TRY(cudaGetLastError());
 };
@@ -306,7 +318,7 @@ __global__
 void assignLevelsKernel(
 	pos_key_pair* brackets, uint64_t count,
 	BlockSumArray* sum_pyramid, int pyramid_height,
-	char open_bracket, char closed_bracket,
+	char* open_chars, char* close_chars, int bracket_char_cnt,
 	int16_t* lvls) {
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
 	const auto aggregation_rate = sum_pyramid[0].block_size;
@@ -332,16 +344,22 @@ void assignLevelsKernel(
 	}
 
 	for (int i = did; i < min(did + aggregation_rate, count); ++i){
-		if (brackets[i].second == open_bracket)
-			lvls[i] = ++sum;
-		else if (brackets[i].second == closed_bracket)
-			lvls[i] = sum--;
+		for (int bi = 0; bi < bracket_char_cnt; ++bi) {
+			if (brackets[i].second == open_chars[bi]) {
+				lvls[i] = ++sum;
+				break;
+			}
+			else if (brackets[i].second == close_chars[bi]) {
+				lvls[i] = sum--;
+				break;
+			}
+		}
 	}
 }
 
 void assignLevels(pos_key_pair* brackets, uint64_t count,
 	const BlockSumPyramid& sum_pyramid,
-	char open_bracket, char closed_bracket,
+	char* open_chars, char* close_chars, int bracket_char_cnt,
 	int16_t* lvls) {
 	int blockSize;
 	int minGridSize;
@@ -355,7 +373,7 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 	assignLevelsKernel<<<gridSize, blockSize>>>(
 		brackets, count,
 		sum_pyramid.deviceGetLevels(), sum_pyramid.getHeigth(),
-		open_bracket, closed_bracket,
+		open_chars, close_chars, bracket_char_cnt,
 		lvls);
 
 	CUDA_TRY(cudaGetLastError());
@@ -363,22 +381,39 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 
 
 // return a unique_ptr, once they are merged
-int16_t* getBracketLevels(pos_key_pair* brackets, int count, char open_bracket, char closed_bracket){
-	// Probably should be done outside of this function
+int16_t* getBracketLevels(
+	pos_key_pair* brackets, int count,
+	const std::string& open_chars, const std::string& close_chars){
+	// TODO: should be done outside of this function
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
 	// total level difference for each segment of brackets in the file
 	BlockSumPyramid aggregated_sums(count);
 	
+	// copy open/close chars to device
+	assert(open_chars.size() == open_chars.size());
+
+	char* d_open_chars = nullptr;
+	RMM_ALLOC(&d_open_chars, open_chars.size() * sizeof(char), 0);
+	CUDA_TRY(cudaMemcpyAsync(
+		d_open_chars, open_chars.c_str(),
+		open_chars.size() * sizeof(char), cudaMemcpyDefault));
+
+	char* d_close_chars = nullptr;
+	RMM_ALLOC(&d_close_chars, close_chars.size() * sizeof(char), 0);
+	CUDA_TRY(cudaMemcpyAsync(
+		d_close_chars, close_chars.c_str(),
+		close_chars.size() * sizeof(char), cudaMemcpyDefault));
+
 	// aggregate sums
-	sumBrackets(brackets, count, open_bracket, closed_bracket, aggregated_sums[0]);
+	sumBrackets(brackets, count, d_open_chars, d_close_chars, open_chars.size(), aggregated_sums[0]);
 	for (size_t level_idx = 1; level_idx < aggregated_sums.getHeigth(); ++level_idx)
 		aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
 
 	// assign levels
 	int16_t* d_levels = nullptr;
 	RMM_ALLOC(&d_levels, sizeof(int16_t) * count, 0);
-	assignLevels(brackets, count, aggregated_sums, open_bracket, closed_bracket, d_levels);
+	assignLevels(brackets, count, aggregated_sums, d_open_chars, d_close_chars, open_chars.size(), d_levels);
 
 	return d_levels;
 }
