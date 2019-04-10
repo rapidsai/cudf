@@ -28,11 +28,10 @@
 #define BALLOT(v)   __ballot(v)
 #endif
 
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
+#define LOG2_NTHREADS   (5+2)
+#define NTHREADS        (1 << LOG2_NTHREADS)
+#define NZ_BFRSZ        (NTHREADS*2)
+
 
 inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 {
@@ -41,19 +40,6 @@ inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 
 
 namespace parquet { namespace gpu {
-
-
-// NOTE: For maximum SM occupancy with 32 registers/thread, we need sizeof(page_state_s) to be 1024 bytes or below
-#define LOG2_INDEX_QUEUE_LEN    7
-#define INDEX_QUEUE_LEN         (1 << LOG2_INDEX_QUEUE_LEN)
-
-struct index_queue_s
-{
-    int32_t finished;   // Set to 1 when there are no more values
-    int32_t wr_count;   // WARP0 write count
-    int32_t rd_count;   // WARP1 values read
-    int32_t buf[INDEX_QUEUE_LEN];   // Buffered values
-};
 
 
 struct page_state_s {
@@ -65,6 +51,8 @@ struct page_state_s {
     int32_t dict_size;              // size of dictionary data
     uint8_t *data_out;
     int32_t valid_map_offset;       // offset in valid_map, in bits
+    uint32_t out_valid;
+    uint32_t out_valid_mask;
     int32_t first_row;
     int32_t num_rows;
     int32_t dtype_len;              // Output data type
@@ -77,11 +65,14 @@ struct page_state_s {
     int32_t error;
     PageInfo page;
     ColumnChunkDesc col;
-    volatile index_queue_s q;   // Index queue
-    union {
-        int32_t dict_idx[32];       // Dictionary indices for current batch (PLAIN_DICTIONARY, RLE_DICTIONARY)
-        nvstrdesc_s str_desc[32];   // String descriptors for current batch (PLAIN encoding for BYTE_ARRAY type)
-    } scratch;
+    int32_t value_count;            // number of values decoded (including NULLs)
+    int32_t num_values;             // max number of values to decode
+    int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
+    int32_t dict_pos;               // write position of dictionary indices
+    int32_t out_pos;                // read position of final output
+    uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
+    uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
+    uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
 };
 
 
@@ -244,28 +235,27 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
 }
 
 /**
- * @brief WARP0: Decode definition and repetition levels and outputs row indices
+ * @brief Decode definition and repetition levels and outputs row indices
  *
  * @param[in,out] s Page state input/output
- * @param[in] t Thread ID
+ * @param[in] t Warp0 thread ID (0..31)
  **/
-__device__ void gpuDecodeLevels(page_state_s *s, int t)
+__device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
 {
     const uint8_t *cur_def = s->lvl_start[0];
     const uint8_t *end = s->data_start;
     uint32_t *valid_map = s->valid_map;
     uint32_t valid_map_offset = s->valid_map_offset;
-    uint32_t out_valid = 0, out_valid_mask = (~0) << valid_map_offset;
+    uint32_t out_valid = s->out_valid, out_valid_mask = s->out_valid_mask;
     int32_t first_row = s->first_row;
     uint32_t def_run = s->initial_rle_run[0];
     int32_t def_val = s->initial_rle_value[0];
     int def_bits = s->col.def_level_bits;
-    int def_mask = (1 << def_bits) - 1;
     int max_def_level = s->col.max_def_level;
-    int32_t num_values = min(s->page.num_values, first_row + s->num_rows);
-    int32_t value_count = 0;    // Row offset of next value
-    int32_t coded_count = 0;    // Count of non-null values
-    while (value_count < num_values)
+    int32_t num_values = s->num_values;
+    int32_t value_count = s->value_count;   // Row offset of next value
+    int32_t coded_count = s->nz_count;      // Count of non-null values
+    while (coded_count < target_count && value_count < num_values)
     {
         int batch_len, is_valid, valid_mask;
         if (def_run <= 1)
@@ -329,7 +319,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int t)
                     if (def_bits > 16 - bitpos && cur < end)
                         def_val |= cur[0] << 16;
                 }
-                def_val = (def_val >> bitpos) & def_mask;
+                def_val = (def_val >> bitpos) & ((1 << def_bits) - 1);
             }
             def_run -= batch_len8 * 2;
             cur_def += batch_len8 * def_bits;
@@ -348,23 +338,9 @@ __device__ void gpuDecodeLevels(page_state_s *s, int t)
             {
                 int idx = coded_count + __popc(valid_mask & ((1 << t) - 1));
                 int ofs = value_count + t - first_row;
-                s->q.buf[idx & (INDEX_QUEUE_LEN - 1)] = ofs;
+                s->nz_idx[idx & (NZ_BFRSZ - 1)] = ofs;
             }
             coded_count += __popc(valid_mask);
-            SYNCWARP();
-            if (!t)
-            {
-                // Wait until we can safely output a full batch
-                s->q.wr_count = coded_count;
-                __threadfence_block();
-                while (s->q.rd_count + INDEX_QUEUE_LEN - 32 < coded_count)
-                {
-                    NANOSLEEP(100);
-                    if (s->error)
-                        break;
-                }
-            }
-            SYNCWARP();
         }
         value_count += batch_len;
         if (!t && valid_map)
@@ -407,14 +383,27 @@ __device__ void gpuDecodeLevels(page_state_s *s, int t)
             __threadfence_block();
         }
     }
-    // Store the remaining valid bits
-    if (!t && valid_map && valid_map_offset != 0)
+    if (!t)
     {
-        out_valid_mask &= (1 << valid_map_offset) - 1;
-        out_valid &= out_valid_mask;
-        s->page.valid_count += __popc(out_valid);
-        atomicAnd(valid_map, ~out_valid_mask);
-        atomicOr(valid_map, out_valid);
+        s->lvl_start[0] = cur_def;
+        s->initial_rle_run[0] = def_run;
+        s->initial_rle_value[0] = def_val;
+        if (value_count >= num_values && valid_map && valid_map_offset != 0)
+        {
+            // Store the remaining valid bits at the end of the page
+            out_valid_mask &= (1 << valid_map_offset) - 1;
+            out_valid &= out_valid_mask;
+            s->page.valid_count += __popc(out_valid);
+            atomicAnd(valid_map, ~out_valid_mask);
+            atomicOr(valid_map, out_valid);
+            out_valid_mask = 0;
+        }
+        s->valid_map_offset = valid_map_offset;
+        s->out_valid_mask = out_valid_mask;
+        s->out_valid = out_valid;
+        s->valid_map = valid_map;
+        s->value_count = value_count;
+        s->nz_count = coded_count;
     }
 }
 
@@ -422,357 +411,450 @@ __device__ void gpuDecodeLevels(page_state_s *s, int t)
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
- * @param[in] batch_len Batch length
- * @param[in] t Thread ID
+ * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to 31)
+ * @param[in] t Warp1 thread ID (0..31)
  *
- * @return The batch length
+ * @return The new output position
  **/
-__device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int batch_len, int t)
+__device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_pos, int t)
 {
     const uint8_t *end = s->data_end;
     int dict_bits = s->dict_bits;
-    int is_literal = 0, dict_idx;
+    int pos = s->dict_pos;
 
-    if (!t)
+    while (pos < target_pos)
     {
-        uint32_t run = s->dict_run;
-        const uint8_t *cur = s->data_start;
-        if (run <= 1)
+        int is_literal, batch_len;
+        if (!t)
         {
-            run = (cur < end) ? get_vlq32(cur, end) : 0;
-            if (!(run & 1))
+            uint32_t run = s->dict_run;
+            const uint8_t *cur = s->data_start;
+            if (run <= 1)
             {
-                // Repeated value
-                int bytecnt = (dict_bits + 7) >> 3;
-                if (cur + bytecnt <= end)
+                run = (cur < end) ? get_vlq32(cur, end) : 0;
+                if (!(run & 1))
                 {
-                    int32_t run_val = cur[0];
-                    if (bytecnt > 1)
+                    // Repeated value
+                    int bytecnt = (dict_bits + 7) >> 3;
+                    if (cur + bytecnt <= end)
                     {
-                        run_val |= cur[1] << 8;
-                        if (bytecnt > 2)
+                        int32_t run_val = cur[0];
+                        if (bytecnt > 1)
                         {
-                            run_val |= cur[2] << 16;
-                            if (bytecnt > 3)
+                            run_val |= cur[1] << 8;
+                            if (bytecnt > 2)
                             {
-                                run_val |= cur[3] << 24;
+                                run_val |= cur[2] << 16;
+                                if (bytecnt > 3)
+                                {
+                                    run_val |= cur[3] << 24;
+                                }
                             }
                         }
+                        s->dict_val = run_val & ((1 << dict_bits) - 1);
                     }
-                    s->dict_val = run_val & ((1 << dict_bits) - 1);
+                    cur += bytecnt;
                 }
-                cur += bytecnt;
             }
-        }
-        if (run & 1)
-        {
-            // Literal batch: must output a multiple of 8, except for the last batch
-            int batch_len_div8;
-            batch_len = max(min(batch_len, (int)(run >> 1) * 8), 1);
-            if (batch_len >= 8)
+            if (run & 1)
             {
-                batch_len &= ~7;
+                // Literal batch: must output a multiple of 8, except for the last batch
+                int batch_len_div8;
+                batch_len = max(min(32, (int)(run >> 1) * 8), 1);
+                batch_len_div8 = (batch_len + 7) >> 3;
+                run -= batch_len_div8 * 2;
+                cur += batch_len_div8 * dict_bits;
             }
-            batch_len_div8 = (batch_len + 7) >> 3;
-            run -= batch_len_div8 * 2;
-            cur += batch_len_div8 * dict_bits;
-        }
-        else
-        {
-            batch_len = max(min(batch_len, (int)(run >> 1)), 1);
-            run -= batch_len * 2;
-        }
-        s->dict_run = run;
-        s->data_start = cur;
-        is_literal = run & 1;
-        __threadfence_block();
-    }
-    SYNCWARP();
-    is_literal = SHFL0(is_literal);
-    batch_len = SHFL0(batch_len);
-    if (is_literal && t < batch_len)
-    {
-        int32_t ofs = (t - ((batch_len + 7) & ~7)) * dict_bits;
-        const uint8_t *p = s->data_start + (ofs >> 3);
-        ofs &= 7;
-        if (p < end)
-        {
-            uint32_t c = 8 - ofs;
-            dict_idx = (*p++) >> ofs;
-            if (c < dict_bits && p < end)
+            else
             {
-                dict_idx |= (*p++) << c;
-                c += 8;
-                if (c < dict_bits && p < end)
+                batch_len = max(min(32, (int)(run >> 1)), 1);
+                run -= batch_len * 2;
+            }
+            s->dict_run = run;
+            s->data_start = cur;
+            is_literal = run & 1;
+            __threadfence_block();
+        }
+        SYNCWARP();
+        is_literal = SHFL0(is_literal);
+        batch_len = SHFL0(batch_len);
+        if (t < batch_len)
+        {
+            int dict_idx = s->dict_val;
+            if (is_literal)
+            {
+                int32_t ofs = (t - ((batch_len + 7) & ~7)) * dict_bits;
+                const uint8_t *p = s->data_start + (ofs >> 3);
+                ofs &= 7;
+                if (p < end)
                 {
-                    dict_idx |= (*p++) << c;
-                    c += 8;
+                    uint32_t c = 8 - ofs;
+                    dict_idx = (*p++) >> ofs;
                     if (c < dict_bits && p < end)
                     {
                         dict_idx |= (*p++) << c;
+                        c += 8;
+                        if (c < dict_bits && p < end)
+                        {
+                            dict_idx |= (*p++) << c;
+                            c += 8;
+                            if (c < dict_bits && p < end)
+                            {
+                                dict_idx |= (*p++) << c;
+                            }
+                        }
                     }
+                    dict_idx &= (1 << dict_bits) - 1;
                 }
             }
-            dict_idx &= (1 << dict_bits) - 1;
+            s->dict_idx[(pos + t) & (NZ_BFRSZ - 1)] = dict_idx;
         }
+        pos += batch_len;
     }
-    else
-    {
-        dict_idx = s->dict_val;
-    }
-    s->scratch.dict_idx[t] = dict_idx;
-    return batch_len;
+    return pos;
 }
 
 /**
  * @brief Performs RLE decoding of dictionary indexes, for when dict_size=1
  *
  * @param[in,out] s Page state input/output
- * @param[in] batch_len Batch length
+ * @param[in] target_pos Target write position
  * @param[in] t Thread ID
  *
- * @return The batch length
+ * @return The new output position
  **/
-__device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int batch_len, int t)
+__device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, int t)
 {
     const uint8_t *end = s->data_end;
-    int is_literal = 0, dict_idx;
+    int pos = s->dict_pos;
 
-    if (!t)
+    while (pos < target_pos)
     {
-        uint32_t run = s->dict_run;
-        const uint8_t *cur = s->data_start;
-        if (run <= 1)
+        int is_literal, batch_len;
+        if (!t)
         {
-            run = (cur < end) ? get_vlq32(cur, end) : 0;
-            if (!(run & 1))
+            uint32_t run = s->dict_run;
+            const uint8_t *cur = s->data_start;
+            if (run <= 1)
             {
-                // Repeated value
-                s->dict_val = (cur < end) ? cur[0] & 1 : 0;
-                cur++;
+                run = (cur < end) ? get_vlq32(cur, end) : 0;
+                if (!(run & 1))
+                {
+                    // Repeated value
+                    s->dict_val = (cur < end) ? cur[0] & 1 : 0;
+                    cur++;
+                }
             }
-        }
-        if (run & 1)
-        {
-            // Literal batch: must output a multiple of 8, except for the last batch
-            int batch_len_div8;
-            batch_len = max(min(batch_len, (int)(run >> 1) * 8), 1);
-            if (batch_len >= 8)
+            if (run & 1)
             {
-                batch_len &= ~7;
+                // Literal batch: must output a multiple of 8, except for the last batch
+                int batch_len_div8;
+                batch_len = max(min(32, (int)(run >> 1) * 8), 1);
+                if (batch_len >= 8)
+                {
+                    batch_len &= ~7;
+                }
+                batch_len_div8 = (batch_len + 7) >> 3;
+                run -= batch_len_div8 * 2;
+                cur += batch_len_div8;
             }
-            batch_len_div8 = (batch_len + 7) >> 3;
-            run -= batch_len_div8 * 2;
-            cur += batch_len_div8;
+            else
+            {
+                batch_len = max(min(32, (int)(run >> 1)), 1);
+                run -= batch_len * 2;
+            }
+            s->dict_run = run;
+            s->data_start = cur;
+            is_literal = run & 1;
+            __threadfence_block();
         }
-        else
+        SYNCWARP();
+        is_literal = SHFL0(is_literal);
+        batch_len = SHFL0(batch_len);
+        if (t < batch_len)
         {
-            batch_len = max(min(batch_len, (int)(run >> 1)), 1);
-            run -= batch_len * 2;
+            int dict_idx;
+            if (is_literal)
+            {
+                int32_t ofs = t - ((batch_len + 7) & ~7);
+                const uint8_t *p = s->data_start + (ofs >> 3);
+                dict_idx = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
+            }
+            else
+            {
+                dict_idx = s->dict_val;
+            }
+            s->dict_idx[(pos + t) & (NZ_BFRSZ - 1)] = dict_idx;
         }
-        s->dict_run = run;
-        s->data_start = cur;
-        is_literal = run & 1;
-        __threadfence_block();
+        pos += batch_len;
     }
-    SYNCWARP();
-    is_literal = SHFL0(is_literal);
-    batch_len = SHFL0(batch_len);
-    if (is_literal && t < batch_len)
-    {
-        int32_t ofs = t - ((batch_len + 7) & ~7);
-        const uint8_t *p = s->data_start + (ofs >> 3);
-        dict_idx = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
-    }
-    else
-    {
-        dict_idx = s->dict_val;
-    }
-    s->scratch.dict_idx[t] = dict_idx;
-    return batch_len;
+    return pos;
 }
 
 /**
- * @brief Parses the length of strings in the batch and initializes the
- * corresponding string descriptor
+ * @brief Parses the length and position of strings
  *
  * @param[in,out] s Page state input/output
- * @param[in] batch_len Number of strings to process
+ * @param[in] target_pos Target output position
  * @param[in] t Thread ID
+ *
+ * @return The new output position
  **/
-__device__ void gpuInitStringDescriptors(volatile page_state_s *s, int batch_len, int t)
+__device__ void gpuInitStringDescriptors(volatile page_state_s *s, int target_pos, int t)
 {
+    int pos = s->dict_pos;
     // This step is purely serial
     if (!t)
     {
         const uint8_t *cur = s->data_start;
-        const uint8_t *end = s->data_end;
+        int dict_size = s->dict_size;
+        int k = s->dict_val;
 
-        for (int i = 0; i < batch_len; i++)
+        while (pos < target_pos)
         {
-            if (cur + 4 <= end)
+            int len;
+            if (k + 4 <= dict_size)
             {
-                uint32_t len = (cur[0]) | (cur[1] << 8) | (cur[2] << 16) | (cur[3] << 24);
-                if (cur + 4 + len <= end)
+                len = (cur[k]) | (cur[k+1] << 8) | (cur[k+2] << 16) | (cur[k+3] << 24);
+                k += 4;
+                if (k + len > dict_size)
                 {
-                    cur += 4;
-                    s->scratch.str_desc[i].ptr = reinterpret_cast<const char *>(cur);
-                    s->scratch.str_desc[i].count = len;
-                    cur += len;
+                    len = 0;
                 }
-            }
-        }
-        s->data_start = cur;
-        __threadfence_block();
-    }
-    SYNCWARP();
-}
-
-
-enum CodingMode {
-    PLAIN_FIXED_LENGTH,     // Plain, fixed length symbols
-    PLAIN_VARIABLE_LENGTH,  // Plain string 32-bit length followed by data
-    DICTIONARY_RLE,         // RLE-coded dictionary indices
-    BOOL_RLE,               // 1-bit bool to byte
-    PLAIN_STR2HASH,         // Plain string to 32-bit hash
-    DICTIONARY_STR2HASH,    // String dictionary to 32-bit hash
-};
-
-/**
- * @brief WARP1: Decodes and stores the output at the row position given by WARP0
- *
- * @param[in,out] s Page state input/output
- * @param[in] t Thread ID
- **/
-template<CodingMode mode>
-__device__ void gpuDecodeValues(volatile page_state_s *s, int t)
-{
-    int32_t rd_count = 0, batch_len = 0;
-    for (;;)
-    {
-        const uint8_t *dict;
-        unsigned int dict_size, dict_pos;
-        int row_idx;
-        if (!t)
-        {
-            // Wait for data from WARP0
-            batch_len = min(s->q.wr_count - rd_count, 32);
-            if (batch_len < 8) // We want at least 8 values in the batch (simplifies RLE dictionary path)
-            {
-                for (;;)
-                {
-                    int finished = s->q.finished;
-                    batch_len = min(s->q.wr_count - rd_count, 32);
-                    if (batch_len >= 8 || finished)
-                        break;
-                    NANOSLEEP(100);
-                }
-            }
-        }
-        batch_len = SHFL0(batch_len);
-        if (batch_len <= 0)
-            break;
-        if (mode == DICTIONARY_RLE || mode == DICTIONARY_STR2HASH)
-        {
-            if (s->dict_bits > 0)
-            {
-                batch_len = gpuDecodeDictionaryIndices(s, batch_len, t); // May lower the value of batch_len
-                dict_pos = s->scratch.dict_idx[t] * s->dtype_len_in;
             }
             else
             {
-                dict_pos = 0; // 0-bits for dictionary indices
+                len = 0;
             }
-            dict = s->dict_base;
-            dict_size = s->dict_size;
+            s->dict_idx[pos & (NZ_BFRSZ - 1)] = k;
+            s->str_len[pos & (NZ_BFRSZ - 1)] = len;
+            k += len;
+            pos++;
         }
-        else if (mode == PLAIN_VARIABLE_LENGTH || mode == PLAIN_STR2HASH)
+        s->dict_val = k;
+        __threadfence_block();
+    }
+}
+
+
+/**
+ * @brief Output a string descriptor
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
+ **/
+inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, void *dstv)
+{
+    const char *ptr = NULL;
+    size_t len = 0;
+
+    if (s->dict_base)
+    {
+        // String dictionary
+        uint32_t dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] * sizeof(nvstrdesc_s) : 0;
+        if (dict_pos < (uint32_t)s->dict_size)
         {
-            gpuInitStringDescriptors(s, batch_len, t);
-            dict_pos = 0;
-            dict = const_cast<const uint8_t *>(reinterpret_cast<volatile uint8_t *>(&s->scratch.str_desc[t]));
-            dict_size = sizeof(s->scratch.str_desc[0]);
+            const nvstrdesc_s *src = reinterpret_cast<const nvstrdesc_s *>(s->dict_base + dict_pos);
+            ptr = src->ptr;
+            len = src->count;
         }
-        else if (mode == BOOL_RLE)
+    }
+    else
+    {
+        // Plain encoding
+        uint32_t dict_pos = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
+        if (dict_pos < (uint32_t)s->dict_size)
         {
-            batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
-            dict_pos = s->scratch.dict_idx[t];
+            ptr = reinterpret_cast<const char *>(s->data_start + dict_pos);
+            len = s->str_len[src_pos & (NZ_BFRSZ - 1)];
         }
-        else // PLAIN_FIXED_LENGTH
+    }
+    if (s->dtype_len == 4)
+    {
+        // Output hash
+        *reinterpret_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
+    }
+    else
+    {
+        // Output string descriptor
+        nvstrdesc_s *dst = reinterpret_cast<nvstrdesc_s *>(dstv);
+        dst->ptr = ptr;
+        dst->count = len;
+    }
+}
+
+
+/**
+ * @brief Output a boolean
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ **/
+inline __device__ void gpuOutputBoolean(volatile page_state_s *s, int src_pos, uint8_t *dst)
+{
+    *dst = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
+}
+
+
+/**
+ * @brief Store a 32-bit data element
+ *
+ * @param[out] dst ptr to output
+ * @param[in] src8 raw input bytes
+ * @param[in] dict_pos byte position in dictionary
+ * @param[in] dict_size size of dictionary
+ **/
+inline __device__ void gpuStoreOutput(uint32_t *dst, const uint8_t *src8, uint32_t dict_pos, uint32_t dict_size)
+{
+    uint32_t bytebuf;
+    unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
+    src8 -= ofs;    // align to 32-bit boundary
+    ofs <<= 3;      // bytes -> bits
+    if (dict_pos < dict_size)
+    {
+        bytebuf = *(const uint32_t *)(src8 + dict_pos);
+        if (ofs)
         {
-            dict_pos = (rd_count + t) * s->dtype_len_in;
-            dict = s->data_start;
-            dict_size = s->dict_size;
+            uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+            bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
         }
-        if (t < batch_len)
+    }
+    else
+    {
+        bytebuf = 0;
+    }
+    *dst = bytebuf;
+}
+
+
+/**
+ * @brief Store a 64-bit data element
+ *
+ * @param[out] dst ptr to output
+ * @param[in] src8 raw input bytes
+ * @param[in] dict_pos byte position in dictionary
+ * @param[in] dict_size size of dictionary
+ **/
+inline __device__ void gpuStoreOutput(uint2 *dst, const uint8_t *src8, uint32_t dict_pos, uint32_t dict_size)
+{
+    uint2 v;
+    unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
+    src8 -= ofs;    // align to 32-bit boundary
+    ofs <<= 3;      // bytes -> bits
+    if (dict_pos < dict_size)
+    {
+        v.x = *(const uint32_t *)(src8 + dict_pos + 0);
+        v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+        if (ofs)
         {
-            row_idx = s->q.buf[(rd_count + t) & (INDEX_QUEUE_LEN - 1)];
-            if (row_idx >= 0 && row_idx < s->num_rows)
+            uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+            v.x = __funnelshift_r(v.x, v.y, ofs);
+            v.y = __funnelshift_r(v.y, next, ofs);
+        }
+    }
+    else
+    {
+        v.x = v.y = 0;
+    }
+    *dst = v;
+}
+
+
+/**
+* @brief Output a small fixed-length value
+*
+* @param[in,out] s Page state input/output
+* @param[in] src_pos Source position
+* @param[in] dst Pointer to row output data
+**/
+template <typename T>
+inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *dst)
+{
+    const uint8_t *dict;
+    uint32_t dict_pos, dict_size = s->dict_size;
+
+    if (s->dict_base)
+    {
+        // Dictionary
+        dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] : 0;
+        dict = s->dict_base;
+    }
+    else
+    {
+        // Plain
+        dict_pos = src_pos;
+        dict = s->data_start;
+    }
+    dict_pos *= (uint32_t)s->dtype_len_in;
+    gpuStoreOutput(dst, dict, dict_pos, dict_size);
+}
+
+
+/**
+ * @brief Output a N-byte value
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst8 Pointer to row output data
+ * @param[in] len Length of element
+ **/
+static __device__ void gpuOutputGeneric(volatile page_state_s *s, int src_pos, uint8_t *dst8, int len)
+{
+    const uint8_t *dict;
+    uint32_t dict_pos, dict_size = s->dict_size;
+    
+    if (s->dict_base)
+    {
+        // Dictionary
+        dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] : 0;
+        dict = s->dict_base;
+    }
+    else
+    {
+        // Plain
+        dict_pos = src_pos;
+        dict = s->data_start;
+    }
+    dict_pos *= (uint32_t)s->dtype_len_in;
+    if (len & 3)
+    {
+        // Generic slow path
+        for (unsigned int i = 0; i < len; i++)
+        {
+            dst8[i] = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+        }
+    }
+    else
+    {
+        // Copy 4 bytes at a time
+        const uint8_t *src8 = dict;
+        unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
+        src8 -= ofs;    // align to 32-bit boundary
+        ofs <<= 3;      // bytes -> bits
+        for (unsigned int i = 0; i < len; i += 4)
+        {
+            uint32_t bytebuf;
+            if (dict_pos < dict_size)
             {
-                // Read and store the value
-                unsigned int len = s->dtype_len;
-                uint8_t *dst8 = s->data_out;
-                if (dst8)
+                bytebuf = *(const uint32_t *)(src8 + dict_pos);
+                if (ofs)
                 {
-                    dst8 += len * row_idx;
-                    if (mode == BOOL_RLE)
-                    {
-                        // Boolean output indices (index into a fixed 2-entry {0,1} dictionary)
-                        *dst8 = dict_pos;
-                    }
-                    else if (mode == DICTIONARY_STR2HASH || mode == PLAIN_STR2HASH)
-                    {
-                        const nvstrdesc_s *str = reinterpret_cast<const nvstrdesc_s *>(dict + dict_pos);
-                        uint32_t h = (dict_pos + sizeof(nvstrdesc_s) <= dict_size) ? device_str2hash32(str->ptr, str->count) : 0;
-                        *reinterpret_cast<uint32_t *>(dst8) = h;
-                    }
-                    else if (len & 3)
-                    {
-                        // Generic slow path
-                        for (unsigned int i = 0; i < len; i++)
-                        {
-                            dst8[i] = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
-                        }
-                    }
-                    else
-                    {
-                        // Copy 4 bytes at a time
-                        const uint8_t *src8 = dict;
-                        unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
-                        src8 -= ofs;    // align to 32-bit boundary
-                        ofs <<= 3;      // bytes -> bits
-                        for (unsigned int i = 0; i < len; i += 4)
-                        {
-                            uint32_t bytebuf;
-                            if (dict_pos < dict_size)
-                            {
-                                bytebuf = *(const uint32_t *)(src8 + dict_pos);
-                                if (ofs)
-                                {
-                                    uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
-                                    bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
-                                }
-                            }
-                            else
-                            {
-                                bytebuf = 0;
-                            }
-                            dict_pos += 4;
-                            *(uint32_t *)(dst8 + i) = bytebuf;
-                        }
-                    }
+                    uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+                    bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
                 }
             }
-        }
-        SYNCWARP();
-        rd_count += batch_len;
-        if (t == 0)
-        {
-            s->q.rd_count = rd_count;
-            __threadfence_block();
+            else
+            {
+                bytebuf = 0;
+            }
+            dict_pos += 4;
+            *(uint32_t *)(dst8 + i) = bytebuf;
         }
     }
 }
+
 
 /**
  * @brief Kernel for reading the column data stored in the pages
@@ -783,43 +865,41 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
  * desired output datatype (ex. 32-bit to 16-bit, string to hash).
  *
  * @param[in] pages List of pages
- * @param[in] num_pages Number of pages
  * @param[in,out] chunks List of column chunks
+ * @param[in] min_row crop all rows below min_row
+ * @param[in] num_rows Maximum number of rows to read
  * @param[in] num_chunks Number of column chunks
- * @param[in] min_row Minimum number of rows to read
- * @param[in] num_rows Total number of rows to read
  **/
-// blockDim {64,2,1}
-extern "C" __global__ void __launch_bounds__(128)
-gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, int32_t num_chunks, size_t min_row, size_t num_rows)
+// blockDim {NTHREADS,1,1}
+extern "C" __global__ void __launch_bounds__(NTHREADS)
+gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size_t num_rows, int32_t num_chunks)
 {
-    __shared__ __align__(16) page_state_s state_g[2];
+    __shared__ __align__(16) page_state_s state_g;
 
-    page_state_s * const s = &state_g[threadIdx.y];
-    int page_idx = blockIdx.x * 2 + threadIdx.y;
+    page_state_s * const s = &state_g;
+    int page_idx = blockIdx.x;
     int t = threadIdx.x;
+    int chunk_idx, out_thread0;
     
     // Fetch page info
-    if (page_idx < num_pages)
+    // NOTE: Assumes that sizeof(PageInfo) <= 256
+    if (t < sizeof(PageInfo) / sizeof(uint32_t))
     {
-        // NOTE: Assumes that sizeof(PageInfo) <= 256
-        if (t < sizeof(PageInfo) / sizeof(uint32_t))
-        {
-            ((uint32_t *)&s->page)[t] = ((const uint32_t *)&pages[page_idx])[t];
-        }
+        ((uint32_t *)&s->page)[t] = ((const uint32_t *)&pages[page_idx])[t];
     }
     __syncthreads();
-    // Fetch column chunk info
-    if (page_idx < num_pages)
+    if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY)
     {
-        int chunk_idx = s->page.chunk_idx;
-        if ((uint32_t)chunk_idx < (uint32_t)num_chunks)
+        return;
+    }
+    // Fetch column chunk info
+    chunk_idx = s->page.chunk_idx;
+    if ((uint32_t)chunk_idx < (uint32_t)num_chunks)
+    {
+        // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256
+        if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t))
         {
-            // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256
-            if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t))
-            {
-                ((uint32_t *)&s->col)[t] = ((const uint32_t *)&chunks[chunk_idx])[t];
-            }
+            ((uint32_t *)&s->col)[t] = ((const uint32_t *)&chunks[chunk_idx])[t];
         }
     }
     __syncthreads();
@@ -828,7 +908,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
         s->num_rows = 0;
         s->page.valid_count = 0;
         s->error = 0;
-        if (page_idx < num_pages && !(s->page.flags & PAGEINFO_FLAGS_DICTIONARY) && s->page.num_values > 0 && s->page.num_rows > 0)
+        if (s->page.num_values > 0 && s->page.num_rows > 0)
         {
             uint8_t *cur = s->page.page_data;
             uint8_t *end = cur + s->page.uncompressed_page_size;
@@ -895,6 +975,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
                 s->num_rows = s->page.num_rows - s->first_row;
             }
+            s->out_valid = 0;
+            s->out_valid_mask = (~0) << s->valid_map_offset;
             if (page_start_row + s->num_rows > min_row + num_rows)
             {
                 s->num_rows = (int32_t)max((int64_t)(min_row + num_rows - page_start_row), INT64_C(0));
@@ -932,6 +1014,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 break;
             case PLAIN:
                 s->dict_size = static_cast<int32_t>(end - cur);
+                s->dict_val = 0;
                 if ((s->col.data_type & 7) == BOOLEAN)
                 {
                     s->dict_run = s->dict_size * 2 + 1;
@@ -950,70 +1033,115 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
             }
             s->data_start = cur;
             s->data_end = end;
-            s->q.finished = 0;
-            s->q.wr_count = 0;
-            s->q.rd_count = 0;
         }
-        else if (!(s->page.flags & PAGEINFO_FLAGS_DICTIONARY))
+        else
         {
             s->error = 1;
         }
+        s->value_count = 0;
+        s->nz_count = 0;
+        s->dict_pos = 0;
+        s->out_pos = 0;
+        s->num_values = min(s->page.num_values, s->first_row + s->num_rows);
         __threadfence_block();
     }
     __syncthreads();
-    if (page_idx < num_pages && !(s->page.flags & PAGEINFO_FLAGS_DICTIONARY))
+    if (s->dict_base)
     {
-        if (!s->error)
+        out_thread0 = (s->dict_bits > 0) ? 64 : 32;
+    }
+    else
+    {
+        out_thread0 = ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
+    }
+
+    while (!s->error && (s->value_count < s->num_values || s->out_pos < s->nz_count))
+    {
+        int target_pos;
+
+        if (t < out_thread0)
         {
-            if (t < 32)
+            target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
+        }
+        else
+        {
+            target_pos = min(s->nz_count, s->out_pos + NTHREADS - out_thread0);
+            if (out_thread0 > 32)
             {
-                // WARP0: Decode definition and repetition levels, outputs row indices
-                gpuDecodeLevels(s, t);
-                if (!t)
-                {
-                    s->q.finished = 1;
-                }
+                target_pos = min(target_pos, s->dict_pos);
             }
-            else
+        }
+        __syncthreads();
+        if (t < 32)
+        {
+            // WARP0: Decode definition and repetition levels, outputs row indices
+            gpuDecodeLevels(s, target_pos, t);
+        }
+        else if (t < out_thread0)
+        {
+            // WARP1: Decode dictionary indices, booleans or string positions
+            if (s->dict_base)
             {
-                int dtype = s->col.data_type & 7;
-                // WARP1: Decode values
-                if ((dtype == BYTE_ARRAY) && (s->dtype_len == 4))
-                {
-                    if (s->dict_base)
-                        gpuDecodeValues<DICTIONARY_STR2HASH>(s, t & 0x1f);
-                    else
-                        gpuDecodeValues<PLAIN_STR2HASH>(s, t & 0x1f);
-                }
-                else if (s->dict_base)
-                    gpuDecodeValues<DICTIONARY_RLE>(s, t & 0x1f);
-                else if (dtype == BYTE_ARRAY)
-                    gpuDecodeValues<PLAIN_VARIABLE_LENGTH>(s, t & 0x1f);
+                target_pos = gpuDecodeDictionaryIndices(s, target_pos, t & 0x1f);
+            }
+            else if ((s->col.data_type & 7) == BOOLEAN)
+            {
+                target_pos = gpuDecodeRleBooleans(s, target_pos, t & 0x1f);
+            }
+            else if ((s->col.data_type & 7) == BYTE_ARRAY)
+            {
+                gpuInitStringDescriptors(s, target_pos, t & 0x1f);
+            }
+            if (t == 32)
+            {
+                *(volatile int32_t *)&s->dict_pos = target_pos;
+            }
+        }
+        else
+        {
+            // WARP1..WARP3: Decode values
+            int dtype = s->col.data_type & 7;
+            int out_pos = s->out_pos + t - out_thread0;
+            int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
+            if (out_pos < target_pos && row_idx >= 0 && row_idx < s->num_rows)
+            {
+                uint32_t dtype_len = s->dtype_len;
+                uint8_t *dst = s->data_out + (size_t)row_idx * dtype_len;
+                if (dtype == BYTE_ARRAY)
+                    gpuOutputString(s, out_pos, dst);
                 else if (dtype == BOOLEAN)
-                    gpuDecodeValues<BOOL_RLE>(s, t & 0x1f);
+                    gpuOutputBoolean(s, out_pos, dst);
+                else if (dtype_len == 8)
+                    gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
+                else if (dtype_len == 4)
+                    gpuOutputFast(s, out_pos, reinterpret_cast<uint32_t *>(dst));
                 else
-                    gpuDecodeValues<PLAIN_FIXED_LENGTH>(s, t & 0x1f);
+                    gpuOutputGeneric(s, out_pos, dst, dtype_len);
             }
-            __threadfence_block();
+            if (t == out_thread0)
+            {
+                *(volatile int32_t *)&s->out_pos = target_pos;
+            }
         }
-        SYNCWARP();
-        if (!t)
-        {
-            // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
-            pages[page_idx].num_rows = s->num_rows;
-            pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
-        }
+        __syncthreads();
+    }
+    __syncthreads();
+    if (!t)
+    {
+        // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
+        pages[page_idx].num_rows = s->num_rows;
+        pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
     }
 }
+
 
 cudaError_t __host__ DecodePageData(PageInfo *pages, int32_t num_pages,
                                     ColumnChunkDesc *chunks, int32_t num_chunks,
                                     size_t num_rows, size_t min_row,
                                     cudaStream_t stream) {
-  dim3 dim_block(64, 2);
-  dim3 dim_grid((num_pages + 1) >> 1, 1);  // 2 warps per page, 4 warps per block
-  gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(
-      pages, chunks, num_pages, num_chunks, min_row, num_rows);
+  dim3 dim_block(NTHREADS, 1);
+  dim3 dim_grid(num_pages, 1);  // 1 threadblock per page
+  gpuDecodePageData <<< dim_grid, dim_block, 0, stream >>> (pages, chunks, min_row, num_rows, num_chunks);
   return cudaSuccess;
 }
 
