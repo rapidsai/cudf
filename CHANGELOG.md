@@ -7,6 +7,7 @@
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1381 Add DataFrame._get_numeric_data
+- PR #1396 Add DataFrame.drop method
 
 ## Improvements
 

@@ -269,6 +269,7 @@ def test_dataframe_drop_method():
 
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop('a').columns) == ('b', 'c')
+    assert tuple(df.drop('a', axis=1).columns) == ('b', 'c')
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop(['a', 'b']).columns) == ('c',)
     assert tuple(df.columns) == ('a', 'b', 'c')
