@@ -22,7 +22,7 @@ Generic reduction implementation with support for validity mask
 template<typename T_in, typename T_out, typename F, typename Ld>
 __global__
 void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T_out *results,
+                      gdf_size_type size, T_out *result,
                       F functor, T_out identity, Ld loader)
 {
     typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
@@ -52,7 +52,7 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
 
     // First thread of each block stores the result.
     if (tid == 0){
-        cudf::genericAtomicOperation(&results[0], agg, functor);
+        cudf::genericAtomicOperation(result, agg, functor);
     }
 }
 
@@ -136,7 +136,6 @@ public:
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
-        CUDF_EXPECTS(col->size > col->null_count, "Input column is empty");
         cudf::type_dispatcher(scalar->dtype,
             ReduceOutputDispatcher<T, Op>(), col, scalar, stream);
     }
@@ -161,6 +160,10 @@ gdf_scalar reduction(const gdf_column *col,
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
     scalar.is_valid = false; // the scalar is not valid for error case
+
+    CUDF_EXPECTS(col != nullptr, "Input column is null");
+    // check if input column is empty
+    if( col->size <= col->null_count )return scalar;
 
     switch(op){
     case GDF_REDUCTION_SUM:

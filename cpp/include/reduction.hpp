@@ -25,7 +25,10 @@ namespace cudf {
  * This function does not detect overflows in reductions.
  * Using a higher precision `dtype` may prevent overflow.
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
- * types (date32, timestamp, category...)
+ * types (date32, timestamp, category...).
+ * The null values are skipped for the operation.
+ * If the column is empty, the member is_valid of the output gdf_scalar
+ * will contain `false`.
  *
  * @param[in] col Input column
  * @param[in] op  The operator applied by the reduction

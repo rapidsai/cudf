@@ -29,28 +29,28 @@ struct SquaredLoader {
 };
 
 struct ReductionSum {
-    typedef IdentityLoader Loader;
-    typedef cudf::DeviceSum Op;
+    using Loader = IdentityLoader;
+    using Op = cudf::DeviceSum;
 };
 
 struct ReductionProduct {
-    typedef IdentityLoader Loader;
-    typedef cudf::DeviceProduct Op;
+    using Loader = IdentityLoader;
+    using Op = cudf::DeviceProduct;
 };
 
 struct ReductionSumOfSquares {
-    typedef SquaredLoader Loader;
-    typedef cudf::DeviceSum Op;
+    using Loader = SquaredLoader;
+    using Op = cudf::DeviceSum;
 };
 
 struct ReductionMin{
-    typedef IdentityLoader Loader;
-    typedef cudf::DeviceMin Op;
+    using Loader = IdentityLoader;
+    using Op = cudf::DeviceMin;
 };
 
 struct ReductionMax{
-    typedef IdentityLoader Loader;
-    typedef cudf::DeviceMax Op;
+    using Loader = IdentityLoader;
+    using Op = cudf::DeviceMax;
 };
 
 } // namespace reductions
