@@ -35,7 +35,7 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief  Computes the validity mask for the rows in the gdf_table.
+ * @brief  Computes the validity mask for the rows in the device_table.
 
    If a single value in a row of the table is NULL, then the entire row is 
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
@@ -84,7 +84,7 @@ struct row_masker
 /* --------------------------------------------------------------------------*/
 /** 
 
-    The gdf_table class is meant to wrap a set of gdf_columns and provide functions
+    The device_table class is meant to wrap a set of gdf_columns and provide functions
     for operating across all of the columns. It can be thought of as a `matrix`
     whose columns can be of different data types. Thinking of it as a matrix,
     many row-wise operations are defined, such as checking if two rows in a table
@@ -92,14 +92,14 @@ struct row_masker
  */
 /* ----------------------------------------------------------------------------*/
 template <typename T, typename byte_t = unsigned char>
-class gdf_table : public managed
+class device_table : public managed
 {
 public:
 
   using size_type = T;
   using byte_type = byte_t;
 
-  gdf_table(size_type num_cols, gdf_column ** gdf_columns) 
+  device_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
   {
     assert(num_cols > 0);
@@ -175,7 +175,7 @@ public:
     d_row_valid = device_row_valid.data().get();
   }
 
-  ~gdf_table(){}
+  ~device_table(){}
 
 
   /* --------------------------------------------------------------------------*/
@@ -230,7 +230,7 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @brief  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
+   * @brief  Gets the size in bytes of a row in the device_table, i.e., the sum of 
    * the byte widths of all columns in the table
    * 
    * @returns The size in bytes of the row in the table
@@ -339,7 +339,7 @@ public:
      */
     /* ----------------------------------------------------------------------------*/
   __device__ 
-  gdf_error copy_row(gdf_table const & source,
+  gdf_error copy_row(device_table const & source,
                      const size_type target_row_index,
                      const size_type source_row_index)
   {
@@ -390,7 +390,7 @@ public:
    */
   /* ----------------------------------------------------------------------------*/
   __device__
-  bool rows_equal(gdf_table const & rhs, 
+  bool rows_equal(device_table const & rhs, 
                   const size_type this_row_index, 
                   const size_type rhs_row_index) const
   {

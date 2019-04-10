@@ -22,14 +22,14 @@
 
 #include "cudf/functions.h"
 #include "cudf/types.h"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 
 #include "sort_join.cuh"
 #include "join_compute_api.h"
 
  /* --------------------------------------------------------------------------*/
  /**
-  * @brief  Computes the hash-based join between two sets of gdf_tables.
+  * @brief  Computes the hash-based join between two sets of device_tables.
   *
   * @param left_table The left table to be joined
   * @param right_table The right table to be joined
@@ -44,8 +44,8 @@
 template<JoinType join_type,
          typename output_index_type,
          typename size_type>
-gdf_error join_hash(gdf_table<size_type> const & left_table,
-                    gdf_table<size_type> const & right_table,
+gdf_error join_hash(device_table<size_type> const & left_table,
+                    device_table<size_type> const & right_table,
                     gdf_column * const output_l,
                     gdf_column * const output_r,
                     bool flip_indices = false)

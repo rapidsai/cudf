@@ -25,7 +25,7 @@ enum class JoinType {
 };
 
 #include "cudf.h"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 #include "hash/concurrent_unordered_multimap.cuh"
 #include "hash/hash_functions.cuh"
 #include "utilities/bit_util.cuh"
@@ -36,7 +36,7 @@ enum class JoinType {
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @brief  Builds a hash table from a gdf_table that maps the hash values of 
+* @brief  Builds a hash table from a device_table that maps the hash values of 
   each row to its respective row index.
 * 
 * @param[in,out] multi_map The hash table to be built to insert rows into
@@ -49,7 +49,7 @@ enum class JoinType {
 template<typename multimap_type,
          typename size_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
-                                  gdf_table<size_type> const & build_table,
+                                  device_table<size_type> const & build_table,
                                   const size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
 {
@@ -133,8 +133,8 @@ template< JoinType join_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
-                                          gdf_table<size_type> const & build_table,
-                                          gdf_table<size_type> const & probe_table,
+                                          device_table<size_type> const & build_table,
+                                          device_table<size_type> const & probe_table,
                                           const size_type probe_table_num_rows,
                                           size_type* output_size)
 {
@@ -267,8 +267,8 @@ template< JoinType join_type,
           size_type block_size,
           size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type const * const multi_map,
-                                  gdf_table<size_type> const & build_table,
-                                  gdf_table<size_type> const & probe_table,
+                                  device_table<size_type> const & build_table,
+                                  device_table<size_type> const & probe_table,
                                   const size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
                                   output_index_type * join_output_r,

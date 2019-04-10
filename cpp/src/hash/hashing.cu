@@ -20,7 +20,7 @@
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 #include "join/joining.h"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 #include "hash/hash_functions.cuh"
 #include "utilities/int_fastdiv.h"
 #include "utilities/nvtx/nvtx_utils.h"
@@ -48,14 +48,14 @@ bool is_power_two( T number )
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  This functor is used to compute the hash value for the rows
- * of a gdf_table
+ * of a device_table
  */
 /* ----------------------------------------------------------------------------*/
 template <template <typename> class hash_function,
          typename size_type>
 struct row_hasher
 {
-  row_hasher(gdf_table<size_type> const & table_to_hash, hash_value_type *initial_hash_values)
+  row_hasher(device_table<size_type> const & table_to_hash, hash_value_type *initial_hash_values)
     : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
   {}
 
@@ -65,7 +65,7 @@ struct row_hasher
     return the_table.template hash_row<hash_function>(row_index, initial_hash_values);
   }
 
-  gdf_table<size_type> const & the_table;
+  device_table<size_type> const & the_table;
   hash_value_type* initial_hash_values{nullptr};
 };
 
@@ -123,8 +123,8 @@ gdf_error gdf_hash(int num_cols,
 
   using size_type = int64_t;
 
-  // Wrap input columns in gdf_table
-  std::unique_ptr< gdf_table<size_type> > input_table{new gdf_table<size_type>(num_cols, input)};
+  // Wrap input columns in device_table
+  std::unique_ptr< device_table<size_type> > input_table{new device_table<size_type>(num_cols, input)};
 
   const size_type num_rows = input_table->get_column_length();
 
@@ -246,7 +246,7 @@ struct bitwise_partitioner
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Computes which partition each row of a gdf_table will belong to based
+ * @brief Computes which partition each row of a device_table will belong to based
    on hashing each row, and applying a partition function to the hash value. 
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
@@ -268,7 +268,7 @@ template <template <typename> class hash_function,
           typename partitioner_type,
           typename size_type>
 __global__ 
-void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
+void compute_row_partition_numbers(device_table<size_type> const & the_table, 
                                    const size_type num_rows,
                                    const size_type num_partitions,
                                    const partitioner_type the_partitioner,
@@ -388,7 +388,7 @@ void compute_row_output_locations(size_type * row_partition_numbers,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Partitions an input gdf_table into a specified number of partitions.
+ * @brief Partitions an input device_table into a specified number of partitions.
  * A hash value is computed for each row in a sub-set of the columns of the 
  * input table. Each hash value is placed in a bin from [0, number of partitions).
  * A copy of the input table is created where the rows are rearranged such that
@@ -408,11 +408,11 @@ void compute_row_output_locations(size_type * row_partition_numbers,
 /* ----------------------------------------------------------------------------*/
 template < template <typename> class hash_function,
            typename size_type>
-gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
-                                   gdf_table<size_type> const & table_to_hash,
+gdf_error hash_partition_device_table(device_table<size_type> const & input_table,
+                                   device_table<size_type> const & table_to_hash,
                                    const size_type num_partitions,
                                    size_type * partition_offsets,
-                                   gdf_table<size_type> & partitioned_output)
+                                   device_table<size_type> & partitioned_output)
 {
 
   const size_type num_rows = table_to_hash.get_column_length();
@@ -616,9 +616,9 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
   PUSH_RANGE("LIBGDF_HASH_PARTITION", PARTITION_COLOR);
 
-  // Wrap input and output columns in gdf_table
-  std::unique_ptr< const gdf_table<size_type> > input_table{new gdf_table<size_type>(num_input_cols, input)};
-  std::unique_ptr< gdf_table<size_type> > output_table{new gdf_table<size_type>(num_input_cols, partitioned_output)};
+  // Wrap input and output columns in device_table
+  std::unique_ptr< const device_table<size_type> > input_table{new device_table<size_type>(num_input_cols, input)};
+  std::unique_ptr< device_table<size_type> > output_table{new device_table<size_type>(num_input_cols, partitioned_output)};
 
   // Create vector of pointers to columns that will be hashed
   std::vector<gdf_column *> gdf_columns_to_hash(num_cols_to_hash);
@@ -627,7 +627,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
     gdf_columns_to_hash[i] = input[columns_to_hash[i]];
   }
   // Create a separate table of the columns to be hashed
-  std::unique_ptr< const gdf_table<size_type> > table_to_hash {new gdf_table<size_type>(num_cols_to_hash, 
+  std::unique_ptr< const device_table<size_type> > table_to_hash {new device_table<size_type>(num_cols_to_hash, 
                                                                                         gdf_columns_to_hash.data())};
 
   gdf_error gdf_status{GDF_SUCCESS};
@@ -636,7 +636,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
   {
     case GDF_HASH_MURMUR3:
       {
-        gdf_status = hash_partition_gdf_table<MurmurHash3_32>(*input_table, 
+        gdf_status = hash_partition_device_table<MurmurHash3_32>(*input_table, 
                                                               *table_to_hash,
                                                               num_partitions,
                                                               partition_offsets,
@@ -645,7 +645,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
       }
     case GDF_HASH_IDENTITY:
       {
-        gdf_status = hash_partition_gdf_table<IdentityHash>(*input_table, 
+        gdf_status = hash_partition_device_table<IdentityHash>(*input_table, 
                                                             *table_to_hash,
                                                             num_partitions,
                                                             partition_offsets,

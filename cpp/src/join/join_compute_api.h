@@ -21,7 +21,7 @@
 
 #include "join_kernels.cuh"
 
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 #include "full_join.cuh"
@@ -60,8 +60,8 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 template <JoinType join_type,
           typename multimap_type,
           typename size_type>
-gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
-                                    gdf_table<size_type> const & probe_table,
+gdf_error estimate_join_output_size(device_table<size_type> const & build_table,
+                                    device_table<size_type> const & probe_table,
                                     multimap_type const & hash_table,
                                     size_type * join_output_size_estimate)
 {
@@ -203,7 +203,7 @@ inline size_t compute_hash_table_size(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Performs a hash-based join between two sets of gdf_tables.
+* @brief  Performs a hash-based join between two sets of device_tables.
 *
 * @param joined_output The output of the join operation
 * @param left_table The left table to join
@@ -225,8 +225,8 @@ template<JoinType join_type,
 gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
-                            gdf_table<size_type> const & left_table,
-                            gdf_table<size_type> const & right_table,
+                            device_table<size_type> const & left_table,
+                            device_table<size_type> const & right_table,
                             bool flip_results = false)
 {
   gdf_error gdf_error_code{GDF_SUCCESS};
@@ -256,11 +256,11 @@ gdf_error compute_hash_join(
   constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
 
   // Hash table will be built on the right table
-  gdf_table<size_type> const & build_table{right_table};
+  device_table<size_type> const & build_table{right_table};
   const size_type build_table_num_rows{build_table.get_column_length()};
   
   // Probe with the left table
-  gdf_table<size_type> const & probe_table{left_table};
+  device_table<size_type> const & probe_table{left_table};
   const size_type probe_table_num_rows{probe_table.get_column_length()};
 
   // Hash table size must be at least 1 in order to have a valid allocation.

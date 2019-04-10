@@ -20,7 +20,7 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
@@ -44,9 +44,9 @@
 template <typename aggregation_type, 
           template <typename T> class op,
           typename size_type>
-gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
+gdf_error typed_groupby(device_table<size_type> const & groupby_input_table,
                         gdf_column* in_aggregation_column,       
-                        gdf_table<size_type> & groupby_output_table,
+                        device_table<size_type> & groupby_output_table,
                         gdf_column* out_aggregation_column,
                         bool sort_result = false)
 {
@@ -89,9 +89,9 @@ struct is_same_functor<T,T> : std::true_type{};
 /* ----------------------------------------------------------------------------*/
 template <template <typename T> class op,
           typename size_type>
-gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_table,        
+gdf_error dispatch_aggregation_type(device_table<size_type> const & groupby_input_table,        
                                     gdf_column* in_aggregation_column,       
-                                    gdf_table<size_type> & groupby_output_table,
+                                    device_table<size_type> & groupby_output_table,
                                     gdf_column* out_aggregation_column,
                                     bool sort_result = false)
 {
@@ -243,9 +243,9 @@ gdf_error gdf_group_by_hash(size_type ncols,
     return GDF_SUCCESS;
   }
 
-  // Wrap the groupby input and output columns in a gdf_table
-  std::unique_ptr< const gdf_table<size_type> > groupby_input_table{new gdf_table<size_type>(ncols, in_groupby_columns)};
-  std::unique_ptr< gdf_table<size_type> > groupby_output_table{new gdf_table<size_type>(ncols, out_groupby_columns)};
+  // Wrap the groupby input and output columns in a device_table
+  std::unique_ptr< const device_table<size_type> > groupby_input_table{new device_table<size_type>(ncols, in_groupby_columns)};
+  std::unique_ptr< device_table<size_type> > groupby_output_table{new device_table<size_type>(ncols, out_groupby_columns)};
 
   return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
                                                           in_aggregation_column, 

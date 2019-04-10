@@ -18,7 +18,7 @@
 #define GROUPBY_KERNELS_H
 
 #include "hash/concurrent_unordered_map.cuh"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 
 #include "aggregation_operations.hpp"
 
@@ -46,7 +46,7 @@ template<typename map_type,
          typename size_type,
          typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        gdf_table<size_type> const & groupby_input_table,
+                                        device_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
                                         size_type column_size,
                                         aggregation_operation op,
@@ -80,7 +80,7 @@ template<typename map_type,
          typename size_type,
          typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        gdf_table<size_type> const & groupby_input_table,
+                                        device_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
                                         size_type column_size,
                                         count_op<typename map_type::mapped_type> op,
@@ -128,8 +128,8 @@ template<typename map_type,
          typename aggregation_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
                                        const size_type map_size,
-                                       gdf_table<size_type> & groupby_output_table,
-                                       gdf_table<size_type> const & groupby_input_table,
+                                       device_table<size_type> & groupby_output_table,
+                                       device_table<size_type> const & groupby_input_table,
                                        aggregation_type * const __restrict__ aggregation_out_column,
                                        size_type * const global_write_index)
 {

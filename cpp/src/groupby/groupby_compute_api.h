@@ -26,7 +26,7 @@
 
 #include "hash/managed.cuh"
 #include "hash_groupby_kernels.cuh"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
 #include "types.hpp"
 
@@ -47,7 +47,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
  * If comparing a key to the map's unused key, simply performs the 
  * default key comparison defined in the map class. 
  *
- * Otherwise, the hash table keys refer to row indices in gdf_tables and the 
+ * Otherwise, the hash table keys refer to row indices in device_tables and the 
  * functor checks for equality between the two rows.
  */
 /* ----------------------------------------------------------------------------*/
@@ -64,13 +64,13 @@ struct row_comparator
    * keys in the hash table.
    * 
    * @param map The hash table
-   * @param l_table The left gdf_table
-   * @param r_table The right gdf_table
+   * @param l_table The left device_table
+   * @param r_table The right device_table
    */
   /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
-                 gdf_table<size_type> const & l_table,
-                 gdf_table<size_type> const & r_table) 
+                 device_table<size_type> const & l_table,
+                 device_table<size_type> const & r_table) 
                 : the_map{map}, 
                   left_table{l_table}, 
                   right_table{r_table},
@@ -88,8 +88,8 @@ struct row_comparator
    * is being used to compare against an empty key. In this case, perform the default
    * key comparison defined in the map class.
    *
-   * 2. Else, the functor is being used to compare two rows of gdf_tables. In this case,
-   * the gdf_table rows_equal function is used to check if the two rows are equal.
+   * 2. Else, the functor is being used to compare two rows of device_tables. In this case,
+   * the device_table rows_equal function is used to check if the two rows are equal.
    * 
    * @param left_index The left table index to compare
    * @param right_index The right table index to compare
@@ -100,7 +100,7 @@ struct row_comparator
   __device__ bool operator()(key_type const & left_index, 
                              key_type const & right_index) const
   {
-    // The unused key is not a valid row index in the gdf_tables.
+    // The unused key is not a valid row index in the device_tables.
     // Therefore, if comparing against the unused key, use the map's default
     // comparison function
     if((unused_key == left_index) || (unused_key == right_index))
@@ -113,8 +113,8 @@ struct row_comparator
   const map_key_comparator default_comparator{};
   const key_type unused_key;
   map_type const & the_map;
-  gdf_table<size_type> const & left_table;
-  gdf_table<size_type> const & right_table;
+  device_table<size_type> const & left_table;
+  device_table<size_type> const & right_table;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -139,9 +139,9 @@ struct row_comparator
 template< typename aggregation_type,
           typename size_type,
           typename aggregation_operation>
-gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
+gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
                         const aggregation_type * const in_aggregation_column,
-                        gdf_table<size_type> & groupby_output_table,
+                        device_table<size_type> & groupby_output_table,
                         aggregation_type * out_aggregation_column,
                         size_type * out_size,
                         aggregation_operation aggregation_op,

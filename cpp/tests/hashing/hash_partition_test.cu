@@ -18,7 +18,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <utilities/int_fastdiv.h>
-#include <dataframe/cudf_table.cuh>
+#include <dataframe/device_table.cuh>
 #include <hash/hash_functions.cuh>
 
 #include <cudf.h>
@@ -45,7 +45,7 @@ template <template <typename> class hash_function,
 struct row_partition_mapper
 {
   __device__
-  row_partition_mapper(gdf_table<size_type> const & table_to_hash, const size_type _num_partitions)
+  row_partition_mapper(device_table<size_type> const & table_to_hash, const size_type _num_partitions)
     : the_table{table_to_hash}, num_partitions{_num_partitions}
   {}
 
@@ -55,7 +55,7 @@ struct row_partition_mapper
     return the_table.template hash_row<hash_function>(row_index) % num_partitions;
   }
 
-  gdf_table<size_type> const & the_table;
+  device_table<size_type> const & the_table;
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
@@ -173,7 +173,7 @@ struct HashPartitionTest : public GdfTest
     }
 
     // Create a table from the gdf output of only the columns that were hashed
-    std::unique_ptr< gdf_table<int> > table_to_hash{new gdf_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
+    std::unique_ptr< device_table<int> > table_to_hash{new device_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
 
     rmm::device_vector<int> row_partition_numbers(table_to_hash->get_column_length());
 

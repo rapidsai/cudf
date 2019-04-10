@@ -22,7 +22,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
-#include "dataframe/cudf_table.cuh"
+#include "dataframe/device_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.hpp"
 #include <nvstrings/NVCategory.h>
@@ -55,9 +55,9 @@ template <JoinType join_type,
 gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
                     gdf_column *l_result, gdf_column *r_result)
 {
-  // Wrap the set of gdf_columns in a gdf_table class
-  std::unique_ptr< gdf_table<size_type> > left_table(new gdf_table<size_type>(num_cols, leftcol));
-  std::unique_ptr< gdf_table<size_type> > right_table(new gdf_table<size_type>(num_cols, rightcol));
+  // Wrap the set of gdf_columns in a device_table class
+  std::unique_ptr< device_table<size_type> > left_table(new device_table<size_type>(num_cols, leftcol));
+  std::unique_ptr< device_table<size_type> > right_table(new device_table<size_type>(num_cols, rightcol));
 
   return join_hash<join_type, output_index_type>(*left_table, 
                                                         *right_table, 
