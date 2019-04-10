@@ -24,7 +24,10 @@
 #include "utilities/error_utils.hpp"
 
 #include <cuda_runtime.h>
+#ifndef INCLUDED_NVGSTRINGS_H_
+#define INCLUDED_NVGSTRINGS_H_
 #include <nvstrings/NVStrings.h>
+#endif // INCLUDED_NVGSTRINGS_H_
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 

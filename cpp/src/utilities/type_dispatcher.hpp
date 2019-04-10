@@ -21,7 +21,10 @@
 
 #include <cudf/types.h>
 
+#ifndef INCLUDED_NVGSTRINGS_H_
+#define INCLUDED_NVGSTRINGS_H_
 #include <nvstrings/NVStrings.h>
+#endif // INCLUDED_NVGSTRINGS_H_
 
 #include <cassert>
 #include <utility>

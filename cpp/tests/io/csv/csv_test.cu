@@ -16,7 +16,10 @@
 
 #include <cudf.h>
 
+#ifndef INCLUDED_NVGSTRINGS_H_
+#define INCLUDED_NVGSTRINGS_H_
 #include <nvstrings/NVStrings.h>
+#endif // INCLUDED_NVGSTRINGS_H_
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
