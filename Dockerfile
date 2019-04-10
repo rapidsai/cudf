@@ -6,6 +6,7 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 # Needed for cudf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
+ARG CUDA_REL=9.2
 
 ARG CC=5
 ARG CXX=5
@@ -52,12 +53,12 @@ ADD . /cudf/
 # the environment file based on versions set in build args
 RUN ls -la /cudf
 RUN if [ -f /cudf/docker/package_versions.sh ]; \
-    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
-         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml ; \
     else rm -rf /cudf && \
          git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
-         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
-         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml ; \
     fi
 
 # libcudf build/install
