@@ -276,6 +276,7 @@ add_library(cudf SHARED
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
+            src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp

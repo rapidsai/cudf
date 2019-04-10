@@ -23,6 +23,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "rmm/rmm.h"
+#include <utilities/column_utils.hpp>
 #include "utilities/type_dispatcher.hpp"
 #include "string/nvcategory_util.hpp"
 #include "bitmask/legacy_bitmask.hpp"
@@ -85,9 +86,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = 0;
-  gdf_error result = get_column_byte_width(output_column, &column_byte_width);
-  GDF_REQUIRE(GDF_SUCCESS == result, result);
+  int column_byte_width = cudf::width(*output_column);
 
   // copy data
 
@@ -117,7 +116,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
       column_lengths[i] = columns_to_concat[i]->size;
     }
 
-    result = gdf_mask_concat(output_column->valid, 
+    gdf_error result = gdf_mask_concat(output_column->valid,
                              output_column->size, 
                              masks, 
                              column_lengths, 
@@ -212,13 +211,17 @@ namespace{
 }
 
 // returns the size in bytes of the specified gdf_dtype
-gdf_size_type gdf_dtype_size(gdf_dtype dtype) {
-  return cudf::type_dispatcher(dtype, get_type_size{});
+gdf_size_type gdf_dtype_size(gdf_dtype dtype)
+{
+  return cudf::size_of(dtype);
 }
+
 // Returns the size in bytes of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  *width = gdf_dtype_size(col->dtype);
-	return GDF_SUCCESS;
+  CUDF_EXPECTS(col != nullptr, "Null column pointer");
+  CUDF_EXPECTS(width != nullptr, "Null return value location pointer");
+  *width = cudf::width(*col);
+  return GDF_SUCCESS;
 }
