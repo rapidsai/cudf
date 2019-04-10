@@ -260,11 +260,11 @@ add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
 
-option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
-if(JITIFY_PROCESS_CACHE)
-    message(STATUS "Using process level cache for JIT compiled kernels")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
-endif(JITIFY_PROCESS_CACHE)
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
+    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
