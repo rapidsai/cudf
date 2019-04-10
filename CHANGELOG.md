@@ -24,6 +24,8 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1390 Added some basic utility functions for `gdf_column`'s
+- PR #1791 Added general column comparison code for testing
 
 ## Bug Fixes
 
@@ -47,7 +49,6 @@
 - PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
 - PR #1786 Maintain the original series name in series.unique output
-- PR #1390 Added some basic utility functions for `gdf_column`'s
 
 
 # cuDF 0.7.1 (11 May 2019)

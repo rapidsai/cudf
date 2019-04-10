@@ -19,11 +19,14 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "tests/utilities/compare_column_wrappers.cuh"
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "types.hpp"
 #include "utilities/wrapper_types.hpp"
+
+#include <tests/utilities/compare_column_wrappers.cuh>
 
 #include <random>
 
@@ -116,7 +119,7 @@ TYPED_TEST(GatherTest, IdentityTest) {
   EXPECT_NO_THROW(
       cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
-  EXPECT_TRUE(source_column == destination_column);
+  expect_columns_are_equal<TypeParam>(source_column, destination_column);
 }
 
 TYPED_TEST(GatherTest, ReverseIdentityTest) {
@@ -159,9 +162,13 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   std::vector<gdf_valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
+  auto print_all_unequal_pairs { true };
+  expect_column_values_are_equal<TypeParam>(
+      destination_size, expected_data.data(), nullptr, "Expected",
+      result_data.data(), nullptr, "Actual",
+      print_all_unequal_pairs);
+
   for (gdf_index_type i = 0; i < destination_size; i++) {
-    EXPECT_EQ(expected_data[i], result_data[i])
-        << "Data at index " << i << " doesn't match!\n";
     EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
         << "Value at index " << i << " should be non-null!\n";
   }
