@@ -33,7 +33,6 @@
 
 
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the validity mask for the rows in the device_table.
 
@@ -41,7 +40,6 @@
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
    column together to get a bitmask for the validity of each row.
  */
-/* ----------------------------------------------------------------------------*/
 template <typename size_type>
 struct row_masker
 {
@@ -49,7 +47,6 @@ struct row_masker
     : column_valid_masks{column_masks}, num_columns(num_cols)
     { }
    
-  /* --------------------------------------------------------------------------*/
   /** 
    * @brief Computes the bit-wise AND across all columns for the specified mask
    * 
@@ -57,7 +54,6 @@ struct row_masker
    * 
    * @returns The bit-wise AND across all columns for the specified mask number
    */
-  /* ----------------------------------------------------------------------------*/
   __device__ __forceinline__
   gdf_valid_type operator()(const size_type mask_number)
   {
@@ -81,14 +77,8 @@ struct row_masker
   gdf_valid_type ** column_valid_masks;
 };
 
-/* --------------------------------------------------------------------------*/
 /** 
-
-    The device_table class is meant to wrap a set of gdf_columns and provide functions
-    for operating across all of the columns. It can be thought of as a `matrix`
-    whose columns can be of different data types. Thinking of it as a matrix,
-    many row-wise operations are defined, such as checking if two rows in a table
-    are equivalent.
+ * @brief Provides row-level device functions for operating on a set of columns.
  */
 /* ----------------------------------------------------------------------------*/
 template <typename T, typename byte_t = unsigned char>
@@ -175,7 +165,7 @@ public:
     d_row_valid = device_row_valid.data().get();
   }
 
-  ~device_table(){}
+  ~device_table() = default;
 
 
   /* --------------------------------------------------------------------------*/
@@ -320,11 +310,6 @@ public:
     return GDF_SUCCESS;
   }
 
-  __device__
-  gdf_valid_type* get_columns_device_valids_ptr(size_type column_index)
-  {
-    return d_columns_valids_ptr[column_index];
-  }
     /* --------------------------------------------------------------------------*/
     /** 
      * @brief  Copies a row from a source table to a target row in this table
