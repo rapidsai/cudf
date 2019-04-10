@@ -55,7 +55,7 @@ gdf_error join_hash(device_table<size_type> const & left_table,
   // For inner joins, doesn't matter which table is build/probe, so we want
   // to build the hash table on the smaller table.
   if((join_type == JoinType::INNER_JOIN) &&
-     (right_table.get_column_length() > left_table.get_column_length()))
+     (right_table.num_rows() > left_table.num_rows()))
   {
     return join_hash<join_type, output_index_type>(right_table, 
                                                    left_table, 

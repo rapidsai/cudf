@@ -126,7 +126,7 @@ gdf_error gdf_hash(int num_cols,
   // Wrap input columns in device_table
   std::unique_ptr< device_table<size_type> > input_table{new device_table<size_type>(num_cols, input)};
 
-  const size_type num_rows = input_table->get_column_length();
+  const size_type num_rows = input_table->num_rows();
 
   // Wrap output buffer in Thrust device_ptr
   hash_value_type * p_output = static_cast<hash_value_type*>(output->data);
@@ -415,7 +415,7 @@ gdf_error hash_partition_device_table(device_table<size_type> const & input_tabl
                                    device_table<size_type> & partitioned_output)
 {
 
-  const size_type num_rows = table_to_hash.get_column_length();
+  const size_type num_rows = table_to_hash.num_rows();
 
   constexpr int rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
   const size_type grid_size = (num_rows + rows_per_block - 1) / rows_per_block;

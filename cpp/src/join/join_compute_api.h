@@ -65,8 +65,8 @@ gdf_error estimate_join_output_size(device_table<size_type> const & build_table,
                                     multimap_type const & hash_table,
                                     size_type * join_output_size_estimate)
 {
-  const size_type build_table_num_rows{build_table.get_column_length()};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  const size_type build_table_num_rows{build_table.num_rows()};
+  const size_type probe_table_num_rows{probe_table.num_rows()};
   
   // If the probe table is significantly larger (5x) than the build table, 
   // then we attempt to only use a subset of the probe table rows to compute an
@@ -233,11 +233,11 @@ gdf_error compute_hash_join(
 
   // Hash table will be built on the right table
   device_table<size_type> const & build_table{right_table};
-  const size_type build_table_num_rows{build_table.get_column_length()};
+  const size_type build_table_num_rows{build_table.num_rows()};
   
   // Probe with the left table
   device_table<size_type> const & probe_table{left_table};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  const size_type probe_table_num_rows{probe_table.num_rows()};
 
   // Hash table size must be at least 1 in order to have a valid allocation.
   // Even if the hash table will be empty, it still must be allocated for the
@@ -334,7 +334,7 @@ gdf_error compute_hash_join(
     <<<probe_grid_size, block_size>>> (hash_table.get(),
                                        build_table,
                                        probe_table,
-                                       probe_table.get_column_length(),
+                                       probe_table.num_rows(),
                                        output_l_ptr,
                                        output_r_ptr,
                                        d_global_write_index,

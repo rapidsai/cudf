@@ -142,7 +142,7 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
 {
-  const size_type input_num_rows = groupby_input_table.get_column_length();
+  const size_type input_num_rows = groupby_input_table.num_rows();
 
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
@@ -198,7 +198,7 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
   // the size of the output. Update the output size.
   CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost) );
   RMM_TRY( RMM_FREE(global_write_index, 0) );
-  groupby_output_table.set_column_length(*out_size);
+  groupby_output_table.set_num_rows(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {

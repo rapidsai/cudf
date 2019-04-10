@@ -175,7 +175,7 @@ struct HashPartitionTest : public GdfTest
     // Create a table from the gdf output of only the columns that were hashed
     std::unique_ptr< device_table<int> > table_to_hash{new device_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
 
-    rmm::device_vector<int> row_partition_numbers(table_to_hash->get_column_length());
+    rmm::device_vector<int> row_partition_numbers(table_to_hash->num_rows());
 
     // Compute the partition number for every row in the result
     switch(gdf_hash_function)
@@ -202,11 +202,11 @@ struct HashPartitionTest : public GdfTest
     }
 
 
-    std::vector<int> host_row_partition_numbers(table_to_hash->get_column_length());
+    std::vector<int> host_row_partition_numbers(table_to_hash->num_rows());
 
     cudaMemcpy(host_row_partition_numbers.data(), 
                row_partition_numbers.data().get(),
-               table_to_hash->get_column_length() * sizeof(int),
+               table_to_hash->num_rows() * sizeof(int),
                cudaMemcpyDeviceToHost);
 
     if(print)
@@ -231,7 +231,7 @@ struct HashPartitionTest : public GdfTest
       // The end of the last partition is the end of the table
       else
       {
-        partition_stop = table_to_hash->get_column_length();
+        partition_stop = table_to_hash->num_rows();
       }
 
       // Everything in the current partition should have the same partition

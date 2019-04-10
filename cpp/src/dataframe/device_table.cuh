@@ -94,9 +94,9 @@ public:
   {
     assert(num_cols > 0);
     assert(nullptr != host_columns[0]);
-    column_length = host_columns[0]->size;
+    _num_rows = host_columns[0]->size;
 
-    if(column_length > 0)
+    if(_num_rows > 0)
     {
       assert(nullptr != host_columns[0]->data);
     }
@@ -113,8 +113,8 @@ public:
     {
       gdf_column * const current_column = host_columns[i];
       assert(nullptr != current_column);
-      assert(column_length == current_column->size);
-      if(column_length > 0)
+      assert(_num_rows == current_column->size);
+      if(_num_rows > 0)
       {
         assert(nullptr != current_column->data);
       }
@@ -151,7 +151,7 @@ public:
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
-    const size_type mask_size = gdf_valid_allocation_size(column_length);
+    const size_type mask_size = gdf_valid_allocation_size(_num_rows);
     device_row_valid.resize(mask_size);
 
     // If a row contains a single NULL value, then the entire row is considered
@@ -170,21 +170,20 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @brief  Updates the length of the gdf_columns in the table
+   * @brief  Updates the size of the gdf_columns in the table
    * 
    * @param new_length The new length
    */
   /* ----------------------------------------------------------------------------*/
-  void set_column_length(const size_type new_length)
+  void set_num_rows(const size_type new_length)
   {
-    column_length = new_length;
+    _num_rows = new_length;
 
     for(size_type i = 0; i < num_columns; ++i)
     {
-      host_columns[i]->size = this->column_length;
+      host_columns[i]->size = this->_num_rows;
     }
   }
-
 
   size_type get_num_columns() const
   {
@@ -205,9 +204,9 @@ public:
   }
 
   __host__ __device__
-  size_type get_column_length() const
+  size_type num_rows() const
   {
-    return column_length;
+    return _num_rows;
   }
 
   __device__ bool is_row_valid(size_type row_index) const
@@ -248,7 +247,7 @@ public:
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  gdf_error get_packed_row_values(size_type row_index, void * row_byte_buffer) const
+  gdf_error pack_row(size_type row_index, void * row_byte_buffer) const
   {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
@@ -489,7 +488,7 @@ public:
 private:
 
   const size_type num_columns; /** The number of columns in the table */
-  size_type column_length{0};     /** The number of rows in the table */
+  size_type _num_rows{0};     /** The number of rows in the table */
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
