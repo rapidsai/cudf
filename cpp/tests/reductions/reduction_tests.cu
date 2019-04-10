@@ -213,3 +213,34 @@ TEST_F(ReductionDtypeTest, different_precision)
         (v, int64_t(expected_value), false, GDF_REDUCTION_SUM, GDF_INT64);
 
 }
+
+// test case for empty input cases
+TEST(ReductionErrorTest, empty_column)
+{
+    using T = int32_t;
+    auto statement = [](const gdf_column* col) {
+        cudf::test::scalar_wrapper<T> result =
+            cudf::reduction(col, GDF_REDUCTION_SUM, GDF_INT64);
+        EXPECT_EQ( result.is_valid(), false );
+    };
+
+    // test input column is nullptr, reduction throws an error if input is nullptr
+    EXPECT_ANY_THROW(statement(nullptr));
+
+    // test if the size of input column is zero
+    // expect result.is_valid() is false
+    cudf::test::column_wrapper<T> const col0(0);
+    CUDF_EXPECT_NO_THROW(statement(col0.get()));
+
+    // test if null count is equal or greater than size of input 
+    // expect result.is_valid() is false
+    int col_size = 5;
+    std::vector<T> col_data(col_size);
+    std::vector<gdf_valid_type> valids(gdf_valid_allocation_size(col_size));
+    std::fill(valids.begin(), valids.end(), 0);
+    
+    cudf::test::column_wrapper<T> col_empty(col_data, valids);
+    CUDF_EXPECT_NO_THROW(statement(col_empty.get()));
+}
+
+
