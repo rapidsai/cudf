@@ -127,13 +127,13 @@ template<typename map_type,
          typename size_type,
          typename aggregation_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
-                                       const size_type map_size,
+                                       const size_t map_size,
                                        device_table<size_type> & groupby_output_table,
                                        device_table<size_type> const & groupby_input_table,
                                        aggregation_type * const __restrict__ aggregation_out_column,
                                        size_type * const global_write_index)
 {
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  size_t i = threadIdx.x + blockIdx.x * blockDim.x;
 
   constexpr typename map_type::key_type unused_key{map_type::get_unused_key()};
 
