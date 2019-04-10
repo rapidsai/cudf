@@ -25,6 +25,7 @@
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 #include "full_join.cuh"
+#include <hash/helper_functions.cuh>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -37,7 +38,6 @@
 //   3) replace input iterators & input counts with arrow::Datum
 //   3) replace output iterators & output counts with arrow::ArrayData
 
-constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
@@ -176,30 +176,6 @@ gdf_error estimate_join_output_size(device_table<size_type> const & build_table,
   return GDF_SUCCESS;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Computes the number of entries required in a hash table to satisfy
- * inserting a specified number of keys to achieve the specified hash table
- * occupancy.
- *
- * @param num_keys_to_insert The number of keys that will be inserted
- * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
- * 50% occupancy
- * @return size_t The size of the hash table that will satisfy the desired
- * occupancy for the specified number of insertions
- *---------------------------------------------------------------------------**/
-inline size_t compute_hash_table_size(
-    gdf_size_type num_keys_to_insert,
-    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
-  assert(desired_occupancy != 0);
-  assert(desired_occupancy <= 100);
-  double const grow_factor{100.0 / desired_occupancy};
-
-  // Calculate size of hash map based on the desired occupancy
-  size_t hash_table_size{
-      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
-
-  return hash_table_size;
-}
 
 /* --------------------------------------------------------------------------*/
 /**
