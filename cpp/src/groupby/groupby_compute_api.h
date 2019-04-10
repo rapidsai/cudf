@@ -17,25 +17,20 @@
 #ifndef GROUPBY_COMPUTE_API_H
 #define GROUPBY_COMPUTE_API_H
 
-#include <cuda_runtime.h>
-#include <limits>
-#include <memory>
-#include <thrust/device_vector.h>
-#include <thrust/gather.h>
-#include <thrust/copy.h>
 
 #include "hash/managed.cuh"
 #include "hash_groupby_kernels.cuh"
 #include "dataframe/device_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
 #include "types.hpp"
+#include <hash/helper_functions.cuh>
 
-
-
-
-// The occupancy of the hash table determines it's capacity. A value of 50 implies
-// 50% occupancy, i.e., hash_table_size == 2 * input_size
-constexpr unsigned int DEFAULT_HASH_TABLE_OCCUPANCY{50};
+#include <cuda_runtime.h>
+#include <limits>
+#include <memory>
+#include <thrust/device_vector.h>
+#include <thrust/gather.h>
+#include <thrust/copy.h>
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
@@ -160,8 +155,7 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
                                             legacy_allocator<thrust::pair<size_type, aggregation_type> > >;
 
   // The hash table occupancy and the input size determines the size of the hash table
-  // e.g., for a 50% occupancy, the size of the hash table is twice that of the input
-  const size_type hash_table_size = static_cast<size_type>((static_cast<uint64_t>(input_num_rows) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY));
+  const size_t hash_table_size{ compute_hash_table_size(input_num_rows) };
   
   // Initialize the hash table with the aggregation operation functor's identity value
   std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
