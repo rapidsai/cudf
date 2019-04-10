@@ -20,6 +20,31 @@
 #include "cudf.h"
 
 namespace cudf {
+
+/**
+ * @brief These enums indicate the supported reduction operations that can be
+ * performed on a column
+ */
+enum class ReductionOp {
+  Sum = 0,        ///< Computes the sum of all values in the column
+  Min,            ///< Computes the minimum of all values in the column
+  Max,            ///< Computes the maximum of all values in the column
+  Product,        ///< Computes the multiplicative product of all values in the column
+  SumOfSquares,   ///< Computes the sum of squares of the values in the column
+};
+
+/**
+ * @brief These enums indicate the supported operations of prefix scan that can be
+ * performed on a column
+ */
+enum class ScanOp {
+  Sum = 0,        ///< Computes the prefix scan of sum operation of all values for the column
+  Min,            ///< Computes the prefix scan of maximum operation of all values for the column
+  Max,            ///< Computes the prefix scan of maximum operation of all values for the column
+  Product,        ///< Computes the prefix scan of multiplicative product operation of all values for the column
+};
+
+
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column
  * This function does not detect overflows in reductions.
@@ -42,7 +67,7 @@ namespace cudf {
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
+gdf_scalar reduction(const gdf_column *col, cudf::ReductionOp op,
                         gdf_dtype output_dtype);
 
 /** --------------------------------------------------------------------------*
@@ -57,7 +82,7 @@ gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
  * an exclusive scan if false.
  * ----------------------------------------------------------------------------**/
 void scan(const gdf_column *input, gdf_column *output,
-                   gdf_scan_op op, bool inclusive);
+                   cudf::ScanOp op, bool inclusive);
 
 }  // namespace cudf
 

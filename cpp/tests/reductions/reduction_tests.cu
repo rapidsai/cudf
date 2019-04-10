@@ -48,7 +48,7 @@ struct ReductionTest : public GdfTest
 
     void reduction_test(std::vector<int>& int_values,
         T expected_value, bool succeeded_condition,
-        gdf_reduction_op op)
+        cudf::ReductionOp op)
     {
         gdf_size_type col_size = int_values.size();
         std::vector<T> input_values(col_size);
@@ -95,9 +95,9 @@ TYPED_TEST(ReductionTest, MinMax)
     bool result_error(true);
 
     this->reduction_test(v, TypeParam(expected_min_result),
-        result_error, GDF_REDUCTION_MIN);
+        result_error, cudf::ReductionOp::Min);
     this->reduction_test(v, TypeParam(expected_max_result),
-        result_error, GDF_REDUCTION_MAX);
+        result_error, cudf::ReductionOp::Max);
 }
 
 TYPED_TEST(ReductionTest, Product)
@@ -107,7 +107,7 @@ TYPED_TEST(ReductionTest, Product)
         [](int acc, int i) { return acc * i; });
 
     this->reduction_test(v, TypeParam(expected_value),
-        this->ret_non_arithmetic, GDF_REDUCTION_PRODUCT);
+        this->ret_non_arithmetic, cudf::ReductionOp::Product);
 }
 
 TYPED_TEST(ReductionTest, Sum)
@@ -116,7 +116,7 @@ TYPED_TEST(ReductionTest, Sum)
     int expected_value = std::accumulate(v.begin(), v.end(), 0);
 
     this->reduction_test(v, TypeParam(expected_value),
-        this->ret_non_arithmetic, GDF_REDUCTION_SUM);
+        this->ret_non_arithmetic, cudf::ReductionOp::Sum);
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
@@ -126,7 +126,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
         [](int acc, int i) { return acc + i * i; });
 
     this->reduction_test(v, TypeParam(expected_value),
-        this->ret_non_arithmetic, GDF_REDUCTION_SUMOFSQUARES);
+        this->ret_non_arithmetic, cudf::ReductionOp::SumOfSquares);
 }
 
 // ----------------------------------------------------------------------------
@@ -136,7 +136,7 @@ struct ReductionDtypeTest : public GdfTest
     template <typename T_in, typename T_out>
     void reduction_test(std::vector<int>& int_values,
         T_out expected_value, bool succeeded_condition,
-        gdf_reduction_op op, gdf_dtype out_dtype,
+        cudf::ReductionOp op, gdf_dtype out_dtype,
         bool expected_overflow = false)
     {
         gdf_size_type col_size = int_values.size();
@@ -178,39 +178,39 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // over flow
     this->reduction_test<int8_t, int8_t>
-        (v, int8_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT8,
+        (v, int8_t(expected_value), true, cudf::ReductionOp::Sum, GDF_INT8,
             expected_overflow);
 
     this->reduction_test<int8_t, int64_t>
-        (v, int64_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT64);
+        (v, int64_t(expected_value), true, cudf::ReductionOp::Sum, GDF_INT64);
 
     this->reduction_test<int8_t, double>
-        (v, double(expected_value), true, GDF_REDUCTION_SUM, GDF_FLOAT64);
+        (v, double(expected_value), true, cudf::ReductionOp::Sum, GDF_FLOAT64);
 
     // down cast (over flow)
     this->reduction_test<double, int8_t>
-        (v, int8_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT8,
+        (v, int8_t(expected_value), true, cudf::ReductionOp::Sum, GDF_INT8,
             expected_overflow);
 
     // down cast (no over flow)
     this->reduction_test<double, int16_t>
-        (v, int16_t(expected_value), true, GDF_REDUCTION_SUM, GDF_INT16);
+        (v, int16_t(expected_value), true, cudf::ReductionOp::Sum, GDF_INT16);
 
     // not supported case:
     // any of wrapper classes is not convertible
     this->reduction_test<cudf::date64, cudf::timestamp>
-        (v, cudf::timestamp(expected_value), false, GDF_REDUCTION_SUM, GDF_TIMESTAMP);
+        (v, cudf::timestamp(expected_value), false, cudf::ReductionOp::Sum, GDF_TIMESTAMP);
 
     this->reduction_test<cudf::date32, cudf::category>
-        (v, cudf::category(expected_value), false, GDF_REDUCTION_SUM, GDF_CATEGORY);
+        (v, cudf::category(expected_value), false, cudf::ReductionOp::Sum, GDF_CATEGORY);
 
     this->reduction_test<cudf::date32, cudf::date64>
-        (v, cudf::date64(expected_value), false, GDF_REDUCTION_SUM, GDF_DATE64);
+        (v, cudf::date64(expected_value), false, cudf::ReductionOp::Sum, GDF_DATE64);
 
     // Though the underlying type of cudf::date64 is int64_t,
     // they are not convertible types.
     this->reduction_test<cudf::date64, int64_t>
-        (v, int64_t(expected_value), false, GDF_REDUCTION_SUM, GDF_INT64);
+        (v, int64_t(expected_value), false, cudf::ReductionOp::Sum, GDF_INT64);
 
 }
 
@@ -220,7 +220,7 @@ TEST(ReductionErrorTest, empty_column)
     using T = int32_t;
     auto statement = [](const gdf_column* col) {
         cudf::test::scalar_wrapper<T> result =
-            cudf::reduction(col, GDF_REDUCTION_SUM, GDF_INT64);
+            cudf::reduction(col, cudf::ReductionOp::Sum, GDF_INT64);
         EXPECT_EQ( result.is_valid(), false );
     };
 

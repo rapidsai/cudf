@@ -133,19 +133,6 @@ cdef extern from "cudf.h" nogil:
       GDF_COUNT_DISTINCT,
       N_GDF_AGG_OPS,
 
-    ctypedef enum gdf_reduction_op:
-      GDF_REDUCTION_SUM = 0,
-      GDF_REDUCTION_MIN,
-      GDF_REDUCTION_MAX,
-      GDF_REDUCTION_PRODUCT,
-      GDF_REDUCTION_SUMOFSQUARES,
-
-    ctypedef enum gdf_scan_op:
-      GDF_SCAN_SUM = 0,
-      GDF_SCAN_MIN,
-      GDF_SCAN_MAX,
-      GDF_SCAN_PRODUCT,
-
     ctypedef enum gdf_color:
       GDF_GREEN = 0,
       GDF_BLUE,

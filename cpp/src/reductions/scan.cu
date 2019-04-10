@@ -8,7 +8,7 @@
 
 #include "utilities/device_atomics.cuh"
 #include <cub/device/device_scan.cuh>
-
+#include <reduction.hpp>
 
 namespace { //anonymous
 
@@ -170,25 +170,25 @@ namespace { //anonymous
 namespace cudf{
 
 void scan(const gdf_column *input, gdf_column *output,
-    gdf_scan_op op, bool inclusive)
+    cudf::ScanOp op, bool inclusive)
 {
     CUDF_EXPECTS(input  != nullptr, "Input column is null");
     CUDF_EXPECTS(output != nullptr, "Output column is null");
 
     switch(op){
-    case GDF_SCAN_SUM:
+    case cudf::ScanOp::Sum:
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive);
         return;
-    case GDF_SCAN_MIN:
+    case cudf::ScanOp::Min:
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive);
         return;
-    case GDF_SCAN_MAX:
+    case cudf::ScanOp::Max:
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive);
         return;
-    case GDF_SCAN_PRODUCT:
+    case cudf::ScanOp::Product:
         cudf::type_dispatcher(input->dtype,
             PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive);
         return;

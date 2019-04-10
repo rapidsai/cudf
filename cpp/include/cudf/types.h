@@ -177,29 +177,6 @@ typedef enum {
   N_GDF_AGG_OPS,      ///< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE
 } gdf_agg_op;
 
-/**
- * @brief These enums indicate the supported reduction operations that can be
- * performed on a column
- */
-typedef enum {
-  GDF_REDUCTION_SUM = 0,        ///< Computes the sum of all values in the column
-  GDF_REDUCTION_MIN,            ///< Computes the minimum of all values in the column
-  GDF_REDUCTION_MAX,            ///< Computes the maximum of all values in the column
-  GDF_REDUCTION_PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  GDF_REDUCTION_SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-} gdf_reduction_op;
-
-/**
- * @brief These enums indicate the supported operations of prefix scan that can be
- * performed on a column
- */
-typedef enum {
-  GDF_SCAN_SUM = 0,             ///< Computes the prefix scan of sum operation of all values for the column
-  GDF_SCAN_MIN,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_MAX,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_PRODUCT,             ///< Computes the prefix scan of multiplicative product operation of all values for the column
-} gdf_scan_op;
-
 /** 
  * @brief  Colors for use with NVTX ranges.
  *

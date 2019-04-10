@@ -38,7 +38,7 @@ struct ScanTest : public GdfTest
 {
     void scan_test(std::vector<int> const & int_values,
         std::vector<int> const & exact_values,
-        gdf_scan_op op, bool inclusive)
+        cudf::ScanOp op, bool inclusive)
     {
         bool do_print = false;
 
@@ -112,7 +112,7 @@ TYPED_TEST(ScanTest, Min)
         }
     );
 
-    this->scan_test(v, exact, GDF_SCAN_MIN, true);
+    this->scan_test(v, exact, cudf::ScanOp::Min, true);
 }
 
 TYPED_TEST(ScanTest, Max)
@@ -128,7 +128,7 @@ TYPED_TEST(ScanTest, Max)
         }
     );
 
-    this->scan_test(v, exact, GDF_SCAN_MAX, true);
+    this->scan_test(v, exact, cudf::ScanOp::Max, true);
 }
 
 
@@ -141,7 +141,7 @@ TYPED_TEST(ScanTest, Product)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc *= i; exact.push_back(acc); });
 
-    this->scan_test(v, exact, GDF_SCAN_PRODUCT, true);
+    this->scan_test(v, exact, cudf::ScanOp::Product, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
@@ -153,7 +153,7 @@ TYPED_TEST(ScanTest, Sum)
     std::for_each(v.begin(), v.end(),
         [&acc, &exact](int i){ acc += i; exact.push_back(acc); });
 
-    this->scan_test(v, exact, GDF_SCAN_SUM, true);
+    this->scan_test(v, exact, cudf::ScanOp::Sum, true);
 }
 
 
