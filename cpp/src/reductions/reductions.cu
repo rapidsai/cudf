@@ -10,6 +10,7 @@
 #include <limits>
 #include <type_traits>
 
+#include <reduction.hpp>
 #include "reduction_operators.cuh"
 
 namespace { // anonymous namespace

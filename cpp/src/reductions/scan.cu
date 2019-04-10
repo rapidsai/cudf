@@ -8,7 +8,7 @@
 
 #include "utilities/device_atomics.cuh"
 #include <cub/device/device_scan.cuh>
-
+#include <reduction.hpp>
 
 namespace { //anonymous
 
