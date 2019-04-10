@@ -1461,8 +1461,8 @@ def test_reductions(pdf, gdf, accessor, func):
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1494,8 +1494,8 @@ def test_bitwise_binops_df(pdf, gdf, binop):
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1519,6 +1519,17 @@ def test_binops_series(pdf, gdf, binop):
 def test_bitwise_binops_series(pdf, gdf, binop):
     d = binop(pdf.x, pdf.y + 1)
     g = binop(gdf.x, gdf.y + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('unaryop', [
+    operator.neg,
+    operator.inv,
+    operator.abs,
+])
+def test_unaryops_df(pdf, gdf, unaryop):
+    d = unaryop(pdf - 5)
+    g = unaryop(gdf - 5)
     assert_eq(d, g)
 
 
@@ -2039,3 +2050,14 @@ def test_series_to_gpu_array(nan_value):
     s = Series([0, 1, None, 3])
     np.testing.assert_array_equal(s.to_array(nan_value),
                                   s.to_gpu_array(nan_value).copy_to_host())
+
+
+def test_get_numeric_data():
+    pdf = pd.DataFrame({
+        'x': [1, 2, 3],
+        'y': [1., 2., 3.],
+        'z': ['a', 'b', 'c']
+    })
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())

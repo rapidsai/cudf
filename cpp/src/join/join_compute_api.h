@@ -24,6 +24,7 @@
 #include "dataframe/cudf_table.cuh"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
+#include "full_join.cuh"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -39,158 +40,6 @@
 constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Creates a vector of indices that do not appear in index_ptr
-*
-* @param index_ptr Array of indices
-* @param max_index_value The maximum value an index can have in index_ptr
-* @param index_size Number of left and right indices
-* @tparam index_type The type of data associated with index_ptr
-* @tparam size_type The data type used for size calculations
-*
-* @returns  thrust::device_vector containing the indices that are missing from index_ptr
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
-thrust::device_vector<index_type>
-create_missing_indices(
-        index_type const * const index_ptr,
-        const size_type max_index_value,
-		const size_type index_size) {
-	//Assume all the indices in invalid_index_map are invalid
-	thrust::device_vector<index_type> invalid_index_map(max_index_value, 1);
-	//Vector allocated for unmatched result
-	thrust::device_vector<index_type> unmatched_indices(max_index_value);
-	//lambda to check for index validity since left joins can create invalid indices
-    auto bounds_checker =
-    [max_index_value] __device__(gdf_index_type index) {
-        return ((index >= 0) && (index < max_index_value));
-    };
-
-	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
-	//Thus specifying that those locations are valid
-	thrust::scatter_if(
-			thrust::device,
-			thrust::make_constant_iterator(0),
-			thrust::make_constant_iterator(0) + index_size,
-			index_ptr,//Index locations
-			index_ptr,//Stencil - Check if index location is valid
-			invalid_index_map.begin(),//Output indices
-			bounds_checker);//Stencil Predicate
-	CHECK_STREAM(0);
-	size_type begin_counter = static_cast<size_type>(0);
-	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
-	//Create list of indices that have been marked as invalid
-	size_type compacted_size = thrust::copy_if(
-			thrust::device,
-			thrust::make_counting_iterator(begin_counter),
-			thrust::make_counting_iterator(end_counter),
-			invalid_index_map.begin(),
-			unmatched_indices.begin(),
-			thrust::identity<index_type>()) -
-		unmatched_indices.begin();
-	CHECK_STREAM(0);
-	unmatched_indices.resize(compacted_size);
-	return unmatched_indices;
-}
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Expands a buffer's size
-*
-* @param buffer Address of the buffer to expand
-* @param buffer_capacity Memory allocated for buffer
-* @param buffer_size Number of elements in the buffer
-* @param expand_size Amount of extra elements to be pushed into the buffer
-* @tparam data_type The type of data associated with the buffer
-* @tparam size_type The data type used for size calculations
-*
-* @returns  cudaSuccess upon successful completion of buffer expansion. Otherwise returns
-* the appropriate CUDA error code
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename data_type, typename size_type>
-gdf_error expand_buffer(
-        data_type ** buffer,
-        size_type * const buffer_capacity,
-        const size_type buffer_size,
-        const size_type expand_size) {
-    size_type requested_size = buffer_size + expand_size;
-    //No need to proceed if the buffer can contain requested additional elements
-    if (*buffer_capacity >= requested_size) {
-        return GDF_SUCCESS;
-    }
-    data_type * new_buffer{nullptr};
-    data_type * old_buffer = *buffer;
-    RMM_TRY( RMM_ALLOC((void**)&new_buffer, requested_size*sizeof(data_type), 0) );
-    CUDA_TRY( cudaMemcpy(new_buffer, old_buffer, buffer_size*sizeof(data_type), cudaMemcpyDeviceToDevice) );
-    RMM_TRY( RMM_FREE(old_buffer, 0) );
-    *buffer = new_buffer;
-    *buffer_capacity = requested_size;
-
-    return GDF_SUCCESS;
-}
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Adds indices that are missing in r_index_ptr at the ends and places
-* JoinNoneValue to the corresponding l_index_ptr.
-*
-* @param l_index_ptr Address of the left indices
-* @param r_index_ptr Address of the right indices
-* @param index_capacity Amount of memory allocated for left and right indices
-* @param index_size Number of left and right indices
-* @param max_index_value The maximum value an index can have in r_index_ptr
-* @tparam index_type The type of data associated with index_ptr
-* @tparam size_type The data type used for size calculations
-*
-* @returns  cudaSuccess upon successful completion of append call. Otherwise returns
-* the appropriate CUDA error code
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
-gdf_error append_full_join_indices(
-        index_type ** l_index_ptr,
-        index_type ** r_index_ptr,
-        size_type * const index_capacity,
-        size_type * const index_size,
-        const size_type max_index_value) {
-    gdf_error err;
-    //Get array of indices that do not appear in r_index_ptr
-    thrust::device_vector<index_type> unmatched_indices =
-        create_missing_indices(
-                *r_index_ptr, max_index_value, *index_size);
-    CUDA_CHECK_LAST()
-
-    //Expand l_index_ptr and r_index_ptr if necessary
-    size_type mismatch_index_size = unmatched_indices.size();
-    size_type l_index_capacity = *index_capacity;
-    size_type r_index_capacity = *index_capacity;
-    err = expand_buffer(l_index_ptr, &l_index_capacity, *index_size, mismatch_index_size);
-    if (GDF_SUCCESS != err) return err;
-    err = expand_buffer(r_index_ptr, &r_index_capacity, *index_size, mismatch_index_size);
-    if (GDF_SUCCESS != err) return err;
-
-    //Copy JoinNoneValue to l_index_ptr to denote that a match does not exist on the left
-    thrust::fill(
-            thrust::device,
-            *l_index_ptr + *index_size,
-            *l_index_ptr + *index_size + mismatch_index_size,
-            JoinNoneValue);
-
-    //Copy unmatched indices to the r_index_ptr
-    thrust::copy(thrust::device,
-            unmatched_indices.begin(),
-            unmatched_indices.begin() + mismatch_index_size,
-            *r_index_ptr + *index_size);
-    *index_capacity = l_index_capacity;
-    *index_size = *index_size + mismatch_index_size;
-
-    CUDA_CHECK_LAST()
-	return GDF_SUCCESS;
-}
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -423,7 +272,6 @@ gdf_error compute_hash_join(
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
-  // but moderngpu only provides cudaDeviceProp
   // (although should be possible once we move to Arrow)
   hash_table->prefetch(0);
 
@@ -538,11 +386,13 @@ gdf_error compute_hash_join(
   // free memory used for the counters
   RMM_TRY( RMM_FREE(d_global_write_index, 0) );
 
+  cudaStream_t stream = 0;
   if (join_type == JoinType::FULL_JOIN) {
       append_full_join_indices(
               &output_l_ptr, &output_r_ptr,
-              &estimated_join_output_size,
-              &h_actual_found, build_table_num_rows);
+              estimated_join_output_size,
+              h_actual_found, build_table_num_rows,
+              stream);
   }
 
   // If the estimated join output size was larger than the actual output size,
