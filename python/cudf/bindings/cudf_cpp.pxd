@@ -629,4 +629,9 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
-    
+
+    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color )
+
+    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color )
+
+    cdef gdf_error gdf_nvtx_range_pop()
