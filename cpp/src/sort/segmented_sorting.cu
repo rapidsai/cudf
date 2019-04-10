@@ -8,33 +8,6 @@
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 
-namespace cub
-{
-    
-template <> struct NumericTraits<cudf::date32> :           
-    BaseTraits<SIGNED_INTEGER, true, false, 
-        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date32>>,
-        cudf::detail::unwrapped_type_t<cudf::date32>> {};
-template <> struct NumericTraits<cudf::timestamp> :        
-    BaseTraits<SIGNED_INTEGER, true, false, 
-        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::timestamp>>,
-        cudf::detail::unwrapped_type_t<cudf::timestamp>> {};
-template <> struct NumericTraits<cudf::date64> :           
-    BaseTraits<SIGNED_INTEGER, true, false, 
-        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date64>>,
-        cudf::detail::unwrapped_type_t<cudf::date64>> {};
-template <> struct NumericTraits<cudf::category> :         
-    BaseTraits<SIGNED_INTEGER, true, false, 
-        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::category>>,
-        cudf::detail::unwrapped_type_t<cudf::category>> {};
-template <> struct NumericTraits<cudf::nvstring_category> :
-    BaseTraits<SIGNED_INTEGER, true, false, 
-        std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
-        cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
-
-} // cub
-
-
 
 struct SegmentedRadixSortPlan{
     const gdf_size_type num_items;

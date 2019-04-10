@@ -3,6 +3,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/wrapper_types.hpp"
 
 #include <cub/device/device_radix_sort.cuh>
 
@@ -169,16 +170,7 @@ template <typename Tv>
 struct gdf_radixsort_functor
 {
     template <typename Tk>
-    typename std::enable_if_t<!std::is_arithmetic<Tk>::value, gdf_error>
-    operator()( gdf_radixsort_plan_type *hdl,
-                gdf_column *keycol,
-                gdf_column *valcol)
-    {
-        return GDF_UNSUPPORTED_DTYPE;
-    }
-
-    template <typename Tk>
-    typename std::enable_if_t<std::is_arithmetic<Tk>::value, gdf_error>
+    gdf_error
     operator()( gdf_radixsort_plan_type *hdl,
                 gdf_column *keycol,
                 gdf_column *valcol)

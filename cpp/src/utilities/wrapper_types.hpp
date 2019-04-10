@@ -4,6 +4,8 @@
 #include <cudf/types.h>
 #include "cudf_utils.h"
 
+#include <cub/util_type.cuh>
+
 #include <iosfwd>
 #include <type_traits>
 #include <limits>
@@ -388,5 +390,35 @@ struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
 };
 
 } // std
+
+namespace cub
+{
+
+template <> struct NumericTraits<cudf::date32> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date32>>,
+    cudf::detail::unwrapped_type_t<cudf::date32>> {};
+
+template <> struct NumericTraits<cudf::timestamp> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::timestamp>>,
+    cudf::detail::unwrapped_type_t<cudf::timestamp>> {};
+
+template <> struct NumericTraits<cudf::date64> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date64>>,
+    cudf::detail::unwrapped_type_t<cudf::date64>> {};
+
+template <> struct NumericTraits<cudf::category> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::category>>,
+    cudf::detail::unwrapped_type_t<cudf::category>> {};
+
+template <> struct NumericTraits<cudf::nvstring_category> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
+    cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
+
+} // cub
 
 #endif
