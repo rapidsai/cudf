@@ -331,7 +331,7 @@ def test_dataframe_pop():
     empty_gdf = DataFrame.from_pandas(empty_pdf)
     pb = empty_pdf.pop('b')
     gb = empty_gdf.pop('b')
-    assert assert len(pb) == len(gb)
+    assert len(pb) == len(gb)
     assert empty_pdf.empty and empty_gdf.empty
 
 
