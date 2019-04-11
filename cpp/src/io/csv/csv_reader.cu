@@ -64,7 +64,6 @@
 
 using std::vector;
 using std::string;
-using std::unique_ptr;
 
 /**---------------------------------------------------------------------------*
  * @brief Struct used for internal parsing state
