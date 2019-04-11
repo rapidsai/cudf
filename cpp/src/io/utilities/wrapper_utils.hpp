@@ -147,38 +147,52 @@ struct rmm_deleter {
 template <typename T>
 using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
-// DOXY
+/**
+ * @brief A helper class that ownes a resizable device memory buffer.
+ *
+ * Copy construction and copy assignment are disabled to prevent
+ * accidental copies.
+ **/
 template <typename T>
-class rmm_device_buffer {
-	T* d_data = nullptr;
+class device_buffer {
+  T* d_data_ = nullptr;
+  size_t count_ = 0;
+  const cudaStream_t stream_ = 0;
 
 public:
-	rmm_device_buffer() noexcept = default;
-	rmm_device_buffer(size_t cnt) {
-		const auto error = RMM_ALLOC(&d_data, cnt*sizeof(T), 0);
-		if(error != RMM_SUCCESS) {
-			cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
-		}
-	}
+  device_buffer() noexcept = default;
+  device_buffer(size_t cnt, cudaStream_t stream = 0):
+    stream_(stream), count_(cnt){
+    resize(count_);
+  }
 
-	T* data() const noexcept {return d_data;}
+  T* data() const noexcept {return d_data_;}
+  size_t size() const noexcept {return count_;}
 
-	void resize(size_t cnt) {
-		const auto error = RMM_REALLOC(&d_data, cnt*sizeof(T), 0);
-		if(error != RMM_SUCCESS) {
-			cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
-		}
-	}
-	// TODO: do we want to enable copy assignment?
-	rmm_device_buffer& operator=(rmm_device_buffer& ) = delete;
-	rmm_device_buffer& operator=(rmm_device_buffer&& rh) {
-		d_data = rh.d_data; 
-		rh.d_data = nullptr;
-		return *this;
-	}
+  void resize(size_t cnt) {
+    count_ = cnt;
+    const auto error = RMM_REALLOC(&d_data_, count_*sizeof(T), stream_);
+    if(error != RMM_SUCCESS) {
+      cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
+    }
+  }
 
-	~rmm_device_buffer() {
-		RMM_FREE(d_data, 0);
-	}
+  device_buffer(device_buffer& ) = delete;
+  device_buffer(device_buffer&& rh) noexcept {
+    d_data_ = rh.d_data_; 
+    count_ = rh.count_;
+  }
 
+  device_buffer& operator=(device_buffer& ) = delete;
+  device_buffer& operator=(device_buffer&& rh) noexcept {
+    RMM_FREE(d_data_, stream_);
+    d_data_ = rh.d_data_; 
+    count_ = rh.count_;
+    rh.d_data_ = nullptr;
+    return *this;
+  }
+
+  ~device_buffer() {
+    RMM_FREE(d_data_, stream_);
+  }
 };

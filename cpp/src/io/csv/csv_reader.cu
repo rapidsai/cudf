@@ -70,8 +70,8 @@ using std::unique_ptr;
  * @brief Struct used for internal parsing state
  *---------------------------------------------------------------------------**/
 typedef struct raw_csv_ {
-    rmm_device_buffer<char> data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
-    rmm_device_buffer<uint64_t> recStart;	// on-device: Starting position of the records.
+    device_buffer<char> 	data;		// on-device: the raw unprocessed CSV data - loaded as a large char * array
+    device_buffer<uint64_t> recStart;	// on-device: Starting position of the records.
 
     ParseOptions			opts;			// options to control parsing behavior
 
@@ -84,7 +84,7 @@ typedef struct raw_csv_ {
     vector<gdf_dtype>		dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
     vector<string>			col_names;		// host: array of column names
     std::unique_ptr<bool[]>	h_parseCol;		// host   : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
-    rmm_device_buffer<bool>	d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
+    device_buffer<bool>		d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
 
     long        byte_range_offset;  // offset into the data to start parsing
     long        byte_range_size;    // length of the data of interest to parse
@@ -333,7 +333,7 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 	const bool last_line_terminated = (h_data[h_size - 1] == raw_csv->opts.terminator);
 	// If the last line is not terminated, allocate space for the EOF entry (added later)
 	const gdf_size_type record_start_count = raw_csv->num_records + (last_line_terminated ? 0 : 1);
-	raw_csv->recStart = rmm_device_buffer<uint64_t>(record_start_count); 
+	raw_csv->recStart = device_buffer<uint64_t>(record_start_count); 
 
 	auto* find_result_ptr = raw_csv->recStart.data();
 	if (raw_csv->byte_range_offset == 0) {
@@ -611,7 +611,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
 		raw_csv.h_parseCol = std::make_unique<bool[]>(h_num_cols);
-		raw_csv.d_parseCol = rmm_device_buffer<bool>(h_num_cols);
+		raw_csv.d_parseCol = device_buffer<bool>(h_num_cols);
 		for (int i = 0; i<h_num_cols; i++)
 			raw_csv.h_parseCol[i]=true;
 		
@@ -660,7 +660,7 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else {
 		raw_csv.h_parseCol = std::make_unique<bool[]>(args->num_cols);
-		raw_csv.d_parseCol = rmm_device_buffer<bool>(args->num_cols);
+		raw_csv.d_parseCol = device_buffer<bool>(args->num_cols);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
 			raw_csv.h_parseCol[i]=true;
@@ -720,7 +720,7 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 
 		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-		rmm_device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
+		device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
 		CUDA_TRY( cudaMemset(d_ColumnData.data(),	0, 	(sizeof(column_data_t) * (raw_csv.num_active_cols)) ) ) ;
 
 		launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
@@ -1050,7 +1050,7 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                       cudaMemcpyDefault));
 
   // Upload the raw data that is within the rows of interest
-  raw_csv->data = rmm_device_buffer<char>(raw_csv->num_bytes);
+  raw_csv->data = device_buffer<char>(raw_csv->num_bytes);
   CUDA_TRY(cudaMemcpy(raw_csv->data.data(), h_uncomp_data + start_offset,
                       raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
