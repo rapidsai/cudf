@@ -148,7 +148,7 @@ template <typename T>
 using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
 /**
- * @brief A helper class that ownes a resizable device memory buffer.
+ * @brief A helper class that owns a resizable device memory buffer.
  *
  * Copy construction and copy assignment are disabled to prevent
  * accidental copies.
