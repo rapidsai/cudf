@@ -212,17 +212,17 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
       if (status != GDF_SUCCESS)
         return status;
 
-      status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
+      status = gdf_order_by(groupby_output_table.columns(),             //input columns
                        nullptr,
-                       groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                       groupby_output_table.num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
                        &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                        0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
       if (status != GDF_SUCCESS)
         return status;
 
       // Reorder table according to indices from order_by
-      cudf::table result_table(groupby_output_table.get_columns(),
-                               groupby_output_table.get_num_columns());
+      cudf::table result_table(groupby_output_table.columns(),
+                               groupby_output_table.num_columns());
       cudf::detail::gather(&result_table, sorted_indices.data().get(), &result_table);
 
       rmm::device_vector<aggregation_type> temporary_aggregation_buffer(*out_size);

@@ -522,10 +522,10 @@ gdf_error hash_partition_device_table(device_table<size_type> const & input_tabl
   // Creates the partitioned output table by scattering the rows of
   // the input table to rows of the output table based on each rows
   // output location
-  cudf::table source_table{input_table.get_columns(),
-                           input_table.get_num_columns()};
-  cudf::table destination_table{partitioned_output.get_columns(),
-                                input_table.get_num_columns()};
+  cudf::table source_table{input_table.columns(),
+                           input_table.num_columns()};
+  cudf::table destination_table{partitioned_output.columns(),
+                                input_table.num_columns()};
 
   auto gdf_status = cudf::detail::scatter(&source_table, row_output_locations,
                                           &destination_table);

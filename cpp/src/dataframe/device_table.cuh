@@ -42,7 +42,7 @@ namespace {
 template <typename size_type>
 struct row_masker {
   row_masker(gdf_valid_type** column_masks, const size_type num_cols)
-      : column_valid_masks{column_masks}, num_columns(num_cols) {}
+      : column_valid_masks{column_masks}, _num_columns(num_cols) {}
 
   /**
    * @brief Computes the bit-wise AND across all columns for the specified mask
@@ -58,7 +58,7 @@ struct row_masker {
     gdf_valid_type row_valid_mask{0};
     row_valid_mask = ~(row_valid_mask);
 
-    for (size_type i = 0; i < num_columns; ++i) {
+    for (size_type i = 0; i < _num_columns; ++i) {
       const gdf_valid_type* current_column_mask = column_valid_masks[i];
 
       // The column validity mask is optional and can be nullptr
@@ -69,7 +69,7 @@ struct row_masker {
     return row_valid_mask;
   }
 
-  const size_type num_columns;
+  const size_type _num_columns;
   gdf_valid_type** column_valid_masks;
 };
 
@@ -87,7 +87,7 @@ public:
   using byte_type = byte_t;
 
   device_table(size_type num_cols, gdf_column ** gdf_columns) 
-    : num_columns(num_cols), host_columns(gdf_columns)
+    : _num_columns(num_cols), host_columns(gdf_columns)
   {
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
     CUDF_EXPECTS(nullptr != host_columns[0], "Attempt to create table with a null column.");
@@ -160,6 +160,8 @@ public:
   }
 
   ~device_table() = default;
+  device_table(device_table const& other) = delete;
+  device_table& operator=(device_table const& other) = delete;
 
 
   /** 
@@ -171,17 +173,16 @@ public:
   {
     _num_rows = new_length;
 
-    for(size_type i = 0; i < num_columns; ++i)
+    for(size_type i = 0; i < _num_columns; ++i)
     {
       host_columns[i]->size = this->_num_rows;
     }
   }
 
-  size_type get_num_columns() const
+  size_type num_columns() const
   {
-    return num_columns;
+    return _num_columns;
   }
-
 
   __host__ 
   gdf_column * get_column(size_type column_index) const
@@ -190,7 +191,7 @@ public:
   }
 
    __host__ 
-  gdf_column ** get_columns() const
+  gdf_column ** columns() const
   {
     return host_columns;
   }
@@ -241,7 +242,7 @@ public:
     }
 
     // Pack the element from each column in the row into the buffer
-    for(size_type i = 0; i < num_columns; ++i)
+    for(size_type i = 0; i < _num_columns; ++i)
     {
       const gdf_dtype source_col_type = d_columns_types_ptr[i];
 
@@ -284,7 +285,7 @@ public:
       return GDF_DATASET_EMPTY;
     }
     
-    for(size_type i = 0; i < num_columns; i++)
+    for(size_type i = 0; i < _num_columns; i++)
     {
       // get validity of item in column in self
       if (gdf_is_valid(d_columns_valids_ptr[i], row_index))
@@ -310,7 +311,7 @@ public:
                      const size_type target_row_index,
                      const size_type source_row_index)
   {
-    for(size_type i = 0; i < num_columns; ++i)
+    for(size_type i = 0; i < _num_columns; ++i)
     {
       const gdf_dtype target_col_type = d_columns_types_ptr[i];
       const gdf_dtype source_col_type = source.d_columns_types_ptr[i];
@@ -368,7 +369,7 @@ public:
       return false;
     }
 
-    for(size_type i = 0; i < num_columns; ++i)
+    for(size_type i = 0; i < _num_columns; ++i)
     {
       gdf_dtype const this_col_type = d_columns_types_ptr[i];
       gdf_dtype const rhs_col_type = rhs.d_columns_types_ptr[i];
@@ -447,7 +448,7 @@ public:
     // If num_columns_to_hash is zero, hash all columns
     if(0 == num_columns_to_hash) 
     {
-      num_columns_to_hash = this->num_columns;
+      num_columns_to_hash = this->_num_columns;
     }
 
     bool const use_initial_value{ initial_hash_values != nullptr };
@@ -468,7 +469,7 @@ public:
 
 private:
 
-  const size_type num_columns; /** The number of columns in the table */
+  const size_type _num_columns; /** The number of columns in the table */
   size_type _num_rows{0};     /** The number of rows in the table */
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
