@@ -268,33 +268,6 @@ public:
 
   };
 
-  /**
-   * @brief Packs the validity mask of a specified row into a contiguous byte-buffer 
-   * 
-   * This function is called by a single thread, and the thread will copy each element
-   * of the row into a single contiguous buffer.
-   * 
-   * @param row_index The row of the table to return validity mask for
-   * @param row_valid_byte_buffer A pointer to a preallocated buffer large enough to hold
-      the validity bitmask of a row of the table
-   */
-  __device__
-  gdf_error get_row_valids(size_type row_index, gdf_valid_type * row_valid_byte_buffer) const
-  {
-    if(nullptr == row_valid_byte_buffer) {
-      return GDF_DATASET_EMPTY;
-    }
-    
-    for(size_type i = 0; i < _num_columns; i++)
-    {
-      // get validity of item in column in self
-      if (gdf_is_valid(d_columns_valids_ptr[i], row_index))
-        // set validity in output buffer
-        row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (gdf_valid_type{1} << (i % GDF_VALID_BITSIZE));
-    }
-    return GDF_SUCCESS;
-  }
-
     /** 
      * @brief  Copies a row from a source table to a target row in this table
      *  
