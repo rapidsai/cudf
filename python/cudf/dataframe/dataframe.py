@@ -859,7 +859,7 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels):
+    def drop(self, labels, axis=None):
         """Drop column(s)
 
         Parameters
@@ -893,6 +893,9 @@ class DataFrame(object):
         3    3
         4    4
         """
+        if axis == 0:
+            raise NotImplementedError("Can only drop columns, not rows")
+
         columns = [labels] if isinstance(labels, str) else list(labels)
 
         outdf = self.copy()
