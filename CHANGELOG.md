@@ -26,6 +26,7 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 
 ## Bug Fixes
 
