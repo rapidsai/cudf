@@ -297,6 +297,44 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ('b', 'c', 'a')
 
 
+def test_dataframe_pop():
+    pdf = pd.DataFrame(
+        {'a': [1, 2, 3], 'b': ['x', 'y', 'z'], 'c': [7., 8., 9.]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    # Test non-existing column error
+    with pytest.raises(KeyError) as raises:
+        gdf.pop('fake_colname')
+    raises.match("fake_colname")
+
+    # check pop numeric column
+    pdf_pop = pdf.pop('a')
+    gdf_pop = gdf.pop('a')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check string column
+    pdf_pop = pdf.pop('b')
+    gdf_pop = gdf.pop('b')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check float column and empty dataframe
+    pdf_pop = pdf.pop('c')
+    gdf_pop = gdf.pop('c')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check empty dataframe edge case
+    empty_pdf = pd.DataFrame(columns=['a', 'b'])
+    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    pb = empty_pdf.pop('b')
+    gb = empty_gdf.pop('b')
+    assert empty_pdf.index.size == empty_gdf.index.size
+    assert empty_pdf.empty and empty_gdf.empty
+
+
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
 def test_dataframe_astype(nelem):
     df = DataFrame()
