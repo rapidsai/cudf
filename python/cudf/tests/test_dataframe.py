@@ -2193,4 +2193,3 @@ def test_get_numeric_data():
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
-
