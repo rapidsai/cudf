@@ -269,6 +269,7 @@ def test_dataframe_drop_method():
 
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop('a').columns) == ('b', 'c')
+    assert tuple(df.drop('a', axis=1).columns) == ('b', 'c')
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop(['a', 'b']).columns) == ('c',)
     assert tuple(df.columns) == ('a', 'b', 'c')
@@ -2050,3 +2051,14 @@ def test_series_to_gpu_array(nan_value):
     s = Series([0, 1, None, 3])
     np.testing.assert_array_equal(s.to_array(nan_value),
                                   s.to_gpu_array(nan_value).copy_to_host())
+
+
+def test_get_numeric_data():
+    pdf = pd.DataFrame({
+        'x': [1, 2, 3],
+        'y': [1., 2., 3.],
+        'z': ['a', 'b', 'c']
+    })
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())

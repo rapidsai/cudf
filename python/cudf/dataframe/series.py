@@ -19,7 +19,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
 
 class Series(object):
@@ -1299,7 +1299,7 @@ class Series(object):
         mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
         return Series(mod_vals)
 
-    def quantile(self, q, interpolation='midpoint', exact=True,
+    def quantile(self, q, interpolation='linear', exact=True,
                  quant_index=True):
         """
         Return values at the given quantile.
