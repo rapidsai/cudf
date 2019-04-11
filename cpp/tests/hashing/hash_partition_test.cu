@@ -40,26 +40,25 @@
 
 #include <cstdlib>
 
-template <template <typename> class hash_function,
-         typename size_type>
+template <template <typename> class hash_function>
 struct row_partition_mapper
 {
   __device__
-  row_partition_mapper(device_table<size_type> const & table_to_hash, const size_type _num_partitions)
+  row_partition_mapper(device_table const & table_to_hash, const gdf_size_type _num_partitions)
     : the_table{table_to_hash}, num_partitions{_num_partitions}
   {}
 
   __device__
-  hash_value_type operator()(size_type row_index) const
+  hash_value_type operator()(gdf_size_type row_index) const
   {
     return the_table.template hash_row<hash_function>(row_index) % num_partitions;
   }
 
-  device_table<size_type> const & the_table;
+  device_table const & the_table;
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
-  size_type num_partitions;
+  gdf_size_type num_partitions;
 };
 
 // Put all repeated setup and validation stuff here
@@ -173,7 +172,7 @@ struct HashPartitionTest : public GdfTest
     }
 
     // Create a table from the gdf output of only the columns that were hashed
-    std::unique_ptr< device_table<int> > table_to_hash{new device_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
+    std::unique_ptr< device_table > table_to_hash{new device_table(num_cols_to_hash, gdf_cols_to_hash.data())};
 
     rmm::device_vector<int> row_partition_numbers(table_to_hash->num_rows());
 
@@ -185,7 +184,7 @@ struct HashPartitionTest : public GdfTest
           thrust::tabulate(thrust::device,
                            row_partition_numbers.begin(),
                            row_partition_numbers.end(),
-                           row_partition_mapper<MurmurHash3_32,int>(*table_to_hash,num_partitions));
+                           row_partition_mapper<MurmurHash3_32>(*table_to_hash,num_partitions));
           break;
         }
       case GDF_HASH_IDENTITY:
@@ -193,7 +192,7 @@ struct HashPartitionTest : public GdfTest
           thrust::tabulate(thrust::device,
                            row_partition_numbers.begin(),
                            row_partition_numbers.end(),
-                           row_partition_mapper<IdentityHash,int>(*table_to_hash,num_partitions));
+                           row_partition_mapper<IdentityHash>(*table_to_hash,num_partitions));
 
           break;
         }

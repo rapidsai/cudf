@@ -43,16 +43,15 @@
 template<typename map_type, 
          typename aggregation_operation,
          typename aggregation_type,
-         typename size_type,
          typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        device_table<size_type> const & groupby_input_table,
+                                        device_table const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
-                                        size_type column_size,
+                                        gdf_size_type column_size,
                                         aggregation_operation op,
                                         row_comparator the_comparator)
 {
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while( i < column_size ){
 
@@ -77,16 +76,15 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
 // Specialization for COUNT operation that ignores the values of the input aggregation column
 template<typename map_type,
          typename aggregation_type,
-         typename size_type,
          typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        device_table<size_type> const & groupby_input_table,
+                                        device_table const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
-                                        size_type column_size,
+                                        gdf_size_type column_size,
                                         count_op<typename map_type::mapped_type> op,
                                         row_comparator the_comparator)
 {
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   // Hash the current row of the input table
   const auto row_hash = groupby_input_table.hash_row(i);
@@ -124,14 +122,13 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
  */
 /* ----------------------------------------------------------------------------*/
 template<typename map_type,
-         typename size_type,
          typename aggregation_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
                                        const size_t map_size,
-                                       device_table<size_type> & groupby_output_table,
-                                       device_table<size_type> const & groupby_input_table,
+                                       device_table & groupby_output_table,
+                                       device_table const & groupby_input_table,
                                        aggregation_type * const __restrict__ aggregation_out_column,
-                                       size_type * const global_write_index)
+                                       gdf_size_type * const global_write_index)
 {
   size_t i = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -146,7 +143,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
     const typename map_type::key_type current_key = hashtabl_values[i].first;
 
     if( current_key != unused_key){
-      const size_type thread_write_index = atomicAdd(global_write_index, 1);
+      const gdf_size_type thread_write_index = atomicAdd(global_write_index, 1);
 
       // Copy the row at current_key from the input table to the row at
       // thread_write_index in the output table

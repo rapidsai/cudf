@@ -39,9 +39,8 @@ namespace {
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
    column together to get a bitmask for the validity of each row.
  */
-template <typename size_type>
 struct row_masker {
-  row_masker(gdf_valid_type** column_masks, const size_type num_cols)
+  row_masker(gdf_valid_type** column_masks, const gdf_size_type num_cols)
       : column_valid_masks{column_masks}, _num_columns(num_cols) {}
 
   /**
@@ -53,12 +52,12 @@ struct row_masker {
    * @returns The bit-wise AND across all columns for the specified mask number
    */
   __device__ __forceinline__ gdf_valid_type
-  operator()(const size_type mask_number) {
+  operator()(const gdf_size_type mask_number) {
     // Intialize row validity mask with all bits set to 1
     gdf_valid_type row_valid_mask{0};
     row_valid_mask = ~(row_valid_mask);
 
-    for (size_type i = 0; i < _num_columns; ++i) {
+    for (gdf_size_type i = 0; i < _num_columns; ++i) {
       const gdf_valid_type* current_column_mask = column_valid_masks[i];
 
       // The column validity mask is optional and can be nullptr
@@ -69,7 +68,7 @@ struct row_masker {
     return row_valid_mask;
   }
 
-  const size_type _num_columns;
+  const gdf_size_type _num_columns;
   gdf_valid_type** column_valid_masks;
 };
 
@@ -78,13 +77,11 @@ struct row_masker {
 /** 
  * @brief Provides row-level device functions for operating on a set of columns.
  */
-template <typename T, typename byte_t = unsigned char>
 class device_table : public managed
 {
 public:
 
-  using size_type = T;
-  using byte_type = byte_t;
+  using size_type = int64_t;
 
   device_table(size_type num_cols, gdf_column ** gdf_columns) 
     : _num_columns(num_cols), host_columns(gdf_columns)
@@ -102,7 +99,7 @@ public:
     std::vector<void*> columns_data(num_cols);
     std::vector<gdf_valid_type*> columns_valids(num_cols);
     std::vector<gdf_dtype> columns_types(num_cols);
-    std::vector<byte_type> columns_byte_widths(num_cols);
+    std::vector<gdf_size_type> columns_byte_widths(num_cols);
 
     for(size_type i = 0; i < num_cols; ++i)
     {
@@ -119,7 +116,7 @@ public:
       {
         row_size_bytes += column_width_bytes;
         // Store the byte width of each column in a device array
-        columns_byte_widths[i] = (static_cast<byte_type>(row_size_bytes));
+        columns_byte_widths[i] = row_size_bytes;
       }
       else
       {
@@ -154,7 +151,7 @@ public:
     thrust::tabulate(rmm::exec_policy()->on(0),
                      device_row_valid.begin(),
                      device_row_valid.end(),
-                     row_masker<size_type>(d_columns_valids_ptr, num_cols));
+                     row_masker(d_columns_valids_ptr, num_cols));
 
     d_row_valid = device_row_valid.data().get();
   }
@@ -173,19 +170,19 @@ public:
   {
     _num_rows = new_length;
 
-    for(size_type i = 0; i < _num_columns; ++i)
+    for(gdf_size_type i = 0; i < _num_columns; ++i)
     {
       host_columns[i]->size = this->_num_rows;
     }
   }
 
-  size_type num_columns() const
+  gdf_size_type num_columns() const
   {
     return _num_columns;
   }
 
   __host__ 
-  gdf_column * get_column(size_type column_index) const
+  gdf_column * get_column(gdf_size_type column_index) const
   {
     return host_columns[column_index];
   }
@@ -197,12 +194,12 @@ public:
   }
 
   __host__ __device__
-  size_type num_rows() const
+  gdf_size_type num_rows() const
   {
     return _num_rows;
   }
 
-  __device__ bool is_row_valid(size_type row_index) const
+  __device__ bool is_row_valid(gdf_size_type row_index) const
   {
     const bool row_valid = gdf_is_valid(d_row_valid, row_index);
 
@@ -216,7 +213,7 @@ public:
    * 
    * @returns The size in bytes of the row in the table
    */
-  byte_type get_row_size_bytes() const
+  gdf_size_type get_row_size_bytes() const
   {
     return row_size_bytes;
   }
@@ -235,14 +232,14 @@ public:
    * 
    */
   __device__
-  gdf_error pack_row(size_type row_index, void * row_byte_buffer) const
+  gdf_error pack_row(gdf_size_type row_index, void * row_byte_buffer) const
   {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
     }
 
     // Pack the element from each column in the row into the buffer
-    for(size_type i = 0; i < _num_columns; ++i)
+    for(gdf_size_type i = 0; i < _num_columns; ++i)
     {
       const gdf_dtype source_col_type = d_columns_types_ptr[i];
 
@@ -258,8 +255,8 @@ public:
   struct copy_element{
     template <typename ColumnType>
     __device__ __forceinline__
-    void operator()(void * target_column, size_type target_row_index,
-                    void const * source_column, size_type source_row_index)
+    void operator()(void * target_column, gdf_size_type target_row_index,
+                    void const * source_column, gdf_size_type source_row_index)
     {
       ColumnType& target_value { static_cast<ColumnType*>(target_column)[target_row_index] };
       ColumnType const& source_value{static_cast<ColumnType const*>(source_column)[source_row_index]};
@@ -281,10 +278,10 @@ public:
      */
   __device__ 
   gdf_error copy_row(device_table const & source,
-                     const size_type target_row_index,
-                     const size_type source_row_index)
+                     const gdf_size_type target_row_index,
+                     const gdf_size_type source_row_index)
   {
-    for(size_type i = 0; i < _num_columns; ++i)
+    for(gdf_size_type i = 0; i < _num_columns; ++i)
     {
       const gdf_dtype target_col_type = d_columns_types_ptr[i];
       const gdf_dtype source_col_type = source.d_columns_types_ptr[i];
@@ -309,8 +306,8 @@ public:
   struct elements_are_equal{
     template <typename ColumnType>
     __device__ __forceinline__
-    bool operator()(void const * lhs_column, size_type lhs_row_index,
-                    void const * rhs_column, size_type rhs_row_index)
+    bool operator()(void const * lhs_column, gdf_size_type lhs_row_index,
+                    void const * rhs_column, gdf_size_type rhs_row_index)
     {
       ColumnType const lhs_elem{static_cast<ColumnType const*>(lhs_column)[lhs_row_index]};
       ColumnType const rhs_elem{static_cast<ColumnType const*>(rhs_column)[rhs_row_index]};
@@ -330,8 +327,8 @@ public:
    */
   __device__
   bool rows_equal(device_table const & rhs, 
-                  const size_type this_row_index, 
-                  const size_type rhs_row_index) const
+                  const gdf_size_type this_row_index, 
+                  const gdf_size_type rhs_row_index) const
   {
 
     // If either row contains a NULL, then by definition, because NULL != x for all x,
@@ -342,7 +339,7 @@ public:
       return false;
     }
 
-    for(size_type i = 0; i < _num_columns; ++i)
+    for(gdf_size_type i = 0; i < _num_columns; ++i)
     {
       gdf_dtype const this_col_type = d_columns_types_ptr[i];
       gdf_dtype const rhs_col_type = rhs.d_columns_types_ptr[i];
@@ -378,8 +375,8 @@ public:
     __device__ __forceinline__
     void operator()(hash_value_type& hash_value, 
                     void const * col_data,
-                    size_type row_index,
-                    size_type col_index,
+                    gdf_size_type row_index,
+                    gdf_size_type col_index,
                     bool use_initial_value = false,
                     const hash_value_type& initial_value = 0)
     {
@@ -412,9 +409,9 @@ public:
    * ----------------------------------------------------------------------------**/
   template <template <typename> class hash_function = default_hash>
   __device__ 
-  hash_value_type hash_row(size_type row_index,
+  hash_value_type hash_row(gdf_size_type row_index,
                            hash_value_type* initial_hash_values = nullptr,
-                           size_type num_columns_to_hash = 0) const
+                           gdf_size_type num_columns_to_hash = 0) const
   {
     hash_value_type hash_value{0};
 
@@ -426,7 +423,7 @@ public:
 
     bool const use_initial_value{ initial_hash_values != nullptr };
     // Iterate all the columns and hash each element, combining the hash values together
-    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    for(gdf_size_type i = 0; i < num_columns_to_hash; ++i)
     {
       gdf_dtype const current_column_type = d_columns_types_ptr[i];
 
@@ -442,8 +439,8 @@ public:
 
 private:
 
-  const size_type _num_columns; /** The number of columns in the table */
-  size_type _num_rows{0};     /** The number of rows in the table */
+  const gdf_size_type _num_columns; /** The number of columns in the table */
+  gdf_size_type _num_rows{0};     /** The number of rows in the table */
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
@@ -459,9 +456,9 @@ private:
   rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types_ptr{nullptr};                 /** Raw pointer to the device array's data */
 
-  size_type row_size_bytes{0};
-  rmm::device_vector<byte_type> device_column_byte_widths;
-  byte_type * d_columns_byte_widths_ptr{nullptr};
+  gdf_size_type row_size_bytes{0};
+  rmm::device_vector<gdf_size_type> device_column_byte_widths;
+  gdf_size_type * d_columns_byte_widths_ptr{nullptr};
 
 };
 

@@ -46,14 +46,13 @@ enum class JoinType {
 * 
 */
 /* ----------------------------------------------------------------------------*/
-template<typename multimap_type,
-         typename size_type>
+template<typename multimap_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
-                                  device_table<size_type> const & build_table,
-                                  const size_type build_table_num_rows,
+                                  device_table const & build_table,
+                                  const gdf_size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
 {
-    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+    gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
     while( i < build_table_num_rows) {
 
@@ -94,8 +93,7 @@ memory cache the pair will be written
 * 
 */
 /* ----------------------------------------------------------------------------*/
-template<typename size_type,
-         typename output_index_type>
+template<typename size_type, typename output_index_type>
 __inline__ __device__ void add_pair_to_cache(const output_index_type first, 
                                              const output_index_type second, 
                                              size_type *current_idx_shared, 
@@ -129,17 +127,16 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 /* ----------------------------------------------------------------------------*/
 template< JoinType join_type,
           typename multimap_type,
-          typename size_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
-                                          device_table<size_type> const & build_table,
-                                          device_table<size_type> const & probe_table,
-                                          const size_type probe_table_num_rows,
-                                          size_type* output_size)
+                                          device_table const & build_table,
+                                          device_table const & probe_table,
+                                          const gdf_size_type probe_table_num_rows,
+                                          size_t* output_size)
 {
 
-  __shared__ size_type block_counter;
+  __shared__ size_t block_counter;
   block_counter=0;
   __syncthreads();
 
@@ -147,7 +144,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
   __syncwarp();
 #endif
 
-  size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
@@ -199,7 +196,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
-              atomicAdd(&block_counter,size_type(1)) ;
+              atomicAdd(&block_counter,1) ;
             }
             // Continue searching for matching rows until you hit an empty hash map entry
             ++found;
@@ -223,7 +220,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           }
 
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            atomicAdd(&block_counter,size_type(1));
+            atomicAdd(&block_counter,1);
           }
         }
       }
@@ -262,23 +259,22 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 template< JoinType join_type,
           typename multimap_type,
           typename key_type,
-          typename size_type,
           typename output_index_type,
-          size_type block_size,
-          size_type output_cache_size>
+          gdf_size_type block_size,
+          gdf_size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type const * const multi_map,
-                                  device_table<size_type> const & build_table,
-                                  device_table<size_type> const & probe_table,
-                                  const size_type probe_table_num_rows,
+                                  device_table const & build_table,
+                                  device_table const & probe_table,
+                                  const gdf_size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
                                   output_index_type * join_output_r,
-                                  size_type* current_idx,
-                                  const size_type max_size,
+                                  gdf_size_type* current_idx,
+                                  const gdf_size_type max_size,
                                   bool flip_results,
                                   const output_index_type offset = 0)
 {
   constexpr int num_warps = block_size/warp_size;
-  __shared__ size_type current_idx_shared[num_warps];
+  __shared__ gdf_size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
   __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
   output_index_type *output_l = join_output_l, *output_r = join_output_r;
@@ -398,7 +394,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
         const unsigned int activemask = __ballot(1);
 #endif
         int num_threads = __popc(activemask);
-        size_type output_offset = 0;
+        gdf_size_type output_offset = 0;
 
         if ( 0 == lane_id )
         {
@@ -409,7 +405,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
         for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
         {
-          size_type thread_offset = output_offset + shared_out_idx;
+          gdf_size_type thread_offset = output_offset + shared_out_idx;
           if (thread_offset < max_size) {
             output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
             output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
@@ -436,7 +432,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
       const unsigned int activemask = __ballot(1);
 #endif
       int num_threads = __popc(activemask);
-      size_type output_offset = 0;
+      gdf_size_type output_offset = 0;
       if ( 0 == lane_id )
       {
         output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
@@ -446,7 +442,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
       for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
       {
-        size_type thread_offset = output_offset + shared_out_idx;
+        gdf_size_type thread_offset = output_offset + shared_out_idx;
         if (thread_offset < max_size) 
         {
           output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];

@@ -46,8 +46,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
  * functor checks for equality between the two rows.
  */
 /* ----------------------------------------------------------------------------*/
-template <typename map_type,
-          typename size_type>
+template <typename map_type>
 struct row_comparator
 {
   using key_type = typename map_type::key_type;
@@ -64,8 +63,8 @@ struct row_comparator
    */
   /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
-                 device_table<size_type> const & l_table,
-                 device_table<size_type> const & r_table) 
+                 device_table const & l_table,
+                 device_table const & r_table) 
                 : the_map{map}, 
                   left_table{l_table}, 
                   right_table{r_table},
@@ -108,8 +107,8 @@ struct row_comparator
   const map_key_comparator default_comparator{};
   const key_type unused_key;
   map_type const & the_map;
-  device_table<size_type> const & left_table;
-  device_table<size_type> const & right_table;
+  device_table const & left_table;
+  device_table const & right_table;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -132,27 +131,26 @@ struct row_comparator
 */
 /* ----------------------------------------------------------------------------*/
 template< typename aggregation_type,
-          typename size_type,
           typename aggregation_operation>
-gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
+gdf_error GroupbyHash(device_table const & groupby_input_table,
                         const aggregation_type * const in_aggregation_column,
-                        device_table<size_type> & groupby_output_table,
+                        device_table & groupby_output_table,
                         aggregation_type * out_aggregation_column,
-                        size_type * out_size,
+                        gdf_size_type * out_size,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
 {
-  const size_type input_num_rows = groupby_input_table.num_rows();
+  const gdf_size_type input_num_rows = groupby_input_table.num_rows();
 
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
   // for a given unique row
-  using map_type = concurrent_unordered_map<size_type, 
+  using map_type = concurrent_unordered_map<gdf_size_type, 
                                             aggregation_type, 
-                                            std::numeric_limits<size_type>::max(), 
-                                            default_hash<size_type>, 
-                                            equal_to<size_type>,
-                                            legacy_allocator<thrust::pair<size_type, aggregation_type> > >;
+                                            std::numeric_limits<gdf_size_type>::max(), 
+                                            default_hash<gdf_size_type>, 
+                                            equal_to<gdf_size_type>,
+                                            legacy_allocator<thrust::pair<gdf_size_type, aggregation_type> > >;
 
   // The hash table occupancy and the input size determines the size of the hash table
   const size_t hash_table_size{ compute_hash_table_size(input_num_rows) };
@@ -173,13 +171,13 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
                                                            in_aggregation_column,
                                                            input_num_rows,
                                                            aggregation_op,
-                                                           row_comparator<map_type, size_type>(*the_map, groupby_input_table, groupby_input_table));
+                                                           row_comparator<map_type>(*the_map, groupby_input_table, groupby_input_table));
   CUDA_TRY(cudaGetLastError());
 
   // Used by threads to coordinate where to write their results
-  size_type * global_write_index{nullptr};
-  RMM_TRY(RMM_ALLOC((void**)&global_write_index, sizeof(size_type), 0)); // TODO: non-default stream?
-  CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(size_type)));
+  gdf_size_type * global_write_index{nullptr};
+  RMM_TRY(RMM_ALLOC((void**)&global_write_index, sizeof(gdf_size_type), 0)); // TODO: non-default stream?
+  CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(gdf_size_type)));
 
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
 
@@ -196,7 +194,7 @@ gdf_error GroupbyHash(device_table<size_type> const & groupby_input_table,
 
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.
-  CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost) );
+  CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(gdf_size_type), cudaMemcpyDeviceToHost) );
   RMM_TRY( RMM_FREE(global_write_index, 0) );
   groupby_output_table.set_num_rows(*out_size);
 

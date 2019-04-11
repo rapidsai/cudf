@@ -42,11 +42,10 @@
  */
 /* ----------------------------------------------------------------------------*/
 template <typename aggregation_type, 
-          template <typename T> class op,
-          typename size_type>
-gdf_error typed_groupby(device_table<size_type> const & groupby_input_table,
+          template <typename T> class op>
+gdf_error typed_groupby(device_table const & groupby_input_table,
                         gdf_column* in_aggregation_column,       
-                        device_table<size_type> & groupby_output_table,
+                        device_table & groupby_output_table,
                         gdf_column* out_aggregation_column,
                         bool sort_result = false)
 {
@@ -58,7 +57,7 @@ gdf_error typed_groupby(device_table<size_type> const & groupby_input_table,
   // TODO Need to allow for the aggregation output type to be different from the aggregation input type
   aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
-  size_type output_size{0};
+  gdf_size_type output_size{0};
 
   gdf_error gdf_error_code = GroupbyHash(groupby_input_table, 
                                          in_agg_col, 
@@ -87,11 +86,10 @@ struct is_same_functor<T,T> : std::true_type{};
  * 
  */
 /* ----------------------------------------------------------------------------*/
-template <template <typename T> class op,
-          typename size_type>
-gdf_error dispatch_aggregation_type(device_table<size_type> const & groupby_input_table,        
+template <template <typename T> class op>
+gdf_error dispatch_aggregation_type(device_table const & groupby_input_table,        
                                     gdf_column* in_aggregation_column,       
-                                    device_table<size_type> & groupby_output_table,
+                                    device_table & groupby_output_table,
                                     gdf_column* out_aggregation_column,
                                     bool sort_result = false)
 {
@@ -210,9 +208,8 @@ gdf_error dispatch_aggregation_type(device_table<size_type> const & groupby_inpu
  * @returns gdf_error
  */
 /* ----------------------------------------------------------------------------*/
-template <template <typename aggregation_type> class aggregation_operation,
-          typename size_type>
-gdf_error gdf_group_by_hash(size_type ncols,               
+template <template <typename aggregation_type> class aggregation_operation>
+gdf_error gdf_group_by_hash(gdf_size_type ncols,               
                             gdf_column* in_groupby_columns[],        
                             gdf_column* in_aggregation_column,       
                             gdf_column* out_groupby_columns[],
@@ -244,8 +241,8 @@ gdf_error gdf_group_by_hash(size_type ncols,
   }
 
   // Wrap the groupby input and output columns in a device_table
-  std::unique_ptr< const device_table<size_type> > groupby_input_table{new device_table<size_type>(ncols, in_groupby_columns)};
-  std::unique_ptr< device_table<size_type> > groupby_output_table{new device_table<size_type>(ncols, out_groupby_columns)};
+  std::unique_ptr< const device_table > groupby_input_table{new device_table(ncols, in_groupby_columns)};
+  std::unique_ptr< device_table > groupby_output_table{new device_table(ncols, out_groupby_columns)};
 
   return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
                                                           in_aggregation_column, 
