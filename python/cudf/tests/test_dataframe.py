@@ -2091,6 +2091,137 @@ def test_series_to_gpu_array(nan_value):
                                   s.to_gpu_array(nan_value).copy_to_host())
 
 
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Our describe result is a DataFrame, not a Series. "
+           "Our quantile values do not perfectly match Pandas.")
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_series_describe_numeric(dtype):
+    pdf = pd.Series([0, 1, 2, 3])
+    gdf = Series.from_pandas(pdf).astype(dtype)
+    gdf_results = gdf.describe().to_pandas()
+    pdf_results = gdf.to_pandas().describe()
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_datetime():
+    pdf = pd.Series([0, 1, 2, 3]).astype('datetime64[ms]')
+    gdf = Series.from_pandas(pdf)
+    gdf_results = gdf.describe()
+    pdf_results = pdf.describe()
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
+
+
+def test_dataframe_describe_exclude():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(exclude=['float']).to_pandas()
+    pdf_results = pdf.describe(exclude=['float'])
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+def test_dataframe_describe_include():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include=['int']).to_pandas()
+    pdf_results = pdf.describe(include=['int'])
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Quantile interpolation does not currently tightly match pandas.")
+def test_dataframe_describe_default():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe().to_pandas()
+    pdf_results = pdf.describe()
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_include_all():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    df['animal'] = np.random.choice(['dog', 'cat', 'bird'], data_length)
+
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include='all').to_pandas()
+    pdf_results = pdf.describe(include='all')
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Quantile interpolation does not currently tightly match pandas.")
+def test_dataframe_describe_percentiles():
+    np.random.seed(12)
+    data_length = 10000
+    sample_percentiles = [0.0, 0.1, 0.33, 0.84, 0.4, 0.99]
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(percentiles=sample_percentiles).to_pandas()
+    pdf_results = pdf.describe(percentiles=sample_percentiles)
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
 def test_get_numeric_data():
     pdf = pd.DataFrame({
         'x': [1, 2, 3],
