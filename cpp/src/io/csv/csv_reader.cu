@@ -74,16 +74,17 @@ typedef struct raw_csv_ {
 
     ParseOptions			opts;			// options to control parsing behavior
 
-    long					num_bytes;		// host: the number of bytes in the data
-    long					num_bits;		// host: the number of 64-bit bitmaps (different than valid)
-	gdf_size_type 			num_records;	// host: number of records loaded into device memory, and then number of records to read
-	// int					num_cols;		// host: number of columns
-	int						num_active_cols;// host: number of columns that will be return to user.
-	int						num_actual_cols;// host: number of columns in the file --- based on the number of columns in header
-    vector<gdf_dtype>		dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
-    vector<string>			col_names;		// host: array of column names
-    std::unique_ptr<bool[]>	h_parseCol;		// host   : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
-    device_buffer<bool>		d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
+    long				num_bytes;		// host: the number of bytes in the data
+    long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
+	gdf_size_type 		num_records;	// host: number of records loaded into device memory, and then number of records to read
+	// int				num_cols;		// host: number of columns
+	int					num_active_cols;// host: number of columns that will be return to user.
+	int					num_actual_cols;// host: number of columns in the file --- based on the number of columns in header
+    vector<gdf_dtype>	dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
+    vector<string>		col_names;		// host: array of column names
+	
+	thrust::host_vector<bool>	h_parseCol;	// host   : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
+    rmm::device_vector<bool>	d_parseCol;	// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
 
     long        byte_range_offset;  // offset into the data to start parsing
     long        byte_range_size;    // length of the data of interest to parse
@@ -608,11 +609,8 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		const int h_num_cols = raw_csv.col_names.size();
 
-		// Allocating a boolean array that will use to state if a column needs to read or filtered.
-		raw_csv.h_parseCol = std::make_unique<bool[]>(h_num_cols);
-		raw_csv.d_parseCol = device_buffer<bool>(h_num_cols);
-		for (int i = 0; i<h_num_cols; i++)
-			raw_csv.h_parseCol[i]=true;
+		// Initialize a boolean array that states if a column needs to read or filtered.
+		raw_csv.h_parseCol = thrust::host_vector<bool>(h_num_cols, true);
 		
 		// Rename empty column names to "Unnamed: col_index"
 		for (size_t col_idx = 0; col_idx < raw_csv.col_names.size(); ++col_idx) {
@@ -655,19 +653,14 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.num_actual_cols = h_num_cols;							// Actual number of columns in the CSV file
 		raw_csv.num_active_cols = h_num_cols-h_dup_cols_removed;		// Number of fields that need to be processed based on duplicatation fields
 
-		CUDA_TRY(cudaMemcpy(raw_csv.d_parseCol.data(), raw_csv.h_parseCol.get(), sizeof(bool) * h_num_cols, cudaMemcpyHostToDevice));
 	}
 	else {
-		raw_csv.h_parseCol = std::make_unique<bool[]>(args->num_cols);
-		raw_csv.d_parseCol = device_buffer<bool>(args->num_cols);
+		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_cols, true);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			raw_csv.h_parseCol[i]=true;
 			std::string col_name 	= args->names[i];
 			raw_csv.col_names.push_back(col_name);
-
 		}
-		CUDA_TRY(cudaMemcpy(raw_csv.d_parseCol.data(), raw_csv.h_parseCol.get(), sizeof(bool) * args->num_cols, cudaMemcpyHostToDevice));
 	}
 
 	// User can give
@@ -697,9 +690,8 @@ gdf_error read_csv(csv_read_arg *args)
 			}
 			raw_csv.num_active_cols = countFound;
 		}
-		CUDA_TRY(cudaMemcpy(raw_csv.d_parseCol.data(), raw_csv.h_parseCol.get(), sizeof(bool) * raw_csv.num_actual_cols, cudaMemcpyHostToDevice));
 	}
-
+	raw_csv.d_parseCol = raw_csv.h_parseCol;
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
@@ -1094,7 +1086,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf,
 
   convertCsvToGdf <<< gridSize, blockSize >>> (
       raw_csv->data.data(), raw_csv->opts, raw_csv->num_records,
-      raw_csv->num_actual_cols, raw_csv->d_parseCol.data(), raw_csv->recStart.data(),
+      raw_csv->num_actual_cols, raw_csv->d_parseCol.data().get(), raw_csv->recStart.data(),
       d_dtypes, gdf, valid, num_valid);
 
   CUDA_TRY(cudaGetLastError());
@@ -1311,7 +1303,7 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
 
   dataTypeDetection <<< gridSize, blockSize >>> (
       raw_csv->data.data(), raw_csv->opts, raw_csv->num_records,
-      raw_csv->num_actual_cols, raw_csv->d_parseCol.data(), raw_csv->recStart.data(),
+      raw_csv->num_actual_cols, raw_csv->d_parseCol.data().get(), raw_csv->recStart.data(),
       d_columnData);
 
   CUDA_TRY(cudaGetLastError());
