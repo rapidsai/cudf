@@ -815,15 +815,12 @@ gdf_error read_csv(csv_read_arg *args)
     }
   }
 
-  // Transfer ownership to raw pointer output arguments
-  args->data = (gdf_column **)malloc(sizeof(gdf_column *) * raw_csv.num_active_cols);
   for (int i = 0; i < raw_csv.num_active_cols; ++i) {
-    args->data[i] = columns[i].release();
-
-    if (args->data[i]->dtype == GDF_STRING) {
-      auto str_list = static_cast<string_pair *>(args->data[i]->data);
-      auto str_data = NVStrings::create_from_index(str_list, args->data[i]->size);
-      RMM_TRY(RMM_FREE(std::exchange(args->data[i]->data, str_data), 0));
+    if (columns[i]->dtype == GDF_STRING) {
+      std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_data(
+        NVStrings::create_from_index(static_cast<string_pair *>(columns[i]->data), columns[i]->size), 
+        &NVStrings::destroy);
+      RMM_TRY(RMM_FREE(columns[i]->data, 0));
 
       // PANDAS' default behavior of enabling doublequote for two consecutive
       // quotechars in quoted fields results in reduction to a single quotechar
@@ -831,10 +828,18 @@ gdf_error read_csv(csv_read_arg *args)
           (raw_csv.opts.doublequote == true)) {
         const std::string quotechar(1, raw_csv.opts.quotechar);
         const std::string doublequotechar(2, raw_csv.opts.quotechar);
-        args->data[i]->data = str_data->replace(doublequotechar.c_str(), quotechar.c_str());
-        NVStrings::destroy(str_data);
+        columns[i]->data = str_data->replace(doublequotechar.c_str(), quotechar.c_str());
+      }
+      else {
+        columns[i]->data = str_data.release();
       }
     }
+  }
+
+  // Transfer ownership to raw pointer output arguments
+  args->data = (gdf_column **)malloc(sizeof(gdf_column *) * raw_csv.num_active_cols);
+  for (int i = 0; i < raw_csv.num_active_cols; ++i) {
+    args->data[i] = columns[i].release();
   }
   args->num_cols_out = raw_csv.num_active_cols;
   args->num_rows_out = raw_csv.num_records;
