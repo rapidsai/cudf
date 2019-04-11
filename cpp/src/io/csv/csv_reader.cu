@@ -64,6 +64,7 @@
 
 using std::vector;
 using std::string;
+using std::unique_ptr;
 
 /**---------------------------------------------------------------------------*
  * @brief Struct used for internal parsing state
@@ -507,6 +508,7 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.d_naTrie = createSerializedTrie(na_values);
 		raw_csv.opts.naValuesTrie = raw_csv.d_naTrie.data().get();
 	}
+	args->data = nullptr;
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -586,6 +588,14 @@ gdf_error read_csv(csv_read_arg *args)
 
 	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, &raw_csv);
 	checkError(error, "call to upload the CSV data to the device");
+
+	//-----------------------------------------------------------------------------
+	//---  done with host data
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		close(fd);
+		munmap(map_data, map_size);
+	}
 
 	//-----------------------------------------------------------------------------
 	//-- Populate the header
@@ -711,14 +721,13 @@ gdf_error read_csv(csv_read_arg *args)
 
 		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
 		rmm_device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
-
 		CUDA_TRY( cudaMemset(d_ColumnData.data(),	0, 	(sizeof(column_data_t) * (raw_csv.num_active_cols)) ) ) ;
 
 		launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
-
 		CUDA_TRY( cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * (raw_csv.num_active_cols), cudaMemcpyDeviceToHost));
 
-	    vector<gdf_dtype>	d_detectedTypes;			// host: array of dtypes (since gdf_columns are not created until end)
+		// host: array of dtypes (since gdf_columns are not created until end)
+		vector<gdf_dtype>	d_detectedTypes;
 
 		raw_csv.dtypes.clear();
 
