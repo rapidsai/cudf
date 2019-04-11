@@ -103,10 +103,9 @@ TEST(gdf_json_test, BracketsLevels)
 	const auto d_lvls = getBracketLevels(d_pos, count, string("[{"), string("]}"));
 
 	std::vector<int16_t> h_lvls(count);
-	cudaMemcpy(h_lvls.data(), d_lvls, count*sizeof(int16_t), cudaMemcpyDefault);
+	cudaMemcpy(h_lvls.data(), d_lvls.get(), count*sizeof(int16_t), cudaMemcpyDefault);
 	for (auto lvl: h_lvls)
 		cout << lvl << ' ';
 
 	cudaFree(d_pos);
-	RMM_FREE(d_lvls, 0);
 }

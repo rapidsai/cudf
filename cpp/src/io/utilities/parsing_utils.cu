@@ -31,6 +31,7 @@
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/error_utils.hpp"
+#include "io/utilities/wrapper_utils.hpp"
 
 // When processing the input in chunks, this is the maximum size of each chunk.
 // Only one chunk is loaded on the GPU at a time, so this value is chosen to
@@ -42,11 +43,7 @@ constexpr int bytes_per_find_thread = 64;
 using pos_key_pair = thrust::pair<uint64_t,char>;
 
 template <typename T>
-struct rmm_deleter {
- void operator()(T *ptr) { RMM_FREE(ptr, 0); }
-};
-template <typename T>
-using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
+constexpr T divCeil(T dividend, T divisor) noexcept { return (dividend + divisor - 1) / divisor; }
 
 /**---------------------------------------------------------------------------*
  * @brief Sets the specified element of the array to the passed value
@@ -147,13 +144,13 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
 	int minGridSize;	// minimum block count required
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countAndSetPositions<T>) );
 
-	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
+	const size_t chunk_count = divCeil(h_size, max_chunk_bytes);
 	for (size_t ci = 0; ci < chunk_count; ++ci) {	
 		const auto chunk_offset = ci * max_chunk_bytes;	
 		const auto h_chunk = h_data + chunk_offset;
-		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
-		const auto chunk_bits = (chunk_bytes + bytes_per_find_thread - 1) / bytes_per_find_thread;
-		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
+		const int chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
+		const auto chunk_bits = divCeil(chunk_bytes, bytes_per_find_thread);
+		const int gridSize = divCeil(chunk_bits, blockSize);
 
 		// Copy chunk to device
 		CUDA_TRY(cudaMemcpyAsync(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
@@ -185,7 +182,7 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
  *---------------------------------------------------------------------------**/
 gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys) {
 	return findAllFromSet<void>(h_data, h_size, keys, 0, nullptr);
- }
+}
 
 template gdf_size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	uint64_t *positions);
@@ -195,43 +192,43 @@ template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h
 
 struct BlockSumArray {
 		int16_t* d_sums = nullptr;
-		uint64_t length;
-		uint64_t block_size;
+		uint64_t length = 0;
+		uint64_t block_size; // the number of elements that have been aggregated into each element of this array
 		BlockSumArray(uint64_t len, uint64_t bsize): length(len), block_size(bsize){}
 };
 
 class BlockSumPyramid {
-	const uint16_t aggregation_rate = 32;
-	std::vector<BlockSumArray> levels;
-	BlockSumArray* d_levels = nullptr;
+	const uint16_t aggregation_rate_ = 32;
+	std::vector<BlockSumArray> levels_;
+	BlockSumArray* d_levels_ = nullptr;
 
 public:
 	BlockSumPyramid(int count){
 		int prev_lvl_cnt = count;
 		int prev_lvl_block_size = 1;
-		while (prev_lvl_cnt >= aggregation_rate) {
-			levels.emplace_back(prev_lvl_cnt/aggregation_rate, prev_lvl_block_size*aggregation_rate);
-			RMM_ALLOC(&levels.back().d_sums, levels.back().length*sizeof(int16_t), 0);
-			prev_lvl_cnt = levels.back().length;
-			prev_lvl_block_size = levels.back().block_size;
+		while (prev_lvl_cnt >= aggregation_rate_) {
+			levels_.emplace_back(prev_lvl_cnt/aggregation_rate_, prev_lvl_block_size*aggregation_rate_);
+			RMM_ALLOC(&levels_.back().d_sums, levels_.back().length*sizeof(int16_t), 0);
+			prev_lvl_cnt = levels_.back().length;
+			prev_lvl_block_size = levels_.back().block_size;
 		}
 
-		if (!levels.empty()) {	
-			RMM_ALLOC(&d_levels, levels.size()*sizeof(BlockSumArray), 0);
-			cudaMemcpyAsync(d_levels, levels.data(), levels.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
+		if (!levels_.empty()) {	
+			RMM_ALLOC(&d_levels_, levels_.size()*sizeof(BlockSumArray), 0);
+			cudaMemcpyAsync(d_levels_, levels_.data(), levels_.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
 		}
 	}
 
-	auto operator[](int lvl) const {return levels[lvl];}
-	auto deviceGetLevels() const noexcept {return d_levels;}
-	size_t getHeigth() const noexcept {return levels.size();}
-	constexpr int getAggregationRate() const {return aggregation_rate;}
+	auto operator[](int lvl) const {return levels_[lvl];}
+	auto deviceGetLevels() const noexcept {return d_levels_;}
+	size_t getHeight() const noexcept {return levels_.size();}
+	constexpr int getAggregationRate() const {return aggregation_rate_;}
 
 	~BlockSumPyramid() {
-		for (auto& lvl: levels) {
+		for (auto& lvl: levels_) {
 			RMM_FREE(lvl.d_sums, 0);
 		}
-		RMM_FREE(d_levels, 0);
+		RMM_FREE(d_levels_, 0);
 	}
 };
 
@@ -241,78 +238,72 @@ void sumBracketsKernel(
 	pos_key_pair* brackets, int bracket_count,
 	const char* open_chars, const char* close_chars, int bracket_char_cnt,
 	BlockSumArray sum_array) {
-	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-	const uint64_t did = tid * sum_array.block_size;
+	const uint64_t sum_idx = threadIdx.x + (blockDim.x * blockIdx.x);
+	const uint64_t first_in_idx = sum_idx * sum_array.block_size;
 
-
-	if (tid >= sum_array.length)
+	if (sum_idx >= sum_array.length)
 		return;
 
-	const auto* start = brackets + did;
-	int16_t csum = 0;
-	for (int i = 0; i < sum_array.block_size; ++i) {
-		const auto curr_elem = (start + i)->second;
-		for (int bi = 0; bi < bracket_char_cnt; ++bi) {
-			if (curr_elem == open_chars[bi]) {
-				++csum; 
+	int16_t sum = 0;
+	for (uint64_t in_idx = first_in_idx; in_idx < first_in_idx + sum_array.block_size; ++in_idx) {
+		for (int bchar_idx = 0; bchar_idx < bracket_char_cnt; ++bchar_idx) {
+			if (brackets[in_idx].second == open_chars[bchar_idx]) {
+				++sum; 
 				break;
 			}
-			if (curr_elem == close_chars[bi]) {
-				--csum; 
+			if (brackets[in_idx].second == close_chars[bchar_idx]) {
+				--sum; 
 				break;
 			}
 		}
 	}
-	sum_array.d_sums[tid] = csum;
+	sum_array.d_sums[sum_idx] = sum;
 }
 
 void sumBrackets(
 	pos_key_pair* brackets, int bracket_count,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
 	const BlockSumArray& sum_array) {
-	int blockSize;
-	int minGridSize;
+	int blockSize = 0;
+	int minGridSize = 0;
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
 		sumBracketsKernel));
 
-	// Calculate actual block count to use based on records count
-	int gridSize = (sum_array.length + blockSize - 1) / blockSize;
+	const int gridSize = divCeil(sum_array.length, (uint64_t)blockSize);
 
 	sumBracketsKernel<<<gridSize, blockSize>>>(
 		brackets, bracket_count,
 		open_chars, close_chars, bracket_char_cnt,
 		sum_array);
-
 	CUDA_TRY(cudaGetLastError());
 };
 
 __global__
-void aggregateSumKernel(BlockSumArray in, BlockSumArray aggregate){
-	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-	const int aggregate_group_size = aggregate.block_size / in.block_size;
-	const uint64_t did = tid * aggregate_group_size;
+void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate){
+	const uint64_t aggregate_idx = threadIdx.x + (blockDim.x * blockIdx.x);
+	const int aggregate_group_size = aggregate.block_size / elements.block_size;
+	const uint64_t first_in_idx = aggregate_idx * aggregate_group_size;
 
-	if (tid >= aggregate.length)
+	if (aggregate_idx >= aggregate.length)
 		return;
 
 	int16_t sum = 0;
-	for (int i = did; i < did + aggregate_group_size; ++i)
-		sum += in.d_sums[i];
+	for (int in_idx = first_in_idx; in_idx < first_in_idx + aggregate_group_size; ++in_idx) {
+		sum += elements.d_sums[in_idx];
+	}
 
-	aggregate.d_sums[tid] = sum;
+	aggregate.d_sums[aggregate_idx] = sum;
 }
 
 void aggregateSum(const BlockSumArray& in, const BlockSumArray& aggregate){
-	int blockSize;
-	int minGridSize;
+	int blockSize = 0;
+	int minGridSize = 0;
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
 		aggregateSumKernel));
 
-	// Calculate actual block count to use based on records count
-	int gridSize = (aggregate.length + blockSize - 1) / blockSize;
+	const int gridSize = divCeil(aggregate.length, (uint64_t)blockSize);
 
 	aggregateSumKernel<<<gridSize, blockSize>>>(in, aggregate);
-
 	CUDA_TRY(cudaGetLastError());
 };
 
@@ -321,42 +312,44 @@ void assignLevelsKernel(
 	pos_key_pair* brackets, uint64_t count,
 	BlockSumArray* sum_pyramid, int pyramid_height,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
-	int16_t* lvls) {
+	int16_t* levels) {
 	// Process the number of elements equal to the aggregation rate, if the pyramid is used
 	// Process all elements otherwise
 	const auto to_process = pyramid_height != 0 ? sum_pyramid[0].block_size : count;
 	const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
-	const uint64_t did = tid * to_process;
+	const uint64_t first_bracket_idx = tid * to_process;
 
-	if (did >= count)
+	if (first_bracket_idx >= count)
 		return;
 
-	// find the previous sum
+	// Find the total sum of levels before the current block
 	int sum = 0;
 	if (pyramid_height != 0) {
 		const auto aggregation_rate = sum_pyramid[0].block_size;
-		int lvl = pyramid_height - 1;
+		int level = pyramid_height - 1;
 		int block_idx = 0;
-		int offset = did;
+		int offset = first_bracket_idx;
 		while(offset) {
-			while(offset < sum_pyramid[lvl].block_size && lvl > 0) {
-				--lvl; block_idx *= aggregation_rate;
+			while(offset < sum_pyramid[level].block_size && level > 0) {
+				--level; block_idx *= aggregation_rate;
 			}
-			while(offset >= sum_pyramid[lvl].block_size) {
-				offset -= sum_pyramid[lvl].block_size;
-				sum += sum_pyramid[lvl].d_sums[block_idx];
+			while(offset >= sum_pyramid[level].block_size) {
+				offset -= sum_pyramid[level].block_size;
+				sum += sum_pyramid[level].d_sums[block_idx];
 				++block_idx;
 			}
 		}
 	}
-	for (int i = did; i < min(did + to_process, count); ++i){
-		for (int bi = 0; bi < bracket_char_cnt; ++bi) {
-			if (brackets[i].second == open_chars[bi]) {
-				lvls[i] = ++sum;
+
+	const auto last_bracket_idx = min(first_bracket_idx + to_process, count) - 1;
+	for (uint64_t bracket_idx = first_bracket_idx; bracket_idx <= last_bracket_idx; ++bracket_idx){
+		for (int bchar_idx = 0; bchar_idx < bracket_char_cnt; ++bchar_idx) {
+			if (brackets[bracket_idx].second == open_chars[bchar_idx]) {
+				levels[bracket_idx] = ++sum;
 				break;
 			}
-			else if (brackets[i].second == close_chars[bi]) {
-				lvls[i] = sum--;
+			else if (brackets[bracket_idx].second == close_chars[bchar_idx]) {
+				levels[bracket_idx] = sum--;
 				break;
 			}
 		}
@@ -366,62 +359,60 @@ void assignLevelsKernel(
 void assignLevels(pos_key_pair* brackets, uint64_t count,
 	const BlockSumPyramid& sum_pyramid,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
-	int16_t* lvls) {
+	int16_t* levels) {
 	int blockSize;
 	int minGridSize;
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
 		assignLevelsKernel));
 
-	// Calculate actual block count to use based on records count
-	const int threadCnt = (count + sum_pyramid.getAggregationRate() - 1) / sum_pyramid.getAggregationRate();
-	const int gridSize = (threadCnt + blockSize - 1) / blockSize;
+	const int threadCnt = divCeil(count, (uint64_t)sum_pyramid.getAggregationRate());
+	const int gridSize = divCeil(threadCnt, blockSize);
 
 	assignLevelsKernel<<<gridSize, blockSize>>>(
 		brackets, count,
-		sum_pyramid.deviceGetLevels(), sum_pyramid.getHeigth(),
+		sum_pyramid.deviceGetLevels(), sum_pyramid.getHeight(),
 		open_chars, close_chars, bracket_char_cnt,
-		lvls);
+		levels);
 
 	CUDA_TRY(cudaGetLastError());
 };
 
 
-// return a unique_ptr, once they are merged
-int16_t* getBracketLevels(
+device_ptr<int16_t> getBracketLevels(
 	pos_key_pair* brackets, int count,
 	const std::string& open_chars, const std::string& close_chars){
-	// TODO: should be done outside of this function
+	// TODO: consider moving sort() out of this function
 	thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 
-	// total level difference for each segment of brackets in the file
+	// Total bracket level difference within each segment of brackets
 	BlockSumPyramid aggregated_sums(count);
 	
-	// copy open/close chars to device
 	assert(open_chars.size() == open_chars.size());
 
+	// Copy the open/close chars to device
 	char* d_open_chars = nullptr;
 	RMM_ALLOC(&d_open_chars, open_chars.size() * sizeof(char), 0);
+	device_ptr<char> d_open_chars_deleter(d_open_chars);
 	CUDA_TRY(cudaMemcpyAsync(
 		d_open_chars, open_chars.c_str(),
 		open_chars.size() * sizeof(char), cudaMemcpyDefault));
 
 	char* d_close_chars = nullptr;
 	RMM_ALLOC(&d_close_chars, close_chars.size() * sizeof(char), 0);
+	device_ptr<char> d_close_chars_deleter(d_open_chars);
 	CUDA_TRY(cudaMemcpyAsync(
 		d_close_chars, close_chars.c_str(),
 		close_chars.size() * sizeof(char), cudaMemcpyDefault));
 
-	// aggregate sums
-	if (aggregated_sums.getHeigth() != 0) {
+	if (aggregated_sums.getHeight() != 0) {
 		sumBrackets(brackets, count, d_open_chars, d_close_chars, open_chars.size(), aggregated_sums[0]);
-		for (size_t level_idx = 1; level_idx < aggregated_sums.getHeigth(); ++level_idx)
+		for (size_t level_idx = 1; level_idx < aggregated_sums.getHeight(); ++level_idx)
 			aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
 	}
 
-	// assign levels
 	int16_t* d_levels = nullptr;
 	RMM_ALLOC(&d_levels, sizeof(int16_t) * count, 0);
 	assignLevels(brackets, count, aggregated_sums, d_open_chars, d_close_chars, open_chars.size(), d_levels);
 
-	return d_levels;
+	return device_ptr<int16_t>(d_levels);
 }
