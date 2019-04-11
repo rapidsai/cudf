@@ -42,6 +42,7 @@
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
