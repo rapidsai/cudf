@@ -1304,6 +1304,34 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
+    def melt(self, **kwargs):
+        """Unpivots a DataFrame from wide format to long format,
+        optionally leaving identifier variables set.
+
+        Parameters
+        ----------
+        frame : DataFrame
+        id_vars : tuple, list, or ndarray, optional
+            Column(s) to use as identifier variables.
+            default: None
+        value_vars : tuple, list, or ndarray, optional
+            Column(s) to unpivot.
+            default: all columns that are not set as `id_vars`.
+        var_name : scalar
+            Name to use for the `variable` column.
+            default: frame.columns.name or 'variable'
+        value_name : str
+            Name to use for the `value` column.
+            default: 'value'
+
+        Returns
+        -------
+        out : DataFrame
+            Melted result
+        """
+        from cudf.reshape.general import melt
+        return melt(self, **kwargs)
+
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, lsuffix=None, rsuffix=None,
               type="", method='hash', indicator=False, suffixes=('_x', '_y')):
