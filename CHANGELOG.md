@@ -42,6 +42,7 @@
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 
+
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
@@ -195,6 +196,7 @@
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
