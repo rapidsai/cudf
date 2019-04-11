@@ -38,7 +38,7 @@ from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 
@@ -1364,7 +1364,7 @@ class DataFrame(object):
         2    4    14.0    12.0
         """
         import nvstrings
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -1596,7 +1596,7 @@ class DataFrame(object):
             new_index = new_index[indexed-1]
             df.index = new_index
 
-        _gdf.nvtx_range_pop()
+        nvtx_range_pop()
 
         return df
 
@@ -1627,7 +1627,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        nvtx_range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1777,7 +1777,7 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import Groupby
 
-            _gdf.nvtx_range_push("CUDF_GROUPBY", "purple")
+            nvtx_range_push("CUDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
@@ -1847,7 +1847,7 @@ class DataFrame(object):
             raise TypeError("local_dict type: expected dict but found {!r}"
                             .format(type(local_dict)))
 
-        _gdf.nvtx_range_push("CUDF_QUERY", "purple")
+        nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -1864,7 +1864,7 @@ class DataFrame(object):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        _gdf.nvtx_range_pop()
+        nvtx_range_pop()
         return result
 
     @applyutils.doc_apply()
