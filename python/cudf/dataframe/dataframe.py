@@ -920,6 +920,13 @@ class DataFrame(object):
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
 
+    def pop(self, item):
+        """Return a column and drop it from the DataFrame.
+        """
+        popped = self[item]
+        del self[item]
+        return popped
+
     def rename(self, mapper=None, columns=None, copy=True, inplace=False):
         """
         Alter column labels.
