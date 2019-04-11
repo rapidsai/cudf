@@ -11,7 +11,7 @@ from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
-from cudf._gdf import nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_pop
 import cudf.dataframe.index as index
 
 from libgdf_cffi import ffi, libgdf

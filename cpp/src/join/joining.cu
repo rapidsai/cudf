@@ -22,6 +22,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
+#include "utilities/type_dispatcher.hpp"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.hpp"
