@@ -106,8 +106,8 @@ gdf_error estimate_join_output_size(device_table const & build_table,
   }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_t * d_size_estimate{nullptr};
-  size_t h_size_estimate{0};
+  gdf_size_type * d_size_estimate{nullptr};
+  gdf_size_type h_size_estimate{0};
 
   CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_t)));
   *d_size_estimate = 0;

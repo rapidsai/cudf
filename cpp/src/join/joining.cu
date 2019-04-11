@@ -24,7 +24,6 @@
 #include "utilities/error_utils.hpp"
 #include "dataframe/device_table.cuh"
 #include "utilities/type_dispatcher.hpp"
-#include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.hpp"
 #include <nvstrings/NVCategory.h>

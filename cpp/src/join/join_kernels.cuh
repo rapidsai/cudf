@@ -133,10 +133,10 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           device_table const & build_table,
                                           device_table const & probe_table,
                                           const gdf_size_type probe_table_num_rows,
-                                          size_t* output_size)
+                                          gdf_size_type* output_size)
 {
 
-  __shared__ size_t block_counter;
+  __shared__ gdf_size_type block_counter;
   block_counter=0;
   __syncthreads();
 
