@@ -161,7 +161,7 @@ def test_gpu_parse_arrow_cats():
 @pytest.mark.skipif(arrow_version is None,
                     reason='need compatible pyarrow to generate test data')
 @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
-def test_gpu_parse_arrow_int():
+def test_gpu_parse_arrow_int(dtype):
 
     depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=dtype)
     arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=dtype)
