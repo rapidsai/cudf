@@ -377,12 +377,12 @@ class SegmentedRadixortPlan(object):
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
-            libgdf.gdf_segmented_radixsort_generic(self.plan,
-                                                   col_keys.cffi_view,
-                                                   col_vals.cffi_view,
-                                                   segsize,
-                                                   unwrap_devary(d_begins[s:]),
-                                                   unwrap_devary(d_ends[s:]))
+            libgdf.gdf_segmented_radixsort(self.plan,
+                                           col_keys.cffi_view,
+                                           col_vals.cffi_view,
+                                           segsize,
+                                           unwrap_devary(d_begins[s:]),
+                                           unwrap_devary(d_ends[s:]))
 
 
 def hash_columns(columns, result, initial_hash_values=None):
