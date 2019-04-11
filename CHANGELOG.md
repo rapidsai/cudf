@@ -11,6 +11,7 @@
 ## Improvements
 
 - PR #1404 Parquet reader page data decoding speedup
+- PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
