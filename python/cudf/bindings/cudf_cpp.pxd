@@ -630,8 +630,8 @@ cdef extern from "cudf.h" nogil:
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
 
-    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color )
+    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color ) except +
 
-    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color )
+    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
 
-    cdef gdf_error gdf_nvtx_range_pop()
+    cdef gdf_error gdf_nvtx_range_pop() except +
