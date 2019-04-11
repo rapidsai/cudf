@@ -7,6 +7,7 @@
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1381 Add DataFrame._get_numeric_data
+- PR #1396 Add DataFrame.drop method
 
 ## Improvements
 
@@ -24,6 +25,7 @@
 - PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
+- PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
 
 ## Bug Fixes
 
@@ -42,6 +44,7 @@
 - PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
+- PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 
 
 # cuDF 0.6.0 (Date TBD)
@@ -197,6 +200,7 @@
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
