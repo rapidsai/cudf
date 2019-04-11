@@ -161,7 +161,7 @@ public:
 		}
 	}
 
-	T* get() const noexcept {return d_data;}
+	T* data() const noexcept {return d_data;}
 
 	void resize(size_t cnt) {
 		const auto error = RMM_REALLOC(&d_data, cnt*sizeof(T), 0);
