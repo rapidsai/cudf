@@ -238,6 +238,7 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
  * @brief Decode definition and repetition levels and outputs row indices
  *
  * @param[in,out] s Page state input/output
+ * @param[in] t target_count Target count of non-NULL values on output
  * @param[in] t Warp0 thread ID (0..31)
  **/
 __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
