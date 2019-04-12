@@ -51,7 +51,6 @@
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 - PR #1416 Fix bug at gdf_quantile_exact and gdf_quantile_appox
 
->>>>>>> upstream/branch-0.7
 
 # cuDF 0.6.0 (Date TBD)
 
