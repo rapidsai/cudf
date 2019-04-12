@@ -382,3 +382,54 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     nvtx_range_pop()
 
     return df
+
+
+def write_csv( df, filepath, lineterminator='\n', sep=',',
+               true_value='true', false_value='false' )
+    """
+    Create a CSV file from a DataFrame
+
+    Parameters
+    ----------
+    filepath : str
+        Path of file to write CSV formatted data.
+    sep : char, default ','
+        Character to be used between column values.
+    lineterminator: char, default '\\n'
+        Character to be used at the end of each line.
+    true_value: str, default 'true'
+        String to be used for int8 values !=0.
+    false_value: str, default 'false'
+        String to be used for int8 values ==0.
+
+    """
+
+    if df is None:
+        raise ValueError("df parameter must be specified")
+    if len(df.columns)==0:
+        raise ValueError("no columns in df")
+    if filepath is None:
+        raise ValueError("filepath parameter must be specified")
+    if sep is None:
+        sep = ','
+    if lineterminator is None:
+        lineterminator = '\n'
+    if true_value is None:
+        true_value = "true"
+    if false_value is None:
+        false_value = "false"
+
+    nvtx_range_push("CUDF_WRITE_CSV", "purple")
+
+    csv_writer = ffi.new('csv_write_arg*')
+    csv_writer.filepath = filepath.encode()
+    csv_writer.delimiter = sep.encode()
+    csv_writer.line_terminator = lineterminator.encode()
+    csv_writer.true_value = true_value.encode()
+    csv_writer.false_value = false_value.encode()
+    csv_writer.num_cols = len(df.columns)
+    csv_writer.data = 0  # gdf_columns from the df.columns
+
+    libgdf.write_csv(csv_writer)
+
+    nvtx_range_pop()

@@ -22,6 +22,8 @@
  */
 gdf_error read_csv(csv_read_arg *args);
 
+gdf_error write_csv(csv_write_arg* args);
+
 /*
  * @brief Interface to parse Parquet data to GDF columns
  */
