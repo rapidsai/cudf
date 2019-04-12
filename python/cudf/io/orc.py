@@ -25,7 +25,7 @@ def _wrap_string(text):
 
 
 @ioutils.doc_read_orc()
-def read_orc(path, engine='pyarrow', columns=None, **kwargs):
+def read_orc(path, engine='pyarrow', columns=None, skip_rows=0, num_rows=None):
     """{docstring}"""
 
     if engine == 'cudf':
@@ -46,6 +46,10 @@ def read_orc(path, engine='pyarrow', columns=None, **kwargs):
             use_cols_ptr = ffi.new('char*[]', arr_cols)
             orc_reader.use_cols = use_cols_ptr
             orc_reader.use_cols_len = len(columns)
+
+        orc_reader.skip_rows = skip_rows
+        if num_rows is not None:
+            orc_reader.num_rows = num_rows
 
         # Call to libcudf
         libgdf.read_orc(orc_reader)
@@ -77,10 +81,6 @@ def read_orc(path, engine='pyarrow', columns=None, **kwargs):
         df = DataFrame()
         for k, v in zip(new_names, outcols):
             df[k] = v
-
-        # Set column to use as row indexes if available
-        if orc_reader.index_col != ffi.NULL:
-            df = df.set_index(df.columns[orc_reader.index_col[0]])
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
         orc_file = orc.ORCFile(path)
