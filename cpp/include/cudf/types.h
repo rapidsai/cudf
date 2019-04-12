@@ -178,7 +178,6 @@ typedef enum {
 } gdf_agg_op;
 
 
-
 /** 
  * @brief  Colors for use with NVTX ranges.
  *
@@ -275,15 +274,6 @@ typedef enum{
   GDF_ORDER_ASC,
   GDF_ORDER_DESC
 } order_by_type;
-
-typedef enum{
-  GDF_EQUALS,
-  GDF_NOT_EQUALS,
-  GDF_LESS_THAN,
-  GDF_LESS_THAN_OR_EQUALS,
-  GDF_GREATER_THAN,
-  GDF_GREATER_THAN_OR_EQUALS
-} gdf_comparison_operator;
 
 typedef enum{
   GDF_WINDOW_RANGE,

@@ -16,6 +16,10 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
+cdef gdf_dtype get_dtype(dtype)
+
+cdef get_scalar_value(gdf_scalar scalar)
+
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
@@ -35,6 +39,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
+    ctypedef long    gdf_timestamp
     ctypedef int     gdf_date32
     ctypedef int     gdf_category
     ctypedef int     gdf_nvstring_category
@@ -170,14 +175,6 @@ cdef extern from "cudf.h" nogil:
         GDF_ORDER_ASC,
         GDF_ORDER_DESC
 
-    ctypedef enum gdf_comparison_operator:
-        GDF_EQUALS,
-        GDF_NOT_EQUALS,
-        GDF_LESS_THAN,
-        GDF_LESS_THAN_OR_EQUALS,
-        GDF_GREATER_THAN,
-        GDF_GREATER_THAN_OR_EQUALS
-
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -213,7 +210,6 @@ cdef extern from "cudf.h" nogil:
         GDF_BITWISE_OR,
         GDF_BITWISE_XOR,
 
-
     ctypedef enum gdf_unary_math_op:
         GDF_SIN,
         GDF_COS,
@@ -229,17 +225,21 @@ cdef extern from "cudf.h" nogil:
         GDF_ABS,
         GDF_BIT_INVERT,
 
+    ctypedef union gdf_data:
+        char          si08
+        short         si16
+        int           si32
+        long          si64
+        float         fp32
+        double        fp64
+        gdf_date32    dt32
+        gdf_date64    dt64
+        gdf_timestamp tmst
 
     ctypedef struct gdf_scalar:
-        void *data
+        gdf_data  data
         gdf_dtype dtype
-
-
-    cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
-
-    cdef gdf_error gdf_nvtx_range_push_hex(char * name, unsigned int color )
-
-    cdef gdf_error gdf_nvtx_range_pop()
+        bool      is_valid
 
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
 
@@ -294,24 +294,9 @@ cdef extern from "cudf.h" nogil:
                                        size_t sizeof_key, size_t sizeof_val)
     cdef gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl)
 
-    cdef gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
-                               gdf_column *keycol,
-                               gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
+    cdef gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                    gdf_column *keycol,
-                                    gdf_column *valcol)
 
     cdef gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,
         unsigned begin_bit, unsigned end_bit)
@@ -319,32 +304,7 @@ cdef extern from "cudf.h" nogil:
     size_t sizeof_key, size_t sizeof_val)
     cdef gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl)
 
-    cdef gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
+    cdef gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
                                          gdf_column *keycol, gdf_column *valcol,
                                          unsigned num_segments,
                                          unsigned *d_begin_offsets,
@@ -400,8 +360,6 @@ cdef extern from "cudf.h" nogil:
                                  gdf_column * partitioned_output[],
                                  int partition_offsets[],
                                  gdf_hash_func hash)
-
-    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, bool inclusive)
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
@@ -506,24 +464,7 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
-
-    cdef unsigned int gdf_reduction_get_intermediate_output_size()
-
-    cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     
-    cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation)
-
-    cdef gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation)
-
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
@@ -629,4 +570,9 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
-    
+
+    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color ) except +
+
+    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
+
+    cdef gdf_error gdf_nvtx_range_pop() except +

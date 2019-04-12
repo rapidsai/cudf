@@ -61,18 +61,6 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - filter tests ----------------------------------------------------------------------------------
-
-set(FILTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
-
-ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
-
-###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC 
@@ -147,6 +135,15 @@ set(QUANTILES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
+
+###################################################################################################
+# - reduction tests ---------------------------------------------------------------------------------
+
+set(REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+
+ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
 # - replace tests ---------------------------------------------------------------------------------
