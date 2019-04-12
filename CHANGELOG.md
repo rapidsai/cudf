@@ -47,6 +47,7 @@
 - PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
 - PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
+- PR #1392 Update cudf Dockerfile and package_versions.sh
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
