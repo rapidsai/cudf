@@ -303,10 +303,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
-
-
 def apply_segsort(col_keys, col_vals, segments, descending=False,
                   plan=None):
     """Inplace segemented sort
