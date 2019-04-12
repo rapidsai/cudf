@@ -138,7 +138,7 @@ def test_exact_quantiles(int_method):
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
-    df = pd.DataFrame(arr, columns=['a'])
+    df = pd.DataFrame(arr)
     gdf_series = Series(arr)
 
     q1 = gdf_series.quantile(quant_values, interpolation=int_method,
@@ -155,7 +155,7 @@ def test_exact_quantiles_int(int_method):
     arr = np.asarray([7, 0, 3, 4, 2, 1, -1, 1, 6])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
-    df = pd.DataFrame(arr, columns=['a'])
+    df = pd.DataFrame(arr)
     gdf_series = Series(arr)
 
     q1 = gdf_series.quantile(quant_values, interpolation=int_method,
@@ -165,6 +165,7 @@ def test_exact_quantiles_int(int_method):
 
     np.testing.assert_allclose(q1.to_pandas().values,
                                np.array(q2.values).T.flatten(), rtol=1e-10)
+
 
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
