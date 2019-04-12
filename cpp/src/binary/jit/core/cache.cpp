@@ -15,7 +15,9 @@
  */
 
 #include "cache.h"
-#include <utilities/error_utils.hpp>
+
+namespace cudf {
+namespace jit {
 
 std::string getTempDir()
 {
@@ -42,9 +44,6 @@ std::string getTempDir()
     #endif // __unix__
 }
 
-namespace cudf {
-namespace jit {
-
 cudfJitCache::cudfJitCache() { }
 
 cudfJitCache::~cudfJitCache() { }
@@ -59,46 +58,13 @@ std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_program_cache_mutex);
 
-    // Find memory cached preprocessed program
-    auto prog_it = program_map.find(prog_name);
-    if ( prog_it != program_map.end()) {
-        return prog_it->second;
-    }
-    else { // Find file cached preprocessed program
-        bool successful_read = false;
-        std::string prog_string;
-        #if defined(JITIFY_USE_CACHE)
-            std::string prog_file_name = getTempDir() + prog_name;
-            std::ifstream prog_file (prog_file_name, std::ios::binary);
-            if (prog_file) {
-                std::stringstream buffer;
-                buffer << prog_file.rdbuf();
-                std::string magic_header;
-                std::getline(buffer, magic_header);
-                if (magic_header == CUDF_STRINGIFY(CUDF_VERSION)) {
-                    prog_string = buffer.str().substr(magic_header.size()+1);
-                    successful_read = true;
-                }
-            }
-        #endif
-        if (not successful_read) {
-            // JIT preprocess the program and write to file if possible
-            prog_string = jitify_v2::Program(cuda_source,
-                                            given_headers,
-                                            given_options,
-                                            file_callback)
-                                            .serialize();
-            #if defined(JITIFY_USE_CACHE)
-                std::ofstream prog_file(prog_file_name, std::ios::binary);
-                prog_file << CUDF_STRINGIFY(CUDF_VERSION) << std::endl << prog_string;
-            #endif
+    return getCached(prog_name, program_map, 
+        [&](){return jitify_v2::Program(cuda_source,
+                                        given_headers,
+                                        given_options,
+                                        file_callback);
         }
-        // Add deserialized program to cache and return
-        auto program = std::make_shared<jitify_v2::Program>(
-            jitify_v2::Program::deserialize(prog_string));
-        program_map[prog_name] = program;
-        return program;
-    }
+    );
 }
 
 std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
@@ -113,44 +79,11 @@ std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantia
     std::string kern_inst_name = kern_name;
     for ( auto&& arg : arguments ) kern_inst_name += '_' + arg;
 
-    // Find memory cached kernel instantiation
-    auto kern_inst_it = kernel_inst_map.find(kern_inst_name);
-    if ( kern_inst_it != kernel_inst_map.end()) {
-        return kern_inst_it->second;
-    }
-    else { // Find file cached kernel instantiation
-        bool successful_read = false;
-        std::string kern_inst_string;
-        #if defined(JITIFY_USE_CACHE)
-            std::string kern_file_name = getTempDir() + kern_inst_name;
-            std::ifstream kern_file (kern_file_name, std::ios::binary);
-            if (kern_file) {
-                std::stringstream buffer;
-                buffer << kern_file.rdbuf();
-                std::string magic_header;
-                std::getline(buffer, magic_header);
-                if (magic_header == CUDF_STRINGIFY(CUDF_VERSION)) {
-                    kern_inst_string = buffer.str().substr(magic_header.size()+1);
-                    successful_read = true;
-                }
-            }
-        #endif
-        if (not successful_read) {
-            // JIT compile the kernel and write to file if possible
-            kern_inst_string = program.kernel(kern_name)
-                                      .instantiate(arguments)
-                                      .serialize();
-            #if defined(JITIFY_USE_CACHE)
-                std::ofstream kern_file(kern_file_name, std::ios::binary);
-                kern_file << CUDF_STRINGIFY(CUDF_VERSION) << std::endl << kern_inst_string;
-            #endif
+    return getCached(kern_name, kernel_inst_map, 
+        [&](){return program.kernel(kern_name)
+                            .instantiate(arguments);
         }
-        // Add deserialized kernel to cache and return
-        auto kernel = std::make_shared<jitify_v2::KernelInstantiation>(
-            jitify_v2::KernelInstantiation::deserialize(kern_inst_string));
-        kernel_inst_map[kern_inst_name] = kernel;
-        return kernel;
-    }
+    );
 }
 
 // Another overload for getKernelInstantiation which might be useful to get

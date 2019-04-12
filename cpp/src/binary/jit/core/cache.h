@@ -17,6 +17,7 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <utilities/error_utils.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
@@ -25,6 +26,8 @@
 
 namespace cudf {
 namespace jit {
+
+std::string getTempDir();
 
 class cudfJitCache
 {
@@ -60,6 +63,50 @@ private:
 
     std::mutex _kernel_cache_mutex;
     std::mutex _program_cache_mutex;
+
+private:
+    template <typename T, typename FallbackFunc>
+    std::shared_ptr<T> getCached(
+        std::string name,
+        umap_str_shptr<T>& map,
+        FallbackFunc func) {
+
+        // Find memory cached T object
+        auto it = map.find(name);
+        if ( it != map.end()) {
+            return it->second;
+        }
+        else { // Find file cached T object
+            bool successful_read = false;
+            std::string serialized;
+            #if defined(JITIFY_USE_CACHE)
+                std::string file_name = getTempDir() + name;
+                std::ifstream file (file_name, std::ios::binary);
+                if (file) {
+                    std::stringstream buffer;
+                    buffer << file.rdbuf();
+                    std::string magic_header;
+                    std::getline(buffer, magic_header);
+                    if (magic_header == CUDF_STRINGIFY(CUDF_VERSION)) {
+                        serialized = buffer.str().substr(magic_header.size()+1);
+                        successful_read = true;
+                    }
+                }
+            #endif
+            if (not successful_read) {
+                // JIT compile and write to file if possible
+                serialized = func().serialize();
+                #if defined(JITIFY_USE_CACHE)
+                    std::ofstream file(file_name, std::ios::binary);
+                    file << CUDF_STRINGIFY(CUDF_VERSION) << std::endl << serialized;
+                #endif
+            }
+            // Add deserialized T to cache and return
+            auto program = std::make_shared<T>(T::deserialize(serialized));
+            map[name] = program;
+            return program;
+        }
+    }
 };
 
 } // namespace jit
