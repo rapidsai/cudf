@@ -78,10 +78,10 @@ def test_segradixsort(nelem, num_segments, descending, dtype):
     libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
 
     # Sort
-    libgdf.gdf_segmented_radixsort_generic(plan, col_key, col_val,
-                                           num_segments,
-                                           unwrap_devary(d_begin_offsets),
-                                           unwrap_devary(d_end_offsets))
+    libgdf.gdf_segmented_radixsort(plan, col_key, col_val,
+                                   num_segments,
+                                   unwrap_devary(d_begin_offsets),
+                                   unwrap_devary(d_end_offsets))
 
     # Cleanup
     libgdf.gdf_segmented_radixsort_plan_free(plan)
