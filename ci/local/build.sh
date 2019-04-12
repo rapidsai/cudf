@@ -26,26 +26,26 @@ fi
 
 while getopts ":hHr:i:s" option; do
     case ${option} in
-	r)
+        r)
             REPO_PATH=${OPTARG}
             ;;
-	i)
+        i)
             DOCKER_IMAGE=${OPTARG}
             ;;
 	s)
-	    CONTAINER_SHELL_ONLY=1
-	    ;;
-	h)
-	    echo "${SHORTHELP}"
+            CONTAINER_SHELL_ONLY=1
+            ;;
+        h)
+            echo "${SHORTHELP}"
             exit 0
             ;;
-	H)
-	    echo "${LONGHELP}"
+        H)
+            echo "${LONGHELP}"
             exit 0
             ;;
         *)
             echo "ERROR: Invalid flag"
-	    echo "${SHORTHELP}"
+            echo "${SHORTHELP}"
             exit 1
             ;;
     esac
