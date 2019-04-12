@@ -162,19 +162,36 @@ class device_buffer {
 public:
   device_buffer() noexcept = default;
   device_buffer(size_t cnt, cudaStream_t stream = 0):
-    stream_(stream), count_(cnt){
-    resize(count_);
+    stream_(stream){
+    resize(cnt);
   }
 
   T* data() const noexcept {return d_data_;}
   size_t size() const noexcept {return count_;}
 
   void resize(size_t cnt) {
-    count_ = cnt;
-    const auto error = RMM_REALLOC(&d_data_, count_*sizeof(T), stream_);
+    // new size is zero, free the buffer if not null
+    if(cnt == 0 && d_data_ != nullptr) {
+      RMM_FREE(d_data_, stream_);
+      d_data_ = nullptr;
+      count_ = cnt;
+      return;
+    }
+
+    T* new_ptr = nullptr;
+    const auto error = RMM_ALLOC(&new_ptr, cnt*sizeof(T), stream_);
     if(error != RMM_SUCCESS) {
       cudf::detail::throw_cuda_error(cudaErrorMemoryAllocation, __FILE__, __LINE__);
     }
+    // Copy to the new buffer, if some memory was already allocated
+    if (count_ != 0) {
+      const size_t copy_bytes = min(cnt, count_)*sizeof(T);
+      CUDA_TRY(cudaMemcpyAsync(new_ptr, d_data_, copy_bytes, cudaMemcpyDefault, stream_));
+      RMM_FREE(d_data_, stream_);
+    }
+
+    d_data_ = new_ptr;
+    count_ = cnt;
   }
 
   device_buffer(device_buffer& ) = delete;
