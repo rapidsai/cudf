@@ -11,6 +11,7 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1419 Initial CSV writer function
 
 ## Improvements
 

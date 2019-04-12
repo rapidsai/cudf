@@ -384,8 +384,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     return df
 
 
-def write_csv( df, filepath, lineterminator='\n', sep=',',
-               true_value='true', false_value='false' )
+def write_csv(df, filepath, lineterminator='\n', sep=',',
+              true_value='true', false_value='false'):
     """
     Create a CSV file from a DataFrame
 
@@ -406,7 +406,7 @@ def write_csv( df, filepath, lineterminator='\n', sep=',',
 
     if df is None:
         raise ValueError("df parameter must be specified")
-    if len(df.columns)==0:
+    if len(df.columns) == 0:
         raise ValueError("no columns in df")
     if filepath is None:
         raise ValueError("filepath parameter must be specified")
