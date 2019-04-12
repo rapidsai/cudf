@@ -576,7 +576,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	gdf_error err = gdf_comparison(left_column, right_column, output_column, gdf_comparison_operator::GDF_EQUALS);
+	gdf_error err = gdf_binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL);
 	EXPECT_EQ(GDF_SUCCESS, err);
 
 	int8_t * data = new int8_t[rows_size];

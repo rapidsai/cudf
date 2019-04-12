@@ -38,7 +38,7 @@ from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 
@@ -294,15 +294,23 @@ class DataFrame(object):
         return self._size
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
     @property
     def empty(self):
         return not len(self)
+
+    def _get_numeric_data(self):
+        """ Return a dataframe with only numeric data types """
+        columns = [c for c, dt in self.dtypes.items()
+                   if dt != object and
+                   not pd.api.types.is_categorical_dtype(dt)]
+        return self[columns]
 
     def assign(self, **kwargs):
         """
@@ -430,11 +438,15 @@ class DataFrame(object):
             len(self),
         )
 
-    # binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other):
+    # unary, binary, rbinary, orderedcompare, unorderedcompare
+    def _apply_op(self, fn, other=None):
         result = DataFrame()
         result.set_index(self.index)
-        if isinstance(other, Sequence):
+        if other is None:
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], fn)()
+            return result
+        elif isinstance(other, Sequence):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
@@ -465,13 +477,6 @@ class DataFrame(object):
                     "supported at this time.")
         return result
 
-    def _unaryop(self, fn):
-        result = DataFrame()
-        result.set_index(self.index)
-        for col in self._cols:
-            result[col] = self._cols[col]._unaryop(fn)
-        return result
-
     def __add__(self, other):
         return self._apply_op('__add__', other)
 
@@ -490,11 +495,14 @@ class DataFrame(object):
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def __mod__(self, other):
+        return self._apply_op('__mod__', other)
+
+    def __rmod__(self, other):
+        return self._apply_op('__rmod__', other)
+
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._apply_op('__pow__', other)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
@@ -537,8 +545,44 @@ class DataFrame(object):
     def __ge__(self, other):
         return self._apply_op('__ge__', other)
 
+    def __invert__(self):
+        return self._apply_op('__invert__')
+
+    def __neg__(self):
+        return self._apply_op('__neg__')
+
+    def __abs__(self):
+        return self._apply_op('__abs__')
+
     def __iter__(self):
         return iter(self.columns)
+
+    def sin(self):
+        return self._apply_op('sin')
+
+    def cos(self):
+        return self._apply_op('cos')
+
+    def tan(self):
+        return self._apply_op('tan')
+
+    def asin(self):
+        return self._apply_op('asin')
+
+    def acos(self):
+        return self._apply_op('acos')
+
+    def atan(self):
+        return self._apply_op('atan')
+
+    def exp(self):
+        return self._apply_op('exp')
+
+    def log(self):
+        return self._apply_op('log')
+
+    def sqrt(self):
+        return self._apply_op('sqrt')
 
     def iteritems(self):
         """ Iterate over column names and series pairs """
@@ -815,7 +859,7 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels):
+    def drop(self, labels, axis=None):
         """Drop column(s)
 
         Parameters
@@ -849,6 +893,9 @@ class DataFrame(object):
         3    3
         4    4
         """
+        if axis == 0:
+            raise NotImplementedError("Can only drop columns, not rows")
+
         columns = [labels] if isinstance(labels, str) else list(labels)
 
         outdf = self.copy()
@@ -872,6 +919,13 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def pop(self, item):
+        """Return a column and drop it from the DataFrame.
+        """
+        popped = self[item]
+        del self[item]
+        return popped
 
     def rename(self, mapper=None, columns=None, copy=True, inplace=False):
         """
@@ -1257,6 +1311,34 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
+    def melt(self, **kwargs):
+        """Unpivots a DataFrame from wide format to long format,
+        optionally leaving identifier variables set.
+
+        Parameters
+        ----------
+        frame : DataFrame
+        id_vars : tuple, list, or ndarray, optional
+            Column(s) to use as identifier variables.
+            default: None
+        value_vars : tuple, list, or ndarray, optional
+            Column(s) to unpivot.
+            default: all columns that are not set as `id_vars`.
+        var_name : scalar
+            Name to use for the `variable` column.
+            default: frame.columns.name or 'variable'
+        value_name : str
+            Name to use for the `value` column.
+            default: 'value'
+
+        Returns
+        -------
+        out : DataFrame
+            Melted result
+        """
+        from cudf.reshape.general import melt
+        return melt(self, **kwargs)
+
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, lsuffix=None, rsuffix=None,
               type="", method='hash', indicator=False, suffixes=('_x', '_y')):
@@ -1317,7 +1399,7 @@ class DataFrame(object):
         2    4    14.0    12.0
         """
         import nvstrings
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        nvtx_range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -1549,7 +1631,7 @@ class DataFrame(object):
             new_index = new_index[indexed-1]
             df.index = new_index
 
-        _gdf.nvtx_range_pop()
+        nvtx_range_pop()
 
         return df
 
@@ -1580,7 +1662,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        nvtx_range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1730,14 +1812,14 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import Groupby
 
-            _gdf.nvtx_range_push("CUDF_GROUPBY", "purple")
+            nvtx_range_push("CUDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
                              level=level)
             return result
 
-    def query(self, expr):
+    def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -1750,6 +1832,9 @@ class DataFrame(object):
             A boolean expression. Names in expression refer to columns.
 
             Names starting with `@` refer to Python variables
+
+        local_dict : dict
+            Containing the local variable to be used in query.
 
         Returns
         -------
@@ -1779,13 +1864,31 @@ class DataFrame(object):
         >>> print(df.query('datetimes==@search_date'))
                         datetimes
         1 2018-10-08T00:00:00.000
+
+        Using local_dict:
+
+        >>> import numpy as np
+        >>> import datetime
+        >>> df = cudf.DataFrame()
+        >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+        >>> df['datetimes'] = data
+        >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+        >>> print(df.query('datetimes==@search_date',
+        >>>         local_dict={'search_date':search_date2}))
+                        datetimes
+        1 2018-10-08T00:00:00.000
         """
-        _gdf.nvtx_range_push("CUDF_QUERY", "purple")
+        if not isinstance(local_dict, dict):
+            raise TypeError("local_dict type: expected dict but found {!r}"
+                            .format(type(local_dict)))
+
+        nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
             'locals': callframe.f_locals,
             'globals': callframe.f_globals,
+            'local_dict': local_dict,
         }
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
@@ -1796,7 +1899,7 @@ class DataFrame(object):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        _gdf.nvtx_range_pop()
+        nvtx_range_pop()
         return result
 
     @applyutils.doc_apply()
@@ -2040,6 +2143,122 @@ class DataFrame(object):
 
         if not inplace:
             return outdf
+
+    def describe(self, percentiles=None, include=None, exclude=None):
+        """Compute summary statistics of a DataFrame's columns. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        include: str, list-like, optional
+            The dtypes to be included in the output summary statistics. Columns
+            of dtypes not included in this list will not be part of the output.
+            If include='all', all dtypes are included. Default of None includes
+            all numeric columns.
+
+        exclude: str, list-like, optional
+            The dtypes to be excluded from the output summary statistics.
+            Columns of dtypes included in this list will not be part of the
+            output. Default of None excludes no columns.
+
+        Returns
+        -------
+        output_frame : DataFrame
+            Summary statistics of relevant columns in the original dataframe.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+
+        Describing a ``DataFrame``. By default all numeric fields
+        are returned.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> gdf['d'] = [1.0, 2.0, 3.0]
+        >>> gdf['d'] = gdf['d'].astype('float32')
+        >>> print(gdf.describe())
+           stats    a    b    d
+        0  count  3.0  3.0  3.0
+        1   mean  2.0  2.0  2.0
+        2    std  1.0  1.0  1.0
+        3    min  1.0  1.0  1.0
+        4    25%  1.5  1.5  1.5
+        5    50%  1.5  1.5  1.5
+        6    75%  2.5  2.5  2.5
+        7    max  3.0  3.0  3.0
+
+        Using the ``include`` keyword to describe only specific dtypes.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> print(gdf.describe(include='int'))
+           stats    a
+        0  count  3.0
+        1   mean  2.0
+        2    std  1.0
+        3    min  1.0
+        4    25%  1.5
+        5    50%  1.5
+        6    75%  2.5
+        7    max  3.0
+        """
+
+        def _create_output_frame(data, percentiles=None):
+            # hack because we don't support strings in indexes
+            columns = data.columns
+            out_df = data[columns[0]].describe(percentiles=percentiles)
+            for col in columns[1:]:
+                out_df[col] = data[col].describe(percentiles=percentiles)[col]
+
+            return out_df
+
+        if not include and not exclude:
+            numeric_data = self.select_dtypes(np.number)
+            output_frame = _create_output_frame(numeric_data, percentiles)
+
+        elif include == 'all':
+            if exclude:
+                raise ValueError("Cannot exclude when include='all'.")
+
+            included_data = self.select_dtypes(np.number)
+            output_frame = _create_output_frame(included_data, percentiles)
+            logging.warning("Describe does not yet include StringColumns or "
+                            "DatetimeColumns.")
+
+        else:
+            if not include:
+                include = np.number
+
+            included_data = self.select_dtypes(include=include,
+                                               exclude=exclude)
+            if included_data.empty:
+                raise ValueError("No data of included types.")
+            output_frame = _create_output_frame(included_data, percentiles)
+
+        return output_frame
 
     def to_pandas(self):
         """
@@ -2359,6 +2578,35 @@ class DataFrame(object):
                                          exact=exact,
                                          quant_index=False)
         return result
+
+    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+        """Return the mean of the values for the requested axis.
+
+        Parameters
+        ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on.
+
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        level : int or level name, default None
+            If the axis is a MultiIndex (hierarchical), count along a
+            particular level, collapsing into a Series.
+
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data. Not implemented for
+            Series.
+
+        **kwargs
+            Additional keyword arguments to be passed to the function.
+
+        Returns
+        -------
+        mean : Series or DataFrame (if level specified)
+        """
+        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.

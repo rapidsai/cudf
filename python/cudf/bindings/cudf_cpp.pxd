@@ -175,14 +175,6 @@ cdef extern from "cudf.h" nogil:
         GDF_ORDER_ASC,
         GDF_ORDER_DESC
 
-    ctypedef enum gdf_comparison_operator:
-        GDF_EQUALS,
-        GDF_NOT_EQUALS,
-        GDF_LESS_THAN,
-        GDF_LESS_THAN_OR_EQUALS,
-        GDF_GREATER_THAN,
-        GDF_GREATER_THAN_OR_EQUALS
-
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -219,16 +211,25 @@ cdef extern from "cudf.h" nogil:
         GDF_BITWISE_XOR,
 
 
+    ctypedef enum gdf_unary_math_op:
+        GDF_SIN,
+        GDF_COS,
+        GDF_TAN,
+        GDF_ARCSIN,
+        GDF_ARCCOS,
+        GDF_ARCTAN,
+        GDF_EXP,
+        GDF_LOG,
+        GDF_SQRT,
+        GDF_CEIL,
+        GDF_FLOOR,
+        GDF_ABS,
+        GDF_BIT_INVERT,
+
+
     ctypedef struct gdf_scalar:
         void *data
         gdf_dtype dtype
-
-
-    cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
-
-    cdef gdf_error gdf_nvtx_range_push_hex(char * name, unsigned int color )
-
-    cdef gdf_error gdf_nvtx_range_pop()
 
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
 
@@ -284,24 +285,9 @@ cdef extern from "cudf.h" nogil:
                                        size_t sizeof_key, size_t sizeof_val)
     cdef gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl)
 
-    cdef gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
-                               gdf_column *keycol,
-                               gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
+    cdef gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-    cdef gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                    gdf_column *keycol,
-                                    gdf_column *valcol)
 
     cdef gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,
         unsigned begin_bit, unsigned end_bit)
@@ -309,32 +295,7 @@ cdef extern from "cudf.h" nogil:
     size_t sizeof_key, size_t sizeof_val)
     cdef gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl)
 
-    cdef gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-    cdef gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
+    cdef gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
                                          gdf_column *keycol, gdf_column *valcol,
                                          unsigned num_segments,
                                          unsigned *d_begin_offsets,
@@ -395,129 +356,9 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
-    cdef gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_sin_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_sin_f64(gdf_column *input, gdf_column *output)
+    cdef gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op)
 
-    cdef gdf_error gdf_cos_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cos_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cos_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_tan_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_tan_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_tan_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_asin_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_asin_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_asin_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_acos_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_acos_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_acos_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_atan_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_atan_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_atan_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_exp_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_exp_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_exp_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_log_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_log_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_log_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_sqrt_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_ceil_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_ceil_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_ceil_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_floor_generic(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_floor_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_floor_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_f32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_f32(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_f64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_f64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_i8(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_i8(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_i32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_i32(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_i64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_i64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_date32(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_date32(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i8_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i32_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_i64_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f32_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_f64_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date32_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_date64_to_date64(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_cast_timestamp_to_date64(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_i8_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_i32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_i64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_f32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_f64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_date32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_date64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
-    cdef gdf_error gdf_cast_timestamp_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
+    cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output)
 
     cdef gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output)
@@ -625,15 +466,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     
-    cdef gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation)
-    cdef gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation)
-
-    cdef gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation)
-
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
@@ -739,4 +571,9 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
-    
+
+    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color ) except +
+
+    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
+
+    cdef gdf_error gdf_nvtx_range_pop() except +
