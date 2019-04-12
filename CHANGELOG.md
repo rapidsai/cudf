@@ -50,6 +50,7 @@
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 
 
 # cuDF 0.6.0 (Date TBD)
