@@ -7,7 +7,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.datetime import DatetimeColumn
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 import collections.abc
@@ -227,6 +227,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             header_infer = -1
         csv_reader.names = ffi.NULL
         csv_reader.num_cols = 0
+        if dtype is not None:
+            if dtype_dict:
+                for k, v in dtype.items():
+                    arr_dtypes.append(_wrap_string(str(str(k)+":"+str(v))))
     else:
         if header is None:
             header_infer = -1

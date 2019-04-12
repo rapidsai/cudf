@@ -6,11 +6,19 @@
 #include <iostream>
 #include <stdexcept>
 
-#define RMM_TRY(x) \
-  if ((x) != RMM_SUCCESS) return GDF_MEMORYMANAGER_ERROR;
+#include <rmm/rmm.h>
+
+#define RMM_TRY(call)                                             \
+  do {                                                            \
+    rmmError_t const status = (call);                             \
+    if (RMM_SUCCESS != status) {                                  \
+      cudf::detail::throw_rmm_error(status, __FILE__, __LINE__);  \
+    }                                                             \
+  } while (0);
 
 #define RMM_TRY_CUDAERROR(x) \
-  if ((x) != RMM_SUCCESS) return cudaPeekAtLastError();
+  if ((x) != RMM_SUCCESS) CUDA_TRY(cudaPeekAtLastError());
+
 
 /**---------------------------------------------------------------------------*
  * @brief DEPRECATED error checking macro that verifies a condition evaluates to
@@ -35,6 +43,8 @@ namespace cudf {
  *---------------------------------------------------------------------------**/
 struct logic_error : public std::logic_error {
   logic_error(char const* const message) : std::logic_error(message) {}
+
+  logic_error(std::string const& message) : std::logic_error(message) {}
 
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
@@ -61,12 +71,6 @@ struct cuda_error : public std::runtime_error {
  * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
  * @endcode
  *
- * Example usage:
- *
- * @code
- * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
- * @endcode
- *
  * @param[in] cond Expression that evaluates to true or false
  * @param[in] reason String literal description of the reason that cond is
  * expected to be true
@@ -78,8 +82,33 @@ struct cuda_error : public std::runtime_error {
       : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
+/**---------------------------------------------------------------------------*
+ * @brief Error macro that throws an exception
+ * 
+ * Example usage:
+ * 
+ * @code
+ * CUDF_FAIL("Non-arithmetic operation is not supported");
+ * @endcode
+ *
+ * @param[in] reason String literal description of the reason
+ * @throw cudf::logic_error if the condition evaluates to false.
+ *---------------------------------------------------------------------------**/
+#define CUDF_FAIL(reason)      				     \
+    throw cudf::logic_error("cuDF failure at: " __FILE__     \
+                            ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+
 namespace cudf {
 namespace detail {
+
+inline void throw_rmm_error(rmmError_t error, const char* file,
+                             unsigned int line) {
+  // todo: throw cuda_error if the error is from cuda
+  throw cudf::logic_error(
+      std::string{"RMM error encountered at: " + std::string{file} + ":" +
+                  std::to_string(line) + ": " + std::to_string(error) + " " +
+                  rmmGetErrorString(error)});
+}
 
 inline void throw_cuda_error(cudaError_t error, const char* file,
                              unsigned int line) {

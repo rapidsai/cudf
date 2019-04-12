@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef JOIN_KERNELS_CUH
+#define JOIN_KERNELS_CUH
 
 constexpr int JoinNoneValue = -1;
 
@@ -30,7 +32,7 @@ enum class JoinType {
 
 #include <cub/cub.cuh>
 
-// constexpr int warp_size = 32;
+ constexpr int warp_size = 32;
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -510,3 +512,4 @@ __global__ void probe_hash_table_uniq_keys(
 }
 
 */
+#endif
