@@ -772,11 +772,13 @@ class DataFrame(object):
             memo = {}
         return self.copy(deep=True)
 
-    def _sanitize_columns(self, col):
+    def _sanitize_columns(self, series):
         """Sanitize pre-appended
            col values
         """
-        series = Series(col)
+        if not isinstance(series,Series):
+            series = Series(series)
+
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
             dtype = np.float64
@@ -791,17 +793,16 @@ class DataFrame(object):
             self._index = series.index
             self._size = len(series)
 
-    def _sanitize_values(self, col):
+    def _sanitize_values(self, series, SCALAR):
         """Sanitize col values before
            being added
         """
+        if SCALAR:
+            col = series
+        if not isinstance(series,Series):
+            series = Series(series)
         index = self._index
-        series = Series(col)
         sind = series.index
-
-        # This won't handle 0 dimensional arrays which should be okay
-        SCALAR = np.isscalar(col)
-
         if len(self) > 0 and len(series) == 1 and SCALAR:
             if series.dtype == np.dtype("object"):
                 gather_map = cudautils.zeros(len(index), 'int32')
@@ -812,7 +813,7 @@ class DataFrame(object):
                 return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
-        return col
+        return series
 
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
@@ -826,11 +827,14 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        self._sanitize_columns(col)
-        col = self._sanitize_values(col)
+        # Check if the input is scalar before converting to a series
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+        series = Series(col) if not SCALAR else col
+        self._sanitize_columns(series)
+        series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        series = Series(col)
         if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
