@@ -11,6 +11,7 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1420 Add script to build and test on a local gpuCI image
 
 ## Improvements
 
