@@ -32,7 +32,7 @@ while getopts ":hHr:i:s" option; do
         i)
             DOCKER_IMAGE=${OPTARG}
             ;;
-	s)
+        s)
             CONTAINER_SHELL_ONLY=1
             ;;
         h)
@@ -90,4 +90,5 @@ docker pull ${DOCKER_IMAGE}
 docker run --runtime=nvidia --rm -it -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} \
        -v ${REPO_PATH}:${REPO_PATH_IN_CONTAINER} \
        -v ${CONTAINER_BUILD_DIR}:${BUILD_DIR_IN_CONTAINER} \
+       --cap-add=SYS_PTRACE \
        ${DOCKER_IMAGE} bash -c "${COMMAND}"
