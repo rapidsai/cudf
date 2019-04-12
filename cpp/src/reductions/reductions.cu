@@ -84,15 +84,12 @@ void ReduceOp(const gdf_column *input,
     CHECK_STREAM(stream);
 
     // read back the result to host memory
-    CUDA_TRY(cudaMemcpyAsync(&scalar->data, result,
-            sizeof(T_out), cudaMemcpyDeviceToHost, stream));
-    CHECK_STREAM(stream);
+    // TODO: asynchronous copy
+    CUDA_TRY(cudaMemcpy(&scalar->data, result,
+            sizeof(T_out), cudaMemcpyDeviceToHost));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
-
-    // sync the stream
-    CUDA_TRY(cudaStreamSynchronize(stream));
 
     // set scalar is valid
     scalar->is_valid = true;
