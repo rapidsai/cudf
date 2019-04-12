@@ -18,6 +18,8 @@ cpdef get_column_valid_ptr(obj)
 
 cdef gdf_dtype get_dtype(dtype)
 
+cdef get_scalar_value(gdf_scalar scalar)
+
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)

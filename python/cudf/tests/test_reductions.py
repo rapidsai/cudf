@@ -32,9 +32,6 @@ def test_sum(dtype, nelem):
     got = sr.sum()
     expect = dtype(data.sum())
 
-    print('expect:', expect)
-    print('got:', got)
-
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
 
@@ -54,9 +51,6 @@ def test_product(dtype, nelem):
     got = sr.product()
     expect = np.product(data)
 
-    print('expect:', expect)
-    print('got:', got)
-
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
 
@@ -74,9 +68,6 @@ def test_sum_of_squares(dtype, nelem):
 
     got = sr.sum_of_squares()
     expect = (data ** 2).sum()
-
-    print('expect:', expect)
-    print('got:', got)
 
     if np.dtype(dtype).kind == 'i':
         if 0 <= expect <= np.iinfo(dtype).max:
@@ -96,9 +87,6 @@ def test_min(dtype, nelem):
     got = sr.min()
     expect = dtype(data.min())
 
-    print('expect:', expect)
-    print('got:', got)
-
     assert expect == got
 
 
@@ -109,9 +97,6 @@ def test_max(dtype, nelem):
 
     got = sr.max()
     expect = dtype(data.max())
-
-    print('expect:', expect)
-    print('got:', got)
 
     assert expect == got
 
@@ -131,9 +116,6 @@ def test_sum_masked(nelem):
     res_mask = np.asarray(bitmask, dtype=np.bool_)[:data.size]
     expect = data[res_mask].sum()
 
-    print('expect:', expect)
-    print('got:', got)
-
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
 
@@ -142,8 +124,5 @@ def test_sum_boolean():
     s = Series(np.arange(100000))
     got = (s > 1).sum(dtype=np.int32)
     expect = 99998
-
-    print('expect:', expect)
-    print('got:', got)
 
     assert expect == got
