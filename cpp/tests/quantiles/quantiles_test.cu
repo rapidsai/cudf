@@ -18,6 +18,8 @@
 
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
@@ -49,8 +51,12 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 
 
 template<typename VType>
-void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std::vector<std::vector<double>>& v_out_m, const gdf_error expected_error = GDF_SUCCESS)
+void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_appox, 
+  std::vector<std::vector<double>>& v_out_exact, const gdf_error expected_error = GDF_SUCCESS)
 {
+  cudf::test::scalar_wrapper<VType>  result_approx(VType{0});
+  cudf::test::scalar_wrapper<double> result_exact(double{0});
+
   std::vector<std::string> methods{"lin_interp", "lower", "higher", "midpoint", "nearest"};
   size_t n_methods = methods.size();
   
@@ -62,17 +68,15 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
   
   for(size_t j = 0; j<n_qs; ++j)
     {
-      VType res = 0;
       auto q = qvals[j];
-      gdf_error ret = gdf_quantile_approx(col_in, q, &res, &ctxt);
-      v_out_exact[j] = res;
+      gdf_error ret = gdf_quantile_approx(col_in, q, result_approx.get(), &ctxt);
+      v_out_appox[j] = result_approx.value();
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       
       for(size_t i = 0;i<n_methods;++i)
         {
-          double rt = 0;
-          ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, &rt, &ctxt);
-          v_out_m[i][j] = rt;
+          ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, result_exact.get(), &ctxt);
+          v_out_exact[i][j] = result_exact.value();
           
           EXPECT_EQ( ret, expected_error) << "exact " << methods[i] << " returns unexpected failure\n";
         }
@@ -173,7 +177,8 @@ TEST_F(gdf_quantile, IntegerVector)
         {
           double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
           bool flag = delta < 1.0e-8;
-          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th deviates from baseline by: " << delta;
+          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th deviates from baseline by: " << delta
+              << " val = " << v_baseline_exact[i][j] << ", " <<  v_out_exact[i][j] << std::endl;
         }
     }
 }

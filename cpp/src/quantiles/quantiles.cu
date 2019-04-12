@@ -98,13 +98,13 @@ namespace{ //unknown
     case GDF_QUANT_LINEAR:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      //TODO: safe operation to avoid overflow
+      //TODO: safe operation to avoid overflow/underflow
       result = static_cast<RetT>(static_cast<RetT>(hv[0]) + qi.fraction*static_cast<RetT>(hv[1]-hv[0]));
       break;
     case GDF_QUANT_MIDPOINT:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      //TODO: safe operation to avoid overflow
+      //TODO: safe operation to avoid overflow/underflow
       result = static_cast<RetT>(static_cast<RetT>(hv[0] + hv[1])/2.0);
       break;
     case GDF_QUANT_LOWER:
@@ -223,38 +223,44 @@ namespace{ //unknown
 
 }//unknown namespace
 
-gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
+gdf_error gdf_quantile_exact( gdf_column*         col_in,       //input column;
                               gdf_quantile_method prec,         //precision: type of quantile method calculation
                               double              q,            //requested quantile in [0,1]
-                              void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
-                                                                //(1) for uniformity of interface with <approx>;
-                                                                //(2) for possible types bigger than double, in the future;
+                              gdf_scalar*         result,       // the result
                               gdf_context*        ctxt)         //context info
 {
   GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
 
+  result->dtype = GDF_FLOAT64;
+  result->is_valid = false; // the scalar is not valid for error case
+
   ret = cudf::type_dispatcher(col_in->dtype,
                               trampoline_exact_functor{},
-                              col_in, prec, q, t_erased_res, ctxt);
+                              col_in, prec, q, &result->data, ctxt);
 
+  if( ret == GDF_SUCCESS ) result->is_valid = true;
   return ret;
 }
 
 gdf_error gdf_quantile_approx(	gdf_column*  col_in,       //input column;
                                 double       q,            //requested quantile in [0,1]
-                                void*        t_erased_res, //type-erased result of same type as column;
+                                gdf_scalar*  result,       // the result
                                 gdf_context* ctxt)         //context info
 {
   GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
 
+  result->dtype = col_in->dtype;
+  result->is_valid = false; // the scalar is not valid for error case
+
   ret = cudf::type_dispatcher(col_in->dtype,
                               trampoline_approx_functor{},
-                              col_in, q, t_erased_res, ctxt);
+                              col_in, q, &result->data, ctxt);
   
+  if( ret == GDF_SUCCESS ) result->is_valid = true;
   return ret;
 }
 

@@ -1202,7 +1202,7 @@ gdf_error gdf_group_by_count(int ncols,
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
  * @param[in] requested quantile in [0,1]
- * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
+ * @param[out] result the result as double. The type can be changed in future
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
@@ -1210,7 +1210,7 @@ gdf_error gdf_group_by_count(int ncols,
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
-                            void* t_erased_res,                            
+                            gdf_scalar*  result,
                             gdf_context* ctxt);
 
 /**
@@ -1218,14 +1218,14 @@ gdf_error gdf_quantile_exact(gdf_column* col_in,
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result; type-erased result of same type as column;
+ * @param[out] result the result as same type of column
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
-                              void* t_erased_res,
+                              gdf_scalar*  result,
                               gdf_context* ctxt);
 
 /** 
