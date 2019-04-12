@@ -20,17 +20,6 @@
 
 #include "cudf.h"
 
-#include <thrust/execution_policy.h>
-#include <thrust/system/cuda/execution_policy.h>
-#include <thrust/sort.h>
-#include <thrust/extrema.h>
-
-#include <vector>
-#include <cassert>
-#include <algorithm>
-#include <functional>
-#include <rmm/thrust_rmm_allocator.h>
-
 struct QuantiledIndex {
   size_t lower_bound;
   size_t upper_bound;
@@ -39,46 +28,5 @@ struct QuantiledIndex {
 };
 
 QuantiledIndex find_quantile_index(size_t length, double quant);
-
-
-template<typename T>
-size_t quantile_index(T* dv, size_t n, double q, double& fract_pos, cudaStream_t stream, bool flag_sorted)
-{
-  if( !flag_sorted )
-    thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-
-  double pos = q*static_cast<double>(n);//(n-1);
-  size_t k = static_cast<size_t>(pos);
-  
-  fract_pos = pos - static_cast<double>(k);
-  if( k > 0 )//using n and (k-1) gives more intuitive result than using (n-1) and k
-    --k;
-
-  return k;
-}
-
-template<typename T>
-T quantile_approx(T* dv, size_t n, double q, cudaStream_t stream = NULL, bool flag_sorted = false)
-{
-  std::vector<T> hv(2);
-  if( q >= 1.0 )
-    {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-      cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
-      return hv[0];
-    }
-
-  if( n < 2 )
-    {
-      cudaMemcpy(&hv[0], dv, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
-      return hv[0];
-    }
-
-   double fract_pos = 0;
-   size_t k = quantile_index(dv, n, q, fract_pos, stream, flag_sorted);
-
-   cudaMemcpy(&hv[0], dv+k, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
-   return hv[0];
-}
 
 
