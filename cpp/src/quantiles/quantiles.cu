@@ -27,16 +27,8 @@
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
-QuantiledIndex find_quantile_index(size_t length, double quant)
+QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
 {
-    // Todo: treat more than 52bit length input
-    // lower_bound is always equal to upper_bound if input value is more than 52bit value.
-    // because the fraction part of double is 52bits.
-    // e.g.
-    // find_quantile_index(0x2000000000000001, 0.5) will return
-    // upper_bound = 0x1000000000000000 and fraction = 0 for now.
-    // it should return 0x1000000000000001 and 0.5.
-
     // clamp quant value.
     // Todo: use std::clamp if c++17 is supported.
     quant = std::min(std::max(quant, 0.0), 1.0);
@@ -54,7 +46,7 @@ namespace{ //unknown
 
   template<typename T, typename RetT>
   gdf_error select_quantile(T* dv,
-                          size_t n,
+                          gdf_size_type n,
                           double q, 
                           gdf_quantile_method interpolation,
                           RetT& result,

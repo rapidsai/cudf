@@ -27,6 +27,6 @@ struct QuantiledIndex {
   double fraction;
 };
 
-QuantiledIndex find_quantile_index(size_t length, double quant);
+QuantiledIndex find_quantile_index(gdf_size_type length, double quant);
 
 
