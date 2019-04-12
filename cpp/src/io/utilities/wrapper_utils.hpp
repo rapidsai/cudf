@@ -150,6 +150,7 @@ using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 /**
  * @brief A helper class that owns a resizable device memory buffer.
  *
+ * Memory in the allocated buffer is not initialized in the constructors.
  * Copy construction and copy assignment are disabled to prevent
  * accidental copies.
  **/
