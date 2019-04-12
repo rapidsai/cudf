@@ -276,15 +276,6 @@ typedef enum{
 } order_by_type;
 
 typedef enum{
-  GDF_EQUALS,
-  GDF_NOT_EQUALS,
-  GDF_LESS_THAN,
-  GDF_LESS_THAN_OR_EQUALS,
-  GDF_GREATER_THAN,
-  GDF_GREATER_THAN_OR_EQUALS
-} gdf_comparison_operator;
-
-typedef enum{
   GDF_WINDOW_RANGE,
   GDF_WINDOW_ROW
 } window_function_type;
