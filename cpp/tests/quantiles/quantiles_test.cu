@@ -98,7 +98,7 @@ TEST_F(gdf_quantile, DoubleVector)
   size_t n_qs = 5;
   size_t n_methods = 5;
 
-  std::vector<VType> v_baseline_approx{-1.01, 0.15, 0.15, 1.11, 6.8};
+  std::vector<VType> v_baseline_approx{-1.01,   0.8,  0.8,    2.13,   6.8};
   std::vector<std::vector<double>> v_baseline_exact{
     {-1.01,   0.8,  0.9984, 2.13,   6.8},
     {-1.01,   0.8,  0.8,    2.13,   6.8},
@@ -147,7 +147,7 @@ TEST_F(gdf_quantile, IntegerVector)
   size_t n_qs = 5;
   size_t n_methods = 5;
 
-  std::vector<VType> v_baseline_approx{-1, 0, 0, 1, 7};
+  std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7},
@@ -181,7 +181,7 @@ TEST_F(gdf_quantile, IntegerVector)
 TEST_F(gdf_quantile, ReportValidMaskError)
 {
   using VType = int32_t;
-  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
+  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
   rmm::device_vector<VType> d_in = v;
   rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
   
@@ -195,13 +195,13 @@ TEST_F(gdf_quantile, ReportValidMaskError)
   size_t n_qs = 5;
   size_t n_methods = 5;
 
-  std::vector<VType> v_baseline_approx{-1, 0, 0, 1, 7};
+  std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
-      {-1, -1, 0, -0.5, -1},
-      {0.25, 0, 1, 0.5, 0},
-      {0.97, 0, 1, 0.5, 1},
-      {1.5, 1, 2, 1.5, 2},
-      {7, 7, 7, 7, 7}};
+    {-1.0,   1.0,   1.0,   2.0,   7.0},
+    {-1,     1,     1,     2,     7},
+    {-1,     1,     1,     2,     7},
+    {-1.0,   1.0,   1.0,   2.0,   7.0},
+    {-1,     1,     1,     2,     7}};
   
   std::vector<VType> v_out_approx(n_qs, 0);
   std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));

@@ -20,6 +20,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/wrapper_types.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 #include "cudf.h"
 
@@ -51,8 +52,7 @@ QuantiledIndex find_quantile_index(size_t length, double quant)
 
 namespace{ //unknown
 
-  template<typename T, 
-         typename RetT = double> // just in case double won't be enough to hold result, in the future
+  template<typename T, typename RetT>
   gdf_error select_quantile(T* dv,
                           size_t n,
                           double q, 
@@ -99,13 +99,13 @@ namespace{ //unknown
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       //TODO: safe operation to avoid overflow
-      result = static_cast<RetT>(static_cast<double>(hv[0]) + qi.fraction*static_cast<double>(hv[1]-hv[0]));
+      result = static_cast<RetT>(static_cast<RetT>(hv[0]) + qi.fraction*static_cast<RetT>(hv[1]-hv[0]));
       break;
     case GDF_QUANT_MIDPOINT:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       //TODO: safe operation to avoid overflow
-      result = static_cast<RetT>(static_cast<double>(hv[0] + hv[1])/2.0);
+      result = static_cast<RetT>(static_cast<RetT>(hv[0] + hv[1])/2.0);
       break;
     case GDF_QUANT_LOWER:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
@@ -163,30 +163,6 @@ namespace{ //unknown
                                ctxt->flag_sorted);
       }
   }
-
-  template<typename ColType>
-  void trampoline_approx(gdf_column*  col_in,
-                         double q,
-                         void* t_erased_res,
-                         gdf_context* ctxt)
-  {
-    ColType* ptr_res = static_cast<ColType*>(t_erased_res);
-    size_t n = col_in->size;
-    ColType* p_dv = static_cast<ColType*>(col_in->data);
-    if( ctxt->flag_sort_inplace || ctxt->flag_sorted )
-      {
-        *ptr_res = quantile_approx(p_dv, n, q, NULL, ctxt->flag_sorted);
-      }
-    else
-      {
-        rmm::device_vector<ColType> dv(n);
-        thrust::copy_n(thrust::device, /*TODO: stream*/p_dv, n, dv.begin());
-        cudaDeviceSynchronize();
-        p_dv = dv.data().get();
-
-        *ptr_res = quantile_approx(p_dv, n, q, NULL, ctxt->flag_sorted);
-      }
-  }
     
   struct trampoline_exact_functor{
     template <typename T,
@@ -210,19 +186,39 @@ namespace{ //unknown
                                                            //(2) for possible types bigger than double, in the future;
                          gdf_context*        ctxt)         //context info
     {
-      return trampoline_exact<T>(col_in, prec, q, t_erased_res, ctxt);
+      return trampoline_exact<T, double>
+                 (col_in, prec, q, t_erased_res, ctxt);
     }
   };
 
   struct trampoline_approx_functor{
+    template <typename UnderLyingT>
+    gdf_error call(gdf_column*  col_in,
+                    double       q,
+                    void*        t_erased_res,
+                    gdf_context* ctxt,
+                    UnderLyingT* data)
+    {
+      return trampoline_exact<UnderLyingT, UnderLyingT>
+                 (col_in, GDF_QUANT_LOWER, q, t_erased_res, ctxt);
+    }
+
     template <typename T>
-    void operator()(gdf_column*  col_in,       //input column;
+    gdf_error operator()(gdf_column*  col_in,       //input column;
                     double       q,            //requested quantile in [0,1]
                     void*        t_erased_res, //type-erased result of same type as column;
                     gdf_context* ctxt)         //context info)
-    {
-      trampoline_approx<T>(col_in, q, t_erased_res, ctxt);
+    { 
+      // ToDo: remove calling "call" function with UnderLying type and directly call "trampoline_exact"
+      // without this, `select_quantile` cannnot be compiled for wrapper types
+      // since double * wrapper types is not defined.
+      // The error occurs at GDF_QUANT_LINEAR and GDF_QUANT_MIDPOINT cases 
+      // even though this call won't get in.
+      T* data = static_cast<T*>( col_in->data );
+      return call(col_in, q, t_erased_res, ctxt, &cudf::detail::unwrap(data[0]));
     }
+
+
   };
 
 }//unknown namespace
@@ -255,9 +251,9 @@ gdf_error gdf_quantile_approx(	gdf_column*  col_in,       //input column;
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
 
-  cudf::type_dispatcher(col_in->dtype,
-                        trampoline_approx_functor{},
-                        col_in, q, t_erased_res, ctxt);
+  ret = cudf::type_dispatcher(col_in->dtype,
+                              trampoline_approx_functor{},
+                              col_in, q, t_erased_res, ctxt);
   
   return ret;
 }
