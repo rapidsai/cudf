@@ -16,7 +16,7 @@ from cudf.utils import cudautils, utils
 from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
