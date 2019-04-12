@@ -51,6 +51,8 @@ struct orc_bytestream_s
     const uint8_t *base;
     uint32_t pos;
     uint32_t len;
+    uint32_t fill_pos;
+    uint32_t fill_count;
     union {
         uint8_t u8[BYTESTREAM_BFRSZ];
         uint32_t u32[BYTESTREAM_BFRSZ >> 2];
@@ -62,8 +64,6 @@ struct orc_rlev1_state_s
 {
     uint32_t num_runs;
     uint32_t num_vals;
-    uint32_t fill_pos;
-    uint32_t fill_count;
     int32_t run_data[NWARPS*12];    // (delta << 24) | (count << 16) | (first_val)
 };
 
@@ -71,11 +71,6 @@ struct orc_rlev2_state_s
 {
     uint32_t num_runs;
     uint32_t num_vals;
-    uint32_t fill_pos;
-    uint32_t fill_count;
-
-    int dbg;
-
     union {
         uint32_t u32[NWARPS];
         uint64_t u64[NWARPS];
@@ -92,8 +87,6 @@ struct orc_byterle_state_s
 {
     uint32_t num_runs;
     uint32_t num_vals;
-    uint32_t fill_pos;
-    uint32_t fill_count;
     uint32_t runs_loc[NWARPS];
     uint32_t runs_pos[NWARPS];
 };
@@ -163,6 +156,8 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs, const uint
     bs->base = base - pos;
     bs->pos = (len > 0) ? pos : 0;
     bs->len = (len + pos + 7) & ~7;
+    bs->fill_pos = 0;
+    bs->fill_count = min(bs->len, BYTESTREAM_BFRSZ) >> 3;
 }
 
 /**
@@ -172,12 +167,13 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs, const uint
  * @param[in] bytes_consumed Number of bytes that were consumed
  *
  **/
-static __device__ uint32_t bytestream_flush_bytes(volatile orc_bytestream_s *bs, uint32_t bytes_consumed)
+static __device__ void bytestream_flush_bytes(volatile orc_bytestream_s *bs, uint32_t bytes_consumed)
 {
     uint32_t pos = bs->pos;
     uint32_t pos_new = min(pos + bytes_consumed, bs->len);
     bs->pos = pos_new;
-    return (pos_new >> 3) - (pos >> 3);
+    bs->fill_pos = pos;
+    bs->fill_count = (pos_new >> 3) - (pos >> 3);
 }
 
 /**
@@ -189,25 +185,14 @@ static __device__ uint32_t bytestream_flush_bytes(volatile orc_bytestream_s *bs,
  * @param[in] t thread id
  *
  **/
-static __device__ void bytestream_fill(orc_bytestream_s *bs, uint32_t pos, uint32_t count, int t)
+static __device__ void bytestream_fill(orc_bytestream_s *bs, int t)
 {
-    if ((uint32_t)t < count)
+    int count = bs->fill_count;
+    if (t < count)
     {
-        int pos8 = (pos >> 3) + t;
+        int pos8 = (bs->fill_pos >> 3) + t;
         bs->buf.u64[pos8 & ((BYTESTREAM_BFRSZ >> 3) - 1)] = (reinterpret_cast<const uint2 *>(bs->base))[pos8];
     }
-}
-
-/**
- * @brief Initial buffer fill
- *
- * @param[in] bs Byte stream input
- * @param[in] t thread id
- *
- **/
-static __device__ void bytestream_initbuf(orc_bytestream_s *bs, int t)
-{
-    bytestream_fill(bs, 0, min(bs->len, BYTESTREAM_BFRSZ) >> 3, t);
 }
 
 /**
@@ -372,14 +357,38 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s *bs, int pos)
 {
     if (bytestream_readbyte(bs, pos) > 0x7f)
     {
-        uint32_t next32 = bytestream_readu32(bs, pos);
-        uint32_t len = 1 + (__ffs((~next32) & 0x80808080) >> 3);
-        if (sizeof(T) > 4 && len == 5)
+        uint32_t next32 = bytestream_readu32(bs, pos + 1);
+        uint32_t zbit = __ffs((~next32) & 0x80808080);
+        if (sizeof(T) <= 4 || zbit)
         {
-            next32 = bytestream_readu32(bs, pos + 4);
-            len += __ffs((~next32) & 0x80808080) >> 3;
+            return 1 + (zbit >> 3); // up to 5x7 bits
         }
-        return len;
+        else
+        {
+            next32 = bytestream_readu32(bs, pos + 5);
+            zbit = __ffs((~next32) & 0x80808080);
+            if (zbit)
+            {
+                return 5 + (zbit >> 3); // up to 9x7 bits
+            }
+            else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f))
+            {
+                return 10;  // up to 70 bits
+            }
+            else
+            {
+                uint64_t next64 = bytestream_readu64(bs, pos + 10);
+                zbit = __ffsll((~next64) & 0x8080808080808080ull);
+                if (zbit)
+                {
+                    return 10 + (zbit >> 3); // Up to 18x7 bits (126)
+                }
+                else
+                {
+                    return 19; // Up to 19x7 bits (133)
+                }
+            }
+        }
     }
     else
     {
@@ -518,7 +527,6 @@ static __device__ uint32_t Integer_RLEv1(orc_bytestream_s *bs, volatile orc_rlev
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
         uint32_t lastpos = bs->pos;
-        rle->fill_pos = lastpos;
         numvals = numruns = 0;
         // Find the length and start location of each run
         while (numvals < maxvals &&  numruns < NWARPS*12)
@@ -561,7 +569,7 @@ static __device__ uint32_t Integer_RLEv1(orc_bytestream_s *bs, volatile orc_rlev
         }
         rle->num_runs = numruns;
         rle->num_vals = numvals;
-        rle->fill_count = bytestream_flush_bytes(bs, lastpos - bs->pos);
+        bytestream_flush_bytes(bs, lastpos - bs->pos);
     }
     __syncthreads();
     // Expand the runs
@@ -594,9 +602,6 @@ static __device__ uint32_t Integer_RLEv1(orc_bytestream_s *bs, volatile orc_rlev
         decode_varint(bs, pos, v);
         vals[t] = v + delta;
     }
-    __syncthreads();
-    // Refill the byte stream buffer
-    bytestream_fill(bs, rle->fill_pos, rle->fill_count, t);
     __syncthreads();
     return numvals;
 }
@@ -633,7 +638,6 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
         uint32_t lastpos = bs->pos;
-        rle->fill_pos = lastpos;
         numvals = numruns = 0;
         // Find the length and start location of each run
         while (numvals < maxvals)
@@ -692,7 +696,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
         }
         rle->num_vals = numvals;
         rle->num_runs = numruns;
-        rle->fill_count = bytestream_flush_bytes(bs, lastpos - bs->pos);
+        bytestream_flush_bytes(bs, lastpos - bs->pos);
     }
     __syncthreads();
     // Process the runs, 1 warp per run
@@ -878,9 +882,6 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
         }
     }
     __syncthreads();
-    // Refill the byte stream buffer
-    bytestream_fill(bs, rle->fill_pos, rle->fill_count, t);
-    __syncthreads();
     return rle->num_vals;
 }
 
@@ -920,7 +921,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
         uint32_t lastpos = bs->pos;
-        rle->fill_pos = lastpos;
         numvals = numruns = 0;
         // Find the length and start location of each run
         while (numvals < maxvals && numruns < NWARPS)
@@ -949,7 +949,7 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
         }
         rle->num_runs = numruns;
         rle->num_vals = numvals;
-        rle->fill_count = bytestream_flush_bytes(bs, lastpos - bs->pos);
+        bytestream_flush_bytes(bs, lastpos - bs->pos);
     }
     __syncthreads();
     numruns = rle->num_runs;
@@ -976,9 +976,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
             vals[loc + i] = bytestream_readbyte(bs, pos + (i & literal_mask));
         }
     }
-    __syncthreads();
-    // Refill the byte stream buffer
-    bytestream_fill(bs, rle->fill_pos, rle->fill_count, t);
     __syncthreads();
     return rle->num_vals;
 }
@@ -1020,17 +1017,10 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
         if (t == 0)
         {
             s->top.nulls.row = 0;
-            if (s->chunk.strm_len[CI_PRESENT] > 0)
-            {
-                bytestream_init(&s->bs, s->chunk.streams[CI_PRESENT], s->chunk.strm_len[CI_PRESENT]);
-            }
+            bytestream_init(&s->bs, s->chunk.streams[CI_PRESENT], s->chunk.strm_len[CI_PRESENT]);
         }
         __syncthreads();
-        if (s->chunk.strm_len[CI_PRESENT] > 0)
-        {
-            bytestream_initbuf(&s->bs, t);
-        }
-        else
+        if (s->chunk.strm_len[CI_PRESENT] == 0)
         {
             // No present stream: all rows are valid
             s->vals.u32[t] = ~0;
@@ -1040,6 +1030,8 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
             uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls.row, NTHREADS*32);
             uint32_t nrows;
             size_t row_in;
+
+            bytestream_fill(&s->bs, t);
             __syncthreads();
             if (s->chunk.strm_len[CI_PRESENT] > 0)
             {
@@ -1180,11 +1172,11 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
                 bytestream_init(&s->bs, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
             }
             __syncthreads();
-            bytestream_initbuf(&s->bs, t);
             while (s->top.dict.dict_len > 0)
             {
                 uint32_t numvals = min(s->top.dict.dict_len, NTHREADS), len;
                 volatile uint32_t *vals = s->vals.u32;
+                bytestream_fill(&s->bs, t);
                 __syncthreads();
                 if (IS_RLEv1(s->chunk.encoding_kind))
                 {
@@ -1278,19 +1270,16 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
         bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
     }
     __syncthreads();
-    bytestream_initbuf(&s->bs, t);
-    if ((s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
-     || s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL)
-      && !IS_DICTIONARY(s->chunk.encoding_kind))
-    {
-        bytestream_initbuf(&s->bs2, t);
-    }
     __syncthreads();
     while (s->top.data.cur_row < s->top.data.end_row)
     {
+        bytestream_fill(&s->bs, t);
+        bytestream_fill(&s->bs2, t);
         __syncthreads();
         if (t == 0)
         {
+            s->bs.fill_count = 0;
+            s->bs2.fill_count = 0;
             s->top.data.nrows = 0;
             s->top.data.max_vals = min(s->chunk.skip_count, NTHREADS);
         }
@@ -1328,8 +1317,6 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                     row_ofs_plus1[nz_pos - 1] = s->top.data.nrows + t;
                 }
                 __syncthreads();
-                
-                __syncthreads();
                 if (t == 0)
                 {
                     if (s->top.data.max_vals > NTHREADS)
@@ -1366,10 +1353,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
         {
             uint32_t numvals = s->top.data.max_vals;
             if (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
-             || s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL)
+             || s->chunk.type_kind == TIMESTAMP)
             {
-                // For these data types, we have a secondary unsigned 32-bit data stream
-                orc_bytestream_s *bs = &s->bs;//(IS_DICTIONARY(s->chunk.encoding_kind)) ? &s->bs : &s->bs2;
+                // For these data types, we have a secondary 32-bit data stream
+                orc_bytestream_s *bs = (IS_DICTIONARY(s->chunk.encoding_kind)) ? &s->bs : &s->bs2;
                 uint32_t ofs = s->top.data.buffered_count;
                 if (s->chunk.type_kind == TIMESTAMP && s->top.data.buffered_count > 0)
                 {
@@ -1464,15 +1451,16 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                 numvals = min(numvals << 3u, s->top.data.max_vals);
                 __syncthreads();
             }
-            else if (s->chunk.type_kind == LONG)
+            else if (s->chunk.type_kind == LONG || s->chunk.type_kind == DECIMAL)
             {
+                orc_bytestream_s *bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;
                 if (IS_RLEv1(s->chunk.encoding_kind))
                 {
-                    numvals = Integer_RLEv1<int64_t>(&s->bs, &s->u.rlev1, s->vals.i64, numvals, t);
+                    numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
                 }
                 else
                 {
-                    numvals = Integer_RLEv2<int64_t>(&s->bs, &s->u.rlev2, s->vals.i64, numvals, t);
+                    numvals = Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t);
                 }
                 __syncthreads();
             }
@@ -1486,11 +1474,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                 __syncthreads();
                 if (t == 0)
                 {
-                    s->u.rle8.fill_pos = s->bs.pos;
-                    s->u.rle8.fill_count = bytestream_flush_bytes(&s->bs, numvals * 4);
+                    bytestream_flush_bytes(&s->bs, numvals * 4);
                 }
-                __syncthreads();
-                bytestream_fill(&s->bs, s->u.rle8.fill_pos, s->u.rle8.fill_count, t);
                 __syncthreads();
             }
             else if (s->chunk.type_kind == DOUBLE)
@@ -1503,11 +1488,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                 __syncthreads();
                 if (t == 0)
                 {
-                    s->u.rle8.fill_pos = s->bs.pos;
-                    s->u.rle8.fill_count = bytestream_flush_bytes(&s->bs, numvals * 8);
+                    bytestream_flush_bytes(&s->bs, numvals * 8);
                 }
-                __syncthreads();
-                bytestream_fill(&s->bs, s->u.rle8.fill_pos, s->u.rle8.fill_count, t);
                 __syncthreads();
             }
             __syncthreads();
@@ -1565,7 +1547,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                             else
                             {
                                 count = 0;
-                                ptr = (uint8_t *)0xdeadbeef;
+                                //ptr = (uint8_t *)0xdeadbeef;
                             }
                         }
                         else
@@ -1576,7 +1558,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                             if (dict_idx + count > s->chunk.strm_len[CI_DATA])
                             {
                                 count = 0;
-                                ptr = (uint8_t *)0xdeadbeef;
+                                //ptr = (uint8_t *)0xdeadbeef;
                             }
                         }
                         strdesc->ptr = reinterpret_cast<const char *>(ptr);
