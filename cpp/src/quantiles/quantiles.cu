@@ -26,54 +26,106 @@
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
+QuantiledIndex find_quantile_index(size_t length, double quant)
+{
+    // Todo: treat more than 52bit length input
+    // lower_bound is always equal to upper_bound if input value is more than 52bit value.
+    // because the fraction part of double is 52bits.
+    // e.g.
+    // find_quantile_index(0x2000000000000001, 0.5) will return
+    // upper_bound = 0x1000000000000000 and fraction = 0 for now.
+    // it should return 0x1000000000000001 and 0.5.
+
+    // clamp quant value.
+    // Todo: use std::clamp if c++17 is supported.
+    quant = std::min(std::max(quant, 0.0), 1.0);
+    double val = quant*(length -1);
+    QuantiledIndex qi;
+    qi.lower_bound = std::floor(val);
+    qi.upper_bound = static_cast<size_t>(std::ceil(val));
+    qi.nearest = static_cast<size_t>(std::nearbyint(val));
+    qi.fraction = val - qi.lower_bound;
+
+    return qi;
+}
+
 namespace{ //unknown
-  template<typename VType,
-           typename RetT = double>
-    void f_quantile_tester(rmm::device_vector<VType>& d_in)
+
+  template<typename T, 
+         typename RetT = double> // just in case double won't be enough to hold result, in the future
+  gdf_error select_quantile(T* dv,
+                          size_t n,
+                          double q, 
+                          gdf_quantile_method interpolation,
+                          RetT& result,
+                          bool flag_sorted = false,
+                          cudaStream_t stream = NULL)
   {
-    using FctrType = std::function<RetT(VType, VType, double)>;
+    std::vector<T> hv(2);
 
-    FctrType lin_interp{[](VType y0, VType y1, double x){
-        return static_cast<RetT>(static_cast<double>(y0) + x*static_cast<double>(y1-y0));//(f(x) - y0) / (x - 0) = m = (y1 - y0)/(1 - 0)
-      }};
+    if( q >= 1.0 && flag_sorted )
+    {
+      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+      cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
+      result = static_cast<RetT>( hv[0] );
+      return GDF_SUCCESS;
+    }
 
-    FctrType midpoint{[](VType y0, VType y1, double x){
-        return static_cast<RetT>(static_cast<double>(y0 + y1)/2.0);
-      }};
+    if( q <= 0.0 && flag_sorted )
+    {
+      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+      cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
+      result = static_cast<RetT>( hv[0] );
+      return GDF_SUCCESS;
+    }
 
-    FctrType nearest{[](VType y0, VType y1, double x){
-        return static_cast<RetT>(x < 0.5 ? y0 : y1);
-      }};
+    if( n < 2 )
+    {
+      cudaMemcpy(&hv[0], dv, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
+      result = static_cast<RetT>( hv[0] );
+      return GDF_SUCCESS;
+    }
 
-    FctrType lowest{[](VType y0, VType y1, double x){
-        return static_cast<RetT>(y0);
-      }};
+    // sort if the input is not sorted.
+    if( !flag_sorted ){
+      thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+    }
 
-    FctrType highest{[](VType y0, VType y1, double x){
-        return static_cast<RetT>(y1);
-      }};
-  
-  
-    std::vector<std::string> methods{"lin_interp", "midpoint", "nearest", "lowest", "highest"};
-    size_t n_methods = methods.size();
-    std::vector<FctrType> vf{lin_interp, midpoint, nearest, lowest, highest};
-  
-    std::vector<double> qvals{0.0, 0.25, 0.33, 0.5, 1.0};
+    QuantiledIndex qi = find_quantile_index(n, q);
 
-  
-    assert( n_methods == methods.size() );
-  
-    for(auto q: qvals)
-      {
-        VType res = quantile_approx(d_in.data().get(), d_in.size(), q);
-        std::cout<<"q: "<<q<<"; exact res: "<<res<<"\n";
-        for(auto i = 0;i<n_methods;++i)
-          {
-            RetT rt = quantile_exact(d_in.data().get(), d_in.size(), q, vf[i]);
-            std::cout<<"q: "<<q<<"; method: "<<methods[i]<<"; rt: "<<rt<<"\n";
-          }
-      }
-  }
+    switch( interpolation )
+    {
+    case GDF_QUANT_LINEAR:
+      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      //TODO: safe operation to avoid overflow
+      result = static_cast<RetT>(static_cast<double>(hv[0]) + qi.fraction*static_cast<double>(hv[1]-hv[0]));
+      break;
+    case GDF_QUANT_MIDPOINT:
+      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      //TODO: safe operation to avoid overflow
+      result = static_cast<RetT>(static_cast<double>(hv[0] + hv[1])/2.0);
+      break;
+    case GDF_QUANT_LOWER:
+      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      result = static_cast<RetT>( hv[0] );
+      break;
+    case GDF_QUANT_HIGHER:
+      cudaMemcpy(&hv[0], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      result = static_cast<RetT>( hv[0] );
+      break;
+    case GDF_QUANT_NEAREST:
+      cudaMemcpy(&hv[0], dv+qi.nearest, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      result = static_cast<RetT>( hv[0] );
+      break;
+
+    default:
+      return GDF_UNSUPPORTED_METHOD;
+    }
+    
+    return GDF_SUCCESS;
+ }
 
   template<typename ColType,
            typename RetT = double> // just in case double won't be enough to hold result, in the future
@@ -86,6 +138,7 @@ namespace{ //unknown
     RetT* ptr_res = static_cast<RetT*>(t_erased_res);
     size_t n = col_in->size;
     ColType* p_dv = static_cast<ColType*>(col_in->data);
+    
     if( ctxt->flag_sort_inplace || ctxt->flag_sorted)
       {
         return select_quantile(p_dv,

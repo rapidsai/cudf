@@ -39,8 +39,6 @@
 #include <cmath>
 
 
-
-
 template<typename T, typename Allocator, template<typename, typename> class Vector>
 __host__ __device__
 void print_v(const Vector<T, Allocator>& v, std::ostream& os)
@@ -74,7 +72,7 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
         {
           double rt = 0;
           ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, &rt, &ctxt);
-          v_out_m[j][i] = rt;
+          v_out_m[i][j] = rt;
           
           EXPECT_EQ( ret, expected_error) << "exact " << methods[i] << " returns unexpected failure\n";
         }
@@ -102,11 +100,11 @@ TEST_F(gdf_quantile, DoubleVector)
 
   std::vector<VType> v_baseline_approx{-1.01, 0.15, 0.15, 1.11, 6.8};
   std::vector<std::vector<double>> v_baseline_exact{
-    {-1.01, -1.01, 0.15, -0.43, -1.01},
-      {0.3125, 0.15, 0.8, 0.475, 0.15},
-        {0.7805, 0.15, 0.8, 0.475, 0.8},
-          {1.62, 1.11, 2.13, 1.62, 2.13},
-            {6.8, 6.8, 6.8, 6.8, 6.8}};
+    {-1.01,   0.8,  0.9984, 2.13,   6.8},
+    {-1.01,   0.8,  0.8,    2.13,   6.8},
+    {-1.01,   0.8,  1.11,   2.13,   6.8},
+    {-1.01,   0.8,  0.955,  2.13,   6.8},
+    {-1.01,   0.8,  1.11,   2.13,   6.8}};
   
   std::vector<VType> v_out_approx(n_qs, 0);
   std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));
@@ -126,7 +124,8 @@ TEST_F(gdf_quantile, DoubleVector)
         {
           double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
           bool flag = delta < 1.0e-8;
-          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th deviates from baseline by: " << delta;
+          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th method deviates from baseline by: " << delta
+              << " val = " << v_baseline_exact[i][j] << ", " <<  v_out_exact[i][j] << std::endl;
         }
     }
 }
@@ -150,11 +149,11 @@ TEST_F(gdf_quantile, IntegerVector)
 
   std::vector<VType> v_baseline_approx{-1, 0, 0, 1, 7};
   std::vector<std::vector<double>> v_baseline_exact{
-    {-1, -1, 0, -0.5, -1},
-      {0.25, 0, 1, 0.5, 0},
-        {0.97, 0, 1, 0.5, 1},
-          {1.5, 1, 2, 1.5, 2},
-            {7, 7, 7, 7, 7}};
+    {-1.0,   1.0,   1.0,   2.0,   7.0},
+    {-1,     1,     1,     2,     7},
+    {-1,     1,     1,     2,     7},
+    {-1.0,   1.0,   1.0,   2.0,   7.0},
+    {-1,     1,     1,     2,     7}};
   
   std::vector<VType> v_out_approx(n_qs, 0);
   std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));
