@@ -82,12 +82,12 @@ void benchmark_fraction_shmoo(Bench bench, gdf_size_type column_size,
 template <typename Init, typename Bench>
 void benchmark_types(Init init, Bench bench, int iters = 100)
 {
-  benchmark<int8_t>(init, bench, iters);
-  benchmark<int16_t>(init, bench, iters);
+  //benchmark<int8_t>(init, bench, iters);
+  //benchmark<int16_t>(init, bench, iters);
   benchmark<int32_t>(init, bench, iters);
-  benchmark<int64_t>(init, bench, iters);
-  benchmark<float>(init, bench, iters);
-  benchmark<double>(init, bench, iters);
+  //benchmark<int64_t>(init, bench, iters);
+  //benchmark<float>(init, bench, iters);
+  //benchmark<double>(init, bench, iters);
 }
 
 int main(int argc, char **argv)
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
             << column_size << " elements:\n";
   benchmark_types(init, bench, iters);
 
-  auto init_no_null = [column_size](auto a) {
+  /*auto init_no_null = [column_size](auto a) {
     using TypeParam = decltype(a);
     cudf::test::column_wrapper<TypeParam> source{column_size, false};
     cudf::test::column_wrapper<cudf::bool8> mask{
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
 
   std::cout << "All false mask: Avg time to apply_boolean_mask for "
             << column_size << " elements:\n";
-  benchmark_types(init_all_false_mask, bench, iters);
+  benchmark_types(init_all_false_mask, bench, iters);*/
 
   rmmFinalize();
 
