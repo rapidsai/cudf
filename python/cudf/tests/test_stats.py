@@ -170,7 +170,7 @@ def test_exact_quantiles_int(int_method):
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
-    approx_results = [-1.01, 0.15, 0.15, 1.11, 6.8]
+    approx_results = [-1.01, 0.8, 0.8, 2.13, 6.8]
 
     gdf_series = Series(arr)
 
@@ -178,3 +178,15 @@ def test_approx_quantiles():
 
     np.testing.assert_allclose(q1.to_pandas().values, approx_results,
                                rtol=1e-10)
+
+
+def test_approx_quantiles_int():
+    arr = np.asarray([1, 2, 3])
+    quant_values = [0.5]
+    approx_results = [2]
+
+    gdf_series = Series(arr)
+
+    q1 = gdf_series.quantile(quant_values, exact=False)
+
+    assert approx_results == q1.to_pandas().values

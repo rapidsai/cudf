@@ -16,6 +16,8 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
+cdef get_scalar_value(gdf_scalar scalar)
+
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
@@ -36,6 +38,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
     ctypedef int     gdf_date32
+    ctypedef long    gdf_timestamp
     ctypedef int     gdf_category
     ctypedef int     gdf_nvstring_category
 
@@ -221,11 +224,21 @@ cdef extern from "cudf.h" nogil:
         GDF_ABS,
         GDF_BIT_INVERT,
 
+    ctypedef union gdf_data:
+        char          si08
+        short         si16
+        int           si32
+        long          si64
+        float         fp32
+        double        fp64
+        gdf_date32    dt32
+        gdf_date64    dt64
+        gdf_timestamp tmst
 
     ctypedef struct gdf_scalar:
-        void *data
+        gdf_data  data
         gdf_dtype dtype
-
+        bool      is_valid
 
     cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
 
@@ -537,17 +550,17 @@ cdef extern from "cudf.h" nogil:
                                  gdf_column* out_col_agg,
                                  gdf_context* ctxt)
 
-    cdef gdf_error gdf_quantile_exact(   gdf_column*         col_in,
+
+    cdef gdf_error gdf_quantile_exact(gdf_column*       col_in,
                                     gdf_quantile_method prec,
                                     double              q,
-                                    void*               t_erased_res,
-
-
+                                    gdf_scalar*         result,
                                     gdf_context*        ctxt)
+
 
     cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
                                     double       q,
-                                    void*        t_erased_res,
+                                    gdf_scalar*  result,
                                     gdf_context* ctxt)
 
 

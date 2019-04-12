@@ -12,6 +12,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 import nvstrings
+import cudf.bindings.quantile as cpp_quantile
 
 from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
@@ -573,7 +574,7 @@ class Column(object):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return _gdf.quantile(self, quant, interpolation, exact)
+        return cpp_quantile.apply_quantile(self, quant, interpolation, exact)
 
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.

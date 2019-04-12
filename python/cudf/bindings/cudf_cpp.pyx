@@ -67,6 +67,18 @@ cpdef get_column_data_ptr(obj):
 cpdef get_column_valid_ptr(obj):
     return get_ctype_ptr(obj._mask.mem)
 
+cdef get_scalar_value(gdf_scalar scalar):
+    return {
+        GDF_FLOAT64: scalar.data.fp64,
+        GDF_FLOAT32: scalar.data.fp32,
+        GDF_INT64:   scalar.data.si64,
+        GDF_INT32:   scalar.data.si32,
+        GDF_INT16:   scalar.data.si16,
+        GDF_INT8:    scalar.data.si08,
+        GDF_DATE32:  scalar.data.dt32,
+        GDF_DATE64:  scalar.data.dt64,
+        GDF_TIMESTAMP: scalar.data.tmst,
+    }[scalar.dtype]
 
 # gdf_column functions
 
