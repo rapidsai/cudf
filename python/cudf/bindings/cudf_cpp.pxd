@@ -240,12 +240,6 @@ cdef extern from "cudf.h" nogil:
         gdf_dtype dtype
         bool      is_valid
 
-    cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
-
-    cdef gdf_error gdf_nvtx_range_push_hex(char * name, unsigned int color )
-
-    cdef gdf_error gdf_nvtx_range_pop()
-
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
 
     cdef gdf_size_type gdf_column_sizeof()
@@ -585,4 +579,10 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                                  const gdf_column ** columns,
                                  gdf_size_type num_columns) except +
-    
+
+    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color ) except +
+
+    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
+
+    cdef gdf_error gdf_nvtx_range_pop() except +
+
