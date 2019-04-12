@@ -16,6 +16,10 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
+cdef gdf_dtype get_dtype(dtype)
+
+cdef get_scalar_value(gdf_scalar scalar)
+
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
@@ -35,6 +39,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
+    ctypedef long    gdf_timestamp
     ctypedef int     gdf_date32
     ctypedef int     gdf_category
     ctypedef int     gdf_nvstring_category
@@ -205,7 +210,6 @@ cdef extern from "cudf.h" nogil:
         GDF_BITWISE_OR,
         GDF_BITWISE_XOR,
 
-
     ctypedef enum gdf_unary_math_op:
         GDF_SIN,
         GDF_COS,
@@ -221,10 +225,21 @@ cdef extern from "cudf.h" nogil:
         GDF_ABS,
         GDF_BIT_INVERT,
 
+    ctypedef union gdf_data:
+        char          si08
+        short         si16
+        int           si32
+        long          si64
+        float         fp32
+        double        fp64
+        gdf_date32    dt32
+        gdf_date64    dt64
+        gdf_timestamp tmst
 
     ctypedef struct gdf_scalar:
-        void *data
+        gdf_data  data
         gdf_dtype dtype
+        bool      is_valid
 
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
 
@@ -346,8 +361,6 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, bool inclusive)
-
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
     cdef gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op)
@@ -451,14 +464,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
-
-    cdef unsigned int gdf_reduction_get_intermediate_output_size()
-
-    cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 

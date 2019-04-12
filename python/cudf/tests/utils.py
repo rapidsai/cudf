@@ -72,7 +72,7 @@ def gen_rand(dtype, size, **kwargs):
             return res
         else:
             return (res * 2 - 1)
-    elif dtype == np.int8:
+    elif dtype == np.int8 or np.int16:
         low = kwargs.get('low', -32)
         high = kwargs.get('high', 32)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
