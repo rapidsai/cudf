@@ -28,7 +28,6 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-#include <array>
 #include <cstring>
 #include <iostream>
 #include <numeric>
@@ -146,7 +145,7 @@ constexpr orc::gpu::StreamIndexType to_stream_index(
  * convenience methods for initializing and accessing metadata.
  **/
 class OrcMetadata {
-  using StripeInfo =
+  using OrcStripeInfo =
       std::pair<const orc::StripeInformation *, orc::StripeFooter>;
 
  public:
@@ -221,7 +220,7 @@ class OrcMetadata {
     printf(" rowIndexStride = %d\n", ff.rowIndexStride);
   }
 
-  std::vector<StripeInfo> select_stripes(uint64_t min_row, uint64_t num_rows) {
+  std::vector<OrcStripeInfo> select_stripes(uint64_t min_row, uint64_t num_rows) {
     // Exclude non-needed stripes
     while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= min_row) {
       ff.numberOfRows -= ff.stripes[0].numberOfRows;
@@ -243,7 +242,7 @@ class OrcMetadata {
     }
 
     // Read each stripe's stripefooter metadata
-    std::vector<StripeInfo> stripe_infos;
+    std::vector<OrcStripeInfo> stripe_infos;
     stripe_infos.resize(ff.stripes.size());
 
     for (size_t i = 0; i < ff.stripes.size(); ++i) {
@@ -327,6 +326,7 @@ size_t gather_stream_info(const size_t stripe_index,
 
   for (const auto &stream : stripefooter.streams) {
     if (stream.column >= orc2gdf.size()) {
+      std::cerr << "Detected invalid column in stream" << std::endl;
       dst_offset += stream.length;
       continue;
     }
@@ -397,28 +397,27 @@ uint8_t *decompress_stripe_data(
     std::vector<OrcStreamInfo> &stream_info, size_t num_stripes) {
 
   // Parse the columns' compressed info
-  hostdevice_vector<orc::gpu::CompressedStreamInfo> streams(0,
-                                                            stream_info.size());
-  for (size_t i = 0; i < streams.max_size(); ++i) {
-    streams.insert(orc::gpu::CompressedStreamInfo(
+  hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
+  for (size_t i = 0; i < compinfo.max_size(); ++i) {
+    compinfo.insert(orc::gpu::CompressedStreamInfo(
         stripe_data[stream_info[i].stripe_idx].get() + stream_info[i].dst_pos,
         stream_info[i].length));
   }
-  CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
-                           streams.memory_size(), cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
+                           compinfo.memory_size(), cudaMemcpyHostToDevice));
   CUDA_TRY(ParseCompressedStripeData(
-      streams.device_ptr(), streams.size(), decompressor->GetBlockSize(),
+      compinfo.device_ptr(), compinfo.size(), decompressor->GetBlockSize(),
       decompressor->GetLog2MaxCompressionRatio()));
-  CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
-                           streams.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(compinfo.host_ptr(), compinfo.device_ptr(),
+                           compinfo.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
 
   // Count the exact number of compressed blocks
   size_t num_compressed_blocks = 0;
   size_t total_decompressed_size = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    num_compressed_blocks += streams[i].num_compressed_blocks;
-    total_decompressed_size += streams[i].max_uncompressed_size;
+  for (size_t i = 0; i < compinfo.size(); ++i) {
+    num_compressed_blocks += compinfo[i].num_compressed_blocks;
+    total_decompressed_size += compinfo[i].max_uncompressed_size;
   }
   CUDF_EXPECTS(total_decompressed_size > 0, "No decompressible data found");
 
@@ -435,20 +434,20 @@ uint8_t *decompress_stripe_data(
   // Parse again to populate the decompression input/output buffers
   size_t decompressed_ofs = 0;
   uint32_t start_pos = 0;
-  for (size_t i = 0; i < streams.size(); ++i) {
-    streams[i].uncompressed_data = decompressed_data + decompressed_ofs;
-    streams[i].decctl = inflate_in.data().get() + start_pos;
-    streams[i].decstatus = inflate_out.data().get() + start_pos;
-    streams[i].max_compressed_blocks = streams[i].num_compressed_blocks;
+  for (size_t i = 0; i < compinfo.size(); ++i) {
+    compinfo[i].uncompressed_data = decompressed_data + decompressed_ofs;
+    compinfo[i].decctl = inflate_in.data().get() + start_pos;
+    compinfo[i].decstatus = inflate_out.data().get() + start_pos;
+    compinfo[i].max_compressed_blocks = compinfo[i].num_compressed_blocks;
 
     stream_info[i].dst_pos = decompressed_ofs;
-    decompressed_ofs += streams[i].max_uncompressed_size;
-    start_pos += streams[i].num_compressed_blocks;
+    decompressed_ofs += compinfo[i].max_uncompressed_size;
+    start_pos += compinfo[i].num_compressed_blocks;
   }
-  CUDA_TRY(cudaMemcpyAsync(streams.device_ptr(), streams.host_ptr(),
-                           streams.memory_size(), cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
+                           compinfo.memory_size(), cudaMemcpyHostToDevice));
   CUDA_TRY(ParseCompressedStripeData(
-      streams.device_ptr(), streams.size(), decompressor->GetBlockSize(),
+      compinfo.device_ptr(), compinfo.size(), decompressor->GetBlockSize(),
       decompressor->GetLog2MaxCompressionRatio()));
 
   // Dispatch batches of blocks to decompress
@@ -465,15 +464,15 @@ uint8_t *decompress_stripe_data(
       CUDF_EXPECTS(false, "Unexpected decompression dispatch");
       break;
   }
-  CUDA_TRY(PostDecompressionReassemble(streams.device_ptr(), streams.size()));
+  CUDA_TRY(PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size()));
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  CUDA_TRY(cudaMemcpyAsync(streams.host_ptr(), streams.device_ptr(),
-                           streams.memory_size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(compinfo.host_ptr(), compinfo.device_ptr(),
+                           compinfo.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
 
   // const auto num_stripes = md.ff.stripes.size();
@@ -483,9 +482,9 @@ uint8_t *decompress_stripe_data(
     for (size_t j = 0; j < num_columns; ++j) {
       auto &chunk = chunks[i * num_columns + j];
       for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; ++k) {
-        if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < streams.size()) {
-          chunk.streams[k] = streams[chunk.strm_id[k]].uncompressed_data;
-          chunk.strm_len[k] = streams[chunk.strm_id[k]].max_uncompressed_size;
+        if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
+          chunk.streams[k] = compinfo[chunk.strm_id[k]].uncompressed_data;
+          chunk.strm_len[k] = compinfo[chunk.strm_id[k]].max_uncompressed_size;
         }
       }
     }
@@ -577,8 +576,7 @@ gdf_error read_orc(orc_read_arg *args) {
   const auto stripes = md.select_stripes(0, 0x7fffffff);
 
   // Select only columns required (if it exists), otherwise select all
-  std::vector<int32_t> gdf2orc;                           // Map gdf columns to orc columns
-  std::vector<int32_t> orc2gdf(md.get_num_columns(), -1); // Map orc columns to gdf columns
+  std::vector<int32_t> selected_cols;
   if (args->use_cols) {
     std::vector<std::string> use_names(args->use_cols,
                                        args->use_cols + args->use_cols_len);
@@ -589,8 +587,7 @@ gdf_error read_orc(orc_read_arg *args) {
           index = 0;
         }
         if (md.ff.GetColumnName(index) == use_name) {
-          orc2gdf[index] = gdf2orc.size();
-          gdf2orc.emplace_back(index);
+          selected_cols.emplace_back(index);
           index++;
         }
       }
@@ -599,20 +596,23 @@ gdf_error read_orc(orc_read_arg *args) {
     // For now, only select all leaf nodes
     for (int i = 0; i < md.get_num_columns(); ++i) {
       if (md.ff.types[i].subtypes.size() == 0) {
-        orc2gdf[i] = gdf2orc.size();
-        gdf2orc.emplace_back(i);
+        selected_cols.emplace_back(i);
       }
     }
   }
-  num_columns = gdf2orc.size();
+  num_columns = selected_cols.size();
   CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
+
+  // Association between each ORC column and its gdf_column
+  std::vector<int32_t> orc_col_map(md.get_num_columns(), -1);
 
   // Initialize gdf_columns, but hold off on allocating storage space
   std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
-  for (const auto &col : gdf2orc) {
+  for (const auto &col : selected_cols) {
     auto dtype_info = to_dtype(md.ff.types[col]);
 
+    orc_col_map[col] = columns.size();
     columns.emplace_back(static_cast<gdf_size_type>(md.ff.numberOfRows),
                          dtype_info.first, dtype_info.second,
                          md.ff.GetColumnName(col));
@@ -638,13 +638,13 @@ gdf_error read_orc(orc_read_arg *args) {
     size_t stripe_start_row = 0;
     uint32_t num_dictionary_entries = 0;
     for (size_t i = 0; i < stripes.size(); ++i) {
-      const auto stripeinfo = stripes[i].first;
-      const auto stripefooter = stripes[i].second;
+      const auto stripe_info = stripes[i].first;
+      const auto stripe_footer = stripes[i].second;
 
       auto stream_count = stream_info.size();
       const auto total_data_size = gather_stream_info(
-          i, *stripeinfo, stripefooter, orc2gdf, gdf2orc, md.ff.types,
-          num_dictionary_entries, chunks, stream_info);
+          i, *stripe_info, stripe_footer, orc_col_map, selected_cols,
+          md.ff.types, num_dictionary_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
       uint8_t *d_data = nullptr;
@@ -671,16 +671,16 @@ gdf_error read_orc(orc_read_arg *args) {
       for (int j = 0; j < num_columns; j++) {
         auto &chunk = chunks[i * num_columns + j];
         chunk.start_row = stripe_start_row;
-        chunk.num_rows = stripeinfo->numberOfRows;
-        chunk.encoding_kind = stripefooter.columns[gdf2orc[j]].kind;
-        chunk.type_kind = md.ff.types[gdf2orc[j]].kind;
+        chunk.num_rows = stripe_info->numberOfRows;
+        chunk.encoding_kind = stripe_footer.columns[selected_cols[j]].kind;
+        chunk.type_kind = md.ff.types[selected_cols[j]].kind;
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
             chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
           }
         }
       }
-      stripe_start_row += stripeinfo->numberOfRows;
+      stripe_start_row += stripe_info->numberOfRows;
     }
 
     // Deallocate and replace compressed data with decompressed data
