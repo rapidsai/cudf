@@ -1,5 +1,6 @@
 # An integration test & dev container which builds and installs cuDF from master
 ARG CUDA_VERSION=9.2
+ARG CUDA_SHORT_VERSION=${CUDA_VERSION}
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
@@ -7,7 +8,6 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
 ENV DEBIAN_FRONTEND=noninteractive
-ARG CUDA_REL=9.2
 
 ARG CC=5
 ARG CXX=5
@@ -28,6 +28,7 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
+ARG CUDA_SHORT_VERSION
 ARG PYTHON_VERSION
 ENV PYTHON_VERSION=$PYTHON_VERSION
 ARG NUMBA_VERSION
@@ -54,12 +55,12 @@ ADD . /cudf/
 # the environment file based on versions set in build args
 RUN ls -la /cudf
 RUN if [ -f /cudf/docker/package_versions.sh ]; \
-    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml && \
-         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml ; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml ; \
     else rm -rf /cudf && \
          git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
-         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml && \
-         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_REL}.yml ; \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml ; \
     fi
 
 # libcudf build/install
