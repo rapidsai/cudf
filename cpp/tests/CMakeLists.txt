@@ -215,6 +215,14 @@ ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
+# - search tests -------------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/multisearch.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
+###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC

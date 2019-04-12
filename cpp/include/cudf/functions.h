@@ -1111,3 +1111,51 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+
+/**
+ * @brief Search for multiple values within a sorted table/sequence of columns
+ *
+ * @param[out] results
+ *     indices, of dtype `gdf_size_type`, of the search result for each needle
+ *     value. Must have the same length as the @p needles columns. If this
+ *     column is nullable and no element satisfies the search condition for a
+ *     given needle, the output column is set to NULL at the corresponding
+ *     position. If the column is not nullable, such needles have their
+ *     result set to the length of @p haystack.
+ * @param[in] sorted_haystack
+ *     A sequence of records represented as columns of identical length, within
+ *     which we search for the @p needles records. The column types correspond
+ *     to those in @p needles.
+ * @param[in] needles
+ *     A (short) sequence of records, represented as columns of identical length.
+ *     Each record is a "needle", to be sought in the @p haystack table. Column
+ *     types correspond to those in @p haystack.
+ * @param[in] num_columns
+ *     The number of columns of @p sorted_hatstack and @p needles.
+ * @param[in] find_first_greater
+ *     If true (resp. false), the search result is the index of the first record
+ *     in @p needles which is strictly greater (resp. greater-or-equal), in
+ *     lexicographic order) than the needle.
+ * @param[in] nulls_before_values
+ *     If true (resp. false), in sorted columns and in comparisons, NULL elements
+ *     are less-than (resp. greater-than) any non-NULL value. Note this means that,
+ *     when set to true, a `find_first_greater` search for a record with no NULL
+ *     values may find a match which has NULLs, or is all-NULLs.
+ * @param[in] use_haystack_length_for_not_found
+ *     If true, when no appropriate position is found for one of the needles,
+ *     the result will be set to the length of the haystack (an otherwise-invalid
+ *     value).If false, the results column must be nullable, and NULL will be
+ *     used to indicate the failure.
+ */
+gdf_error
+gdf_multisearch(
+    gdf_column *           results,
+    gdf_column **          sorted_haystack,
+    gdf_column **          needles,
+    gdf_num_columns_type   num_columns,
+    bool                   find_first_greater,
+    bool                   nulls_before_values,
+    bool                   use_haystack_length_for_not_found
+);
+

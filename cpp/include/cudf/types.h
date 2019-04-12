@@ -13,6 +13,9 @@ typedef	int           gdf_category;
 typedef	long          gdf_timestamp;
 typedef int           gdf_nvstring_category;
 
+typedef gdf_size_type gdf_num_columns_type;
+typedef gdf_index_type gdf_column_index_type;
+
 
  /**
  * @brief  These enums indicate the possible data types for a gdf_column
@@ -22,6 +25,7 @@ typedef enum {
     GDF_INT8,
     GDF_INT16,
     GDF_INT32,
+    GDF_SIZE_TYPE = GDF_INT32,
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
