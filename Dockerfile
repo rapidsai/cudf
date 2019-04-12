@@ -7,8 +7,8 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 # Needed for cudf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
-ENV DEBIAN_FRONTEND=noninteractive
 
+ARG DEBIAN_FRONTEND=noninteractive
 ARG CC=5
 ARG CXX=5
 RUN apt update -y --fix-missing && \
