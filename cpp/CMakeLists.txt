@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,10 +62,6 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
-
-# suppress SHFL warnings caused by Modern GPU
-# TODO: remove this when Modern GPU is removed or fixed to use shfl_sync
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
@@ -142,7 +138,6 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ZLIB_INCLUDE_DIRS}")
@@ -195,7 +190,6 @@ add_library(cudf SHARED
             src/dataframe/column.cpp
             src/dataframe/context.cpp
             src/string/nvcategory_util.cpp
-            src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
             src/sort/digitize.cu
@@ -224,13 +218,23 @@ add_library(cudf SHARED
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
-            src/unary/unary_ops.cu
+            src/unary/math_ops.cu
+            src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
+            src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
-            src/io/comp/uncomp.cpp
+            src/io/parquet/page_data.cu
+            src/io/parquet/page_hdr.cu
+            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
+            src/io/comp/uncomp.cpp
+            src/io/comp/brotli_dict.cpp
+            src/io/comp/debrotli.cu
+            src/io/comp/unsnap.cu
+            src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
@@ -274,7 +278,7 @@ if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
     find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
     target_link_libraries(cudf ${NVTX_LIBRARY})
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro USE_NVTX")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
 
 option(HT_LEGACY_ALLOCATOR "Use the legacy allocator for hash tables" ON)

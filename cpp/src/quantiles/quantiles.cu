@@ -16,15 +16,15 @@
 
 //Quantile (percentile) functionality
 
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
-
-#include "cudf.h"
+#include "quantiles.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
+#include "utilities/type_dispatcher.hpp"
 #include "rmm/thrust_rmm_allocator.h"
+#include "cudf.h"
 
-#include "quantiles.h"
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
 
 namespace{ //unknown
   template<typename VType,
@@ -135,71 +135,60 @@ namespace{ //unknown
       }
   }
     
+  struct trampoline_exact_functor{
+    template <typename T,
+              typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
+    gdf_error operator()(gdf_column* col_in,
+                         gdf_quantile_method prec,
+                         double q,
+                         void* t_erased_res,
+                         gdf_context* ctxt)
+    {
+      return GDF_UNSUPPORTED_DTYPE;
+    }
+
+    template <typename T,
+              typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
+    gdf_error operator()(gdf_column*  col_in,              //input column;
+                         gdf_quantile_method prec,         //precision: type of quantile method calculation
+                         double              q,            //requested quantile in [0,1]
+                         void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
+                                                           //(1) for uniformity of interface with <approx>;
+                                                           //(2) for possible types bigger than double, in the future;
+                         gdf_context*        ctxt)         //context info
+    {
+      return trampoline_exact<T>(col_in, prec, q, t_erased_res, ctxt);
+    }
+  };
+
+  struct trampoline_approx_functor{
+    template <typename T>
+    void operator()(gdf_column*  col_in,       //input column;
+                    double       q,            //requested quantile in [0,1]
+                    void*        t_erased_res, //type-erased result of same type as column;
+                    gdf_context* ctxt)         //context info)
+    {
+      trampoline_approx<T>(col_in, q, t_erased_res, ctxt);
+    }
+  };
+
 }//unknown namespace
 
 gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
-                                gdf_quantile_method prec,         //precision: type of quantile method calculation
-                                double              q,            //requested quantile in [0,1]
-                                void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
-                                                                  //(1) for uniformity of interface with <approx>;
-                                                                  //(2) for possible types bigger than double, in the future;
-                                gdf_context*        ctxt)         //context info
+                              gdf_quantile_method prec,         //precision: type of quantile method calculation
+                              double              q,            //requested quantile in [0,1]
+                              void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
+                                                                //(1) for uniformity of interface with <approx>;
+                                                                //(2) for possible types bigger than double, in the future;
+                              gdf_context*        ctxt)         //context info
 {
   GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
-  
-  switch( col_in->dtype )
-    {
-    case GDF_INT8:
-      {
-        using ColType = int8_t;//char;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-        
-        break;
-      }
-    case GDF_INT16:
-      {
-        using ColType = int16_t;//short;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_INT32:
-      {
-        using ColType = int32_t;//int;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_INT64:
-      {
-        using ColType = int64_t;//long;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_FLOAT32:
-      {
-        using ColType = float;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-	  
-        break;
-      }
-    case GDF_FLOAT64:
-      {
-        using ColType = double;
-        ret = trampoline_exact<ColType>(col_in, prec, q, t_erased_res, ctxt);
-	  
-        break;
-      }
 
-    default:
-      assert( false );//type not handled, yet
-    }
+  ret = cudf::type_dispatcher(col_in->dtype,
+                              trampoline_exact_functor{},
+                              col_in, prec, q, t_erased_res, ctxt);
 
   return ret;
 }
@@ -212,59 +201,11 @@ gdf_error gdf_quantile_approx(	gdf_column*  col_in,       //input column;
   GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
+
+  cudf::type_dispatcher(col_in->dtype,
+                        trampoline_approx_functor{},
+                        col_in, q, t_erased_res, ctxt);
   
-  switch( col_in->dtype )
-    {
-    case GDF_INT8:
-      {
-        using ColType = int8_t;//char;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-      }
-    case GDF_INT16:
-      {
-        using ColType = int16_t;//short;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_INT32:
-      {
-        using ColType = int32_t;//int;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_INT64:
-      {
-        using ColType = int64_t;//long;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-        
-      }
-    case GDF_FLOAT32:
-      {
-        using ColType = float;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-      }
-    case GDF_FLOAT64:
-      {
-        using ColType = double;
-        trampoline_approx<ColType>(col_in, q, t_erased_res, ctxt);
-	  
-        break;
-      }
-
-    default:
-      assert( false );//type not handled, yet
-    }
-
   return ret;
 }
 

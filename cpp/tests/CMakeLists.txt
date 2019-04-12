@@ -61,18 +61,6 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - filter tests ----------------------------------------------------------------------------------
-
-set(FILTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
-
-ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
-
-###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC 
@@ -180,11 +168,14 @@ set(BINARY_TEST_SRC
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
 ###################################################################################################
-# - csv tests -------------------------------------------------------------------------------------
+# - io tests -------------------------------------------------------------------------------------
 
+set(DECOMPRESSION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
+ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
@@ -233,6 +224,7 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")

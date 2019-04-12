@@ -133,6 +133,22 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     assert_eq(gdf1, gdf2)
 
 
+def test_csv_reader_dict_dtypes_no_names(tmpdir):
+
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
+    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
+
+    # need to save the file along with the column header
+    # in order to infer from dict_dtypes
+    df.to_csv(fname, sep=',', index=False, header=True)
+
+    out = read_csv(str(fname), delimiter=',', dtype=gdf_dict)
+    df_out = pd.read_csv(fname, delimiter=',', dtype=pd_dict, dayfirst=True)
+
+    assert len(out.columns) == len(df_out.columns)
+    assert_eq(df_out, out)
+
+
 def test_csv_reader_all_numeric_dtypes(tmpdir):
 
     # fname = os.path.abspath('cudf/tests/data/tmp_csvreader_file4.csv')
@@ -947,3 +963,16 @@ def test_csv_reader_pd_consistent_quotes(quoting):
                         names=names, quoting=quoting)
 
     assert_eq(pd_df, gd_df)
+
+
+def test_csv_reader_scientific_type_detection():
+    buffer = '1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1'
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+
+    df = read_csv(StringIO(buffer),
+                  header=None)
+
+    for dt in df.dtypes:
+        assert(dt == 'float64')
+    for col in df:
+        assert(np.isclose(df[col][0], expected[int(col)]))
