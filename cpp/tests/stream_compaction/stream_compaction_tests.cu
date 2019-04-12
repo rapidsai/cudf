@@ -88,21 +88,21 @@ void BooleanMaskTest(cudf::test::column_wrapper<T> source,
 
   EXPECT_TRUE(expected == result);
 
-  /*std::cout << "expected\n";
-  expected.print();
-  std::cout << expected.get()->null_count << "\n";
-  fflush(stdout);
-  std::cout << "result\n";
-  print_gdf_column(&result);
-  std::cout << result.null_count << "\n";
-  fflush(stdout);*/
+  if (!(expected == result)) {
+    std::cout << "expected\n";
+    expected.print();
+    std::cout << expected.get()->null_count << "\n";
+    std::cout << "result\n";
+    print_gdf_column(&result);
+    std::cout << result.null_count << "\n";
+  }
 
   gdf_column_free(&result);
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, Identity)
 {
-  constexpr gdf_size_type column_size{1000};
+  constexpr gdf_size_type column_size{1000001};
 
   BooleanMaskTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{column_size,                             

@@ -142,7 +142,7 @@ __device__ void atomicClearValidBit(gdf_valid_type *valid_mask, gdf_index_type i
   atomicAnd( &valid_mask[index], gdf_valid_type(~(1 << bit)) );
 }
 
-template <int block_size, typename MaskFunc>
+template <int block_size, int per_thread, typename MaskFunc>
 __global__ void scatter_foo(gdf_column *output_column,
                             gdf_column const * input_column,
                             gdf_index_type const *scatter_map,
@@ -151,35 +151,40 @@ __global__ void scatter_foo(gdf_column *output_column,
                             bool has_valid,
                             MaskFunc mask)
 {
-  int tid = threadIdx.x + blockIdx.x * block_size;
-                    
-  if (tid < scatter_size) {
-    if (mask(tid)) {
+  int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
 
-      const gdf_index_type in_index = tid;
-      const gdf_index_type out_index = scatter_map[tid];
+  //if (tid + block_size * (per_thread - 1) < scatter_size) {
+    for (int i = 0; i < per_thread; i++) {
+      if (tid < scatter_size) {
+        if (mask(tid)) {
 
-      //for (int c = 0; c < num_columns; c++) {
-      //static_cast<T*>(out->data)[out_index] = 
-      //  static_cast<T const*>(in->data)[in_index];
-      cudf::type_dispatcher(output_column->dtype, scatter_functor{},
-                            output_column, out_index,
-                            input_column, in_index);
+        const gdf_index_type in_index = tid;
+        const gdf_index_type out_index = scatter_map[tid];
 
-      if (has_valid) {
-        // Scatter the valid bit
-        if (gdf_is_valid(input_column->valid, in_index)) {
-          //printf("Setting bit for index %d\n", out_index);
-          atomicSetValidBit(output_column->valid, out_index);
-        }
-        else {
-          atomicAdd(&(output_column->null_count), 1);
-          //printf("Clearing bit for index %d\n", out_index);
-          atomicClearValidBit(output_column->valid, out_index);
+        //for (int c = 0; c < num_columns; c++) {
+        //static_cast<T*>(out->data)[out_index] = 
+        //  static_cast<T const*>(in->data)[in_index];
+        cudf::type_dispatcher(output_column->dtype, scatter_functor{},
+                              output_column, out_index,
+                              input_column, in_index);
+
+        if (has_valid) {
+          // Scatter the valid bit
+          if (gdf_is_valid(input_column->valid, in_index)) {
+            //printf("Setting bit for index %d\n", out_index);
+            atomicSetValidBit(output_column->valid, out_index);
+          }
+          else {
+            atomicAdd(&(output_column->null_count), 1);
+            //printf("Clearing bit for index %d\n", out_index);
+            atomicClearValidBit(output_column->valid, out_index);
+          }
         }
       }
     }
+    tid += block_size;
   }
+  //}
 }
 
 template <typename MaskFunc>
@@ -258,13 +263,15 @@ gdf_column apply_boolean_mask(gdf_column const *input,
     //gdf_column* outputs[1] = {&output};
 
     constexpr int block_size = 256;
-    scatter_foo<block_size><<<1024, block_size>>>(d_output, 
-                                                  d_input, 
-                                                  thrust::raw_pointer_cast(scatter_map.data()),
-                                                  boolean_mask->size, 
-                                                  gdf_size_type{1},
-                                                  input->valid != nullptr, 
-                                                  nonnull_and_true{*boolean_mask});
+    constexpr int per_thread = 32;
+    constexpr int per_block = block_size * per_thread;
+    const int num_blocks = (boolean_mask->size + per_block - 1) / per_block;
+    scatter_foo<block_size, per_thread>
+      <<<num_blocks, block_size>>>(d_output, d_input, 
+                                   thrust::raw_pointer_cast(scatter_map.data()),
+                                   boolean_mask->size, gdf_size_type{1},
+                                   input->valid != nullptr, 
+                                   nonnull_and_true{*boolean_mask});
 
     CHECK_STREAM(0);
 
