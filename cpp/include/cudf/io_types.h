@@ -149,7 +149,6 @@ typedef struct {
   int           num_cols_out;               ///< Out: Number of columns returned
   int           num_rows_out;               ///< Out: Number of rows returned
   gdf_column    **data;                     ///< Out: Array of gdf_columns*
-  int           *index_col;                 ///< Out: If available, column index to use as row labels
 
   /*
    * Input arguments
@@ -160,6 +159,9 @@ typedef struct {
 
   const char    **use_cols;                 ///< In: Columns of interest. Only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
+
+  int           skip_rows;                  ///< In: Number of rows to skip from the start
+  int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
 
 } orc_read_arg;
 

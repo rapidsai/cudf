@@ -39,6 +39,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
+                  !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
+              "Unexpected sizeof(CompressedStreamInfo)");
+static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
+                  !(sizeof(orc::gpu::ColumnDesc) & 7),
+              "Unexpected sizeof(ColumnDesc)");
+
 #if 1
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -220,15 +227,18 @@ class OrcMetadata {
     printf(" rowIndexStride = %d\n", ff.rowIndexStride);
   }
 
-  std::vector<OrcStripeInfo> select_stripes(uint64_t min_row, uint64_t num_rows) {
+  std::vector<OrcStripeInfo> select_stripes(size_t skip_rows, size_t num_rows) {
     // Exclude non-needed stripes
-    while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= min_row) {
+    while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= skip_rows) {
       ff.numberOfRows -= ff.stripes[0].numberOfRows;
-      min_row -= ff.stripes[0].numberOfRows;
+      skip_rows -= ff.stripes[0].numberOfRows;
       ff.stripes.erase(ff.stripes.begin());
     }
-    num_rows = std::min(num_rows,
-                        ff.numberOfRows - std::min(min_row, ff.numberOfRows));
+    if (num_rows == 0) {
+      num_rows = ff.numberOfRows - std::min(skip_rows, ff.numberOfRows);
+    } else {
+      num_rows = std::min(num_rows, ff.numberOfRows - std::min(skip_rows, ff.numberOfRows));
+    }
     if (ff.numberOfRows > num_rows) {
       uint64_t row = 0;
       for (size_t i = 0; i < ff.stripes.size(); i++) {
@@ -240,6 +250,7 @@ class OrcMetadata {
         row += ff.stripes[i].numberOfRows;
       }
     }
+    assert(num_rows == ff.numberOfRows);
 
     // Read each stripe's stripefooter metadata
     std::vector<OrcStripeInfo> stripe_infos;
@@ -316,17 +327,15 @@ size_t gather_stream_info(const size_t stripe_index,
                           const std::vector<int> &orc2gdf,
                           const std::vector<int> &gdf2orc,
                           const std::vector<orc::SchemaType> types,
-                          size_t num_dictionary_entries,
+                          size_t* num_dictionary_entries,
                           hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                           std::vector<OrcStreamInfo> &stream_info) {
 
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
-
   for (const auto &stream : stripefooter.streams) {
     if (stream.column >= orc2gdf.size()) {
-      std::cerr << "Detected invalid column in stream" << std::endl;
       dst_offset += stream.length;
       continue;
     }
@@ -361,10 +370,10 @@ size_t gather_stream_info(const size_t stripe_index,
           chunk.strm_len[idx] = stream.length;
 
           if (idx == orc::gpu::CI_DICTIONARY) {
-            chunk.dictionary_start = num_dictionary_entries;
+            chunk.dictionary_start = *num_dictionary_entries;
             chunk.dict_len =
                 stripefooter.columns[stream.column].dictionarySize;
-            num_dictionary_entries +=
+            *num_dictionary_entries +=
                 stripefooter.columns[stream.column].dictionarySize;
           }
         }
@@ -501,7 +510,7 @@ uint8_t *decompress_stripe_data(
  * @param[in,out] columns List of gdf_columns
  **/
 void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-                        size_t num_dicts,
+                        size_t num_dicts, size_t skip_rows,
                         const std::vector<gdf_column_wrapper> &columns) {
 
   const size_t num_columns = columns.size();
@@ -527,9 +536,9 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                            chunks.memory_size(), cudaMemcpyHostToDevice));
   CUDA_TRY(DecodeNullsAndStringDictionaries(
       chunks.device_ptr(), global_dict.data().get(), num_columns, num_stripes,
-      num_rows, 0));
+      num_rows, skip_rows));
   CUDA_TRY(DecodeOrcColumnData(chunks.device_ptr(), global_dict.data().get(),
-                               num_columns, num_stripes, num_rows, 0));
+                               num_columns, num_stripes, num_rows, skip_rows));
   CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
                            chunks.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
@@ -556,24 +565,14 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
  **/
 gdf_error read_orc(orc_read_arg *args) {
 
-  int num_columns = 0;
-  int num_rows = 0;
-
   DataSource input(args->source);
 
   OrcMetadata md(input.data(), input.size());
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
-  static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
-                    !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
-                "Unexpected sizeof(CompressedStreamInfo)");
-  static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
-                    !(sizeof(orc::gpu::ColumnDesc) & 7),
-                "Unexpected sizeof(ColumnDesc)");
-
   // Select only required stripes (aka rowgroups)
-  num_rows = md.get_total_rows();
-  const auto stripes = md.select_stripes(0, 0x7fffffff);
+  const auto stripes = md.select_stripes(args->skip_rows, args->num_rows);
+  const int num_rows = md.get_total_rows();
 
   // Select only columns required (if it exists), otherwise select all
   std::vector<int32_t> selected_cols;
@@ -600,7 +599,7 @@ gdf_error read_orc(orc_read_arg *args) {
       }
     }
   }
-  num_columns = selected_cols.size();
+  const int num_columns = selected_cols.size();
   CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
   // Association between each ORC column and its gdf_column
@@ -612,8 +611,10 @@ gdf_error read_orc(orc_read_arg *args) {
   for (const auto &col : selected_cols) {
     auto dtype_info = to_dtype(md.ff.types[col]);
 
+    // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
-    columns.emplace_back(static_cast<gdf_size_type>(md.ff.numberOfRows),
+
+    columns.emplace_back(static_cast<gdf_size_type>(num_rows),
                          dtype_info.first, dtype_info.second,
                          md.ff.GetColumnName(col));
 
@@ -630,13 +631,11 @@ gdf_error read_orc(orc_read_arg *args) {
   std::vector<device_ptr<uint8_t>> stripe_data;
 
   if (num_rows > 0) {
-    const auto num_stripes = stripes.size();
-    const auto num_column_chunks = num_stripes * num_columns;
+    const auto num_column_chunks = stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
 
-    // Read stripe footers
     size_t stripe_start_row = 0;
-    uint32_t num_dictionary_entries = 0;
+    size_t num_dict_entries = 0;
     for (size_t i = 0; i < stripes.size(); ++i) {
       const auto stripe_info = stripes[i].first;
       const auto stripe_footer = stripes[i].second;
@@ -644,7 +643,7 @@ gdf_error read_orc(orc_read_arg *args) {
       auto stream_count = stream_info.size();
       const auto total_data_size = gather_stream_info(
           i, *stripe_info, stripe_footer, orc_col_map, selected_cols,
-          md.ff.types, num_dictionary_entries, chunks, stream_info);
+          md.ff.types, &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
       uint8_t *d_data = nullptr;
@@ -683,7 +682,6 @@ gdf_error read_orc(orc_read_arg *args) {
       stripe_start_row += stripe_info->numberOfRows;
     }
 
-    // Deallocate and replace compressed data with decompressed data
     if (md.ps.compression != orc::NONE) {
       uint8_t *d_decomp_data =
           decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
@@ -695,7 +693,7 @@ gdf_error read_orc(orc_read_arg *args) {
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
-    decode_stream_data(chunks, num_dictionary_entries, columns);
+    decode_stream_data(chunks, num_dict_entries, args->skip_rows, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
@@ -703,26 +701,29 @@ gdf_error read_orc(orc_read_arg *args) {
     }
   }
 
+  // For string dtype, allocate an NvStrings container instance, deallocating
+  // the original string list memory in the process.
+  // This container takes a list of string pointers and lengths, and copies
+  // into its own memory so the source memory must not be released yet.
+  for (auto &column : columns) {
+    if (column->dtype == GDF_STRING) {
+      using str_pair = std::pair<const char *, size_t>;
+      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
+      auto str_list = static_cast<str_pair *>(column->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
+                       &NVStrings::destroy);
+      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+    }
+  }
+
   // Transfer ownership to raw pointer output arguments
   args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
-
-    // For string dtype, allocate and return an NvStrings container instance,
-    // deallocating the original string list memory in the process.
-    // This container takes a list of string pointers and lengths, and copies
-    // into its own memory so the source memory must not be released yet.
-    if (args->data[i]->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-
-      auto str_list = static_cast<str_pair *>(args->data[i]->data);
-      auto str_data = NVStrings::create_from_index(str_list, num_rows);
-      RMM_FREE(std::exchange(args->data[i]->data, str_data), 0);
-    }
   }
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
-  args->index_col = nullptr;
 
   return GDF_SUCCESS;
 }
