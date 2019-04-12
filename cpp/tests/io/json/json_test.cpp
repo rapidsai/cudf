@@ -34,7 +34,6 @@
 
 using std::vector;
 using std::string;
-using std::cout;
 
 bool checkFile(std::string fname)
 {
@@ -91,7 +90,11 @@ TEST(gdf_json_test, BracketsLevels)
 		h_data[i] = '[';
 		h_data[i + 2] = ']';
 	}
-	cout << h_data << '\n';
+	
+	vector<int16_t> expected{1,2,2,2,2};
+	fill_n(back_inserter(expected), rows*2, 3);
+	expected.push_back(2);
+	expected.push_back(1);
 
 	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']','{','}'});
 
@@ -102,10 +105,10 @@ TEST(gdf_json_test, BracketsLevels)
 
 	const auto d_lvls = getBracketLevels(d_pos, count, string("[{"), string("]}"));
 
-	std::vector<int16_t> h_lvls(count);
-	cudaMemcpy(h_lvls.data(), d_lvls.get(), count*sizeof(int16_t), cudaMemcpyDefault);
-	for (auto lvl: h_lvls)
-		cout << lvl << ' ';
-
 	cudaFree(d_pos);
+
+	vector<int16_t> h_lvls(count);
+	cudaMemcpy(h_lvls.data(), d_lvls.get(), count*sizeof(int16_t), cudaMemcpyDefault);
+
+	EXPECT_THAT(h_lvls, ::testing::ContainerEq(expected));
 }

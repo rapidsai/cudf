@@ -140,9 +140,9 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
 	device_ptr<gdf_size_type> count_deleter(d_count);
 	CUDA_TRY(cudaMemsetAsync(d_count, 0ull, sizeof(gdf_size_type)));
 
-	int blockSize;		// suggested thread count to use
-	int minGridSize;	// minimum block count required
-	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countAndSetPositions<T>) );
+	int block_size = 0;		// suggested thread count to use
+	int min_grid_size = 0;	// minimum block count required
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, countAndSetPositions<T>) );
 
 	const size_t chunk_count = divCeil(h_size, max_chunk_bytes);
 	for (size_t ci = 0; ci < chunk_count; ++ci) {	
@@ -150,13 +150,13 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
 		const auto h_chunk = h_data + chunk_offset;
 		const int chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = divCeil(chunk_bytes, bytes_per_find_thread);
-		const int gridSize = divCeil(chunk_bits, blockSize);
+		const int grid_size = divCeil(chunk_bits, block_size);
 
 		// Copy chunk to device
 		CUDA_TRY(cudaMemcpyAsync(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		for (char key: keys) {
-			countAndSetPositions<T> <<< gridSize, blockSize >>> (
+			countAndSetPositions<T> <<< grid_size, block_size >>> (
 				d_chunk, chunk_bytes, chunk_offset + result_offset, key,
 				d_count, positions);
 		}
@@ -198,8 +198,8 @@ template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h
  **/
 struct BlockSumArray {
 		int16_t* d_sums = nullptr;	///< Array of partial sums
-		uint64_t length = 0;		///< Length of the array
-		uint64_t block_size;		///< The number of elements aggregated into each partial sum
+		const uint64_t length = 0;	///< Length of the array
+		const uint64_t block_size;	///< The number of elements aggregated into each partial sum
 
 		BlockSumArray(uint64_t len, uint64_t bsize): length(len), block_size(bsize){}
 };
@@ -216,14 +216,15 @@ class BlockSumPyramid {
 	std::vector<BlockSumArray> levels_;		///< Host array of the partial sums on device, largest to smallest
 
 public:
-	BlockSumPyramid(int count){
-		int prev_lvl_cnt = count;
-		int prev_lvl_block_size = 1;
-		while (prev_lvl_cnt >= aggregation_rate_) {
-			levels_.emplace_back(prev_lvl_cnt/aggregation_rate_, prev_lvl_block_size*aggregation_rate_);
+	BlockSumPyramid(int input_count){
+		// input parameter is the number of elements aggregated with this pyramid
+		int prev_count = input_count;
+		int prev_block_size = 1;
+		while (prev_count >= aggregation_rate_) {
+			levels_.emplace_back(prev_count/aggregation_rate_, prev_block_size*aggregation_rate_);
 			RMM_ALLOC(&levels_.back().d_sums, levels_.back().length*sizeof(int16_t), 0);
-			prev_lvl_cnt = levels_.back().length;
-			prev_lvl_block_size = levels_.back().block_size;
+			prev_count = levels_.back().length;
+			prev_block_size = levels_.back().block_size;
 		}
 
 		if (!levels_.empty()) {	
@@ -232,7 +233,7 @@ public:
 		}
 	}
 
-	auto operator[](int lvl) const {return levels_[lvl];}
+	auto operator[](int level_idx) const {return levels_[level_idx];}
 	auto deviceGetLevels() const noexcept {return d_levels_;}
 	size_t getHeight() const noexcept {return levels_.size();}
 	constexpr auto getAggregationRate() const {return aggregation_rate_;}
@@ -242,8 +243,8 @@ public:
 	BlockSumPyramid& operator=(BlockSumPyramid&) = delete;
 
 	~BlockSumPyramid() {
-		for (auto& lvl: levels_) {
-			RMM_FREE(lvl.d_sums, 0);
+		for (auto& level: levels_) {
+			RMM_FREE(level.d_sums, 0);
 		}
 		RMM_FREE(d_levels_, 0);
 	}
@@ -310,14 +311,14 @@ void sumBrackets(
 	pos_key_pair* brackets, int bracket_count,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
 	const BlockSumArray& sum_array) {
-	int blockSize = 0;
-	int minGridSize = 0;
-	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+	int block_size = 0;
+	int min_grid_size = 0;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
 		sumBracketsKernel));
 
-	const int gridSize = divCeil(sum_array.length, (uint64_t)blockSize);
+	const int gridSize = divCeil(sum_array.length, static_cast<uint64_t>(block_size));
 
-	sumBracketsKernel<<<gridSize, blockSize>>>(
+	sumBracketsKernel<<<gridSize, block_size>>>(
 		brackets, bracket_count,
 		open_chars, close_chars, bracket_char_cnt,
 		sum_array);
@@ -358,14 +359,14 @@ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate){
  * @return void
  *---------------------------------------------------------------------------**/
 void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate){
-	int blockSize = 0;
-	int minGridSize = 0;
-	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+	int block_size = 0;
+	int min_grid_size = 0;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
 		aggregateSumKernel));
 
-	const int gridSize = divCeil(aggregate.length, (uint64_t)blockSize);
+	const int grid_size = divCeil(aggregate.length, static_cast<uint64_t>(block_size));
 
-	aggregateSumKernel<<<gridSize, blockSize>>>(elements, aggregate);
+	aggregateSumKernel<<<grid_size, block_size>>>(elements, aggregate);
 	CUDA_TRY(cudaGetLastError());
 };
 
@@ -454,15 +455,15 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 	const BlockSumPyramid& sum_pyramid,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
 	int16_t* levels) {
-	int blockSize;
-	int minGridSize;
-	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+	int block_size = 0;
+	int min_grid_size = 0;
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
 		assignLevelsKernel));
 
-	const int threadCnt = divCeil(count, (uint64_t)sum_pyramid.getAggregationRate());
-	const int gridSize = divCeil(threadCnt, blockSize);
+	const int thread_cnt = divCeil(count, static_cast<uint64_t>(sum_pyramid.getAggregationRate()));
+	const int grid_size = divCeil(thread_cnt, block_size);
 
-	assignLevelsKernel<<<gridSize, blockSize>>>(
+	assignLevelsKernel<<<grid_size, block_size>>>(
 		brackets, count,
 		sum_pyramid.deviceGetLevels(), sum_pyramid.getHeight(),
 		open_chars, close_chars, bracket_char_cnt,
