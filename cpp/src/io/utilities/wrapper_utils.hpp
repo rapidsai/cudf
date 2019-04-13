@@ -199,14 +199,23 @@ public:
   device_buffer(device_buffer&& rh) noexcept {
     d_data_ = rh.d_data_; 
     count_ = rh.count_;
+    stream_ = rh.stream_;
+
+    rh.d_data_ = nullptr;
+    rh.count_ = 0;
   }
 
   device_buffer& operator=(device_buffer& ) = delete;
   device_buffer& operator=(device_buffer&& rh) noexcept {
     RMM_FREE(d_data_, stream_);
+
     d_data_ = rh.d_data_; 
     count_ = rh.count_;
+    stream_ = rh.stream_;
+
     rh.d_data_ = nullptr;
+    rh.count_ = 0;
+   
     return *this;
   }
 
