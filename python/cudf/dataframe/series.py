@@ -1091,33 +1091,33 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self, axis=None, skipna=True):
+    def min(self, axis=None, skipna=True, dtype=None):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min()
+        return self._column.min(dtype=dtype)
 
-    def max(self, axis=None, skipna=True):
+    def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max()
+        return self._column.max(dtype=dtype)
 
-    def sum(self, axis=None, skipna=True):
+    def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum()
+        return self._column.sum(dtype=dtype)
 
-    def product(self, axis=None, skipna=True):
+    def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product()
+        return self._column.product(dtype=dtype)
 
-    def mean(self, axis=None, skipna=True):
+    def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self._column.mean(dtype=dtype)
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
@@ -1138,8 +1138,8 @@ class Series(object):
         mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
-    def sum_of_squares(self):
-        return self._column.sum_of_squares()
+    def sum_of_squares(self, dtype=None):
+        return self._column.sum_of_squares(dtype=dtype)
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
@@ -1330,6 +1330,95 @@ class Series(object):
         else:
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
+
+    def describe(self, percentiles=None, include=None, exclude=None):
+        """Compute summary statistics of a Series. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        Returns
+        -------
+        A DataFrame containing summary statistics of relevant columns from
+        the input DataFrame.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+        """
+
+        from cudf import DataFrame
+
+        def _prepare_percentiles(percentiles):
+            percentiles = list(percentiles)
+
+            if not all(0 <= x <= 1 for x in percentiles):
+                raise ValueError("All percentiles must be between 0 and 1, "
+                                 "inclusive.")
+
+            # describe always includes 50th percentile
+            if 0.5 not in percentiles:
+                percentiles.append(0.5)
+
+            percentiles = np.sort(percentiles)
+            return percentiles
+
+        def _format_percentile_names(percentiles):
+            return ['{0}%'.format(int(x*100)) for x in percentiles]
+
+        def _format_stats_values(stats_data):
+            return list(map(lambda x: round(x, 6), stats_data))
+
+        def describe_numeric(self):
+            # mimicking pandas
+            names = ['count', 'mean', 'std', 'min'] + \
+                    _format_percentile_names(percentiles) + ['max']
+            data = [self.count(), self.mean(), self.std(), self.min()] + \
+                self.quantile(percentiles).to_array().tolist() + [self.max()]
+            data = _format_stats_values(data)
+
+            values_name = 'values'
+            if self.name:
+                values_name = self.name
+
+            return DataFrame({'stats': names, values_name: data})
+
+        def describe_categorical(self):
+            # blocked by StringColumn/DatetimeColumn support for
+            # value_counts/unique
+            pass
+
+        if percentiles is not None:
+            percentiles = _prepare_percentiles(percentiles)
+        else:
+            # pandas defaults
+            percentiles = np.array([0.25, 0.5, 0.75])
+
+        if np.issubdtype(self.dtype, np.number):
+            return describe_numeric(self)
+        else:
+            raise NotImplementedError("Describing non-numeric columns is not "
+                                      "yet supported")
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
