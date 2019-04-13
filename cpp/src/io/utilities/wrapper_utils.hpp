@@ -22,6 +22,7 @@
 #include <cuda_runtime.h>
 #include <rmm/rmm.h>
 
+#include <algorithm>
 #include <cstring>
 
 /**
@@ -158,7 +159,7 @@ template <typename T>
 class device_buffer {
   T* d_data_ = nullptr;
   size_t count_ = 0;
-  const cudaStream_t stream_ = 0;
+  cudaStream_t stream_ = 0;
 
 public:
   device_buffer() noexcept = default;
@@ -186,7 +187,7 @@ public:
     }
     // Copy to the new buffer, if some memory was already allocated
     if (count_ != 0) {
-      const size_t copy_bytes = min(cnt, count_)*sizeof(T);
+      const size_t copy_bytes = std::min(cnt, count_)*sizeof(T);
       CUDA_TRY(cudaMemcpyAsync(new_ptr, d_data_, copy_bytes, cudaMemcpyDefault, stream_));
       RMM_FREE(d_data_, stream_);
     }
