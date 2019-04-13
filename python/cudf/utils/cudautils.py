@@ -282,7 +282,9 @@ def expand_mask_bits_logical_not(size, bits):
     expanded_inverted_mask = full(size, 0, dtype=np.int32)
     numtasks = min(1024, expanded_inverted_mask.size)
     if numtasks > 0:
-        gpu_expand_mask_bits_logical_not.forall(numtasks)(bits, expanded_inverted_mask)
+        gpu_expand_mask_bits_logical_not.forall(numtasks)(
+            bits, expanded_inverted_mask
+        )
     return expanded_inverted_mask
 
 
