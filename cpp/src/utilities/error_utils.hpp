@@ -33,6 +33,19 @@
 #define GDF_REQUIRE(F, S) \
   if (!(F)) return (S);
 
+/**---------------------------------------------------------------------------*
+ * @brief a version of GDF_REQUIRE for expressions of type `gdf_error` rather
+ * than booleans
+ *
+ * This macro is sort-of DEPRECATED.
+ *
+ *---------------------------------------------------------------------------**/
+#define GDF_TRY(_expression) do { \
+    gdf_error _gdf_try_result = ( _expression ) ; \
+    if (_gdf_try_result != GDF_SUCCESS) return _gdf_try_result ; \
+} while(0)
+
+
 namespace cudf {
 /**---------------------------------------------------------------------------*
  * @brief Exception thrown when logical precondition is violated.
@@ -62,8 +75,8 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
 
 /**---------------------------------------------------------------------------*
- * @brief Error checking macro that throws an exception when a condition is
- * violated.
+ * @brief Macro for checking (pre-)conditions that throws an exception when  
+ * a condition is violated.
  * 
  * Example usage:
  * 
@@ -81,6 +94,19 @@ struct cuda_error : public std::runtime_error {
       ? static_cast<void>(0)                                 \
       : throw cudf::logic_error("cuDF failure at: " __FILE__ \
                                 ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+
+/**---------------------------------------------------------------------------*
+ * @brief Try evaluation an expression with a gdf_error type,
+ * and throw an appropriate exception if it fails.
+ *---------------------------------------------------------------------------**/
+#define CUDF_TRY(_gdf_error_expression) do { \
+    auto _evaluated = _gdf_error_expression; \
+    if (_evaluated == GDF_SUCCESS) { break; } \
+    throw cudf::logic_error( \
+        ("cuDF error " + std::string(gdf_error_get_name(_evaluated)) + " at " \
+       __FILE__ ":"  \
+        CUDF_STRINGIFY(__LINE__) " evaluating " CUDF_STRINGIFY(#_gdf_error_expression)).c_str() ); \
+} while(0)
 
 /**---------------------------------------------------------------------------*
  * @brief Error macro that throws an exception
@@ -176,3 +202,5 @@ inline void check_stream(cudaStream_t stream, const char* file,
 #else
 #define CHECK_STREAM(stream) static_cast<void>(0)
 #endif
+
+
