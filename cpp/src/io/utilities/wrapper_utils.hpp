@@ -158,7 +158,7 @@ template <typename T>
 class device_buffer {
   T* d_data_ = nullptr;
   size_t count_ = 0;
-  const cudaStream_t stream_ = 0;
+  cudaStream_t stream_ = 0;
 
 public:
   device_buffer() noexcept = default;
