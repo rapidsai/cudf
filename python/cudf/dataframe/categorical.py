@@ -171,20 +171,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self):
-        mask = None
-        if self.has_null_mask:
-            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         indices = self.cat().codes.to_arrow()
-        indices_data = indices.buffers()[1]
-        indices = pa.Array.from_buffers(
-            type=indices.type,
-            length=len(self),
-            buffers=[
-                mask,
-                indices_data
-            ],
-            null_count=self.null_count
-        )
         ordered = self.cat()._ordered
         dictionary = pa.array(self.cat().categories)
         return pa.DictionaryArray.from_arrays(
