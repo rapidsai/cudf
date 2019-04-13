@@ -41,6 +41,6 @@ template<class T>
 gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
 
-device_ptr<int16_t> getBracketLevels(
+device_buffer<int16_t> getBracketLevels(
 	thrust::pair<uint64_t,char>* brackets, int count, 
 	const std::string& open_chars, const std::string& close_chars);

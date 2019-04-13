@@ -51,64 +51,49 @@ std::vector<T> gdf_column_to_host(gdf_column* const col) {
 
 TEST(gdf_json_test, SquareBrackets)
 {
-	const string h_data("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
+	const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
 		"\"index\":[\"row 1\",\"row 2\"] , "
 		"\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
 
-	char* d_data{};
-	cudaMalloc(&d_data, h_data.size()*sizeof(char));
-	cudaMemcpy(d_data, h_data.c_str(), h_data.size()*sizeof(char), cudaMemcpyDefault);
+	const gdf_size_type count = countAllFromSet(json_file.c_str(), json_file.size()*sizeof(char), {'[', ']'});
+	ASSERT_TRUE(count == 10);
 
-	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'});
+	device_buffer<uint64_t> d_pos(count);
+	findAllFromSet(json_file.c_str(), json_file.size()*sizeof(char), {'[', ']'}, 0, d_pos.data());
 
-	uint64_t* d_pos{};
 	vector<uint64_t> h_pos(count);
-	cudaMalloc(&d_pos, count*sizeof(uint64_t));
-
-	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']'}, 0, d_pos);
-	cudaMemcpy(h_pos.data(), d_pos, count*sizeof(uint64_t), cudaMemcpyDefault);
-
-	cudaFree(d_data);
-	cudaFree(d_pos);
-
+	cudaMemcpy(h_pos.data(), d_pos.data(), count*sizeof(uint64_t), cudaMemcpyDefault);
 	for (auto pos: h_pos)
-		ASSERT_TRUE(h_data[pos] == '[' || h_data[pos] == ']');
+		ASSERT_TRUE(json_file[pos] == '[' || json_file[pos] == ']');
 }
 
 using pos_key_pair = thrust::pair<uint64_t,char>;
 TEST(gdf_json_test, BracketsLevels)
 {
 	// Generate square brackets consistent with 'split' json format
-	const int rows = 60;
+	const int rows = 1000000;
 	const int file_size = rows * 4 + 1;
-	string h_data("{\"columns\":[x],\"index\":[x],\"data\":[");
-	const int header_size = h_data.size();
-	h_data += string(file_size, 'x');
-	h_data[h_data.size() - 2] = ']';
-	h_data[h_data.size() - 1] = '}';
-	for (size_t i = header_size; i < h_data.size() - 1; i += 4){
-		h_data[i] = '[';
-		h_data[i + 2] = ']';
+	string json_mock("{\"columns\":[x],\"index\":[x],\"data\":[");
+	const int header_size = json_mock.size();
+	json_mock += string(file_size, 'x');
+	json_mock[json_mock.size() - 2] = ']';
+	json_mock[json_mock.size() - 1] = '}';
+	for (size_t i = header_size; i < json_mock.size() - 1; i += 4){
+		json_mock[i] = '[';
+		json_mock[i + 2] = ']';
 	}
-	
-	vector<int16_t> expected{1,2,2,2,2};
+
+	vector<int16_t> expected{1, 2, 2, 2, 2, 2};
 	fill_n(back_inserter(expected), rows*2, 3);
 	expected.push_back(2);
 	expected.push_back(1);
 
-	const gdf_size_type count = countAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']','{','}'});
-
-	pos_key_pair* d_pos{};
-	cudaMalloc(&d_pos, count*sizeof(pos_key_pair));
-
-	findAllFromSet(h_data.c_str(), h_data.size()*sizeof(char), {'[', ']','{','}'}, 0, d_pos);
-
-	const auto d_lvls = getBracketLevels(d_pos, count, string("[{"), string("]}"));
-
-	cudaFree(d_pos);
+	const gdf_size_type count = countAllFromSet(json_mock.c_str(), json_mock.size()*sizeof(char), {'[', ']','{','}'});
+	device_buffer<pos_key_pair> d_pos(count);
+	findAllFromSet(json_mock.c_str(), json_mock.size()*sizeof(char), {'[', ']','{','}'}, 0, d_pos.data());
+	const auto d_lvls = getBracketLevels(d_pos.data(), count, string("[{"), string("]}"));
 
 	vector<int16_t> h_lvls(count);
-	cudaMemcpy(h_lvls.data(), d_lvls.get(), count*sizeof(int16_t), cudaMemcpyDefault);
-
+	cudaMemcpy(h_lvls.data(), d_lvls.data(), count*sizeof(int16_t), cudaMemcpyDefault);
 	EXPECT_THAT(h_lvls, ::testing::ContainerEq(expected));
 }
