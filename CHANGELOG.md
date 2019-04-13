@@ -53,6 +53,7 @@
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1328 Fix CategoricalColumn to_arrow() null mask
 
 
 # cuDF 0.6.0 (Date TBD)
