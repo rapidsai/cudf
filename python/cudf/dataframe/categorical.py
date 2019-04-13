@@ -173,13 +173,18 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def to_arrow(self):
         mask = None
         if self.has_null_mask:
-            # Necessary because PyArrow doesn't support from_buffers for
-            # DictionaryArray yet
-            mask = cudautils.expand_mask_bits_logical_not(
-                len(self),
-                self.nullmask.mem
-            ).copy_to_host().astype('bool')
-        indices = pa.array(self.cat().codes.data.mem.copy_to_host(), mask=mask)
+            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
+        indices = self.cat().codes.to_arrow()
+        indices_data = indices.buffers()[1]
+        indices = pa.Array.from_buffers(
+            type=indices.type,
+            length=len(self),
+            buffers=[
+                mask,
+                indices_data
+            ],
+            null_count=self.null_count
+        )
         ordered = self.cat()._ordered
         dictionary = pa.array(self.cat().categories)
         return pa.DictionaryArray.from_arrays(

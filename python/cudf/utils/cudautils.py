@@ -264,30 +264,6 @@ def expand_mask_bits(size, bits):
     return expanded_mask
 
 
-@cuda.jit
-def gpu_expand_mask_bits_logical_not(bits, out):
-    """Expand and invert each bit in bitmask *bits* into an element in out,
-    such that 0 becomes 1, and 1 becomes 0.
-    This is a flexible kernel that can be launch with any number of blocks
-    and threads.
-    """
-    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
-        if i < bits.size * mask_bitsize:
-            out[i] = ~mask_get(bits, i) + 2
-
-
-def expand_mask_bits_logical_not(size, bits):
-    """Expand bit-mask into an inverted byte-mask, similar to numpy.logical_not
-    """
-    expanded_inverted_mask = full(size, 0, dtype=np.int32)
-    numtasks = min(1024, expanded_inverted_mask.size)
-    if numtasks > 0:
-        gpu_expand_mask_bits_logical_not.forall(numtasks)(
-            bits, expanded_inverted_mask
-        )
-    return expanded_inverted_mask
-
-
 def mask_assign_slot(size, mask):
     # expand bits into bytes
     expanded_mask = expand_mask_bits(size, mask)
