@@ -8,7 +8,7 @@
 
 ## Improvements
 
-...
+- PR #1422 Added a RAII wrapper for CUDA streams
 
 ## Bug Fixes
 
