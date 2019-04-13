@@ -46,6 +46,8 @@
 
 namespace orc { namespace gpu {
 
+static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
+
 struct orc_bytestream_s
 {
     const uint8_t *base;
@@ -1266,7 +1268,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
  **/
 static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
 {
-    1, 100, 1000, 1000, 10000, 100000, 1000000, 10000000
+    1, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000
 };
 
 /**
@@ -1619,9 +1621,13 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                     }
                     case TIMESTAMP:
                     {
-                        int64_t seconds = s->vals.i64[t];
+                        int64_t seconds = s->vals.i64[t] + kORCTimeToUTC;
                         uint32_t nanos = secondary_val;
                         nanos = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
+                        if (seconds < 0 && nanos != 0)
+                        {
+                            seconds -= 1;
+                        }
                         reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000ll + nanos; // Output nanoseconds
                         break;
                     }
@@ -1643,7 +1649,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
             if ((s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR)
              && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
             {
-                s->chunk.dictionary_start += s->vals.u32[NTHREADS + s->top.data.max_vals - 1];
+                s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
             }
             if (!s->top.data.max_vals && !s->top.data.nrows)
                 break;
