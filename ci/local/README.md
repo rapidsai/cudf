@@ -1,7 +1,7 @@
 ## Purpose
 
 This script is designed for developer and contributor use. This tool mimics the actions of gpuCI on your local machine. This allows you to test and even debug your code inside a gpuCI base container before pushing your code as a GitHub commit.
-
+The script can be helpful in locally triaging and debugging RAPIDS continuous integration failures.
 
 ## Usage
 
