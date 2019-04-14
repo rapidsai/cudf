@@ -192,7 +192,7 @@ cuda-memcheck python <program_name>.py <program_arguments>
 ### Building and Testing on a gpuCI image locally
 
 Before submitting a pull request, you can do a local build and test on your machine that mimics our gpuCI environment using the `ci/local/build.sh` script.
-For detailed information on usage of this script, see [here](https://github.com/rapidsai/cudf/tree/branch-0.7/ci/local).
+For detailed information on usage of this script, see [here](ci/local/README.md).
 
 ## Automated Build in Docker Container
 
