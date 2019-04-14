@@ -36,7 +36,7 @@ The docker image will generate build artifacts in a folder on your machine locat
 
 ### Where The User is Dumped
 
-The script will build your repository and run all tests. If any tests fail, we dump the user into the docker container itself if you would like to debug from within the container. If all the tests pass as expected the container will be exited and removed automatically. Just remember to exit the container if any tests fail if you do not wish to debug within the container itself.
+The script will build your repository and run all tests. If any tests fail, it dumps the user into the docker container itself to allow you to debug from within the container. If all the tests pass as expected the container exits and is automatically removed. Remember to exit the container if tests fail and you do not wish to debug within the container itself.
 
 
 ### Container File Structure
