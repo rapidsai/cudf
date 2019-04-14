@@ -185,7 +185,7 @@ typedef struct {
   const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
 
-  const char    **use_cols;                 ///< In: Columns of interest. Only these columns will be parsed and returned.
+  const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned
   int           use_cols_len;               ///< In: Number of columns
 
 } pq_read_arg;

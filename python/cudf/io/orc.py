@@ -69,9 +69,14 @@ def read_orc(path, engine='pyarrow', columns=None, skip_rows=0, num_rows=None):
                 newcol = Column.from_cffi_view(out[i])
                 new_names.append(ffi.string(out[i].col_name).decode())
                 if newcol.dtype.type == np.datetime64:
-                    outcols.append(
-                        newcol.view(DatetimeColumn, dtype='datetime64[ms]')
-                    )
+                    if (out[i].dtype_info.time_unit == libgdf.TIME_UNIT_ns):
+                        outcols.append(
+                            newcol.view(DatetimeColumn, dtype='datetime64[ns]')
+                        )
+                    else:
+                        outcols.append(
+                            newcol.view(DatetimeColumn, dtype='datetime64[ms]')
+                        )
                 else:
                     outcols.append(
                         newcol.view(NumericalColumn, dtype=newcol.dtype)
