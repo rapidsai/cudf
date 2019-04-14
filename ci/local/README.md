@@ -24,7 +24,7 @@ For a full list of available gpuCI docker images, visit our [DockerHub](https://
 
 ## Information
 
-There are some caveats to be aware of when utilizing this script, especially if you plan on developing from within the container itself.
+There are some caveats to be aware of when using this script, especially if you plan on developing from within the container itself.
 
 
 ### Docker Image Build Repository
