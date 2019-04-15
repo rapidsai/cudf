@@ -34,7 +34,7 @@
 #define LOG2_BYTESTREAM_BFRSZ   13  // Must be able to handle 512x 8-byte values
 
 #define BYTESTREAM_BFRSZ        (1 << LOG2_BYTESTREAM_BFRSZ)
-#define BYTESTREAM_BFRMASK32    ((BYTESTREAM_BFRSZ-1) >> 3)
+#define BYTESTREAM_BFRMASK32    ((BYTESTREAM_BFRSZ-1) >> 2)
 #define LOG2_NWARPS             5   // Log2 of number of warps per threadblock
 #define LOG2_NTHREADS           (LOG2_NWARPS+5)
 #define NWARPS                  (1 << LOG2_NWARPS)
@@ -171,8 +171,11 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs, const uint
 static __device__ void bytestream_flush_bytes(volatile orc_bytestream_s *bs, uint32_t bytes_consumed)
 {
     uint32_t pos = bs->pos;
-    uint32_t pos_new = min(pos + bytes_consumed, bs->len);
+    uint32_t len = bs->len;
+    uint32_t pos_new = min(pos + bytes_consumed, len);
     bs->pos = pos_new;
+    pos = min(pos + BYTESTREAM_BFRSZ, len);
+    pos_new = min(pos_new + BYTESTREAM_BFRSZ, len);
     bs->fill_pos = pos;
     bs->fill_count = (pos_new >> 3) - (pos >> 3);
 }
@@ -423,28 +426,31 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s *bs, int p
                 {
                     b = bytestream_readbyte(bs, pos++);
                     v = (v & 0x0fffffff) | (b << 28);
-                    if (sizeof(T) > 4 && b > 0x7f)
+                    if (sizeof(T) > 4)
                     {
                         uint32_t lo = v;
                         uint64_t hi;
-                        v = (b >> 4) & 7;
-                        b = bytestream_readbyte(bs, pos++);
-                        v |= b << 3;
+                        v = b >> 4;
                         if (b > 0x7f)
                         {
                             b = bytestream_readbyte(bs, pos++);
-                            v = (v & 0x3ff) | (b << 10);
+                            v = (v & 7) | (b << 3);
                             if (b > 0x7f)
                             {
                                 b = bytestream_readbyte(bs, pos++);
-                                v = (v & 0x1ffff) | (b << 17);
+                                v = (v & 0x3ff) | (b << 10);
                                 if (b > 0x7f)
                                 {
                                     b = bytestream_readbyte(bs, pos++);
-                                    v = (v & 0xffffff) | (b << 24);
+                                    v = (v & 0x1ffff) | (b << 17);
                                     if (b > 0x7f)
                                     {
-                                        pos++; // last bit is redundant (extra byte implies bit63 is 1)
+                                        b = bytestream_readbyte(bs, pos++);
+                                        v = (v & 0xffffff) | (b << 24);
+                                        if (b > 0x7f)
+                                        {
+                                            pos++; // last bit is redundant (extra byte implies bit63 is 1)
+                                        }
                                     }
                                 }
                             }
@@ -454,7 +460,6 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s *bs, int p
                         result = hi | lo;
                         return pos;
                     }
- 
                 }
             }
         }
