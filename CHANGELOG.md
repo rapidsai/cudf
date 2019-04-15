@@ -55,6 +55,7 @@
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1433 Fix NVStrings/categories includes
 
 
 # cuDF 0.6.0 (Date TBD)
