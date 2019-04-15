@@ -30,6 +30,8 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1389 Refactored `set_null_count()`
+- PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 
 ## Bug Fixes
 
@@ -52,6 +54,10 @@
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 - PR #1421 Fix remove creation of series multiple times during `add_column()`
+- PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
+
 
 # cuDF 0.6.0 (Date TBD)
 
