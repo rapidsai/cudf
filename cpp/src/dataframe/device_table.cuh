@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef GDF_TABLE_H
-#define GDF_TABLE_H
+#ifndef DEVICE_TABLE_H
+#define DEVICE_TABLE_H
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
@@ -23,12 +23,9 @@
 #include "utilities/error_utils.hpp"
 #include "hash/hash_functions.cuh"
 #include "hash/managed.cuh"
-#include "copying/gather.hpp"
-#include "sqls/sqls_rtti_comp.h"
 #include "bitmask/legacy_bitmask.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include <utilities/error_utils.hpp>
-
 #include <thrust/tabulate.h>
 
 namespace {
@@ -89,10 +86,6 @@ public:
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
     CUDF_EXPECTS(nullptr != host_columns[0], "Attempt to create table with a null column.");
     _num_rows = host_columns[0]->size;
-
-    if(_num_rows > 0) {
-      CUDF_EXPECTS(nullptr != host_columns[0]->data, "Column missing data");
-    }
 
     // Copy pointers to each column's data, types, and validity bitmasks 
     // to contiguous host vectors (AoS to SoA conversion)
@@ -156,10 +149,10 @@ public:
     d_row_valid = device_row_valid.data().get();
   }
 
+
   ~device_table() = default;
   device_table(device_table const& other) = delete;
   device_table& operator=(device_table const& other) = delete;
-
 
   /** 
    * @brief  Updates the size of the gdf_columns in the table
@@ -181,7 +174,7 @@ public:
     return _num_columns;
   }
 
-  __host__ 
+  __host__
   gdf_column * get_column(gdf_size_type column_index) const
   {
     return host_columns[column_index];
@@ -202,10 +195,8 @@ public:
   __device__ bool is_row_valid(gdf_size_type row_index) const
   {
     const bool row_valid = gdf_is_valid(d_row_valid, row_index);
-
     return row_valid;
   }
-
 
   /** 
    * @brief  Gets the size in bytes of a row in the device_table, i.e., the sum of 
@@ -217,7 +208,6 @@ public:
   {
     return row_size_bytes;
   }
-
 
   /** 
    * @brief  Packs the elements of a specified row into a contiguous byte-buffer
