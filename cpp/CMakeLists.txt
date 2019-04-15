@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -224,13 +224,23 @@ add_library(cudf SHARED
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
-            src/unary/unary_ops.cu
+            src/unary/math_ops.cu
+            src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
+            src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
-            src/io/comp/uncomp.cpp
+            src/io/parquet/page_data.cu
+            src/io/parquet/page_hdr.cu
+            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
+            src/io/comp/uncomp.cpp
+            src/io/comp/brotli_dict.cpp
+            src/io/comp/debrotli.cu
+            src/io/comp/unsnap.cu
+            src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
