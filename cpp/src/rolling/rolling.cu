@@ -24,6 +24,9 @@
 #include <stdio.h>
 #include <algorithm>
 
+// basic aggregation classes from groupby
+#include <groupby/aggregation_operations.hpp>
+
 namespace
 {
 
@@ -31,6 +34,8 @@ namespace
  * @brief Computes the rolling window function
  *
  * @tparam ColumnType  Datatype of values pointed to by the pointers
+ * @tparam agg_op  A functor that defines the aggregation operation
+ * @tparam average Perform average across all valid elements in the window
  * @param in_col[in]  Pointers to input column's data
  * @param in_cols_valid[in]  Pointers to the validity mask of the input column
  * @param out_col[out]  Pointers to pre-allocated output column's data
@@ -45,7 +50,7 @@ namespace
  *                direction, accumulates from in_col[i] to
  *                in_col[i+forward_window] inclusive
  */
-template <typename ColumnType>
+template <typename ColumnType, template <typename AggType> class agg_op, bool average>
 __global__
 void gpu_rolling(ColumnType *in_col, gdf_valid_type *in_col_valid,
 		 ColumnType *out_col, gdf_valid_type *out_col_valid,
@@ -59,11 +64,12 @@ void gpu_rolling(ColumnType *in_col, gdf_valid_type *in_col_valid,
 
   // TODO: need a more generic way to handle aggregators (check groupby)
   // TODO: currently only sum is supported
+  agg_op<ColumnType> op;
 
   auto active_threads = __ballot_sync(0xffffffff, i < nrows);
   while(i < nrows)
   {
-    ColumnType val = 0;
+    ColumnType val = agg_op<ColumnType>::IDENTITY;
     gdf_size_type count = 0;
 
     // compute bounds
@@ -74,21 +80,31 @@ void gpu_rolling(ColumnType *in_col, gdf_valid_type *in_col_valid,
     for (size_t j = start_index; j < end_index; j++) {
       bool const input_is_valid{gdf_is_valid(in_col_valid, j)};
       if (input_is_valid) {
-        val = val + in_col[j];
+        val = op(in_col[j], val);
         count++;
       }
     }
-  
-    out_col[i] = val;
+
+    // check if we have enough input samples
+    bool output_is_valid = (count >= min_periods);
 
     // set the mask
-    bool output_is_valid = (count >= min_periods);
     MaskType const result_mask{__ballot_sync(active_threads, output_is_valid)};
     gdf_index_type const out_mask_location = i / BITS_PER_MASK;
     MaskType* const __restrict__ out_mask32 = reinterpret_cast<MaskType*>(out_col_valid);
+
     // only one thread writes the mask
     if (0 == threadIdx.x % warpSize)
       out_mask32[out_mask_location] = result_mask;
+
+    // store the output value, one per thread
+    if (output_is_valid) {
+      if (average)
+        // special case for COUNT aggregator
+        out_col[i] = val / count;
+      else
+        out_col[i] = val;
+    }
 
     // process next element 
     i += stride;
@@ -101,7 +117,7 @@ struct launch_kernel
   /**
    * @brief Uses SFINAE to instantiate only for arithmetic types
    */
-  template<typename ColumnType, class... TArgs,
+  template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
 	   typename std::enable_if_t<std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
   gdf_error dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
   {
@@ -110,7 +126,7 @@ struct launch_kernel
     gdf_size_type block = 256;
     gdf_size_type grid = (nrows + block-1) / block;
 
-    gpu_rolling<ColumnType><<<grid, block>>>(FArgs...); 
+    gpu_rolling<ColumnType, agg_op, average><<<grid, block>>>(FArgs...);
 
     cudaDeviceSynchronize();
     CUDA_CHECK_LAST();
@@ -118,12 +134,12 @@ struct launch_kernel
     POP_RANGE();
 
     return GDF_SUCCESS;
-  };
+  }
 
   /**
    * @brief If we cannot perform aggregation on this type then throw an error
    */
-  template<typename ColumnType, class... TArgs,
+  template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
 	   typename std::enable_if_t<!std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
   gdf_error dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
   {
@@ -132,18 +148,46 @@ struct launch_kernel
 
   /**
    * @brief Helper function for gdf_rolling. Deduces the type of the
-   * aggregation column and calls another function to perform the rolling window.
+   * aggregation column and type and calls another function to perform the
+   * rolling window.
+   */
+  template <typename ColumnType, template <typename AggType> class agg_op, bool average>
+  gdf_error typed_rolling_window(
+    void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
+    void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
+    gdf_size_type nrows, gdf_size_type window, gdf_size_type min_periods, gdf_size_type forward_window)
+  {
+    return dispatch_aggregation_type<ColumnType, agg_op, average>(nrows,
+					  	 reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr,
+			      		  	 reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr,
+		 	      		  	 nrows, window, min_periods, forward_window);
+  }
+
+  /**
+   * @brief Helper function for gdf_rolling. Deduces the type of the
+   * aggregation column and calls another function with the right agg type.
    */
   template <typename ColumnType>
   gdf_error operator()(
     void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
     void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
-    gdf_size_type nrows, gdf_size_type window, gdf_size_type min_periods, gdf_size_type forward_window)
+    gdf_size_type nrows, gdf_size_type window, gdf_size_type min_periods, gdf_size_type forward_window, gdf_agg_op agg_type)
   {
-    return dispatch_aggregation_type<ColumnType>(nrows,
-					  	 reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr,
-			      		  	 reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr,
-		 	      		  	 nrows, window, min_periods, forward_window);
+    switch (agg_type) {
+    case GDF_SUM:
+      return typed_rolling_window<ColumnType, sum_op, false>(in_col_data_ptr, in_col_valid_ptr, out_col_data_ptr, out_col_valid_ptr, nrows, window, min_periods, forward_window);
+    case GDF_MIN:
+      return typed_rolling_window<ColumnType, min_op, false>(in_col_data_ptr, in_col_valid_ptr, out_col_data_ptr, out_col_valid_ptr, nrows, window, min_periods, forward_window);
+    case GDF_MAX:
+      return typed_rolling_window<ColumnType, max_op, false>(in_col_data_ptr, in_col_valid_ptr, out_col_data_ptr, out_col_valid_ptr, nrows, window, min_periods, forward_window);
+    case GDF_COUNT:
+      return typed_rolling_window<ColumnType, count_op, false>(in_col_data_ptr, in_col_valid_ptr, out_col_data_ptr, out_col_valid_ptr, nrows, window, min_periods, forward_window);
+    case GDF_AVG:
+      return typed_rolling_window<ColumnType, sum_op, true>(in_col_data_ptr, in_col_valid_ptr, out_col_data_ptr, out_col_valid_ptr, nrows, window, min_periods, forward_window);
+    default:
+      // TODO: distinct operator will not be implemented for 0.7
+      return GDF_NOTIMPLEMENTED_ERROR;
+    }
   }
 };
 
@@ -175,6 +219,6 @@ gdf_error gdf_rolling_window(gdf_column *output_col,
                                launch_kernel{},
                                input_col->data, input_col->valid,
                                output_col->data, output_col->valid,
-                               input_col->size, window, min_periods, forward_window);
+                               input_col->size, window, min_periods, forward_window, agg_type);
 }
 

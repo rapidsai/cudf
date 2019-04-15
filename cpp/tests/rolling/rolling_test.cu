@@ -22,6 +22,8 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/column_wrapper.cuh>
 
+#include <groupby/aggregation_operations.hpp>
+
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -61,6 +63,7 @@ protected:
       auto valid_generator = [&](size_t row, size_t col){
         return in_col_valid[row];
       };
+      // note that if gdf_col_pointer contained something it will be freed since it's a unique pointer
       in_gdf_col = init_gdf_column(in_col, 0, valid_generator);
     }
     else
@@ -72,20 +75,20 @@ protected:
     // TODO: do we always need to create a valid buffer? we can't guarantee that every entry will be valid up front 
     auto valid_generator = [&](size_t row, size_t col){ return true; };
     std::vector<T> out_col(in_col.size());
+    // note that if gdf_col_pointer contained something it will be freed since it's a unique pointer
     out_gdf_col = init_gdf_column(out_col, 0, valid_generator);
   }
 
-  void create_reference_output(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
+  template<template <typename AggType> class agg_op, bool average>
+  void create_reference_output(size_t window, size_t min_periods, size_t forward_window)
   {
     // compute the reference solution on the cpu
     size_t nrows = in_col.size();
     ref_data.resize(nrows);
     ref_data_valid.resize(nrows);
-    bool has_nulls = true;	// always have the valid bit mask set
+    agg_op<T> op;
     for(size_t i = 0; i < nrows; i++) {
-      ASSERT_TRUE(agg == GDF_SUM);
-      // TODO: need a more generic way to handle aggregators - initialize (check groupby test)
-      T val = 0;
+      T val = agg_op<T>::IDENTITY;
       size_t count = 0;
       // compute bounds
       size_t start_index = std::max((size_t)0, i - window + 1);
@@ -93,13 +96,41 @@ protected:
       // aggregate
       for (size_t j = start_index; j < end_index; j++) {
         if (in_col_valid[j]) {
-          // TODO: need a more generic way to handle aggregators (maybe type dispatcher?)
-          val = val + in_col[j];
+          val = op(in_col[j], val);
           count++;
         }
       }
-      ref_data[i] = val;
       ref_data_valid[i] = (count >= min_periods);
+      if (ref_data_valid[i]) {
+        if (average)
+          ref_data[i] = val / count;
+        else
+          ref_data[i] = val;
+      }
+    }
+  }
+
+  void create_reference_output(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
+  {
+    // unroll aggregation types
+    switch(agg) {
+    case GDF_SUM:
+      create_reference_output<sum_op, false>(window, min_periods, forward_window);
+      break;
+    case GDF_MIN:
+      create_reference_output<min_op, false>(window, min_periods, forward_window);
+      break;
+    case GDF_MAX:
+      create_reference_output<max_op, false>(window, min_periods, forward_window);
+      break;
+    case GDF_COUNT:
+      create_reference_output<count_op, false>(window, min_periods, forward_window);
+      break;
+    case GDF_AVG:
+      create_reference_output<sum_op, true>(window, min_periods, forward_window);
+      break;
+    default:
+      FAIL() << "aggregation type not supported";
     }
   }
 
@@ -129,6 +160,9 @@ protected:
       cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
       cudf::test::column_wrapper<T> ref(ref_data, [&](gdf_index_type i) { return ref_data_valid[i]; } );
       ASSERT_TRUE(out == ref);
+
+      // print the column
+      out.print();
     #endif
   }
 
@@ -159,7 +193,7 @@ protected:
   gdf_col_pointer out_gdf_col;
 };
 
-using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t>;
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, double>;
 
 TYPED_TEST_CASE(RollingTest, TestTypes);
 
@@ -171,4 +205,8 @@ TYPED_TEST(RollingTest, Simple)
   this->in_col_valid = {1, 1, 1, 0, 1};
 
   this->run_test(2, 2, 0, GDF_SUM);
+  this->run_test(2, 2, 0, GDF_MIN);
+  this->run_test(2, 2, 0, GDF_MAX);
+  this->run_test(2, 2, 0, GDF_COUNT);
+  this->run_test(2, 2, 0, GDF_AVG);
 }
