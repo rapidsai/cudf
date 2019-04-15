@@ -13,28 +13,20 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
+  string: py{{ py_version }}_{{ git_revision_count }}
   script_env:
     - CC
     - CXX
-    - CUDAHOSTCXX
-    - PARALLEL_LEVEL
-    - BUILD_ABI
 
 requirements:
   build:
-    - cmake >=3.12.4
-    - python x.x
+    - python
     - cffi
     - setuptools
-    - nvstrings 0.7.*
-    - pycparser 2.19
-    - pyarrow 0.12.1
-  run:
     - libcudf {{ version }}
-    - python x.x
+  run:
+    - python
     - cffi
-    - pycparser 2.19
     - pyarrow 0.12.1
 
 test:

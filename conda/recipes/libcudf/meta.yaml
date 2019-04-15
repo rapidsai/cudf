@@ -18,15 +18,17 @@ build:
     - CXX
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
-    - BUILD_ABI
+  run_exports:
+    - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
 requirements:
   build:
     - cmake >=3.12.4
-    - nvstrings 0.7.*
+  host:
+    - librmm 0.7.*
+    - libnvstrings 0.7.*
   run:
     - pyarrow 0.12.1
-    - nvstrings 0.7.*
 
 test:
   commands:

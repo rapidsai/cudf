@@ -19,19 +19,19 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
-                    "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${GTEST_INCLUDE_DIR}"
+                    "${ARROW_INCLUDE_DIR}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${RMM_INCLUDE}"
+                    "${NVSTRINGS_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
