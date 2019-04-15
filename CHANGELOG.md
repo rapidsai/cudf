@@ -29,8 +29,15 @@
 - PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
+<<<<<<< HEAD
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
+=======
+- PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1389 Refactored `set_null_count()`
+- PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
+- PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+>>>>>>> 19dc23a11db0c9faa2ba7e277f7aefb7f68fa698
 
 ## Bug Fixes
 
