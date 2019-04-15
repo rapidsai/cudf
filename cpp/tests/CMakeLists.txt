@@ -22,6 +22,8 @@ endfunction(ConfigureTest)
 include_directories("${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${RMM_INCLUDE}"
+                    "${NVSTRINGS_INCLUDE}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -29,7 +31,6 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
 
 ###################################################################################################
@@ -38,7 +39,11 @@ include_directories("${GTEST_INCLUDE_DIR}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${FLATBUFFERS_LIBRARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
+                 "${GTEST_LIBRARY_DIR}"
+                 "${RMM_LIBRARY}"
+                 "${NVSTRINGS_LIBRARY}"
+                 "${NVCATEGORY_LIBRARY}"
+                 "${NVTEXT_LIBRARY}")
 
 ###################################################################################################
 ### test sources ##################################################################################
