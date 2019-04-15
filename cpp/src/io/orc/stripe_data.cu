@@ -404,7 +404,7 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s *bs, int pos)
  * @return new position in byte stream buffer
  **/
 template <class T>
-inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, T &result)
+inline __device__ int decode_base128_varint(volatile orc_bytestream_s *bs, int pos, T &result)
 {
     uint32_t v = bytestream_readbyte(bs, pos++);
     if (v > 0x7f)
@@ -454,6 +454,7 @@ inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, T &r
                         result = hi | lo;
                         return pos;
                     }
+ 
                 }
             }
         }
@@ -464,23 +465,45 @@ inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, T &r
 
 
 /**
+ * @brief Decodes an unsigned 32-bit varint
+ **/
+inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, uint32_t &result)
+{
+    uint32_t u;
+    pos = decode_base128_varint<uint32_t>(bs, pos, u);
+    result = u;
+    return pos;
+}
+
+/**
+ * @brief Decodes an unsigned 64-bit varint
+ **/
+inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, uint64_t &result)
+{
+    uint64_t u;
+    pos = decode_base128_varint<uint64_t>(bs, pos, u);
+    result = u;
+    return pos;
+}
+
+/**
  * @brief Signed version of 32-bit decode_varint
  **/
 inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, int32_t &result)
 {
     uint32_t u;
-    pos = decode_varint<uint32_t>(bs, pos, u);
+    pos = decode_base128_varint<uint32_t>(bs, pos, u);
     result = (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
     return pos;
 }
 
 /**
-* @brief Signed version of 64-bit decode_varint
-**/
+ * @brief Signed version of 64-bit decode_varint
+ **/
 inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, int64_t &result)
 {
     uint64_t u;
-    pos = decode_varint<uint64_t>(bs, pos, u);
+    pos = decode_base128_varint<uint64_t>(bs, pos, u);
     result = (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
     return pos;
 }
@@ -765,16 +788,20 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     {
                         T baseval;
                         // Delta
-                        pos = decode_varint<T>(bs, pos, baseval);
+                        pos = decode_varint(bs, pos, baseval);
                         if (sizeof(T) <= 4)
                         {
+                            int32_t delta;
+                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u32[r] = baseval;
-                            pos = decode_varint(bs, pos, rle->delta.i32[r]);
+                            rle->delta.i32[r] = delta;
                         }
                         else
                         {
+                            int64_t delta;
+                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u64[r] = baseval;
-                            pos = decode_varint(bs, pos, rle->delta.i64[r]);
+                            rle->delta.i64[r] = delta;
                         }
                     }
                 }
