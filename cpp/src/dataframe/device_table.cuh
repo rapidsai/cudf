@@ -26,6 +26,9 @@
 #include "bitmask/legacy_bitmask.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include <utilities/error_utils.hpp>
+#include <types.hpp>
+
+
 #include <thrust/tabulate.h>
 
 namespace {
@@ -149,6 +152,11 @@ public:
     d_row_valid = device_row_valid.data().get();
   }
 
+/**---------------------------------------------------------------------------*
+ * @brief Construct a new device_table from a cudf::table
+ * 
+*---------------------------------------------------------------------------**/
+  device_table( cudf::table & t ) : device_table{t.num_columns(), t.begin()} {}
 
   ~device_table() = default;
   device_table(device_table const& other) = delete;
