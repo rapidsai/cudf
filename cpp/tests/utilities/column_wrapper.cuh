@@ -379,11 +379,7 @@ struct column_wrapper {
       the_column.valid = nullptr;
     }
 
-    gdf_error result = set_null_count(&the_column);
-    if (GDF_SUCCESS != result) {
-      throw std::runtime_error("Failed to set null count. Error code: " +
-                               std::to_string(result));
-    }
+    set_null_count(the_column);
   }
 
   rmm::device_vector<ColumnType> data;  ///< Container for the column's data

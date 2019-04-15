@@ -132,7 +132,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
 
   if((nullptr == count)){return GDF_DATASET_EMPTY;}
 
-  if(0 == num_rows) {return GDF_SUCCESS;}
+  if(0 == num_rows){
+    *count = 0;
+    return GDF_SUCCESS;
+  }
 
   if(nullptr == masks){
       *count = num_rows;

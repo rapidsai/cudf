@@ -18,6 +18,8 @@
 
 //Quantile (percentile) functionality
 
+#include "cudf.h"
+
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>
 #include <thrust/sort.h>

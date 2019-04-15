@@ -28,6 +28,7 @@
 #include <bitset>
 #include <cstdint>
 #include <random>
+#include <iostream>
 
 template<typename T>
 __global__
@@ -40,7 +41,7 @@ void gpu_atomic_test(T *result, T *data, size_t size)
         atomicAdd(&result[0], data[id]);
         atomicMin(&result[1], data[id]);
         atomicMax(&result[2], data[id]);
-        atomicAdd(&result[3], data[id]);
+        cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
     }
 }
 
@@ -76,6 +77,21 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
     }
 }
 
+template<typename T>
+__global__
+void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
+{
+    size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t step = blockDim.x * gridDim.x;
+
+    for (; id < size; id += step) {
+        atomicAnd(&result[0], data[id]);
+        atomicOr(&result[1], data[id]);
+        atomicXor(&result[2], data[id]);
+        cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceAnd{});
+    }
+}
+
 // TODO: remove these explicit instantiation for kernels
 // At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
 // because `TypeParam` is a private member of class ::testing::Test
@@ -85,11 +101,13 @@ template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cu
 template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomic_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+template  __global__ void gpu_atomic_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
 
 template  __global__ void gpu_atomicCAS_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
 template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
+template  __global__ void gpu_atomicCAS_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
 
 
 // ---------------------------------------------
@@ -148,8 +166,8 @@ struct AtomicsTest : public GdfTest
 
 using TestingTypes = ::testing::Types<
     int8_t, int16_t, int32_t, int64_t, float, double,
-    cudf::date32, cudf::date64, cudf::timestamp, cudf::category
-    >;
+    cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+    cudf::nvstring_category>;
 
 TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 
@@ -236,4 +254,86 @@ TYPED_TEST(AtomicsTest, atomicCASRandom)
     this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
+// ------------------------------------------------------------------
+
+template <typename T>
+struct AtomicsBitwiseOpTest : public GdfTest
+{
+    void atomic_test(std::vector<uint64_t> const & v,
+        int block_size=0, int grid_size=1)
+    {
+        std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull)};
+        T exact[4];
+        exact[0] = std::accumulate(v.begin(), v.end(), identity[0],
+            [](T acc, uint64_t i) { return acc & T(i); });
+        exact[1] = std::accumulate(v.begin(), v.end(), identity[1],
+            [](T acc, uint64_t i) { return acc | T(i); });
+        exact[2] = std::accumulate(v.begin(), v.end(), identity[2],
+            [](T acc, uint64_t i) { return acc ^ T(i); });
+        exact[3] = exact[0];
+
+        size_t vec_size = v.size();
+
+        std::vector<T> v_type(vec_size);
+        std::transform(v.begin(), v.end(), v_type.begin(),
+            [](uint64_t x) { T t(x) ; return t; } );
+
+        std::vector<T> result_init(identity);
+
+
+        thrust::device_vector<T> dev_result(result_init);
+        thrust::device_vector<T> dev_data(v_type);
+
+        if( block_size == 0) block_size = vec_size;
+
+	gpu_atomic_bitwiseOp_test<T> <<<grid_size, block_size>>> (
+		reinterpret_cast<T*>( dev_result.data().get() ),
+		reinterpret_cast<T*>( dev_data.data().get() ),
+		vec_size);
+
+        thrust::host_vector<T> host_result(dev_result);
+        cudaDeviceSynchronize();
+        CUDA_CHECK_LAST();
+
+        print_exact(exact, "exact");
+        print_exact(host_result.data(), "result");
+
+
+        EXPECT_EQ(host_result[0], exact[0]) << "atomicAnd test failed";
+        EXPECT_EQ(host_result[1], exact[1]) << "atomicOr test failed";
+        EXPECT_EQ(host_result[2], exact[2]) << "atomicXor test failed";
+        EXPECT_EQ(host_result[3], exact[0]) << "atomicAnd test(2) failed";
+    }
+
+    void print_exact(const T *v, const char* msg){
+        std::cout << std::hex << std::showbase;
+        std::cout << "The " << msg << " = {" 
+            << +v[0] << ", "
+            << +v[1] << ", "
+            << +v[2] << "}"
+            << std::endl;
+    }
+
+};
+
+using BitwiseOpTestingTypes = ::testing::Types<
+    int8_t, int16_t, int32_t, int64_t,
+    uint8_t, uint16_t, uint32_t, uint64_t
+    >;
+
+TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
+
+TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
+{
+    { // test for AND, XOR
+        std::vector<uint64_t> input_array(
+            {0xfcfcfcfcfcfcfc7f, 0x7f7f7f7f7f7ffc, 0xfffddffddffddfdf, 0x7f7f7f7f7f7ffc});
+        this->atomic_test(input_array);
+    }
+    { // test for OR, XOR
+        std::vector<uint64_t> input_array(
+            {0x01, 0xfc02, 0x1dff03, 0x1100a0b0801d0003, 0x8000000000000000, 0x1dff03});
+        this->atomic_test(input_array);
+    }
+}
 

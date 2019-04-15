@@ -49,6 +49,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     gdf = DataFrame.from_pandas(pdf)
 
     got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
+    got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
 
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
     # pandas' melt makes the 'variable' column of 'object' type (string)
@@ -58,4 +59,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     pd.testing.assert_frame_equal(
         expect,
         got.to_pandas()
+    )
+
+    pd.testing.assert_frame_equal(
+        expect,
+        got_from_melt_method.to_pandas()
     )
