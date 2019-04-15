@@ -32,6 +32,7 @@
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
+- PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
 
 ## Bug Fixes
 
