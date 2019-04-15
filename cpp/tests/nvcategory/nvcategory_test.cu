@@ -10,6 +10,7 @@
 #include <random>
 
 #include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 
 #include "rmm/rmm.h"
 #include <cstring>
