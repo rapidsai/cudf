@@ -186,10 +186,10 @@ template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h
 	pos_key_pair *positions);
 
 /**
- * @brief A class representing an array of partial sums, stored on the GPU memory.
+ * @brief A class representing an array of partial sums, stored in the GPU memory.
  *
- * The object is just a reference to the device memory,
- * it does not own the device memory.
+ * The object is a reference to the device memory,
+ * it does not own the allocated buffer.
  **/
 struct BlockSumArray {
 		int16_t* d_sums = nullptr;	///< Array of partial sums
@@ -252,12 +252,12 @@ public:
  * Each sum is the level difference between the first bracket in the block,
  * and the first bracket in the next block (if any). For example, "[[]]" = 0,
  * because all open brackets are closed. "[[]" = 1, because the one unmatched
- * open bracket would raise the level of all subsequent lemenets.
+ * open bracket would raise the level of all subsequent elements.
  * 
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] bracket_count Number of brackets
  * @param[in] open_chars Array of characters to treat as open brackets
- * @param[in] close_chars Array of characters to treat as open brackets
+ * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
  * @param[in, out] sum_array Array of partial sums
  * 
@@ -374,12 +374,13 @@ void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
  * 
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] count Number of brackets
- * @param[in] sum_pyramid 
- * @param[in] pyramid_height 
+ * @param[in] sum_pyramid Pyramid of aggregated partial sums, where 
+ * higher levels aggregate more elements per block
+ * @param[in] pyramid_height Number of levels in the sum_pyramid
  * @param[in] open_chars Array of characters to treat as open brackets
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
- * @param[out] levels Array of outout levels
+ * @param[out] levels Array of output levels, one per bracket
  * 
  * @return void
  *---------------------------------------------------------------------------**/
@@ -406,9 +407,11 @@ void assignLevelsKernel(
 		int block_idx = 0;
 		int offset = first_bracket_idx;
 		while(offset) {
+			// Look for the highest level that can be used with the current offset
 			while(offset < sum_pyramid[level].block_size && level > 0) {
 				--level; block_idx *= aggregation_rate;
 			}
+			// Add up the blocks in the current level while the offset is after/at the block end
 			while(offset >= sum_pyramid[level].block_size) {
 				offset -= sum_pyramid[level].block_size;
 				sum += sum_pyramid[level].d_sums[block_idx];
@@ -416,7 +419,7 @@ void assignLevelsKernel(
 			}
 		}
 	}
-
+	// Assign levels, update current level based on the encountered brackets
 	const auto last_bracket_idx = min(first_bracket_idx + to_process, count) - 1;
 	for (uint64_t bracket_idx = first_bracket_idx; bracket_idx <= last_bracket_idx; ++bracket_idx){
 		for (int bchar_idx = 0; bchar_idx < bracket_char_cnt; ++bchar_idx) {
@@ -437,8 +440,9 @@ void assignLevelsKernel(
  * 
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] count Number of brackets
- * @param[in] sum_pyramid 
- * @param[in] pyramid_height 
+ * @param[in] sum_pyramid Pyramid of aggregated partial sums, where 
+ * higher levels aggregate more elements per block
+ * @param[in] pyramid_height Number of levels in the sum_pyramid
  * @param[in] open_chars Array of characters to treat as open brackets
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
@@ -467,12 +471,12 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Computes nested level for each of the brackets in the input array
+ * @brief Computes nested levels for each of the brackets in the input array
  * 
  * The input array of brackets is sorted before levels are computed. 
  * Brackets at the top level are assigned level 1.
  * 
- * @param[in] brackets Array of brackets, in (offset, char) format
+ * @param[in] brackets Device memory array of brackets, in (offset, key) format
  * @param[in] count Number of brackets
  * @param[in] open_chars string of characters to treat as open brackets
  * @param[in] close_chars string of characters to treat as close brackets
@@ -492,11 +496,10 @@ device_buffer<int16_t> getBracketLevels(
 
 	// Copy the open/close chars to device
 	device_buffer<char> d_open_chars(open_chars.size());
+	device_buffer<char> d_close_chars(close_chars.size());
 	CUDA_TRY(cudaMemcpyAsync(
 		d_open_chars.data(), open_chars.c_str(),
 		open_chars.size() * sizeof(char), cudaMemcpyDefault));
-
-	device_buffer<char> d_close_chars(close_chars.size());
 	CUDA_TRY(cudaMemcpyAsync(
 		d_close_chars.data(), close_chars.c_str(),
 		close_chars.size() * sizeof(char), cudaMemcpyDefault));
