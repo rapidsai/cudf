@@ -24,6 +24,19 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
+@ioutils.doc_read_parquet_metadata()
+def read_parquet_metadata(path):
+    """{docstring}"""
+
+    pq_file = pq.ParquetFile(path)
+
+    num_rows = pq_file.metadata.num_rows
+    num_row_groups = pq_file.num_row_groups
+    col_names = pq_file.schema.names
+
+    return num_rows, num_row_groups, col_names
+
+
 @ioutils.doc_read_parquet()
 def read_parquet(path, engine='cudf', *args, **kwargs):
     """{docstring}"""
@@ -47,6 +60,12 @@ def read_parquet(path, engine='cudf', *args, **kwargs):
             use_cols_ptr = ffi.new('char*[]', arr_cols)
             pq_reader.use_cols = use_cols_ptr
             pq_reader.use_cols_len = len(usecols)
+
+        row_group = kwargs.get("row_group")
+        if row_group is not None:
+            pq_reader.row_group = row_group
+        else:
+            pq_reader.row_group = -1
 
         # Call to libcudf
         libgdf.read_parquet(pq_reader)

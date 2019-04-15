@@ -87,6 +87,45 @@ def test_parquet_reader(parquet_file, columns, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+def test_parquet_read_metadata(tmpdir, pdf):
+    def num_row_groups(rows, group_size):
+        return max(1, (rows + (group_size - 1)) // group_size)
+
+    fname = tmpdir.join("metadata.parquet")
+    row_group_size = 5
+    pdf.to_parquet(fname, compression='snappy', row_group_size=row_group_size)
+
+    num_rows, row_groups, col_names = cudf.read_parquet_metadata(fname)
+
+    assert(num_rows == len(pdf.index))
+    assert(row_groups == num_row_groups(num_rows, row_group_size))
+    for a, b in zip(col_names, pdf.columns):
+        assert(a == b)
+
+
+@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+@pytest.mark.parametrize('row_group_size', [1, 5, 100])
+def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
+    fname = tmpdir.join("row_group.parquet")
+    pdf.to_parquet(fname, compression='gzip', row_group_size=row_group_size)
+
+    num_rows, row_groups, col_names = cudf.read_parquet_metadata(fname)
+
+    gdf = [cudf.read_parquet(fname, engine='cudf', row_group=i)
+          for i in range(row_groups)]
+    gdf = cudf.concat(gdf).reset_index(drop=True)
+
+    if 'col_bool' in pdf.columns:
+        pdf['col_bool'] = pdf['col_bool'].astype('int8')
+    if 'col_category' in pdf.columns:
+        pdf = pdf.drop(columns=['col_category'])
+    if 'col_category' in gdf.columns:
+        gdf = gdf.drop('col_category')
+
+    assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_parquet_writer(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
