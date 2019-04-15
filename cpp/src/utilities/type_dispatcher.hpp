@@ -21,7 +21,8 @@
 
 #include <cudf/types.h>
 
-#include <nvstrings/NVStrings.h>
+// Forward decl
+class NVStrings;
 
 #include <cassert>
 #include <utility>
