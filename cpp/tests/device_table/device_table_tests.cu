@@ -25,6 +25,26 @@
 
 struct DeviceTableTest : GdfTest {};
 
+struct row_self_equality {
+  device_table * t;
+
+   row_self_equality(device_table * _t) : t{_t} {}
+
+   __device__ bool operator()(int row_index) {
+    return t->rows_equal(*t, row_index, row_index);
+  }
+};
+
+ struct row_is_valid {
+    device_table * t;
+
+     row_is_valid(device_table * _t) : t{_t} {}
+
+     __device__ bool operator()(int row_index){
+        return t->is_row_valid(row_index);
+    }
+};
+
 TEST_F(DeviceTableTest, First) {
   constexpr int size{1000};
 
@@ -38,32 +58,37 @@ TEST_F(DeviceTableTest, First) {
 
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
 
-  device_table table(4, gdf_cols.data());
+  std::unique_ptr<device_table> table{new device_table(4, gdf_cols.data())};
 
   // Table attributes such as number of rows/columns should
   // match expected
-  EXPECT_EQ(size, table.num_rows());
-  EXPECT_EQ(4, table.num_columns());
+  EXPECT_EQ(size, table->num_rows());
+  EXPECT_EQ(4, table->num_columns());
 
   // Pointers to the `gdf_column` should be identical
-  EXPECT_EQ(col0.get(), table.get_column(0));
-  EXPECT_EQ(col1.get(), table.get_column(1));
-  EXPECT_EQ(col2.get(), table.get_column(2));
-  EXPECT_EQ(col3.get(), table.get_column(3));
+  EXPECT_EQ(col0.get(), table->get_column(0));
+  EXPECT_EQ(col1.get(), table->get_column(1));
+  EXPECT_EQ(col2.get(), table->get_column(2));
+  EXPECT_EQ(col3.get(), table->get_column(3));
 
-  gdf_column** cols = table.columns();
+  gdf_column** cols = table->columns();
   EXPECT_EQ(col0.get(), cols[0]);
   EXPECT_EQ(col1.get(), cols[1]);
   EXPECT_EQ(col2.get(), cols[2]);
   EXPECT_EQ(col3.get(), cols[3]);
 
   // gdf_columns should equal the column_wrappers
-  EXPECT_TRUE(col0 == *table.get_column(0));
-  EXPECT_TRUE(col1 == *table.get_column(1));
-  EXPECT_TRUE(col2 == *table.get_column(2));
-  EXPECT_TRUE(col3 == *table.get_column(3));
+  EXPECT_TRUE(col0 == *table->get_column(0));
+  EXPECT_TRUE(col1 == *table->get_column(1));
+  EXPECT_TRUE(col2 == *table->get_column(2));
+  EXPECT_TRUE(col3 == *table->get_column(3));
 
   int const expected_row_byte_size =
       sizeof(int32_t) + sizeof(float) + sizeof(double) + sizeof(int8_t);
-  EXPECT_EQ(expected_row_byte_size, table.get_row_size_bytes());
+  EXPECT_EQ(expected_row_byte_size, table->get_row_size_bytes());
+
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size - 1), 
+      row_is_valid(table.get())));
 }
