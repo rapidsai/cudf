@@ -87,8 +87,22 @@ TEST_F(DeviceTableTest, First) {
       sizeof(int32_t) + sizeof(float) + sizeof(double) + sizeof(int8_t);
   EXPECT_EQ(expected_row_byte_size, table->get_row_size_bytes());
 
+  // Every row should be valid
   EXPECT_TRUE(thrust::all_of(
       rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(size - 1), 
       row_is_valid(table.get())));
+
+  // Every row should be equal to itself
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size - 1), 
+      row_self_equality(table.get())));
 }
+
+// Test where a single column has every other value null, 
+// should mean that every other row is null
+
+// Test where one table is identical to the other 
+
+// test where one table is the reverse of the other
