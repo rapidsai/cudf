@@ -776,7 +776,7 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series,Series):
+        if not isinstance(series, Series):
             series = Series(series)
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
@@ -799,7 +799,7 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series,Series):
+        if not isinstance(series, Series):
             series = Series(series)
         index = self._index
         sind = series.index
