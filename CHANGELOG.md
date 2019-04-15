@@ -32,7 +32,7 @@
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
-- PR #XXXX Rework CMake and conda recipes to depend on installed libraries
+- PR #1435 Rework CMake and conda recipes to depend on installed libraries
 
 ## Bug Fixes
 
