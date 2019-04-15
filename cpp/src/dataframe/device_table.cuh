@@ -72,6 +72,7 @@ struct row_masker {
   gdf_valid_type** column_valid_masks;
 };
 
+
 }  // namespace
 
 /** 
@@ -83,82 +84,36 @@ public:
 
   using size_type = int64_t;
 
-  device_table(size_type num_cols, gdf_column ** gdf_columns) 
-    : _num_columns(num_cols), host_columns(gdf_columns)
-  {
-    CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
-    CUDF_EXPECTS(nullptr != host_columns[0], "Attempt to create table with a null column.");
-    _num_rows = host_columns[0]->size;
+/**---------------------------------------------------------------------------*
+ * @brief Factory function to construct a device_table wrapped in a unique_ptr.
+ * 
+ * @param num_columns The number of columns
+ * @param cols Array of columns
+ * @return A unique_ptr containing a device_table object
+*---------------------------------------------------------------------------**/
+  static auto create(gdf_size_type num_columns, gdf_column* cols[]) {
+    auto deleter = [](device_table* d) { d->destroy(); };
 
-    // Copy pointers to each column's data, types, and validity bitmasks 
-    // to contiguous host vectors (AoS to SoA conversion)
-    std::vector<void*> columns_data(num_cols);
-    std::vector<gdf_valid_type*> columns_valids(num_cols);
-    std::vector<gdf_dtype> columns_types(num_cols);
-    std::vector<gdf_size_type> columns_byte_widths(num_cols);
-
-    for(size_type i = 0; i < num_cols; ++i)
-    {
-      gdf_column * const current_column = host_columns[i];
-      CUDF_EXPECTS(nullptr != current_column, "Column is null");
-      CUDF_EXPECTS(_num_rows == current_column->size, "Column size mismatch");
-      if(_num_rows > 0) {
-        CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
-      }
-	
-      // Compute the size of a row in the table in bytes
-      int column_width_bytes{0};
-      if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
-      {
-        row_size_bytes += column_width_bytes;
-        // Store the byte width of each column in a device array
-        columns_byte_widths[i] = row_size_bytes;
-      }
-      else
-      {
-        std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
-        columns_byte_widths[i] = 0;
-      }
-
-      columns_data[i] = (host_columns[i]->data);
-      columns_valids[i] = (host_columns[i]->valid);
-      columns_types[i] = (host_columns[i]->dtype);
-    }
-
-    // Copy host vectors to device vectors
-    device_columns_data = columns_data;
-    device_columns_valids = columns_valids;
-    device_columns_types = columns_types;
-    device_column_byte_widths = columns_byte_widths;
-
-    d_columns_data_ptr = device_columns_data.data().get();
-    d_columns_valids_ptr = device_columns_valids.data().get();
-    d_columns_types_ptr = device_columns_types.data().get();
-    d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
-
-    // Allocate storage sufficient to hold a validity bit for every row
-    // in the table
-    const size_type mask_size = gdf_valid_allocation_size(_num_rows);
-    device_row_valid.resize(mask_size);
-
-    // If a row contains a single NULL value, then the entire row is considered
-    // to be NULL, therefore initialize the row-validity mask with the
-    // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(rmm::exec_policy()->on(0),
-                     device_row_valid.begin(),
-                     device_row_valid.end(),
-                     row_masker(d_columns_valids_ptr, num_cols));
-
-    d_row_valid = device_row_valid.data().get();
+    return std::unique_ptr<device_table, decltype(deleter)>{
+        new device_table(num_columns, cols), deleter};
   }
 
-/**---------------------------------------------------------------------------*
- * @brief Construct a new device_table from a cudf::table
- * 
-*---------------------------------------------------------------------------**/
-  device_table( cudf::table & t ) : device_table{t.num_columns(), t.begin()} {}
+  static auto create(cudf::table& t) {
+    return device_table::create(t.num_columns(), t.begin());
+  }
 
-  ~device_table() = default;
+  /**---------------------------------------------------------------------------*
+   * @brief Destroys the `device_table`.
+   *
+   * This function is required because the destructor is protected to prohibit
+   * stack allocation.
+   *
+   *---------------------------------------------------------------------------**/
+  void destroy(void){
+      delete this;
+  }
+
+  device_table() = delete;
   device_table(device_table const& other) = delete;
   device_table& operator=(device_table const& other) = delete;
 
@@ -202,8 +157,7 @@ public:
 
   __device__ bool is_row_valid(gdf_size_type row_index) const
   {
-    const bool row_valid = gdf_is_valid(d_row_valid, row_index);
-    return row_valid;
+    return gdf_is_valid(d_row_valid, row_index);
   }
 
   /** 
@@ -458,6 +412,100 @@ private:
   rmm::device_vector<gdf_size_type> device_column_byte_widths;
   gdf_size_type * d_columns_byte_widths_ptr{nullptr};
 
+protected:
+ /**---------------------------------------------------------------------------*
+  * @brief Constructs a new device_table object from an array of `gdf_column*`.
+  *
+  * This constructor is protected to require use of the device_table::create
+  * factory method. This will ensure the device_table is constructed via the overloaded
+  * new operator that allocates the object using managed memory.
+  *
+  * @param num_cols
+  * @param gdf_columns
+  *---------------------------------------------------------------------------**/
+ device_table(size_type num_cols, gdf_column** gdf_columns)
+     : _num_columns(num_cols), host_columns(gdf_columns) {
+   CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
+   CUDF_EXPECTS(nullptr != host_columns[0],
+                "Attempt to create table with a null column.");
+   _num_rows = host_columns[0]->size;
+
+   // Copy pointers to each column's data, types, and validity bitmasks
+   // to contiguous host vectors (AoS to SoA conversion)
+   std::vector<void*> columns_data(num_cols);
+   std::vector<gdf_valid_type*> columns_valids(num_cols);
+   std::vector<gdf_dtype> columns_types(num_cols);
+   std::vector<gdf_size_type> columns_byte_widths(num_cols);
+
+   for (size_type i = 0; i < num_cols; ++i) {
+     gdf_column* const current_column = host_columns[i];
+     CUDF_EXPECTS(nullptr != current_column, "Column is null");
+     CUDF_EXPECTS(_num_rows == current_column->size, "Column size mismatch");
+     if (_num_rows > 0) {
+       CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
+     }
+
+     // Compute the size of a row in the table in bytes
+     int column_width_bytes{0};
+     if (GDF_SUCCESS ==
+         get_column_byte_width(current_column, &column_width_bytes)) {
+       row_size_bytes += column_width_bytes;
+       // Store the byte width of each column in a device array
+       columns_byte_widths[i] = row_size_bytes;
+     } else {
+       std::cerr << "Attempted to get column byte width of unsupported GDF "
+                    "datatype.\n";
+       columns_byte_widths[i] = 0;
+     }
+
+     columns_data[i] = (host_columns[i]->data);
+     columns_valids[i] = (host_columns[i]->valid);
+     columns_types[i] = (host_columns[i]->dtype);
+   }
+
+   // Copy host vectors to device vectors
+   device_columns_data = columns_data;
+   device_columns_valids = columns_valids;
+   device_columns_types = columns_types;
+   device_column_byte_widths = columns_byte_widths;
+
+   d_columns_data_ptr = device_columns_data.data().get();
+   d_columns_valids_ptr = device_columns_valids.data().get();
+   d_columns_types_ptr = device_columns_types.data().get();
+   d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
+
+   // Allocate storage sufficient to hold a validity bit for every row
+   // in the table
+   const size_type mask_size = gdf_valid_allocation_size(_num_rows);
+   device_row_valid.resize(mask_size);
+
+   // If a row contains a single NULL value, then the entire row is considered
+   // to be NULL, therefore initialize the row-validity mask with the
+   // bit-wise AND of the validity mask of all the columns
+   thrust::tabulate(rmm::exec_policy()->on(0), device_row_valid.begin(),
+                    device_row_valid.end(),
+                    row_masker(d_columns_valids_ptr, num_cols));
+
+   d_row_valid = device_row_valid.data().get();
+  }
+
+ /**---------------------------------------------------------------------------*
+  * @brief Destructor is protected to prevent stack allocation.
+  *
+  * The device_table class is allocated with managed memory via an overloaded
+  * `new` operator.
+  *
+  * This requires that the `device_table` always be allocated on the heap via
+  * `new`.
+  *
+  * Therefore, to protect users for errors, stack allocation should be
+  * prohibited.
+  *
+  *---------------------------------------------------------------------------**/
+ ~device_table() = default;
+
 };
+
+
 
 #endif

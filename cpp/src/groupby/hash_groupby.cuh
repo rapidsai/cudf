@@ -186,8 +186,8 @@ gdf_error gdf_group_by_hash(gdf_size_type ncols,
   }
 
   // Wrap the groupby input and output columns in a device_table
-  std::unique_ptr< const device_table > groupby_input_table{new device_table(ncols, in_groupby_columns)};
-  std::unique_ptr< device_table > groupby_output_table{new device_table(ncols, out_groupby_columns)};
+  auto groupby_input_table = device_table::create(ncols, in_groupby_columns);
+  auto groupby_output_table = device_table::create(ncols, out_groupby_columns);
 
   return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
                                                           in_aggregation_column, 

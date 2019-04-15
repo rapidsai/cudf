@@ -172,7 +172,7 @@ struct HashPartitionTest : public GdfTest
     }
 
     // Create a table from the gdf output of only the columns that were hashed
-    std::unique_ptr< device_table > table_to_hash{new device_table(num_cols_to_hash, gdf_cols_to_hash.data())};
+    auto table_to_hash = device_table::create(num_cols_to_hash, gdf_cols_to_hash.data());
 
     rmm::device_vector<int> row_partition_numbers(table_to_hash->num_rows());
 
