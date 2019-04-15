@@ -137,6 +137,15 @@ set(QUANTILES_TEST_SRC
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
 ###################################################################################################
+# - reduction tests ---------------------------------------------------------------------------------
+
+set(REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+
+ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
+
+###################################################################################################
 # - replace tests ---------------------------------------------------------------------------------
 
 set(REPLACE_TEST_SRC 

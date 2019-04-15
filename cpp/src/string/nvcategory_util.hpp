@@ -3,8 +3,12 @@
 
 #include "cudf.h"
 #include <vector>
-#include "types.hpp"
+
+// Forward declarations
 class NVCategory;
+namespace cudf{
+    struct table;
+}
 
 const bool DEVICE_ALLOCATED = true;
 const bool HOST_ALLOCATED = false;
