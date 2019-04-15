@@ -30,6 +30,8 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1389 Refactored `set_null_count()`
+- PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 
 ## Bug Fixes
 
@@ -47,10 +49,12 @@
 - PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
 - PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
+- PR #1392 Update cudf Dockerfile and package_versions.sh
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1328 Fix CategoricalColumn to_arrow() null mask
 
 
 # cuDF 0.6.0 (Date TBD)
