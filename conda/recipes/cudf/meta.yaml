@@ -19,25 +19,24 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
+    - numba >=0.41
     - libcudf {{ version }}
-    - numba >=0.40
     - nvstrings 0.7.*
   run:
     - python
-    - libcudf_cffi {{ version }}
     - pandas >=0.23.4
-    - numba >=0.40
+    - numba >=0.41
+    - libcudf_cffi {{ version }}
+    - rmm 0.7.*
     - nvstrings 0.7.*
 
 test:
-  requires:
-    - distributed >=1.23.0
-    - pytest
-  imports:
-    - cudf
+  commands:
+    - python -c "import cudf"
 
 about:
   home: http://rapids.ai/
   license: Apache-2.0
-  # license_file: LICENSE
+  license_family: Apache
+  license_file: LICENSE
   summary: cuDF GPU DataFrame core library

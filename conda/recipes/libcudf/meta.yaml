@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', 'unknown').split('.')[:2]) %}
 package:
   name: libcudf
   version: {{ version }}
@@ -45,5 +45,6 @@ test:
 about:
   home: http://rapids.ai/
   license: Apache-2.0
-  # license_file: LICENSE
+  license_family: Apache
+  license_file: LICENSE
   summary: libcudf library
