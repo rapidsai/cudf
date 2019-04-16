@@ -187,6 +187,10 @@ public:
     return gdf_is_valid(d_row_valid, row_index);
   }
 
+  __device__ bool row_has_nulls(gdf_size_type row_index) const{
+      return not gdf_is_valid(d_row_valid, row_index);
+  }
+
   /** 
    * @brief  Gets the size in bytes of a row in the device_table, i.e., the sum of 
    * the byte widths of all columns in the table
@@ -287,44 +291,55 @@ public:
 
   struct elements_are_equal{
     template <typename ColumnType>
-    __device__ __forceinline__
-    bool operator()(void const * lhs_column, gdf_size_type lhs_row_index,
-                    void const * rhs_column, gdf_size_type rhs_row_index)
-    {
-      ColumnType const lhs_elem{static_cast<ColumnType const*>(lhs_column)[lhs_row_index]};
-      ColumnType const rhs_elem{static_cast<ColumnType const*>(rhs_column)[rhs_row_index]};
-      return lhs_elem == rhs_elem;
+    __device__ __forceinline__ bool operator()(
+        void const* lhs_data, gdf_valid_type const* lhs_bitmask,
+        gdf_size_type lhs_row_index, void const* rhs_data,
+        gdf_valid_type const* rhs_bitmask, gdf_size_type rhs_row_index,
+        bool nulls_are_equal = false) {
+      if (gdf_is_valid(lhs_bitmask, lhs_row_index) and
+          gdf_is_valid(rhs_bitmask, rhs_row_index)) {
+        return static_cast<ColumnType const*>(lhs_data)[lhs_row_index] ==
+               static_cast<ColumnType const*>(rhs_data)[rhs_row_index];
+      }
+
+      if (not gdf_is_valid(lhs_bitmask, lhs_row_index) and
+          not gdf_is_valid(rhs_bitmask, rhs_row_index)) {
+        return nulls_are_equal;
+      }
+
+      return false;
     }
   };
 
-  /** 
-   * @brief  Checks for equality between a target row in this table and a source 
+  /**
+   * @brief  Checks for equality between a target row in this table and a source
    * row in another table.
-   * 
+   *
    * @param rhs The other table whose row is compared to this tables
    * @param this_row_index The row index of this table to compare
    * @param rhs_row_index The row index of the rhs table to compare
-   * 
+   * @param nulls_are_equal Flag indicating if two null values are considered
+   * equal
+   *
    * @returns True if the elements in both rows are equivalent, otherwise False
    */
   __device__
   bool rows_equal(device_table const & rhs, 
                   const gdf_size_type this_row_index, 
-                  const gdf_size_type rhs_row_index) const
+                  const gdf_size_type rhs_row_index,
+                  bool nulls_are_equal = false) const
   {
+    bool const rows_have_nulls =
+        this->row_has_nulls(this_row_index) or rhs.row_has_nulls(rhs_row_index);
 
-    // If either row contains a NULL, then by definition, because NULL != x for all x,
-    // the two rows are not equal
-    bool const both_rows_are_valid =
-        this->is_row_valid(this_row_index) && rhs.is_row_valid(rhs_row_index);
-    if (not both_rows_are_valid) 
-    {
+    if (rows_have_nulls and not nulls_are_equal) {
       return false;
     }
 
     auto equal_elements =
         [this, &rhs, this_row_index,
-         rhs_row_index](gdf_size_type column_index) {
+         rhs_row_index, nulls_are_equal](gdf_size_type column_index) {
+
           bool const type_mismatch{d_columns_types_ptr[column_index] !=
                                    rhs.d_columns_types_ptr[column_index]};
 
@@ -334,8 +349,10 @@ public:
 
           return cudf::type_dispatcher(
               d_columns_types_ptr[column_index], elements_are_equal{},
-              d_columns_data_ptr[column_index], this_row_index,
-              rhs.d_columns_data_ptr[column_index], rhs_row_index);
+              d_columns_data_ptr[column_index],
+              d_columns_valids_ptr[column_index], this_row_index,
+              rhs.d_columns_data_ptr[column_index],
+              rhs.d_columns_valids_ptr[column_index], rhs_row_index);
         };
 
     return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
