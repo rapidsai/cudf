@@ -99,4 +99,5 @@ docker run --runtime=nvidia --rm -it -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_
        -v ${REPO_PATH}:${REPO_PATH_IN_CONTAINER} \
        -v ${CPP_CONTAINER_BUILD_DIR}:${CPP_BUILD_DIR_IN_CONTAINER} \
        -v ${PYTHON_CONTAINER_BUILD_DIR}:${PYTHON_BUILD_DIR_IN_CONTAINER} \
+       --cap-add=SYS_PTRACE \
        ${DOCKER_IMAGE} bash -c "${COMMAND}"
