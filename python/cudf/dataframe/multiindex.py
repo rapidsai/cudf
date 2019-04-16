@@ -114,10 +114,13 @@ class MultiIndex(indexPackage.Index):
         """
         validity_mask = []
         for i, element in enumerate(row_tuple):
+            index_of_code_at_level = None
             for level_index in range(len(self.levels[i])):
                 if self.levels[i][level_index] == element:
                     index_of_code_at_level = level_index
                     break
+            if index_of_code_at_level == None:
+                raise KeyError(element)
             matches = []
             for k, code in enumerate(self.codes[self.codes.columns[i]]):
                 if k in validity_mask or len(validity_mask) == 0:
@@ -132,7 +135,6 @@ class MultiIndex(indexPackage.Index):
     def get_row_major(self, df, row_tuple):
         valid_indices = self._compute_validity_mask(df, row_tuple)
         result = df.iloc[valid_indices]
-        print(df._index.codes.iloc[valid_indices])
         # Build new index - INDEX based MultiIndex
         # ---------------
         from cudf import DataFrame
@@ -154,7 +156,7 @@ class MultiIndex(indexPackage.Index):
         else:
             if(len(out_index.columns)) > 0:
                 result.index = self._popn(len(row_tuple))[valid_indices]
-        if len(result) == 1:
+        if len(result) == 1 and len(row_tuple)-len(self.levels) == 1:
             from cudf.dataframe import Series
             result = Series(result.iloc[0])
             result.name = row_tuple

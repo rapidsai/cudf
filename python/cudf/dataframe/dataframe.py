@@ -632,6 +632,9 @@ class DataFrame(object):
     @columns.setter
     def columns(self, columns):
         if isinstance(columns, MultiIndex):
+            if len(columns) != len(self.columns):
+                msg = f'Length mismatch: Expected axis has {len(self.columns)} elements, new values have {len(columns)} elements'  # noqa: E501
+                raise ValueError(msg)
             self.multi_cols = columns
             # TODO: Broken, this strategy doesn't work.
             # The strategy was to use the MultiIndex as a wrapper
@@ -663,6 +666,9 @@ class DataFrame(object):
     @index.setter
     def index(self, _index):
         if isinstance(_index, MultiIndex):
+            if len(_index) != len(self[self.columns[0]]):
+                msg = f'Length mismatch: Expected axis has {len(self[self.columns[0]])} elements, new values have {len(_index)} elements'  # noqa: E501
+                raise ValueError(msg)
             self._index = _index
             for k in self.columns:
                 self[k].set_index(_index)
