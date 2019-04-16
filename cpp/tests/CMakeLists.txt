@@ -2,12 +2,6 @@
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -25,7 +19,6 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-message(STATUS "CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES: ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -43,7 +36,6 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
-message(STATUS "CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES: ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}")
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${FLATBUFFERS_LIBRARY_DIR}"

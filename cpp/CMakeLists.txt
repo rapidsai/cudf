@@ -323,7 +323,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
+target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
