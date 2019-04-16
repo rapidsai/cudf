@@ -2,7 +2,7 @@
 *           @rapidsai/admins @rapidsai/cudf-admin @rapidsai/cudf-codeowners
 
 #cpp code owners
-cpp/*       @rapidsai/cudf-cpp-codeowners
+cpp/       @rapidsai/cudf-cpp-codeowners
 
 #python code owners
-python/*    @rapidsai/cudf-python-codeowners
+python/    @rapidsai/cudf-python-codeowners
