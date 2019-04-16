@@ -1091,33 +1091,33 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self, axis=None, skipna=True):
+    def min(self, axis=None, skipna=True, dtype=None):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min()
+        return self._column.min(dtype=dtype)
 
-    def max(self, axis=None, skipna=True):
+    def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max()
+        return self._column.max(dtype=dtype)
 
-    def sum(self, axis=None, skipna=True):
+    def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum()
+        return self._column.sum(dtype=dtype)
 
-    def product(self, axis=None, skipna=True):
+    def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product()
+        return self._column.product(dtype=dtype)
 
-    def mean(self, axis=None, skipna=True):
+    def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self._column.mean(dtype=dtype)
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
@@ -1138,8 +1138,8 @@ class Series(object):
         mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
-    def sum_of_squares(self):
-        return self._column.sum_of_squares()
+    def sum_of_squares(self, dtype=None):
+        return self._column.sum_of_squares(dtype=dtype)
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)

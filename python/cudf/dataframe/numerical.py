@@ -259,32 +259,32 @@ class NumericalColumn(columnops.TypedColumnBase):
     def all(self):
         return bool(self.min())
 
-    def min(self):
-        return cpp_reduce.apply_reduce('min', self)
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
 
-    def max(self):
-        return cpp_reduce.apply_reduce('max', self)
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
-    def sum(self):
-        return cpp_reduce.apply_reduce('sum', self)
+    def sum(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
 
-    def product(self):
-        return cpp_reduce.apply_reduce('product', self)
+    def product(self, dtype=None):
+        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self):
-        return self.sum().astype('f8') / self.valid_count
+    def mean(self, dtype=None):
+        return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1):
+    def mean_var(self, ddof=1, dtype=None):
         x = self.astype('f8')
-        mu = x.mean()
+        mu = x.mean(dtype=dtype)
         n = x.valid_count
-        asum = x.sum_of_squares()
+        asum = x.sum_of_squares(dtype=dtype)
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
 
-    def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_of_squares', self)
+    def sum_of_squares(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
