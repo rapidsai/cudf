@@ -39,7 +39,6 @@ cdef extern from "cudf.h" nogil:
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
-    ctypedef long    gdf_timestamp
     ctypedef int     gdf_date32
     ctypedef long    gdf_timestamp
     ctypedef int     gdf_category
