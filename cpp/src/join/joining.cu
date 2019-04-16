@@ -55,8 +55,8 @@ gdf_error hash_join(gdf_size_type num_cols, gdf_column **leftcol, gdf_column **r
                     gdf_column *l_result, gdf_column *r_result)
 {
   // Wrap the set of gdf_columns in a device_table class
-  std::unique_ptr< device_table > left_table(new device_table(num_cols, leftcol));
-  std::unique_ptr< device_table > right_table(new device_table(num_cols, rightcol));
+  auto left_table = device_table::create(num_cols, leftcol);
+  auto right_table = device_table::create(num_cols, rightcol);
 
   return join_hash<join_type, output_index_type>(*left_table, 
                                                         *right_table, 

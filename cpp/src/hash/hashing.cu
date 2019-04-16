@@ -121,7 +121,7 @@ gdf_error gdf_hash(int num_cols,
   }
 
   // Wrap input columns in device_table
-  std::unique_ptr< device_table > input_table{new device_table(num_cols, input)};
+  auto input_table = device_table::create(num_cols, input);
 
   const gdf_size_type num_rows = input_table->num_rows();
 
@@ -602,8 +602,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
   PUSH_RANGE("LIBGDF_HASH_PARTITION", PARTITION_COLOR);
 
   // Wrap input and output columns in device_table
-  std::unique_ptr< const device_table > input_table{new device_table(num_input_cols, input)};
-  std::unique_ptr< device_table > output_table{new device_table(num_input_cols, partitioned_output)};
+  auto input_table = device_table::create(num_input_cols, input);
+  auto output_table = device_table::create(num_input_cols, partitioned_output);
 
   // Create vector of pointers to columns that will be hashed
   std::vector<gdf_column *> gdf_columns_to_hash(num_cols_to_hash);
@@ -612,31 +612,24 @@ gdf_error gdf_hash_partition(int num_input_cols,
     gdf_columns_to_hash[i] = input[columns_to_hash[i]];
   }
   // Create a separate table of the columns to be hashed
-  std::unique_ptr< const device_table > table_to_hash {new device_table(num_cols_to_hash, 
-                                                                                        gdf_columns_to_hash.data())};
+  auto table_to_hash =
+      device_table::create(num_cols_to_hash, gdf_columns_to_hash.data());
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  switch(hash)
-  {
-    case GDF_HASH_MURMUR3:
-      {
-        gdf_status = hash_partition_device_table<MurmurHash3_32>(*input_table, 
-                                                              *table_to_hash,
-                                                              num_partitions,
-                                                              partition_offsets,
-                                                              *output_table);
-        break;
-      }
-    case GDF_HASH_IDENTITY:
-      {
-        gdf_status = hash_partition_device_table<IdentityHash>(*input_table, 
-                                                            *table_to_hash,
-                                                            num_partitions,
-                                                            partition_offsets,
-                                                            *output_table);
-        break;
-      }
+  switch (hash) {
+    case GDF_HASH_MURMUR3: {
+      gdf_status = hash_partition_device_table<MurmurHash3_32>(
+          *input_table, *table_to_hash, num_partitions, partition_offsets,
+          *output_table);
+      break;
+    }
+    case GDF_HASH_IDENTITY: {
+      gdf_status = hash_partition_device_table<IdentityHash>(
+          *input_table, *table_to_hash, num_partitions, partition_offsets,
+          *output_table);
+      break;
+    }
     default:
       gdf_status = GDF_INVALID_HASH_FUNCTION;
   }

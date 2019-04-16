@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/device_vector.h>
 #include <dataframe/device_table.cuh>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -22,6 +21,11 @@
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "types.hpp"
+
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
+#include <thrust/execution_policy.h>
 
 struct DeviceTableTest : GdfTest {};
 
@@ -35,6 +39,7 @@ struct row_self_equality {
   }
 };
 
+
  struct row_is_valid {
     device_table * t;
 
@@ -45,20 +50,23 @@ struct row_self_equality {
     }
 };
 
+
 TEST_F(DeviceTableTest, First) {
   constexpr int size{1000};
 
-  auto all_zeros = [](auto index) { return 0; };
+  const int val{42};
+  auto init_values = [val](auto index) { return val; };
   auto all_valid = [](auto index) { return true; };
 
-  cudf::test::column_wrapper<int32_t> col0(size, all_zeros, all_valid);
-  cudf::test::column_wrapper<float> col1(size, all_zeros, all_valid);
-  cudf::test::column_wrapper<double> col2(size, all_zeros, all_valid);
-  cudf::test::column_wrapper<int8_t> col3(size, all_zeros, all_valid);
+  cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
+  cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
+  cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
+  cudf::test::column_wrapper<int8_t> col3(size, init_values, all_valid);
 
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
 
-  std::unique_ptr<device_table> table{new device_table(4, gdf_cols.data())};
+
+  auto table = device_table::create(4, gdf_cols.data());
 
   // Table attributes such as number of rows/columns should
   // match expected
@@ -86,6 +94,7 @@ TEST_F(DeviceTableTest, First) {
   int const expected_row_byte_size =
       sizeof(int32_t) + sizeof(float) + sizeof(double) + sizeof(int8_t);
   EXPECT_EQ(expected_row_byte_size, table->get_row_size_bytes());
+
 
   // Every row should be valid
   EXPECT_TRUE(thrust::all_of(
