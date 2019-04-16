@@ -786,7 +786,7 @@ TEST(gdf_csv_test, Writer)
     wargs.filepath = "/tmp/CsvWriteTestOut.csv";
     wargs.num_cols = std::extent<decltype(names)>::value;
     wargs.delimiter = ',';
-    wargs.line_terminator = '\n';
+    wargs.line_terminator = "\n";
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 }

@@ -145,8 +145,7 @@ typedef struct
     int num_cols;                 // number of columns
 
     const char* filepath;         // full path to file to create
-    bool windows_line;            // use \r\n for line terminator; ignore line_terminator char
-    char line_terminator;         // character to use for separating lines (default '\n')
+    const char* line_terminator;  // character to use for separating lines (default "\n")
     char delimiter;               // character to use between each column entry (default ',')
 
     const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')

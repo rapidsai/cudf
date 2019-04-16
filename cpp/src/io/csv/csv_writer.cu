@@ -24,13 +24,16 @@
 #include <string.h>
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
+
 
 // called by write_csv method
 NVStrings* column_to_strings_csv( gdf_column* col, const char* delimiter, const char* strue, const char* sfalse )
 {
-    NVStrings* rtn = 0;
+    NVStrings* rtn = nullptr;
     unsigned int rows = (unsigned int)col->size;
     unsigned char* valid = (unsigned char*)col->valid;
     switch( col->dtype )
@@ -60,13 +63,13 @@ NVStrings* column_to_strings_csv( gdf_column* col, const char* delimiter, const 
             break; // should not happen
     }
     if( !rtn )
-        return 0;
+        return nullptr;
 
     // probably could collapse this more
     bool bquoted = (col->dtype==GDF_STRING);
     // check for delimeters and quotes
-    bool* bmatches = 0;
-    cudaMalloc(&bmatches,rows*sizeof(bool));
+    bool* bmatches = nullptr;
+    RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
     if( rtn->contains("\"",bmatches) > 0 )
     {
         NVStrings* esc = rtn->replace("\"","\"\"");
@@ -75,7 +78,7 @@ NVStrings* column_to_strings_csv( gdf_column* col, const char* delimiter, const 
     }
     else if( rtn->contains(",",bmatches) > 0 )
         bquoted = true;
-    cudaFree(bmatches);
+    RMM_TRY( RMM_FREE( bmatches, 0 ) );
     if( bquoted )
     {
         // prepend and append quotes
@@ -112,14 +115,9 @@ gdf_error write_csv(csv_write_arg* args)
     char delimiter[2] = {',','\0'};
     if( args->delimiter )
         delimiter[0] = args->delimiter;
-    char terminator[3] = {'\n','\0','\0'};
-    if( args->windows_line )
-    {
-        terminator[0] = '\r';
-        terminator[1] = '\n';
-    }
-    else if( args->line_terminator )
-        terminator[0] = args->line_terminator;
+    const char* terminator = "\n";
+    if( args->line_terminator )
+        terminator = args->line_terminator;
     const char* true_value = (args->true_value ? args->true_value : "true");
     const char* false_value = (args->false_value ? args->false_value : "false");
 
@@ -144,7 +142,7 @@ gdf_error write_csv(csv_write_arg* args)
     for( int idx=0; idx < args->num_cols; ++idx )
     {
         gdf_column* col = args->data[idx];
-        NVStrings* strs = 0;
+        NVStrings* strs = nullptr;
         //printf("%d: %p %s %d %d\n", idx, col, col->col_name, (int)col->dtype, (int)col->size);
         switch( col->dtype )
         {
@@ -190,7 +188,8 @@ gdf_error write_csv(csv_write_arg* args)
     //
     // compute sizes we need
     // build a matrix of pointers
-    int* datalens = new int[rows*count]; // matrix
+    std::unique_ptr<int> pdatalens(new int[rows*count]); // matrix
+    int* datalens = pdatalens.get();
     size_t memsize = 0;
     for( unsigned int idx=0; idx < count; ++idx )
     {
@@ -224,9 +223,11 @@ gdf_error write_csv(csv_write_arg* args)
     // so it may be better to fixup in place
     //
     //printf("memsize=%ld\n",memsize);
-    char* buffer = new char[memsize+1];
+    std::unique_ptr<char> pbuffer(new char[memsize+1]);
+    char* buffer = pbuffer.get();
     memset(buffer,',',memsize); // fill with commas
-    size_t* dataptrs = new size_t[rows*count]; // this will hold all the memory pointers for each column
+    std::unique_ptr<size_t> pdataptrs(new size_t[rows*count]); // this will hold all the memory pointers for each column
+    size_t* dataptrs = pdataptrs.get();
     dataptrs[0] = 0; // first one is always 0
     // compute offsets into dataptrs
     // need figure out a good way to parallelize this
@@ -265,9 +266,6 @@ gdf_error write_csv(csv_write_arg* args)
         }
     }
     buffer[memsize] = 0; // just so we can printf
-    //printf("\n%s\n",buffer);
-    delete datalens;
-    delete dataptrs;
     // write buffer to file
     // first write the header
     for( unsigned int idx=0; idx < count; ++idx )
@@ -281,6 +279,6 @@ gdf_error write_csv(csv_write_arg* args)
     // now write the data
     fwrite(buffer,memsize,1,fh);
     fclose(fh);
-    delete buffer;
     return rc;
+    // buffer, datalens, dataptrs are automatically freed by unique_ptr
 }
