@@ -36,7 +36,7 @@ struct DeviceTableTest : GdfTest {};
 
      __device__ 
      bool operator()(int row_index){
-        return t->is_row_valid(row_index);
+        return not t->row_has_nulls(row_index);
     }
 };
 

@@ -58,7 +58,7 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 
       // It is impossible for a row with a NULL value to match any other row,
       // therefore, do not insert it into the hash table
-      if (build_table.is_row_valid(i)) {
+      if (not build_table.row_has_nulls(i)) {
 
         // Compute the hash value of this row
         const hash_value_type row_hash_value{build_table.hash_row(i)};
@@ -158,7 +158,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
     // hash value to determine the location where to search for the row in the hash map
     // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(probe_table.is_row_valid(probe_row_index))
+    if(not probe_table.row_has_nulls(probe_row_index))
     {
       // Search the hash map for the hash value of the probe row
       probe_row_hash_value = probe_table.hash_row(probe_row_index);
@@ -312,7 +312,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
     // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(probe_table.is_row_valid(probe_row_index))
+    if(not probe_table.row_has_nulls(probe_row_index))
     {
       // Search the hash map for the hash value of the probe row
       probe_row_hash_value = probe_table.hash_row(probe_row_index);

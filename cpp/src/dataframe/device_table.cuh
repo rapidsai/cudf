@@ -182,11 +182,6 @@ public:
     return _num_rows;
   }
 
-  __device__ bool is_row_valid(gdf_size_type row_index) const
-  {
-    return gdf_is_valid(d_row_valid, row_index);
-  }
-
   __device__ bool row_has_nulls(gdf_size_type row_index) const{
       return not gdf_is_valid(d_row_valid, row_index);
   }
@@ -296,17 +291,23 @@ public:
         gdf_size_type lhs_row_index, void const* rhs_data,
         gdf_valid_type const* rhs_bitmask, gdf_size_type rhs_row_index,
         bool nulls_are_equal = false) {
-      if (gdf_is_valid(lhs_bitmask, lhs_row_index) and
-          gdf_is_valid(rhs_bitmask, rhs_row_index)) {
+    
+      bool const lhs_is_valid{gdf_is_valid(lhs_bitmask, lhs_row_index)};
+      bool const rhs_is_valid{gdf_is_valid(rhs_bitmask, rhs_row_index)};
+
+      // If both values are non-null, compare them
+      if (lhs_is_valid and rhs_is_valid) {
         return static_cast<ColumnType const*>(lhs_data)[lhs_row_index] ==
                static_cast<ColumnType const*>(rhs_data)[rhs_row_index];
       }
 
-      if (not gdf_is_valid(lhs_bitmask, lhs_row_index) and
-          not gdf_is_valid(rhs_bitmask, rhs_row_index)) {
+      // If both values are null
+      if (not lhs_is_valid and
+          not rhs_is_valid) {
         return nulls_are_equal;
       }
 
+      // If only one value is null, they can never be equal
       return false;
     }
   };
