@@ -14,6 +14,7 @@
 
 ## Improvements
 
+- PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
@@ -33,6 +34,8 @@
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 
 ## Bug Fixes
 
