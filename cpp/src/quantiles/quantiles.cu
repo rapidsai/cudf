@@ -27,14 +27,23 @@
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
-namespace cudf {
-namespace interpolate {
 
-QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
-{
+namespace{ // anonymouys namespace
+
+  struct QuantiledIndex {
+    gdf_size_type lower_bound;
+    gdf_size_type upper_bound;
+    gdf_size_type nearest;
+    double fraction;
+  };
+
+  QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
+  {
     // clamp quant value.
     // Todo: use std::clamp if c++17 is supported.
     quant = std::min(std::max(quant, 0.0), 1.0);
+
+    // since gdf_size_type is int32_t, there is no underflow/overflow
     double val = quant*(length -1);
     QuantiledIndex qi;
     qi.lower_bound = std::floor(val);
@@ -43,18 +52,20 @@ QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
     qi.fraction = val - qi.lower_bound;
 
     return qi;
-}
+  }
 
-}
-}
-
-
-namespace{ //unknown
+  template<typename T>
+  void singleMemcpy(T& res, T* input, cudaStream_t stream = NULL)
+  {
+    (void)stream;
+    //TODO: async with streams?
+    CUDA_TRY( cudaMemcpy(&res, input, sizeof(T), cudaMemcpyDeviceToHost) );
+  }
 
   template<typename T, typename RetT>
   gdf_error select_quantile(T* dv,
                           gdf_size_type n,
-                          double q, 
+                          double quant, 
                           gdf_quantile_method interpolation,
                           RetT& result,
                           bool flag_sorted = false,
@@ -62,25 +73,25 @@ namespace{ //unknown
   {
     std::vector<T> hv(2);
 
-    if( q >= 1.0 && flag_sorted )
-    {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-      cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
-      result = static_cast<RetT>( hv[0] );
-      return GDF_SUCCESS;
-    }
-
-    if( q <= 0.0 && flag_sorted )
-    {
-      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-      cudaMemcpy(&hv[0], d_res, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
-      result = static_cast<RetT>( hv[0] );
-      return GDF_SUCCESS;
-    }
-
     if( n < 2 )
     {
-      cudaMemcpy(&hv[0], dv, sizeof(T), cudaMemcpyDeviceToHost);//TODO: async with streams?
+      singleMemcpy(hv[0], dv, stream);
+      result = static_cast<RetT>( hv[0] );
+      return GDF_SUCCESS;
+    }
+
+    if( quant >= 1.0 && !flag_sorted )
+    {
+      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+      singleMemcpy(hv[0], d_res, stream);
+      result = static_cast<RetT>( hv[0] );
+      return GDF_SUCCESS;
+    }
+
+    if( quant <= 0.0 && !flag_sorted )
+    {
+      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+      singleMemcpy(hv[0], d_res, stream);
       result = static_cast<RetT>( hv[0] );
       return GDF_SUCCESS;
     }
@@ -90,30 +101,36 @@ namespace{ //unknown
       thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
     }
 
-    cudf::interpolate::QuantiledIndex qi = cudf::interpolate::find_quantile_index(n, q);
+    QuantiledIndex qi = find_quantile_index(n, quant);
 
     switch( interpolation )
     {
     case GDF_QUANT_LINEAR:
-      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      cudf::interpolate::linear(result, cudf::detail::unwrap(hv[0]), cudf::detail::unwrap(hv[1]), qi.fraction);
+      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
+      singleMemcpy(hv[1], dv+qi.upper_bound, stream);
+      cudf::interpolate::linear(
+          cudf::detail::unwrap(result), 
+          cudf::detail::unwrap(hv[0]), 
+          cudf::detail::unwrap(hv[1]), qi.fraction);
       break;
     case GDF_QUANT_MIDPOINT:
-      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      cudf::interpolate::midpoint(result, cudf::detail::unwrap(hv[0]), cudf::detail::unwrap(hv[1]));
+      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
+      singleMemcpy(hv[1], dv+qi.upper_bound, stream);
+      cudf::interpolate::midpoint(
+          cudf::detail::unwrap(result), 
+          cudf::detail::unwrap(hv[0]), 
+          cudf::detail::unwrap(hv[1]));
       break;
     case GDF_QUANT_LOWER:
-      cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
       result = static_cast<RetT>( hv[0] );
       break;
     case GDF_QUANT_HIGHER:
-      cudaMemcpy(&hv[0], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      singleMemcpy(hv[0], dv+qi.upper_bound, stream);
       result = static_cast<RetT>( hv[0] );
       break;
     case GDF_QUANT_NEAREST:
-      cudaMemcpy(&hv[0], dv+qi.nearest, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
+      singleMemcpy(hv[0], dv+qi.nearest, stream);
       result = static_cast<RetT>( hv[0] );
       break;
 
@@ -122,15 +139,16 @@ namespace{ //unknown
     }
     
     return GDF_SUCCESS;
- }
+  }
 
   template<typename ColType,
-           typename RetT = double> // just in case double won't be enough to hold result, in the future
+           typename RetT = double>
   gdf_error trampoline_exact(gdf_column*  col_in,
-                             gdf_quantile_method prec,
-                             double q,
+                             gdf_quantile_method interpolation,
+                             double quant,
                              void* t_erased_res,
-                             gdf_context* ctxt)
+                             gdf_context* ctxt,
+                             cudaStream_t stream = NULL)
   {
     RetT* ptr_res = static_cast<RetT*>(t_erased_res);
     size_t n = col_in->size;
@@ -140,24 +158,23 @@ namespace{ //unknown
       {
         return select_quantile(p_dv,
                                n,
-                               q, 
-                               prec,
+                               quant, 
+                               interpolation,
                                *ptr_res,
-                               ctxt->flag_sorted);
+                               ctxt->flag_sorted, stream);
       }
     else
       {
         rmm::device_vector<ColType> dv(n);
-        thrust::copy_n(thrust::device, /*TODO: stream*/p_dv, n, dv.begin());
-        cudaDeviceSynchronize();
+        thrust::copy_n(rmm::exec_policy(stream)->on(stream), p_dv, n, dv.begin());
         p_dv = dv.data().get();
 
         return select_quantile(p_dv,
                                n,
-                               q, 
-                               prec,
+                               quant, 
+                               interpolation,
                                *ptr_res,
-                               ctxt->flag_sorted);
+                               ctxt->flag_sorted, stream);
       }
   }
     
@@ -165,71 +182,57 @@ namespace{ //unknown
     template <typename T,
               typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
     gdf_error operator()(gdf_column* col_in,
-                         gdf_quantile_method prec,
-                         double q,
-                         void* t_erased_res,
-                         gdf_context* ctxt)
+                         gdf_quantile_method interpolation,
+                         double              quant,
+                         void*               t_erased_res,
+                         gdf_context*        ctxt,
+                         cudaStream_t        stream = NULL)
     {
       return GDF_UNSUPPORTED_DTYPE;
     }
 
     template <typename T,
               typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
-    gdf_error operator()(gdf_column*  col_in,              //input column;
-                         gdf_quantile_method prec,         //precision: type of quantile method calculation
-                         double              q,            //requested quantile in [0,1]
-                         void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
-                                                           //(1) for uniformity of interface with <approx>;
-                                                           //(2) for possible types bigger than double, in the future;
-                         gdf_context*        ctxt)         //context info
+    gdf_error operator()(gdf_column*  col_in,
+                         gdf_quantile_method interpolation,
+                         double              quant,
+                         void*               t_erased_res,
+                         gdf_context*        ctxt,
+                         cudaStream_t        stream = NULL)
     {
+      // just in case double won't be enough to hold result
+      // it can be changed in future
       return trampoline_exact<T, double>
-                 (col_in, prec, q, t_erased_res, ctxt);
+                 (col_in, interpolation, quant, t_erased_res, ctxt, stream);
     }
   };
 
   struct trampoline_approx_functor{
-    template <typename UnderLyingT>
-    gdf_error call(gdf_column*  col_in,
-                    double       q,
+    template <typename T>
+    gdf_error operator()(gdf_column*  col_in, 
+                    double       quant,
                     void*        t_erased_res,
                     gdf_context* ctxt,
-                    UnderLyingT* data)
+                    cudaStream_t stream = NULL)
     {
-      return trampoline_exact<UnderLyingT, UnderLyingT>
-                 (col_in, GDF_QUANT_LOWER, q, t_erased_res, ctxt);
+      return trampoline_exact<T, T>(col_in, GDF_QUANT_LOWER, quant, t_erased_res, ctxt, stream);
     }
-
-    template <typename T>
-    gdf_error operator()(gdf_column*  col_in,       //input column;
-                    double       q,            //requested quantile in [0,1]
-                    void*        t_erased_res, //type-erased result of same type as column;
-                    gdf_context* ctxt)         //context info)
-    { 
-      // ToDo: remove calling "call" function with UnderLying type and directly call "trampoline_exact"
-      // without this, `select_quantile` cannnot be compiled for wrapper types
-      // since double * wrapper types is not defined.
-      // The error occurs at GDF_QUANT_LINEAR and GDF_QUANT_MIDPOINT cases 
-      // even though this call won't get in.
-      T* data = static_cast<T*>( col_in->data );
-      return call(col_in, q, t_erased_res, ctxt, &cudf::detail::unwrap(data[0]));
-    }
-
-
   };
 
-}//unknown namespace
+} // end of anonymouys namespace
 
-gdf_error gdf_quantile_exact( gdf_column*         col_in,       //input column;
-                              gdf_quantile_method prec,         //precision: type of quantile method calculation
-                              double              q,            //requested quantile in [0,1]
+gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
+                              gdf_quantile_method prec,         // interpolation method
+                              double              q,            // requested quantile in [0,1]
                               gdf_scalar*         result,       // the result
-                              gdf_context*        ctxt)         //context info
+                              gdf_context*        ctxt)         // context info
 {
-  GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
-  gdf_error ret = GDF_SUCCESS;
-  assert( col_in->size > 0 );
+  GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
+  gdf_error ret = GDF_SUCCESS;
   result->dtype = GDF_FLOAT64;
   result->is_valid = false; // the scalar is not valid for error case
 
@@ -241,15 +244,17 @@ gdf_error gdf_quantile_exact( gdf_column*         col_in,       //input column;
   return ret;
 }
 
-gdf_error gdf_quantile_approx(	gdf_column*  col_in,       //input column;
-                                double       q,            //requested quantile in [0,1]
+gdf_error gdf_quantile_approx(	gdf_column*  col_in,       // input column
+                                double       q,            // requested quantile in [0,1]
                                 gdf_scalar*  result,       // the result
-                                gdf_context* ctxt)         //context info
+                                gdf_context* ctxt)         // context info
 {
-  GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
-  gdf_error ret = GDF_SUCCESS;
-  assert( col_in->size > 0 );
+  GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
+  gdf_error ret = GDF_SUCCESS;
   result->dtype = col_in->dtype;
   result->is_valid = false; // the scalar is not valid for error case
 

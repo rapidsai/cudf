@@ -23,21 +23,22 @@
 namespace cudf {
 namespace interpolate {
 
-struct QuantiledIndex {
-  size_t lower_bound;
-  size_t upper_bound;
-  size_t nearest;
-  double fraction;
-};
-
-QuantiledIndex find_quantile_index(gdf_size_type length, double quant);
-
-
 template <typename T_out, typename T_in>
 void linear(T_out& result, T_in lhs, T_in rhs, double frac)
 {
-    //TODO: safe operation to avoid overflow/underflow
-     result = static_cast<T_out>(static_cast<T_out>(lhs) + frac*static_cast<T_out>(rhs-lhs));
+    // TODO: safe operation to avoid overflow/underflow
+    // double can fully represent int8-32 value range.
+    // Since the fractoin part of double is 52 bits,
+    // double cannot fully represent int64.
+    // The underflow will be occurs at converting int64 to double
+    // detail: https://github.com/rapidsai/cudf/issues/1417
+
+    double dlhs = static_cast<double>(lhs);
+    double drhs = static_cast<double>(rhs);
+    double one_minus_frac = 1.0 - frac;
+
+//    result = static_cast<T_out>(static_cast<T_out>(lhs) + frac*static_cast<T_out>(rhs-lhs));
+    result = static_cast<T_out>(one_minus_frac * dlhs + frac * drhs);
 }
 
 
