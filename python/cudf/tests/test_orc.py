@@ -36,25 +36,21 @@ def test_orc_reader(datadir, orc_args, engine):
 
     # cuDF's default currently handles some types differently
     if engine == 'cudf':
-        # For bool, cuDF doesn't support it so convert it to int8
+        # cuDF doesn't support bool so convert to int8
         if 'boolean1' in expect.columns:
             expect['boolean1'] = expect['boolean1'].astype('int8')
-        # For datetime64, cuDF only supports milliseconds, so convert Numpy
+        # cuDF doesn't support nanosecond units so convert to datetime[ms]
         if 'time' in expect.columns:
-            #expect['time'] = pd.to_datetime(expect['time'], unit='ms')
+            expect['time'] = pd.to_datetime(expect['time'], unit='ms')
             expect['time'] = expect['time'].astype('int64')
             got['time'] = got['time'].astype('int64')
         if 'date' in expect.columns:
-            #expect['time'] = pd.to_datetime(expect['time'], unit='ms')
-            expect['date'] = expect['date'].astype('int64')
-            got['date'] = got['date'].astype('int64')
+            expect['date'] = pd.to_datetime(expect['date'], unit='ms')
 
     print("")
     print("")
     print("Pyarrow:")
     print(expect.dtypes)
-    if 'time' in expect.columns:
-        print(expect['time'])
     print("")
     print("cuDF:")
     print(got.dtypes)
