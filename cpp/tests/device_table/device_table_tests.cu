@@ -29,29 +29,37 @@
 
 struct DeviceTableTest : GdfTest {};
 
-struct row_self_equality {
-  device_table * t;
-
-   row_self_equality(device_table * _t) : t{_t} {}
-
-   __device__ bool operator()(int row_index) {
-    return t->rows_equal(*t, row_index, row_index);
-  }
-};
-
-
  struct row_is_valid {
     device_table * t;
 
      row_is_valid(device_table * _t) : t{_t} {}
 
-     __device__ bool operator()(int row_index){
+     __device__ 
+     bool operator()(int row_index){
         return t->is_row_valid(row_index);
     }
 };
 
+struct all_rows_equal {
 
-TEST_F(DeviceTableTest, First) {
+    device_table * t;
+
+    all_rows_equal(device_table * _t) : t{_t} {}
+
+    __device__ 
+    bool operator()(int row_index){
+        for(int i = 0; i < t->num_rows(); ++ i){
+            if(not t->rows_equal(*t, row_index, i)){
+                return false;
+            }
+        }
+        return true;
+    }
+
+};
+
+
+TEST_F(DeviceTableTest, AllRowsEqual) {
   constexpr int size{1000};
 
   const int val{42};
@@ -64,7 +72,6 @@ TEST_F(DeviceTableTest, First) {
   cudf::test::column_wrapper<int8_t> col3(size, init_values, all_valid);
 
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
-
 
   auto table = device_table::create(4, gdf_cols.data());
 
@@ -102,11 +109,11 @@ TEST_F(DeviceTableTest, First) {
       thrust::make_counting_iterator(size - 1), 
       row_is_valid(table.get())));
 
-  // Every row should be equal to itself
+  // Every row should be equal to every other row
   EXPECT_TRUE(thrust::all_of(
       rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(size - 1), 
-      row_self_equality(table.get())));
+      all_rows_equal(table.get())));
 }
 
 // Test where a single column has every other value null, 
