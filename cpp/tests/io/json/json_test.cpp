@@ -97,3 +97,16 @@ TEST(gdf_json_test, BracketsLevels)
 	cudaMemcpy(h_lvls.data(), d_lvls.data(), count*sizeof(int16_t), cudaMemcpyDefault);
 	EXPECT_THAT(h_lvls, ::testing::ContainerEq(expected));
 }
+
+TEST(gdf_json_test, BasicJsonLines)
+{
+	const char* types[]	= { "int", "float64" };
+	json_read_arg args{};
+	args.source = "[1, 1.1]\n[2, 2.2]";
+	args.dtype = types;
+	args.num_cols = 2;
+	read_json(&args);
+	ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
+
+	// delete columns?
+}

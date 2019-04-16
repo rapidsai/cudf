@@ -163,3 +163,28 @@ typedef struct {
   int           use_cols_len;               ///< In: Number of columns
 
 } pq_read_arg;
+
+/**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_json interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+  int           *index_col;                 ///< Out: If available, column index to use as row labels
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  int           num_cols;                   ///< Number of columns in the names and dtype arrays
+  const char    **dtype;                    ///< Ordered List of data types
+
+} json_read_arg;

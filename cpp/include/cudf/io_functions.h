@@ -31,3 +31,8 @@ gdf_error read_parquet(pq_read_arg *args);
  * @brief Interface to convert GDF Columns to Compressed Sparse Row
  */
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+
+/*
+ * @brief Interface to parse JSON data to GDF columns
+ */
+gdf_error read_json(json_read_arg *args);
