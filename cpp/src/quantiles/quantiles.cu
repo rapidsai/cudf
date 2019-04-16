@@ -16,7 +16,7 @@
 
 //Quantile (percentile) functionality
 
-#include "quantiles.h"
+#include "quantiles.hpp"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
@@ -26,6 +26,9 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+
+namespace cudf {
+namespace interpolate {
 
 QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
 {
@@ -41,6 +44,10 @@ QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
 
     return qi;
 }
+
+}
+}
+
 
 namespace{ //unknown
 
@@ -83,21 +90,19 @@ namespace{ //unknown
       thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
     }
 
-    QuantiledIndex qi = find_quantile_index(n, q);
+    cudf::interpolate::QuantiledIndex qi = cudf::interpolate::find_quantile_index(n, q);
 
     switch( interpolation )
     {
     case GDF_QUANT_LINEAR:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      //TODO: safe operation to avoid overflow/underflow
-      result = static_cast<RetT>(static_cast<RetT>(hv[0]) + qi.fraction*static_cast<RetT>(hv[1]-hv[0]));
+      cudf::interpolate::linear(result, cudf::detail::unwrap(hv[0]), cudf::detail::unwrap(hv[1]), qi.fraction);
       break;
     case GDF_QUANT_MIDPOINT:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
       cudaMemcpy(&hv[1], dv+qi.upper_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams
-      //TODO: safe operation to avoid overflow/underflow
-      result = static_cast<RetT>(static_cast<RetT>(hv[0] + hv[1])/2.0);
+      cudf::interpolate::midpoint(result, cudf::detail::unwrap(hv[0]), cudf::detail::unwrap(hv[1]));
       break;
     case GDF_QUANT_LOWER:
       cudaMemcpy(&hv[0], dv+qi.lower_bound, sizeof(T), cudaMemcpyDeviceToHost); //TODO: async with streams

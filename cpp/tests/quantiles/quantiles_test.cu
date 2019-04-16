@@ -23,14 +23,14 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
-#include <quantiles/quantiles.h>
+#include <quantiles/quantiles.hpp>
 #include <cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
-
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <iostream>
@@ -41,18 +41,12 @@
 #include <cmath>
 
 
-template<typename T, typename Allocator, template<typename, typename> class Vector>
-__host__ __device__
-void print_v(const Vector<T, Allocator>& v, std::ostream& os)
-{
-  thrust::copy(v.begin(), v.end(), std::ostream_iterator<T>(os,","));
-  os<<"\n";
-}
-
-
 template<typename VType>
-void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_appox, 
-  std::vector<std::vector<double>>& v_out_exact, const gdf_error expected_error = GDF_SUCCESS)
+void f_quantile_tester(
+  gdf_column* col_in,                           ///< input column
+  std::vector<VType>& v_appox,                  ///< expected result for quantile_approx
+  std::vector<std::vector<double>>& v_exact,    ///< expected result for quantile_exact
+  const gdf_error expected_error = GDF_SUCCESS) ///< expected returned state for quantiles
 {
   cudf::test::scalar_wrapper<VType>  result_approx(VType{0});
   cudf::test::scalar_wrapper<double> result_exact(double{0});
@@ -70,15 +64,26 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_appox,
     {
       auto q = qvals[j];
       gdf_error ret = gdf_quantile_approx(col_in, q, result_approx.get(), &ctxt);
-      v_out_appox[j] = result_approx.value();
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       
+      if( ret == GDF_SUCCESS ){
+        double delta = std::abs(static_cast<double>(result_approx.value() - v_appox[j]));
+        bool flag = delta < 1.0e-8;
+        EXPECT_EQ( flag, true ) << " " << q << " appox quantile "
+          << " val = " << result_approx.value() << ", " <<  v_appox[j];
+      }
+
       for(size_t i = 0;i<n_methods;++i)
         {
           ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, result_exact.get(), &ctxt);
-          v_out_exact[i][j] = result_exact.value();
-          
           EXPECT_EQ( ret, expected_error) << "exact " << methods[i] << " returns unexpected failure\n";
+
+          if( ret == GDF_SUCCESS ){
+            double delta = std::abs(static_cast<double>(result_exact.value() - v_exact[i][j]));
+            bool flag = delta < 1.0e-8;
+            EXPECT_EQ( flag, true ) << " "  << q  <<" exact quantile on " << methods[i]
+              << " val = " << result_exact.value() << ", " <<  v_exact[i][j];
+          }
         }
     }
 }
@@ -99,9 +104,6 @@ TEST_F(gdf_quantile, DoubleVector)
   col_in.null_count = 0;
   col_in.dtype = GDF_FLOAT64;
 
-  size_t n_qs = 5;
-  size_t n_methods = 5;
-
   std::vector<VType> v_baseline_approx{-1.01,   0.8,  0.8,    2.13,   6.8};
   std::vector<std::vector<double>> v_baseline_exact{
     {-1.01,   0.8,  0.9984, 2.13,   6.8},
@@ -109,29 +111,8 @@ TEST_F(gdf_quantile, DoubleVector)
     {-1.01,   0.8,  1.11,   2.13,   6.8},
     {-1.01,   0.8,  0.955,  2.13,   6.8},
     {-1.01,   0.8,  1.11,   2.13,   6.8}};
-  
-  std::vector<VType> v_out_approx(n_qs, 0);
-  std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));
 
-  f_quantile_tester<VType>(&col_in, v_out_approx, v_out_exact);
-
-  for(size_t i=0; i<n_qs;++i)
-    {
-      double delta = std::abs(static_cast<double>(v_baseline_approx[i] - v_out_approx[i]));
-      bool flag = delta < 1.0e-8;
-      EXPECT_EQ( flag, true ) << i <<"-th quantile deviates from baseline by: " << delta;
-    }
-
-  for(size_t i=0; i<n_qs;++i)
-    {
-      for(size_t j=0; j < n_methods; ++j)
-        {
-          double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
-          bool flag = delta < 1.0e-8;
-          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th method deviates from baseline by: " << delta
-              << " val = " << v_baseline_exact[i][j] << ", " <<  v_out_exact[i][j] << std::endl;
-        }
-    }
+  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact);
 }
 
 TEST_F(gdf_quantile, IntegerVector)
@@ -148,9 +129,6 @@ TEST_F(gdf_quantile, IntegerVector)
   col_in.null_count = 0;
   col_in.dtype = GDF_INT32;
 
-  size_t n_qs = 5;
-  size_t n_methods = 5;
-
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
     {-1.0,   1.0,   1.0,   2.0,   7.0},
@@ -158,29 +136,8 @@ TEST_F(gdf_quantile, IntegerVector)
     {-1,     1,     1,     2,     7},
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
-  
-  std::vector<VType> v_out_approx(n_qs, 0);
-  std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));
 
-  f_quantile_tester<VType>(&col_in, v_out_approx, v_out_exact);
-
-  for(size_t i=0; i<n_qs;++i)
-    {
-      double delta = std::abs(static_cast<double>(v_baseline_approx[i] - v_out_approx[i]));
-      bool flag = delta < 1.0e-8;
-      EXPECT_EQ( flag, true ) << i <<"-th quantile deviates from baseline by: " << delta;
-    }
-
-  for(size_t i=0; i<n_qs;++i)
-    {
-      for(size_t j=0; j < n_methods; ++j)
-        {
-          double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
-          bool flag = delta < 1.0e-8;
-          EXPECT_EQ( flag, true ) << i <<"-th quantile on " << j << "-th deviates from baseline by: " << delta
-              << " val = " << v_baseline_exact[i][j] << ", " <<  v_out_exact[i][j] << std::endl;
-        }
-    }
+  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact);
 }
 
 TEST_F(gdf_quantile, ReportValidMaskError)
@@ -197,9 +154,6 @@ TEST_F(gdf_quantile, ReportValidMaskError)
   col_in.null_count = 1;//Should cause the quantile calls to fail
   col_in.dtype = GDF_INT32;
 
-  size_t n_qs = 5;
-  size_t n_methods = 5;
-
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
     {-1.0,   1.0,   1.0,   2.0,   7.0},
@@ -208,12 +162,58 @@ TEST_F(gdf_quantile, ReportValidMaskError)
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
   
-  std::vector<VType> v_out_approx(n_qs, 0);
-  std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));
-
-  f_quantile_tester<VType>(&col_in, v_out_approx, v_out_exact, GDF_VALIDITY_UNSUPPORTED);
+  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact, GDF_VALIDITY_UNSUPPORTED);
 }
 
+
+// ----------------------------------------------------
+
+template<typename T_in>
+struct InterpolateTest : public GdfTest {};
+
+using TestingTypes = ::testing::Types<
+    int8_t, int16_t, int32_t, int64_t, float, double>;
+
+TYPED_TEST_CASE(InterpolateTest, TestingTypes);
+
+
+
+template<typename T_out, typename T_in>
+void midpoint_test(T_out exact, T_in lhs, T_in rhs)
+{
+    T_out result;
+    cudf::interpolate::midpoint(result, lhs, rhs);
+
+    EXPECT_EQ(exact, result) << "midpoint( " << lhs << ", " << rhs << ")";
+}
+
+TYPED_TEST(InterpolateTest, MidpointTest)
+{
+    using T = TypeParam;
+
+    T t_max = std::numeric_limits<T>::max();
+    T t_min = std::numeric_limits<T>::lowest();
+
+    // integer overflow test
+    midpoint_test(t_max, t_max, t_max);
+    midpoint_test(t_min, t_min, t_min);
+    midpoint_test(T(t_max-1), t_max, T(t_max-2));
+    midpoint_test(T(t_min+1), t_min, T(t_min+T(2)));
+
+    double mid_of_mimax = ( std::is_integral<T>::value == true ) ?
+        -0.5 : 0.0;
+
+    midpoint_test(mid_of_mimax, t_max, t_min);
+    midpoint_test(mid_of_mimax, t_min, t_max);
+
+    midpoint_test(T{0}, t_max, t_min);
+    midpoint_test(T{0}, t_min, t_max);
+    midpoint_test(T{0}, T(t_max-1), T(t_min+1));
+    midpoint_test(T{0}, T(t_min+1), T(t_max-1));
+    midpoint_test(T{0},   t_max,    T(t_min+1));
+    midpoint_test(T{0}, T(t_min+1),   t_max);
+
+}
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
