@@ -30,6 +30,8 @@
 
 
 #include <thrust/tabulate.h>
+#include <thrust/logical.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace {
 /**
@@ -242,17 +244,20 @@ public:
 
   };
 
-    /** 
-     * @brief  Copies a row from a source table to a target row in this table
-     *  
-     * This device function should be called by a single thread and the thread will copy all of 
-     * the elements in the row from one table to the other. TODO: In the future, this could be done
-     * by multiple threads by passing in a cooperative group.
-     * 
-     * @param other The other table from which the row is copied
-     * @param my_row_index The index of the row in this table that will be written to
-     * @param other_row_index The index of the row from the other table that will be copied from
-     */
+  /**
+   * @brief  Copies a row from a source table to a target row in this table
+   *
+   * This device function should be called by a single thread and the thread
+   * will copy all of the elements in the row from one table to the other. TODO:
+   * In the future, this could be done by multiple threads by passing in a
+   * cooperative group.
+   *
+   * @param other The other table from which the row is copied
+   * @param target_row_index The index of the row in this table that will be written
+   * to
+   * @param source_row_index The index of the row from the other table that will
+   * be copied from
+   */
   __device__ 
   gdf_error copy_row(device_table const & source,
                      const gdf_size_type target_row_index,
@@ -310,39 +315,32 @@ public:
 
     // If either row contains a NULL, then by definition, because NULL != x for all x,
     // the two rows are not equal
-    bool const valid = this->is_row_valid(this_row_index) && rhs.is_row_valid(rhs_row_index);
-    if (false == valid) 
+    bool const both_rows_are_valid =
+        this->is_row_valid(this_row_index) && rhs.is_row_valid(rhs_row_index);
+    if (not both_rows_are_valid) 
     {
       return false;
     }
 
-    for(gdf_size_type i = 0; i < _num_columns; ++i)
-    {
-      gdf_dtype const this_col_type = d_columns_types_ptr[i];
-      gdf_dtype const rhs_col_type = rhs.d_columns_types_ptr[i];
-    
-      if(this_col_type != rhs_col_type)
-      {
-        return false;
-      }
+    auto equal_elements =
+        [this, &rhs, this_row_index,
+         rhs_row_index](gdf_size_type column_index) {
+          bool const type_mismatch{d_columns_types_ptr[column_index] !=
+                                   rhs.d_columns_types_ptr[column_index]};
 
-      bool is_equal = cudf::type_dispatcher(this_col_type, 
-                                            elements_are_equal{}, 
-                                            d_columns_data_ptr[i], 
-                                            this_row_index, 
-                                            rhs.d_columns_data_ptr[i], 
-                                            rhs_row_index);
+          if (type_mismatch) {
+            return false;
+          }
 
-      // If the elements in column `i` do not match, return false
-      // Otherwise, continue to column i+1
-      if(false == is_equal){
-        return false;
-      }
-    }
+          return cudf::type_dispatcher(
+              d_columns_types_ptr[column_index], elements_are_equal{},
+              d_columns_data_ptr[column_index], this_row_index,
+              rhs.d_columns_data_ptr[column_index], rhs_row_index);
+        };
 
-    // If we get through all the columns without returning false,
-    // then the rows are equivalent
-    return true;
+    return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(_num_columns),
+                          equal_elements);
   }
 
   template < template <typename> typename hash_function >
