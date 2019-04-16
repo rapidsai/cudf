@@ -1011,11 +1011,10 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
     return rle->num_vals;
 }
 
-#if 0
 /**
-* @brief Powers of 10
-*
-**/
+ * @brief Powers of 10
+ *
+ **/
 static const __device__ __constant__ int64_t kPow10[19] =
 {
     1,
@@ -1039,24 +1038,56 @@ static const __device__ __constant__ int64_t kPow10[19] =
     1000000000000000000ll
 };
 
-
 /**
-* @brief ORC Decimal decoding (unbounded base-128 varints)
-*
-* @param[in] bs Input byte stream
-* @param[in,out] vals on input: scale from secondary stream, on output: value
-* @param[in] numvals Number of values to decode
-* @param[in] t thread id
-*
-**/
-static __device__ void Decode_Decimals(orc_bytestream_s *bs, volatile int64_t *vals, int numvals, int t)
+ * @brief ORC Decimal decoding (unbounded base-128 varints)
+ *
+ * @param[in] bs Input byte stream
+ * @param[in,out] vals on input: scale from secondary stream, on output: value
+ * @param[in] numvals Number of values to decode
+ * @param[in] t thread id
+ *
+ * @return number of values decoded
+ *
+ **/
+static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int t)
 {
+    int scale = (t < numvals) ? (int)vals[t] : 0;
     if (t == 0)
     {
+        uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
+        uint32_t lastpos = bs->pos;
+        uint32_t n;
+        for (n = 0; n < numvals; n++)
+        {
+            uint32_t pos = lastpos;
+            *(volatile int32_t *)&vals[t] = lastpos;
+            pos += varint_length<uint4>(bs, pos);
+            if (pos > maxpos)
+                break;
+            lastpos = pos;
+        }
+        scratch->num_vals = n;
     }
+    __syncthreads();
+    numvals = scratch->num_vals;
+    if (t < numvals)
+    {
+        int pos = *(volatile int32_t *)&vals[t];
+        int64_t v;
+        decode_varint(bs, pos, v);
+        if (scale > 0)
+        {
+            v *= kPow10[min(scale, 18)];
+        }
+        else if (scale < 0)
+        {
+            v /= kPow10[min(-scale, 18)];
+        }
+        vals[t] = v;
+    }
+    return numvals;
 }
 
-#endif // WIP
 
 /**
  * @brief Decoding NULLs and builds string dictionary index tables
@@ -1295,6 +1326,79 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
 
 
 /**
+ * @brief Decode row positions from valid bits
+ *
+ * @param[in,out] s Column chunk decoder state
+ * @param[in] first_row crop all rows below first rows
+ * @param[in] t thread id
+ *
+ **/
+static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, int t)
+{
+    while (s->top.data.max_vals < NTHREADS && s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row && s->top.data.nrows < 0xfe00)
+    {
+        uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row, min(0xfe00 - s->top.data.nrows, NTHREADS));
+        if (s->chunk.strm_len[CI_PRESENT] > 0)
+        {
+            // We have a present stream
+            uint32_t rmax = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
+            uint32_t r = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
+            uint32_t valid = (t < nrows && r < rmax) ? (((const uint8_t *)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1 : 0;
+            volatile uint16_t *row_ofs_plus1 = &s->top.data.row_ofs_plus1[s->top.data.max_vals];
+            uint32_t nz_pos;
+            if (t < nrows)
+            {
+                row_ofs_plus1[t] = valid;
+            }
+            lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
+            if (t == nrows - 1)
+            {
+                s->top.data.max_vals += row_ofs_plus1[t];
+            }
+            __syncthreads();
+            nz_pos = (valid) ? row_ofs_plus1[t] : 0;
+            __syncthreads();
+            if (valid)
+            {
+                row_ofs_plus1[nz_pos - 1] = s->top.data.nrows + t;
+            }
+            __syncthreads();
+            if (t == 0)
+            {
+                if (s->top.data.max_vals > NTHREADS)
+                {
+                    s->top.data.max_vals = NTHREADS;
+                    s->top.data.nrows = s->top.data.row_ofs_plus1[NTHREADS - 1];
+                }
+                else
+                {
+                    s->top.data.nrows += nrows;
+                }
+            }
+            __syncthreads();
+        }
+        else
+        {
+            // All values are valid
+            nrows = min(nrows, NTHREADS - s->top.data.max_vals);
+            if (t < nrows)
+            {
+                s->top.data.row_ofs_plus1[s->top.data.max_vals + t] = s->top.data.nrows + t + 1;
+            }
+            __syncthreads();
+            if (t == 0)
+            {
+                s->top.data.nrows += nrows;
+                s->top.data.max_vals += nrows;
+            }
+            __syncthreads();
+        }
+    }
+}
+
+
+
+/**
  * @brief Trailing zeroes for decoding timestamp nanoseconds
  *
  **/
@@ -1315,7 +1419,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
  *
  **/
 // blockDim {NTHREADS,1,1}
-extern "C" __global__ void __launch_bounds__(NTHREADS, 1)
+extern "C" __global__ void __launch_bounds__(NTHREADS)
 gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, size_t max_num_rows, size_t first_row, uint32_t num_chunks)
 {
     __shared__ __align__(16) orcdec_state_s state_g;
@@ -1364,65 +1468,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
             s->top.data.row_ofs_plus1[t] = 0; // Skipped values (below first_row)
         }
         // 1. Use the valid bits to compute non-null row positions until we get a full batch of values to decode (up to 64K rows)
-        while (s->top.data.max_vals < NTHREADS && s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row && s->top.data.nrows < 0xfe00)
-        {
-            uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row, min(0xfe00 - s->top.data.nrows, NTHREADS));
-            if (s->chunk.strm_len[CI_PRESENT] > 0)
-            {
-                // We have a present stream
-                uint32_t rmax = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
-                uint32_t r = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
-                uint32_t valid = (t < nrows && r < rmax) ? (((const uint8_t *)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1 : 0;
-                volatile uint16_t *row_ofs_plus1 = &s->top.data.row_ofs_plus1[s->top.data.max_vals];
-                uint32_t nz_pos;
-                if (t < nrows)
-                {
-                    row_ofs_plus1[t] = valid;
-                }
-                lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
-                if (t == nrows - 1)
-                {
-                    s->top.data.max_vals += row_ofs_plus1[t];
-                }
-                __syncthreads();
-                nz_pos = (valid) ? row_ofs_plus1[t] : 0;
-                __syncthreads();
-                if (valid)
-                {
-                    row_ofs_plus1[nz_pos - 1] = s->top.data.nrows + t;
-                }
-                __syncthreads();
-                if (t == 0)
-                {
-                    if (s->top.data.max_vals > NTHREADS)
-                    {
-                        s->top.data.max_vals = NTHREADS;
-                        s->top.data.nrows = s->top.data.row_ofs_plus1[NTHREADS-1];
-                    }
-                    else
-                    {
-                        s->top.data.nrows += nrows;
-                    }
-                }
-                __syncthreads();
-            }
-            else
-            {
-                // All values are valid
-                nrows = min(nrows, NTHREADS - s->top.data.max_vals);
-                if (t < nrows)
-                {
-                    s->top.data.row_ofs_plus1[s->top.data.max_vals + t] = s->top.data.nrows + t + 1;
-                }
-                __syncthreads();
-                if (t == 0)
-                {
-                    s->top.data.nrows += nrows;
-                    s->top.data.max_vals += nrows;
-                }
-            }
-            __syncthreads();
-        }
+        DecodeRowPositions(s, first_row, t);
         // 2. Decode data streams
         if (s->top.data.max_vals > 0)
         {
@@ -1527,13 +1573,11 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                 {
                     numvals = Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t);
                 }
-            #if 0
                 if (s->chunk.type_kind == DECIMAL)
                 {
                     __syncthreads();
-                    Decode_Decimals(&s->bs, s->vals.i64, numvals, t);
+                    numvals = Decode_Decimals(&s->bs, &s->u.rle8, s->vals.i64, numvals, t);
                 }
-            #endif
                 __syncthreads();
             }
             else if (s->chunk.type_kind == FLOAT)
