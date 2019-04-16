@@ -211,7 +211,7 @@ class DataFrame(object):
         # returning the rows specified in the boolean mask
         """
         if isinstance(self.columns, MultiIndex):
-            return self.columns.get(arg)
+            return self.columns.get_column_major(self, arg)
         if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
            isinstance(arg, tuple):
             s = self._cols[arg]
@@ -400,9 +400,12 @@ class DataFrame(object):
         # Prepare cells
         cols = OrderedDict()
         dtypes = OrderedDict()
-        use_cols = list(self.columns[:ncols - 1])
-        if ncols > 0:
-            use_cols.append(self.columns[-1])
+        if hasattr(self, 'multi_cols'):
+            use_cols = list(range(len(self.columns)))
+        else:
+            use_cols = list(self.columns[:ncols - 1])
+            if ncols > 0:
+                use_cols.append(self.columns[-1])
 
         for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
@@ -618,25 +621,37 @@ class DataFrame(object):
     def columns(self):
         """Returns a tuple of columns
         """
-        if isinstance(self._cols, MultiIndex):
-            return self._cols
+        if hasattr(self, 'multi_cols'):
+            # TODO: Broken for the same reason as below. I'm including
+            # it here because it doesn't break anything except for
+            # the growing MultiIndex implementation.
+            return self.multi_cols
         else:
             return pd.Index(self._cols)
 
     @columns.setter
     def columns(self, columns):
         if isinstance(columns, MultiIndex):
-            self._cols = columns
-            return
+            self.multi_cols = columns
+            # TODO: Broken, this strategy doesn't work.
+            # The strategy was to use the MultiIndex as a wrapper
+            # over a set of integer named columns. This doesn't work
+            # because .columns returns the multi_cols object as soon as
+            # it is set.
+            self._rename_columns(list(range(len(self._cols))))
+        else:
+            self._rename_columns(columns)
+
+    def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
         l_old_cols = len(old_cols)
-        l_new_cols = len(columns)
+        l_new_cols = len(new_names)
         if l_new_cols != l_old_cols:
             msg = f'Length of new column names: {l_new_cols} does not ' \
                   'match length of previous column names: {l_old_cols}'
             raise ValueError(msg)
 
-        mapper = dict(zip(old_cols, columns))
+        mapper = dict(zip(old_cols, new_names))
         self.rename(mapper=mapper, inplace=True)
 
     @property
@@ -2448,7 +2463,7 @@ class Loc(object):
         row_label = None
 
         if isinstance(self._df.index, MultiIndex):
-            return self._df._index.get(self._df, arg)
+            return self._df._index.get_row_major(self._df, arg)
 
         if isinstance(arg, int):
             if arg < 0 or arg >= len(self._df):

@@ -145,6 +145,26 @@ def test_multiindex_loc():
     #           gdf.loc[('a', 'store'): ('b', 'house')])
 
 
+def test_multiindex_column_iteration():
+    assert False
+
+
+def test_multiindex_iteration():
+    pdf = pd.DataFrame(np.random.rand(5, 5))
+    gdf = cudf.from_pandas(pdf)
+    pdfIndex = pd.MultiIndex([['a', 'b', 'c'],
+                              ['house', 'store', 'forest'],
+                              ['clouds', 'clear', 'storm']],
+                             [[0, 0, 1, 1, 2],
+                              [1, 1, 0, 0, 2],
+                              [2, 2, 2, 0, 1]])
+    pdfIndex.names = ['alpha', 'location', 'weather']
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.columns = pdfIndex
+    gdf.columns = gdfIndex
+
+
 def test_multiindex_columns():
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -159,9 +179,16 @@ def test_multiindex_columns():
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    print(pdf)
+    for x, col in enumerate(pdf.columns):
+        print(col)
+        print(pdf.columns[x])
+        print(pdf[col])
+        print(x)
     print(gdf.columns)
-    print(dir(gdf))
+    for col in gdf.columns:
+        print('toot')
+        print(col)
+    print(gdf.to_pandas())
     assert_eq(pdf[('a', 'store')],
               gdf[('a', 'store')])
     assert_eq(pdf[('b', 'house')],

@@ -753,13 +753,9 @@ def test_string_groupby_key_index():
     gdf['b'] = other_data
 
     expect = pdf.groupby('a').count()
-    with pytest.raises(
-        NotImplementedError,
-        match="Strings are not yet supported in the index"
-    ):
-        got = gdf.groupby('a').count()
+    got = gdf.groupby('a').count()
 
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('scalar', [

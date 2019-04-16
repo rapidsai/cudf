@@ -129,9 +129,10 @@ class MultiIndex(indexPackage.Index):
                 validity_mask = matches
         return validity_mask
 
-    def get(self, df, row_tuple):
+    def get_row_major(self, df, row_tuple):
         valid_indices = self._compute_validity_mask(df, row_tuple)
         result = df.iloc[valid_indices]
+        print(df._index.codes.iloc[valid_indices])
         # Build new index - INDEX based MultiIndex
         # ---------------
         from cudf import DataFrame
@@ -158,6 +159,28 @@ class MultiIndex(indexPackage.Index):
             result = Series(result.iloc[0])
             result.name = row_tuple
         return result
+
+    def get_column_major(self, df, row_tuple):
+        valid_indices = self._compute_validity_mask(df, row_tuple)
+        from cudf import DataFrame
+        result = DataFrame()
+        for ix, col in enumerate(df.columns):
+            if ix in valid_indices:
+                result[col] = df[col]
+        # Build new index - COLUMN based MultiIndex
+        # ---------------
+        out_index = DataFrame()
+        # If every level is homogeneous except the last do the out_index
+        # case above for columns.
+        for ix, col in enumerate(df.multi_cols.codes):
+            if ix in valid_indices:
+                out_index[col] = df.multi_cols.codes[col]
+        for k in range(len(row_tuple), len(df.multi_cols.levels)):
+            out_index.add_column(df.multi_cols.names[k],
+                                 df.multi_cols.codes[df.multi_cols.codes.columns[k]])
+        result.columns = out_index
+        return result
+
 
     def __len__(self):
         return len(self.codes[self.codes.columns[0]])
