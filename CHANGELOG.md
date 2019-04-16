@@ -14,6 +14,7 @@
 
 ## Improvements
 
+- PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
@@ -33,6 +34,8 @@
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration.
 
 ## Bug Fixes
 
@@ -54,8 +57,10 @@
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1421 Fix remove creation of series multiple times during `add_column()`
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
 
 
 # cuDF 0.6.0 (Date TBD)
