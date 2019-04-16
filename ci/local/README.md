@@ -47,4 +47,4 @@ The script will build your repository and run all tests. If any tests fail, it d
 
 ### Container File Structure
 
-Your repository will be located in the `/rapids/` folder of the container. This folder is volume mounted from the local machine. Any changes to the code in this repository are replicated onto the local machine. The `cpp/build` directory within your repository is on a separate mount to avoid conflicting with your local build artifacts. The file within the `cpp/build` directory in the container named `build.sh` is a small script that builds your repository from source and run tests.
+Your repository will be located in the `/rapids/` folder of the container. This folder is volume mounted from the local machine. Any changes to the code in this repository are replicated onto the local machine. The `cpp/build` and `python/build` directories within your repository is on a separate mount to avoid conflicting with your local build artifacts.
