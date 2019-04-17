@@ -1116,12 +1116,14 @@ class Series(object):
     def cummin(self, axis=0, skipna=True):
         """Compute the cumulative minimum of the series"""
         assert axis in (None, 0) and skipna is True
-        return Series(self._column._apply_scan_op('min'), name=self.name)
+        return Series(self._column._apply_scan_op('min'), name=self.name,
+                      index=self.index)
 
     def cummax(self, axis=0, skipna=True):
         """Compute the cumulative maximum of the series"""
         assert axis in (None, 0) and skipna is True
-        return Series(self._column._apply_scan_op('max'), name=self.name)
+        return Series(self._column._apply_scan_op('max'), name=self.name,
+                      index=self.index)
 
     def cumsum(self, axis=0, skipna=True):
         """Compute the cumulative sum of the series"""
@@ -1130,9 +1132,10 @@ class Series(object):
         # pandas always returns int64 dtype if original dtype is int
         if np.issubdtype(self.dtype, np.integer):
             return Series(self.astype(np.int64)._column._apply_scan_op('sum'),
-                          name=self.name)
+                          name=self.name, index=self.index)
         else:
-            return Series(self._column._apply_scan_op('sum'), name=self.name)
+            return Series(self._column._apply_scan_op('sum'), name=self.name,
+                          index=self.index)
 
     def cumprod(self, axis=0, skipna=True):
         """Compute the cumulative sum of the series"""
@@ -1142,10 +1145,10 @@ class Series(object):
         if np.issubdtype(self.dtype, np.integer):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op('product'),
-                name=self.name)
+                name=self.name, index=self.index)
         else:
             return Series(self._column._apply_scan_op('product'),
-                          name=self.name)
+                          name=self.name, index=self.index)
 
     def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
