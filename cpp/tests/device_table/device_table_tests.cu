@@ -40,24 +40,47 @@ struct row_has_nulls {
   }
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Compares if a row in one table is equal to all rows in another table.
+ *
+ *---------------------------------------------------------------------------**/
 struct all_rows_equal {
-  device_table * lhs;
-  device_table * rhs;
+  device_table* lhs;
+  device_table* rhs;
   bool nulls_are_equal;
-  bool check_self_equality;
 
-  all_rows_equal(device_table * _lhs, device_table * _rhs,
-                 bool _nulls_are_equal = false,
-                 bool _check_self_equality = true)
+  all_rows_equal(device_table* _lhs, device_table* _rhs,
+                 bool _nulls_are_equal = false)
       : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
-  __device__ bool operator()(int row_index) {
-    for (int i = 0; i < lhs->num_rows(); ++i) {
-      if (not lhs->rows_equal(*rhs, row_index, i, nulls_are_equal)) {
-        return false;
-      }
-    }
-    return true;
+  /**---------------------------------------------------------------------------*
+   * @brief Returns true if row `lhs_index` in the `lhs` table is equal to every
+   * row in the `rhs` table.
+   *
+   *---------------------------------------------------------------------------**/
+  __device__ bool operator()(int lhs_index) {
+    auto row_equality = [this, lhs_index](gdf_size_type rhs_index) {
+      return lhs->rows_equal(*rhs, lhs_index, rhs_index, nulls_are_equal);
+    };
+    return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(rhs->num_rows()),
+                          row_equality);
+  }
+};
+
+struct row_comparison {
+  device_table* lhs;
+  device_table* rhs;
+  bool nulls_are_equal;
+
+  row_comparison(device_table* _lhs, device_table* _rhs,
+                 bool _nulls_are_equal = false)
+      : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
+
+  __device__ bool operator()(
+      thrust::pair<gdf_size_type, gdf_size_type> indices) {
+    return lhs->rows_equal(*rhs, indices.first, indices.second,
+                           nulls_are_equal);
   }
 };
 
