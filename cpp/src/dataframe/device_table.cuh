@@ -324,12 +324,10 @@ public:
    *
    * @returns True if the elements in both rows are equivalent, otherwise False
    */
-  __device__
-  bool rows_equal(device_table const & rhs, 
-                  const gdf_size_type this_row_index, 
-                  const gdf_size_type rhs_row_index,
-                  bool nulls_are_equal = false) const
-  {
+  __device__ bool rows_equal(device_table const& rhs,
+                             const gdf_size_type this_row_index,
+                             const gdf_size_type rhs_row_index,
+                             bool nulls_are_equal = false) const {
     bool const rows_have_nulls =
         this->row_has_nulls(this_row_index) or rhs.row_has_nulls(rhs_row_index);
 
@@ -337,25 +335,15 @@ public:
       return false;
     }
 
-    auto equal_elements =
-        [this, &rhs, this_row_index,
-         rhs_row_index, nulls_are_equal](gdf_size_type column_index) {
-
-          bool const type_mismatch{d_columns_types_ptr[column_index] !=
-                                   rhs.d_columns_types_ptr[column_index]};
-
-          if (type_mismatch) {
-            return false;
-          }
-
-          return cudf::type_dispatcher(
-              d_columns_types_ptr[column_index], elements_are_equal{},
-              d_columns_data_ptr[column_index],
-              d_columns_valids_ptr[column_index], this_row_index,
-              rhs.d_columns_data_ptr[column_index],
-              rhs.d_columns_valids_ptr[column_index], rhs_row_index,
-              nulls_are_equal);
-        };
+    auto equal_elements = [this, &rhs, this_row_index, rhs_row_index,
+                           nulls_are_equal](gdf_size_type column_index) {
+      return cudf::type_dispatcher(
+          d_columns_types_ptr[column_index], elements_are_equal{},
+          d_columns_data_ptr[column_index], d_columns_valids_ptr[column_index],
+          this_row_index, rhs.d_columns_data_ptr[column_index],
+          rhs.d_columns_valids_ptr[column_index], rhs_row_index,
+          nulls_are_equal);
+    };
 
     return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
                           thrust::make_counting_iterator(_num_columns),
