@@ -433,6 +433,11 @@ template <> struct NumericTraits<cudf::nvstring_category> :
     std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
     cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
 
+template <> struct NumericTraits<cudf::bool8> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::bool8>>,
+    cudf::detail::unwrapped_type_t<cudf::bool8>> {};
+
 } // cub
 
 #endif
