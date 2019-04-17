@@ -60,9 +60,17 @@
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
+- PR #XXXX Merge 1275 hotfix from master into branch-0.7
 
 
-# cuDF 0.6.0 (Date TBD)
+# cuDF 0.6.1 (25 Mar 2019)
+
+## Bug Fixes
+
+- PR #1275 Fix CentOS exception in DataFrame.hash_partition from using value "returned" by a void function
+
+
+# cuDF 0.6.0 (22 Mar 2019)
 
 ## New Features
 
