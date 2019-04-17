@@ -35,7 +35,7 @@ typedef gdf_input_type gdf_csv_input_form;
 /*
  * @brief Enumeration of quoting behavior for CSV readers/writers
  */
-typedef enum
+typedef enum 
 {
   QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
   QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
@@ -47,7 +47,7 @@ typedef enum
  * @brief  This struct contains all input parameters to the read_csv function.
  * Also contains the output dataframe.
  *
- * Input parameters are all stored in host memory. The output dataframe is in
+ * Input parameters are all stored in host memory. The output dataframe is in 
  * the device memory.
  *
  * Parameters in PANDAS that are unavailable in cudf:
@@ -77,7 +77,7 @@ typedef struct {
 
   bool          windowslinetermination;     ///< States if we should \r\n as our line termination
   char          lineterminator;             ///< define the line terminator character. Default is  '\n'
-  char          delimiter;                  ///< define the field separator, default is ',' This argument is also called 'sep'
+  char          delimiter;                  ///< define the field separator, default is ',' This argument is also called 'sep' 
   bool          delim_whitespace;           ///< Use white space as the delimiter - default is false. This overrides the delimiter argument
   bool          skipinitialspace;           ///< Skip white spaces after the delimiter - default is false
 
@@ -97,14 +97,14 @@ typedef struct {
   gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
   gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
 
-  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN
+  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
 
   const char    **true_values;              ///< List of values to recognize as boolean True
   int           num_true_values;            ///< Number of values in the true_values list
   const char    **false_values;             ///< List of values to recognize as boolean False
   int           num_false_values;           ///< Number of values in the true_values list
 
-  const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN:
+  const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
                                             'NaN', 'n/a', 'nan', 'null'. */
   int           num_na_values;              ///< Number of values in the na_values list
@@ -133,15 +133,17 @@ typedef struct {
 
   char          *encoding;                  // the data encoding, NULL = UTF-8
 
-  size_t        byte_range_offset;          ///< offset of the byte range to read.
+  size_t        byte_range_offset;          ///< offset of the byte range to read. 
   size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
 } csv_read_arg;
 
-
+/**---------------------------------------------------------------------------*
+ * @brief These are the arguments to the CSV writer function.
+ *---------------------------------------------------------------------------**/
 typedef struct
 {
-    gdf_column** data;            // columns to output
+    gdf_column** columns;         // columns to output
     int num_cols;                 // number of columns
 
     const char* filepath;         // full path to file to create
@@ -150,6 +152,7 @@ typedef struct
 
     const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
     const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
+    const char* na_rep;           // string to use for null entries
 
 } csv_write_arg;
 

@@ -781,12 +781,19 @@ TEST(gdf_csv_test, Writer)
     rargs.nrows = -1;
     EXPECT_EQ( read_csv(&rargs), GDF_SUCCESS );
 
+    const char* ofname = "/tmp/CsvWriteTestOut.csv";
     csv_write_arg wargs{};
-    wargs.data = rargs.data;  // columns from reader above
-    wargs.filepath = "/tmp/CsvWriteTestOut.csv";
+    wargs.columns = rargs.data;  // columns from reader above
+    wargs.filepath = ofname;
     wargs.num_cols = std::extent<decltype(names)>::value;
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
+
+    // check result
+    std::ifstream infile(ofname);
+    std::string csv((std::istreambuf_iterator<char>(infile)),std::istreambuf_iterator<char>());
+    std::string verify = "\"integer\",\"float\",\"string\"\n1,1,\"one\"\n2,2.25,\"two\"\n3,3.5,\"three\"\n4,4.75,\"four\"\n5,5,\"five\"\n";
+    EXPECT_EQ( csv.compare(verify), 0 );
 }
