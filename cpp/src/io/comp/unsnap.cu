@@ -211,7 +211,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
             if (lit_len != 0)
             {
                 offset = cur;
-                blen = min(lit_len, 32);
+                blen = min(lit_len, 64);
                 lit_len -= blen;
                 cur += blen;
                 // Wait for prefetcher
@@ -289,29 +289,50 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
             uint32_t dist = b->offset;
             if (blen <= 64)
             {
+                uint8_t b0, b1;
                 // Copy
                 if (t < blen)
                 {
                     uint32_t pos = t;
                     const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
-                    out[t] = *src;
+                    b0 = *src;
                 }
-                SYNCWARP();
                 if (32 + t < blen)
                 {
                     uint32_t pos = 32 + t;
                     const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
-                    out[32 + t] = *src;
+                    b1 = *src;
+                }
+                if (t < blen)
+                {
+                    out[t] = b0;
+                }
+                if (32 + t < blen)
+                {
+                    out[32 + t] = b1;
                 }
                 SYNCWARP();
             }
             else
             {
                 // Literal
+                uint8_t b0, b1;
                 blen -= 64;
                 if (t < blen)
                 {
-                    out[t] = literal_base[dist + t];
+                    b0 = literal_base[dist + t];
+                }
+                if (32 + t < blen)
+                {
+                    b1 = literal_base[dist + 32 + t];
+                }
+                if (t < blen)
+                {
+                    out[t] = b0;
+                }
+                if (32 + t < blen)
+                {
+                    out[32 + t] = b1;
                 }
             }
             out += blen;

@@ -279,7 +279,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
-    from cudf import _gdf
+
+    import cudf.bindings.reduce as cpp_reduce
+    from cudf.dataframe.numerical import NumericalColumn
+    from cudf.dataframe.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,
@@ -288,10 +291,11 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    _gdf.apply_prefixsum(_gdf.columnview_from_devary(vals),
-                         _gdf.columnview_from_devary(slots[1:]),
-                         inclusive=True)
-
+    in_col = NumericalColumn(data=Buffer(vals), mask=None,
+                             null_count=0, dtype=vals.dtype)
+    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None,
+                              null_count=0, dtype=vals.dtype)
+    cpp_reduce.apply_scan(in_col, out_col, 'sum', inclusive=True)
     return slots
 
 
