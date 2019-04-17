@@ -41,16 +41,18 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  */
 gdf_error gdf_nvtx_range_pop();
 
-/** 
- * @brief  Counts the number of valid bits in the mask that corresponds to
- * the specified number of rows.
- * 
- * @param[in] masks Array of gdf_valid_types with enough bits to represent
- * num_rows number of rows
- * @param[in] num_rows The number of rows represented in the bit-validity mask.
- * @param[out] count The number of valid rows in the mask
- * 
- * @returns  GDF_SUCCESS upon successful completion. 
+/**
+ * @brief  Counts the number of valid bits for the specified number of rows
+ * in a validity bitmask.
+ *
+ * If the bitmask is null, returns a count equal to the number of rows.
+ *
+ * @param[in] masks The validity bitmask buffer in device memory
+ * @param[in] num_rows The number of bits to count
+ * @param[out] count The number of valid bits in the buffer from [0, num_rows)
+ *
+ * @returns  GDF_SUCCESS upon successful completion
+ *
  */
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count);
@@ -349,14 +351,11 @@ gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
 gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 
 
-/*
- * The following function performs a sort on the key and value columns.
+/**
+ * @brief  Performs a radixsort on the key and value columns
+ * 
  * The null_count of the keycol and valcol columns are expected to be 0
  * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- */
-
-/**
- * @brief  Performs a radixsort on the key and value columns where the key is an int8
  *
  * @param[in] Radix sort plan
  * @param[in] key gdf_column
@@ -364,74 +363,10 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
-                           gdf_column *keycol,
-                           gdf_column *valcol);
+gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
+                        gdf_column *keycol,
+                        gdf_column *valcol);
 
-/**
- * @brief  Performs a radixsort on the key and value columns where the key is an int32
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-
-/**
- * @brief  performs a radixsort on the key and value columns where the key is an int64
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-
-/**
- * @brief  performs a radixsort on the key and value columns where the key is an float
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-
-/**
- * @brief  performs a radixsort on the key and value columns where the key is an double
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
-                            gdf_column *keycol,
-                            gdf_column *valcol);
-
-/**
- * @brief  performs a radixsort on the key and value columns where the key is any type
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol);
 
 
 /* segmented sorting */
@@ -474,14 +409,11 @@ gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *
 gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl);
 
 
-/*
- * The following function performs a sort on the key and value columns.
+/**
+ * @brief  Performs a segmented radixsort on the key and value columns
+ * 
  * The null_count of the keycol and valcol columns are expected to be 0
  * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- */
-
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is an int8
  *
  * @param[in] Radix sort plan
  * @param[in] key gdf_column
@@ -492,101 +424,11 @@ gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *h
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is an int32
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is an int64
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is an float
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-                                    
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is an double
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
-                                    
-/**
- * @brief  performs a segmented radixsort on the key and value columns where the key is any type
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
-                                     gdf_column *keycol, gdf_column *valcol,
-                                     unsigned num_segments,
-                                     unsigned *d_begin_offsets,
-                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
+                                  gdf_column *keycol, gdf_column *valcol,
+                                  unsigned num_segments,
+                                  unsigned *d_begin_offsets,
+                                  unsigned *d_end_offsets);
 
 
 // transpose
@@ -758,23 +600,6 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              int partition_offsets[],
                              gdf_hash_func hash);
 
-/* prefixsum */
-/** --------------------------------------------------------------------------*
- * @brief  Computes the prefix sum of a column.
- * The null values are skipped for the operation, and if an input element
- * at `i` is null, then the output element at `i` will also be null.
- *
- * @param[in] input The input column for prefix sum
- * @param[out] output The pre-allocated output column containing
- * the prefix sum of the input
- * @param[in] inclusive The flag for applying an inclusive prefix sum if true,
- * an exclusive prefix sum if false.
- *
- * @returns   GDF_SUCCESS if the operation was successful,
- * otherwise an appropriate error code.
- * GDF_UNSUPPORTED_DTYPE if input->dtype is not an arithmetic type.
- * ----------------------------------------------------------------------------**/
-gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive);
 
 /* unary operators */
 
@@ -1062,199 +887,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-/* reductions
-
-The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
-size for this use.
-*/
-
-
-/**
- * @brief  Reports the intermediate buffer size in elements required for 
- *         all cuDF reduction operations (gdf_sum, gdf_product, 
- *         gdf_sum_of_squares, gdf_min and gdf_max)
- *
- * @returns  The size of output/intermediate buffer to allocate for reductions
- * 
- * @todo Reductions should be re-implemented to use an atomic add for each
- *       block sum rather than launch a second kernel. When that happens, this
- *       function can go away and the output can be a single element.
- */
-unsigned int gdf_reduction_get_intermediate_output_size();
-
-/**
- * @brief  Computes the sum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output sum 
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the multiplicative product of the values in all rows of 
- *         a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output product
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- */
-gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the sum of squares of the values in all rows of a column
- * 
- * Sum of squares is useful for variance implementation.
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output sum of squares
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- * @todo could be implemented using inner_product if that function is 
- *       implemented
- */
-gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the minimum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output minimum
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the maximum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output maximum
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-
-/*
- * Filtering and comparison operators
- */
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_INT8
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_INT16
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_INT32
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_INT64
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_FLOAT32
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of the input of type GDF_FLOAT64
- * @param[in] Static value to compare against the input
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
-
-/**
- * @brief  Compare two columns of any types against each other using a comparison operation, returns a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
- *
- * @param[in] gdf_column of one input of any type
- * @param[in] gdf_column of second input of any type
- * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
- * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
 /**
  * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0

@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-# Usage:
-#   conda build -c nvidia -c rapidsai -c numba -c conda-forge -c defaults .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 package:
@@ -18,13 +16,6 @@ build:
     - BUILD_ABI
 
 requirements:
-  # use channel:
-  #   - nvidia
-  #   - rapidsai
-  #   - rapidsai-nightly
-  #   - numba
-  #   - conda-forge
-  #   - defaults
   build:
     - python x.x
     - cython >=0.29,<0.30
@@ -32,7 +23,7 @@ requirements:
     - libcudf {{ version }}
     - libcudf_cffi {{ version }}
     - numba >=0.40
-    - nvstrings 0.3*
+    - nvstrings 0.7.*
   run:
     - python x.x
     - cython >=0.29,<0.30
@@ -41,7 +32,7 @@ requirements:
     - libcudf_cffi {{ version }}
     - pandas >=0.23.4
     - numba >=0.40
-    - nvstrings 0.3*
+    - nvstrings 0.7.*
 
 test:
   requires:

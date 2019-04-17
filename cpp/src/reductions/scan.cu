@@ -6,11 +6,11 @@
 #include "utilities/type_dispatcher.hpp"
 #include "bitmask/legacy_bitmask.hpp"
 
+#include "utilities/device_atomics.cuh"
 #include <cub/device/device_scan.cuh>
+#include <reduction.hpp>
 
 namespace { //anonymous
-
-#define COPYMASK_BLOCK_SIZE 1024
 
     template <class T>
     __global__
@@ -30,42 +30,41 @@ namespace { //anonymous
 /**
  * @brief Copy data stream and replace nulls by a scholar value
  *
- * @Param[in] data The stream to be copied
- * @Param[in] mask The bitmask stream for nulls
- * @Param[in] size The element count of stream
- * @Param[out] results The stream for the result
- * @Param[in] identity The scholar value to be used to replace nulls
- * @Param[in] stream The cuda stream to be used
+ * @param[in] data The stream to be copied
+ * @param[in] mask The bitmask stream for nulls
+ * @param[in] size The element count of stream
+ * @param[out] results The stream for the result
+ * @param[in] identity The scholar value to be used to replace nulls
+ * @param[in] stream The cuda stream to be used
  *
- * @Returns  If the operation was successful, returns GDF_SUCCESS
+ * @returns  If the operation was successful, returns GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-    template <class T>
+    template <typename T>
     inline
-        gdf_error copy_and_replace_nulls(
+    void copy_and_replace_nulls(
             const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity, cudaStream_t stream)
     {
-        int blocksize = (size < COPYMASK_BLOCK_SIZE ?
-            size : COPYMASK_BLOCK_SIZE);
-        int gridsize = (size + COPYMASK_BLOCK_SIZE - 1) /
-            COPYMASK_BLOCK_SIZE;
+        int blockSize=0, minGridSize, gridSize;
+        CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(
+            &minGridSize, &blockSize, gpu_copy_and_replace_nulls<T>, 0, 0) );
+        gridSize = (size + blockSize - 1) / blockSize; 
 
         // launch kernel
-        gpu_copy_and_replace_nulls << <gridsize, blocksize, 0, stream >> > (
+        gpu_copy_and_replace_nulls << <gridSize, blockSize, 0, stream >> > (
             data, mask, size, results, identity);
 
         CUDA_CHECK_LAST();
-        return GDF_SUCCESS;
     }
 
-    template <class T>
+    template <typename T, typename Op>
     struct Scan {
         static
-            gdf_error call(const gdf_column *input, gdf_column *output,
-                bool inclusive, cudaStream_t stream) {
-            gdf_error ret;
-            auto scan_function = (inclusive ? inclusive_sum : exclusive_sum);
+        void call(const gdf_column *input, gdf_column *output,
+            bool inclusive, cudaStream_t stream)
+        {
+            auto scan_function = (inclusive ? inclusive_scan : exclusive_scan);
             size_t size = input->size;
             const T* d_input = static_cast<const T*>(input->data);
             T* d_output = static_cast<T*>(output->data);
@@ -73,8 +72,8 @@ namespace { //anonymous
             // Prepare temp storage
             void *temp_storage = NULL;
             size_t temp_storage_bytes = 0;
-            GDF_REQUIRE(GDF_SUCCESS == (ret = scan_function(temp_storage,
-                temp_storage_bytes, d_input, d_output, size, stream)), ret);
+            scan_function(temp_storage, temp_storage_bytes,
+                d_input, d_output, size, stream);
             RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
 
             if( nullptr != input->valid ){
@@ -91,80 +90,112 @@ namespace { //anonymous
                 T* temp_input;
                 RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T), stream));
 
-                // copy d_input data and replace with 0 if mask is null
+                // copy d_input data and replace with identity if mask is null
                 copy_and_replace_nulls(
                     static_cast<const T*>(input->data), input->valid,
-                    size, temp_input, static_cast<T>(0), stream);
+                    size, temp_input, Op::template identity<T>(), stream);
 
                 // Do scan
-                ret = scan_function(temp_storage, temp_storage_bytes,
+                scan_function(temp_storage, temp_storage_bytes,
                     temp_input, d_output, size, stream);
-                GDF_REQUIRE(GDF_SUCCESS == ret, ret);
 
                 RMM_TRY(RMM_FREE(temp_input, stream));
             }
             else {  // Do scan
-                ret = scan_function(temp_storage, temp_storage_bytes,
+                scan_function(temp_storage, temp_storage_bytes,
                     d_input, d_output, size, stream);
-                GDF_REQUIRE(GDF_SUCCESS == ret, ret);
             }
 
             // Cleanup
             RMM_TRY(RMM_FREE(temp_storage, stream));
-
-            return GDF_SUCCESS;
         }
 
         static
-            gdf_error exclusive_sum(void *&temp_storage, size_t &temp_storage_bytes,
-                const T *input, T *output, size_t size, cudaStream_t stream) {
-            cub::DeviceScan::ExclusiveSum(temp_storage, temp_storage_bytes,
-                input, output, size, stream);
+        void exclusive_scan(void *&temp_storage, size_t &temp_storage_bytes,
+            const T *input, T *output, size_t size, cudaStream_t stream)
+        {
+            cub::DeviceScan::ExclusiveScan(temp_storage, temp_storage_bytes,
+                input, output, Op{}, Op::template identity<T>(), size, stream);
             CUDA_CHECK_LAST();
-            return GDF_SUCCESS;
         }
 
         static
-            gdf_error inclusive_sum(void *&temp_storage, size_t &temp_storage_bytes,
-                const T *input, T *output, size_t size, cudaStream_t stream) {
-            cub::DeviceScan::InclusiveSum(temp_storage, temp_storage_bytes,
-                input, output, size, stream);
+        void inclusive_scan(void *&temp_storage, size_t &temp_storage_bytes,
+            const T *input, T *output, size_t size, cudaStream_t stream)
+        {
+            cub::DeviceScan::InclusiveScan(temp_storage, temp_storage_bytes,
+                input, output, Op{}, size, stream);
             CUDA_CHECK_LAST();
-            return GDF_SUCCESS;
         }
     };
 
+    template <typename Op>
     struct PrefixSumDispatcher {
         template <typename T,
             typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-            gdf_error operator()(const gdf_column *input, gdf_column *output,
-                bool inclusive, cudaStream_t stream = 0) {
-            GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-            GDF_REQUIRE(input->dtype == output->dtype, GDF_DTYPE_MISMATCH);
+        void operator()(const gdf_column *input, gdf_column *output,
+            bool inclusive, cudaStream_t stream = 0)
+        {
+            CUDF_EXPECTS(input->size == output->size,
+                "input and output data size must be same");
+            CUDF_EXPECTS(input->dtype == output->dtype,
+                "input and output data types must be same");
 
             if (nullptr == input->valid) {
-                GDF_REQUIRE(0 == input->null_count, GDF_VALIDITY_MISSING);
-                GDF_REQUIRE(nullptr == output->valid, GDF_VALIDITY_UNSUPPORTED);
+                CUDF_EXPECTS(0 == input->null_count,
+                    "Missing valid data at input column");
+                CUDF_EXPECTS(nullptr == output->valid,
+                    "the output column must not have validity"
+                    "if input column doesn't have");
             }
             else {
-                GDF_REQUIRE(nullptr != input->valid && nullptr != output->valid,
-                            GDF_VALIDITY_MISSING);
+                CUDF_EXPECTS(nullptr != input->valid && nullptr != output->valid,
+                    "the output column must have validity"
+                    "if input column have");
             }
-            return Scan<T>::call(input, output, inclusive, stream);
+            Scan<T, Op>::call(input, output, inclusive, stream);
         }
 
         template <typename T,
             typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
-            gdf_error operator()(const gdf_column *input, gdf_column *output,
+            void operator()(const gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream = 0) {
-            return GDF_UNSUPPORTED_DTYPE;
+            CUDF_FAIL("Non-arithmetic operation except for `gdf_scan`"
+                  "is not supported");
         }
     };
 
 } // end anonymous namespace
 
-gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive)
+namespace cudf{
+
+void scan(const gdf_column *input, gdf_column *output,
+    gdf_scan_op op, bool inclusive)
 {
-    return cudf::type_dispatcher(input->dtype, PrefixSumDispatcher(),
-        input, output, inclusive);
+    CUDF_EXPECTS(input  != nullptr, "Input column is null");
+    CUDF_EXPECTS(output != nullptr, "Output column is null");
+
+    switch(op){
+    case GDF_SCAN_SUM:
+        cudf::type_dispatcher(input->dtype,
+            PrefixSumDispatcher<cudf::DeviceSum>(), input, output, inclusive);
+        return;
+    case GDF_SCAN_MIN:
+        cudf::type_dispatcher(input->dtype,
+            PrefixSumDispatcher<cudf::DeviceMin>(), input, output, inclusive);
+        return;
+    case GDF_SCAN_MAX:
+        cudf::type_dispatcher(input->dtype,
+            PrefixSumDispatcher<cudf::DeviceMax>(), input, output, inclusive);
+        return;
+    case GDF_SCAN_PRODUCT:
+        cudf::type_dispatcher(input->dtype,
+            PrefixSumDispatcher<cudf::DeviceProduct>(), input, output, inclusive);
+        return;
+    default:
+        CUDF_FAIL("The input enum `gdf_scan_op` is out of the range");
+    }
 }
+
+} // end cudf namespace
+

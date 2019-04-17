@@ -46,17 +46,6 @@ if [ "$CMAKE_VERSION" ]; then
     set_version "$PACKAGE_NAME" "$CMAKE_VERSION"
 fi
 
-if [ "${CUDA_VERSION:0:3}" == "9.2" ]; then
-    RAPIDS_CUDA_VERSION="9.2"
-elif [ "${CUDA_VERSION:0:4}" == "10.0" ]; then
-    RAPIDS_CUDA_VERSION="10.0"
-fi
-
-if [ "$RAPIDS_CUDA_VERSION" ]; then
-    replace_text "nvidia" "nvidia\/label\/cuda$RAPIDS_CUDA_VERSION"
-    replace_text "rapidsai" "rapidsai\/label\/cuda$RAPIDS_CUDA_VERSION"
-fi
-
 if [ "$NUMPY_VERSION" ]; then
     ABOVE_PACKAGE="pandas"
     PACKAGE_NAME="numpy"

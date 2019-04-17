@@ -6,11 +6,18 @@
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
+- PR #1282 Add Series and DataFrame.describe()
 - PR #1381 Add DataFrame._get_numeric_data
 - PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
+- PR #1396 Add DataFrame.drop method
+- PR #1413 Add DataFrame.melt method
+- PR #1412 Add DataFrame.pop()
+- PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 
 ## Improvements
 
+- PR #1404 Parquet reader page data decoding speedup
+- PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
@@ -20,10 +27,13 @@
 - PR #1287 add exclude argument to cudf.select_dtype function
 - PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
 - PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
+- PR #1005 generic `reduction` and `scan` support
 - PR #1349 Replace modernGPU sort join with thrust.
 - PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 
 ## Bug Fixes
 
@@ -41,6 +51,14 @@
 - PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
 - PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
+- PR #1392 Update cudf Dockerfile and package_versions.sh
+- PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
+- PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
+- PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1421 Fix remove creation of series multiple times during `add_column()`
+- PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
 
 
 # cuDF 0.6.0 (Date TBD)
@@ -196,6 +214,7 @@
 - PR #1246 Fix categorical tests that failed due to bad implicit type conversion
 - PR #1255 Fix overwriting conda package main label uploads
 - PR #1259 Add dlpack includes to pip build
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
@@ -384,4 +403,3 @@
 # cuDF 0.2.0 and cuDF 0.1.0
 
 These were initial releases of cuDF based on previously separate pyGDF and libGDF libraries.
-
