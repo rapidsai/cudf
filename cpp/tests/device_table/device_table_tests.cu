@@ -73,13 +73,14 @@ struct row_comparison {
   device_table* rhs;
   bool nulls_are_equal;
 
+  using index_pair = thrust::tuple<gdf_size_type, gdf_size_type>;
+
   row_comparison(device_table* _lhs, device_table* _rhs,
                  bool _nulls_are_equal = false)
       : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
-  __device__ bool operator()(
-      thrust::pair<gdf_size_type, gdf_size_type> indices) {
-    return lhs->rows_equal(*rhs, indices.first, indices.second,
+  __device__ bool operator()(index_pair const& indices) {
+    return lhs->rows_equal(*rhs, thrust::get<0>(indices), thrust::get<1>(indices),
                            nulls_are_equal);
   }
 };
@@ -212,15 +213,15 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
       rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(size - 1), row_has_nulls(table.get())));
 
-  // Every row should
-  EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
-                              thrust::make_counting_iterator(0),
-                              thrust::make_counting_iterator(size),
-                              all_rows_equal(table.get(), table.get(), false)));
-  EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
-                              thrust::make_counting_iterator(0),
-                              thrust::make_counting_iterator(size),
-                              all_rows_equal(table.get(), table.get(), true)));
+  // If NULL==NULL, every row should be equal to itself
+  thrust::device_vector<gdf_size_type> indices(table->num_rows());
+  thrust::sequence(indices.begin(), indices.end());
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
+                             thrust::make_zip_iterator(thrust::make_tuple(
+                                 indices.begin(), indices.begin())),
+                             thrust::make_zip_iterator(thrust::make_tuple(
+                                 indices.end(), indices.end())),
+                             row_comparison{table.get(), table.get(), true}));
 }
 
 // Test where a single column has every other value null,
