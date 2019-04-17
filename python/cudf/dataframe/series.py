@@ -1138,7 +1138,7 @@ class Series(object):
                           index=self.index)
 
     def cumprod(self, axis=0, skipna=True):
-        """Compute the cumulative sum of the series"""
+        """Compute the cumulative product of the series"""
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int
