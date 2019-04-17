@@ -547,66 +547,6 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     return T(ret);
 }
 
-<<<<<<< HEAD
-// ------------------------------------------------------------------------
-// Binary ops for sum, min, max
-struct DeviceSum {
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceMin{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs <= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::max(); }
-};
-
-struct DeviceMax{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs >= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-};
-
-struct DeviceOr{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs | rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceAnd{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs & rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{-1}; }
-};
-
-=======
->>>>>>> branch-0.7
 } // namespace cudf
 
 
@@ -942,116 +882,6 @@ cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
-<<<<<<< HEAD
-/* Overloads for `atomicOr` */
-/** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
- * computes the bitwise Or of old and val, and stores the result back to memory
- * at the same address.
- * These three operations are performed in one atomic transaction.
- *
- * The supported cudf types for `atomicOr` are:
- * int8_t, uint8_t, int16_t, int32_t, int64_t
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
- * Other types are implemented by `atomicCAS`.
- *
- * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be computed
- *
- * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
-__forceinline__ __device__
-int8_t atomicOr(int8_t* address, int8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload uint8_t atomicOr(uint8_t* address, uint8_t val)
- */
-__forceinline__ __device__
-uint8_t atomicOr(uint8_t* address, uint8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload int16_t atomicOr(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicOr(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload int64_t atomicOr(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicOr(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicOr(a, v);});
-}
-
-
-/* Overloads for `atomicAnd` */
-/** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
- * computes the bitwise And of old and val, and stores the result back to memory
- * at the same address.
- * These three operations are performed in one atomic transaction.
- *
- * The supported cudf types for `atomicOr` are:
- * int8_t, int16_t, int32_t, int64_t
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
- * Other types are implemented by `atomicCAS`.
- *
- * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be computed
- *
- * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
-__forceinline__ __device__
-int8_t atomicAnd(int8_t* address, int8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-
-/**
- * @overload uint8_t atomicAnd(int8_t* address, int8_t val)
- */
-__forceinline__ __device__
-uint8_t atomicAnd(uint8_t* address, uint8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-
-/**
- * @overload int16_t atomicAnd(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicAnd(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @overload int64_t atomicOr(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicAnd(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicAnd(a, v);});
-}
-
-
-=======
 /**
  * @overload cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstring_category val)
  */
@@ -1063,7 +893,6 @@ cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstri
         (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
->>>>>>> branch-0.7
 /* Overloads for `atomicCAS` */
 /** --------------------------------------------------------------------------*
  * @brief reads the `old` located at the `address` in global or shared memory,
@@ -1325,4 +1154,3 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
     return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
-
