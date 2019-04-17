@@ -2,6 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set py_version=environ.get('CONDA_PY', 35) %}
 package:
   name: cudf
   version: {{ version }}
@@ -11,8 +12,7 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  script_env:
-    - CUDF_BUILD_NO_GPU_TEST
+  string: py{{ py_version }}_{{ git_revision_count }}
 
 requirements:
   build:
@@ -21,11 +21,11 @@ requirements:
     - setuptools
     - numba >=0.41
     - libcudf {{ version }}
-    - nvstrings 0.7.*
   run:
     - python
     - pandas >=0.23.4
     - numba >=0.41
+    - pyarrow 0.12.1.*
     - libcudf_cffi {{ version }}
     - rmm 0.7.*
     - nvstrings 0.7.*
