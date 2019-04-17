@@ -1496,10 +1496,10 @@ class Series(object):
         if periods < 1:
             raise NotImplementedError("Shift currently only supports "
                                       "periods >= 1")
-
-        output_dary = rmm.device_array_like(self.data.to_gpu_array())
-        cudautils.gpu_shift.forall(output_dary.size)(self.data.to_gpu_array(),
-                                                     output_dary, periods)
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
+                                                     periods)
         return Series(output_dary, name=self.name)
 
     def groupby(self, group_series=None, level=None, sort=False):
