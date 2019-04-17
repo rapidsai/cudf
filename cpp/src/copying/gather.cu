@@ -332,8 +332,7 @@ struct column_gatherer {
                      gather_map, check_bounds, stream);
 
       // TODO compute the null count in the gather_bitmask kernels
-      gdf_error gdf_status = set_null_count(destination_column);
-      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
+      set_null_count(*destination_column);
     }
 
     CHECK_STREAM(stream);
