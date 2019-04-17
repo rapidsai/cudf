@@ -80,8 +80,8 @@ struct row_comparison {
       : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
   __device__ bool operator()(index_pair const& indices) {
-    return lhs->rows_equal(*rhs, thrust::get<0>(indices), thrust::get<1>(indices),
-                           nulls_are_equal);
+    return lhs->rows_equal(*rhs, thrust::get<0>(indices),
+                           thrust::get<1>(indices), nulls_are_equal);
   }
 };
 
@@ -222,6 +222,26 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
                              thrust::make_zip_iterator(thrust::make_tuple(
                                  indices.end(), indices.end())),
                              row_comparison{table.get(), table.get(), true}));
+
+  // Every row should be different from every other row other than itself
+  for (gdf_size_type i = 0; i < table->num_rows(); ++i) {
+    thrust::device_vector<gdf_size_type> left_indices(table->num_rows(), i);
+    thrust::device_vector<gdf_size_type> right_indices(table->num_rows());
+    thrust::sequence(right_indices.begin(), right_indices.end());
+
+    // Remove indices comparing a row against itself
+    left_indices.erase(left_indices.begin() + i);
+    right_indices.erase(right_indices.begin() + i);
+
+    // Ensure row `i` is not equal to every other row `j`, `i != j`
+    EXPECT_FALSE(thrust::all_of(
+        rmm::exec_policy()->on(0),
+        thrust::make_zip_iterator(
+            thrust::make_tuple(left_indices.begin(), right_indices.begin())),
+        thrust::make_zip_iterator(
+            thrust::make_tuple(left_indices.end(), right_indices.end())),
+        row_comparison{table.get(), table.get(), true}));
+  }
 }
 
 // Test where a single column has every other value null,
