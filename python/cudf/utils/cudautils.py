@@ -580,6 +580,18 @@ def gpu_unique_set_insert(vset, sz, val):
     return -1
 
 
+@cuda.jit
+def gpu_shift(input, output, N):
+    """Shift value at index i of an input array forward by N positions and
+    store the output in a new array.
+    """
+    i = cuda.grid(1)
+    if i < input.size:
+        output[i] = input[i - N]
+    if i < N:
+        output[i] = -1
+
+
 MAX_FAST_UNIQUE_K = 2 * 1024
 
 

@@ -10,6 +10,8 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from librmm_cffi import librmm as rmm
+
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
@@ -1478,6 +1480,27 @@ class Series(object):
         from cudf.dataframe import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values of an input array by periods positions and store the
+        output in a new array.
+
+        Notes
+        -----
+        Shift currently only supports float and integer dtypes and
+        periods >= 1.
+        """
+        if periods == 0:
+            return self
+
+        if periods < 1:
+            raise NotImplementedError("Shift currently only supports "
+                                      "periods >= 1")
+
+        output_dary = rmm.device_array_like(self.data.to_gpu_array())
+        cudautils.gpu_shift.forall(output_dary.size)(self.data.to_gpu_array(),
+                                                     output_dary, periods)
+        return Series(output_dary, name=self.name)
 
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
