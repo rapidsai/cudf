@@ -8,6 +8,7 @@
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
 - PR #1381 Add DataFrame._get_numeric_data
+- PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
