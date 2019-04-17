@@ -27,8 +27,6 @@ requirements:
   host:
     - librmm 0.7.*
     - libnvstrings 0.7.*
-  run:
-    - pyarrow 0.12.1
 
 test:
   commands:

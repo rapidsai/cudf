@@ -26,7 +26,6 @@ requirements:
   run:
     - python
     - cffi
-    - pyarrow 0.12.1
 
 test:
   commands:
