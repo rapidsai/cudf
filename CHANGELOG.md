@@ -58,7 +58,7 @@
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
-
+- PR #1447 Fix legacy groupby apply docstring
 
 # cuDF 0.6.0 (Date TBD)
 
