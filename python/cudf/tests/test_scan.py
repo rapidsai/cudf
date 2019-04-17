@@ -1,18 +1,11 @@
-from __future__ import division
+from itertools import product
 
 import pytest
 import numpy as np
 import pandas as pd
-import cudf.bindings.reduce as cpp_reduce
 
-from itertools import product
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import Series, DataFrame
-from cudf.tests import utils
 from cudf.tests.utils import gen_rand, assert_eq
-
-from librmm_cffi import librmm as rmm
 
 
 params_dtype = [
