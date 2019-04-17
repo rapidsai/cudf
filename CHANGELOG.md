@@ -13,6 +13,7 @@
 - PR #1412 Add DataFrame.pop()
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
+- PR #1445 Parquet Reader: Add selective reading of a row group
 
 ## Improvements
 
