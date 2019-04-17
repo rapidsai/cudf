@@ -454,11 +454,8 @@ class Groupby(object):
     _auto_generate_grouper_agg(locals())
 
     def apply(self, function):
-        """Apply a transformation function over the grouped chunk.
+        """Apply a python transformation function over the grouped chunk.
 
-        This uses numba's CUDA JIT compiler to convert the Python
-        transformation function into a CUDA kernel, thus will have a
-        compilation overhead during the first run.
 
         Parameters
         ----------
