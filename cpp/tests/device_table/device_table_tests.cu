@@ -26,7 +26,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
-struct DeviceTableTest : GdfTest {};
+struct DeviceTableTest : GdfTest {
+  gdf_size_type const size{1000};
+};
 
 struct row_has_nulls {
   device_table* t;
@@ -39,15 +41,19 @@ struct row_has_nulls {
 };
 
 struct all_rows_equal {
-  device_table* t;
+  device_table * lhs;
+  device_table * rhs;
   bool nulls_are_equal;
+  bool check_self_equality;
 
-  all_rows_equal(device_table* _t, bool _nulls_are_equal = false)
-      : t{_t}, nulls_are_equal{_nulls_are_equal} {}
+  all_rows_equal(device_table * _lhs, device_table * _rhs,
+                 bool _nulls_are_equal = false,
+                 bool _check_self_equality = true)
+      : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
   __device__ bool operator()(int row_index) {
-    for (int i = 0; i < t->num_rows(); ++i) {
-      if (not t->rows_equal(*t, row_index, i, nulls_are_equal)) {
+    for (int i = 0; i < lhs->num_rows(); ++i) {
+      if (not lhs->rows_equal(*rhs, row_index, i, nulls_are_equal)) {
         return false;
       }
     }
@@ -56,8 +62,6 @@ struct all_rows_equal {
 };
 
 TEST_F(DeviceTableTest, HostFunctions) {
-  constexpr int size{1000};
-
   const int val{42};
   auto init_values = [val](auto index) { return val; };
   auto all_valid = [](auto index) { return true; };
@@ -100,12 +104,11 @@ TEST_F(DeviceTableTest, HostFunctions) {
 }
 
 TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
-  constexpr int size{1000};
-
   const int val{42};
   auto init_values = [val](auto index) { return val; };
   auto all_valid = [](auto index) { return true; };
 
+  // 4 columns will all rows equal, no nulls
   cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
   cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
   cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
@@ -121,25 +124,24 @@ TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
       thrust::make_counting_iterator(size), row_has_nulls(table.get())));
 
   // Every row should be equal to every other row regardless of NULL ?= NULL
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size), all_rows_equal(table.get(), true)));
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size), all_rows_equal(table.get(), false)));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(size),
+                             all_rows_equal(table.get(), table.get(), true)));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(size),
+                             all_rows_equal(table.get(), table.get(), false)));
 }
 
 TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
-  constexpr int size{1000};
-
   const int val{42};
   auto init_values = [val](auto index) { return val; };
   auto all_valid = [](auto index) { return true; };
   auto all_null = [](auto index) { return false; };
 
   // 4 columns with all rows equal, last column is all nulls
-  cudf::test::column_wrapper<int32_t>
-      col0(size, init_values, all_valid);
+  cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
   cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
   cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
   cudf::test::column_wrapper<int8_t> col3(size, init_values, all_null);
@@ -157,13 +159,45 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
   EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
                               thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(size),
-                              all_rows_equal(table.get(), false)));
+                              all_rows_equal(table.get(), table.get(), false)));
 
   // If NULL == NULL, all rows should be equal
   EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
                              thrust::make_counting_iterator(0),
                              thrust::make_counting_iterator(size),
-                             all_rows_equal(table.get(), true)));
+                             all_rows_equal(table.get(), table.get(), true)));
+}
+
+TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
+  int const val{42};
+  auto init_values = [val](auto index) { return index; };
+  auto all_valid = [](auto index) { return true; };
+  auto all_null = [](auto index) { return false; };
+
+  // 4 columns with all rows different, last column is all nulls
+  cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
+  cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
+  cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
+  cudf::test::column_wrapper<int8_t> col3(size, init_values, all_null);
+
+  std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
+
+  auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
+
+  // Every row should contain nulls
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size - 1), row_has_nulls(table.get())));
+
+  // Every row should
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
+                              thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(size),
+                              all_rows_equal(table.get(), table.get(), false)));
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
+                              thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(size),
+                              all_rows_equal(table.get(), table.get(), true)));
 }
 
 // Test where a single column has every other value null,
