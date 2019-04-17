@@ -353,7 +353,8 @@ public:
               d_columns_data_ptr[column_index],
               d_columns_valids_ptr[column_index], this_row_index,
               rhs.d_columns_data_ptr[column_index],
-              rhs.d_columns_valids_ptr[column_index], rhs_row_index);
+              rhs.d_columns_valids_ptr[column_index], rhs_row_index,
+              nulls_are_equal);
         };
 
     return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),

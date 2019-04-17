@@ -22,44 +22,40 @@
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "types.hpp"
 
-
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/execution_policy.h>
 
 struct DeviceTableTest : GdfTest {};
 
- struct row_is_valid {
-    device_table * t;
+struct row_has_nulls {
+  device_table* t;
 
-     row_is_valid(device_table * _t) : t{_t} {}
+  row_has_nulls(device_table* _t) : t{_t} {}
 
-     __device__ 
-     bool operator()(int row_index){
-        return not t->row_has_nulls(row_index);
-    }
+  __device__ bool operator()(int row_index) {
+    return t->row_has_nulls(row_index);
+  }
 };
 
 struct all_rows_equal {
+  device_table* t;
+  bool nulls_are_equal;
 
-    device_table * t;
+  all_rows_equal(device_table* _t, bool _nulls_are_equal = false)
+      : t{_t}, nulls_are_equal{_nulls_are_equal} {}
 
-    all_rows_equal(device_table * _t) : t{_t} {}
-
-    __device__ 
-    bool operator()(int row_index){
-        for(int i = 0; i < t->num_rows(); ++ i){
-            if(not t->rows_equal(*t, row_index, i)){
-                return false;
-            }
-        }
-        return true;
+  __device__ bool operator()(int row_index) {
+    for (int i = 0; i < t->num_rows(); ++i) {
+      if (not t->rows_equal(*t, row_index, i, nulls_are_equal)) {
+        return false;
+      }
     }
-
+    return true;
+  }
 };
 
-
-TEST_F(DeviceTableTest, AllRowsEqual) {
+TEST_F(DeviceTableTest, HostFunctions) {
   constexpr int size{1000};
 
   const int val{42};
@@ -73,7 +69,7 @@ TEST_F(DeviceTableTest, AllRowsEqual) {
 
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
 
-  auto table = device_table::create(4, gdf_cols.data());
+  auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
 
   // Table attributes such as number of rows/columns should
   // match expected
@@ -101,24 +97,78 @@ TEST_F(DeviceTableTest, AllRowsEqual) {
   int const expected_row_byte_size =
       sizeof(int32_t) + sizeof(float) + sizeof(double) + sizeof(int8_t);
   EXPECT_EQ(expected_row_byte_size, table->get_row_size_bytes());
-
-
-  // Every row should be valid
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size - 1), 
-      row_is_valid(table.get())));
-
-  // Every row should be equal to every other row
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size - 1), 
-      all_rows_equal(table.get())));
 }
 
-// Test where a single column has every other value null, 
+TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
+  constexpr int size{1000};
+
+  const int val{42};
+  auto init_values = [val](auto index) { return val; };
+  auto all_valid = [](auto index) { return true; };
+
+  cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
+  cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
+  cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
+  cudf::test::column_wrapper<int8_t> col3(size, init_values, all_valid);
+
+  std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
+
+  auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
+
+  // Every row should be valid
+  EXPECT_FALSE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size), row_has_nulls(table.get())));
+
+  // Every row should be equal to every other row regardless of NULL ?= NULL
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size), all_rows_equal(table.get(), true)));
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size), all_rows_equal(table.get(), false)));
+}
+
+TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
+  constexpr int size{1000};
+
+  const int val{42};
+  auto init_values = [val](auto index) { return val; };
+  auto all_valid = [](auto index) { return true; };
+  auto all_null = [](auto index) { return false; };
+
+  // 4 columns with all rows equal, last column is all nulls
+  cudf::test::column_wrapper<int32_t>
+      col0(size, init_values, all_valid);
+  cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
+  cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
+  cudf::test::column_wrapper<int8_t> col3(size, init_values, all_null);
+
+  std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
+
+  auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
+
+  // Every row should contain nulls
+  EXPECT_TRUE(thrust::all_of(
+      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size - 1), row_has_nulls(table.get())));
+
+  // If NULL != NULL, no row can equal any other row
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
+                              thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(size),
+                              all_rows_equal(table.get(), false)));
+
+  // If NULL == NULL, all rows should be equal
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(size),
+                             all_rows_equal(table.get(), true)));
+}
+
+// Test where a single column has every other value null,
 // should mean that every other row is null
 
-// Test where one table is identical to the other 
+// Test where one table is identical to the other
 
 // test where one table is the reverse of the other
