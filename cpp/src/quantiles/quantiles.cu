@@ -16,46 +16,44 @@
 
 //Quantile (percentile) functionality
 
-#include "quantiles.hpp"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/wrapper_types.hpp"
-#include "rmm/thrust_rmm_allocator.h"
-#include "cudf.h"
+#include <cudf.h>
+#include <quantiles/quantiles.hpp>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/wrapper_types.hpp>
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
 
-namespace{ // anonymouys namespace
+namespace{ // anonymous
 
-  struct QuantiledIndex {
+  struct QuantileIndex {
     gdf_size_type lower_bound;
     gdf_size_type upper_bound;
     gdf_size_type nearest;
     double fraction;
+
+    QuantileIndex(gdf_size_type length, double quant)
+    {
+      // clamp quant value.
+      // Todo: use std::clamp if c++17 is supported.
+      quant = std::min(std::max(quant, 0.0), 1.0);
+
+      // since gdf_size_type is int32_t, there is no underflow/overflow
+      double val = quant*(length -1);
+      lower_bound = std::floor(val);
+      upper_bound = static_cast<size_t>(std::ceil(val));
+      nearest = static_cast<size_t>(std::nearbyint(val));
+      fraction = val - lower_bound;
+    }
   };
 
-  QuantiledIndex find_quantile_index(gdf_size_type length, double quant)
-  {
-    // clamp quant value.
-    // Todo: use std::clamp if c++17 is supported.
-    quant = std::min(std::max(quant, 0.0), 1.0);
-
-    // since gdf_size_type is int32_t, there is no underflow/overflow
-    double val = quant*(length -1);
-    QuantiledIndex qi;
-    qi.lower_bound = std::floor(val);
-    qi.upper_bound = static_cast<size_t>(std::ceil(val));
-    qi.nearest = static_cast<size_t>(std::nearbyint(val));
-    qi.fraction = val - qi.lower_bound;
-
-    return qi;
-  }
 
   template<typename T>
-  void singleMemcpy(T& res, T* input, cudaStream_t stream = NULL)
+  void singleMemcpy(T& res, T* input, cudaStream_t stream)
   {
     (void)stream;
     //TODO: async with streams?
@@ -68,8 +66,8 @@ namespace{ // anonymouys namespace
                           double quant, 
                           gdf_quantile_method interpolation,
                           RetT& result,
-                          bool flag_sorted = false,
-                          cudaStream_t stream = NULL)
+                          bool flag_sorted,
+                          cudaStream_t stream)
   {
     std::vector<T> hv(2);
 
@@ -101,7 +99,7 @@ namespace{ // anonymouys namespace
       thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
     }
 
-    QuantiledIndex qi = find_quantile_index(n, quant);
+    QuantileIndex qi(n, quant);
 
     switch( interpolation )
     {
@@ -148,34 +146,25 @@ namespace{ // anonymouys namespace
                              double quant,
                              void* t_erased_res,
                              gdf_context* ctxt,
-                             cudaStream_t stream = NULL)
+                             cudaStream_t stream)
   {
     RetT* ptr_res = static_cast<RetT*>(t_erased_res);
     size_t n = col_in->size;
     ColType* p_dv = static_cast<ColType*>(col_in->data);
     
     if( ctxt->flag_sort_inplace || ctxt->flag_sorted)
-      {
-        return select_quantile(p_dv,
-                               n,
-                               quant, 
-                               interpolation,
-                               *ptr_res,
-                               ctxt->flag_sorted, stream);
-      }
-    else
-      {
-        rmm::device_vector<ColType> dv(n);
-        thrust::copy_n(rmm::exec_policy(stream)->on(stream), p_dv, n, dv.begin());
-        p_dv = dv.data().get();
+    {
+      rmm::device_vector<ColType> dv(n);
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream), p_dv, n, dv.begin());
+      p_dv = dv.data().get();
+    }
 
-        return select_quantile(p_dv,
-                               n,
-                               quant, 
-                               interpolation,
-                               *ptr_res,
-                               ctxt->flag_sorted, stream);
-      }
+    return select_quantile(p_dv,
+                           n,
+                           quant, 
+                           interpolation,
+                           *ptr_res,
+                            ctxt->flag_sorted, stream);
   }
     
   struct trampoline_exact_functor{
@@ -219,7 +208,7 @@ namespace{ // anonymouys namespace
     }
   };
 
-} // end of anonymouys namespace
+} // end of anonymous
 
 gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
                               gdf_quantile_method prec,         // interpolation method
