@@ -96,7 +96,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
     row_group_size = 5
     pdf.to_parquet(fname, compression='snappy', row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names = cudf.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     assert(num_rows == len(pdf.index))
     assert(row_groups == num_row_groups(num_rows, row_group_size))
@@ -110,7 +110,7 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression='gzip', row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names = cudf.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     gdf = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
     gdf = cudf.concat(gdf).reset_index(drop=True)
