@@ -181,7 +181,19 @@ def test_cummin(dtype, nelem):
 
 
 def test_cummin_masked():
-    pass
+    data = [1, 2, None, 4, 5]
+    float_types = ['float32', 'float64']
+    int_types = ['int8', 'int16', 'int32', 'int64']
+
+    for type_ in float_types:
+        gs = Series(data).astype(type_)
+        ps = pd.Series(data).astype(type_)
+        assert_eq(gs.cummin(), ps.cummin())
+
+    for type_ in int_types:
+        expected = pd.Series([1, 1, -1, 1, 1]).astype(type_)
+        gs = Series(data).astype(type_)
+        assert_eq(gs.cummin(), expected)
 
 
 @pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
@@ -210,7 +222,19 @@ def test_cummax(dtype, nelem):
 
 
 def test_cummax_masked():
-    pass
+    data = [1, 2, None, 4, 5]
+    float_types = ['float32', 'float64']
+    int_types = ['int8', 'int16', 'int32', 'int64']
+
+    for type_ in float_types:
+        gs = Series(data).astype(type_)
+        ps = pd.Series(data).astype(type_)
+        assert_eq(gs.cummax(), ps.cummax())
+
+    for type_ in int_types:
+        expected = pd.Series([1, 2, -1, 4, 5]).astype(type_)
+        gs = Series(data).astype(type_)
+        assert_eq(gs.cummax(), expected)
 
 
 @pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
