@@ -102,8 +102,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         return numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = columnops.column_empty_like(self, dtype=self.dtype,
-                                              masked=self.has_null_mask)
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
         cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
         return out_col
 
