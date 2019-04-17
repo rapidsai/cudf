@@ -11,6 +11,7 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 
 ## Improvements
 
