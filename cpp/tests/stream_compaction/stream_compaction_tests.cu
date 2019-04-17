@@ -90,22 +90,22 @@ void BooleanMaskTest(cudf::test::column_wrapper<T> source,
 
   if (!(expected == result)) {
     std::cout << "expected\n";
-    expected.print();
+    //expected.print();
     std::cout << expected.get()->null_count << "\n";
     std::cout << "result\n";
-    print_gdf_column(&result);
+    //print_gdf_column(&result);
     std::cout << result.null_count << "\n";
   }
 
   gdf_column_free(&result);
 }
 
+constexpr gdf_size_type column_size{1000000};
+
 TYPED_TEST(ApplyBooleanMaskTest, Identity)
 {
-  constexpr gdf_size_type column_size{1000001};
-
   BooleanMaskTest<TypeParam>(
-    cudf::test::column_wrapper<TypeParam>{column_size,                             
+    cudf::test::column_wrapper<TypeParam>{column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }},
     cudf::test::column_wrapper<cudf::bool8>{column_size,
@@ -118,8 +118,6 @@ TYPED_TEST(ApplyBooleanMaskTest, Identity)
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
 {
-  constexpr gdf_size_type column_size{1000};
-
   BooleanMaskTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{column_size,
       [](gdf_index_type row) { return row; },
@@ -132,8 +130,6 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
 {
-  constexpr gdf_size_type column_size{1000};
-
   BooleanMaskTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{column_size,
       [](gdf_index_type row) { return row; },
@@ -146,8 +142,6 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
 {
-  constexpr gdf_size_type column_size{1000};
-
   BooleanMaskTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{column_size,
       [](gdf_index_type row) { return row; },
@@ -155,15 +149,13 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
     cudf::test::column_wrapper<cudf::bool8>{column_size,
       [](gdf_index_type row) { return cudf::bool8{row % 2 == 1}; },
       [](gdf_index_type row) { return true; }},
-    cudf::test::column_wrapper<TypeParam>{(column_size + 1) / 2,
+    cudf::test::column_wrapper<TypeParam>{column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1;  },
       [](gdf_index_type row) { return true; }});
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
 {
-  constexpr gdf_size_type column_size{1000};
-
   // mix it up a bit by setting the input odd values to be null
   // Since the bool mask has even values null, the output
   // vector should have all values nulled
@@ -175,17 +167,31 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
     cudf::test::column_wrapper<cudf::bool8>{column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return row % 2 == 1; }},
-    cudf::test::column_wrapper<TypeParam>{(column_size + 1) / 2,
+    cudf::test::column_wrapper<TypeParam>{column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1;  },
       [](gdf_index_type row) { return false; }});
 }
 
+TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
+{
+  const int start{1}, end{column_size / 4};
+
+  BooleanMaskTest<TypeParam>(
+    cudf::test::column_wrapper<TypeParam>{column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<cudf::bool8>{column_size,
+      [](gdf_index_type row) { return cudf::bool8{(row < start) || (row >= end)}; },
+      [](gdf_index_type row) { return true; }},
+    cudf::test::column_wrapper<TypeParam>{column_size - (end - start),
+      [](gdf_index_type row) { return (row < start) ? row : row + end - start; },
+      [&](gdf_index_type row) { return true; }});
+}
+
 TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
 {
-  constexpr gdf_size_type column_size{1000};
-
   std::vector<TypeParam> source(column_size, TypeParam{0});
-  std::vector<TypeParam> expected((column_size + 1) / 2, TypeParam{0});
+  std::vector<TypeParam> expected(column_size / 2, TypeParam{0});
   std::iota(source.begin(), source.end(), TypeParam{0});
   std::generate(expected.begin(), expected.end(), 
                 [n = -1] () mutable { return n+=2; });
