@@ -2,11 +2,13 @@ from __future__ import division
 
 import pytest
 import numpy as np
+import pandas as pd
 import cudf.bindings.reduce as cpp_reduce
 
 from itertools import product
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.dataframe import Series, DataFrame
 from cudf.tests import utils
 from cudf.tests.utils import gen_rand
 
@@ -110,3 +112,28 @@ def test_prefixsum_masked(dtype, nelem):
 
     decimal = 4 if dtype == np.float32 else 6
     np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+
+
+@pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
+def test_cumsum(dtype, nelem):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, nelem, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, nelem)
+
+    decimal = 4 if dtype == np.float32 else 6
+
+    # series
+    gs = Series(data)
+    ps = pd.Series(data)
+    np.testing.assert_array_almost_equal(gs.cumsum(), ps.cumsum(),
+                                         decimal=decimal)
+
+    # dataframe series (named series)
+    gdf = DataFrame()
+    gdf['a'] = Series(data)
+    pdf = pd.DataFrame()
+    pdf['a'] = pd.Series(data)
+    np.testing.assert_array_almost_equal(gdf.a.cumsum(), pdf.a.cumsum(),
+                                         decimal=decimal)

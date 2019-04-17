@@ -1113,6 +1113,40 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.product(dtype=dtype)
 
+    def cummin(self, axis=0, skipna=True):
+        """Compute the cumulative minimum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('min'), name=self.name)
+
+    def cummax(self, axis=0, skipna=True):
+        """Compute the cumulative maximum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('max'), name=self.name)
+
+    def cumsum(self, axis=0, skipna=True):
+        """Compute the cumulative sum of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(self.astype(np.int64)._column._apply_scan_op('sum'),
+                          name=self.name)
+        else:
+            return Series(self._column._apply_scan_op('sum'), name=self.name)
+
+    def cumprod(self, axis=0, skipna=True):
+        """Compute the cumulative sum of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(
+                self.astype(np.int64)._column._apply_scan_op('product'),
+                name=self.name)
+        else:
+            return Series(self._column._apply_scan_op('product'),
+                          name=self.name)
+
     def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
         """
