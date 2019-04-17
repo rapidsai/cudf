@@ -60,8 +60,9 @@ namespace{ // anonymous
     CUDA_TRY( cudaMemcpy(&res, input, sizeof(T), cudaMemcpyDeviceToHost) );
   }
 
+  // compute quantile value as `result` from `quant` value by `interpolation` method
   template<typename T, typename RetT>
-  gdf_error select_quantile(T* dv,
+  gdf_error select_quantile(T* devarr,
                           gdf_size_type n,
                           double quant, 
                           gdf_quantile_method interpolation,
@@ -69,34 +70,34 @@ namespace{ // anonymous
                           bool flag_sorted,
                           cudaStream_t stream)
   {
-    std::vector<T> hv(2);
+    std::vector<T> hvalue(2);
 
     if( n < 2 )
     {
-      singleMemcpy(hv[0], dv, stream);
-      result = static_cast<RetT>( hv[0] );
+      singleMemcpy(hvalue[0], devarr, stream);
+      result = static_cast<RetT>( hvalue[0] );
       return GDF_SUCCESS;
     }
 
     if( quant >= 1.0 && !flag_sorted )
     {
-      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-      singleMemcpy(hv[0], d_res, stream);
-      result = static_cast<RetT>( hv[0] );
+      T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
+      singleMemcpy(hvalue[0], d_res, stream);
+      result = static_cast<RetT>( hvalue[0] );
       return GDF_SUCCESS;
     }
 
     if( quant <= 0.0 && !flag_sorted )
     {
-      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), dv, dv+n);
-      singleMemcpy(hv[0], d_res, stream);
-      result = static_cast<RetT>( hv[0] );
+      T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
+      singleMemcpy(hvalue[0], d_res, stream);
+      result = static_cast<RetT>( hvalue[0] );
       return GDF_SUCCESS;
     }
 
     // sort if the input is not sorted.
     if( !flag_sorted ){
-      thrust::sort(rmm::exec_policy(stream)->on(stream), dv, dv+n);
+      thrust::sort(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
     }
 
     QuantileIndex qi(n, quant);
@@ -104,32 +105,32 @@ namespace{ // anonymous
     switch( interpolation )
     {
     case GDF_QUANT_LINEAR:
-      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
-      singleMemcpy(hv[1], dv+qi.upper_bound, stream);
+      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
+      singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
       cudf::interpolate::linear(
           cudf::detail::unwrap(result), 
-          cudf::detail::unwrap(hv[0]), 
-          cudf::detail::unwrap(hv[1]), qi.fraction);
+          cudf::detail::unwrap(hvalue[0]), 
+          cudf::detail::unwrap(hvalue[1]), qi.fraction);
       break;
     case GDF_QUANT_MIDPOINT:
-      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
-      singleMemcpy(hv[1], dv+qi.upper_bound, stream);
+      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
+      singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
       cudf::interpolate::midpoint(
           cudf::detail::unwrap(result), 
-          cudf::detail::unwrap(hv[0]), 
-          cudf::detail::unwrap(hv[1]));
+          cudf::detail::unwrap(hvalue[0]), 
+          cudf::detail::unwrap(hvalue[1]));
       break;
     case GDF_QUANT_LOWER:
-      singleMemcpy(hv[0], dv+qi.lower_bound, stream);
-      result = static_cast<RetT>( hv[0] );
+      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
+      result = static_cast<RetT>( hvalue[0] );
       break;
     case GDF_QUANT_HIGHER:
-      singleMemcpy(hv[0], dv+qi.upper_bound, stream);
-      result = static_cast<RetT>( hv[0] );
+      singleMemcpy(hvalue[0], devarr+qi.upper_bound, stream);
+      result = static_cast<RetT>( hvalue[0] );
       break;
     case GDF_QUANT_NEAREST:
-      singleMemcpy(hv[0], dv+qi.nearest, stream);
-      result = static_cast<RetT>( hv[0] );
+      singleMemcpy(hvalue[0], devarr+qi.nearest, stream);
+      result = static_cast<RetT>( hvalue[0] );
       break;
 
     default:
@@ -150,21 +151,31 @@ namespace{ // anonymous
   {
     RetT* ptr_res = static_cast<RetT*>(t_erased_res);
     size_t n = col_in->size;
-    ColType* p_dv = static_cast<ColType*>(col_in->data);
+    ColType* col_data = static_cast<ColType*>(col_in->data);
     
-    if( ctxt->flag_sort_inplace || ctxt->flag_sorted)
+    if( ctxt->flag_sort_inplace  && ctxt->flag_sorted )
     {
+      return select_quantile(col_data,
+                             n,
+                             quant, 
+                             interpolation,
+                             *ptr_res,
+                             ctxt->flag_sorted,
+                             stream);
+    }else{
+      // create a clone of col_data if sort is required but sort_inplace is not allowed.
       rmm::device_vector<ColType> dv(n);
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), p_dv, n, dv.begin());
-      p_dv = dv.data().get();
-    }
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream), col_data, n, dv.begin());
+      ColType* clone_data = dv.data().get();
 
-    return select_quantile(p_dv,
-                           n,
-                           quant, 
-                           interpolation,
-                           *ptr_res,
-                            ctxt->flag_sorted, stream);
+      return select_quantile(clone_data,
+                             n,
+                             quant, 
+                             interpolation,
+                             *ptr_res,
+                             ctxt->flag_sorted,
+                             stream);
+    }
   }
     
   struct trampoline_exact_functor{

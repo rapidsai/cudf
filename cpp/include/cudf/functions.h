@@ -1077,7 +1077,8 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_context* ctxt);
 
 /**
- * @brief  Calculates exact quantiles
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
@@ -1094,11 +1095,13 @@ gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_context* ctxt);
 
 /**
- * @brief  Calculates approximate quantiles
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with non-arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result the result as same type of column
+ * @param[out] result quantile, with the same type as @p col_in
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
