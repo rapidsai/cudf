@@ -94,15 +94,7 @@ TEST_F(gdf_quantile, DoubleVector)
 {
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
-  rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
-  
-  gdf_column col_in;
-  col_in.size = d_in.size();
-  col_in.data = d_in.data().get();
-  col_in.valid = d_valid.data().get();
-  col_in.null_count = 0;
-  col_in.dtype = GDF_FLOAT64;
+  cudf::test::column_wrapper<VType> col(v);
 
   std::vector<VType> v_baseline_approx{-1.01,   0.8,  0.8,    2.13,   6.8};
   std::vector<std::vector<double>> v_baseline_exact{
@@ -112,22 +104,14 @@ TEST_F(gdf_quantile, DoubleVector)
     {-1.01,   0.8,  0.955,  2.13,   6.8},
     {-1.01,   0.8,  1.11,   2.13,   6.8}};
 
-  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact);
+  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact);
 }
 
 TEST_F(gdf_quantile, IntegerVector)
 {
   using VType = int32_t;
-  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
-  rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
-  
-  gdf_column col_in;
-  col_in.size = d_in.size();
-  col_in.data = d_in.data().get();
-  col_in.valid = d_valid.data().get();
-  col_in.null_count = 0;
-  col_in.dtype = GDF_INT32;
+  std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
+  cudf::test::column_wrapper<VType> col(v);
 
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
@@ -137,22 +121,15 @@ TEST_F(gdf_quantile, IntegerVector)
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
 
-  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact);
+  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact);
 }
 
 TEST_F(gdf_quantile, ReportValidMaskError)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};
-  rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_valid_allocation_size(d_in.size()));
-  
-  gdf_column col_in;
-  col_in.size = d_in.size();
-  col_in.data = d_in.data().get();
-  col_in.valid = d_valid.data().get();
-  col_in.null_count = 1;//Should cause the quantile calls to fail
-  col_in.dtype = GDF_INT32;
+  std::vector<gdf_valid_type> bitmask(gdf_valid_allocation_size(v.size()), 0xF3);
+  cudf::test::column_wrapper<VType> col(v, bitmask);
 
   std::vector<VType> v_baseline_approx{-1,     1,     1,     2,     7};
   std::vector<std::vector<double>> v_baseline_exact{
@@ -162,7 +139,7 @@ TEST_F(gdf_quantile, ReportValidMaskError)
     {-1.0,   1.0,   1.0,   2.0,   7.0},
     {-1,     1,     1,     2,     7}};
   
-  f_quantile_tester<VType>(&col_in, v_baseline_approx, v_baseline_exact, GDF_VALIDITY_UNSUPPORTED);
+  f_quantile_tester<VType>(col.get(), v_baseline_approx, v_baseline_exact, GDF_VALIDITY_UNSUPPORTED);
 }
 
 
@@ -175,7 +152,6 @@ using TestingTypes = ::testing::Types<
     int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(InterpolateTest, TestingTypes);
-
 
 
 template<typename T_out, typename T_in>
