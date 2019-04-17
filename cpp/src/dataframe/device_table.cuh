@@ -328,6 +328,9 @@ public:
                              const gdf_size_type this_row_index,
                              const gdf_size_type rhs_row_index,
                              bool nulls_are_equal = false) const {
+    
+    // TODO Add a specialization where neither table is "nullable" to skip null check
+    // and get better performance
     bool const rows_have_nulls =
         this->row_has_nulls(this_row_index) or rhs.row_has_nulls(rhs_row_index);
 
