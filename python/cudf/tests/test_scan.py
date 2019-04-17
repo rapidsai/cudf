@@ -142,21 +142,25 @@ def test_cumsum_masked():
     pass
 
 
-def test_cumsum_masked():
+def test_cummin():
     pass
 
 
-def test_cumsum_masked():
+def test_cummin_masked():
     pass
 
 
-def test_cumsum_masked():
+def test_cummax():
     pass
 
 
-def test_cumsum_masked():
+def test_cummax_masked():
     pass
 
 
-def test_cumsum_masked():
+def test_cumprod():
+    pass
+
+
+def test_cumprod_masked():
     pass
