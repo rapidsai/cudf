@@ -35,6 +35,7 @@
 - PR #1376 Change series quantile default to linear
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
+- PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 
 ## Bug Fixes
 
