@@ -138,6 +138,7 @@ def test_cumsum(dtype, nelem):
     np.testing.assert_array_almost_equal(gdf.a.cumsum(), pdf.a.cumsum(),
                                          decimal=decimal)
 
+
 def test_cumsum_masked():
     pass
 
