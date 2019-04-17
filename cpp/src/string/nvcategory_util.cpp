@@ -3,7 +3,7 @@
 #include <types.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include "utilities/error_utils.hpp"
 
 namespace {
