@@ -460,7 +460,8 @@ class Groupby(object):
         Parameters
         ----------
         func : function
-          The python transformation function that will be applied on the grouped chunk.
+          The python transformation function that will be applied
+          on the grouped chunk.
 
         Examples
         --------
