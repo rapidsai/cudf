@@ -2232,11 +2232,12 @@ def test_get_numeric_data():
                                    'float32', 'float64'])
 @pytest.mark.parametrize('period', [0, 1, 5, 10])
 def test_shift_forward(dtype, period):
+    nelem = 100000
     if dtype == np.int8:
         # to keep data in range
-        data = gen_rand(dtype, 100, low=-2, high=2)
+        data = gen_rand(dtype, nelem, low=-2, high=2)
     else:
-        data = gen_rand(dtype, 100)
+        data = gen_rand(dtype, nelem)
 
     gdf = DataFrame({'a': data})
     pdf = pd.DataFrame({'a': data})
@@ -2255,11 +2256,12 @@ def test_shift_forward(dtype, period):
                                    'float32', 'float64'])
 @pytest.mark.parametrize('period', [-1, -5, -10, -20])
 def test_shift_backward(dtype, period):
+    nelem = 100000
     if dtype == np.int8:
         # to keep data in range
-        data = gen_rand(dtype, 100, low=-2, high=2)
+        data = gen_rand(dtype, nelem, low=-2, high=2)
     else:
-        data = gen_rand(dtype, 100)
+        data = gen_rand(dtype, nelem)
 
     gdf = DataFrame({'a': data})
     pdf = pd.DataFrame({'a': data})
