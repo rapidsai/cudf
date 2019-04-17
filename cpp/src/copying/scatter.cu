@@ -165,8 +165,7 @@ struct column_scatterer {
                       scatter_map);
 
       // Update destination column's null count
-      gdf_error gdf_status = set_null_count(destination_column);
-      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
+      set_null_count(*destination_column);
     }
 
     CHECK_STREAM(stream);
