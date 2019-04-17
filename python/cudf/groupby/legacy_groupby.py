@@ -460,7 +460,7 @@ class Groupby(object):
         Parameters
         ----------
         func : function
-          The transformation function that will be executed on the CUDA GPU.
+          The python transformation function that will be applied on the grouped chunk.
 
         Examples
         --------
