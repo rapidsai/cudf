@@ -155,16 +155,58 @@ def test_cumsum_masked():
         assert_eq(gs.cumsum(), expected)
 
 
-def test_cummin():
-    pass
+@pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
+def test_cummin(dtype, nelem):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, nelem, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, nelem)
+
+    decimal = 4 if dtype == np.float32 else 6
+
+    # series
+    gs = Series(data)
+    ps = pd.Series(data)
+    np.testing.assert_array_almost_equal(gs.cummin(), ps.cummin(),
+                                         decimal=decimal)
+
+    # dataframe series (named series)
+    gdf = DataFrame()
+    gdf['a'] = Series(data)
+    pdf = pd.DataFrame()
+    pdf['a'] = pd.Series(data)
+    np.testing.assert_array_almost_equal(gdf.a.cummin(), pdf.a.cummin(),
+                                         decimal=decimal)
 
 
 def test_cummin_masked():
     pass
 
 
-def test_cummax():
-    pass
+@pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
+def test_cummax(dtype, nelem):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, nelem, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, nelem)
+
+    decimal = 4 if dtype == np.float32 else 6
+
+    # series
+    gs = Series(data)
+    ps = pd.Series(data)
+    np.testing.assert_array_almost_equal(gs.cummax(), ps.cummax(),
+                                         decimal=decimal)
+
+    # dataframe series (named series)
+    gdf = DataFrame()
+    gdf['a'] = Series(data)
+    pdf = pd.DataFrame()
+    pdf['a'] = pd.Series(data)
+    np.testing.assert_array_almost_equal(gdf.a.cummax(), pdf.a.cummax(),
+                                         decimal=decimal)
 
 
 def test_cummax_masked():
