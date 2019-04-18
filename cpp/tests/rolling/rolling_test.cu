@@ -80,7 +80,12 @@ protected:
   }
 
   template<template <typename AggType> class agg_op, bool average>
-  void create_reference_output(size_t window, size_t min_periods, size_t forward_window)
+  void create_reference_output(size_t window,
+			       size_t min_periods,
+			       size_t forward_window,
+			       const std::vector<gdf_size_type> &window_col,
+			       const std::vector<gdf_size_type> &min_periods_col,
+			       const std::vector<gdf_size_type> &forward_window_col)
   {
     // compute the reference solution on the cpu
     size_t nrows = in_col.size();
@@ -90,6 +95,10 @@ protected:
     for(size_t i = 0; i < nrows; i++) {
       T val = agg_op<T>::IDENTITY;
       size_t count = 0;
+      // load sizes
+      if (window_col.size() > 0) window = window_col[i];
+      if (min_periods_col.size() > 0) min_periods = min_periods_col[i];
+      if (forward_window_col.size() > 0) forward_window = forward_window_col[i];
       // compute bounds
       size_t start_index = std::max((size_t)0, i - window + 1);
       size_t end_index = std::min(nrows, i + forward_window + 1);	// exclusive
@@ -110,24 +119,30 @@ protected:
     }
   }
 
-  void create_reference_output(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
+  void create_reference_output(gdf_agg_op agg,
+			       size_t window,
+			       size_t min_periods,
+			       size_t forward_window,
+			       const std::vector<gdf_size_type> &window_col,
+			       const std::vector<gdf_size_type> &min_periods_col,
+			       const std::vector<gdf_size_type> &forward_window_col)
   {
     // unroll aggregation types
     switch(agg) {
     case GDF_SUM:
-      create_reference_output<sum_op, false>(window, min_periods, forward_window);
+      create_reference_output<sum_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
-      create_reference_output<min_op, false>(window, min_periods, forward_window);
+      create_reference_output<min_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
-      create_reference_output<max_op, false>(window, min_periods, forward_window);
+      create_reference_output<max_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
-      create_reference_output<count_op, false>(window, min_periods, forward_window);
+      create_reference_output<count_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
-      create_reference_output<sum_op, true>(window, min_periods, forward_window);
+      create_reference_output<sum_op, true>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     default:
       FAIL() << "aggregation type not supported";
@@ -166,6 +181,7 @@ protected:
     #endif
   }
 
+  // static windows
   void run_test(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
   {
     create_gdf_input_buffers();
@@ -175,9 +191,41 @@ protected:
 		       window, min_periods, forward_window, agg,
 		       NULL, NULL, NULL);
 
-    create_reference_output(window, min_periods, forward_window, agg);
+    create_reference_output(agg, window, min_periods, forward_window, std::vector<gdf_size_type>(), std::vector<gdf_size_type>(), std::vector<gdf_size_type>());
 
     compare_gdf_result();
+  }
+
+  // dynamic windows
+  void run_test(std::vector<gdf_size_type> window, std::vector<gdf_size_type> min_periods, std::vector<gdf_size_type> forward_window, gdf_agg_op agg)
+  {
+    create_gdf_input_buffers();
+    create_gdf_output_buffers();
+
+    // copy sizes to the gpu
+    // TODO: use RMM to allocate stuff?
+    gdf_size_type *d_window;
+    gdf_size_type *d_min_periods;
+    gdf_size_type *d_forward_window;
+    cudaMalloc(&d_window, window.size() * sizeof(gdf_size_type));
+    cudaMalloc(&d_min_periods, min_periods.size() * sizeof(gdf_size_type));
+    cudaMalloc(&d_forward_window, forward_window.size() * sizeof(gdf_size_type));
+    cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+
+    gdf_rolling_window(out_gdf_col.get(), in_gdf_col.get(),
+		       0, 0, 0, agg,
+		       d_window, d_min_periods, d_forward_window);
+
+    create_reference_output(agg, 0, 0, 0, window, min_periods, forward_window);
+
+    compare_gdf_result();
+  
+    // free GPU memory 
+    cudaFree(d_window);
+    cudaFree(d_min_periods);
+    cudaFree(d_forward_window);
   }
 
   // input
@@ -209,4 +257,25 @@ TYPED_TEST(RollingTest, Simple)
   this->run_test(2, 2, 0, GDF_MAX);
   this->run_test(2, 2, 0, GDF_COUNT);
   this->run_test(2, 2, 0, GDF_AVG);
+
+  // dynamic sizes
+  this->run_test({ 1, 2, 3, 4, 2 }, { 2, 1, 2, 1, 2 }, { 1, 0, 1, 0, 1 }, GDF_SUM);
+  
+  /*
+     correct output (int):
+	@ 1 3 @ @ 
+	@ 0 1 @ @ 
+	@ 1 2 @ @ 
+	@ 2 2 @ @ 
+	@ 0 1 @ @ 
+	1 1 3 3 @ 
+
+     corrrect output (float):
+	@ 1 3 @ @ 
+	@ 0 1 @ @ 
+	@ 1 2 @ @ 
+	@ 2 2 @ @ 
+	@ 0.5 1.5 @ @ 
+	1 1 3 3 @ 
+  */  
 }
