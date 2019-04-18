@@ -1487,7 +1487,7 @@ class Series(object):
 
         Notes
         -----
-        Shift currently only supports float and integer dtypes in columns with
+        Shift currently only supports float and integer dtype columns with
         no null values.
         """
         assert axis in (None, 0) and freq is None and fill_value is None
