@@ -310,7 +310,7 @@ public:
    * @brief  Checks for equality between a target row in this table and a source
    * row in another table.
    *
-   * @param rhs The other table whose row is compared to this tables
+   * @param rhs The other table whose row is compared to this table's row
    * @param this_row_index The row index of this table to compare
    * @param rhs_row_index The row index of the rhs table to compare
    * @param nulls_are_equal Flag indicating if two null values are considered
