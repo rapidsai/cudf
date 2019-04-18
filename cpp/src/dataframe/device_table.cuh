@@ -17,7 +17,7 @@
 #ifndef DEVICE_TABLE_H
 #define DEVICE_TABLE_H
 
-#include "cudf.h"
+#include <cudf.h>
 #include "utilities/cudf_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/error_utils.hpp"
