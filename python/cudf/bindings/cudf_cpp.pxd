@@ -540,13 +540,13 @@ cdef extern from "cudf.h" nogil:
                                     gdf_quantile_method prec,
                                     double              q,
                                     gdf_scalar*         result,
-                                    gdf_context*        ctxt)
+                                    gdf_context*        ctxt) except +
 
 
     cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
                                     double       q,
                                     gdf_scalar*  result,
-                                    gdf_context* ctxt)
+                                    gdf_context* ctxt) except +
 
 
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
