@@ -15,6 +15,7 @@
 - PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1456 Add Series.diff() via Numba kernel
 
 ## Improvements
 
