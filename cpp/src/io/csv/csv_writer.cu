@@ -115,9 +115,9 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Reads CSV-structured data and returns an array of gdf_columns.
+ * @brief Creates CSV file from array of gdf_columns.
  *
- * This will create a CSV format by allocating host memory for the
+ * This will create the CSV format by allocating host memory for the
  * entire output and determine pointers for each row/column entry.
  * Each column is converted to an NVStrings instance and then
  * copied into their position in the output memory. This way,
