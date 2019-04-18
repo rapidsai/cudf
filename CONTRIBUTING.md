@@ -92,7 +92,7 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 ```bash
 CUDF_HOME=$(pwd)/cudf
 git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
-cd CUDF_HOME
+cd $CUDF_HOME
 git submodule update --init --remote --recursive
 ```
 - Create the conda development environment `cudf_dev`:
@@ -188,6 +188,11 @@ cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```bash
 cuda-memcheck python <program_name>.py <program_arguments>
 ```
+
+### Building and Testing on a gpuCI image locally
+
+Before submitting a pull request, you can do a local build and test on your machine that mimics our gpuCI environment using the `ci/local/build.sh` script.
+For detailed information on usage of this script, see [here](ci/local/README.md).
 
 ## Automated Build in Docker Container
 

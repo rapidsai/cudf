@@ -66,7 +66,7 @@ logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 
 logger "Build conda pkg for libcudf_cffi..."
-source ci/cpu/libcudf/build_libcudf_cffi.sh
+source ci/cpu/libcudf_cffi/build_libcudf_cffi.sh
 
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
@@ -75,8 +75,5 @@ source ci/cpu/cudf/build_cudf.sh
 # UPLOAD - Conda packages
 ################################################################################
 
-logger "Upload conda pkgs for libcudf and libcudf_cffi..."
-source ci/cpu/libcudf/upload.sh
-
-logger "Upload conda pkg..."
-source ci/cpu/cudf/upload-anaconda.sh
+logger "Upload conda pkgs..."
+source ci/cpu/upload_anaconda.sh

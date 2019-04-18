@@ -16,7 +16,7 @@ from cudf.utils import cudautils, utils
 from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
@@ -100,6 +100,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def ordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
+
+    def _apply_scan_op(self, op):
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
+        cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
+        return out_col
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
@@ -259,32 +264,32 @@ class NumericalColumn(columnops.TypedColumnBase):
     def all(self):
         return bool(self.min())
 
-    def min(self):
-        return cpp_reduce.apply_reduce('min', self)
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
 
-    def max(self):
-        return cpp_reduce.apply_reduce('max', self)
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
-    def sum(self):
-        return cpp_reduce.apply_reduce('sum', self)
+    def sum(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
 
-    def product(self):
-        return cpp_reduce.apply_reduce('product', self)
+    def product(self, dtype=None):
+        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self):
-        return self.sum().astype('f8') / self.valid_count
+    def mean(self, dtype=None):
+        return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1):
+    def mean_var(self, ddof=1, dtype=None):
         x = self.astype('f8')
-        mu = x.mean()
+        mu = x.mean(dtype=dtype)
         n = x.valid_count
-        asum = x.sum_of_squares()
+        asum = x.sum_of_squares(dtype=dtype)
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
 
-    def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_of_squares', self)
+    def sum_of_squares(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
