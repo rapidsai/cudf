@@ -197,7 +197,14 @@ class Index(object):
     def equals(self, other):
         if len(self) != len(other):
             return False
-        return (self == other)._values.all()
+        elif len(self) == 1:
+            return self[0] == other[0]
+        else:
+            result = (self == other)
+            if isinstance(result, bool):
+                return result
+            else:
+                return (self == other)._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(

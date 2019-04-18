@@ -216,6 +216,7 @@ class DataFrame(object):
            isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
+            s.index = self.index
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
@@ -235,7 +236,7 @@ class DataFrame(object):
                 index = self.index.take(selinds.to_gpu_array())
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
-                df.set_index(index)
+                df = df.set_index(index)
             else:
                 for col in arg:
                     df[col] = self[col]
@@ -671,7 +672,7 @@ class DataFrame(object):
                 raise ValueError(msg)
             self._index = _index
             for k in self.columns:
-                self[k].set_index(_index)
+                self[k].index = _index
             return
 
         new_length = len(_index)
@@ -2123,7 +2124,13 @@ class DataFrame(object):
             vals = dataframe[colk].values
             df[colk] = Series(vals, nan_as_null=nan_as_null)
         # Set index
-        return df.set_index(dataframe.index)
+        from pandas import MultiIndex
+        if isinstance(dataframe.index, MultiIndex):
+            import cudf
+            index = cudf.from_pandas(dataframe.index)
+        else:
+            index = dataframe.index
+        return df.set_index(index)
 
     def to_arrow(self, preserve_index=True):
         """
@@ -2468,7 +2475,11 @@ class Loc(object):
         row_slice = None
         row_label = None
 
-        if isinstance(self._df.index, MultiIndex):
+        if isinstance(self._df.index, MultiIndex) and\
+           isinstance(arg, tuple):
+            # Explicitly ONLY support tuple indexes into MultiIndex.
+            # Pandas allows non tuple indices and warns "results may be
+            # undefined."
             return self._df._index.get_row_major(self._df, arg)
 
         if isinstance(arg, int):

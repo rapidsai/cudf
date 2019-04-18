@@ -134,32 +134,49 @@ class MultiIndex(indexPackage.Index):
 
     def get_row_major(self, df, row_tuple):
         valid_indices = self._compute_validity_mask(df, row_tuple)
-        result = df.iloc[valid_indices]
+        from cudf import Series
+        result = df.take(Series(valid_indices))
         # Build new index - INDEX based MultiIndex
         # ---------------
         from cudf import DataFrame
         out_index = DataFrame()
-        # this is hopelessly wrong: FIX
-        # If every level is homogeneous except the last do the out_index
-        # case below.
+        # Select the last n-k columns where n is the number of source
+        # levels and k is the length of the indexing tuple
         for k in range(len(row_tuple), len(df.index.levels)):
             out_index.add_column(df.index.names[k],
                                  df.index.codes[df.index.codes.columns[k]])
+        # If there's only one column remaining in the output index, convert
+        # it into a StringIndex and name the final index values according
+        # to the proper codes.
         if len(out_index.columns) == 1:
             out_index = []
             for val in result.index.codes[result.index.codes.columns[len(result.index.codes.columns)-1]]:  # noqa: E501
                 out_index.append(result.index.levels[
                         len(result.index.codes.columns)-1][val])
+            # TODO: Warning! The final index column could be arbitrarily
+            # ordered integers, not Strings, so we need to check for that
+            # dtype and produce a GenericIndex instead of a StringIndex
             out_index = StringIndex(out_index)
             out_index.name = result.index.names[len(result.index.names)-1]
             result.index = out_index
         else:
+            # Otherwise pop the leftmost levels, names, and codes from the
+            # source index until it has the correct number of columns (n-k)
             if(len(out_index.columns)) > 0:
-                result.index = self._popn(len(row_tuple))[valid_indices]
-        if len(result) == 1 and len(row_tuple)-len(self.levels) == 1:
+                result.reset_index(drop=True)
+                result.index = result.index._popn(len(row_tuple))
+        # Finally, if n-k==1 and only 1 row is returned, convert the
+        # resulting DataFrame into a Series instead.
+        """
+        print('result')
+        print(len(result))
+        print('n-k')
+        print(len(row_tuple)-len(self.levels))
+        if len(result) == 1 and len(self.levels)-len(row_tuple) == 1:
             from cudf.dataframe import Series
             result = Series(result.iloc[0])
             result.name = row_tuple
+        """
         return result
 
     def get_column_major(self, df, row_tuple):
@@ -192,9 +209,6 @@ class MultiIndex(indexPackage.Index):
                 self.codes == other.codes and\
                 self.names == other.names
 
-    def equals(self, other):
-        return (self == other)._values.all()
-
     @property
     def is_contiguous(self):
         return True
@@ -202,6 +216,42 @@ class MultiIndex(indexPackage.Index):
     @property
     def size(self):
         return len(self.codes[0])
+
+    def take(self, indices):
+        from collections.abc import Sequence
+        from cudf import Series
+        from numbers import Integral
+        if isinstance(indices, (Integral, Sequence)):
+            indices = np.array(indices)
+        elif isinstance(indices, Series):
+            indices = indices.to_gpu_array()
+        codes = self.codes.take(indices)
+        result = MultiIndex(self.levels, codes)
+        result.names = self.names
+        return result
+
+    def __iter__(self):
+        self.n = 0
+        return self
+
+    def __next__(self):
+        if self.n < len(self.codes):
+            result = self[self.n]
+            self.n += 1
+            return result
+        else:
+            raise StopIteration
+
+    def __getitem__(self, index):
+        match = self.take(index)
+        result = []
+        for level, item in enumerate(match.codes):
+            result.append(match.levels[level][match.codes[item][0]])
+        return tuple(result)
+
+    @property
+    def _values(self):
+        return list([i for i in self])
 
     def to_pandas(self):
         pandas_codes = []

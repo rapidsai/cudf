@@ -82,7 +82,6 @@ class Series(object):
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
-
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
@@ -287,7 +286,11 @@ class Series(object):
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        indices = Buffer(indices).to_gpu_array()
+        from cudf import Series
+        if isinstance(indices, Series):
+            indices = indices.to_gpu_array()
+        else:
+            indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return self._copy_construct(data=self.data[:0],

@@ -153,30 +153,83 @@ def pdfIndex():
     return pdfIndex
 
 
+def test_from_pandas(pdf, pdfIndex):
+    pdf.index = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+
+
+def test_series_multiindex(pdfIndex):
+    ps = pd.Series(np.random.rand(7))
+    gs = cudf.from_pandas(ps)
+    ps.index = pdfIndex
+    gs.index = cudf.from_pandas(pdfIndex)
+    assert_eq(ps, gs)
+
+
+def test_multiindex_take(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.index.take([0]), gdf.index.take([0]))
+    assert_eq(pdf.index.take(np.array([0])), gdf.index.take(np.array([0])))
+    from cudf import Series
+    assert_eq(pdf.index.take(Series([0])), gdf.index.take(Series([0])))
+    assert_eq(pdf.index.take([0, 1]), gdf.index.take([0, 1]))
+    assert_eq(pdf.index.take(np.array([0, 1])),
+              gdf.index.take(np.array([0, 1])))
+    assert_eq(pdf.index.take(Series([0, 1])), gdf.index.take(Series([0, 1])))
+
+
+def test_multiindex_getitem(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.index[0], gdf.index[0])
+
+
 def test_multiindex_loc(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    # return 2 rows, 0 remaining keys = dataframe
+    # return 2 rows, 0 remaining keys = dataframe with entire index
     assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire')],
               gdf.loc[('a', 'store', 'clouds', 'fire')])
-    # return 2 rows, 1 remaining key = dataframe
+    # return 2 rows, 1 remaining key = dataframe with n-k index columns
     assert_eq(pdf.loc[('a', 'store', 'storm')],
               gdf.loc[('a', 'store', 'storm')])
-    # return 2 rows, 2 remaining keys = dataframe
+    # return 2 rows, 2 remaining keys = dataframe with n-k index columns
+    print(pdf.loc[('a', 'store')])
+    print(gdf.loc[('a', 'store')].to_pandas())
     assert_eq(pdf.loc[('a', 'store')],
               gdf.loc[('a', 'store')])
     assert_eq(pdf.loc[('b', 'house')],
               gdf.loc[('b', 'house')])
-    # return 2 rows, n-1 remaining keys = dataframe
-    assert_eq(pdf.loc[('a')],
-              gdf.loc[('a')])
-    # return 2 rows, 0 remaining keys = dataframe
+    # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
+    assert_eq(pdf.loc[('a',)],
+              gdf.loc[('a',)])
+    # return 1 row, 0 remaining keys = dataframe with entire index
     assert_eq(pdf.loc[('a', 'store', 'storm', 'smoke')],
               gdf.loc[('a', 'store', 'storm', 'smoke')])
+    # return 1 row and 1 remaining key = series
+    assert_eq(pdf.loc[('c', 'forest', 'clear')],
+              gdf.loc[('c', 'forest', 'clear')])
     # assert_eq(pdf.loc[('a', 'store'): ('b', 'house')],
     #           gdf.loc[('a', 'store'): ('b', 'house')])
+
+
+def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    print(pdf.loc[('a', 'store', 'clouds', 'fire')])
+    print(gdf.loc[('a', 'store', 'clouds', 'fire')].to_pandas())
+    print(pdf.loc[('a', 'store', 'clouds', 'fire')][0])
+    print(gdf.loc[('a', 'store', 'clouds', 'fire')][0])
+    assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire')][0],
+              gdf.loc[('a', 'store', 'clouds', 'fire')][0])
 
 
 def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
@@ -184,9 +237,9 @@ def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     with pytest.raises(KeyError):
-        print(pdf.loc[('d')])
+        print(pdf.loc[('d',)])
     with pytest.raises(KeyError):
-        print(gdf.loc[('d')])
+        print(gdf.loc[('d',)])
     assert_eq(pdf, gdf)
 
 
@@ -203,9 +256,9 @@ def test_multiindex_loc_rows_1_1_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    print(pdf.loc[('c')])
-    print(gdf.loc[('c')].to_pandas())
-    assert_eq(pdf.loc[('c')], gdf.loc[('c')])
+    print(pdf.loc[('c',)])
+    print(gdf.loc[('c',)].to_pandas())
+    assert_eq(pdf.loc[('c',)], gdf.loc[('c',)])
 
 
 def test_multiindex_column_shape():
