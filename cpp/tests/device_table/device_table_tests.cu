@@ -53,7 +53,7 @@ struct all_rows_equal {
    *---------------------------------------------------------------------------**/
   __device__ bool operator()(int lhs_index) {
     auto row_equality = [this, lhs_index](gdf_size_type rhs_index) {
-      return lhs->rows_equal(*rhs, lhs_index, rhs_index, nulls_are_equal);
+      return rows_equal(*lhs, lhs_index, *rhs, rhs_index, nulls_are_equal);
     };
     return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
                           thrust::make_counting_iterator(rhs->num_rows()),
@@ -73,8 +73,8 @@ struct row_comparison {
       : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
   __device__ bool operator()(index_pair const& indices) {
-    return lhs->rows_equal(*rhs, thrust::get<0>(indices),
-                           thrust::get<1>(indices), nulls_are_equal);
+    return rows_equal(*lhs, thrust::get<0>(indices), *rhs,
+                      thrust::get<1>(indices), nulls_are_equal);
   }
 };
 

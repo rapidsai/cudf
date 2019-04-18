@@ -102,7 +102,7 @@ struct row_comparator
       return default_comparator(left_index, right_index);
 
     // Check for equality between the two rows of the two tables
-    return left_table.rows_equal(right_table, left_index, right_index);
+    return rows_equal(left_table, left_index, right_table, right_index);
   }
 
   const map_key_comparator default_comparator{};

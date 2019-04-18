@@ -179,7 +179,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           else if (found->first == probe_row_hash_value)
           {
             // If the hash values are equal, check that the rows are equal
-            if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
+            if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
@@ -327,7 +327,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
         else if (found->first == probe_row_hash_value)
         {
           // If the hash values are equal, check that the rows are equal
-          if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
+          if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
           {
 
             // If the rows are equal, then we have found a true match
