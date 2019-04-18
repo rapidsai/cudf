@@ -143,20 +143,9 @@ class device_table : public managed {
   gdf_valid_type** d_columns_valids_ptr{
       nullptr}; /** Raw pointer to the device array's data */
 
-  rmm::device_vector<gdf_valid_type>
-      device_row_valid; /** Device array of bitmask for the validity of each
-                           row. */
-  gdf_valid_type* d_row_valid{
-      nullptr}; /** Raw pointer to device array's data */
-
   rmm::device_vector<gdf_dtype>
       device_columns_types; /** Device array of each column's data type */
-  gdf_dtype* d_columns_types_ptr{
-      nullptr}; /** Raw pointer to the device array's data */
-
-  gdf_size_type row_size_bytes{0};
-  rmm::device_vector<gdf_size_type> device_column_byte_widths;
-  gdf_size_type* d_columns_byte_widths_ptr{nullptr};
+  gdf_dtype * column_types{nullptr}; /** Raw pointer to the device array's data */
 
  protected:
   /**---------------------------------------------------------------------------*
@@ -204,7 +193,7 @@ class device_table : public managed {
 
     d_columns_data_ptr = device_columns_data.data().get();
     d_columns_valids_ptr = device_columns_valids.data().get();
-    d_columns_types_ptr = device_columns_types.data().get();
+    column_types = device_columns_types.data().get();
 
     CHECK_STREAM(stream);
   }
@@ -276,7 +265,7 @@ __device__ inline bool rows_equal(device_table const& lhs,
   auto equal_elements = [&lhs, &rhs, lhs_row_index, rhs_row_index,
                          nulls_are_equal](gdf_size_type column_index) {
     return cudf::type_dispatcher(
-        lhs.d_columns_types_ptr[column_index], elements_are_equal{},
+        lhs.column_types[column_index], elements_are_equal{},
         lhs.d_columns_data_ptr[column_index],
         lhs.d_columns_valids_ptr[column_index], lhs_row_index,
         rhs.d_columns_data_ptr[column_index],
@@ -352,9 +341,8 @@ __device__ inline hash_value_type hash_row(
     if (gdf_is_valid(t.d_columns_valids_ptr[i], row_index)) {
       hash_value_type const initial_hash_value =
           (use_initial_value) ? initial_hash_values[i] : 0;
-      cudf::type_dispatcher(t.d_columns_types_ptr[i],
-                            hash_element<hash_function>{}, hash_value,
-                            t.d_columns_data_ptr[i], row_index, i,
+      cudf::type_dispatcher(t.column_types[i], hash_element<hash_function>{},
+                            hash_value, t.d_columns_data_ptr[i], row_index, i,
                             use_initial_value, initial_hash_value);
     }
   }
@@ -399,7 +387,7 @@ __device__ inline void copy_row(device_table& target,
                                 device_table const& source,
                                 gdf_size_type source_row_index) {
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.d_columns_types_ptr[i], copy_element{},
+    cudf::type_dispatcher(target.column_types[i], copy_element{},
                           target.d_columns_data_ptr[i], target_row_index,
                           source.d_columns_data_ptr[i], source_row_index);
   }
