@@ -435,7 +435,7 @@ private:
   rmm::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
   gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
-  rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
+  rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each column's data type */
   gdf_dtype * d_columns_types_ptr{nullptr};                 /** Raw pointer to the device array's data */
 
   gdf_size_type row_size_bytes{0};
