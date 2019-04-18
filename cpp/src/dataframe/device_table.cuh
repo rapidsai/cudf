@@ -261,21 +261,13 @@ public:
    * be copied from
    */
   __device__ 
-  gdf_error copy_row(device_table const & source,
+  void copy_row(device_table const & source,
                      const gdf_size_type target_row_index,
                      const gdf_size_type source_row_index)
   {
     for(gdf_size_type i = 0; i < _num_columns; ++i)
     {
-      const gdf_dtype target_col_type = d_columns_types_ptr[i];
-      const gdf_dtype source_col_type = source.d_columns_types_ptr[i];
-    
-      if(target_col_type != source_col_type)
-      {
-        return GDF_DTYPE_MISMATCH;
-      }
-
-      cudf::type_dispatcher(target_col_type,
+      cudf::type_dispatcher(d_columns_types_ptr[i],
                             copy_element{},
                             d_columns_data_ptr[i],
                             target_row_index,
@@ -283,7 +275,6 @@ public:
                             source_row_index);
 
     }
-    return GDF_SUCCESS;
   }
 
 
