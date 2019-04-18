@@ -90,17 +90,22 @@ public:
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
    *
+   * @note Constructing an instance of this class should not be considered a
+   * light-weight operation. It should only be used when the row-level device
+   * functions are necessary.
+   *
    * Constructing a `device_table` via a factory function is required to ensure
    * that it is constructed via the `new` operator that allocates the class with
    * managed memory such that it can be accessed via pointer or reference in
-   * device code. A `unique_ptr` is used to ensure the object is cleaned-up correctly.
-   * 
+   * device code. A `unique_ptr` is used to ensure the object is cleaned-up
+   * correctly.
+   *
    * Usage:
    * ```
    * gdf_column * col;
    * auto device_table_ptr = device_table::create(1, &col);
-   * 
-   * // Because `device_table` is allocated with managed memory, a pointer to 
+   *
+   * // Because `device_table` is allocated with managed memory, a pointer to
    * // the object can be passed directly into device code
    * some_kernel<<<...>>>(device_table_ptr.get());
    * ```
@@ -146,6 +151,8 @@ public:
 
   /** 
    * @brief  Updates the size of the gdf_columns in the table
+   * 
+   * @note Does NOT shrink the column's allocations to the new size.
    * 
    * @param new_length The new length
    */
@@ -376,6 +383,9 @@ public:
 
   /** --------------------------------------------------------------------------*
    * @brief Device function to compute a hash value for a given row in the table
+   * 
+   * @note NULL values are ignored. If a row contains all NULL values, it will
+   * return a hash value of 0.
    * 
    * @param[in] row_index The row of the table to compute the hash value for
    * @param[in] num_columns_to_hash The number of columns in the row to hash. If 0,
