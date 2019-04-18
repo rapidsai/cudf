@@ -96,6 +96,7 @@ chmod ugo+x ${CPP_CONTAINER_BUILD_DIR}/build.sh
 # Run the generated build script in a container
 docker pull ${DOCKER_IMAGE}
 docker run --runtime=nvidia --rm -it -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} \
+       --user $(id -u):$(id -g)
        -v ${REPO_PATH}:${REPO_PATH_IN_CONTAINER} \
        -v ${CPP_CONTAINER_BUILD_DIR}:${CPP_BUILD_DIR_IN_CONTAINER} \
        -v ${PYTHON_CONTAINER_BUILD_DIR}:${PYTHON_BUILD_DIR_IN_CONTAINER} \
