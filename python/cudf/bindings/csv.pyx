@@ -203,6 +203,7 @@ cpdef read_csv(
     cdef csv_read_arg* csv_reader
 
     # Populate csv_reader struct
+    cdef char* buffer_data_holder
     if is_file_like(filepath_or_buffer):
         if compression == 'infer':
             compression = None
@@ -213,7 +214,7 @@ cpdef read_csv(
         else:
             buffer_as_bytes = buffer
         # buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
-        cdef char* buffer_data_holder = buffer_as_bytes
+        buffer_data_holder = buffer_as_bytes
 
         csv_reader.input_data_form = HOST_BUFFER
         csv_reader.filepath_or_buffer = buffer_data_holder
@@ -232,8 +233,10 @@ cpdef read_csv(
         header = -1
     header_infer = header
     # arr_names = []
+    cdef char** arr_names
     # arr_dtypes = []
-    
+    cdef char** arr_dtypes
+
     if names is None:
         if header is -1:
             header_infer = 0
@@ -244,15 +247,15 @@ cpdef read_csv(
         csv_reader.num_cols = 0
         if dtype is not None:
             if dtype_dict:
-                cdef char** arr_dtypes = <char**>malloc(len(dtype.items()) * sizeof(char*))
+                arr_dtypes = <char**>malloc(len(dtype.items()) * sizeof(char*))
                 for idx, (k, v) in enumerate(dtype.items()):
                     arr_dtypes[idx] = _wrap_string(str(str(k)+":"+str(v)))
     else:
         if header is None:
             header_infer = -1
         csv_reader.num_cols = len(names)
-        cdef char** arr_names = <char**>malloc(len(names) * sizeof(char*))
-        cdef char** arr_dtypes = <char**>malloc(len(names) * sizeof(char*))
+        arr_names = <char**>malloc(len(names) * sizeof(char*))
+        arr_dtypes = <char**>malloc(len(names) * sizeof(char*))
         for idx, col_name in enumerate(names):
             arr_names[idx] = _wrap_string(col_name)
             if dtype is not None:
@@ -280,18 +283,20 @@ cpdef read_csv(
     csv_reader.use_cols_char = NULL
     csv_reader.use_cols_char_len = 0
 
+    cdef int* use_cols_int
+    cdef char** use_cols_char
     if usecols is not None:
         # arr_col_names = []
         if(all(isinstance(x, int) for x in usecols)):
             # usecols_ptr = ffi.new('int[]', usecols)
             # csv_reader.use_cols_int = usecols_ptr
-            cdef int* use_cols_int = <int*>malloc(len(usecols) * sizeof(int))
+            use_cols_int = <int*>malloc(len(usecols) * sizeof(int))
             for idx, val in enumerate(usecols):
                 use_cols_int[idx] = val
             csv_reader.use_cols_int = use_cols_int
             csv_reader.use_cols_int_len = len(usecols)
         else:
-            cdef char** use_cols_char = <char**>malloc(len(usecols) * sizeof(char*))
+            use_cols_char = <char**>malloc(len(usecols) * sizeof(char*))
             for idx, col_name in enuemrate(usecols):
                 # arr_col_names.append(_wrap_string(col_name))
                 use_cols_char[idx] = _wrap_string(col_name)
@@ -337,7 +342,7 @@ cpdef read_csv(
     csv_reader.num_false_values = len(false_values or [])
 
     # arr_na_values = []
-    def char** arr_na_values = NULL
+    cdef char** arr_na_values = NULL
     if na_values:
         arr_na_values = <char**>malloc(len(na_values))
         for idx, value in enumerate(na_values):
