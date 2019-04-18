@@ -10,6 +10,8 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from librmm_cffi import librmm as rmm
+
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
@@ -1478,6 +1480,27 @@ class Series(object):
         from cudf.dataframe import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
+
+    def diff(self, periods=1):
+        """Calculate the difference between values at positions i and i - N in
+        an array and store the output in a new array.
+
+        Notes
+        -----
+        Diff currently only supports float and integer dtypes.
+        """
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Diff currently only supports "
+                                      "numeric dtypes")
+        if periods == 0:
+            return self
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_diff.forall(output_dary.size)(input_dary, output_dary,
+                                                    periods)
+        return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
