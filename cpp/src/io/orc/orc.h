@@ -98,6 +98,7 @@ struct StripeFooter
 {
     std::vector<Stream> streams;                // the location of each stream
     std::vector<ColumnEncoding> columns;        // the encoding of each column
+    std::string writerTimezone = "";            // time zone of the writer
 };
 
 

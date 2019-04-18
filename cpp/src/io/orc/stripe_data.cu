@@ -39,6 +39,7 @@
 #define LOG2_NTHREADS           (LOG2_NWARPS+5)
 #define NWARPS                  (1 << LOG2_NWARPS)
 #define NTHREADS                (1 << LOG2_NTHREADS)
+#define ROWDEC_BFRSZ            (NTHREADS + 128)    // Add some margin to look ahead to future rows in case there are many zeroes
 
 #define IS_RLEv1(encoding_mode)         ((encoding_mode) < DIRECT_V2)
 #define IS_RLEv2(encoding_mode)         ((encoding_mode) >= DIRECT_V2)
@@ -93,6 +94,12 @@ struct orc_byterle_state_s
     uint32_t runs_pos[NWARPS];
 };
 
+struct orc_rowdec_state_s
+{
+    uint32_t nz_count;
+    uint32_t row[ROWDEC_BFRSZ];     // 0=skip, >0: row position relative to cur_row
+};
+
 struct orc_strdict_state_s
 {
     uint2 *local_dict;
@@ -113,7 +120,6 @@ struct orc_datadec_state_s
     uint32_t max_vals;                  // max # of non-zero values to decode in this batch
     uint32_t nrows;                     // # of rows in current batch (up to NTHREADS)
     uint32_t buffered_count;            // number of buffered values in the secondary data stream
-    uint16_t row_ofs_plus1[NTHREADS*2]; // 0=skip, >0: row position relative to cur_row
 };
 
 
@@ -131,6 +137,7 @@ struct orcdec_state_s
         orc_rlev1_state_s rlev1;
         orc_rlev2_state_s rlev2;
         orc_byterle_state_s rle8;
+        orc_rowdec_state_s rowdec;
     } u;
     union {
         uint8_t u8[NTHREADS * 8];
@@ -1335,17 +1342,28 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
  **/
 static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, int t)
 {
-    while (s->top.data.max_vals < NTHREADS && s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row && s->top.data.nrows < 0xfe00)
+    if (t == 0)
     {
-        uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row, min(0xfe00 - s->top.data.nrows, NTHREADS));
+        s->u.rowdec.nz_count = min(s->chunk.skip_count, NTHREADS);
+        s->chunk.skip_count -= s->u.rowdec.nz_count;
+    }
+    __syncthreads();
+    if (t < s->u.rowdec.nz_count)
+    {
+        s->u.rowdec.row[t] = 0; // Skipped values (below first_row)
+    }
+    while (s->u.rowdec.nz_count < s->top.data.max_vals && s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row)
+    {
+        uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row, min((ROWDEC_BFRSZ - s->u.rowdec.nz_count)*2, NTHREADS));
         if (s->chunk.strm_len[CI_PRESENT] > 0)
         {
             // We have a present stream
             uint32_t rmax = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
             uint32_t r = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
             uint32_t valid = (t < nrows && r < rmax) ? (((const uint8_t *)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1 : 0;
-            volatile uint16_t *row_ofs_plus1 = &s->top.data.row_ofs_plus1[s->top.data.max_vals];
-            uint32_t nz_pos;
+            volatile uint32_t *rows = &s->u.rowdec.row[s->u.rowdec.nz_count];
+            volatile uint16_t *row_ofs_plus1 = (volatile uint16_t *)rows;
+            uint32_t nz_pos, row_plus1, nz_prev = s->u.rowdec.nz_count;
             if (t < nrows)
             {
                 row_ofs_plus1[t] = valid;
@@ -1353,43 +1371,43 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
             lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
             if (t == nrows - 1)
             {
-                s->top.data.max_vals += row_ofs_plus1[t];
+                s->u.rowdec.nz_count += row_ofs_plus1[t];
             }
-            __syncthreads();
-            nz_pos = (valid) ? row_ofs_plus1[t] : 0;
-            __syncthreads();
-            if (valid)
-            {
-                row_ofs_plus1[nz_pos - 1] = s->top.data.nrows + t;
-            }
+            row_plus1 = s->top.data.nrows + t + 1;
             __syncthreads();
             if (t == 0)
             {
-                if (s->top.data.max_vals > NTHREADS)
+                if (s->u.rowdec.nz_count > s->top.data.max_vals)
                 {
-                    s->top.data.max_vals = NTHREADS;
-                    s->top.data.nrows = s->top.data.row_ofs_plus1[NTHREADS - 1];
+                    s->u.rowdec.nz_count = s->top.data.max_vals;
+                    s->top.data.nrows = row_ofs_plus1[s->u.rowdec.nz_count - nz_prev] - 1;
                 }
                 else
                 {
                     s->top.data.nrows += nrows;
                 }
             }
+            nz_pos = (valid) ? row_ofs_plus1[t] : 0;
+            __syncthreads();
+            if (valid && nz_pos - 1 < s->u.rowdec.nz_count)
+            {
+                rows[nz_pos - 1] = row_plus1;
+            }
             __syncthreads();
         }
         else
         {
             // All values are valid
-            nrows = min(nrows, NTHREADS - s->top.data.max_vals);
+            nrows = min(nrows, s->top.data.max_vals - s->u.rowdec.nz_count);
             if (t < nrows)
             {
-                s->top.data.row_ofs_plus1[s->top.data.max_vals + t] = s->top.data.nrows + t + 1;
+                s->u.rowdec.row[s->u.rowdec.nz_count + t] = s->top.data.nrows + t + 1;
             }
             __syncthreads();
             if (t == 0)
             {
                 s->top.data.nrows += nrows;
-                s->top.data.max_vals += nrows;
+                s->u.rowdec.nz_count += nrows;
             }
             __syncthreads();
         }
@@ -1460,17 +1478,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
             s->bs.fill_count = 0;
             s->bs2.fill_count = 0;
             s->top.data.nrows = 0;
-            s->top.data.max_vals = min(s->chunk.skip_count, NTHREADS);
+            s->top.data.max_vals = min(s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row, NTHREADS);
         }
         __syncthreads();
-        if (t < s->top.data.max_vals)
-        {
-            s->top.data.row_ofs_plus1[t] = 0; // Skipped values (below first_row)
-        }
-        // 1. Use the valid bits to compute non-null row positions until we get a full batch of values to decode (up to 64K rows)
-        DecodeRowPositions(s, first_row, t);
-        // 2. Decode data streams
-        if (s->top.data.max_vals > 0)
+        // Decode data streams
         {
             uint32_t numvals = s->top.data.max_vals, secondary_val;
             if (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
@@ -1525,7 +1536,6 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
             if (t == 0 && numvals > 0 && numvals < s->top.data.max_vals)
             {
                 s->top.data.max_vals = numvals;
-                s->top.data.nrows = s->top.data.row_ofs_plus1[numvals - 1];
             }
             __syncthreads();
             // Decode the primary data stream
@@ -1546,7 +1556,6 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                     if (numvals > 0 && numvals < s->top.data.max_vals)
                     {
                         s->top.data.max_vals = numvals;
-                        s->top.data.nrows = s->top.data.row_ofs_plus1[numvals - 1];
                     }
                 }
                 __syncthreads();
@@ -1616,13 +1625,14 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                     s->top.data.buffered_count = s->top.data.max_vals - numvals;
                 }
                 s->top.data.max_vals = numvals;
-                s->top.data.nrows = s->top.data.row_ofs_plus1[numvals - 1];
             }
             __syncthreads();
+            // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
+            DecodeRowPositions(s, first_row, t);
             // Store decoded values to output
-            if (t < s->top.data.max_vals && s->top.data.row_ofs_plus1[t] != 0)
+            if (t < s->top.data.max_vals && s->u.rowdec.row[t] != 0)
             {
-                size_t row = s->top.data.cur_row + s->top.data.row_ofs_plus1[t] - 1 - first_row;
+                size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
                 if (row < max_num_rows)
                 {
                     void *data_out = s->chunk.column_data_base;
@@ -1720,17 +1730,19 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
         __syncthreads();
         if (t == 0)
         {
-            s->chunk.skip_count = s->chunk.skip_count - min(s->chunk.skip_count, s->top.data.max_vals);
             s->top.data.cur_row += s->top.data.nrows;
             if ((s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR)
              && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
             {
                 s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
             }
-            if (!s->top.data.max_vals && !s->top.data.nrows)
-                break;
         }
         __syncthreads();
+        if (!s->top.data.nrows)
+        {
+            // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
+            break;
+        }
     }
 }
 
