@@ -116,11 +116,11 @@ TEST_F(DeviceTableTest, HostFunctions) {
   EXPECT_TRUE(col3 == *table->get_column(3));
 }
 
-struct hash_row {
+struct row_hasher {
   device_table* t;
-  hash_row(device_table* _t) : t{_t} {}
-  __device__ hash_value_type operator()(int row_index) {
-    return t->hash_row(row_index);
+  row_hasher(device_table* _t) : t{_t} {}
+  __device__ hash_value_type operator()(gdf_size_type row_index) {
+    return hash_row(*t, row_index);
   }
 };
 
@@ -151,7 +151,7 @@ TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), hash_row{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
 
   // All hash values should be equal
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
@@ -188,7 +188,7 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), hash_row{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
 
   // All hash values should be equal because hash_row should ignore nulls
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
@@ -231,7 +231,7 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), hash_row{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
 
   // All hash values should be NOT be equal
   EXPECT_FALSE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),

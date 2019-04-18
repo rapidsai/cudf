@@ -61,7 +61,7 @@ struct row_hasher
   __device__
   hash_value_type operator()(gdf_size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index, initial_hash_values);
+    return hash_row<hash_function>(the_table, row_index, initial_hash_values);
   }
 
   device_table const & the_table;
@@ -287,9 +287,8 @@ void compute_row_partition_numbers(device_table const & the_table,
   // the shared memory counter for that partition
   while( row_number < num_rows)
   {
-    // See here why template disambiguator is required: 
-    // https://stackoverflow.com/questions/4077110/template-disambiguator
-    const hash_value_type row_hash_value = the_table.template hash_row<hash_function>(row_number);
+    const hash_value_type row_hash_value =
+        hash_row<hash_function>(the_table, row_number);
 
     const gdf_size_type partition_number = the_partitioner(row_hash_value);
 

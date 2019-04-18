@@ -56,7 +56,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
   while( i < column_size ){
 
     // Hash the current row of the input table
-    const auto row_hash = groupby_input_table.hash_row(i);
+    const auto row_hash = hash_row(groupby_input_table, i);
 
     // Attempt to insert the current row's index.  
     // The hash value of the row will determine the write location.
@@ -87,7 +87,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   // Hash the current row of the input table
-  const auto row_hash = groupby_input_table.hash_row(i);
+  const auto row_hash = hash_row(groupby_input_table,i);
 
   while( i < column_size ){
 

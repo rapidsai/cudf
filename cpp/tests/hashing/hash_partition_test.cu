@@ -51,7 +51,7 @@ struct row_partition_mapper
   __device__
   hash_value_type operator()(gdf_size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index) % num_partitions;
+    return hash_row<hash_function>(the_table, row_index) % num_partitions;
   }
 
   device_table const & the_table;

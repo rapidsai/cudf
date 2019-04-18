@@ -18,15 +18,14 @@
 #define DEVICE_TABLE_H
 
 #include <cudf.h>
-#include <hash/hash_functions.cuh>
-#include <hash/managed.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy_bitmask.hpp>
+#include <hash/hash_functions.cuh>
+#include <hash/managed.cuh>
 #include <types.hpp>
 #include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -166,77 +165,6 @@ class device_table : public managed {
                             d_columns_data_ptr[i], target_row_index,
                             source.d_columns_data_ptr[i], source_row_index);
     }
-  }
-
-  template <template <typename> typename hash_function>
-  struct hash_element {
-    template <typename col_type>
-    __device__ __forceinline__ void operator()(
-        hash_value_type& hash_value, void const* col_data,
-        gdf_size_type row_index, gdf_size_type col_index,
-        bool use_initial_value = false,
-        const hash_value_type& initial_value = 0) {
-      hash_function<col_type> hasher;
-      col_type const* const current_column{
-          static_cast<col_type const*>(col_data)};
-      hash_value_type key_hash{hasher(current_column[row_index])};
-
-      if (use_initial_value)
-        key_hash = hasher.hash_combine(initial_value, key_hash);
-
-      // Only combine hash-values after the first column
-      if (0 == col_index)
-        hash_value = key_hash;
-      else
-        hash_value = hasher.hash_combine(hash_value, key_hash);
-    }
-  };
-
-  /**
-   * --------------------------------------------------------------------------*
-   * @brief Device function to compute a hash value for a given row in the table
-   *
-   * @note NULL values are ignored. If a row contains all NULL values, it will
-   * return a hash value of 0.
-   *
-   * @param[in] row_index The row of the table to compute the hash value for
-   * @param[in] num_columns_to_hash The number of columns in the row to hash. If
-   * 0, hashes all columns
-   * @param[in] initial_hash_values Optional initial hash values to combine with
-   * each column's hashed values
-   * @tparam hash_function The hash function that is used for each element in
-   * the row, as well as combine hash values
-   *
-   * @return The hash value of the row
-   * ----------------------------------------------------------------------------**/
-  template <template <typename> class hash_function = default_hash>
-  __device__ hash_value_type hash_row(
-      gdf_size_type row_index, hash_value_type* initial_hash_values = nullptr,
-      gdf_size_type num_columns_to_hash = 0) const {
-    hash_value_type hash_value{0};
-
-    // If num_columns_to_hash is zero, hash all columns
-    if (0 == num_columns_to_hash) {
-      num_columns_to_hash = this->_num_columns;
-    }
-
-    bool const use_initial_value{initial_hash_values != nullptr};
-    // Iterate all the columns and hash each element, combining the hash values
-    // together
-    for (gdf_size_type i = 0; i < num_columns_to_hash; ++i) {
-      // Skip null values
-      if (gdf_is_valid(d_columns_valids_ptr[i], row_index)) {
-        gdf_dtype const current_column_type = d_columns_types_ptr[i];
-        hash_value_type const initial_hash_value =
-            (use_initial_value) ? initial_hash_values[i] : 0;
-        cudf::type_dispatcher(current_column_type,
-                              hash_element<hash_function>{}, hash_value,
-                              d_columns_data_ptr[i], row_index, i,
-                              use_initial_value, initial_hash_value);
-      }
-    }
-
-    return hash_value;
   }
 
   const gdf_size_type _num_columns; /** The number of columns in the table */
@@ -399,6 +327,79 @@ __device__ inline bool rows_equal(device_table const& lhs,
   return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(lhs.num_columns()),
                         equal_elements);
+}
+
+namespace {
+template <template <typename> typename hash_function>
+struct hash_element {
+  template <typename col_type>
+  __device__ __forceinline__ void operator()(
+      hash_value_type& hash_value, void const* col_data,
+      gdf_size_type row_index, gdf_size_type col_index,
+      bool use_initial_value = false,
+      const hash_value_type& initial_value = 0) {
+    hash_function<col_type> hasher;
+    col_type const* const current_column{
+        static_cast<col_type const*>(col_data)};
+    hash_value_type key_hash{hasher(current_column[row_index])};
+
+    if (use_initial_value)
+      key_hash = hasher.hash_combine(initial_value, key_hash);
+
+    // Only combine hash-values after the first column
+    if (0 == col_index)
+      hash_value = key_hash;
+    else
+      hash_value = hasher.hash_combine(hash_value, key_hash);
+  }
+};
+}  // namespace
+
+/**
+ * --------------------------------------------------------------------------*
+ * @brief Computes the hash value for a row in a table
+ *
+ * @note NULL values are ignored. If a row contains all NULL values, it will
+ * return a hash value of 0.
+ *
+ * @param[in] row_index The row of the table to compute the hash value for
+ * @param[in] num_columns_to_hash The number of columns in the row to hash. If
+ * 0, hashes all columns
+ * @param[in] initial_hash_values Optional initial hash values to combine with
+ * each column's hashed values
+ * @tparam hash_function The hash function that is used for each element in
+ * the row, as well as combine hash values
+ *
+ * @return The hash value of the row
+ * ----------------------------------------------------------------------------**/
+template <template <typename> class hash_function = default_hash>
+__device__ hash_value_type
+hash_row(device_table const& t, gdf_size_type row_index,
+         hash_value_type* initial_hash_values = nullptr,
+         gdf_size_type num_columns_to_hash = 0) {
+  hash_value_type hash_value{0};
+
+  // If num_columns_to_hash is zero, hash all columns
+  if (0 == num_columns_to_hash) {
+    num_columns_to_hash = t.num_columns();
+  }
+
+  bool const use_initial_value{initial_hash_values != nullptr};
+
+  // Iterate all the columns and hash each element, combining the hash values
+  // together
+  for (gdf_size_type i = 0; i < num_columns_to_hash; ++i) {
+    // Skip null values
+    if (gdf_is_valid(t.d_columns_valids_ptr[i], row_index)) {
+      hash_value_type const initial_hash_value =
+          (use_initial_value) ? initial_hash_values[i] : 0;
+      cudf::type_dispatcher(t.d_columns_types_ptr[i],
+                            hash_element<hash_function>{}, hash_value,
+                            t.d_columns_data_ptr[i], row_index, i,
+                            use_initial_value, initial_hash_value);
+    }
+  }
+  return hash_value;
 }
 
 #endif

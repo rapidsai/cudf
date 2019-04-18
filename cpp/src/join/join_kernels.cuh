@@ -56,7 +56,7 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 
     while (i < build_table_num_rows) {
       // Compute the hash value of this row
-      const hash_value_type row_hash_value{build_table.hash_row(i)};
+      const hash_value_type row_hash_value{hash_row(build_table,i)};
 
       // Insert the (row hash value, row index) into the map
       // using the row hash value to determine the location in the
@@ -151,7 +151,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
     // hash value to determine the location where to search for the row in the hash map
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
-    probe_row_hash_value = probe_table.hash_row(probe_row_index);
+    probe_row_hash_value = hash_row(probe_table,probe_row_index);
     found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
@@ -300,7 +300,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
     // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
-    probe_row_hash_value = probe_table.hash_row(probe_row_index);
+    probe_row_hash_value = hash_row(probe_table,probe_row_index);
     found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
