@@ -21,7 +21,8 @@
 
 #include <cudf/types.h>
 
-#include <nvstrings/NVStrings.h>
+// Forward decl
+class NVStrings;
 
 #include <cassert>
 #include <utility>
@@ -111,7 +112,8 @@ namespace cudf {
 
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
-#pragma hd_warning_disable
+#pragma hd_warning_disable 
+#pragma nv_exec_check_disable
 template <class functor_t, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
                                                          functor_t f,
