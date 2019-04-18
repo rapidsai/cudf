@@ -122,6 +122,13 @@ class device_table : public managed {
     return host_columns[column_index];
   }
 
+  __device__ gdf_column* device_column(gdf_size_type index) {
+    return &device_columns[index];
+  }
+
+  __device__ gdf_column const * begin() const { return device_columns; }
+  __device__ gdf_column const * end() const { return device_columns + _num_columns; }
+
   __host__ gdf_column** columns() const { return host_columns; }
 
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
@@ -145,7 +152,10 @@ class device_table : public managed {
 
   rmm::device_vector<gdf_dtype>
       device_columns_types; /** Device array of each column's data type */
-  gdf_dtype * column_types{nullptr}; /** Raw pointer to the device array's data */
+  gdf_dtype* column_types{
+      nullptr}; /** Raw pointer to the device array's data */
+
+  gdf_column* device_columns{nullptr};
 
  protected:
   /**---------------------------------------------------------------------------*
@@ -173,6 +183,8 @@ class device_table : public managed {
     std::vector<gdf_dtype> columns_types(num_cols);
     std::vector<gdf_size_type> columns_byte_widths(num_cols);
 
+    std::vector<gdf_column> temp_columns(num_cols);
+
     for (size_type i = 0; i < num_cols; ++i) {
       gdf_column* const current_column = host_columns[i];
       CUDF_EXPECTS(nullptr != current_column, "Column is null");
@@ -184,7 +196,15 @@ class device_table : public managed {
       columns_data[i] = (host_columns[i]->data);
       columns_valids[i] = (host_columns[i]->valid);
       columns_types[i] = (host_columns[i]->dtype);
+
+      temp_columns[i] = *gdf_columns[i];
     }
+
+    // Copy columns to device
+    RMM_ALLOC(&device_columns, num_cols * sizeof(gdf_column), stream);
+    CUDA_TRY(cudaMemcpyAsync(device_columns, temp_columns.data(),
+                             num_cols * sizeof(gdf_column),
+                             cudaMemcpyHostToDevice, stream));
 
     // Copy host vectors to device vectors
     device_columns_data = columns_data;
@@ -217,20 +237,18 @@ class device_table : public managed {
 namespace {
 struct elements_are_equal {
   template <typename ColumnType>
-  __device__ __forceinline__ bool operator()(void const* lhs_data,
-                                             gdf_valid_type const* lhs_bitmask,
-                                             gdf_size_type lhs_row_index,
-                                             void const* rhs_data,
-                                             gdf_valid_type const* rhs_bitmask,
-                                             gdf_size_type rhs_row_index,
+  __device__ __forceinline__ bool operator()(gdf_column const& lhs,
+                                             gdf_size_type lhs_index,
+                                             gdf_column const& rhs,
+                                             gdf_size_type rhs_index,
                                              bool nulls_are_equal = false) {
-    bool const lhs_is_valid{gdf_is_valid(lhs_bitmask, lhs_row_index)};
-    bool const rhs_is_valid{gdf_is_valid(rhs_bitmask, rhs_row_index)};
+    bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
+    bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
 
     // If both values are non-null, compare them
     if (lhs_is_valid and rhs_is_valid) {
-      return static_cast<ColumnType const*>(lhs_data)[lhs_row_index] ==
-             static_cast<ColumnType const*>(rhs_data)[rhs_row_index];
+      return static_cast<ColumnType const*>(lhs.data)[lhs_index] ==
+             static_cast<ColumnType const*>(rhs.data)[rhs_index];
     }
 
     // If both values are null
@@ -248,9 +266,9 @@ struct elements_are_equal {
  * @brief  Checks for equality between two rows between two tables.
  *
  * @param lhs The left table
- * @param lhs_row_index The index of the row in the rhs table to compare
+ * @param lhs_index The index of the row in the rhs table to compare
  * @param rhs The right table
- * @param rhs_row_index The index of the row within rhs table to compare
+ * @param rhs_index The index of the row within rhs table to compare
  * @param nulls_are_equal Flag indicating whether two null values are considered
  * equal
  *
@@ -258,23 +276,18 @@ struct elements_are_equal {
  * @returns false If any element differs between the two rows
  */
 __device__ inline bool rows_equal(device_table const& lhs,
-                                  const gdf_size_type lhs_row_index,
+                                  const gdf_size_type lhs_index,
                                   device_table const& rhs,
-                                  const gdf_size_type rhs_row_index,
+                                  const gdf_size_type rhs_index,
                                   bool nulls_are_equal = false) {
-  auto equal_elements = [&lhs, &rhs, lhs_row_index, rhs_row_index,
-                         nulls_are_equal](gdf_size_type column_index) {
-    return cudf::type_dispatcher(
-        lhs.column_types[column_index], elements_are_equal{},
-        lhs.d_columns_data_ptr[column_index],
-        lhs.d_columns_valids_ptr[column_index], lhs_row_index,
-        rhs.d_columns_data_ptr[column_index],
-        rhs.d_columns_valids_ptr[column_index], rhs_row_index, nulls_are_equal);
+  auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](gdf_column const& l,
+                                                                gdf_column const& r) {
+    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index,
+                                 r, rhs_index, nulls_are_equal);
   };
 
-  return thrust::all_of(thrust::seq, thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(lhs.num_columns()),
-                        equal_elements);
+  return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
+                       equal_elements);
 }
 
 namespace {
