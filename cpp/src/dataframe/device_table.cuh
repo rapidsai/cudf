@@ -122,6 +122,13 @@ class device_table : public managed {
     return host_columns[column_index];
   }
 
+  __host__ gdf_column const* host_column(gdf_size_type index) const {
+    return host_columns[index];
+  }
+  __host__ gdf_column* host_column(gdf_size_type index) {
+    return host_columns[index];
+  }
+
   __device__ gdf_column const* device_column(gdf_size_type index) const {
     return &device_columns[index];
   }
@@ -147,22 +154,6 @@ class device_table : public managed {
   gdf_column** host_columns{
       nullptr}; /** The set of gdf_columns that this table wraps */
 
-  rmm::device_vector<void*>
-      device_columns_data; /** Device array of pointers to each column's data */
-  void** d_columns_data_ptr{
-      nullptr}; /** Raw pointer to the device array's data */
-
-  rmm::device_vector<gdf_valid_type*>
-      device_columns_valids; /** Device array of pointers to each column's
-                                validity bitmask*/
-  gdf_valid_type** d_columns_valids_ptr{
-      nullptr}; /** Raw pointer to the device array's data */
-
-  rmm::device_vector<gdf_dtype>
-      device_columns_types; /** Device array of each column's data type */
-  gdf_dtype* column_types{
-      nullptr}; /** Raw pointer to the device array's data */
-
   gdf_column* device_columns{nullptr};
 
  protected:
@@ -184,13 +175,6 @@ class device_table : public managed {
                  "Attempt to create table with a null column.");
     _num_rows = host_columns[0]->size;
 
-    // Copy pointers to each column's data, types, and validity bitmasks
-    // to contiguous host vectors (AoS to SoA conversion)
-    std::vector<void*> columns_data(num_cols);
-    std::vector<gdf_valid_type*> columns_valids(num_cols);
-    std::vector<gdf_dtype> columns_types(num_cols);
-    std::vector<gdf_size_type> columns_byte_widths(num_cols);
-
     std::vector<gdf_column> temp_columns(num_cols);
 
     for (size_type i = 0; i < num_cols; ++i) {
@@ -200,11 +184,6 @@ class device_table : public managed {
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
       }
-
-      columns_data[i] = (host_columns[i]->data);
-      columns_valids[i] = (host_columns[i]->valid);
-      columns_types[i] = (host_columns[i]->dtype);
-
       temp_columns[i] = *gdf_columns[i];
     }
 
@@ -213,15 +192,6 @@ class device_table : public managed {
     CUDA_TRY(cudaMemcpyAsync(device_columns, temp_columns.data(),
                              num_cols * sizeof(gdf_column),
                              cudaMemcpyHostToDevice, stream));
-
-    // Copy host vectors to device vectors
-    device_columns_data = columns_data;
-    device_columns_valids = columns_valids;
-    device_columns_types = columns_types;
-
-    d_columns_data_ptr = device_columns_data.data().get();
-    d_columns_valids_ptr = device_columns_valids.data().get();
-    column_types = device_columns_types.data().get();
 
     CHECK_STREAM(stream);
   }
@@ -302,30 +272,6 @@ namespace {
 template <template <typename> typename hash_function>
 struct hash_element {
   template <typename col_type>
-  __device__ __forceinline__ void operator()(
-      hash_value_type& hash_value, void const* col_data,
-      gdf_size_type row_index, gdf_size_type col_index,
-      bool use_initial_value = false,
-      const hash_value_type& initial_value = 0) {
-    hash_function<col_type> hasher;
-    col_type const* const current_column{
-        static_cast<col_type const*>(col_data)};
-    hash_value_type key_hash{hasher(current_column[row_index])};
-
-    if (use_initial_value)
-      key_hash = hasher.hash_combine(initial_value, key_hash);
-
-    // Only combine hash-values after the first column
-    if (0 == col_index)
-      hash_value = key_hash;
-    else
-      hash_value = hasher.hash_combine(hash_value, key_hash);
-  }
-};
-
-template <template <typename> typename hash_function>
-struct hash_it {
-  template <typename col_type>
   __device__ inline hash_value_type operator()(gdf_column const& col,
                                                gdf_size_type row_index) {
     hash_function<col_type> hasher;
@@ -363,10 +309,12 @@ template <template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type* initial_hash_values = nullptr) {
+  // Hashes an element in a column and optionally combines it with an initial
+  // hash value
   auto hasher = [row_index, &t,
                  initial_hash_values](gdf_size_type column_index) {
     hash_value_type hash_value = cudf::type_dispatcher(
-        t.device_column(column_index)->dtype, hash_it<hash_function>{},
+        t.device_column(column_index)->dtype, hash_element<hash_function>{},
         *t.device_column(column_index), row_index);
 
     if (initial_hash_values != nullptr) {
@@ -381,6 +329,7 @@ __device__ inline hash_value_type hash_row(
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
 
+  // Hash each element and combine all the hash values together
   return thrust::transform_reduce(
       thrust::seq, thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(t.num_columns()), hasher,
