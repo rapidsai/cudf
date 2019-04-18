@@ -122,12 +122,20 @@ class device_table : public managed {
     return host_columns[column_index];
   }
 
+  __device__ gdf_column const* device_column(gdf_size_type index) const {
+    return &device_columns[index];
+  }
   __device__ gdf_column* device_column(gdf_size_type index) {
     return &device_columns[index];
   }
 
-  __device__ gdf_column const * begin() const { return device_columns; }
-  __device__ gdf_column const * end() const { return device_columns + _num_columns; }
+  __device__ gdf_column const* begin() const { return device_columns; }
+  __device__ gdf_column* begin() { return device_columns; }
+
+  __device__ gdf_column const* end() const {
+    return device_columns + _num_columns;
+  }
+  __device__ gdf_column* end() { return device_columns + _num_columns; }
 
   __host__ gdf_column** columns() const { return host_columns; }
 
@@ -280,10 +288,10 @@ __device__ inline bool rows_equal(device_table const& lhs,
                                   device_table const& rhs,
                                   const gdf_size_type rhs_index,
                                   bool nulls_are_equal = false) {
-  auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](gdf_column const& l,
-                                                                gdf_column const& r) {
-    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index,
-                                 r, rhs_index, nulls_are_equal);
+  auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
+                            gdf_column const& l, gdf_column const& r) {
+    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index, r,
+                                 rhs_index, nulls_are_equal);
   };
 
   return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
@@ -364,16 +372,13 @@ __device__ inline hash_value_type hash_row(
 
 namespace {
 struct copy_element {
-  template <typename ColumnType>
-  __device__ __forceinline__ void operator()(void* target_column,
-                                             gdf_size_type target_row_index,
-                                             void const* source_column,
-                                             gdf_size_type source_row_index) {
-    ColumnType& target_value{
-        static_cast<ColumnType*>(target_column)[target_row_index]};
-    ColumnType const& source_value{
-        static_cast<ColumnType const*>(source_column)[source_row_index]};
-    target_value = source_value;
+  template <typename T>
+  __device__ inline void operator()(gdf_column& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    static_cast<T*>(target.data)[target_index] =
+        static_cast<T const*>(source.data)[source_index];
   }
 };
 }  // namespace
@@ -396,13 +401,13 @@ struct copy_element {
  * be copied from
  */
 __device__ inline void copy_row(device_table& target,
-                                gdf_size_type target_row_index,
+                                gdf_size_type target_index,
                                 device_table const& source,
-                                gdf_size_type source_row_index) {
+                                gdf_size_type source_index) {
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.column_types[i], copy_element{},
-                          target.d_columns_data_ptr[i], target_row_index,
-                          source.d_columns_data_ptr[i], source_row_index);
+    cudf::type_dispatcher(target.device_column(i)->dtype, copy_element{},
+                          *target.device_column(i), target_index,
+                          *source.device_column(i), source_index);
   }
 }
 
