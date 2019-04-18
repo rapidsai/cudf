@@ -595,7 +595,7 @@ def gpu_diff(in_col, out_col, N):
     else:
         if i <= (in_col.size + N):
             out_col[i] = in_col[i] - in_col[i - N]
-        if i >= (in_col.size + N):
+        if i >= (in_col.size + N) and i < in_col.size:
             out_col[i] = -1
 
 
