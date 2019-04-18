@@ -33,8 +33,14 @@
 #include <thrust/logical.h>
 #include <thrust/iterator/counting_iterator.h>
 
-/** 
- * @brief Provides row-level device functions for operating on a set of columns.
+/**
+ * @brief Flattens a gdf_column array-of-structs into a struct-of-arrays and
+ * provides row-level device functions.
+ *
+ * @note Because the class is allocated with managed memory, instances of
+ * `device_table` can be passed directly via pointer or reference into device
+ * code.
+ *
  */
 class device_table : public managed
 {
@@ -45,10 +51,6 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
-   *
-   * @note Constructing an instance of this class should not be considered a
-   * light-weight operation. It should only be used when the row-level device
-   * functions are necessary.
    *
    * Constructing a `device_table` via a factory function is required to ensure
    * that it is constructed via the `new` operator that allocates the class with
@@ -143,17 +145,6 @@ public:
   gdf_size_type num_rows() const
   {
     return _num_rows;
-  }
-
-  /** 
-   * @brief  Gets the size in bytes of a row in the device_table, i.e., the sum of 
-   * the byte widths of all columns in the table
-   * 
-   * @returns The size in bytes of the row in the table
-   */
-  gdf_size_type get_row_size_bytes() const
-  {
-    return row_size_bytes;
   }
 
   /** 
@@ -428,19 +419,6 @@ protected:
        CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
      }
 
-     // Compute the size of a row in the table in bytes
-     int column_width_bytes{0};
-     if (GDF_SUCCESS ==
-         get_column_byte_width(current_column, &column_width_bytes)) {
-       row_size_bytes += column_width_bytes;
-       // Store the byte width of each column in a device array
-       columns_byte_widths[i] = row_size_bytes;
-     } else {
-       std::cerr << "Attempted to get column byte width of unsupported GDF "
-                    "datatype.\n";
-       columns_byte_widths[i] = 0;
-     }
-
      columns_data[i] = (host_columns[i]->data);
      columns_valids[i] = (host_columns[i]->valid);
      columns_types[i] = (host_columns[i]->dtype);
@@ -450,12 +428,10 @@ protected:
    device_columns_data = columns_data;
    device_columns_valids = columns_valids;
    device_columns_types = columns_types;
-   device_column_byte_widths = columns_byte_widths;
 
    d_columns_data_ptr = device_columns_data.data().get();
    d_columns_valids_ptr = device_columns_valids.data().get();
    d_columns_types_ptr = device_columns_types.data().get();
-   d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
 
    CHECK_STREAM(stream);
   }

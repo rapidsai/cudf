@@ -114,10 +114,6 @@ TEST_F(DeviceTableTest, HostFunctions) {
   EXPECT_TRUE(col1 == *table->get_column(1));
   EXPECT_TRUE(col2 == *table->get_column(2));
   EXPECT_TRUE(col3 == *table->get_column(3));
-
-  int const expected_row_byte_size =
-      sizeof(int32_t) + sizeof(float) + sizeof(double) + sizeof(int8_t);
-  EXPECT_EQ(expected_row_byte_size, table->get_row_size_bytes());
 }
 
 struct hash_row {
