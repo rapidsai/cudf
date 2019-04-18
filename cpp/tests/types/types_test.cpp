@@ -48,6 +48,12 @@ struct WrappersTest : public ::testing::Test {
   }
 };
 
+using WrappersTestBool8 = WrappersTest<cudf::bool8>;
+
+// These structs enable specializing the underlying type to use in testing
+// comparisons. For example, we specialize cudf::bool8 to map to bool. This
+// means that it's wrapper operators are expected to act like bool even though
+// its actual underlying type is a signed 8-bit integer.
 template <typename T>
 struct TypeToUse{
     using type = void;
@@ -226,6 +232,65 @@ TYPED_TEST(WrappersTest, BooleanOperators)
     EXPECT_TRUE(w2 <= w2);
     EXPECT_FALSE(w2 >= w3);
     EXPECT_TRUE(w2 <= w3);
+}
+
+// Just for booleans
+TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
+{
+    for(int i = 0; i < NUM_TRIALS; ++i)
+    {
+        bool const t0{this->rand()};
+        bool const t1{this->rand()};
+
+        cudf::bool8 const w0{t0};
+        cudf::bool8 const w1{t1};
+
+        EXPECT_EQ(t0 > t1, w0 > w1);
+        EXPECT_EQ(t0 < t1, w0 < w1);
+        EXPECT_EQ(t0 <= t1, w0 <= w1);
+        EXPECT_EQ(t0 >= t1, w0 >= w1);
+        EXPECT_EQ(t0 == t1, w0 == w1);
+        EXPECT_EQ(t0 != t1, w0 != w1);
+    }
+
+    cudf::bool8 w2{42};
+    cudf::bool8 w3{43};
+
+    EXPECT_TRUE(w2 == w2);
+    EXPECT_TRUE(w2 == w3);
+    EXPECT_FALSE(w2 < w3);
+    EXPECT_FALSE(w2 > w3);
+    EXPECT_FALSE(w2 != w3);
+    EXPECT_TRUE(w2 >= w2);
+    EXPECT_TRUE(w2 <= w2);
+    EXPECT_TRUE(w2 >= w3);
+    EXPECT_TRUE(w2 <= w3);
+
+    cudf::bool8 w4{-42};
+    cudf::bool8 w5{43};
+
+    EXPECT_TRUE(w4 == w4);
+    EXPECT_TRUE(w5 == w5);
+    EXPECT_FALSE(w4 < w5);
+    EXPECT_FALSE(w4 > w5);
+    EXPECT_FALSE(w4 != w5);
+    EXPECT_TRUE(w4 >= w4);
+    EXPECT_TRUE(w4 <= w4);
+    EXPECT_TRUE(w4 >= w5);
+    EXPECT_TRUE(w4 <= w5);
+
+    cudf::bool8 w6{0};
+    cudf::bool8 w7{43};
+
+    EXPECT_FALSE(w6 == w6);
+    EXPECT_FALSE(w6 == w7);
+    EXPECT_TRUE(w6 < w7);
+    EXPECT_FALSE(w6 > w7);
+    EXPECT_TRUE(w6 != w7);
+    EXPECT_TRUE(w6 >= w6);
+    EXPECT_TRUE(w6 <= w6);
+    EXPECT_FALSE(w6 >= w7);
+    EXPECT_TRUE(w6 <= w7);
 }
 
 TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
