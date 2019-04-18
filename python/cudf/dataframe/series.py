@@ -1489,6 +1489,8 @@ class Series(object):
         -----
         Shift currently only supports float and integer dtypes.
         """
+        assert axis in (None, 0) and freq is None and fill_value is None
+        
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError("Shift currently only supports "
                                       "numeric dtypes")
