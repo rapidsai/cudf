@@ -313,7 +313,7 @@ public:
    * @param rhs The other table whose row is compared to this table's row
    * @param this_row_index The index of the row within this table to compare
    * @param rhs_row_index The index of the row within rhs table to compare
-   * @param nulls_are_equal Flag indicating if two null values are considered
+   * @param nulls_are_equal Flag indicating whether two null values are considered
    * equal
    *
    * @returns True if the elements in both rows are equivalent, otherwise False
