@@ -1491,7 +1491,7 @@ class Series(object):
         """
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError("Shift currently only supports "
-                                "numeric dtypes")
+                                      "numeric dtypes")
         if periods == 0:
             return self
 
