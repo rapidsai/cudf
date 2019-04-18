@@ -39,6 +39,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <memory>
+#include <arrow/io/interfaces.h>
+#include <arrow/io/file.h>
+#include <arrow/buffer.h>
+#include <arrow/io/memory.h>
+
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -50,36 +56,42 @@
  **/
 class DataSource {
  public:
+  explicit DataSource(){
+    this->file_handler = nullptr;
+  }
   explicit DataSource(const char *filepath) {
-    fd = open(filepath, O_RDONLY);
-    CUDF_EXPECTS(fd > 0, "Cannot open file");
+    std::shared_ptr<arrow::io::ReadableFile> file;
+    CUDF_EXPECTS(arrow::io::ReadableFile::Open(std::string(filepath), &file).ok() == true, "Error opening parquet file");
+    this->file_handler = file;
+  }
 
-    struct stat st {};
-    CUDF_EXPECTS(fstat(fd, &st) == 0, "Cannot query file size");
+  explicit DataSource(const char *filepath, size_t buffer_length) {
+      this->file_handler = std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(filepath), buffer_length);
+    }
 
-    mapped_size = st.st_size;
-    CUDF_EXPECTS(mapped_size > 0, "Unexpected zero-sized file");
-
-    mapped_data = mmap(NULL, mapped_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Cannot memory-mapping file");
+  explicit DataSource(std::shared_ptr<arrow::io::RandomAccessFile> file_handler) {
+    this->file_handler = file_handler;
   }
 
   ~DataSource() {
-    if (mapped_data) {
-      munmap(mapped_data, mapped_size);
-    }
-    if (fd) {
-      close(fd);
-    }
+
   }
 
-  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
-  size_t size() const { return mapped_size; }
+  const std::shared_ptr<arrow::Buffer> get_buffer(int64_t position, int64_t nbytes) const {
+    std::shared_ptr< arrow::Buffer > out;
+    this->file_handler->ReadAt ( position,  nbytes, &out);
+    return out;
+  }
+//  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
+  size_t size() const {
+    int64_t size;
+    this->file_handler->GetSize(&size);
+    return size;
+  }
 
  private:
-  void *mapped_data = nullptr;
-  size_t mapped_size = 0;
-  int fd = 0;
+  std::shared_ptr<arrow::io::RandomAccessFile> file_handler;
+
 };
 
 /**
@@ -145,25 +157,34 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(const uint8_t *data, size_t len) {
+  explicit ParquetMetadata(const DataSource data) {
+    size_t len = data.size();
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
-    const auto header = (const parquet::file_header_s *)data;
-    const auto ender = (const parquet::file_ender_s *)(data + len - ender_len);
-    CUDF_EXPECTS(
-        data && len > header_len + ender_len,
-        "Incorrect data source");
-    CUDF_EXPECTS(
-        header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
-        "Corrupted header or footer");
-    CUDF_EXPECTS(
-        ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
-        "Incorrect footer length");
 
-    parquet::CompactProtocolReader cp(
-        data + len - ender->footer_len - ender_len, ender->footer_len);
-    CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+    {
+      const auto header_buffer = data.get_buffer(0,sizeof(parquet::file_header_s));
+      const auto header = (const parquet::file_header_s *)header_buffer->data();
+      const auto ender_buffer = data.get_buffer(len - ender_len,sizeof(parquet::file_ender_s));
+      const auto ender = (const parquet::file_ender_s *)ender_buffer->data();
+      CUDF_EXPECTS(
+           len > header_len + ender_len,
+          "Incorrect data source");
+      CUDF_EXPECTS(
+          header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+          "Corrupted header or footer");
+      CUDF_EXPECTS(
+          ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
+          "Incorrect footer length");
+
+
+      const auto buffer = data.get_buffer(len - ender->footer_len - ender_len,ender->footer_len);
+      parquet::CompactProtocolReader cp(
+          buffer->data(), ender->footer_len);
+      CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+      CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+
+    }
 
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" version = %d\n", version);
@@ -500,6 +521,9 @@ void decode_page_data(
   }
 }
 
+
+
+
 /**
  * @brief Reads Apache Parquet data and returns an array of gdf_columns.
  *
@@ -507,15 +531,22 @@ void decode_page_data(
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
-gdf_error read_parquet(pq_read_arg *args) {
+gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> file_handle) {
 
   int num_columns = 0;
   int num_rows = 0;
   int index_col = -1;
+  DataSource input;
+  if(args->source_type == FILE_PATH){
+    input = DataSource(args->source);
+  }else if(args->source_type == ARROW_RANDOM_ACCESS_FILE){
+    CUDF_EXPECTS(file_handle != nullptr,"read_parquet_arrow was used but no file handle set");
+    input = DataSource(file_handle);
+  }else{
+    input = DataSource(args->source, args->buffer_size);
+  }
 
-  DataSource input(args->source);
-
-  ParquetMetadata md(input.data(), input.size());
+  ParquetMetadata md(input);
   CUDF_EXPECTS(md.get_num_rowgroups() > 0, "No row groups found");
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
@@ -619,9 +650,11 @@ gdf_error read_parquet(pq_read_arg *args) {
                                 : col_meta.data_page_offset;
         RMM_TRY(RMM_ALLOC(&d_compdata, col_meta.total_compressed_size, 0));
         page_data.emplace_back(d_compdata);
-        CUDA_TRY(cudaMemcpyAsync(d_compdata, input.data() + offset,
+        const auto buffer = input.get_buffer(offset,col_meta.total_compressed_size);
+        CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
                                  col_meta.total_compressed_size,
                                  cudaMemcpyHostToDevice));
+        CUDA_TRY(cudaStreamSynchronize(0));
       }
       chunks.insert(parquet::gpu::ColumnChunkDesc(
           col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -707,4 +740,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   }
 
   return GDF_SUCCESS;
+}
+
+gdf_error read_parquet(pq_read_arg *args) {
+  return read_parquet_arrow(args, nullptr);
 }
