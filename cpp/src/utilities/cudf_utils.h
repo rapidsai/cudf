@@ -7,6 +7,7 @@
 #include <cuda_runtime_api.h>
 
 #include <vector>
+#include <cassert>
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
@@ -18,16 +19,19 @@
 #define CUDA_LAUNCHABLE
 #endif
 
-inline gdf_error set_null_count(gdf_column* col) {
-  gdf_size_type valid_count{};
-  gdf_error result =
-      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
-
-  GDF_REQUIRE(GDF_SUCCESS == result, result);
-
-  col->null_count = col->size - valid_count;
-
-  return GDF_SUCCESS;
+/**---------------------------------------------------------------------------*
+ * @brief Sets a @ref gdf_column 's (uninitialized) null_count value by
+ * counting the zeros in its validity indicator bits (if it has them).
+ **---------------------------------------------------------------------------*/
+inline void set_null_count(gdf_column& column) {
+    if (column.valid == nullptr) {
+        column.null_count = 0;
+    }
+    else {
+        gdf_size_type valid_count;
+        CUDF_TRY(gdf_count_nonzero_mask(column.valid, column.size, &valid_count));
+        column.null_count = column.size - valid_count;
+    }
 }
 
 /* --------------------------------------------------------------------------*/
@@ -93,6 +97,22 @@ inline gdf_error soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gd
 	CUDA_TRY(cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice));//TODO: add streams
 
 	return GDF_SUCCESS;
+}
+
+inline bool isPtrManaged(cudaPointerAttributes attr) {
+#if CUDART_VERSION >= 10000
+    return (attr.type == cudaMemoryTypeManaged);
+#else
+    return attr.isManaged;
+#endif
+}
+
+inline bool isDeviceType(cudaPointerAttributes attrib) {
+#if CUDART_VERSION >= 10000
+    return (attrib.type == cudaMemoryTypeDevice);
+#else
+    return (attrib.memoryType == cudaMemoryTypeDevice);
+#endif
 }
 
 #endif // GDF_UTILS_H
