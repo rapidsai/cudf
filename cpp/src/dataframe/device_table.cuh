@@ -247,9 +247,12 @@ public:
    * @brief  Copies a row from a source table to a target row in this table
    *
    * This device function should be called by a single thread and the thread
-   * will copy all of the elements in the row from one table to the other. TODO:
-   * In the future, this could be done by multiple threads by passing in a
+   * will copy all of the elements in the row from one table to the other. 
+   * 
+   * TODO: In the future, this could be done by multiple threads by passing in a
    * cooperative group.
+   * 
+   * FIXME: Does NOT set null bitmask for the target row.
    *
    * @param other The other table from which the row is copied
    * @param target_row_index The index of the row in this table that will be written
