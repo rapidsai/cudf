@@ -1487,15 +1487,14 @@ class Series(object):
 
         Notes
         -----
-        Shift currently only supports float and integer dtypes and
-        periods >= 1.
+        Shift currently only supports float and integer dtypes.
         """
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Shift currently only supports "
+                                "numeric dtypes")
         if periods == 0:
             return self
 
-        if periods < 1:
-            raise NotImplementedError("Shift currently only supports "
-                                      "periods >= 1")
         input_dary = self.data.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,

@@ -2230,38 +2230,13 @@ def test_get_numeric_data():
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
-@pytest.mark.parametrize('period', [0, 1, 5, 10])
-def test_shift_forward(dtype, period):
-    nelem = 100000
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, period):
     if dtype == np.int8:
         # to keep data in range
-        data = gen_rand(dtype, nelem, low=-2, high=2)
+        data = gen_rand(dtype, 100000, low=-2, high=2)
     else:
-        data = gen_rand(dtype, nelem)
-
-    gdf = DataFrame({'a': data})
-    pdf = pd.DataFrame({'a': data})
-
-    shifted_outcome = gdf.a.shift(period)
-    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
-
-    assert_eq(shifted_outcome, expected_outcome)
-
-
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="Backward shift is not yet implemented."
-)
-@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
-@pytest.mark.parametrize('period', [-1, -5, -10, -20])
-def test_shift_backward(dtype, period):
-    nelem = 100000
-    if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, nelem, low=-2, high=2)
-    else:
-        data = gen_rand(dtype, nelem)
+        data = gen_rand(dtype, 100000)
 
     gdf = DataFrame({'a': data})
     pdf = pd.DataFrame({'a': data})
