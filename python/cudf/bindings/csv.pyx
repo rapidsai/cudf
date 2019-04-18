@@ -213,7 +213,7 @@ cpdef read_csv(
         else:
             buffer_as_bytes = buffer
         # buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
-        cdef char[] buffer_data_holder = buffer_as_bytes
+        cdef char* buffer_data_holder = buffer_as_bytes
 
         csv_reader.input_data_form = HOST_BUFFER
         csv_reader.filepath_or_buffer = buffer_data_holder
@@ -415,7 +415,7 @@ cpdef read_csv(
                 )
     
     # Free all of the things!
-    
+
 
     # Build dataframe
     df = DataFrame()
