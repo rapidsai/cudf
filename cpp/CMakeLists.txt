@@ -224,7 +224,7 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
-            src/io/json/json_reader.cpp
+            src/io/json/json_reader.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader.cu

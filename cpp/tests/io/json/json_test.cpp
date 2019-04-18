@@ -48,7 +48,6 @@ std::vector<T> gdf_column_to_host(gdf_column* const col) {
 		return m_hostdata;
 }
 
-
 TEST(gdf_json_test, SquareBrackets)
 {
 	const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
@@ -106,7 +105,20 @@ TEST(gdf_json_test, BasicJsonLines)
 	args.dtype = types;
 	args.num_cols = 2;
 	read_json(&args);
-	ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
 
-	// delete columns?
+	ASSERT_EQ(args.num_cols_out, 2);
+	ASSERT_EQ(args.num_rows_out, 2);
+
+	ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
+	ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
+
+	ASSERT_EQ(std::string(args.data[0]->col_name), "0");
+	ASSERT_EQ(std::string(args.data[1]->col_name), "1");
+
+
+	const auto firstCol = gdf_column_to_host<int32_t>(args.data[0]);
+	EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2));
+	const auto secondCol = gdf_column_to_host<double>(args.data[1]);
+	EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+
 }

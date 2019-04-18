@@ -184,7 +184,7 @@ typedef struct {
   const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
 
-  int           num_cols;                   ///< Number of columns in the names and dtype arrays
+  int           num_cols;                   ///< Number of columns in the dtype array
   const char    **dtype;                    ///< Ordered List of data types
 
 } json_read_arg;
