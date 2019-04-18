@@ -426,7 +426,7 @@ private:
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
-  rmm::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
+  rmm::device_vector<void*> device_columns_data; /** Device array of pointers to each column's data */
   void ** d_columns_data_ptr{nullptr};                  /** Raw pointer to the device array's data */
 
   rmm::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
