@@ -18,7 +18,7 @@
 #define GROUPBY_COMPUTE_API_H
 
 
-#include "hash/managed.cuh"
+#include <hash/managed.cuh>
 #include "hash_groupby_kernels.cuh"
 #include "dataframe/device_table.cuh"
 #include <copying/gather.hpp>
