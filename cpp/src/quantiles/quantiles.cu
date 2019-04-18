@@ -107,18 +107,12 @@ namespace{ // anonymous
     case GDF_QUANT_LINEAR:
       singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
       singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
-      cudf::interpolate::linear(
-          cudf::detail::unwrap(result), 
-          cudf::detail::unwrap(hvalue[0]), 
-          cudf::detail::unwrap(hvalue[1]), qi.fraction);
+      cudf::interpolate::linear(result, hvalue[0], hvalue[1], qi.fraction);
       break;
     case GDF_QUANT_MIDPOINT:
       singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
       singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
-      cudf::interpolate::midpoint(
-          cudf::detail::unwrap(result), 
-          cudf::detail::unwrap(hvalue[0]), 
-          cudf::detail::unwrap(hvalue[1]));
+      cudf::interpolate::midpoint(result, hvalue[0], hvalue[1]);
       break;
     case GDF_QUANT_LOWER:
       singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
@@ -208,7 +202,20 @@ namespace{ // anonymous
   };
 
   struct trampoline_approx_functor{
-    template <typename T>
+    template <typename T,
+              typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
+    gdf_error operator()(gdf_column* col_in,
+                         double              quant,
+                         void*               t_erased_res,
+                         gdf_context*        ctxt,
+                         cudaStream_t        stream = NULL)
+    {
+      // TODO: support non-arithemetic types
+      return GDF_UNSUPPORTED_DTYPE;
+    }
+
+    template <typename T,
+              typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
     gdf_error operator()(gdf_column*  col_in, 
                     double       quant,
                     void*        t_erased_res,

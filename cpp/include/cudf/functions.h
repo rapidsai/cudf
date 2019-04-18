@@ -1097,7 +1097,7 @@ gdf_error gdf_quantile_exact(gdf_column* col_in,
 /**
  * @brief  Computes approximate quantile
  * computes quantile with the same type as @p col_in.
- * This function works with non-arithmetic colum.
+ * This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
