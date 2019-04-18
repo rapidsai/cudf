@@ -209,6 +209,14 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
                              thrust::make_counting_iterator(0),
                              thrust::make_counting_iterator(size),
                              all_rows_equal(table.get(), table.get(), true)));
+
+  // Compute hash value of every row
+  thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(), hash_row{table.get()});
+
+  // All hash values should be equal because hash_row should ignore nulls
+  EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
+                            row_hashes.begin()));
 }
 
 TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {

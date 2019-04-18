@@ -411,15 +411,18 @@ public:
 
     bool const use_initial_value{ initial_hash_values != nullptr };
     // Iterate all the columns and hash each element, combining the hash values together
-    for(gdf_size_type i = 0; i < num_columns_to_hash; ++i)
-    {
-      gdf_dtype const current_column_type = d_columns_types_ptr[i];
+    for (gdf_size_type i = 0; i < num_columns_to_hash; ++i) {
 
-      hash_value_type const initial_hash_value = (use_initial_value) ? initial_hash_values[i] : 0;
-      cudf::type_dispatcher(current_column_type, 
-                          hash_element<hash_function>{}, 
-                          hash_value, d_columns_data_ptr[i], row_index, i,
-                          use_initial_value, initial_hash_value);
+      // Skip null values
+      if (gdf_is_valid(d_columns_valids_ptr[i], row_index)) {
+        gdf_dtype const current_column_type = d_columns_types_ptr[i];
+        hash_value_type const initial_hash_value =
+            (use_initial_value) ? initial_hash_values[i] : 0;
+        cudf::type_dispatcher(current_column_type,
+                              hash_element<hash_function>{}, hash_value,
+                              d_columns_data_ptr[i], row_index, i,
+                              use_initial_value, initial_hash_value);
+      }
     }
 
     return hash_value;
