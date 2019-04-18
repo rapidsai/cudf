@@ -20,6 +20,7 @@ export HOME=$WORKSPACE
 
 # Set versions of packages needed to be grabbed
 export NVSTRINGS_VERSION=0.7.*
+export RMM_VERSION=0.7.*
 
 ################################################################################
 # SETUP - Check environment
@@ -33,7 +34,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=${NVSTRINGS_VERSION}
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION}
 
 logger "Check versions..."
 python --version
