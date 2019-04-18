@@ -1493,10 +1493,8 @@ class Series(object):
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError("Diff currently only supports "
                                       "numeric dtypes")
-        if periods == 0:
-            return self
 
-        input_dary = self.data.to_gpu_array()
+        input_dary = self.data.copy().to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_diff.forall(output_dary.size)(input_dary, output_dary,
                                                     periods)
