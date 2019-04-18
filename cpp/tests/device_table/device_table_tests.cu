@@ -33,16 +33,6 @@ struct DeviceTableTest : GdfTest {
   gdf_size_type const size{1000};
 };
 
-struct row_has_nulls {
-  device_table* t;
-
-  row_has_nulls(device_table* _t) : t{_t} {}
-
-  __device__ bool operator()(int row_index) {
-    return t->row_has_nulls(row_index);
-  }
-};
-
 /**---------------------------------------------------------------------------*
  * @brief Compares if a row in one table is equal to all rows in another table.
  *
@@ -153,11 +143,6 @@ TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
 
   auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
 
-  // Every row should be valid
-  EXPECT_FALSE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size), row_has_nulls(table.get())));
-
   // Every row should be equal to every other row regardless of NULL ?= NULL
   EXPECT_TRUE(thrust::all_of(rmm::exec_policy()->on(0),
                              thrust::make_counting_iterator(0),
@@ -192,11 +177,6 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
 
   auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
-
-  // Every row should contain nulls
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size - 1), row_has_nulls(table.get())));
 
   // If NULL != NULL, no row can equal any other row
   EXPECT_FALSE(thrust::all_of(rmm::exec_policy()->on(0),
@@ -234,11 +214,6 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
   std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
 
   auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
-
-  // Every row should contain nulls
-  EXPECT_TRUE(thrust::all_of(
-      rmm::exec_policy()->on(0), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(size - 1), row_has_nulls(table.get())));
 
   // If NULL==NULL, every row should be equal to itself
   thrust::device_vector<gdf_size_type> indices(table->num_rows());

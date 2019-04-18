@@ -54,26 +54,19 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 {
     gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-    while( i < build_table_num_rows) {
+    while (i < build_table_num_rows) {
+      // Compute the hash value of this row
+      const hash_value_type row_hash_value{build_table.hash_row(i)};
 
-      // It is impossible for a row with a NULL value to match any other row,
-      // therefore, do not insert it into the hash table
-      if (not build_table.row_has_nulls(i)) {
+      // Insert the (row hash value, row index) into the map
+      // using the row hash value to determine the location in the
+      // hash map where the new pair should be inserted
+      const auto insert_location = multi_map->insert(
+          thrust::make_pair(row_hash_value, i), true, row_hash_value);
 
-        // Compute the hash value of this row
-        const hash_value_type row_hash_value{build_table.hash_row(i)};
-
-        // Insert the (row hash value, row index) into the map
-        // using the row hash value to determine the location in the 
-        // hash map where the new pair should be inserted
-        const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                        true,
-                                                        row_hash_value );
-
-        // If the insert failed, set the error code accordingly
-        if(multi_map->end() == insert_location){
-          *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
-        }
+      // If the insert failed, set the error code accordingly
+      if (multi_map->end() == insert_location) {
+        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
       }
       i += blockDim.x * gridDim.x;
     }
@@ -156,16 +149,10 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(not probe_table.row_has_nulls(probe_row_index))
-    {
-      // Search the hash map for the hash value of the probe row
-      probe_row_hash_value = probe_table.hash_row(probe_row_index);
-      found = multi_map->find(probe_row_hash_value,
-                              true,
-                              probe_row_hash_value);
-    }
+    // Search the hash map for the hash value of the probe row
+    probe_row_hash_value = probe_table.hash_row(probe_row_index);
+    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -312,15 +299,9 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
     // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(not probe_table.row_has_nulls(probe_row_index))
-    {
-      // Search the hash map for the hash value of the probe row
-      probe_row_hash_value = probe_table.hash_row(probe_row_index);
-      found = multi_map->find(probe_row_hash_value,
-                                   true,
-                                   probe_row_hash_value);
-    }
-
+    // Search the hash map for the hash value of the probe row
+    probe_row_hash_value = probe_table.hash_row(probe_row_index);
+    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;

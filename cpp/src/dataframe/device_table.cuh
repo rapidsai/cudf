@@ -33,50 +33,6 @@
 #include <thrust/logical.h>
 #include <thrust/iterator/counting_iterator.h>
 
-namespace {
-/**
- * @brief  Computes the validity mask for the rows in the device_table.
-
-   If a single value in a row of the table is NULL, then the entire row is
-   considered to be NULL. Therefore, we can AND all of the bitmasks of each
-   column together to get a bitmask for the validity of each row.
- */
-struct row_masker {
-  row_masker(gdf_valid_type** column_masks, const gdf_size_type num_cols)
-      : column_valid_masks{column_masks}, _num_columns(num_cols) {}
-
-  /**
-   * @brief Computes the bit-wise AND across all columns for the specified mask
-   *
-   * @param mask_number The index of the mask to compute the bit-wise AND across
-   * all columns
-   *
-   * @returns The bit-wise AND across all columns for the specified mask number
-   */
-  __device__ __forceinline__ gdf_valid_type
-  operator()(const gdf_size_type mask_number) {
-    // Intialize row validity mask with all bits set to 1
-    gdf_valid_type row_valid_mask{0};
-    row_valid_mask = ~(row_valid_mask);
-
-    for (gdf_size_type i = 0; i < _num_columns; ++i) {
-      const gdf_valid_type* current_column_mask = column_valid_masks[i];
-
-      // The column validity mask is optional and can be nullptr
-      if (nullptr != current_column_mask) {
-        row_valid_mask &= current_column_mask[mask_number];
-      }
-    }
-    return row_valid_mask;
-  }
-
-  const gdf_size_type _num_columns;
-  gdf_valid_type** column_valid_masks;
-};
-
-
-}  // namespace
-
 /** 
  * @brief Provides row-level device functions for operating on a set of columns.
  */
@@ -187,10 +143,6 @@ public:
   gdf_size_type num_rows() const
   {
     return _num_rows;
-  }
-
-  __device__ bool row_has_nulls(gdf_size_type row_index) const{
-      return not gdf_is_valid(d_row_valid, row_index);
   }
 
   /** 
@@ -330,15 +282,6 @@ public:
                              const gdf_size_type rhs_row_index,
                              bool nulls_are_equal = false) const {
     
-    // TODO Add a specialization where neither table is "nullable" to skip null check
-    // and get better performance
-    bool const rows_have_nulls =
-        this->row_has_nulls(this_row_index) or rhs.row_has_nulls(rhs_row_index);
-
-    if (rows_have_nulls and not nulls_are_equal) {
-      return false;
-    }
-
     auto equal_elements = [this, &rhs, this_row_index, rhs_row_index,
                            nulls_are_equal](gdf_size_type column_index) {
       return cudf::type_dispatcher(
@@ -513,20 +456,6 @@ protected:
    d_columns_valids_ptr = device_columns_valids.data().get();
    d_columns_types_ptr = device_columns_types.data().get();
    d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
-
-   // Allocate storage sufficient to hold a validity bit for every row
-   // in the table
-   const size_type mask_size = gdf_valid_allocation_size(_num_rows);
-   device_row_valid.resize(mask_size);
-
-   // If a row contains a single NULL value, then the entire row is considered
-   // to be NULL, therefore initialize the row-validity mask with the
-   // bit-wise AND of the validity mask of all the columns
-   thrust::tabulate(rmm::exec_policy(stream)->on(stream), device_row_valid.begin(),
-                    device_row_valid.end(),
-                    row_masker(d_columns_valids_ptr, num_cols));
-
-   d_row_valid = device_row_valid.data().get();
 
    CHECK_STREAM(stream);
   }
