@@ -151,7 +151,8 @@ TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(),
+                   row_hasher{table.get()});
 
   // All hash values should be equal
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
@@ -188,7 +189,8 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(),
+                   row_hasher{table.get()});
 
   // All hash values should be equal because hash_row should ignore nulls
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
@@ -231,7 +233,8 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
 
   // Compute hash value of every row
   thrust::device_vector<hash_value_type> row_hashes(table->num_rows());
-  thrust::tabulate(row_hashes.begin(), row_hashes.end(), row_hasher{table.get()});
+  thrust::tabulate(row_hashes.begin(), row_hashes.end(),
+                   row_hasher{table.get()});
 
   // All hash values should be NOT be equal
   EXPECT_FALSE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(),
@@ -304,17 +307,18 @@ TEST_F(DeviceTableTest, TwoTablesAllRowsEqual) {
       row_comparison{left_table.get(), right_table.get(), false}));
 }
 
-struct copy_row {
-  device_table* source;
+struct row_copier {
   device_table* target;
+  device_table* source;
 
   using index_pair = thrust::tuple<gdf_size_type, gdf_size_type>;
 
-  copy_row(device_table* _source, device_table* _target)
-      : source{_source}, target{_target} {}
+  row_copier(device_table* _target, device_table* _source)
+      : target{_target}, source{_source} {}
 
   __device__ void operator()(index_pair const& indices) {
-    target->copy_row(*source, thrust::get<0>(indices), thrust::get<1>(indices));
+    copy_row(*target, thrust::get<0>(indices), *source,
+             thrust::get<1>(indices));
   }
 };
 
@@ -360,7 +364,7 @@ TEST_F(DeviceTableTest, CopyRowsNoNulls) {
           thrust::make_tuple(target_indices.begin(), source_indices.begin())),
       thrust::make_zip_iterator(
           thrust::make_tuple(target_indices.end(), source_indices.end())),
-      copy_row{source_table.get(), target_table.get()}));
+      row_copier{target_table.get(), source_table.get()}));
 
   // ensure source_table row @ source_indices[i] == target_table row @
   // target_indices[i]

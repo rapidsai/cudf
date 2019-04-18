@@ -126,47 +126,6 @@ class device_table : public managed {
 
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
 
-  struct copy_element {
-    template <typename ColumnType>
-    __device__ __forceinline__ void operator()(void* target_column,
-                                               gdf_size_type target_row_index,
-                                               void const* source_column,
-                                               gdf_size_type source_row_index) {
-      ColumnType& target_value{
-          static_cast<ColumnType*>(target_column)[target_row_index]};
-      ColumnType const& source_value{
-          static_cast<ColumnType const*>(source_column)[source_row_index]};
-      target_value = source_value;
-    }
-  };
-
-  /**
-   * @brief  Copies a row from a source table to a target row in this table
-   *
-   * This device function should be called by a single thread and the thread
-   * will copy all of the elements in the row from one table to the other.
-   *
-   * TODO: In the future, this could be done by multiple threads by passing in a
-   * cooperative group.
-   *
-   * FIXME: Does NOT set null bitmask for the target row.
-   *
-   * @param other The other table from which the row is copied
-   * @param target_row_index The index of the row in this table that will be
-   * written to
-   * @param source_row_index The index of the row from the other table that will
-   * be copied from
-   */
-  __device__ void copy_row(device_table const& source,
-                           const gdf_size_type target_row_index,
-                           const gdf_size_type source_row_index) {
-    for (gdf_size_type i = 0; i < _num_columns; ++i) {
-      cudf::type_dispatcher(d_columns_types_ptr[i], copy_element{},
-                            d_columns_data_ptr[i], target_row_index,
-                            source.d_columns_data_ptr[i], source_row_index);
-    }
-  }
-
   const gdf_size_type _num_columns; /** The number of columns in the table */
   gdf_size_type _num_rows{0};       /** The number of rows in the table */
 
@@ -373,10 +332,10 @@ struct hash_element {
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
 template <template <typename> class hash_function = default_hash>
-__device__ hash_value_type
-hash_row(device_table const& t, gdf_size_type row_index,
-         hash_value_type* initial_hash_values = nullptr,
-         gdf_size_type num_columns_to_hash = 0) {
+__device__ inline hash_value_type hash_row(
+    device_table const& t, gdf_size_type row_index,
+    hash_value_type* initial_hash_values = nullptr,
+    gdf_size_type num_columns_to_hash = 0) {
   hash_value_type hash_value{0};
 
   // If num_columns_to_hash is zero, hash all columns
@@ -400,6 +359,50 @@ hash_row(device_table const& t, gdf_size_type row_index,
     }
   }
   return hash_value;
+}
+
+namespace {
+struct copy_element {
+  template <typename ColumnType>
+  __device__ __forceinline__ void operator()(void* target_column,
+                                             gdf_size_type target_row_index,
+                                             void const* source_column,
+                                             gdf_size_type source_row_index) {
+    ColumnType& target_value{
+        static_cast<ColumnType*>(target_column)[target_row_index]};
+    ColumnType const& source_value{
+        static_cast<ColumnType const*>(source_column)[source_row_index]};
+    target_value = source_value;
+  }
+};
+}  // namespace
+
+/**
+ * @brief  Copies a row from a source table to a target table.
+ *
+ * This device function should be called by a single thread and the thread
+ * will copy all of the elements in the row from one table to the other.
+ *
+ * @note This function do not guard against race conditions in either the source
+ * or target row.
+ *
+ * FIXME: Does NOT set null bitmask for the target row.
+ *
+ * @param other The other table from which the row is copied
+ * @param target_row_index The index of the row in this table that will be
+ * written to
+ * @param source_row_index The index of the row from the other table that will
+ * be copied from
+ */
+__device__ inline void copy_row(device_table& target,
+                                gdf_size_type target_row_index,
+                                device_table const& source,
+                                gdf_size_type source_row_index) {
+  for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
+    cudf::type_dispatcher(target.d_columns_types_ptr[i], copy_element{},
+                          target.d_columns_data_ptr[i], target_row_index,
+                          source.d_columns_data_ptr[i], source_row_index);
+  }
 }
 
 #endif

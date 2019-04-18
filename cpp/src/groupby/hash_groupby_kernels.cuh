@@ -147,9 +147,8 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
 
       // Copy the row at current_key from the input table to the row at
       // thread_write_index in the output table
-      groupby_output_table.copy_row(groupby_input_table, 
-                                    thread_write_index,
-                                    current_key);
+      copy_row(groupby_output_table, thread_write_index, groupby_input_table,
+               current_key);
 
       aggregation_out_column[thread_write_index] = hashtabl_values[i].second;
     }
