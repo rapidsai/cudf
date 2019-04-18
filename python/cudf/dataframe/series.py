@@ -1499,7 +1499,7 @@ class Series(object):
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
                                                      periods)
-        return Series(output_dary, name=self.name)
+        return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
