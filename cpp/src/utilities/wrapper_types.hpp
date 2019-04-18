@@ -361,12 +361,53 @@ static constexpr bool8 true_v{gdf_bool{1}};
 static constexpr bool8 false_v{gdf_bool{0}};
 #endif
 
+// Wrapper operator overloads for cudf::bool8 
 namespace detail {
+
+// For some reason, get a multiple definition error if this is defined.
+// But it would be nice for the output of cudf::bool8 in ostreams to be 
+// more useful than an int8 value...
+/*std::ostream& operator<<(std::ostream& os, cudf::bool8 const& w) 
+{
+  return os << static_cast<bool>(w.value);
+}*/
 
 CUDA_HOST_DEVICE_CALLABLE
 bool operator==(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
   return (lhs.value == 0) == (rhs.value == 0);
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+bool operator!=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{ 
+  return (lhs.value == 0) != (rhs.value == 0);
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+bool operator<=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{ 
+  return static_cast<bool>(lhs.value) <= static_cast<bool>(rhs.value); 
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+bool operator>=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{ 
+  return static_cast<bool>(lhs.value) >= static_cast<bool>(rhs.value); 
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE 
+bool operator<(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<bool>(lhs.value) < static_cast<bool>(rhs.value);
+}
+
+CUDA_HOST_DEVICE_CALLABLE 
+bool operator>(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<bool>(lhs.value) > static_cast<bool>(rhs.value);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
@@ -424,23 +465,6 @@ cudf::bool8& operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
   lhs = lhs / rhs;
   return lhs;
 }
-
-// prefix increment operator
-/*CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8& operator++(cudf::bool8 &w)
-{
-  static
-  //w = cudf::bool8{static_cast<bool>(w.value)++};
-  return w;
-}
-
-// postfix increment operator
-CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8& operator++(cudf::bool8 &w, int)
-{
-  return w;//cudf::bool8{static_cast<bool>(w.value)++};
-}*/
-
 
 } // namespace detail
 
