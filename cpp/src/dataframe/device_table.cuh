@@ -95,7 +95,10 @@ class device_table : public managed {
    *prohibit stack allocation.
    *
    *---------------------------------------------------------------------------**/
-  void destroy(void) { delete this; }
+  __host__ void destroy(void) {
+    RMM_FREE(device_columns, _stream);
+    delete this;
+  }
 
   device_table() = delete;
   device_table(device_table const& other) = delete;
@@ -117,10 +120,6 @@ class device_table : public managed {
   }
 
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
-
-  __host__ gdf_column* get_column(gdf_size_type column_index) const {
-    return host_columns[column_index];
-  }
 
   __host__ gdf_column const* host_column(gdf_size_type index) const {
     return host_columns[index];
@@ -148,6 +147,7 @@ class device_table : public managed {
 
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
 
+ private:
   const gdf_size_type _num_columns; /** The number of columns in the table */
   gdf_size_type _num_rows{0};       /** The number of rows in the table */
 
@@ -155,6 +155,8 @@ class device_table : public managed {
       nullptr}; /** The set of gdf_columns that this table wraps */
 
   gdf_column* device_columns{nullptr};
+
+  cudaStream_t _stream;
 
  protected:
   /**---------------------------------------------------------------------------*

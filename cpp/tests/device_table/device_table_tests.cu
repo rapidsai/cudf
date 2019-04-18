@@ -98,10 +98,10 @@ TEST_F(DeviceTableTest, HostFunctions) {
   EXPECT_EQ(4, table->num_columns());
 
   // Pointers to the `gdf_column` should be identical
-  EXPECT_EQ(col0.get(), table->get_column(0));
-  EXPECT_EQ(col1.get(), table->get_column(1));
-  EXPECT_EQ(col2.get(), table->get_column(2));
-  EXPECT_EQ(col3.get(), table->get_column(3));
+  EXPECT_EQ(col0.get(), table->host_column(0));
+  EXPECT_EQ(col1.get(), table->host_column(1));
+  EXPECT_EQ(col2.get(), table->host_column(2));
+  EXPECT_EQ(col3.get(), table->host_column(3));
 
   gdf_column** cols = table->columns();
   EXPECT_EQ(col0.get(), cols[0]);
@@ -110,10 +110,10 @@ TEST_F(DeviceTableTest, HostFunctions) {
   EXPECT_EQ(col3.get(), cols[3]);
 
   // gdf_columns should equal the column_wrappers
-  EXPECT_TRUE(col0 == *table->get_column(0));
-  EXPECT_TRUE(col1 == *table->get_column(1));
-  EXPECT_TRUE(col2 == *table->get_column(2));
-  EXPECT_TRUE(col3 == *table->get_column(3));
+  EXPECT_TRUE(col0 == *table->host_column(0));
+  EXPECT_TRUE(col1 == *table->host_column(1));
+  EXPECT_TRUE(col2 == *table->host_column(2));
+  EXPECT_TRUE(col3 == *table->host_column(3));
 }
 
 struct row_hasher {
