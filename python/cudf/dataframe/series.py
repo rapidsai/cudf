@@ -1487,9 +1487,14 @@ class Series(object):
 
         Notes
         -----
-        Shift currently only supports float and integer dtypes.
+        Shift currently only supports float and integer dtypes in columns with
+        no null values.
         """
         assert axis in (None, 0) and freq is None and fill_value is None
+
+        if self.null_count != 0:
+            raise AssertionError("Diff currently requires columns with no "
+                                 "null values")
 
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError("Shift currently only supports "
