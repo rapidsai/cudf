@@ -32,7 +32,7 @@
 
 /**
  * @brief Convert gdf_column into NVStrings instance.
- * 
+ *
  * This is called by the write_csv method below.
  * @param[in] column The column to be converted.
  * @param[in] delimiter Separator to append to the column strings
@@ -150,7 +150,7 @@ gdf_error write_csv(csv_write_arg* args)
     CUDF_EXPECTS( columns!=0, "write_csv: invalid data values" );
 
     // check all columns are the same size
-    const bool all_sizes_match = std::all_of( columns, columns+count, 
+    const bool all_sizes_match = std::all_of( columns, columns+count,
         [rows] (gdf_column* col) {
             if( col->dtype==GDF_STRING )
             {
@@ -184,7 +184,7 @@ gdf_error write_csv(csv_write_arg* args)
         memsize += strs->byte_count(string_lengths + (idx*rows),false);
         NVStrings::destroy(strs);
     }
-    
+
     //
     // Example string_lengths matrix for 4 columns and 7 rows
     //                                     row-sums
@@ -199,8 +199,8 @@ gdf_error write_csv(csv_write_arg* args)
     // Need to convert this into the following -- string_locations (below)
     //     0,  27,  55,  83, 122, 161, 199
     //     1,  28,  57,  94, 134, 168, 206
-    //     2,  29,  59,  96, 137, 175, 213
-    //    22,  49,  79, 116, 157, 195, 233
+    //     2,  29,  59,  96, 137, 175, 212
+    //    22,  49,  79, 116, 157, 195, 232
     //
     // This is essentially an exclusive-scan (prefix-sum) across columns.
     // Moving left-to-right, add up each column and carry each value to the next column.
