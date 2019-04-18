@@ -1487,7 +1487,7 @@ class Series(object):
 
         Notes
         -----
-        Diff currently only supports float and integer dtypes columns with
+        Diff currently only supports float and integer dtype columns with
         no null values.
         """
         if self.null_count != 0:
