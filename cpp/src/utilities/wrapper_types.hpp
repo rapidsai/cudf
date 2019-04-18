@@ -181,7 +181,7 @@ wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> c
   return wrapper<T, type_id>{ static_cast<T>(lhs.value / rhs.value) };
 }
 
-// prefix increment operator
+// prefix increment operator (not supported for cudf::bool8)
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id>& operator++(wrapper<T,type_id> & w)
@@ -361,6 +361,88 @@ static constexpr bool8 true_v{gdf_bool{1}};
 static constexpr bool8 false_v{gdf_bool{0}};
 #endif
 
+namespace detail {
+
+CUDA_HOST_DEVICE_CALLABLE
+bool operator==(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return (lhs.value == 0) == (rhs.value == 0);
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator+(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs.value) +
+                                  static_cast<bool>(rhs.value));
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator-(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs.value) -
+                                  static_cast<bool>(rhs.value));
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator*(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs.value) *
+                                  static_cast<bool>(rhs.value));
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator/(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs.value) /
+                                  static_cast<bool>(rhs.value));
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator+=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
+  lhs = lhs + rhs;
+  return lhs;
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator-=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
+  lhs = lhs - rhs;
+  return lhs;
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator*=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
+  lhs = lhs * rhs;
+  return lhs;
+}
+
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
+  lhs = lhs / rhs;
+  return lhs;
+}
+
+// prefix increment operator
+/*CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator++(cudf::bool8 &w)
+{
+  static
+  //w = cudf::bool8{static_cast<bool>(w.value)++};
+  return w;
+}
+
+// postfix increment operator
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8& operator++(cudf::bool8 &w, int)
+{
+  return w;//cudf::bool8{static_cast<bool>(w.value)++};
+}*/
+
+
+} // namespace detail
 
 } // namespace cudf
 

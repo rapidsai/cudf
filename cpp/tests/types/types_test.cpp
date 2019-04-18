@@ -48,10 +48,32 @@ struct WrappersTest : public ::testing::Test {
   }
 };
 
+template <typename T>
+struct TypeToUse{
+    using type = void;
+};
+
+template<>
+struct TypeToUse<cudf::bool8>{
+    using type = bool;
+};
+
+template <typename T, gdf_dtype dtype>
+struct TypeToUse<cudf::detail::wrapper<T, dtype>>{
+    using type = typename cudf::detail::wrapper<T,dtype>::value_type;
+};
+
+template <typename T>
+using WrappersNoBoolTest = WrappersTest<T>;
+
+using WrappersNoBool = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
+                                        cudf::date64>;
+
 using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                   cudf::date64, cudf::bool8>;
 
 TYPED_TEST_CASE(WrappersTest, Wrappers);
+TYPED_TEST_CASE(WrappersNoBoolTest, WrappersNoBool);
 
 /**
  * @brief The number of test trials for each operator
@@ -62,7 +84,7 @@ static constexpr int NUM_TRIALS{10000};
 
 TYPED_TEST(WrappersTest, ConstructorTest)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for (int i = 0; i < NUM_TRIALS; ++i) {
       UnderlyingType t{this->rand()};
@@ -73,7 +95,7 @@ TYPED_TEST(WrappersTest, ConstructorTest)
 
 TYPED_TEST(WrappersTest, AssignmentTest)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for (int i = 0; i < NUM_TRIALS; ++i) {
       UnderlyingType const t0{this->rand()};
@@ -89,7 +111,7 @@ TYPED_TEST(WrappersTest, AssignmentTest)
 
 TYPED_TEST(WrappersTest, UnwrapWrapperTest)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for (int i = 0; i < NUM_TRIALS; ++i) {
         UnderlyingType t0{this->rand()};
@@ -107,7 +129,7 @@ TYPED_TEST(WrappersTest, UnwrapWrapperTest)
 
 TYPED_TEST(WrappersTest, UnwrapFundamentalTest)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for (int i = 0; i < NUM_TRIALS; ++i) {
         UnderlyingType t0{this->rand()};
@@ -122,7 +144,7 @@ TYPED_TEST(WrappersTest, UnwrapFundamentalTest)
 
 TYPED_TEST(WrappersTest, ArithmeticOperators)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for(int i = 0; i < NUM_TRIALS; ++i)
     {
@@ -136,20 +158,21 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
         // arithmetic operations. Therefore, need to convert it back to the
         // original type
         EXPECT_EQ(static_cast<UnderlyingType>(t0 + t1),
-                  TypeParam{w0 + w1}.value);
+                  static_cast<UnderlyingType>(TypeParam{w0 + w1}.value));
         EXPECT_EQ(static_cast<UnderlyingType>(t0 - t1),
-                  TypeParam{w0 - w1}.value);
+                  static_cast<UnderlyingType>(TypeParam{w0 - w1}.value));
         EXPECT_EQ(static_cast<UnderlyingType>(t0 * t1),
-                  TypeParam{w0 * w1}.value);
+                  static_cast<UnderlyingType>(TypeParam{w0 * w1}.value));
         if (0 != t1)
           EXPECT_EQ(static_cast<UnderlyingType>(t0 / t1),
-                    TypeParam{w0 / w1}.value);
+                    static_cast<UnderlyingType>(TypeParam{w0 / w1}.value));
     }
 }
 
-
-TYPED_TEST(WrappersTest, IncrementOperators){
-    using UnderlyingType = typename TypeParam::value_type;
+// note testing increment on everything but cudf::bool8 since ++ on bool is 
+// deprecated
+TYPED_TEST(WrappersNoBoolTest, IncrementOperators){
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for(int i = 0; i < NUM_TRIALS; ++i){
         UnderlyingType t{this->rand()};
@@ -159,8 +182,10 @@ TYPED_TEST(WrappersTest, IncrementOperators){
     }
 }
 
-TYPED_TEST(WrappersTest, DecrementOperators){
-    using UnderlyingType = typename TypeParam::value_type;
+// note testing decrement on everything but cudf::bool8 since -- is not allowed
+// on bool
+TYPED_TEST(WrappersNoBoolTest, DecrementOperators){
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for(int i = 0; i < NUM_TRIALS; ++i){
         UnderlyingType t{this->rand()};
@@ -172,7 +197,7 @@ TYPED_TEST(WrappersTest, DecrementOperators){
 
 TYPED_TEST(WrappersTest, BooleanOperators)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for(int i = 0; i < NUM_TRIALS; ++i)
     {
@@ -205,7 +230,7 @@ TYPED_TEST(WrappersTest, BooleanOperators)
 
 TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
 {
-    using UnderlyingType = typename TypeParam::value_type;
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
     for(int i = 0; i < NUM_TRIALS; ++i)
     {
@@ -217,21 +242,21 @@ TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
 
         t0+=t1;
         w0+=w1;
-        EXPECT_EQ(t0, w0.value);
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
 
         t0-=t1;
         w0-=w1;
-        EXPECT_EQ(t0, w0.value);
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
 
         t0*=t1;
         w0*=w1;
-        EXPECT_EQ(t0, w0.value);
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
 
         if( 0 != t1)
         {
             t0/=t1;
             w0/=w1;
-            EXPECT_EQ(t0, w0.value);
+            EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
         }
     }
 }
