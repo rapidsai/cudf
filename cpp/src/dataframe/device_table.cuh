@@ -147,39 +147,6 @@ public:
     return _num_rows;
   }
 
-  /** 
-   * @brief  Packs the elements of a specified row into a contiguous byte-buffer
-   *
-   * This function is called by a single thread, and the thread will copy each element
-   * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
-   * by passing in a cooperative group. 
-   * 
-   * @param index The row of the table to return
-   * @param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
-      row of the table 
-   * 
-   */
-  __device__
-  gdf_error pack_row(gdf_size_type row_index, void * row_byte_buffer) const
-  {
-    if(nullptr == row_byte_buffer) {
-      return GDF_DATASET_EMPTY;
-    }
-
-    // Pack the element from each column in the row into the buffer
-    for(gdf_size_type i = 0; i < _num_columns; ++i)
-    {
-      const gdf_dtype source_col_type = d_columns_types_ptr[i];
-
-      cudf::type_dispatcher(source_col_type,
-                            copy_element{},
-                            row_byte_buffer, i,
-                            d_columns_data_ptr[i], row_index);
-
-    }
-    return GDF_SUCCESS;
-  }
-
   struct copy_element{
     template <typename ColumnType>
     __device__ __forceinline__
@@ -190,7 +157,6 @@ public:
       ColumnType const& source_value{static_cast<ColumnType const*>(source_column)[source_row_index]};
       target_value = source_value;
     }
-
   };
 
   /**
