@@ -19,6 +19,7 @@
 
 #include "cudf_test_utils.cuh"
 #include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 
 namespace {
 
