@@ -141,10 +141,14 @@ gdf_error estimate_join_output_size(device_table const & build_table,
     // Device sync is required to ensure d_size_estimate is updated
     CUDA_TRY( cudaDeviceSynchronize() );
     
-    	
-    // Increase the estimated output size by a factor of the ratio between the
+    // Only in case subset of probe table is chosen,
+    // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
-    h_size_estimate = *d_size_estimate * probe_to_build_ratio;
+    if(sample_probe_num_rows < probe_table_num_rows) {
+      h_size_estimate = *d_size_estimate * probe_to_build_ratio;
+    } else {
+      h_size_estimate = *d_size_estimate;
+    }
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire

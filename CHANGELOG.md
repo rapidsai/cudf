@@ -12,8 +12,9 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
-- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 
 ## Improvements
 
@@ -69,7 +70,8 @@
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
 - PR #1446 Merge 1275 hotfix from master into branch-0.7
 - PR #1447 Fix legacy groupby apply docstring
-
+- PR #1451 Fix hash join estimated result size is not correct
+- PR #1454 Fix local build script improperly change directory permissions
 
 # cuDF 0.6.1 (25 Mar 2019)
 
