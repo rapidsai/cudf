@@ -516,9 +516,8 @@ gdf_error hash_partition_device_table(device_table const & input_table,
   cudf::table destination_table{partitioned_output.columns(),
                                 input_table.num_columns()};
 
-  auto gdf_status = cudf::detail::scatter(&source_table, row_output_locations,
-                                          &destination_table);
-  GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+  cudf::detail::scatter(&source_table, row_output_locations,
+                        &destination_table);
 
   CUDA_CHECK_LAST();
 

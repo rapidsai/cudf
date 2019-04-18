@@ -8,12 +8,16 @@
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
 - PR #1381 Add DataFrame._get_numeric_data
+- PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 
 ## Improvements
 
+- PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
@@ -33,6 +37,10 @@
 - PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
+- PR #1435 Rework CMake and conda recipes to depend on installed libraries
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
+- PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 
 ## Bug Fixes
 
@@ -54,12 +62,23 @@
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1421 Fix remove creation of series multiple times during `add_column()`
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
 - PR #1433 Fix NVStrings/categories includes
+- PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
+- PR #1446 Merge 1275 hotfix from master into branch-0.7
+- PR #1447 Fix legacy groupby apply docstring
 
 
-# cuDF 0.6.0 (Date TBD)
+# cuDF 0.6.1 (25 Mar 2019)
+
+## Bug Fixes
+
+- PR #1275 Fix CentOS exception in DataFrame.hash_partition from using value "returned" by a void function
+
+
+# cuDF 0.6.0 (22 Mar 2019)
 
 ## New Features
 
