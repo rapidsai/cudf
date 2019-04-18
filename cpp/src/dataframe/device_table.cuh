@@ -322,20 +322,38 @@ struct hash_element {
       hash_value = hasher.hash_combine(hash_value, key_hash);
   }
 };
+
+template <template <typename> typename hash_function>
+struct hash_it {
+  template <typename col_type>
+  __device__ inline hash_value_type operator()(gdf_column const& col,
+                                               gdf_size_type row_index) {
+    hash_function<col_type> hasher;
+
+    // treat null values as the lowest possible value of the type
+    col_type const value_to_hash =
+        gdf_is_valid(col.valid, row_index)
+            ? static_cast<col_type*>(col.data)[row_index]
+            : std::numeric_limits<col_type>::lowest();
+
+    return hasher(value_to_hash);
+  }
+};
 }  // namespace
 
 /**
  * --------------------------------------------------------------------------*
  * @brief Computes the hash value for a row in a table
  *
- * @note NULL values are ignored. If a row contains all NULL values, it will
- * return a hash value of 0.
+ * @note NULL values are treated as an implementation defined discrete value,
+ * such that hashing any two NULL values in columns of the same type will return
+ * the same hash value.
  *
  * @param[in] row_index The row of the table to compute the hash value for
  * @param[in] num_columns_to_hash The number of columns in the row to hash. If
  * 0, hashes all columns
- * @param[in] initial_hash_values Optional initial hash values to combine with
- * each column's hashed values
+ * @param[in] initial_hash_values Optional array of initial hash values for each
+ * column
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
  *
@@ -344,30 +362,29 @@ struct hash_element {
 template <template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
-    hash_value_type* initial_hash_values = nullptr,
-    gdf_size_type num_columns_to_hash = 0) {
-  hash_value_type hash_value{0};
+    hash_value_type* initial_hash_values = nullptr) {
+  auto hasher = [row_index, &t,
+                 initial_hash_values](gdf_size_type column_index) {
+    hash_value_type hash_value = cudf::type_dispatcher(
+        t.device_column(column_index)->dtype, hash_it<hash_function>{},
+        *t.device_column(column_index), row_index);
 
-  // If num_columns_to_hash is zero, hash all columns
-  if (0 == num_columns_to_hash) {
-    num_columns_to_hash = t.num_columns();
-  }
-
-  bool const use_initial_value{initial_hash_values != nullptr};
-
-  // Iterate all the columns and hash each element, combining the hash values
-  // together
-  for (gdf_size_type i = 0; i < num_columns_to_hash; ++i) {
-    // Skip null values
-    if (gdf_is_valid(t.d_columns_valids_ptr[i], row_index)) {
-      hash_value_type const initial_hash_value =
-          (use_initial_value) ? initial_hash_values[i] : 0;
-      cudf::type_dispatcher(t.column_types[i], hash_element<hash_function>{},
-                            hash_value, t.d_columns_data_ptr[i], row_index, i,
-                            use_initial_value, initial_hash_value);
+    if (initial_hash_values != nullptr) {
+      hash_value = hash_function<hash_value_type>{}.hash_combine(
+          hash_value, initial_hash_values[column_index]);
     }
-  }
-  return hash_value;
+
+    return hash_value;
+  };
+
+  auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+    return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+  };
+
+  return thrust::transform_reduce(
+      thrust::seq, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(t.num_columns()), hasher,
+      hash_value_type{0}, hash_combiner);
 }
 
 namespace {
@@ -388,9 +405,6 @@ struct copy_element {
  *
  * This device function should be called by a single thread and the thread
  * will copy all of the elements in the row from one table to the other.
- *
- * @note This function do not guard against race conditions in either the source
- * or target row.
  *
  * FIXME: Does NOT set null bitmask for the target row.
  *
