@@ -41,7 +41,7 @@
 - PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
 - PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
 - PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
-
+- PR #1451 Fix hash join estimated result size is not correct
 
 # cuDF 0.6.0 (Date TBD)
 
