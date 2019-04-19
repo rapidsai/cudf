@@ -117,9 +117,9 @@ struct row_comparator
 * @brief Performs the groupby operation for an arbtirary number of groupby columns and
 * and a single aggregation column.
 * 
-* @param[in] groupby_input_table The set of columns to groupby
+* @param[in] input_keys The set of columns to groupby
 * @param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
-* @param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
+* @param[out] output_keys Preallocated buffer(s) for the groupby column result. This will hold a single
 * entry for every unique row in the input table.
 * @param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
 *                                     corresponds to the out_groupby_column where entry 'i' is the aggregation 
@@ -131,17 +131,15 @@ struct row_comparator
 * @returns   
 */
 /* ----------------------------------------------------------------------------*/
-template< typename aggregation_type,
-          typename aggregation_operation>
-gdf_error GroupbyHash(device_table const & groupby_input_table,
-                        const aggregation_type * const in_aggregation_column,
-                        device_table & groupby_output_table,
-                        aggregation_type * out_aggregation_column,
-                        gdf_size_type * out_size,
-                        aggregation_operation aggregation_op,
-                        bool sort_result = false)
-{
-  const gdf_size_type input_num_rows = groupby_input_table.num_rows();
+template <typename aggregation_type, typename aggregation_operation>
+gdf_error GroupbyHash(cudf::table const& input_keys,
+                      const aggregation_type* const in_aggregation_column,
+                      cudf::table& output_keys,
+                      aggregation_type* out_aggregation_column,
+                      gdf_size_type* out_size,
+                      aggregation_operation aggregation_op,
+                      bool sort_result = false) {
+  const gdf_size_type input_num_rows = input_keys.num_rows();
 
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
@@ -164,30 +162,35 @@ gdf_error GroupbyHash(device_table const & groupby_input_table,
 
   CUDA_TRY(cudaGetLastError());
 
+
+  auto d_input_keys = device_table::create(input_keys);
+
   // Inserts (i, aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
   // is computed between the new and existing value, and the result is stored back.
   build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
-                                                           groupby_input_table, 
+                                                           *d_input_keys, 
                                                            in_aggregation_column,
                                                            input_num_rows,
                                                            aggregation_op,
-                                                           row_comparator<map_type>(*the_map, groupby_input_table, groupby_input_table));
+                                                           row_comparator<map_type>(*the_map, *d_input_keys, *d_input_keys));
   CUDA_TRY(cudaGetLastError());
+
+
+  auto d_output_keys = device_table::create(output_keys);
 
   // Used by threads to coordinate where to write their results
   gdf_size_type * global_write_index{nullptr};
   RMM_TRY(RMM_ALLOC((void**)&global_write_index, sizeof(gdf_size_type), 0)); // TODO: non-default stream?
   CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(gdf_size_type)));
-
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
 
   // Extracts every non-empty key and value into separate contiguous arrays,
   // which provides the result of the groupby operation
   extract_groupby_result<<<extract_grid_size, block_size>>>(the_map.get(),
                                                             hash_table_size,
-                                                            groupby_output_table,
-                                                            groupby_input_table,
+                                                            *d_output_keys,
+                                                            *d_input_keys,
                                                             out_aggregation_column,
                                                             global_write_index);
  
@@ -197,7 +200,11 @@ gdf_error GroupbyHash(device_table const & groupby_input_table,
   // the size of the output. Update the output size.
   CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(gdf_size_type), cudaMemcpyDeviceToHost) );
   RMM_TRY( RMM_FREE(global_write_index, 0) );
-  groupby_output_table.set_num_rows(*out_size);
+
+  // Update the size of the output key columns
+  std::for_each(output_keys.begin(), output_keys.end(),
+                [out_size](gdf_column* col) { col->size = *out_size; });
+
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
@@ -211,18 +218,15 @@ gdf_error GroupbyHash(device_table const & groupby_input_table,
       if (status != GDF_SUCCESS)
         return status;
 
-      status = gdf_order_by(groupby_output_table.columns(),             //input columns
-                       nullptr,
-                       groupby_output_table.num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                       0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+      status = gdf_order_by(output_keys.begin(), nullptr,
+                            output_keys.num_columns(), &sorted_indices_col, 0);
+
       if (status != GDF_SUCCESS)
         return status;
 
       // Reorder table according to indices from order_by
-      cudf::table result_table(groupby_output_table.columns(),
-                               groupby_output_table.num_columns());
-      cudf::detail::gather(&result_table, sorted_indices.data().get(), &result_table);
+      cudf::detail::gather(&output_keys, sorted_indices.data().get(),
+                           &output_keys);
 
       rmm::device_vector<aggregation_type> temporary_aggregation_buffer(*out_size);
       thrust::gather(rmm::exec_policy()->on(0),

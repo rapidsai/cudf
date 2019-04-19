@@ -17,11 +17,10 @@
  */
 
 #include <cuda_runtime.h>
-
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
-#include "dataframe/device_table.cuh"
-
+#include <utilities/error_utils.hpp>
+#include <dataframe/device_table.cuh>
+#include <types.hpp>
+#include <cudf.h>
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
@@ -33,9 +32,9 @@
  * @brief Calls the Hash Based group by compute API to compute the groupby with 
  * aggregation.
  * 
- * @param groupby_input_table The input groupby table
+ * @param input_keys The input groupby table
  * @param in_aggregation_column The input aggregation column
- * @param groupby_output_table The output groupby table
+ * @param output_keys The output groupby table
  * @param out_aggregation_column The output aggregation column
  * @param sort_result Flag to optionally sort the output
  * @tparam aggregation_type  The type of the aggregation column
@@ -46,9 +45,9 @@
 /* ----------------------------------------------------------------------------*/
 template <typename aggregation_type, 
           template <typename T> class op>
-gdf_error typed_groupby(device_table const & groupby_input_table,
+gdf_error typed_groupby(cudf::table const & input_keys,
                         gdf_column* in_aggregation_column,       
-                        device_table & groupby_output_table,
+                        cudf::table & output_keys,
                         gdf_column* out_aggregation_column,
                         bool sort_result = false)
 {
@@ -62,9 +61,9 @@ gdf_error typed_groupby(device_table const & groupby_input_table,
 
   gdf_size_type output_size{0};
 
-  gdf_error gdf_error_code = GroupbyHash(groupby_input_table, 
+  gdf_error gdf_error_code = GroupbyHash(input_keys, 
                                          in_agg_col, 
-                                         groupby_output_table, 
+                                         output_keys, 
                                          out_agg_col, 
                                          &output_size, 
                                          op_type(), 
@@ -104,9 +103,9 @@ struct typed_groupby_functor
  */
 /* ----------------------------------------------------------------------------*/
 template <template <typename T> class op>
-gdf_error dispatch_aggregation_type(device_table const & groupby_input_table,        
+gdf_error dispatch_aggregation_type(cudf::table const & input_keys,        
                                     gdf_column* in_aggregation_column,       
-                                    device_table & groupby_output_table,
+                                    cudf::table & output_keys,
                                     gdf_column* out_aggregation_column,
                                     bool sort_result = false)
 {
@@ -129,9 +128,9 @@ gdf_error dispatch_aggregation_type(device_table const & groupby_input_table,
 
   return cudf::type_dispatcher(aggregation_column_type,
                               typed_groupby_functor<op>{},
-                              groupby_input_table, 
+                              input_keys, 
                               in_aggregation_column, 
-                              groupby_output_table, 
+                              output_keys, 
                               out_aggregation_column, 
                               sort_result);
 
@@ -185,13 +184,12 @@ gdf_error gdf_group_by_hash(gdf_size_type ncols,
     return GDF_SUCCESS;
   }
 
-  // Wrap the groupby input and output columns in a device_table
-  auto groupby_input_table = device_table::create(ncols, in_groupby_columns);
-  auto groupby_output_table = device_table::create(ncols, out_groupby_columns);
+  cudf::table input_keys{in_groupby_columns, ncols};
+  cudf::table output_keys{out_groupby_columns, ncols};
 
-  return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
+  return dispatch_aggregation_type<aggregation_operation>(input_keys, 
                                                           in_aggregation_column, 
-                                                          *groupby_output_table, 
+                                                          output_keys, 
                                                           out_aggregation_column, 
                                                           sort_result);
 }
