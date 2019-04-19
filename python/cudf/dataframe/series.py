@@ -1493,7 +1493,7 @@ class Series(object):
         assert axis in (None, 0) and freq is None and fill_value is None
 
         if self.null_count != 0:
-            raise AssertionError("Diff currently requires columns with no "
+            raise AssertionError("Shift currently requires columns with no "
                                  "null values")
 
         if not np.issubdtype(self.dtype, np.number):
