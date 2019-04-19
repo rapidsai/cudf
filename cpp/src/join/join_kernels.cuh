@@ -48,7 +48,7 @@ enum class JoinType {
 /* ----------------------------------------------------------------------------*/
 template<typename multimap_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
-                                  device_table const & build_table,
+                                  device_table build_table,
                                   const gdf_size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
 {
@@ -123,8 +123,8 @@ template< JoinType join_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
-                                          device_table const & build_table,
-                                          device_table const & probe_table,
+                                          device_table build_table,
+                                          device_table probe_table,
                                           const gdf_size_type probe_table_num_rows,
                                           gdf_size_type* output_size)
 {
@@ -250,8 +250,8 @@ template< JoinType join_type,
           gdf_size_type block_size,
           gdf_size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type const * const multi_map,
-                                  device_table const & build_table,
-                                  device_table const & probe_table,
+                                  device_table build_table,
+                                  device_table probe_table,
                                   const gdf_size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
                                   output_index_type * join_output_r,
