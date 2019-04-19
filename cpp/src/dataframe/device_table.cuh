@@ -36,7 +36,7 @@
  * size
  *
  */
-class device_table : public managed {
+class device_table {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Factory function to construct a device_table wrapped in a
@@ -62,10 +62,6 @@ class device_table : public managed {
 
     std::unique_ptr<device_table, decltype(deleter)> p{
         new device_table(num_columns, cols, stream), deleter};
-
-    int dev_id = 0;
-    CUDA_TRY(cudaGetDevice(&dev_id));
-    CUDA_TRY(cudaMemPrefetchAsync(p.get(), sizeof(*p), dev_id, stream))
 
     CHECK_STREAM(stream);
 

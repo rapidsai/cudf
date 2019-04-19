@@ -64,8 +64,8 @@ struct row_comparator
    */
   /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
-                 device_table const & l_table,
-                 device_table const & r_table) 
+                 device_table l_table,
+                 device_table r_table) 
                 : the_map{map}, 
                   left_table{l_table}, 
                   right_table{r_table},
@@ -108,8 +108,8 @@ struct row_comparator
   const map_key_comparator default_comparator{};
   const key_type unused_key;
   map_type const & the_map;
-  device_table const & left_table;
-  device_table const & right_table;
+  device_table left_table;
+  device_table right_table;
 };
 
 /* --------------------------------------------------------------------------*/

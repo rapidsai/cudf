@@ -44,7 +44,7 @@ template <template <typename> class hash_function>
 struct row_partition_mapper
 {
   __device__
-  row_partition_mapper(device_table const & table_to_hash, const gdf_size_type _num_partitions)
+  row_partition_mapper(device_table table_to_hash, const gdf_size_type _num_partitions)
     : the_table{table_to_hash}, num_partitions{_num_partitions}
   {}
 
@@ -54,7 +54,7 @@ struct row_partition_mapper
     return hash_row<hash_function>(the_table, row_index) % num_partitions;
   }
 
-  device_table const & the_table;
+  device_table the_table;
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
