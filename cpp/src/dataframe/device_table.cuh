@@ -92,7 +92,7 @@ class device_table : public managed {
 
   device_table() = delete;
   device_table(device_table const& other) = default;
-  device_table& operator=(device_table const& other) = delete;
+  device_table& operator=(device_table const& other) = default;
   ~device_table() = default;
 
   __device__ gdf_column const* get_column(gdf_size_type index) const {
@@ -108,7 +108,7 @@ class device_table : public managed {
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
 
  private:
-  const gdf_size_type _num_columns;  ///< The number of columns in the table
+  gdf_size_type _num_columns;  ///< The number of columns in the table
   gdf_size_type _num_rows{0};        ///< The number of rows in the table
   gdf_column* device_columns{ nullptr};  ///< Array of `gdf_column`s in device memory
   cudaStream_t _stream;  ///< Stream used to allocate/free the table's device memory
