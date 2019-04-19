@@ -395,14 +395,12 @@ void compute_row_output_locations(gdf_size_type * row_partition_numbers,
  * @tparam hash_function The hash function that will be used to hash the rows
  */
 /* ----------------------------------------------------------------------------*/
-template < template <typename> class hash_function>
-gdf_error hash_partition_device_table(device_table const & input_table,
-                                   device_table const & table_to_hash,
-                                   const gdf_size_type num_partitions,
-                                   gdf_size_type * partition_offsets,
-                                   device_table & partitioned_output)
-{
-
+template <template <typename> class hash_function>
+gdf_error hash_partition_table(cudf::table const &input_table,
+                               cudf::table const &table_to_hash,
+                               const gdf_size_type num_partitions,
+                               gdf_size_type *partition_offsets,
+                               cudf::table &partitioned_output) {
   const gdf_size_type num_rows = table_to_hash.num_rows();
 
   constexpr gdf_size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
@@ -425,6 +423,8 @@ gdf_error hash_partition_device_table(device_table const & input_table,
   RMM_TRY( RMM_ALLOC((void**)&global_partition_sizes, num_partitions * sizeof(gdf_size_type), 0) );
   CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(gdf_size_type)) );
 
+  auto d_table_to_hash = device_table::create(table_to_hash);
+
   // If the number of partitions is a power of two, we can compute the partition 
   // number of each row more efficiently with bitwise operations
   if( true == is_power_two(num_partitions) )
@@ -436,13 +436,10 @@ gdf_error hash_partition_device_table(device_table const & input_table,
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
-    <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(table_to_hash, 
-                                                                    num_rows,
-                                                                    num_partitions,
-                                                                    partitioner_type(num_partitions),
-                                                                    row_partition_numbers,
-                                                                    block_partition_sizes,
-                                                                    global_partition_sizes);
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(
+            *d_table_to_hash, num_rows, num_partitions,
+            partitioner_type(num_partitions), row_partition_numbers,
+            block_partition_sizes, global_partition_sizes);
 
   }
   else
@@ -454,13 +451,10 @@ gdf_error hash_partition_device_table(device_table const & input_table,
     // a partitioning operator on the hash value. Also computes the number of
     // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
-    <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(table_to_hash, 
-                                                                    num_rows,
-                                                                    num_partitions,
-                                                                    partitioner_type(num_partitions),
-                                                                    row_partition_numbers,
-                                                                    block_partition_sizes,
-                                                                    global_partition_sizes);
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(
+            *d_table_to_hash, num_rows, num_partitions,
+            partitioner_type(num_partitions), row_partition_numbers,
+            block_partition_sizes, global_partition_sizes);
   }
 
 
@@ -510,13 +504,8 @@ gdf_error hash_partition_device_table(device_table const & input_table,
   // Creates the partitioned output table by scattering the rows of
   // the input table to rows of the output table based on each rows
   // output location
-  cudf::table source_table{input_table.columns(),
-                           input_table.num_columns()};
-  cudf::table destination_table{partitioned_output.columns(),
-                                input_table.num_columns()};
-
-  cudf::detail::scatter(&source_table, row_output_locations,
-                        &destination_table);
+  cudf::detail::scatter(&input_table, row_output_locations,
+                        &partitioned_output);
 
   CUDA_CHECK_LAST();
 
@@ -599,9 +588,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
   PUSH_RANGE("LIBGDF_HASH_PARTITION", PARTITION_COLOR);
 
-  // Wrap input and output columns in device_table
-  auto input_table = device_table::create(num_input_cols, input);
-  auto output_table = device_table::create(num_input_cols, partitioned_output);
+  cudf::table input_table(input, num_input_cols);
+  cudf::table output_table(partitioned_output, num_input_cols);
 
   // Create vector of pointers to columns that will be hashed
   std::vector<gdf_column *> gdf_columns_to_hash(num_cols_to_hash);
@@ -609,23 +597,24 @@ gdf_error gdf_hash_partition(int num_input_cols,
   {
     gdf_columns_to_hash[i] = input[columns_to_hash[i]];
   }
+
   // Create a separate table of the columns to be hashed
-  auto table_to_hash =
-      device_table::create(num_cols_to_hash, gdf_columns_to_hash.data());
+  cudf::table table_to_hash(gdf_columns_to_hash.data(),
+                            gdf_columns_to_hash.size());
 
   gdf_error gdf_status{GDF_SUCCESS};
 
   switch (hash) {
     case GDF_HASH_MURMUR3: {
-      gdf_status = hash_partition_device_table<MurmurHash3_32>(
-          *input_table, *table_to_hash, num_partitions, partition_offsets,
-          *output_table);
+      gdf_status = hash_partition_table<MurmurHash3_32>(
+          input_table, table_to_hash, num_partitions, partition_offsets,
+          output_table);
       break;
     }
     case GDF_HASH_IDENTITY: {
-      gdf_status = hash_partition_device_table<IdentityHash>(
-          *input_table, *table_to_hash, num_partitions, partition_offsets,
-          *output_table);
+      gdf_status = hash_partition_table<IdentityHash>(
+          input_table, table_to_hash, num_partitions, partition_offsets,
+          output_table);
       break;
     }
     default:
