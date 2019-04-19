@@ -38,8 +38,6 @@
  */
 class device_table : public managed {
  public:
-  using size_type = int64_t;
-
   /**---------------------------------------------------------------------------*
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
@@ -124,7 +122,7 @@ class device_table : public managed {
    * @param num_cols
    * @param columns
    *---------------------------------------------------------------------------**/
-  device_table(size_type num_cols, gdf_column** columns,
+  device_table(gdf_size_type num_cols, gdf_column** columns,
                cudaStream_t stream = 0)
       : _num_columns(num_cols) {
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
@@ -134,7 +132,7 @@ class device_table : public managed {
 
     std::vector<gdf_column> temp_columns(num_cols);
 
-    for (size_type i = 0; i < num_cols; ++i) {
+    for (gdf_size_type i = 0; i < num_cols; ++i) {
       CUDF_EXPECTS(nullptr != columns[i], "Column is null");
       CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
