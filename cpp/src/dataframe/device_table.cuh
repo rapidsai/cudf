@@ -74,8 +74,8 @@ class device_table : public managed {
     return p;
   }
 
-  static auto create(cudf::table& t, cudaStream_t stream = 0) {
-    return device_table::create(t.num_columns(), t.begin(), stream);
+  static auto create(cudf::table const& t, cudaStream_t stream = 0) {
+    return device_table::create(t.num_columns(), t.columns(), stream);
   }
 
   /**---------------------------------------------------------------------------*
