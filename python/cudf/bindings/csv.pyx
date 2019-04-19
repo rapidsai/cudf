@@ -294,17 +294,16 @@ cpdef cpp_read_csv(
     cdef vector[const char*] use_cols_char
     if usecols is not None:
         arr_col_names = []
-        # Need to fix this closure
         all_int = True
         for col in usecols:
             if not isinstance(col, int):
                 all_int = False
                 break
-        # if(all(isinstance(x, int) for x in usecols)):
         if all_int:
             # usecols_ptr = ffi.new('int[]', usecols)
             use_cols_int = usecols
-            usecols_ptr = &use_cols_int[0]
+            # usecols_ptr = &use_cols_int[0]
+            usecols_ptr = use_cols_int.data()
             csv_reader.use_cols_int = usecols_ptr
             csv_reader.use_cols_int_len = len(usecols)
         else:
@@ -312,7 +311,8 @@ cpdef cpp_read_csv(
                 arr_col_names.append(_wrap_string(col_name))
             # col_names_ptr = ffi.new('char*[]', arr_col_names)
             use_cols_char = arr_col_names
-            col_names_ptr = &use_cols_char[0]
+            # col_names_ptr = &use_cols_char[0]
+            col_names_ptr = use_cols_char.data()
             csv_reader.use_cols_char = col_names_ptr
             csv_reader.use_cols_char_len = len(usecols)
 
@@ -330,38 +330,55 @@ cpdef cpp_read_csv(
             raise ValueError("""cannot manually limit rows to be read when
                                 using the byte range parameter""")
 
-    arr_true_values = []
+    # arr_true_values = []
     cdef vector[const char*] vector_true_values
     for value in true_values or []:
-        arr_true_values.append(_wrap_string(str(value)))
-    vector_true_values = arr_true_values
+        # arr_true_values.append(_wrap_string(str(value)))
+        vector_true_values.push_back(_wrap_string(str(value)))
+    # vector_true_values = arr_true_values
     # arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
-    arr_true_values_ptr = &vector_true_values[0]
+    # arr_true_values_ptr = &vector_true_values[0]
+    arr_true_values_ptr = vector_true_values.data()
     csv_reader.true_values = arr_true_values_ptr
-    csv_reader.num_true_values = len(arr_true_values)
+    csv_reader.num_true_values = len(vector_true_values)
 
-    arr_false_values = []
+    # arr_false_values = []
     cdef vector[const char*] vector_false_values
     for value in false_values or []:
-        arr_false_values.append(_wrap_string(str(value)))
-    vector_false_values = arr_false_values
+        # arr_false_values.append(_wrap_string(str(value)))
+        vector_false_values.push_back(_wrap_string(str(value)))
+    # vector_false_values = arr_false_values
     # false_values_ptr = ffi.new('char*[]', arr_false_values)
-    false_values_ptr = &vector_false_values[0]
+    # false_values_ptr = &vector_false_values[0]
+    false_values_ptr = vector_false_values.data()
     csv_reader.false_values = false_values_ptr
-    csv_reader.num_false_values = len(arr_false_values)
+    csv_reader.num_false_values = len(vector_false_values)
 
-    arr_na_values = []
+    # arr_na_values = []
     cdef vector[const char*] vector_na_values
     for value in na_values or []:
-        arr_na_values.append(_wrap_string(str(value)))
-    vector_na_values = arr_na_values
+        # arr_na_values.append(_wrap_string(str(value)))
+        vector_na_values.push_back(_wrap_string(str(value)))
+    # vector_na_values = arr_na_values
     # arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
-    arr_na_values_ptr = &vector_na_values[0]
+    # arr_na_values_ptr = &vector_na_values[0]
+    arr_na_values_ptr = vector_na_values.data()
     csv_reader.na_values = arr_na_values_ptr
-    csv_reader.num_na_values = len(arr_na_values)
+    csv_reader.num_na_values = len(vector_na_values)
 
-    compression_bytes = _wrap_string(compression)
-    prefix_bytes = _wrap_string(prefix)
+    # compression_bytes = _wrap_string(compression)
+    if compression is None:
+        compression_bytes = <char*>NULL
+    else:
+        compression = compression.encode()
+        compression_bytes = <char*>compression
+
+    # prefix_bytes = _wrap_string(prefix)
+    if prefix is None:
+        prefix_bytes = <char*>NULL
+    else:
+        prefix = prefix.encode()
+        prefix_bytes = <char*>prefix
 
     csv_reader.delimiter = delimiter.encode()[0]
     csv_reader.lineterminator = lineterminator.encode()[0]
@@ -392,7 +409,6 @@ cpdef cpp_read_csv(
     csv_reader.na_filter = na_filter
     csv_reader.prefix = prefix_bytes
 
-    print(os.getcwd())
     # Call read_csv
     with nogil:
         result = read_csv(&csv_reader)
