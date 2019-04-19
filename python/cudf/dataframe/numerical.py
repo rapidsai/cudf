@@ -101,6 +101,11 @@ class NumericalColumn(columnops.TypedColumnBase):
     def ordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
 
+    def _apply_scan_op(self, op):
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
+        cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
+        return out_col
+
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
