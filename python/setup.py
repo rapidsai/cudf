@@ -45,7 +45,7 @@ setup(name='cudf',
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
       package_data={
-        'cudf.tests': ['data/*.pickle'],
+        'cudf.tests': ['data/*.pkl','data/orc/*.orc'],
       },
       install_requires=install_requires,
       license="Apache",
