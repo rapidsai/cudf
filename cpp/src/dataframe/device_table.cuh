@@ -109,7 +109,6 @@ class device_table : public managed {
     }
   }
 
-  __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
 
   __host__ gdf_column const* host_column(gdf_size_type index) const {
     return host_columns[index];
@@ -121,20 +120,16 @@ class device_table : public managed {
   __device__ gdf_column const* device_column(gdf_size_type index) const {
     return &device_columns[index];
   }
-  __device__ gdf_column* device_column(gdf_size_type index) {
-    return &device_columns[index];
-  }
 
   __device__ gdf_column const* begin() const { return device_columns; }
-  __device__ gdf_column* begin() { return device_columns; }
 
   __device__ gdf_column const* end() const {
     return device_columns + _num_columns;
   }
-  __device__ gdf_column* end() { return device_columns + _num_columns; }
 
   __host__ gdf_column** columns() const { return host_columns; }
 
+  __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
 
  private:
@@ -144,7 +139,7 @@ class device_table : public managed {
   gdf_column** host_columns{
       nullptr}; /** The set of gdf_columns that this table wraps */
 
-  gdf_column* device_columns{nullptr};
+  gdf_column * device_columns{nullptr};
 
   cudaStream_t _stream;
 
@@ -330,7 +325,7 @@ __device__ inline hash_value_type hash_row(
 namespace {
 struct copy_element {
   template <typename T>
-  __device__ inline void operator()(gdf_column& target,
+  __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
                                     gdf_column const& source,
                                     gdf_size_type source_index) {
