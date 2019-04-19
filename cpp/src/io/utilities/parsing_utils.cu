@@ -193,8 +193,8 @@ template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h
  **/
 struct BlockSumArray {
 		int16_t* d_sums = nullptr;	///< Array of partial sums
-		const uint64_t length = 0;	///< Length of the array
-		const uint64_t block_size;	///< The number of elements aggregated into each partial sum
+		uint64_t length;			///< Length of the array
+		uint64_t block_size;		///< The number of elements aggregated into each partial sum
 
 		BlockSumArray(uint64_t len, uint64_t bsize): length(len), block_size(bsize){}
 };
@@ -202,13 +202,14 @@ struct BlockSumArray {
 /**
  * @brief A class that stores a pyramid of aggregated sums, in the GPU memory.
  *
- * Each level of the pyramid is aggregation_rate times smaller than the previous, rounded down.
+ * Pyramid levels are stored bottom to top; each level is aggregation_rate
+ * times smaller than the previous one, rounded down.
  * Objects of this type own the allocated memory.
  **/
 class BlockSumPyramid {
-	const uint16_t aggregation_rate_ = 32;	///< Aggregation rate between each level of the pyramid
-	BlockSumArray* d_levels_ = nullptr;		///< Device array of partial sums, largest to smallest
-	std::vector<BlockSumArray> levels_;		///< Host array of the partial sums on device, largest to smallest
+	const uint16_t aggregation_rate_ = 32;			///< Aggregation rate between each level of the pyramid
+	thrust::host_vector<BlockSumArray> h_levels_;	///< Host: pyramid levels (lowest to highest)
+	rmm::device_vector<BlockSumArray> d_levels_;	///< Device: pyramid levels (lowest to highest)
 
 public:
 	BlockSumPyramid(int input_count){
@@ -216,21 +217,22 @@ public:
 		int prev_count = input_count;
 		int prev_block_size = 1;
 		while (prev_count >= aggregation_rate_) {
-			levels_.emplace_back(prev_count/aggregation_rate_, prev_block_size*aggregation_rate_);
-			RMM_ALLOC(&levels_.back().d_sums, levels_.back().length*sizeof(int16_t), 0);
-			prev_count = levels_.back().length;
-			prev_block_size = levels_.back().block_size;
+			// We round down when computing the level sizes. Thus, there may be some elements in the input
+			// array that are outside of the pyramid (up to aggregation_rate_ - 1 elements).
+			h_levels_.push_back(BlockSumArray(prev_count/aggregation_rate_, prev_block_size*aggregation_rate_));
+			RMM_ALLOC(&h_levels_.back().d_sums, h_levels_.back().length*sizeof(int16_t), 0);
+			prev_count = h_levels_.back().length;
+			prev_block_size = h_levels_.back().block_size;
 		}
 
-		if (!levels_.empty()) {	
-			RMM_ALLOC(&d_levels_, levels_.size()*sizeof(BlockSumArray), 0);
-			cudaMemcpyAsync(d_levels_, levels_.data(), levels_.size()*sizeof(BlockSumArray), cudaMemcpyDefault);
+		if (!h_levels_.empty()) {
+			d_levels_ = h_levels_;
 		}
 	}
 
-	auto operator[](int level_idx) const {return levels_[level_idx];}
-	auto deviceGetLevels() const noexcept {return d_levels_;}
-	auto getHeight() const noexcept {return levels_.size();}
+	auto operator[](int level_idx) const {return h_levels_[level_idx];}
+	auto deviceGetLevels() const noexcept {return d_levels_.data().get();}
+	auto getHeight() const noexcept {return h_levels_.size();}
 	auto getAggregationRate() const {return aggregation_rate_;}
 
 	// disable copying
@@ -238,10 +240,9 @@ public:
 	BlockSumPyramid& operator=(BlockSumPyramid&) = delete;
 
 	~BlockSumPyramid() {
-		for (auto& level: levels_) {
+		for (auto& level: h_levels_) {
 			RMM_FREE(level.d_sums, 0);
 		}
-		RMM_FREE(d_levels_, 0);
 	}
 };
 
@@ -386,9 +387,9 @@ void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
  *---------------------------------------------------------------------------**/
 __global__
 void assignLevelsKernel(
-	pos_key_pair* brackets, uint64_t count,
-	BlockSumArray* sum_pyramid, int pyramid_height,
-	char* open_chars, char* close_chars, int bracket_char_cnt,
+	const pos_key_pair* brackets, uint64_t count,
+	const BlockSumArray* sum_pyramid, int pyramid_height,
+	const char* open_chars, const char* close_chars, int bracket_char_cnt,
 	int16_t* levels) {
 	// Process the number of elements equal to the aggregation rate, if the pyramid is used
 	// Process all elements otherwise
@@ -473,7 +474,9 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 /**---------------------------------------------------------------------------*
  * @brief Computes nested levels for each of the brackets in the input array
  * 
- * The input array of brackets is sorted before levels are computed. 
+ * The input array of brackets is sorted before levels are computed.
+ * The algorithms assumes well-formed input, i.e. brackets are correctly nested
+ * and there are no brackets that should be ignored (e.g. qouted brackets)
  * Brackets at the top level are assigned level 1.
  * 
  * @param[in] brackets Device memory array of brackets, in (offset, key) format
@@ -492,7 +495,8 @@ device_buffer<int16_t> getBracketLevels(
 	// Total bracket level difference within each segment of brackets
 	BlockSumPyramid aggregated_sums(count);
 	
-	assert(open_chars.size() == open_chars.size());
+	CUDF_EXPECTS(open_chars.size() == close_chars.size(),
+		"The number of open and close bracket characters must be equal.");
 
 	// Copy the open/close chars to device
 	device_buffer<char> d_open_chars(open_chars.size());
