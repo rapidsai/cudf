@@ -94,7 +94,7 @@ class device_table : public managed {
   device_table(device_table const& other) = delete;
   device_table& operator=(device_table const& other) = delete;
 
-  __device__ gdf_column const* device_column(gdf_size_type index) const {
+  __device__ gdf_column const* get_column(gdf_size_type index) const {
     return &device_columns[index];
   }
   __device__ gdf_column const* begin() const { return device_columns; }
@@ -109,9 +109,7 @@ class device_table : public managed {
  private:
   const gdf_size_type _num_columns; /** The number of columns in the table */
   gdf_size_type _num_rows{0};       /** The number of rows in the table */
-
-  gdf_column * device_columns{nullptr};
-
+  gdf_column* device_columns{nullptr};
   cudaStream_t _stream;
 
  protected:
@@ -127,20 +125,19 @@ class device_table : public managed {
    *---------------------------------------------------------------------------**/
   device_table(size_type num_cols, gdf_column** columns,
                cudaStream_t stream = 0)
-      : _num_columns(num_cols){
+      : _num_columns(num_cols) {
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
-    CUDF_EXPECTS(nullptr != columns[0],
+    CUDF_EXPECTS(nullptr != columns,
                  "Attempt to create table with a null column.");
     _num_rows = columns[0]->size;
 
     std::vector<gdf_column> temp_columns(num_cols);
 
     for (size_type i = 0; i < num_cols; ++i) {
-      gdf_column* const current_column = columns[i];
-      CUDF_EXPECTS(nullptr != current_column, "Column is null");
-      CUDF_EXPECTS(_num_rows == current_column->size, "Column size mismatch");
+      CUDF_EXPECTS(nullptr != columns[i], "Column is null");
+      CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
-        CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
+        CUDF_EXPECTS(nullptr != columns[i]->data, "Column missing data.");
       }
       temp_columns[i] = *columns[i];
     }
@@ -150,7 +147,6 @@ class device_table : public managed {
     CUDA_TRY(cudaMemcpyAsync(device_columns, temp_columns.data(),
                              num_cols * sizeof(gdf_column),
                              cudaMemcpyHostToDevice, stream));
-
     CHECK_STREAM(stream);
   }
 
@@ -276,8 +272,8 @@ __device__ inline hash_value_type hash_row(
   auto hasher = [row_index, &t, initial_hash_values,
                  hash_combiner](gdf_size_type column_index) {
     hash_value_type hash_value = cudf::type_dispatcher(
-        t.device_column(column_index)->dtype, hash_element<hash_function>{},
-        *t.device_column(column_index), row_index);
+        t.get_column(column_index)->dtype, hash_element<hash_function>{},
+        *t.get_column(column_index), row_index);
 
     if (initial_hash_values != nullptr) {
       hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
@@ -325,9 +321,9 @@ __device__ inline void copy_row(device_table& target,
                                 device_table const& source,
                                 gdf_size_type source_index) {
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.device_column(i)->dtype, copy_element{},
-                          *target.device_column(i), target_index,
-                          *source.device_column(i), source_index);
+    cudf::type_dispatcher(target.get_column(i)->dtype, copy_element{},
+                          *target.get_column(i), target_index,
+                          *source.get_column(i), source_index);
   }
 }
 
