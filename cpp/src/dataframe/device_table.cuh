@@ -94,24 +94,14 @@ class device_table : public managed {
   device_table(device_table const& other) = delete;
   device_table& operator=(device_table const& other) = delete;
 
-  __host__ gdf_column const* host_column(gdf_size_type index) const {
-    return host_columns[index];
-  }
-  __host__ gdf_column* host_column(gdf_size_type index) {
-    return host_columns[index];
-  }
-
   __device__ gdf_column const* device_column(gdf_size_type index) const {
     return &device_columns[index];
   }
-
   __device__ gdf_column const* begin() const { return device_columns; }
 
   __device__ gdf_column const* end() const {
     return device_columns + _num_columns;
   }
-
-  __host__ gdf_column** columns() const { return host_columns; }
 
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
@@ -119,9 +109,6 @@ class device_table : public managed {
  private:
   const gdf_size_type _num_columns; /** The number of columns in the table */
   gdf_size_type _num_rows{0};       /** The number of rows in the table */
-
-  gdf_column** host_columns{
-      nullptr}; /** The set of gdf_columns that this table wraps */
 
   gdf_column * device_columns{nullptr};
 
@@ -136,26 +123,26 @@ class device_table : public managed {
    *overloaded new operator that allocates the object using managed memory.
    *
    * @param num_cols
-   * @param gdf_columns
+   * @param columns
    *---------------------------------------------------------------------------**/
-  device_table(size_type num_cols, gdf_column** gdf_columns,
+  device_table(size_type num_cols, gdf_column** columns,
                cudaStream_t stream = 0)
-      : _num_columns(num_cols), host_columns(gdf_columns) {
+      : _num_columns(num_cols){
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
-    CUDF_EXPECTS(nullptr != host_columns[0],
+    CUDF_EXPECTS(nullptr != columns[0],
                  "Attempt to create table with a null column.");
-    _num_rows = host_columns[0]->size;
+    _num_rows = columns[0]->size;
 
     std::vector<gdf_column> temp_columns(num_cols);
 
     for (size_type i = 0; i < num_cols; ++i) {
-      gdf_column* const current_column = host_columns[i];
+      gdf_column* const current_column = columns[i];
       CUDF_EXPECTS(nullptr != current_column, "Column is null");
       CUDF_EXPECTS(_num_rows == current_column->size, "Column size mismatch");
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != current_column->data, "Column missing data.");
       }
-      temp_columns[i] = *gdf_columns[i];
+      temp_columns[i] = *columns[i];
     }
 
     // Copy columns to device

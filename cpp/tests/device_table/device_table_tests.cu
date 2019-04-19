@@ -78,44 +78,6 @@ struct row_comparison {
   }
 };
 
-TEST_F(DeviceTableTest, HostFunctions) {
-  const int val{42};
-  auto init_values = [val](auto index) { return val; };
-  auto all_valid = [](auto index) { return true; };
-
-  cudf::test::column_wrapper<int32_t> col0(size, init_values, all_valid);
-  cudf::test::column_wrapper<float> col1(size, init_values, all_valid);
-  cudf::test::column_wrapper<double> col2(size, init_values, all_valid);
-  cudf::test::column_wrapper<int8_t> col3(size, init_values, all_valid);
-
-  std::vector<gdf_column*> gdf_cols{col0, col1, col2, col3};
-
-  auto table = device_table::create(gdf_cols.size(), gdf_cols.data());
-
-  // Table attributes such as number of rows/columns should
-  // match expected
-  EXPECT_EQ(size, table->num_rows());
-  EXPECT_EQ(4, table->num_columns());
-
-  // Pointers to the `gdf_column` should be identical
-  EXPECT_EQ(col0.get(), table->host_column(0));
-  EXPECT_EQ(col1.get(), table->host_column(1));
-  EXPECT_EQ(col2.get(), table->host_column(2));
-  EXPECT_EQ(col3.get(), table->host_column(3));
-
-  gdf_column** cols = table->columns();
-  EXPECT_EQ(col0.get(), cols[0]);
-  EXPECT_EQ(col1.get(), cols[1]);
-  EXPECT_EQ(col2.get(), cols[2]);
-  EXPECT_EQ(col3.get(), cols[3]);
-
-  // gdf_columns should equal the column_wrappers
-  EXPECT_TRUE(col0 == *table->host_column(0));
-  EXPECT_TRUE(col1 == *table->host_column(1));
-  EXPECT_TRUE(col2 == *table->host_column(2));
-  EXPECT_TRUE(col3 == *table->host_column(3));
-}
-
 struct row_hasher {
   device_table* t;
   row_hasher(device_table* _t) : t{_t} {}
