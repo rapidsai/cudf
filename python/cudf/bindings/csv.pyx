@@ -226,7 +226,7 @@ cpdef cpp_read_csv(
             raise(FileNotFoundError)
         if (not os.path.exists(filepath_or_buffer)):
             raise(FileNotFoundError)
-        file_path = _wrap_string(filepath_or_buffer)
+        file_path = filepath_or_buffer.encode()
 
         csv_reader.input_data_form = FILE_PATH
         csv_reader.filepath_or_buffer = file_path
@@ -276,22 +276,6 @@ cpdef cpp_read_csv(
         # dtype_ptr = ffi.new('char*[]', arr_dtypes)
         dtype_ptr = vector_dtypes.data()
         csv_reader.dtype = dtype_ptr
-
-    if csv_reader.dtype is NULL:
-        print("dtype nullptr")
-    else:
-        print("dtype")
-        for idx, dtype in enumerate(vector_dtypes):
-            print(idx, dtype)
-    print()
-
-    if csv_reader.names is NULL:
-        print("names nullptr")
-    else:
-        print("names")
-        for idx, name in enumerate(vector_names):
-            print(idx, name)
-    print()
 
     # csv_reader.use_cols_int = ffi.NULL
     csv_reader.use_cols_int = NULL
