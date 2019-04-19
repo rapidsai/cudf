@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-
 from cudf.bindings.GDFError import GDFError
 
 import numpy as np
@@ -15,6 +14,9 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+from librmm_cffi import librmm as rmm
+import nvstrings
+import nvcategory
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
@@ -222,7 +224,7 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     return c_col
 
 
-cpdef gdf_column_to_column_mem(gdf_column* input_col):
+cdef gdf_column_to_column_mem(gdf_column* input_col):
     gdf_dtype = input_col.dtype
     if gdf_dtype == GDF_STRING_CATEGORY:
         data_ptr = int(<uintptr_t>input_col.data)

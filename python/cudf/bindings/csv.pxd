@@ -7,6 +7,8 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
+cdef char* _wrap_string(text)
+cpdef is_file_like(obj)
 
 cdef extern from "cudf.h" nogil:
 

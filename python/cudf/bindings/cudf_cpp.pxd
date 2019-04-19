@@ -23,6 +23,7 @@ cdef get_scalar_value(gdf_scalar scalar)
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
+cdef gdf_column_to_column_mem(gdf_column* input_col)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace)
