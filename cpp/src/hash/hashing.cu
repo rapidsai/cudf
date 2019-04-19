@@ -54,7 +54,7 @@ bool is_power_two( T number )
 template <template <typename> class hash_function>
 struct row_hasher
 {
-  row_hasher(device_table const & table_to_hash, hash_value_type *initial_hash_values)
+  row_hasher(device_table table_to_hash, hash_value_type *initial_hash_values)
     : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
   {}
 
@@ -64,7 +64,7 @@ struct row_hasher
     return hash_row<hash_function>(the_table, row_index, initial_hash_values);
   }
 
-  device_table const & the_table;
+  device_table the_table;
   hash_value_type* initial_hash_values{nullptr};
 };
 
@@ -259,7 +259,7 @@ struct bitwise_partitioner
 template <template <typename> class hash_function,
           typename partitioner_type>
 __global__ 
-void compute_row_partition_numbers(device_table const & the_table, 
+void compute_row_partition_numbers(device_table the_table, 
                                    const gdf_size_type num_rows,
                                    const gdf_size_type num_partitions,
                                    const partitioner_type the_partitioner,
