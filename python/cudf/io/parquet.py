@@ -38,7 +38,8 @@ def read_parquet_metadata(path):
 
 
 @ioutils.doc_read_parquet()
-def read_parquet(path, engine='cudf', *args, **kwargs):
+def read_parquet(path, engine='cudf', skip_rows=None, num_rows=None,
+                 *args, **kwargs):
     """{docstring}"""
 
     if engine == 'cudf':
@@ -66,6 +67,13 @@ def read_parquet(path, engine='cudf', *args, **kwargs):
             pq_reader.row_group = row_group
         else:
             pq_reader.row_group = -1
+
+        if skip_rows is not None:
+            pq_reader.skip_rows = skip_rows
+        if num_rows is not None:
+            pq_reader.num_rows = num_rows
+        else:
+            pq_reader.num_rows = -1
 
         # Call to libcudf
         libgdf.read_parquet(pq_reader)

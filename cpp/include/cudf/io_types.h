@@ -161,6 +161,9 @@ typedef struct {
 
   int           row_group;                  ///< In: Row group index of interest; only data in this row group will be returned.
 
+  int           skip_rows;                  ///< In: Rows to skip from the start of the dataset
+  int           num_rows;                   ///< In: Number of rows to read and return
+
   const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
 
