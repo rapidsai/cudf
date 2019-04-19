@@ -43,8 +43,8 @@
  /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
          typename output_index_type>
-gdf_error join_hash(device_table const & left_table,
-                    device_table const & right_table,
+gdf_error join_hash(cudf::table const & left_table,
+                    cudf::table const & right_table,
                     gdf_column * const output_l,
                     gdf_column * const output_r,
                     bool flip_indices = false)

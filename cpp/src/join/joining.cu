@@ -15,21 +15,21 @@
  */
 
 
+
+#include <types.hpp>
+#include <cudf.h>
+#include <rmm/rmm.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/nvtx/nvtx_utils.h>
+#include <string/nvcategory_util.hpp>
+#include <nvstrings/NVCategory.h>
+#include <copying/gather.hpp>
+#include "joining.h"
+
 #include <limits>
 #include <set>
 #include <vector>
-
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "utilities/error_utils.hpp"
-#include "dataframe/device_table.cuh"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "string/nvcategory_util.hpp"
-#include <nvstrings/NVCategory.h>
-#include "copying/gather.hpp"
-#include "types.hpp"
-#include "joining.h"
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
@@ -54,14 +54,11 @@ template <JoinType join_type>
 gdf_error hash_join(gdf_size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
                     gdf_column *l_result, gdf_column *r_result)
 {
-  // Wrap the set of gdf_columns in a device_table class
-  auto left_table = device_table::create(num_cols, leftcol);
-  auto right_table = device_table::create(num_cols, rightcol);
+  cudf::table left_table{leftcol, num_cols};
+  cudf::table right_table{rightcol, num_cols};
 
-  return join_hash<join_type, output_index_type>(*left_table, 
-                                                        *right_table, 
-                                                        l_result, 
-                                                        r_result);
+  return join_hash<join_type, output_index_type>(left_table, right_table,
+                                                 l_result, r_result);
 }
 
 /* --------------------------------------------------------------------------*/

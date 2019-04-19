@@ -114,6 +114,7 @@ gdf_error estimate_join_output_size(device_table const & build_table,
 
   CUDA_TRY( cudaGetLastError() );
 
+
   // Continue probing with a subset of the probe table until either:
   // a non-zero output size estimate is found OR
   // all of the rows in the probe table have been sampled
@@ -201,8 +202,8 @@ template<JoinType join_type,
 gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
-                            device_table const & left_table,
-                            device_table const & right_table,
+                            cudf::table const & left_table,
+                            cudf::table const & right_table,
                             bool flip_results = false)
 {
   gdf_error gdf_error_code{GDF_SUCCESS};
@@ -232,12 +233,12 @@ gdf_error compute_hash_join(
   constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
 
   // Hash table will be built on the right table
-  device_table const & build_table{right_table};
-  const gdf_size_type build_table_num_rows{build_table.num_rows()};
+  auto build_table = device_table::create(right_table);
+  const gdf_size_type build_table_num_rows{build_table->num_rows()};
   
   // Probe with the left table
-  device_table const & probe_table{left_table};
-  const gdf_size_type probe_table_num_rows{probe_table.num_rows()};
+  auto probe_table = device_table::create(left_table);
+  const gdf_size_type probe_table_num_rows{probe_table->num_rows()};
 
   // Hash table size must be at least 1 in order to have a valid allocation.
   // Even if the hash table will be empty, it still must be allocated for the
@@ -267,7 +268,7 @@ gdf_error compute_hash_join(
   {
     const gdf_size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
     build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
-                                                      build_table,
+                                                      *build_table,
                                                       build_table_num_rows,
                                                       d_gdf_error_code);
     
@@ -284,7 +285,8 @@ gdf_error compute_hash_join(
 
 
   gdf_size_type estimated_join_output_size{0};
-  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(
+      *build_table, *probe_table, *hash_table, &estimated_join_output_size);
 
   if(GDF_SUCCESS != gdf_error_code){
     return gdf_error_code;
@@ -331,9 +333,9 @@ gdf_error compute_hash_join(
                      block_size,
                      DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>> (hash_table.get(),
-                                       build_table,
-                                       probe_table,
-                                       probe_table.num_rows(),
+                                       *build_table,
+                                       *probe_table,
+                                       probe_table->num_rows(),
                                        output_l_ptr,
                                        output_r_ptr,
                                        d_global_write_index,
