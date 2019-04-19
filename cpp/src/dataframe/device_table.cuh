@@ -32,12 +32,8 @@
 #include <thrust/tabulate.h>
 
 /**
- * @brief Flattens a gdf_column array-of-structs into a struct-of-arrays and
- * provides row-level device functions.
- *
- * @note Because the class is allocated with managed memory, instances of
- * `device_table` can be passed directly via pointer or reference into device
- * code.
+ * @brief Lightweight wrapper for a device array of `gdf_column`s of the same
+ * size
  *
  */
 class device_table : public managed {
@@ -47,12 +43,6 @@ class device_table : public managed {
   /**---------------------------------------------------------------------------*
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
-   *
-   * Constructing a `device_table` via a factory function is required to ensure
-   * that it is constructed via the `new` operator that allocates the class with
-   * managed memory such that it can be accessed via pointer or reference in
-   * device code. A `unique_ptr` is used to ensure the object is cleaned-up
-   * correctly.
    *
    * Usage:
    * ```
@@ -311,24 +301,23 @@ template <template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type* initial_hash_values = nullptr) {
+  auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+    return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+  };
+
   // Hashes an element in a column and optionally combines it with an initial
   // hash value
-  auto hasher = [row_index, &t,
-                 initial_hash_values](gdf_size_type column_index) {
+  auto hasher = [row_index, &t, initial_hash_values,
+                 hash_combiner](gdf_size_type column_index) {
     hash_value_type hash_value = cudf::type_dispatcher(
         t.device_column(column_index)->dtype, hash_element<hash_function>{},
         *t.device_column(column_index), row_index);
 
     if (initial_hash_values != nullptr) {
-      hash_value = hash_function<hash_value_type>{}.hash_combine(
-          hash_value, initial_hash_values[column_index]);
+      hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
     }
 
     return hash_value;
-  };
-
-  auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-    return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
 
   // Hash each element and combine all the hash values together
