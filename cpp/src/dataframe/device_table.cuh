@@ -93,6 +93,7 @@ class device_table : public managed {
   device_table() = delete;
   device_table(device_table const& other) = default;
   device_table& operator=(device_table const& other) = delete;
+  ~device_table() = default;
 
   __device__ gdf_column const* get_column(gdf_size_type index) const {
     return &device_columns[index];
@@ -149,21 +150,6 @@ class device_table : public managed {
                              cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
   }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Destructor is protected to prevent stack allocation.
-   *
-   * The device_table class is allocated with managed memory via an overloaded
-   * `new` operator.
-   *
-   * This requires that the `device_table` always be allocated on the heap via
-   * `new`.
-   *
-   * Therefore, to protect users for errors, stack allocation should be
-   * prohibited.
-   *
-   *---------------------------------------------------------------------------**/
-  ~device_table() = default;
 };
 
 namespace {
