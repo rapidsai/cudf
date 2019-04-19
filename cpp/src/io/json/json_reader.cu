@@ -358,66 +358,53 @@ __global__ void convertCsvToGdf(char * const data, size_t data_size,
   if ( rec_id >= num_records)
     return;
 
-  // Adjust for brackets
+  
   long start = rec_starts[rec_id];
-  while(data[start++] != '[');
-
+  // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+
+  // Adjust for brackets
+  while(data[start++] != '[');
   while(data[--stop] != ']');
 
-  long pos = start;
-  int  col = 0;
-  gdf_size_type num_valid = 0;
+  for (int col = 0; col < num_columns; col++){
 
-  while(col < num_columns){
+    if(start >= stop)
+      return;
 
-    if(start > stop)
-      break;
-
-    pos = seekFieldEnd(data, opts, pos, stop);
-
+    // field_end is at the next delimiter/newline
+    const long field_end = seekFieldEnd(data, opts, start, stop);
+    long field_data_last = field_end - 1;
     // Modify start & end to ignore whitespace and quotechars
-    long tempPos = pos - 1;
     if(dtypes[col] != gdf_dtype::GDF_CATEGORY && dtypes[col] != gdf_dtype::GDF_STRING){
-      adjustForWhitespaceAndQuotes(data, &start, &tempPos, opts.quotechar);
+      adjustForWhitespaceAndQuotes(data, &start, &field_data_last, opts.quotechar);
     }
-
-    if(start <= tempPos) { // Empty fields are not legal values
-
+    // Empty fields are not legal values
+    if(start <= field_data_last) {
       // Type dispatcher does not handle GDF_STRINGS
       if (dtypes[col] == gdf_dtype::GDF_STRING) {
-        long end = pos;
-        if(opts.keepquotes==false){
-          if((data[start] == opts.quotechar) && (data[end - 1] == opts.quotechar)){
-            start++;
-            end--;
-          }
-        }
         auto str_list = static_cast<string_pair*>(gdf_columns[col]);
         str_list[rec_id].first = data + start;
-        str_list[rec_id].second = end - start;
+        str_list[rec_id].second = field_data_last - start + 1;
       } else {
         cudf::type_dispatcher(
           dtypes[col], ConvertFunctor{}, data,
-          gdf_columns[col], rec_id, start, tempPos, opts);
+          gdf_columns[col], rec_id, start, field_data_last, opts);
       }
 
       // set the valid bitmap - all bits were set to 0 to start
       long bitmapIdx = whichBitmap(rec_id);
       long bitIdx = whichBit(rec_id);
       setBit(valid_fields[col] + bitmapIdx, bitIdx);
-      num_valid++;
+      atomicAdd(&num_valid_fields[col], 1);
     }
     else if(dtypes[col] == gdf_dtype::GDF_STRING){
       auto str_list = static_cast<string_pair*>(gdf_columns[col]);
       str_list[rec_id].first = nullptr;
       str_list[rec_id].second = 0;
     }
-    start = ++pos;
-    col++;
+    start = field_end + 1;
   }
-
-  atomicAdd(&num_valid_fields[col], num_valid);
 }
 
 /**---------------------------------------------------------------------------*
