@@ -772,11 +772,13 @@ class DataFrame(object):
             memo = {}
         return self.copy(deep=True)
 
-    def _sanitize_columns(self, col):
+    def _sanitize_columns(self, series):
         """Sanitize pre-appended
            col values
         """
-        series = Series(col)
+        if not isinstance(series, Series):
+            series = Series(series)
+
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
             dtype = np.float64
@@ -791,17 +793,16 @@ class DataFrame(object):
             self._index = series.index
             self._size = len(series)
 
-    def _sanitize_values(self, col):
+    def _sanitize_values(self, series, SCALAR):
         """Sanitize col values before
            being added
         """
+        if SCALAR:
+            col = series
+        if not isinstance(series, Series):
+            series = Series(series)
         index = self._index
-        series = Series(col)
         sind = series.index
-
-        # This won't handle 0 dimensional arrays which should be okay
-        SCALAR = np.isscalar(col)
-
         if len(self) > 0 and len(series) == 1 and SCALAR:
             if series.dtype == np.dtype("object"):
                 gather_map = cudautils.zeros(len(index), 'int32')
@@ -812,7 +813,7 @@ class DataFrame(object):
                 return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
-        return col
+        return series
 
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
@@ -826,11 +827,14 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        self._sanitize_columns(col)
-        col = self._sanitize_values(col)
+        # Check if the input is scalar before converting to a series
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+        series = Series(col) if not SCALAR else col
+        self._sanitize_columns(series)
+        series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        series = Series(col)
         if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
@@ -919,6 +923,13 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def pop(self, item):
+        """Return a column and drop it from the DataFrame.
+        """
+        popped = self[item]
+        del self[item]
+        return popped
 
     def rename(self, mapper=None, columns=None, copy=True, inplace=False):
         """
@@ -1303,6 +1314,34 @@ class DataFrame(object):
     @property
     def T(self):
         return self.transpose()
+
+    def melt(self, **kwargs):
+        """Unpivots a DataFrame from wide format to long format,
+        optionally leaving identifier variables set.
+
+        Parameters
+        ----------
+        frame : DataFrame
+        id_vars : tuple, list, or ndarray, optional
+            Column(s) to use as identifier variables.
+            default: None
+        value_vars : tuple, list, or ndarray, optional
+            Column(s) to unpivot.
+            default: all columns that are not set as `id_vars`.
+        var_name : scalar
+            Name to use for the `variable` column.
+            default: frame.columns.name or 'variable'
+        value_name : str
+            Name to use for the `value` column.
+            default: 'value'
+
+        Returns
+        -------
+        out : DataFrame
+            Melted result
+        """
+        from cudf.reshape.general import melt
+        return melt(self, **kwargs)
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, lsuffix=None, rsuffix=None,
@@ -2108,6 +2147,122 @@ class DataFrame(object):
 
         if not inplace:
             return outdf
+
+    def describe(self, percentiles=None, include=None, exclude=None):
+        """Compute summary statistics of a DataFrame's columns. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        include: str, list-like, optional
+            The dtypes to be included in the output summary statistics. Columns
+            of dtypes not included in this list will not be part of the output.
+            If include='all', all dtypes are included. Default of None includes
+            all numeric columns.
+
+        exclude: str, list-like, optional
+            The dtypes to be excluded from the output summary statistics.
+            Columns of dtypes included in this list will not be part of the
+            output. Default of None excludes no columns.
+
+        Returns
+        -------
+        output_frame : DataFrame
+            Summary statistics of relevant columns in the original dataframe.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+
+        Describing a ``DataFrame``. By default all numeric fields
+        are returned.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> gdf['d'] = [1.0, 2.0, 3.0]
+        >>> gdf['d'] = gdf['d'].astype('float32')
+        >>> print(gdf.describe())
+           stats    a    b    d
+        0  count  3.0  3.0  3.0
+        1   mean  2.0  2.0  2.0
+        2    std  1.0  1.0  1.0
+        3    min  1.0  1.0  1.0
+        4    25%  1.5  1.5  1.5
+        5    50%  1.5  1.5  1.5
+        6    75%  2.5  2.5  2.5
+        7    max  3.0  3.0  3.0
+
+        Using the ``include`` keyword to describe only specific dtypes.
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['a'] = [1,2,3]
+        >>> gdf['b'] = [1.0, 2.0, 3.0]
+        >>> gdf['c'] = ['x', 'y', 'z']
+        >>> print(gdf.describe(include='int'))
+           stats    a
+        0  count  3.0
+        1   mean  2.0
+        2    std  1.0
+        3    min  1.0
+        4    25%  1.5
+        5    50%  1.5
+        6    75%  2.5
+        7    max  3.0
+        """
+
+        def _create_output_frame(data, percentiles=None):
+            # hack because we don't support strings in indexes
+            columns = data.columns
+            out_df = data[columns[0]].describe(percentiles=percentiles)
+            for col in columns[1:]:
+                out_df[col] = data[col].describe(percentiles=percentiles)[col]
+
+            return out_df
+
+        if not include and not exclude:
+            numeric_data = self.select_dtypes(np.number)
+            output_frame = _create_output_frame(numeric_data, percentiles)
+
+        elif include == 'all':
+            if exclude:
+                raise ValueError("Cannot exclude when include='all'.")
+
+            included_data = self.select_dtypes(np.number)
+            output_frame = _create_output_frame(included_data, percentiles)
+            logging.warning("Describe does not yet include StringColumns or "
+                            "DatetimeColumns.")
+
+        else:
+            if not include:
+                include = np.number
+
+            included_data = self.select_dtypes(include=include,
+                                               exclude=exclude)
+            if included_data.empty:
+                raise ValueError("No data of included types.")
+            output_frame = _create_output_frame(included_data, percentiles)
+
+        return output_frame
 
     def to_pandas(self):
         """

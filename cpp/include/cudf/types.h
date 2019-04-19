@@ -178,7 +178,6 @@ typedef enum {
 } gdf_agg_op;
 
 
-
 /** 
  * @brief  Colors for use with NVTX ranges.
  *

@@ -67,6 +67,26 @@ cpdef get_column_data_ptr(obj):
 cpdef get_column_valid_ptr(obj):
     return get_ctype_ptr(obj._mask.mem)
 
+cdef gdf_dtype get_dtype(dtype):
+    return dtypes[dtype]
+
+
+cdef get_scalar_value(gdf_scalar scalar):
+    """
+    Returns typed value from a gdf_scalar
+    0-dim array is retuned if dtype is date32/64, timestamp
+    """
+    return {
+        GDF_FLOAT64: scalar.data.fp64,
+        GDF_FLOAT32: scalar.data.fp32,
+        GDF_INT64:   scalar.data.si64,
+        GDF_INT32:   scalar.data.si32,
+        GDF_INT16:   scalar.data.si16,
+        GDF_INT8:    scalar.data.si08,
+        GDF_DATE32:  np.array(scalar.data.dt32).astype('datetime64[D]'),
+        GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
+        GDF_TIMESTAMP: np.array(scalar.data.tmst).astype('datetime64[ns]'),
+    }[scalar.dtype]
 
 # gdf_column functions
 
