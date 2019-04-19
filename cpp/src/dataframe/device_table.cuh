@@ -94,22 +94,6 @@ class device_table : public managed {
   device_table(device_table const& other) = delete;
   device_table& operator=(device_table const& other) = delete;
 
-  /**
-   * @brief  Updates the size of the gdf_columns in the table
-   *
-   * @note Does NOT shrink the column's allocations to the new size.
-   *
-   * @param new_length The new length
-   */
-  void set_num_rows(const size_type new_length) {
-    _num_rows = new_length;
-
-    for (gdf_size_type i = 0; i < _num_columns; ++i) {
-      host_columns[i]->size = this->_num_rows;
-    }
-  }
-
-
   __host__ gdf_column const* host_column(gdf_size_type index) const {
     return host_columns[index];
   }
