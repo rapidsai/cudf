@@ -42,14 +42,27 @@ class device_table {
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
    *
+   * Because this class allocates device memory, and we want to be sure that
+   * device memory is free'd, this factory function returns a device_table
+   * wrapped in a unique_ptr with a custom deleter that frees the device memory.
+   *
+   * The class' destructor does **not** free the device memory, because we would
+   * like to be able to pass instances of this class by value into kernels via a
+   * shallow-copy (i.e., just copying the pointers without allocating any new
+   * device memory). Since it is shallow copied, if the destructor were to free
+   * the device memory, then you would end up trying to free the underlying
+   * device memory any time a copy is destroyed.
+   *
+   * Instead, the underlying device memory will not be free'd until the returned
+   * `unique_ptr` goes out of scope.
+   *
    * Usage:
    * ```
    * gdf_column * col;
    * auto device_table_ptr = device_table::create(1, &col);
    *
-   * // Because `device_table` is allocated with managed memory, a pointer to
-   * // the object can be passed directly into device code
-   * some_kernel<<<...>>>(device_table_ptr.get());
+   * // Table is passed by **value**, i.e., shallow copy into kernel
+   * some_kernel<<<...>>>(*device_table_ptr);
    * ```
    *
    * @param num_columns The number of columns
@@ -68,6 +81,13 @@ class device_table {
     return p;
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Create a device_table from a `cudf::table`
+   *
+   * @param t The `cudf::table` to wrap
+   * @param stream The stream to use for allocations/frees
+   * @return A unique_ptr containing a device_table object
+   *---------------------------------------------------------------------------**/
   static auto create(cudf::table const& t, cudaStream_t stream = 0) {
     return device_table::create(t.num_columns(), t.columns(), stream);
   }
@@ -75,8 +95,10 @@ class device_table {
   /**---------------------------------------------------------------------------*
    * @brief Destroys the `device_table`.
    *
-   * @note This function is required because the destructor is protected to
-   *prohibit stack allocation.
+   * Frees the underlying device memory and deletes the object.
+   *
+   * This function is invoked by the deleter of the unique_ptr returned from
+   * device_table::create.
    *
    *---------------------------------------------------------------------------**/
   __host__ void destroy(void) {
@@ -103,20 +125,21 @@ class device_table {
 
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
-  gdf_size_type _num_rows{0};        ///< The number of rows in the table
-  gdf_column* device_columns{ nullptr};  ///< Array of `gdf_column`s in device memory
-  cudaStream_t _stream;  ///< Stream used to allocate/free the table's device memory
+  gdf_size_type _num_rows{0};  ///< The number of rows in the table
+  gdf_column* device_columns{
+      nullptr};  ///< Array of `gdf_column`s in device memory
+  cudaStream_t
+      _stream;  ///< Stream used to allocate/free the table's device memory
 
  protected:
   /**---------------------------------------------------------------------------*
    * @brief Constructs a new device_table object from an array of `gdf_column*`.
    *
    * This constructor is protected to require use of the device_table::create
-   * factory method. This will ensure the device_table is constructed via the
-   *overloaded new operator that allocates the object using managed memory.
+   * factory method.
    *
-   * @param num_cols
-   * @param columns
+   * @param num_cols The number of columns to wrap
+   * @param columns An array of columns to copy to device memory
    *---------------------------------------------------------------------------**/
   device_table(gdf_size_type num_cols, gdf_column** columns,
                cudaStream_t stream = 0)
@@ -229,9 +252,8 @@ struct hash_element {
  * such that hashing any two NULL values in columns of the same type will return
  * the same hash value.
  *
+ * @param[in] t The table whose row will be hashed
  * @param[in] row_index The row of the table to compute the hash value for
- * @param[in] num_columns_to_hash The number of columns in the row to hash. If
- * 0, hashes all columns
  * @param[in] initial_hash_values Optional array of initial hash values for each
  * column
  * @tparam hash_function The hash function that is used for each element in
@@ -290,11 +312,10 @@ struct copy_element {
  *
  * FIXME: Does NOT set null bitmask for the target row.
  *
- * @param other The other table from which the row is copied
- * @param target_row_index The index of the row in this table that will be
- * written to
- * @param source_row_index The index of the row from the other table that will
- * be copied from
+ * @param[in,out] The table whose row will be updated
+ * @param[in] The index of the row to update in the target table
+ * @param[in] source The table whose row will be copied
+ * @param source_row_index The index of the row to copy in the source table
  */
 __device__ inline void copy_row(device_table const& target,
                                 gdf_size_type target_index,
