@@ -31,16 +31,16 @@ struct table {
   /**---------------------------------------------------------------------------*
    * @brief Constructs a table object from an array of `gdf_column`s
    *
-   * @param cols The array of columns wrapped by the table
-   * @param num_cols  The number of columns in the array
+   * @param cols The array of _columns wrapped by the table
+   * @param num_cols  The number of _columns in the array
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols)
-      : columns{cols}, _num_columns{num_cols} {
+      : _columns{cols}, _num_columns{num_cols} {
     CUDF_EXPECTS(nullptr != cols[0], "Null input column");
 
     this->_num_rows = cols[0]->size;
 
-    std::for_each(columns, columns + _num_columns, [this](gdf_column* col) {
+    std::for_each(_columns, _columns + _num_columns, [this](gdf_column* col) {
       CUDF_EXPECTS(nullptr != col, "Null input column");
       CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
     });
@@ -51,26 +51,26 @@ struct table {
    * table.
    *
    *---------------------------------------------------------------------------**/
-  gdf_column const* const* begin() const { return columns; }
+  gdf_column const* const* begin() const { return _columns; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the first `gdf_column` in the table.
    *
    *---------------------------------------------------------------------------**/
-  gdf_column** begin() { return columns; }
+  gdf_column** begin() { return _columns; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns const pointer to const of one past the last `gdf_column` in
    * the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_column const* const* end() const { return columns + _num_columns; }
+  gdf_column const* const* end() const { return _columns + _num_columns; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to one past the last `gdf_column` in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_column** end() { return columns + _num_columns; }
+  gdf_column** end() { return _columns + _num_columns; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the column specified by an index.
@@ -80,7 +80,7 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_column* get_column(gdf_index_type index) {
     assert(index < _num_columns);
-    return columns[index];
+    return _columns[index];
   }
 
   /**---------------------------------------------------------------------------*
@@ -90,11 +90,11 @@ struct table {
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
   gdf_column const* get_column(gdf_index_type index) const {
-    return columns[index];
+    return _columns[index];
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the number of columns in the table
+   * @brief Returns the number of _columns in the table
    *
    *---------------------------------------------------------------------------**/
   gdf_size_type num_columns() const { return _num_columns; }
@@ -105,9 +105,13 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_size_type num_rows() const { return _num_rows; }
 
+  gdf_column ** columns() const {
+      return _columns;
+  }
+
  private:
-  gdf_column** columns;              ///< The set of gdf_columns
-  gdf_size_type const _num_columns;  ///< The number of columns in the set
+  gdf_column** _columns;              ///< The set of gdf_columns
+  gdf_size_type const _num_columns;  ///< The number of _columns in the set
   gdf_size_type _num_rows;     ///< The number of elements in each column
 };
 
