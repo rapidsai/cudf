@@ -42,38 +42,17 @@ def test_orc_reader(datadir, orc_args, engine):
         # cuDF doesn't support nanosecond units so convert to datetime[ms]
         if 'time' in expect.columns:
             expect['time'] = pd.to_datetime(expect['time'], unit='ms')
-            expect['time'] = expect['time'].astype('int64')
-            got['time'] = got['time'].astype('int64')
         if 'date' in expect.columns:
             expect['date'] = pd.to_datetime(expect['date'], unit='ms')
 
-    print("")
-    print("")
-    print("Pyarrow:")
-    print(expect.dtypes)
-    print("")
-    print("cuDF:")
-    print(got.dtypes)
-    print(got)
-    print("")
-
+    # Debug code for timestamps
     if 'time' in got.columns:
-        #with open(str('/tmp/test.txt'), 'w') as fp:
-            expectcol = expect['time']
-            gotcol = got['time']
-            for i in range(len(gotcol)):
-                if expectcol[i] != gotcol[i]:
-                    print("Time mismatched at [", i, "] expect: ", expectcol[i], " got: ", gotcol[i])
-                    break
-                #print("[", i, "] expect: ", expectcol[i], " got: ", gotcol[i], file=fp)
-    if 'date' in got.columns:
-        #with open(str('/tmp/test.txt'), 'w') as fp:
-            expectcol = expect['date']
-            gotcol = got['date']
-            for i in range(len(gotcol)):
-                if expectcol[i] != gotcol[i]:
-                    print("Date mismatched at [", i, "] expect: ", expectcol[i], " got: ", gotcol[i])
-                    break
+        expectcol = expect['time'].astype('int64')
+        gotcol =  got['time'].astype('int64')
+        for i in range(len(gotcol)):
+            if expectcol[i] != gotcol[i]:
+                print("Time mismatched at [", i, "] expect: ",
+                      expectcol[i], " got: ", gotcol[i])
+                break
 
-    #np.testing.assert_allclose(expect['date'], got['date'])
-    #np.testing.assert_allclose(expect['time'], got['time'])
+    #assert_eq(expect, got, check_categorical=False)
