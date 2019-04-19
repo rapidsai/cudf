@@ -316,7 +316,7 @@ struct copy_element {
  * @param source_row_index The index of the row from the other table that will
  * be copied from
  */
-__device__ inline void copy_row(device_table& target,
+__device__ inline void copy_row(device_table const& target,
                                 gdf_size_type target_index,
                                 device_table const& source,
                                 gdf_size_type source_index) {
