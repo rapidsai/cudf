@@ -4,7 +4,6 @@ import cudf
 from cudf.tests.utils import assert_eq
 
 import pandas as pd
-import numpy as np
 import pytest
 import pyarrow as pa
 
@@ -48,11 +47,11 @@ def test_orc_reader(datadir, orc_args, engine):
     # Debug code for timestamps
     if 'time' in got.columns:
         expectcol = expect['time'].astype('int64')
-        gotcol =  got['time'].astype('int64')
+        gotcol = got['time'].astype('int64')
         for i in range(len(gotcol)):
             if expectcol[i] != gotcol[i]:
                 print("Time mismatched at [", i, "] expect: ",
                       expectcol[i], " got: ", gotcol[i])
                 break
-
-    #assert_eq(expect, got, check_categorical=False)
+    else:
+        assert_eq(expect, got, check_categorical=False)
