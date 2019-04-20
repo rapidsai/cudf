@@ -122,7 +122,7 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
 // Unsuported gdf_dtypes should throw std::runtime_error in host code
 TEST_F(DispatcherTest, UnsuportedTypesTest) {
   for (auto const& t : unsupported_dtypes) {
-    EXPECT_THROW(cudf::type_dispatcher(t, test_functor{}, t), std::runtime_error);
+    EXPECT_THROW(cudf::type_dispatcher(t, test_functor{}, t), std::invalid_argument);
   }
 }
 
