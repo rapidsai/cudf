@@ -16,10 +16,11 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include <algorithm>
+#include <bitmask/legacy_bitmask.hpp>
+#include <cassert>
 #include <utilities/error_utils.hpp>
 #include "cudf.h"
-#include <algorithm>
-#include <cassert>
 
 namespace cudf {
 
@@ -44,6 +45,47 @@ struct table {
       CUDF_EXPECTS(nullptr != col, "Null input column");
       CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
     });
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Allocates and constructs a set of `gdf_column`s.
+   *
+   * Allocates an of `gdf_column`s of the specified size and type.
+   *
+   * @note It is the caller's responsbility to free the array of gdf_column and
+   * their associated device memory.
+   *
+   * @param[in] num_rows The size of each gdf_column
+   * @param[in] dtypes The type of each column
+   * @param[in] allocate_bitmasks If `true`, each column will be allocated an
+   * appropriately sized bitmask
+   *---------------------------------------------------------------------------**/
+  table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
+        bool allocate_bitmasks = false, cudaStream_t stream = 0)
+      : _num_columns{static_cast<gdf_size_type>(dtypes.size())},
+        _num_rows{num_rows} {
+    // Allocate and initialize each column
+    gdf_column* new_columns = new gdf_column[_num_columns];
+    std::transform(
+        new_columns, new_columns + _num_columns, dtypes.begin(), new_columns,
+        [num_rows, allocate_bitmasks, stream](gdf_column col, gdf_dtype dtype) {
+          col.size = num_rows;
+          col.dtype = dtype;
+          RMM_ALLOC(&col.data, gdf_dtype_size(dtype) * num_rows, stream);
+          if (allocate_bitmasks) {
+            RMM_ALLOC(
+                &col.valid,
+                gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+                stream);
+          }
+          return col;
+        });
+
+    columns = new gdf_column*[_num_columns];
+
+    for (gdf_size_type i = 0; i < _num_columns; ++i) {
+      columns[i] = &new_columns[i];
+    }
   }
 
   /**---------------------------------------------------------------------------*
@@ -108,7 +150,7 @@ struct table {
  private:
   gdf_column** columns;              ///< The set of gdf_columns
   gdf_size_type const _num_columns;  ///< The number of columns in the set
-  gdf_size_type _num_rows;     ///< The number of elements in each column
+  gdf_size_type _num_rows;           ///< The number of elements in each column
 };
 
 }  // namespace cudf
