@@ -69,8 +69,18 @@ struct table {
     std::transform(
         new_columns, new_columns + _num_columns, dtypes.begin(), new_columns,
         [num_rows, allocate_bitmasks, stream](gdf_column col, gdf_dtype dtype) {
+          CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
           col.size = num_rows;
           col.dtype = dtype;
+          col.null_count = 0;
+          col.valid = nullptr;
+
+          // Timestamp currently unsupported as it would require passing in
+          // additional resolution information
+          gdf_dtype_extra_info extra_info;
+          extra_info.time_unit = TIME_UNIT_NONE;
+          col.dtype_info = extra_info;
+
           RMM_ALLOC(&col.data, gdf_dtype_size(dtype) * num_rows, stream);
           if (allocate_bitmasks) {
             RMM_ALLOC(
@@ -78,6 +88,7 @@ struct table {
                 gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
                 stream);
           }
+
           return col;
         });
 
