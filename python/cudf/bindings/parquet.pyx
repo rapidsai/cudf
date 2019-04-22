@@ -62,8 +62,7 @@ def cpp_read_parquet(path, *args, **kwargs):
         for col in usecols:
             arr_cols.append(str(col).encode())
         vector_use_cols = arr_cols
-        use_cols_ptr = vector_use_cols.data()
-        pq_reader.use_cols = use_cols_ptr
+        pq_reader.use_cols = vector_use_cols.data()
         pq_reader.use_cols_len = len(usecols)
         
     # Call read_parquet
@@ -83,6 +82,8 @@ def cpp_read_parquet(path, *args, **kwargs):
         data_mem, mask_mem = gdf_column_to_column_mem(out[i])
         outcols.append(Column.from_mem_views(data_mem, mask_mem))
         new_names.append(out[i].col_name.decode())
+        free(out[i].col_name)
+        free(out[i])
 
     # Construct dataframe from columns
     df = DataFrame()
