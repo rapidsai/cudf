@@ -112,6 +112,21 @@ class Column(object):
                 mask = Buffer(mask_mem)
             return columnops.build_column(data_buf, dtype, mask=mask)
 
+    @staticmethod
+    def from_mem_views(data_mem, mask_mem=None):
+        """Create a Column object from a data device array (or nvstrings
+           object), and an optional mask device array
+        """
+        from cudf.dataframe import columnops
+        if isinstance(data_mem, nvstrings.nvstrings):
+            return columnops.build_column(data_mem, data_mem.dtype)
+        else:
+            data_buf = Buffer(data_mem)
+            mask = None
+            if mask_mem is not None:
+                mask = Buffer(mask_mem)
+            return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
+
     def __init__(self, data, mask=None, null_count=None):
         """
         Parameters
