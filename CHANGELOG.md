@@ -14,6 +14,7 @@
 - PR #1412 Add DataFrame.pop()
 - PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
+- PR #1455 Add Series.Shift via Numba kernel
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 
