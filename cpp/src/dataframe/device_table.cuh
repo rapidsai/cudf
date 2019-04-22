@@ -54,7 +54,7 @@ class device_table {
    * device memory any time a copy is destroyed.
    *
    * Instead, the underlying device memory will not be free'd until the returned
-   * `unique_ptr` goes out of scope.
+   * `unique_ptr` invokes its deleter.
    *
    * Usage:
    * ```
@@ -90,20 +90,6 @@ class device_table {
    *---------------------------------------------------------------------------**/
   static auto create(cudf::table const& t, cudaStream_t stream = 0) {
     return device_table::create(t.num_columns(), t.columns(), stream);
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Destroys the `device_table`.
-   *
-   * Frees the underlying device memory and deletes the object.
-   *
-   * This function is invoked by the deleter of the unique_ptr returned from
-   * device_table::create.
-   *
-   *---------------------------------------------------------------------------**/
-  __host__ void destroy(void) {
-    RMM_FREE(device_columns, _stream);
-    delete this;
   }
 
   device_table() = delete;
@@ -326,6 +312,20 @@ __device__ inline void copy_row(device_table const& target,
                           *target.get_column(i), target_index,
                           *source.get_column(i), source_index);
   }
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Destroys the `device_table`.
+ *
+ * Frees the underlying device memory and deletes the object.
+ *
+ * This function is protected as it should only be invoked by the deleter of the
+ * unique_ptr returned from device_table::create.
+ *
+ *---------------------------------------------------------------------------**/
+__host__ void destroy(void) {
+  RMM_FREE(device_columns, _stream);
+  delete this;
 }
 
 #endif
