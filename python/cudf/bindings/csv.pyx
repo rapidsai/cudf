@@ -179,6 +179,7 @@ cpdef cpp_read_csv(
     if delimiter is None:
         delimiter = sep
 
+    dtype_dict = False
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
