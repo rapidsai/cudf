@@ -253,7 +253,6 @@ cpdef cpp_read_csv(
         csv_reader.names = names_ptr
 
     if dtype is None:
-        # csv_reader.dtype = ffi.NULL
         csv_reader.dtype = NULL
     else:
         if not dtype_dict:
