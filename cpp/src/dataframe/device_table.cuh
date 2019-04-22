@@ -92,6 +92,20 @@ class device_table {
     return device_table::create(t.num_columns(), t.columns(), stream);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Destroys the `device_table`.
+   *
+   * Frees the underlying device memory and deletes the object.
+   *
+   * This function is invoked by the deleter of the
+   * unique_ptr returned from device_table::create.
+   *
+   *---------------------------------------------------------------------------**/
+  __host__ void destroy(void) {
+    RMM_FREE(device_columns, _stream);
+    delete this;
+  }
+
   device_table() = delete;
   device_table(device_table const& other) = default;
   device_table& operator=(device_table const& other) = default;
@@ -312,20 +326,6 @@ __device__ inline void copy_row(device_table const& target,
                           *target.get_column(i), target_index,
                           *source.get_column(i), source_index);
   }
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Destroys the `device_table`.
- *
- * Frees the underlying device memory and deletes the object.
- *
- * This function is protected as it should only be invoked by the deleter of the
- * unique_ptr returned from device_table::create.
- *
- *---------------------------------------------------------------------------**/
-__host__ void destroy(void) {
-  RMM_FREE(device_columns, _stream);
-  delete this;
 }
 
 #endif
