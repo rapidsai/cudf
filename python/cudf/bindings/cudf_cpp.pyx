@@ -72,7 +72,6 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
-
 cdef get_scalar_value(gdf_scalar scalar):
     """
     Returns typed value from a gdf_scalar
