@@ -29,11 +29,10 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<cudf::groupby::distributive_operators> const& operators,
     std::vector<gdf_dtype> const& output_dtypes) {
-
   // Create the output key and value tables
   std::vector<gdf_dtype> key_dtypes(keys.num_columns());
   std::transform(keys.begin(), keys.end(), key_dtypes.begin(),
-                 [](gdf_column* col) { return col->dtype; });
+                 [](gdf_column const* col) { return col->dtype; });
   cudf::table output_keys{keys.num_rows(), key_dtypes};
   cudf::table output_values{keys.num_rows(), output_dtypes};
 
