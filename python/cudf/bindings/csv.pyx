@@ -266,7 +266,7 @@ cpdef cpp_read_csv(
     check_gdf_error(result)
 
     out = csv_reader.data
-    if out == NULL:
+    if out is NULL:
         raise ValueError("Failed to parse CSV")
 
     # Extract parsed columns

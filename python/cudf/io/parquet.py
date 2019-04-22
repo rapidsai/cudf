@@ -10,18 +10,22 @@ import warnings
 
 
 @ioutils.doc_read_parquet()
-def read_parquet(path, engine='cudf', *args, **kwargs):
+def read_parquet(path, engine='cudf', columns=None, *args, **kwargs):
     """{docstring}"""
 
     if engine == 'cudf':
         df = cpp_read_parquet(
             path,
-            *args,
-            **kwargs
+            columns
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
-        pa_table = pq.read_pandas(path, *args, **kwargs)
+        pa_table = pq.read_pandas(
+            path,
+            columns=columns,
+            *args,
+            **kwargs
+        )
         df = DataFrame.from_arrow(pa_table)
 
     return df

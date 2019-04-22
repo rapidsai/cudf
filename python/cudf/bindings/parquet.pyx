@@ -8,7 +8,7 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.parquet cimport *
-from libc.stdint cimport uintptr_t
+from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
 from cudf.dataframe.column import Column
@@ -33,7 +33,7 @@ def is_file_like(obj):
     return True
 
 
-def cpp_read_parquet(path, *args, **kwargs):
+cpdef cpp_read_parquet(path, columns=None):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -55,7 +55,7 @@ def cpp_read_parquet(path, *args, **kwargs):
     pq_reader.source_type = FILE_PATH
     pq_reader.source = source_ptr
 
-    usecols = kwargs.get("columns")
+    usecols = columns
     cdef vector[const char*] vector_use_cols
     if usecols is not None:
         arr_cols = []
