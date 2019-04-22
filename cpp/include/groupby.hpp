@@ -17,7 +17,13 @@
 #ifndef GROUPBY_HPP
 #define GROUPBY_HPP
 
+#include <vector>
+
+
 namespace cudf {
+
+class table;
+
 namespace groupby {
 
 enum distributive_operators { SUM, MIN, MAX, COUNT };
