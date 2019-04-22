@@ -7,7 +7,7 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.parquet cimport read_parquet
+from cudf.bindings.parquet cimport *
 from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
 
@@ -81,22 +81,9 @@ def cpp_read_parquet(path, *args, **kwargs):
     outcols = []
     new_names = []
     for i in range(pq_reader.num_cols_out):
-        if out[i].dtype == GDF_STRING:
-            ptr = int(<uintptr_t>out[i].data)
-            new_names.append(out[i].col_name.decode())
-            outcols.append(nvstrings.bind_cpointer(ptr))
-        else:
-            data_mem, mask_mem = gdf_column_to_column_mem(out[i])
-            newcol = Column.from_mem_views(data_mem, mask_mem)
-            new_names.append(out[i].col_name.decode())
-            if(newcol.dtype.type == np.datetime64):
-                outcols.append(
-                    newcol.view(DatetimeColumn, dtype='datetime64[ms]')
-                )
-            else:
-                outcols.append(
-                    newcol.view(NumericalColumn, dtype=newcol.dtype)
-                )
+        data_mem, mask_mem = gdf_column_to_column_mem(out[i])
+        outcols.append(Column.from_mem_views(data_mem, mask_mem))
+        new_names.append(out[i].col_name.decode())
 
     # Construct dataframe from columns
     df = DataFrame()
