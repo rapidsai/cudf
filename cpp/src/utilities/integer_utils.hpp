@@ -46,8 +46,8 @@ constexpr inline S round_up_safe(S number_to_round, S modulus) {
 * to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
 *
 * @param dividend the number to divide
-* @param divisor the number of by which to divide
-* @return The least integer multiple of {@link divisor} which is greater-or-equal to
+* @param divisor the number by which to divide
+* @return The least integer multiple of {@link divisor} which is greater than or equal to
 * the non-integral division dividend/divisor.
 *
 * @note sensitive to overflow, i.e. if dividend > std::numeric_limits<S>::max() - divisor,
@@ -88,7 +88,7 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>, I di
 *
 * @param dividend the number to divide
 * @param divisor the number of by which to divide
-* @return The least integer multiple of {@link divisor} which is greater-or-equal to
+* @return The least integer multiple of {@link divisor} which is greater than or equal to
 * the non-integral division dividend/divisor.
 *
 * @note will not overflow, and may _or may not_ be slower than the intuitive
