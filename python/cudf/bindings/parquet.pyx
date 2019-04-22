@@ -66,9 +66,8 @@ def cpp_read_parquet(path, *args, **kwargs):
         pq_reader.use_cols = use_cols_ptr
         pq_reader.use_cols_len = len(usecols)
         
-
+    # Call read_parquet
     with nogil:
-    # Call to libcudf
         result = read_parquet(&pq_reader)
 
     check_gdf_error(result)
