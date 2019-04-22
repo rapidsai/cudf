@@ -39,10 +39,11 @@
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
-- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 - PR #1453 Convert CSV Reader CFFI to Cython
 - PR #1479 Convert Parquet Reader CFFI to Cython
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
+- PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
 
 ## Bug Fixes
 
@@ -71,7 +72,8 @@
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
 - PR #1446 Merge 1275 hotfix from master into branch-0.7
 - PR #1447 Fix legacy groupby apply docstring
-
+- PR #1451 Fix hash join estimated result size is not correct
+- PR #1454 Fix local build script improperly change directory permissions
 
 # cuDF 0.6.1 (25 Mar 2019)
 
