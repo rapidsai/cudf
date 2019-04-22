@@ -7,7 +7,7 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.csv cimport read_csv, _wrap_string, is_file_like
+from cudf.bindings.csv cimport read_csv
 from libc.stdlib cimport malloc, free
 from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
@@ -24,16 +24,8 @@ import numpy as np
 import collections.abc
 import os
 
-cdef char* _wrap_string(text):
-    if(text is None):
-        return <char*>NULL
-    else:
-        output = text.encode()
-        return <char*>output
-        # return ffi.new("char[]", text.encode())
 
-
-cpdef is_file_like(obj):
+def is_file_like(obj):
     if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
         return False
     if not hasattr(obj, "__iter__"):
@@ -201,7 +193,6 @@ cpdef cpp_read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    # csv_reader = ffi.new('csv_read_arg*')
     cdef csv_read_arg csv_reader = csv_read_arg()
 
     # Populate csv_reader struct
@@ -215,7 +206,6 @@ cpdef cpp_read_csv(
             buffer_as_bytes = buffer.encode()
         else:
             buffer_as_bytes = buffer
-        # buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
         buffer_data_holder = buffer_as_bytes
 
         csv_reader.input_data_form = HOST_BUFFER
@@ -243,24 +233,23 @@ cpdef cpp_read_csv(
             header_infer = 0
         if header is None:
             header_infer = -1
-        # csv_reader.names = ffi.NULL
         csv_reader.names = NULL
         csv_reader.num_cols = 0
         if dtype is not None:
             if dtype_dict:
-                for idx, (k, v) in enumerate(dtype.items()):
-                    arr_dtypes.append(_wrap_string(str(str(k)+":"+str(v))))
+                for k, v in dtype.items():
+                    arr_dtypes.append(str(str(k)+":"+str(v)).encode())
+
     else:
         if header is None:
             header_infer = -1
         csv_reader.num_cols = len(names)
-        for idx, col_name in enumerate(names):
-            arr_names.append(_wrap_string(col_name))
+        for col_name in names:
+            arr_names.append(str(col_name).encode())
             if dtype is not None:
                 if dtype_dict:
-                    arr_dtypes.append(_wrap_string(str(dtype[col_name])))
+                    arr_dtypes.append(str(dtype[col_name]).encode())
         vector_names = arr_names
-        # names_ptr = ffi.new('char*[]', arr_names)
         names_ptr = vector_names.data()
         csv_reader.names = names_ptr
 
@@ -270,17 +259,14 @@ cpdef cpp_read_csv(
     else:
         if not dtype_dict:
             for col_dtype in dtype:
-                arr_dtypes.append(_wrap_string(str(col_dtype)))
+                arr_dtypes.append(str(col_dtype).encode())
 
         vector_dtypes = arr_dtypes
-        # dtype_ptr = ffi.new('char*[]', arr_dtypes)
         dtype_ptr = vector_dtypes.data()
         csv_reader.dtype = dtype_ptr
 
-    # csv_reader.use_cols_int = ffi.NULL
     csv_reader.use_cols_int = NULL
     csv_reader.use_cols_int_len = 0
-    # csv_reader.use_cols_char = ffi.NULL
     csv_reader.use_cols_char = NULL
     csv_reader.use_cols_char_len = 0
 
@@ -294,16 +280,13 @@ cpdef cpp_read_csv(
                 all_int = False
                 break
         if all_int:
-            # usecols_ptr = ffi.new('int[]', usecols)
             use_cols_int = usecols
-            # usecols_ptr = &use_cols_int[0]
             usecols_ptr = use_cols_int.data()
             csv_reader.use_cols_int = usecols_ptr
             csv_reader.use_cols_int_len = len(usecols)
         else:
-            for idx, col_name in enumerate(usecols):
-                arr_col_names.append(_wrap_string(col_name))
-            # col_names_ptr = ffi.new('char*[]', arr_col_names)
+            for col_name in usecols:
+                arr_col_names.append(str(col_name).encode())
             use_cols_char = arr_col_names
             col_names_ptr = use_cols_char.data()
             csv_reader.use_cols_char = col_names_ptr
@@ -326,9 +309,8 @@ cpdef cpp_read_csv(
     arr_true_values = []
     cdef vector[const char*] vector_true_values
     for value in true_values or []:
-        arr_true_values.append(_wrap_string(str(value)))
+        arr_true_values.append(str(value).encode())
     vector_true_values = arr_true_values
-    # arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
     arr_true_values_ptr = vector_true_values.data()
     csv_reader.true_values = arr_true_values_ptr
     csv_reader.num_true_values = len(arr_true_values)
@@ -336,9 +318,8 @@ cpdef cpp_read_csv(
     arr_false_values = []
     cdef vector[const char*] vector_false_values
     for value in false_values or []:
-        arr_false_values.append(_wrap_string(str(value)))
+        arr_false_values.append(str(value).encode())
     vector_false_values = arr_false_values
-    # false_values_ptr = ffi.new('char*[]', arr_false_values)
     false_values_ptr = vector_false_values.data()
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
@@ -346,21 +327,18 @@ cpdef cpp_read_csv(
     arr_na_values = []
     cdef vector[const char*] vector_na_values
     for value in na_values or []:
-        arr_na_values.append(_wrap_string(str(value)))
+        arr_na_values.append(str(value).encode())
     vector_na_values = arr_na_values
-    # arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
     arr_na_values_ptr = vector_na_values.data()
     csv_reader.na_values = arr_na_values_ptr
     csv_reader.num_na_values = len(arr_na_values)
 
-    # compression_bytes = _wrap_string(compression)
     if compression is None:
         compression_bytes = <char*>NULL
     else:
         compression = compression.encode()
         compression_bytes = <char*>compression
 
-    # prefix_bytes = _wrap_string(prefix)
     if prefix is None:
         prefix_bytes = <char*>NULL
     else:
@@ -403,7 +381,6 @@ cpdef cpp_read_csv(
     check_gdf_error(result)
 
     out = csv_reader.data
-    # if out == ffi.NULL:
     if out == NULL:
         raise ValueError("Failed to parse CSV")
 
@@ -413,16 +390,12 @@ cpdef cpp_read_csv(
     new_names = []
     for i in range(csv_reader.num_cols_out):
         if out[i].dtype == GDF_STRING:
-            # ptr = int(ffi.cast("uintptr_t", out[i].data))
             ptr = int(<uintptr_t>out[i].data)
-            # new_names.append(ffi.string(out[i].col_name).decode())
             new_names.append(out[i].col_name.decode())
             outcols.append(nvstrings.bind_cpointer(ptr))
         else:
-            # newcol = Column.from_cffi_view(out[i])
             data_mem, mask_mem = gdf_column_to_column_mem(out[i])
             newcol = Column.from_mem_views(data_mem, mask_mem)
-            # new_names.append(ffi.string(out[i].col_name).decode())
             new_names.append(out[i].col_name.decode())
             if(newcol.dtype.type == np.datetime64):
                 outcols.append(
@@ -435,7 +408,6 @@ cpdef cpp_read_csv(
 
     # Build dataframe
     df = DataFrame()
-    # if names is not None and header_infer is -1:
 
     for k, v in zip(new_names, outcols):
         df[k] = v
