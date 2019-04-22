@@ -404,6 +404,8 @@ cpdef cpp_read_csv(
                 outcols.append(
                     newcol.view(NumericalColumn, dtype=newcol.dtype)
                 )
+        free(out[i].col_name)
+        free(out[i])
 
     # Build dataframe
     df = DataFrame()
