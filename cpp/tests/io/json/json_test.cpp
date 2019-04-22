@@ -30,6 +30,8 @@
 
 #include <cstdlib>
 
+#include <nvstrings/NVStrings.h>
+
 #include "io/utilities/parsing_utils.cuh"
 
 using std::vector;
@@ -101,13 +103,13 @@ TEST(gdf_json_test, BasicJsonLines)
 {
 	const char* types[]	= { "int", "float64" };
 	json_read_arg args{};
-	args.source = "[1, 1.1]\n[2, 2.2]";
+	args.source = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
 	args.dtype = types;
 	args.num_cols = 2;
 	read_json(&args);
 
 	ASSERT_EQ(args.num_cols_out, 2);
-	ASSERT_EQ(args.num_rows_out, 2);
+	ASSERT_EQ(args.num_rows_out, 3);
 
 	ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
 	ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
@@ -117,8 +119,56 @@ TEST(gdf_json_test, BasicJsonLines)
 
 
 	const auto firstCol = gdf_column_to_host<int32_t>(args.data[0]);
+	EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2, 3));
+	const auto secondCol = gdf_column_to_host<double>(args.data[1]);
+	EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2, 3.3));
+}
+
+TEST(gdf_json_test, JsonLinesStrings)
+{
+	const char* types[]	= { "int", "float64", "str" };
+	json_read_arg args{};
+	args.source = "[1, 1.1, \"aa\"]\n[2, 2.2, \"bbb\"]";
+	args.dtype = types;
+	args.num_cols = 3;
+	read_json(&args);
+
+	ASSERT_EQ(args.num_cols_out, 3);
+	ASSERT_EQ(args.num_rows_out, 2);
+
+	ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
+	ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
+	ASSERT_EQ(args.data[2]->dtype, GDF_STRING);
+
+	ASSERT_EQ(std::string(args.data[0]->col_name), "0");
+	ASSERT_EQ(std::string(args.data[1]->col_name), "1");
+	ASSERT_EQ(std::string(args.data[2]->col_name), "2");
+
+	const auto firstCol = gdf_column_to_host<int32_t>(args.data[0]);
 	EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2));
 	const auto secondCol = gdf_column_to_host<double>(args.data[1]);
 	EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
 
+	const auto stringList = reinterpret_cast<NVStrings*>(args.data[2]->data);
+
+	ASSERT_NE(stringList, nullptr);
+	const auto stringCount = stringList->size();
+	ASSERT_EQ(stringCount, 2u);
+	const auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
+	ASSERT_NE(stringList->byte_count(stringLengths.get(), false), 0u);
+
+	// Check the actual strings themselves
+	auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
+	for (size_t i = 0; i < stringCount; ++i) {
+		ASSERT_GT(stringLengths[i], 0);
+		strings[i] = new char[stringLengths[i] + 1];
+		strings[i][stringLengths[i]] = 0;
+	}
+	EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
+
+	EXPECT_STREQ(strings[0], "aa");
+	EXPECT_STREQ(strings[1], "bbb");
+	for (size_t i = 0; i < stringCount; ++i) {
+		delete[] strings[i];
+	}
 }

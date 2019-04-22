@@ -239,6 +239,17 @@ void JsonReader::convertDataToColumns(){
   }
 
   // handle string columns
+  for (size_t i = 0; i < num_columns; ++i) {
+    if (columns_[i]->dtype == GDF_STRING) {
+      std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_data(
+        NVStrings::create_from_index(static_cast<string_pair *>(columns_[i]->data), columns_[i]->size), 
+        &NVStrings::destroy);
+      
+      RMM_TRY(RMM_FREE(columns_[i]->data, 0));
+
+      columns_[i]->data = str_data.release();
+    }
+  }
 }
 
 void JsonReader::storeColumns(json_read_arg *out_args){
@@ -376,9 +387,7 @@ __global__ void convertCsvToGdf(char * const data, size_t data_size,
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
     // Modify start & end to ignore whitespace and quotechars
-    if(dtypes[col] != gdf_dtype::GDF_CATEGORY && dtypes[col] != gdf_dtype::GDF_STRING){
-      adjustForWhitespaceAndQuotes(data, &start, &field_data_last, opts.quotechar);
-    }
+    adjustForWhitespaceAndQuotes(data, &start, &field_data_last, opts.quotechar);
     // Empty fields are not legal values
     if(start <= field_data_last) {
       // Type dispatcher does not handle GDF_STRINGS
