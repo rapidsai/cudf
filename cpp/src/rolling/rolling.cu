@@ -24,6 +24,11 @@
 #include <stdio.h>
 #include <algorithm>
 
+#include <rolling.hpp>
+
+// allocate column
+#include <io/utilities/wrapper_utils.hpp>
+
 // basic aggregation classes from groupby
 #include <groupby/aggregation_operations.hpp>
 
@@ -142,7 +147,7 @@ struct launch_kernel
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
 	   typename std::enable_if_t<std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
-  gdf_error dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
+  void dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
   {
     PUSH_RANGE("CUDF_ROLLING", GDF_ORANGE);
 
@@ -155,8 +160,6 @@ struct launch_kernel
     CUDA_CHECK_LAST();
 
     POP_RANGE();
-
-    return GDF_SUCCESS;
   }
 
   /**
@@ -164,9 +167,9 @@ struct launch_kernel
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
 	   typename std::enable_if_t<!std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
-  gdf_error dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
+  void dispatch_aggregation_type(gdf_size_type nrows, TArgs... FArgs)
   {
-    return GDF_UNSUPPORTED_DTYPE;
+    CUDF_FAIL("Unsupported column type. Only arithmetic types are supported in rolling windows");
   }
 
   /**
@@ -175,62 +178,82 @@ struct launch_kernel
    * rolling window kernel.
    */
   template <typename ColumnType>
-  gdf_error operator()(gdf_size_type nrows,
-		       gdf_agg_op agg_type,
-		       void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
-		       void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
-		       gdf_size_type window,
-		       gdf_size_type min_periods,
-		       gdf_size_type forward_window,
-		       const gdf_size_type *window_col,
-		       const gdf_size_type *min_periods_col,
-		       const gdf_size_type *forward_window_col)
+  void operator()(gdf_size_type nrows,
+		  gdf_agg_op agg_type,
+		  void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
+		  void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
+		  gdf_size_type window,
+		  gdf_size_type min_periods,
+		  gdf_size_type forward_window,
+		  const gdf_size_type *window_col,
+		  const gdf_size_type *min_periods_col,
+		  const gdf_size_type *forward_window_col)
   {
     switch (agg_type) {
     case GDF_SUM:
-      return dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      break;
     case GDF_MIN:
-      return dispatch_aggregation_type<ColumnType, min_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, min_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      break;
     case GDF_MAX:
-      return dispatch_aggregation_type<ColumnType, max_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, max_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      break;
     case GDF_COUNT:
-      return dispatch_aggregation_type<ColumnType, count_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, count_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      break;
     case GDF_AVG:
-      return dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      break;
     default:
-      // TODO: distinct operator will not be implemented for 0.7
-      return GDF_NOTIMPLEMENTED_ERROR;
+      // TODO: need a nice way to convert enums to strings, same would be useful for groupbys
+      CUDF_FAIL("Aggregation function " + std::to_string(agg_type) + " is not implemented");
     }
   }
 };
 
-} // end of anonymous namespace
+}  // anonymous namespace
 
-gdf_error gdf_rolling_window(gdf_column *output_col,
-                             const gdf_column *input_col,
-                             gdf_size_type window,
-                             gdf_size_type min_periods,
-                             gdf_size_type forward_window,
-                             gdf_agg_op agg_type,
-                             const gdf_size_type *window_col,
-                             const gdf_size_type *min_periods_col,
-                             const gdf_size_type *forward_window_col)
+namespace cudf {
+
+// see rolling.hpp for declaration
+gdf_column* rolling_window(const gdf_column *input_col,
+                           gdf_size_type window,
+                           gdf_size_type min_periods,
+                           gdf_size_type forward_window,
+                           gdf_agg_op agg_type,
+                           const gdf_size_type *window_col,
+                           const gdf_size_type *min_periods_col,
+                           const gdf_size_type *forward_window_col)
 {
-  // Make sure the inputs are not null
-  GDF_REQUIRE((nullptr != input_col) && (nullptr != output_col), GDF_DATASET_EMPTY)
+  // Make sure the input is not null
+  CUDF_EXPECTS(nullptr != input_col, "Input column pointer must not be null");
+
+  // Use the column wrapper class from io/utilities to quickly create a column
+  // TODO: should we care about naming the column?
+  gdf_column_wrapper output_col(input_col->size,
+				input_col->dtype,
+				gdf_dtype_extra_info{TIME_UNIT_NONE},
+				"rolling output column");
 
   // If there are no rows in the input, return successfully
-  GDF_REQUIRE(input_col->size > 0, GDF_SUCCESS)
+  if (input_col->size == 0)
+    return output_col.release();
 
-  // Check datatype homogeneity
-  GDF_REQUIRE(output_col->dtype == input_col->dtype, GDF_DTYPE_MISMATCH)
+  // Allocate memory for the output column
+  CUDF_EXPECTS(output_col.allocate() == GDF_SUCCESS, "Cannot allocate the output column");
 
-  return cudf::type_dispatcher(input_col->dtype,
-                               launch_kernel{},
-                               input_col->size, agg_type,
-                               output_col->data, output_col->valid,
-			       input_col->data, input_col->valid,
-                               window, min_periods, forward_window,
-			       window_col, min_periods_col, forward_window_col);
+  // Launch type dispatcher
+  cudf::type_dispatcher(input_col->dtype,
+                        launch_kernel{},
+                        input_col->size, agg_type,
+                        output_col->data, output_col->valid,
+			input_col->data, input_col->valid,
+                        window, min_periods, forward_window,
+			window_col, min_periods_col, forward_window_col);
+
+  // Release the gdf pointer from the wrapper class
+  return output_col.release();
 }
 
+}  // namespace cudf

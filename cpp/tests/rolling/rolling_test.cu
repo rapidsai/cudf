@@ -17,7 +17,9 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 
+#include <rolling.hpp>
 #include <cudf.h>
+
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/column_wrapper.cuh>
@@ -68,15 +70,6 @@ protected:
     }
     else
       in_gdf_col = create_gdf_column(in_col);
-  }
-
-  void create_gdf_output_buffers()
-  {
-    // TODO: do we always need to create a valid buffer? we can't guarantee that every entry will be valid up front 
-    auto valid_generator = [&](size_t row, size_t col){ return true; };
-    std::vector<T> out_col(in_col.size());
-    // note that if gdf_col_pointer contained something it will be freed since it's a unique pointer
-    out_gdf_col = init_gdf_column(out_col, 0, valid_generator);
   }
 
   template<template <typename AggType> class agg_op, bool average>
@@ -151,45 +144,33 @@ protected:
 
   void compare_gdf_result()
   {
-    // convert to column_wrapper due to a bug in gdf_equal_columns
-    // see https://github.com/rapidsai/cudf/issues/1248 for more detail
-    // TODO: uncomment when the bug is fixed
-    #ifdef BUG_1248_FIXED
-      auto valid_generator = [&](size_t row, size_t col){
-        return ref_data_valid[row];
-      };
-      gdf_col_pointer ref_gdf_col = init_gdf_column(ref_data, 0, valid_generator);
-      ASSERT_TRUE(gdf_equal_columns<T>(ref_gdf_col.get(), out_gdf_col.get()));
-    #else
-      // copy output data to host
-      gdf_size_type nrows = in_col.size();
-      std::vector<T> out_col(nrows);
-      cudaMemcpy(out_col.data(), static_cast<T*>(out_gdf_col->data), nrows * sizeof(T), cudaMemcpyDefault);
-      
-      // copy output valid mask to host
-      gdf_size_type nmasks = gdf_valid_allocation_size(nrows);
-      std::vector<gdf_valid_type> out_col_mask(nmasks);
-      cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault);
-      
-      // create column wrappers and compare
-      cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
-      cudf::test::column_wrapper<T> ref(ref_data, [&](gdf_index_type i) { return ref_data_valid[i]; } );
-      ASSERT_TRUE(out == ref);
+    // convert to column_wrapper to compare
 
-      // print the column
-      out.print();
-    #endif
+    // copy output data to host
+    gdf_size_type nrows = in_col.size();
+    std::vector<T> out_col(nrows);
+    cudaMemcpy(out_col.data(), static_cast<T*>(out_gdf_col->data), nrows * sizeof(T), cudaMemcpyDefault);
+      
+    // copy output valid mask to host
+    gdf_size_type nmasks = gdf_valid_allocation_size(nrows);
+    std::vector<gdf_valid_type> out_col_mask(nmasks);
+    cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault);
+      
+    // create column wrappers and compare
+    cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
+    cudf::test::column_wrapper<T> ref(ref_data, [&](gdf_index_type i) { return ref_data_valid[i]; } );
+    ASSERT_TRUE(out == ref);
+
+    // print the column
+    out.print();
   }
 
   // static windows
   void run_test(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
   {
     create_gdf_input_buffers();
-    create_gdf_output_buffers();
 
-    gdf_rolling_window(out_gdf_col.get(), in_gdf_col.get(),
-		       window, min_periods, forward_window, agg,
-		       NULL, NULL, NULL);
+    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), window, min_periods, forward_window, agg, NULL, NULL, NULL), deleter };
 
     create_reference_output(agg, window, min_periods, forward_window, std::vector<gdf_size_type>(), std::vector<gdf_size_type>(), std::vector<gdf_size_type>());
 
@@ -200,7 +181,6 @@ protected:
   void run_test(std::vector<gdf_size_type> window, std::vector<gdf_size_type> min_periods, std::vector<gdf_size_type> forward_window, gdf_agg_op agg)
   {
     create_gdf_input_buffers();
-    create_gdf_output_buffers();
 
     // copy sizes to the gpu
     // TODO: use RMM to allocate stuff?
@@ -214,9 +194,7 @@ protected:
     cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
     cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
 
-    gdf_rolling_window(out_gdf_col.get(), in_gdf_col.get(),
-		       0, 0, 0, agg,
-		       d_window, d_min_periods, d_forward_window);
+    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), 0, 0, 0, agg, d_window, d_min_periods, d_forward_window), deleter };
 
     create_reference_output(agg, 0, 0, 0, window, min_periods, forward_window);
 
@@ -239,6 +217,13 @@ protected:
 
   // output
   gdf_col_pointer out_gdf_col;
+
+  // column deleter
+  const std::function<void(gdf_column*)> deleter = [](gdf_column* col) {
+    col->size = 0;
+    RMM_FREE(col->data, 0);
+    RMM_FREE(col->valid, 0);
+  };
 };
 
 using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, double>;
