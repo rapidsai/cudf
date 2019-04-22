@@ -42,6 +42,7 @@
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 
 ## Bug Fixes
 
