@@ -84,7 +84,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
 
     // probably could collapse this more
     bool bquoted = (column->dtype==GDF_STRING);
-    // check for delimeters and quotes
+    // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
     if( rtn->contains("\"",bmatches) > 0 )
