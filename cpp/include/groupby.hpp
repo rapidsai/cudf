@@ -17,8 +17,9 @@
 #ifndef GROUPBY_HPP
 #define GROUPBY_HPP
 
-#include <vector>
+#include <cudf.h>
 
+#include <vector>
 
 namespace cudf {
 
@@ -44,12 +45,14 @@ enum distributive_operators { SUM, MIN, MAX, COUNT };
  * @param keys The table of keys
  * @param values The table of aggregation values
  * @param operators The list of distributive aggregation operations
+ * @param output_dtypes The type to use for the output of each aggregation
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the table of reduced output values
  *---------------------------------------------------------------------------**/
 std::tuple<cudf::table, cudf::table> distributive(
     cudf::table const& keys, cudf::table const& values,
-    std::vector<distributive_operators> const& operators);
+    std::vector<distributive_operators> const& operators,
+    std::vector<gdf_dtype> output_dtypes);
 
 }  // namespace groupby
 }  // namespace cudf

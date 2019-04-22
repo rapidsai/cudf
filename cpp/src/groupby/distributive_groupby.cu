@@ -17,6 +17,7 @@
 #include <groupby.hpp>
 #include <types.hpp>
 #include <utilities/error_utils.hpp>
+#include "new_hash_groupby.hpp"
 
 #include <vector>
 
@@ -25,13 +26,13 @@ namespace groupby {
 
 std::tuple<cudf::table, cudf::table> distributive(
     cudf::table const& keys, cudf::table const& values,
-    std::vector<distributive_operators> const& operators) {
-
+    std::vector<distributive_operators> const& operators,
+    std::vector<gdf_dtype> const& output_dtypes) {
   CUDF_EXPECTS(
       static_cast<gdf_size_type>(operators.size()) == values.num_columns(),
       "Size mismatch between operators and value columns");
 
-  return std::make_tuple(keys, values);
+  return cudf::detail::hash_groupby(keys, values, operators, output_dtypes);
 }
 }  // namespace groupby
 }  // namespace cudf
