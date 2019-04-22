@@ -40,8 +40,10 @@
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
-- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
+- PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 
 ## Bug Fixes
 
