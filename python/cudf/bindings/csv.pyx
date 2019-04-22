@@ -250,8 +250,7 @@ cpdef cpp_read_csv(
                 if dtype_dict:
                     arr_dtypes.append(str(dtype[col_name]).encode())
         vector_names = arr_names
-        names_ptr = vector_names.data()
-        csv_reader.names = names_ptr
+        csv_reader.names = vector_names.data()
 
     if dtype is None:
         csv_reader.dtype = NULL
@@ -261,8 +260,7 @@ cpdef cpp_read_csv(
                 arr_dtypes.append(str(col_dtype).encode())
 
         vector_dtypes = arr_dtypes
-        dtype_ptr = vector_dtypes.data()
-        csv_reader.dtype = dtype_ptr
+        csv_reader.dtype = vector_dtypes.data()
 
     csv_reader.use_cols_int = NULL
     csv_reader.use_cols_int_len = 0
@@ -280,15 +278,13 @@ cpdef cpp_read_csv(
                 break
         if all_int:
             use_cols_int = usecols
-            usecols_ptr = use_cols_int.data()
-            csv_reader.use_cols_int = usecols_ptr
+            csv_reader.use_cols_int = use_cols_int.data()
             csv_reader.use_cols_int_len = len(usecols)
         else:
             for col_name in usecols:
                 arr_col_names.append(str(col_name).encode())
             use_cols_char = arr_col_names
-            col_names_ptr = use_cols_char.data()
-            csv_reader.use_cols_char = col_names_ptr
+            csv_reader.use_cols_char = use_cols_char.data()
             csv_reader.use_cols_char_len = len(usecols)
 
     if decimal == delimiter:
@@ -310,8 +306,7 @@ cpdef cpp_read_csv(
     for value in true_values or []:
         arr_true_values.append(str(value).encode())
     vector_true_values = arr_true_values
-    arr_true_values_ptr = vector_true_values.data()
-    csv_reader.true_values = arr_true_values_ptr
+    csv_reader.true_values = vector_true_values.data()
     csv_reader.num_true_values = len(arr_true_values)
 
     arr_false_values = []
@@ -319,8 +314,7 @@ cpdef cpp_read_csv(
     for value in false_values or []:
         arr_false_values.append(str(value).encode())
     vector_false_values = arr_false_values
-    false_values_ptr = vector_false_values.data()
-    csv_reader.false_values = false_values_ptr
+    csv_reader.false_values = vector_false_values.data()
     csv_reader.num_false_values = len(arr_false_values)
 
     arr_na_values = []
@@ -328,8 +322,7 @@ cpdef cpp_read_csv(
     for value in na_values or []:
         arr_na_values.append(str(value).encode())
     vector_na_values = arr_na_values
-    arr_na_values_ptr = vector_na_values.data()
-    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.na_values = vector_na_values.data()
     csv_reader.num_na_values = len(arr_na_values)
 
     if compression is None:
