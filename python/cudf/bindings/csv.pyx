@@ -196,7 +196,6 @@ cpdef cpp_read_csv(
     cdef csv_read_arg csv_reader = csv_read_arg()
 
     # Populate csv_reader struct
-    cdef char* buffer_data_holder
     if is_file_like(filepath_or_buffer):
         if compression == 'infer':
             compression = None
@@ -206,7 +205,7 @@ cpdef cpp_read_csv(
             buffer_as_bytes = buffer.encode()
         else:
             buffer_as_bytes = buffer
-        buffer_data_holder = buffer_as_bytes
+        buffer_data_holder = <char*>buffer_as_bytes
 
         csv_reader.input_data_form = HOST_BUFFER
         csv_reader.filepath_or_buffer = buffer_data_holder
