@@ -42,6 +42,7 @@
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 - PR #1453 Convert CSV Reader CFFI to Cython
+- PR #XXXX Convert Parquet Reader CFFI to Cython
 
 ## Bug Fixes
 
