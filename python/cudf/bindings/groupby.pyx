@@ -10,6 +10,7 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from libc.stdint cimport uintptr_t
+from libc.stdlib cimport free
 from libcpp.vector cimport vector
 cimport cython
 
@@ -64,7 +65,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
 
     ncols = len(groupby_class._by)
     cdef vector[gdf_column*] vector_cols
-    # Each of these `column_view_from_column` need to be freed or change cudf_cpp.pyx to use `unique_ptr`
     for thisBy in groupby_class._by:
         vector_cols.push_back(column_view_from_column(groupby_class._df[thisBy]._column))
 
@@ -77,9 +77,11 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
 
     cdef gdf_column* out_col_indices
     cdef vector[gdf_column*] vector_out_col_values
-    cdef gdf_error err = GDF_CUDA_ERROR
+    cdef gdf_error err
     for val_col in val_columns:
-        # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
+        out_col_indices = NULL
+        vector_out_col_values.clear()
+        err = GDF_CUDA_ERROR
         col_agg = column_view_from_column(groupby_class._df[val_col]._column)
 
         # assuming here that if there are multiple aggregations that the
@@ -93,7 +95,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
             )
-            # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
             out_col_indices = column_view_from_column(out_col_indices_series._column)
         else:
             out_col_indices = NULL
@@ -116,7 +117,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
             out_col_values_series.append(col)
-        # Each of these `column_view_from_column` need to be freed or change cudf_cpp.pyx to use `unique_ptr`
         for i in range(0, ncols):
             vector_out_col_values.push_back(column_view_from_column(out_col_values_series[i]._column))
 
@@ -157,7 +157,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
 
-        # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
         out_col_agg = column_view_from_column(out_col_agg_series._column)
 
         if agg_type is None:
@@ -227,7 +226,7 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         for i, col in enumerate(out_col_values_series):
             if col.dtype == np.dtype("object") and len(col) > 0:
                 import nvcategory
-                nvcat_ptr = int(<uintptr_t>out_col_values[i].dtype_info.category)
+                nvcat_ptr = int(<uintptr_t>vector_out_col_values[i].dtype_info.category)
                 nvcat_obj = None
                 if nvcat_ptr:
                     nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
@@ -280,6 +279,17 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         first_run = False
         col_count = col_count + 1
 
+        # Free objects created each iteration
+        free(col_agg)
+        free(out_col_indices)
+        for val in vector_out_col_values:
+            free(val)
+        free(out_col_agg)
+
+    # Free objects created once
+    for val in vector_cols:
+        free(val)
+
     return result
 
 def agg(groupby_class, args):
@@ -287,6 +297,8 @@ def agg(groupby_class, args):
 
     Parameters
     ----------
+    groupby_class : :class:`~cudf.groupby.Groupby`
+        Instance of :class:`~cudf.groupby.Groupby`.
     args : dict, list, str, callable
         - str
             The aggregate function name.
@@ -386,6 +398,8 @@ def agg(groupby_class, args):
             result.drop_column(idx.name)
     else:
         result = groupby_class.agg([args])
+        
+    free(ctx)
 
     nvtx_range_pop()
     return result
@@ -394,6 +408,8 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
     """
     Parameters
     ----------
+    groupby_class : :class:`~cudf.groupby.Groupby`
+        Instance of :class:`~cudf.groupby.Groupby`.
     agg_type : str
         The aggregation function to run.
     """
@@ -415,6 +431,8 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
         val_columns_out,
         sort_results=sort_results
     )
+
+    free(ctx)
 
     # If a Groupby has one index column and one value column
     # and as_index is set, return a Series instead of a df
