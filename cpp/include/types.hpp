@@ -72,8 +72,9 @@ struct table {
         _columns, _columns + _num_columns, dtypes.begin(), _columns,
         [num_rows, allocate_bitmasks, stream](gdf_column*& col,
                                               gdf_dtype dtype) {
-          col = new gdf_column;
+          CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
           CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
+          col = new gdf_column;
           col->size = num_rows;
           col->dtype = dtype;
           col->null_count = 0;
