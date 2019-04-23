@@ -299,3 +299,15 @@ TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
         }
     }
 }
+
+TYPED_TEST(WrappersTest, NumericLimitsTest)
+{
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
+
+    EXPECT_EQ(static_cast<UnderlyingType>(std::numeric_limits<TypeParam>::max()), 
+              std::numeric_limits<UnderlyingType>::max());
+    EXPECT_EQ(static_cast<UnderlyingType>(std::numeric_limits<TypeParam>::min()), 
+              std::numeric_limits<UnderlyingType>::min());
+    EXPECT_EQ(static_cast<UnderlyingType>(std::numeric_limits<TypeParam>::lowest()), 
+              std::numeric_limits<UnderlyingType>::lowest());
+}

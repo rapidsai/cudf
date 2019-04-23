@@ -485,6 +485,27 @@ struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
 
 };
 
+/** --------------------------------------------------------------------------*
+  * @brief Specialization of std::numeric_limits for cudf::bool8
+  *
+  * Required since the underlying type, int8_t, has different limits than bool
+  * --------------------------------------------------------------------------**/
+template <>
+struct numeric_limits< cudf::detail::wrapper<gdf_bool, GDF_BOOL> > {
+  
+  static constexpr cudf::bool8 max() noexcept {
+    return cudf::bool8{true};
+  }
+  
+  static constexpr cudf::bool8 lowest() noexcept {
+    return cudf::bool8{false};
+  }
+
+  static constexpr cudf::bool8 min() noexcept {
+    return cudf::bool8{false};
+  }
+};
+
 } // std
 
 namespace cub
