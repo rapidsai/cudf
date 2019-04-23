@@ -98,8 +98,8 @@ constexpr inline bool is_floating_point(gdf_dtype element_type) {
  * @param op The aggregation operation
  * @return gdf_dtype Type to use for output aggregation column
  *---------------------------------------------------------------------------**/
-gdf_dtype output_type(gdf_dtype input_type,
-                      cudf::groupby::distributive_operators op) {
+constexpr gdf_dtype output_type(gdf_dtype input_type,
+                                cudf::groupby::distributive_operators op) {
   switch (op) {
     // Use same type for min/max
     case groupby::distributive_operators::MIN:
@@ -121,14 +121,12 @@ gdf_dtype output_type(gdf_dtype input_type,
       if (is_floating_point(input_type)) {
         return input_type;
       }
-      CUDF_FAIL("Unsupported type for SUM aggregation" +
-                std::to_string(input_type));
+      return GDF_invalid;
     }
     default:
-      CUDF_FAIL("Unsupported aggregation type");
+      return GDF_invalid;
   }
 }
-
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
@@ -147,11 +145,11 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   // Allocate/initialize output values
   std::vector<gdf_dtype> output_dtypes(values.num_columns());
-  std::transform(values.begin(), values.end(), operators.begin(),
-                 output_dtypes.begin(),
-                 [](gdf_column const* input_col, groupby::distributive_operators op) {
-                   return output_type(input_col->dtype, op);
-                 });
+  std::transform(
+      values.begin(), values.end(), operators.begin(), output_dtypes.begin(),
+      [](gdf_column const* input_col, groupby::distributive_operators op) {
+        return output_type(input_col->dtype, op);
+      });
   cudf::table output_values{output_size, output_dtypes, true, stream};
   initialize_with_identity(output_values, operators, stream);
 
@@ -162,6 +160,8 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   std::unique_ptr<map_type> map =
       std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()), 0);
+
+  rmm::device_vector<groupby::distributive_operators> d_operators(operators);
 
   CHECK_STREAM(stream);
 
