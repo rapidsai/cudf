@@ -238,16 +238,12 @@ void JsonReader::convertDataToColumns(){
     columns_[i]->null_count = columns_[i]->size - h_valid_counts[i];
   }
 
-  // handle string columns
+  // Handle string columns
   for (size_t i = 0; i < num_columns; ++i) {
     if (columns_[i]->dtype == GDF_STRING) {
-      std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_data(
-        NVStrings::create_from_index(static_cast<string_pair *>(columns_[i]->data), columns_[i]->size), 
-        &NVStrings::destroy);
-      
-      RMM_TRY(RMM_FREE(columns_[i]->data, 0));
-
-      columns_[i]->data = str_data.release();
+      auto str_list = static_cast<string_pair *>(columns_[i]->data);
+      auto str_data = NVStrings::create_from_index(str_list, columns_[i]->size);
+      RMM_FREE(std::exchange(columns_[i]->data, str_data), 0);
     }
   }
 }
@@ -264,7 +260,7 @@ void JsonReader::storeColumns(json_read_arg *out_args){
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Functor for converting CSV data to cuDF data type value.
+ * @brief Functor for converting plain text data to cuDF data type value.
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
@@ -272,10 +268,10 @@ struct ConvertFunctor {
    *---------------------------------------------------------------------------**/
   template <typename T>
   __host__ __device__ __forceinline__ void operator()(
-      const char *csvData, void *gdfColumnData, long rowIndex, long start,
+      const char *data, void *gdf_columns, long row, long start,
       long end, const ParseOptions &opts) {
-    T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
-    value = convertStrToValue<T>(csvData, start, end, opts);
+    T &value{static_cast<T *>(gdf_columns)[row]};
+    value = convertStrToValue<T>(data, start, end, opts);
   }
 };
 
@@ -284,7 +280,7 @@ struct ConvertFunctor {
  * 
  * Also iterates over (one or more) delimiter characters after the field.
  *
- * @param[in] raw_csv The entire CSV data to read
+ * @param[in] data The entire plain text data to read
  * @param[in] opts A set of parsing options
  * @param[in] pos Offset to start the seeking from 
  * @param[in] stop Offset of the end of the row
@@ -326,6 +322,7 @@ long seekFieldEnd(const char *data, const ParseOptions opts, long pos, long stop
   return pos;
 }
 
+// TODO move to a common location instead of duplicating the code
 __inline__ __device__ long whichBitmap(long record) { return (record/8);  }
 __inline__ __device__ int whichBit(long record) { return (record % 8);  }
 
@@ -343,24 +340,24 @@ __inline__ __device__ void setBit(gdf_valid_type* address, int bit) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
+ * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
  * 
  * Data is processed one record at a time
  *
- * @param[in] raw_csv The entire CSV data to read
+ * @param[in] data The entire data to read
+ * @param[in] data_size Size of the data buffer, in bytes
+ * @param[in] rec_starts The start of each data record
+ * @param[in] num_records The number of lines/rows
+ * @param[in] dtypes The data type of each column
  * @param[in] opts A set of parsing options
- * @param[in] num_records The number of lines/rows of CSV data
- * @param[in] num_columns The number of columns of CSV data
- * @param[in] parseCol Whether to parse or skip a column
- * @param[in] recStart The start the CSV data of interest
- * @param[in] dtype The data type of the column
- * @param[out] gdf_data The output column data
- * @param[out] valid The bitmaps indicating whether column fields are valid
- * @param[out] num_valid The numbers of valid fields in columns
+ * @param[out] gdf_columns The output column data
+ * @param[in] num_columns The number of columns
+ * @param[out] valid_fields The bitmaps indicating whether column fields are valid
+ * @param[out] num_valid_fields The numbers of valid fields in columns
  *
  * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
-__global__ void convertCsvToGdf(char * const data, size_t data_size,
+__global__ void convertJsonToGdf(char * const data, size_t data_size,
                                 uint64_t * const rec_starts, gdf_size_type num_records,
                                 gdf_dtype * const dtypes, ParseOptions opts,
                                 void ** gdf_columns, int num_columns, 
@@ -369,7 +366,6 @@ __global__ void convertCsvToGdf(char * const data, size_t data_size,
   if ( rec_id >= num_records)
     return;
 
-  
   long start = rec_starts[rec_id];
   // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
@@ -417,31 +413,30 @@ __global__ void convertCsvToGdf(char * const data, size_t data_size,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Helper function to setup and launch CSV parsing CUDA kernel.
+ * @brief Helper function to setup and launch JSON parsing CUDA kernel.
  * 
- * @param[in,out] raw_csv The metadata for the CSV data
- * @param[out] gdf The output column data
- * @param[out] valid The bitmaps indicating whether column fields are valid
- * @param[out] str_cols The start/end offsets for string data types
- * @param[out] num_valid The numbers of valid fields in columns
+ * @param[in] dtypes The data type of each column
+ * @param[out] gdf_columns The output column data
+ * @param[out] valid_fields The bitmaps indicating whether column fields are valid
+ * @param[out] num_valid_fields The numbers of valid fields in columns
  *
  * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
 void JsonReader::convertJsonToColumns(gdf_dtype * const dtypes, void **gdf_columns,
-                                      gdf_valid_type **valid, gdf_size_type *num_valid) {
+                                      gdf_valid_type **valid_fields, gdf_size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertCsvToGdf));
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
 
   const int grid_size = (rec_starts_.size() + block_size - 1)/block_size;
   const ParseOptions opts{',', '\n', '\"','.'};
 
-  convertCsvToGdf <<< grid_size, block_size >>> (
+  convertJsonToGdf <<< grid_size, block_size >>> (
     d_uncomp_data_.data(), d_uncomp_data_.size(),
     rec_starts_.data(), rec_starts_.size(),
     dtypes, opts,
     gdf_columns, columns_.size(),
-    valid, num_valid);
+    valid_fields, num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
 }

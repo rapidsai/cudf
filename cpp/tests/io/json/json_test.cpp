@@ -128,7 +128,7 @@ TEST(gdf_json_test, JsonLinesStrings)
 {
 	const char* types[]	= { "int", "float64", "str" };
 	json_read_arg args{};
-	args.source = "[1, 1.1, \"aa\"]\n[2, 2.2, \"bbb\"]";
+	args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
 	args.dtype = types;
 	args.num_cols = 3;
 	read_json(&args);
@@ -166,8 +166,8 @@ TEST(gdf_json_test, JsonLinesStrings)
 	}
 	EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
 
-	EXPECT_STREQ(strings[0], "aa");
-	EXPECT_STREQ(strings[1], "bbb");
+	EXPECT_STREQ(strings[0], "aa ");
+	EXPECT_STREQ(strings[1], "  bbb");
 	for (size_t i = 0; i < stringCount; ++i) {
 		delete[] strings[i];
 	}
