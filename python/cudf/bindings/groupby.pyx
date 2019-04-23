@@ -23,29 +23,6 @@ import nvstrings
 cimport cython
 
 
-# _NAMED_FUNCTIONS = {
-#     'mean': gdf_group_by_avg,
-#     'min': gdf_group_by_min,
-#     'max': gdf_group_by_max,
-#     'count': gdf_group_by_count,
-#     'sum': gdf_group_by_sum,
-# }
-
-cdef void* get_cpp_function(func_name):
-    if func_name == 'mean':
-        return <void*>gdf_group_by_avg
-    elif func_name == 'min':
-        return <void*>gdf_group_by_min
-    elif func_name == 'max':
-        return <void*>gdf_group_by_max
-    elif func_name == 'count':
-        return <void*>gdf_group_by_count
-    elif func_name == 'sum':
-        return <void*>gdf_group_by_sum
-    else:
-        return <void*>NULL
-
-
 cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                 gdf_context* ctx, val_columns, val_columns_out, sort_result=True):
     """
@@ -77,13 +54,10 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         ctx.flag_sort_result = 1
 
     ncols = len(groupby_class._by)
-    # cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
     cdef vector[gdf_column*] vector_cols
     # Each of these `column_view_from_column` need to be freed or change cudf_cpp.pyx to use `unique_ptr`
     for thisBy in groupby_class._by:
         vector_cols.push_back(column_view_from_column(groupby_class._df[thisBy]._column))
-    # cols = [column_view_from_column(groupby_class._df[thisBy]._column) for thisBy in groupby_class._by]
-    # vector_cols = cols
 
     first_run = add_col_values
     need_to_index = groupby_class._as_index
@@ -92,11 +66,10 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
     if isinstance(val_columns, (str, Number)):
         val_columns = [val_columns]
 
-    cdef gdf_column* out_col_indices = NULL
+    cdef gdf_column* out_col_indices
     cdef vector[gdf_column*] vector_out_col_values
-    cdef void* agg_func = NULL
+    cdef gdf_error err
     for val_col in val_columns:
-        # col_agg = groupby_class._df[val_col]._column.cffi_view
         # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
         col_agg = column_view_from_column(groupby_class._df[val_col]._column)
 
@@ -111,12 +84,10 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
             )
-            # out_col_indices = out_col_indices_series._column.cffi_view
             # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
             out_col_indices = column_view_from_column(out_col_indices_series._column)
-        # else:
-        #     # out_col_indices = ffi.NULL
-        #     out_col_indices = NULL
+        else:
+            out_col_indices = NULL
 
         out_col_values_series = []
         for i in range(0, ncols):
@@ -136,16 +107,9 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
             out_col_values_series.append(col)
-        # out_col_values = [
-        #     out_col_values_series[i]._column.cffi_view
-        #     for i in range(0, ncols)]
         # Each of these `column_view_from_column` need to be freed or change cudf_cpp.pyx to use `unique_ptr`
         for i in range(0, ncols):
             vector_out_col_values.push_back(column_view_from_column(out_col_values_series[i]._column))
-        # out_col_values = [
-        #     column_view_from_column(out_col_values_series[i]._column)
-        #     for i in range(0, ncols)]
-        # vector_out_col_values = out_col_values
 
         if agg_type == "count":
             out_col_agg_series = Series(
@@ -184,41 +148,65 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                     )
                 )
 
-        # out_col_agg = out_col_agg_series._column.cffi_view
         # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
         out_col_agg = column_view_from_column(out_col_agg_series._column)
 
-        # agg_func = _NAMED_FUNCTIONS.get(agg_type, None)
-        # if agg_func is None:
-        #     raise RuntimeError(
-        #         "ERROR: this aggregator has not been implemented yet"
-        #     )
-        agg_func = get_cpp_function(agg_type)
-        if agg_func is NULL:
+        if agg_type is None:
             raise RuntimeError(
                 "ERROR: this aggregator has not been implemented yet"
             )
-
-
-        # err = agg_func(
-        #     ncols,
-        #     cols,
-        #     col_agg,
-        #     out_col_indices,
-        #     out_col_values,
-        #     out_col_agg,
-        #     ctx)
-
-        with nogil:
-            err = agg_func(
-                ncols, #done
-                vector_cols.data(), #done
-                col_agg, #done
-                out_col_indices, #done
-                vector_out_col_values.data(), #done
-                out_col_agg, #done
-                ctx #done
-            )
+        else:
+            with nogil:
+                if agg_type == 'mean':
+                    err = gdf_group_by_avg(
+                        ncols,
+                        vector_cols.data(),
+                        col_agg,
+                        out_col_indices,
+                        vector_out_col_values.data(),
+                        out_col_agg,
+                        ctx
+                    )
+                elif agg_type == 'min':
+                    err = gdf_group_by_min(
+                        ncols,
+                        vector_cols.data(),
+                        col_agg,
+                        out_col_indices,
+                        vector_out_col_values.data(),
+                        out_col_agg,
+                        ctx
+                    )
+                elif agg_type == 'max':
+                    err = gdf_group_by_max(
+                        ncols,
+                        vector_cols.data(),
+                        col_agg,
+                        out_col_indices,
+                        vector_out_col_values.data(),
+                        out_col_agg,
+                        ctx
+                    )
+                elif agg_type == 'count':
+                    err = gdf_group_by_count(
+                        ncols,
+                        vector_cols.data(),
+                        col_agg,
+                        out_col_indices,
+                        vector_out_col_values.data(),
+                        out_col_agg,
+                        ctx
+                    )
+                elif agg_type == 'sum':
+                    err = gdf_group_by_sum(
+                        ncols,
+                        vector_cols.data(),
+                        col_agg,
+                        out_col_indices,
+                        vector_out_col_values.data(),
+                        out_col_agg,
+                        ctx
+                    )
 
         check_gdf_error(err)
 
@@ -230,12 +218,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         for i, col in enumerate(out_col_values_series):
             if col.dtype == np.dtype("object") and len(col) > 0:
                 import nvcategory
-                # nvcat_ptr = int(
-                #     ffi.cast(
-                #         "uintptr_t",
-                #         out_col_values[i].dtype_info.category
-                #     )
-                # )
                 nvcat_ptr = int(<uintptr_t>out_col_values[i].dtype_info.category)
                 nvcat_obj = None
                 if nvcat_ptr:
@@ -249,12 +231,6 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         if out_col_agg_series.dtype == np.dtype("object") and \
                 len(out_col_agg_series) > 0:
             import nvcategory
-            # nvcat_ptr = int(
-            #     ffi.cast(
-            #         "uintptr_t",
-            #         out_col_agg.dtype_info.category
-            #     )
-            # )
             nvcat_ptr = int(<uintptr_t>out_col_agg.dtype_info.category)
             nvcat_obj = None
             if nvcat_ptr:

@@ -46,7 +46,7 @@
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
-- PR #XXXX Convert GroupBy CFFI to Cython
+- PR #1484 Convert GroupBy CFFI to Cython
 
 ## Bug Fixes
 
