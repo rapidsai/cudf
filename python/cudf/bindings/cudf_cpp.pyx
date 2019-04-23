@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-
 from cudf.bindings.GDFError import GDFError
 
 import numpy as np
@@ -15,6 +14,9 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+from librmm_cffi import librmm as rmm
+import nvstrings
+import nvcategory
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
@@ -69,7 +71,6 @@ cpdef get_column_valid_ptr(obj):
 
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
-
 
 cdef get_scalar_value(gdf_scalar scalar):
     """
@@ -221,6 +222,50 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
 
     return c_col
 
+
+cdef gdf_column_to_column_mem(gdf_column* input_col):
+    gdf_dtype = input_col.dtype
+    if gdf_dtype == GDF_STRING_CATEGORY:
+        data_ptr = int(<uintptr_t>input_col.data)
+        data = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=input_col.size,
+            dtype='int32',
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+        nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
+        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+        nvstr_obj = nvcat_obj.to_strings()
+        mask = None
+        if input_col.valid:
+            mask_ptr = int(<uintptr_t>input_col.valid)
+            mask = rmm.device_array_from_ptr(
+                mask_ptr,
+                nelem=calc_chunk_size(input_col.size, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=rmm._make_finalizer(mask_ptr, 0)
+            )
+        return nvstr_obj, mask
+    else:
+        intaddr = int(<uintptr_t>input_col.data)
+        data = rmm.device_array_from_ptr(
+            intaddr,
+            nelem=input_col.size,
+            dtype=gdf_to_np_dtype(input_col.dtype),
+            finalizer=rmm._make_finalizer(intaddr, 0)
+        )
+        mask = None
+        if input_col.valid:
+            intaddr = int(<uintptr_t>input_col.valid)
+            mask = rmm.device_array_from_ptr(
+                intaddr,
+                nelem=calc_chunk_size(input_col.size, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=rmm._make_finalizer(intaddr, 0)
+            )
+
+        return data, mask
+    
 
 # gdf_context functions
 
