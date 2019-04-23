@@ -80,20 +80,79 @@ void initialize_with_identity(
                           operators[i]);
   }
 }
+
+constexpr inline bool is_an_integer(gdf_dtype element_type) {
+  return (element_type == GDF_INT8) or (element_type == GDF_INT16) or
+         (element_type == GDF_INT32) or (element_type == GDF_INT64);
+}
+
+constexpr inline bool is_floating_point(gdf_dtype element_type) {
+  return (element_type == GDF_FLOAT32) or (element_type == GDF_FLOAT64);
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Determines the output that should be used for a given input type and
+ * operator.
+ *
+ * @param input_type The type of the input aggregation column
+ * @param op The aggregation operation
+ * @return gdf_dtype Type to use for output aggregation column
+ *---------------------------------------------------------------------------**/
+gdf_dtype output_type(gdf_dtype input_type,
+                      cudf::groupby::distributive_operators op) {
+  switch (op) {
+    // Use same type for min/max
+    case groupby::distributive_operators::MIN:
+      return input_type;
+    case groupby::distributive_operators::MAX:
+      return input_type;
+
+    // Always use int64_t for count
+    case groupby::distributive_operators::COUNT:
+      return GDF_INT64;
+
+    case groupby::distributive_operators::SUM: {
+      // Always use the largest int when computing the sum of integers
+      if (is_an_integer(input_type)) {
+        return GDF_INT64;
+      }
+
+      // Use same type as input when computing sum of floating point values
+      if (is_floating_point(input_type)) {
+        return input_type;
+      }
+      CUDF_FAIL("Unsupported type for SUM aggregation" +
+                std::to_string(input_type));
+    }
+    default:
+      CUDF_FAIL("Unsupported aggregation type");
+  }
+}
+
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<cudf::groupby::distributive_operators> const& operators,
-    std::vector<gdf_dtype> const& output_dtypes, cudaStream_t stream) {
-  // Create the output key and value tables
+    cudaStream_t stream) {
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
+  gdf_size_type const output_size{keys.num_rows()};
+
+  // Allocate output keys
   std::vector<gdf_dtype> key_dtypes(keys.num_columns());
   std::transform(keys.begin(), keys.end(), key_dtypes.begin(),
                  [](gdf_column const* col) { return col->dtype; });
-  cudf::table output_keys{keys.num_rows(), key_dtypes, true, stream};
-  cudf::table output_values{keys.num_rows(), output_dtypes, true, stream};
+  cudf::table output_keys{output_size, key_dtypes, true, stream};
+
+  // Allocate/initialize output values
+  std::vector<gdf_dtype> output_dtypes(values.num_columns());
+  std::transform(values.begin(), values.end(), operators.begin(),
+                 output_dtypes.begin(),
+                 [](gdf_column const* input_col, groupby::distributive_operators op) {
+                   return output_type(input_col->dtype, op);
+                 });
+  cudf::table output_values{output_size, output_dtypes, true, stream};
   initialize_with_identity(output_values, operators, stream);
 
   using map_type = concurrent_unordered_map<
