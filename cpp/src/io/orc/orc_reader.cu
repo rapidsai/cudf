@@ -46,7 +46,7 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
                   !(sizeof(orc::gpu::ColumnDesc) & 7),
               "Unexpected sizeof(ColumnDesc)");
 
-#if 1
+#if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
@@ -210,41 +210,51 @@ class OrcMetadata {
         for (int j = 0; j < (int)ff.types[i].subtypes.size(); j++) {
           LOG_PRINTF("%c%d", (j) ? ',' : '{', ff.types[i].subtypes[j]);
         }
-        printf("}\n");
+        LOG_PRINTF("}\n");
       }
       if (ff.types[i].fieldNames.size() > 0) {
-        printf("   fieldNames = ");
+        LOG_PRINTF("   fieldNames = ");
         for (int j = 0; j < (int)ff.types[i].fieldNames.size(); j++) {
-          printf("%c\"%s\"", (j) ? ',' : '{',
+          LOG_PRINTF("%c\"%s\"", (j) ? ',' : '{',
                  ff.types[i].fieldNames[j].c_str());
         }
-        printf("}\n");
+        LOG_PRINTF("}\n");
       }
     }
     for (size_t i = 0; i < ff.metadata.size(); i++) {
-      printf(" metadata: \"%s\" = \"%s\"\n", ff.metadata[i].name.c_str(),
+      LOG_PRINTF(" metadata: \"%s\" = \"%s\"\n", ff.metadata[i].name.c_str(),
              ff.metadata[i].value.c_str());
     }
-    printf(" numberOfRows = %zd\n", (size_t)ff.numberOfRows);
-    printf(" rowIndexStride = %d\n", ff.rowIndexStride);
+    LOG_PRINTF(" numberOfRows = %zd\n", (size_t)ff.numberOfRows);
+    LOG_PRINTF(" rowIndexStride = %d\n", ff.rowIndexStride);
   }
 
-  std::vector<OrcStripeInfo> select_stripes(size_t skip_rows, size_t num_rows) {
+  /**
+   * @brief Filters and reads the info of only a selection of stripes
+   *
+   * @param[in] row_start Starting row of the selection
+   * @param[in,out] row_count Total number of rows selected
+   *
+   * @return List of stripe info and total number of selected rows
+   **/
+  auto select_stripes(int row_start, int &row_count) {
+    std::vector<OrcStripeInfo> selection;
+
     // Exclude non-needed stripes
-    while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= skip_rows) {
+    while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= uint32_t(row_start)) {
       ff.numberOfRows -= ff.stripes[0].numberOfRows;
-      skip_rows -= ff.stripes[0].numberOfRows;
+      row_start -= ff.stripes[0].numberOfRows;
       ff.stripes.erase(ff.stripes.begin());
     }
-    if (num_rows == 0) {
-      num_rows = ff.numberOfRows - std::min(skip_rows, ff.numberOfRows);
+    if (row_count == 0) {
+      row_count = ff.numberOfRows - std::min<int>(row_start, ff.numberOfRows);
     } else {
-      num_rows = std::min(num_rows, ff.numberOfRows - std::min(skip_rows, ff.numberOfRows));
+      row_count = std::min<int>(row_count, ff.numberOfRows - std::min<int>(row_start, ff.numberOfRows));
     }
-    if (ff.numberOfRows > num_rows) {
+    if (ff.numberOfRows > uint64_t(row_count)) {
       uint64_t row = 0;
       for (size_t i = 0; i < ff.stripes.size(); i++) {
-        if (row >= num_rows) {
+        if (row >= uint64_t(row_count)) {
           ff.stripes.resize(i);
           ff.numberOfRows = row;
           break;
@@ -252,12 +262,10 @@ class OrcMetadata {
         row += ff.stripes[i].numberOfRows;
       }
     }
-    assert(num_rows == ff.numberOfRows);
+    assert(row_count == ff.numberOfRows);
 
     // Read each stripe's stripefooter metadata
-    std::vector<OrcStripeInfo> stripe_infos;
-    stripe_infos.resize(ff.stripes.size());
-
+    selection.resize(ff.stripes.size());
     for (size_t i = 0; i < ff.stripes.size(); ++i) {
       const auto &stripe = ff.stripes[i];
       const auto sf_comp_offset =
@@ -271,12 +279,51 @@ class OrcMetadata {
                                               sf_comp_length, &sf_length);
       orc::ProtobufReader pb;
       pb.init(sf_data, sf_length);
-      CUDF_EXPECTS(pb.read(&stripe_infos[i].second, sf_length),
+      CUDF_EXPECTS(pb.read(&selection[i].second, sf_length),
                    "Cannot read stripefooter");
-      stripe_infos[i].first = &stripe;
+      selection[i].first = &stripe;
     }
 
-    return stripe_infos;
+    return selection;
+  }
+
+  /**
+   * @brief Filters and reduces down to a selection of columns
+   *
+   * @param[in] use_cols Array of column names to select
+   * @param[in] use_cols_len Length of the column name array
+   *
+   * @return A list of ORC column indexes
+   **/
+  auto select_columns(const char **use_cols, int use_cols_len) {
+    std::vector<int> selection;
+
+    if (use_cols) {
+      std::vector<std::string> use_names(use_cols, use_cols + use_cols_len);
+      int index = 0;
+      for (const auto &use_name : use_names) {
+        for (int i = 0; i < get_num_columns(); ++i, ++index) {
+          if (index >= get_num_columns()) {
+            index = 0;
+          }
+          if (ff.GetColumnName(index) == use_name) {
+            selection.emplace_back(index);
+            index++;
+            break;
+          }
+        }
+      }
+    } else {
+      // For now, only select all leaf nodes
+      for (int i = 0; i < get_num_columns(); ++i) {
+        if (ff.types[i].subtypes.size() == 0) {
+          selection.emplace_back(i);
+        }
+      }
+    }
+    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
+
+    return selection;
   }
 
   inline int get_total_rows() const { return ff.numberOfRows; }
@@ -572,37 +619,14 @@ gdf_error read_orc(orc_read_arg *args) {
   OrcMetadata md(input.data(), input.size());
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
-  // Select only required stripes (aka rowgroups)
-  const auto stripes = md.select_stripes(args->skip_rows, args->num_rows);
-  const int num_rows = md.get_total_rows();
+  // Select only stripes required (aka row groups)
+  int skip_rows = args->skip_rows;
+  int num_rows = args->num_rows;
+  const auto selected_stripes = md.select_stripes(skip_rows, num_rows);
 
-  // Select only columns required (if it exists), otherwise select all
-  std::vector<int32_t> selected_cols;
-  if (args->use_cols) {
-    std::vector<std::string> use_names(args->use_cols,
-                                       args->use_cols + args->use_cols_len);
-    int index = 0;
-    for (const auto &use_name : use_names) {
-      for (int i = 0; i < md.get_num_columns(); ++i, ++index) {
-        if (index >= md.get_num_columns()) {
-          index = 0;
-        }
-        if (md.ff.GetColumnName(index) == use_name) {
-          selected_cols.emplace_back(index);
-          index++;
-        }
-      }
-    }
-  } else {
-    // For now, only select all leaf nodes
-    for (int i = 0; i < md.get_num_columns(); ++i) {
-      if (md.ff.types[i].subtypes.size() == 0) {
-        selected_cols.emplace_back(i);
-      }
-    }
-  }
+  // Select only columns required
+  const auto selected_cols = md.select_columns(args->use_cols, args->use_cols_len);
   const int num_columns = selected_cols.size();
-  CUDF_EXPECTS(num_columns > 0, "Filtered out all columns");
 
   // Association between each ORC column and its gdf_column
   std::vector<int32_t> orc_col_map(md.get_num_columns(), -1);
@@ -633,14 +657,14 @@ gdf_error read_orc(orc_read_arg *args) {
   std::vector<device_ptr<uint8_t>> stripe_data;
 
   if (num_rows > 0) {
-    const auto num_column_chunks = stripes.size() * num_columns;
+    const auto num_column_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
 
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
-    for (size_t i = 0; i < stripes.size(); ++i) {
-      const auto stripe_info = stripes[i].first;
-      const auto stripe_footer = stripes[i].second;
+    for (size_t i = 0; i < selected_stripes.size(); ++i) {
+      const auto stripe_info = selected_stripes[i].first;
+      const auto stripe_footer = selected_stripes[i].second;
 
       auto stream_count = stream_info.size();
       const auto total_data_size = gather_stream_info(
@@ -687,7 +711,7 @@ gdf_error read_orc(orc_read_arg *args) {
     if (md.ps.compression != orc::NONE) {
       uint8_t *d_decomp_data =
           decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
-                                 stream_info, stripes.size());
+                                 stream_info, selected_stripes.size());
       stripe_data.clear();
       stripe_data.emplace_back(d_decomp_data);
     }
@@ -695,7 +719,7 @@ gdf_error read_orc(orc_read_arg *args) {
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
-    decode_stream_data(chunks, num_dict_entries, args->skip_rows, columns);
+    decode_stream_data(chunks, num_dict_entries, skip_rows, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
