@@ -50,10 +50,13 @@ struct table {
   /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.
    *
-   * Allocates an of `gdf_column`s of the specified size and type.
+   * Allocates an array of `gdf_column`s of the specified size and type.
    *
-   * @note It is the caller's responsbility to free the array of gdf_column and
-   * their associated device memory.
+   * @note It is the caller's responsibility to free the array of gdf_columns
+   *and their associated device memory.
+   *
+   * @note Does not support `GDF_TIMESTAMP` columns as this would require
+   * passing in additional timestamp resolution information.
    *
    * @param[in] num_rows The size of each gdf_column
    * @param[in] dtypes The type of each column
@@ -64,39 +67,33 @@ struct table {
         bool allocate_bitmasks = false, cudaStream_t stream = 0)
       : _num_columns{static_cast<gdf_size_type>(dtypes.size())},
         _num_rows{num_rows} {
-    // Allocate and initialize each column
-    gdf_column* new_columns = new gdf_column[_num_columns];
+    _columns = new gdf_column*[_num_columns];
     std::transform(
-        new_columns, new_columns + _num_columns, dtypes.begin(), new_columns,
-        [num_rows, allocate_bitmasks, stream](gdf_column col, gdf_dtype dtype) {
+        _columns, _columns + _num_columns, dtypes.begin(), _columns,
+        [num_rows, allocate_bitmasks, stream](gdf_column*& col,
+                                              gdf_dtype dtype) {
+          col = new gdf_column;
           CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
-          col.size = num_rows;
-          col.dtype = dtype;
-          col.null_count = 0;
-          col.valid = nullptr;
+          col->size = num_rows;
+          col->dtype = dtype;
+          col->null_count = 0;
+          col->valid = nullptr;
 
           // Timestamp currently unsupported as it would require passing in
           // additional resolution information
           gdf_dtype_extra_info extra_info;
           extra_info.time_unit = TIME_UNIT_NONE;
-          col.dtype_info = extra_info;
+          col->dtype_info = extra_info;
 
-          RMM_ALLOC(&col.data, gdf_dtype_size(dtype) * num_rows, stream);
+          RMM_ALLOC(&col->data, gdf_dtype_size(dtype) * num_rows, stream);
           if (allocate_bitmasks) {
             RMM_ALLOC(
-                &col.valid,
+                &col->valid,
                 gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
                 stream);
           }
-
           return col;
         });
-
-    _columns = new gdf_column*[_num_columns];
-
-    for (gdf_size_type i = 0; i < _num_columns; ++i) {
-      _columns[i] = &new_columns[i];
-    }
   }
 
   table() = default;
