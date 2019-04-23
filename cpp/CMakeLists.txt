@@ -258,6 +258,7 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
+            src/io/csv/csv_writer.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/stripe_data.cu
