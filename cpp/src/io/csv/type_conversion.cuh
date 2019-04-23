@@ -47,12 +47,16 @@ __inline__ __device__ bool isWhitespace(char ch) {
  *---------------------------------------------------------------------------**/
 __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data, long* start,
                                              long* end, char quotechar = '\0') {
-  while ((*start <= *end) &&
-         (isWhitespace(data[*start]) || data[*start] == quotechar)) {
+  while ((*start < *end) && isWhitespace(data[*start])) {
     (*start)++;
   }
-  while ((*start < *end) &&
-         (isWhitespace(data[*end]) || data[*end] == quotechar)) {
+  if ((*start < *end) && data[*start] == quotechar) {
+    (*start)++;
+  }
+  while ((*start <= *end) && isWhitespace(data[*end])) {
+    (*end)--;
+  }
+  if ((*start <= *end) && data[*end] == quotechar) {
     (*end)--;
   }
 }
