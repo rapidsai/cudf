@@ -14,7 +14,9 @@
 - PR #1412 Add DataFrame.pop()
 - PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
+- PR #1455 Add Series.Shift via Numba kernel
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1461 Add Python coverage test to gpu build
 
 ## Improvements
 
@@ -65,6 +67,7 @@
 - PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
 - PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
 - PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1416 Fix bug at gdf_quantile_exact and gdf_quantile_appox
 - PR #1421 Fix remove creation of series multiple times during `add_column()`
 - PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
@@ -74,6 +77,7 @@
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
