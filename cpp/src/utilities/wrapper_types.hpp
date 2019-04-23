@@ -494,6 +494,7 @@ template <>
 struct numeric_limits< cudf::detail::wrapper<gdf_bool, GDF_BOOL> > {
   
   static constexpr cudf::bool8 max() noexcept {
+    // tried using `return cudf::true_v` but it causes a compiler segfault!
     return cudf::bool8{true};
   }
   
