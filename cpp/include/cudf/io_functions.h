@@ -22,6 +22,9 @@
  */
 gdf_error read_csv(csv_read_arg *args);
 
+/*
+ * @brief Interface to output GDF columns to CSV format
+ */
 gdf_error write_csv(csv_write_arg* args);
 
 /*
