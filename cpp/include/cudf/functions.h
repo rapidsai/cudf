@@ -168,15 +168,15 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
 /**
  * @brief  Constructor for the gdf_context struct
  *
- * @param[out] gdf_context being constructed
- * @param[in] Indicates if the input data is sorted. 0 = No, 1 = yes
- * @param[in] the method to be used for the operation (e.g., sort vs hash)
- * @param[in] for COUNT: DISTINCT = 1, else = 0
- * @param[in] When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
- * @param[in] 0 = No sort in place allowed, 1 = else
- * @param[in] GDF_NULL_AS_LARGEST = Nulls are treated as largest,
- *            GDF_NULL_AS_SMALLEST    = Nulls are treated as smallest, 
- *            GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
+ * @param[out] context gdf_context being constructed
+ * @param[in] flag_sorted Indicates if the input data is sorted. 0 = No, 1 = yes
+ * @param[in] flag_method The method to be used for the operation (e.g., sort vs hash)
+ * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
+ * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+ * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
+ *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
+ *                                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
@@ -1284,9 +1284,9 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
  */
 gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
                      gdf_column const * const * data_cols_in,
-									   gdf_index_type* unique_indices,
+                     gdf_index_type* unique_indices,
                      gdf_size_type* num_unique_indices, 
-									   gdf_context* context);
+                     gdf_context* context);
 
 
 /** 

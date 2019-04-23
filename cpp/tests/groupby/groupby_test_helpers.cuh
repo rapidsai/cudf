@@ -3,9 +3,9 @@
 #include <string>
 #include <limits>
 #include <type_traits>
-#include "valid_vectors.h"
-#include <bitmask/bit_mask.h>
 #include <bitmask/legacy_bitmask.hpp>
+
+using host_valid_pointer = std::vector<uint8_t>;
 
 //Terminating call
 //Extract the value of the Ith element of a tuple of vectors keys
@@ -315,8 +315,6 @@ void copy_output_with_array(
     cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(gdf_size_type), cudaMemcpyDeviceToHost);
 }
 
- 
-
 //Copy device side gdf_column data to an std::vector
 template <typename T>
 void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_valid_pointer& output_valids) {
@@ -324,10 +322,8 @@ void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_va
     vec.resize(column->size);
     cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
 
-    cudaMemcpy((uint8_t*)output_valids.data(),  column->valid, bit_mask::num_elements(column->size), cudaMemcpyDeviceToHost);
-    
+    cudaMemcpy((uint8_t*)output_valids.data(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost);
 }
-
 
 //Empty terminal call
 template<std::size_t I = 0, typename... K>
@@ -345,25 +341,7 @@ copy_gdf_tuple_with_nulls(
     std::tuple<std::vector<K>...>& output_key, std::vector<host_valid_pointer>& output_valids) {
     copy_gdf_column_with_nulls(group_by_output_key[I], std::get<I>(output_key), output_valids[I]);
     copy_gdf_tuple_with_nulls<I + 1, K...>(group_by_output_key, output_key, output_valids);
-} 
-
-// //Copy the contents of gdf_columns to std::vectors
-// //group_by_output_key is copied to a tuple of vectors output_key
-// //group_by_output_value is copied to a vector output_value
-// template <typename gdf_column, typename multi_column_t, typename output_t>
-// void copy_output_with_nulls(
-//     gdf_column **group_by_output_key,
-//     multi_column_t& output_key,
-//     std::vector<host_valid_pointer>& output_valids,
-//     gdf_column *group_by_output_value,
-//     std::vector<output_t>& output_value,
-//     gdf_column *gdf_out_indices,
-//     std::vector<output_t>& cpu_out_indices) {
-//     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
-//     copy_gdf_column(group_by_output_value, output_value);
-//     copy_gdf_column(gdf_out_indices, cpu_out_indices);
-// }
-
+}
 
 //Copy the contents of gdf_columns to std::vectors
 //group_by_output_key is copied to a tuple of vectors output_key
@@ -378,7 +356,6 @@ void copy_output_with_nulls(
     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
     copy_gdf_column(group_by_output_value, output_value);
 }
-
 
 template <typename gdf_column, typename multi_column_t>
 void copy_output_with_array_with_nulls(
@@ -397,7 +374,6 @@ void copy_output_with_array_with_nulls(
 // custom functions
 //
 
-
 // Prints a vector
 template<typename T>
 void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
@@ -407,14 +383,14 @@ void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
             std::string ret;
             if (sizeof(v[index]) == 1)
                 ret = std::to_string((int)v[index]);
-            else 
+            else
                 ret = std::to_string(v[index]);
             return ret;
         }
         std::string ret;
         if (sizeof(v[index]) == 1)
             ret = std::to_string((int)v[index]);
-        else 
+        else
             ret = std::to_string(v[index]);
         return ret + "|" + std::string("@");
     };
