@@ -12,6 +12,8 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1419 Initial CSV writer function
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 - PR #1455 Add Series.Shift via Numba kernel
