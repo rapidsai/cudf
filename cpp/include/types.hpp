@@ -52,7 +52,7 @@ struct table {
    *
    * Allocates an array of `gdf_column`s of the specified size and type.
    *
-   * @note It is the caller's responsbility to free the array of gdf_column and
+   * @note It is the caller's responsibility to free the array of gdf_columns and
    * their associated device memory.
    *
    * @param[in] num_rows The size of each gdf_column
