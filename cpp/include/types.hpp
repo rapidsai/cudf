@@ -50,7 +50,7 @@ struct table {
   /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.
    *
-   * Allocates an of `gdf_column`s of the specified size and type.
+   * Allocates an array of `gdf_column`s of the specified size and type.
    *
    * @note It is the caller's responsbility to free the array of gdf_column and
    * their associated device memory.
