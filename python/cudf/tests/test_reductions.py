@@ -126,3 +126,19 @@ def test_sum_boolean():
     expect = 99998
 
     assert expect == got
+
+
+def test_date_minmax():
+    np_data = np.random.normal(size=10**3)
+    gdf_data = Series(np_data)
+
+    np_casted = np_data.astype('datetime64[ms]')
+    gdf_casted = gdf_data.astype('datetime64[ms]')
+
+    np_min = np_casted.min()
+    gdf_min = gdf_casted.min()
+    assert np_min == gdf_min
+
+    np_max = np_casted.max()
+    gdf_max = gdf_casted.max()
+    assert np_max == gdf_max

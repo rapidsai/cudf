@@ -20,6 +20,7 @@ export HOME=$WORKSPACE
 
 # Set versions of packages needed to be grabbed
 export NVSTRINGS_VERSION=0.7.*
+export RMM_VERSION=0.7.*
 
 ################################################################################
 # SETUP - Check environment
@@ -33,7 +34,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} nvstrings=${NVSTRINGS_VERSION}
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION}
 
 logger "Check versions..."
 python --version
@@ -91,10 +92,6 @@ pip install cupy-cuda92
 logger "conda install feather-format"
 conda install -c conda-forge -y feather-format
 
-# Temporarily install tzdata otherwise pyarrow core dumps
-logger "apt-get update && apt-get install -y tzdata"
-apt-get update && apt-get install -y tzdata
-
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v
+py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term

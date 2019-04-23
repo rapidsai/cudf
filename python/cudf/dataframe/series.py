@@ -10,6 +10,8 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from librmm_cffi import librmm as rmm
+
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
@@ -1113,6 +1115,43 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.product(dtype=dtype)
 
+    def cummin(self, axis=0, skipna=True):
+        """Compute the cumulative minimum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('min'), name=self.name,
+                      index=self.index)
+
+    def cummax(self, axis=0, skipna=True):
+        """Compute the cumulative maximum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('max'), name=self.name,
+                      index=self.index)
+
+    def cumsum(self, axis=0, skipna=True):
+        """Compute the cumulative sum of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(self.astype(np.int64)._column._apply_scan_op('sum'),
+                          name=self.name, index=self.index)
+        else:
+            return Series(self._column._apply_scan_op('sum'), name=self.name,
+                          index=self.index)
+
+    def cumprod(self, axis=0, skipna=True):
+        """Compute the cumulative product of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(
+                self.astype(np.int64)._column._apply_scan_op('product'),
+                name=self.name, index=self.index)
+        else:
+            return Series(self._column._apply_scan_op('product'),
+                          name=self.name, index=self.index)
+
     def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
         """
@@ -1441,6 +1480,33 @@ class Series(object):
         from cudf.dataframe import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values of an input array by periods positions and store the
+        output in a new array.
+
+        Notes
+        -----
+        Shift currently only supports float and integer dtype columns with
+        no null values.
+        """
+        assert axis in (None, 0) and freq is None and fill_value is None
+
+        if self.null_count != 0:
+            raise AssertionError("Shift currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Shift currently only supports "
+                                      "numeric dtypes")
+        if periods == 0:
+            return self
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
+                                                     periods)
+        return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy

@@ -14,6 +14,7 @@ from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.reduce as cpp_reduce
 
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
@@ -224,6 +225,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
         return col_keys, col_inds
+
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
 
 def binop(lhs, rhs, op, out_dtype):
