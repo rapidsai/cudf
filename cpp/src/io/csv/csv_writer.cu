@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file csv_writer.cu  Logic to create csv file
- *
- * CSV Writer
- */
-
 #include <fstream>
 #include <algorithm>
 #include <cuda_runtime.h>
@@ -30,17 +24,17 @@
 #include <utilities/error_utils.hpp>
 
 
-/**
- * @brief Convert gdf_column into NVStrings instance.
- *
- * This is called by the write_csv method below.
- * @param[in] column The column to be converted.
- * @param[in] delimiter Separator to append to the column strings
- * @param[in] null_representation String to use for null entries
- * @param[in] true_string String to use for 'true' values in boolean columns
- * @param[in] false_string String to use for 'false' values in boolean columns
- * @return NVStrings instance formated for CSV column output.
- */
+//
+// This is called by the write_csv method below.
+//
+// Parameters:
+// - column:    The column to be converted.
+// - delimiter: Separator to append to the column strings
+// - null_representation: String to use for null entries
+// - true_string: String to use for 'true' values in boolean columns
+// - false_string: String to use for 'false' values in boolean columns
+// Return: NVStrings instance formated for CSV column output.
+//
 NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, const char* null_representation, const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
@@ -114,19 +108,16 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
     return rtn;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Creates CSV file from array of gdf_columns.
- *
- * This will create the CSV format by allocating host memory for the
- * entire output and determine pointers for each row/column entry.
- * Each column is converted to an NVStrings instance and then
- * copied into their position in the output memory. This way,
- * one column is processed at a time minimizing device memory usage.
- *
- * @param[in,out] args Structure is interpretted as documented in io_types.h
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
- *---------------------------------------------------------------------------**/
+//---------------------------------------------------------------------------
+// Creates CSV file from array of gdf_columns.
+//
+// This will create the CSV format by allocating host memory for the
+// entire output and determine pointers for each row/column entry.
+// Each column is converted to an NVStrings instance and then
+// copied into their position in the output memory. This way,
+// one column is processed at a time minimizing device memory usage.
+//
+//---------------------------------------------------------------------------
 gdf_error write_csv(csv_write_arg* args)
 {
     // when args becomes a struct/class these can be modified
