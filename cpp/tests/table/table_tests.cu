@@ -109,6 +109,7 @@ TYPED_TEST(TableTest, ConstructColumns) {
     std::for_each(t.begin(), t.end(), [](gdf_column* col) {
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
+      delete col;
     });
     delete[] t.begin();
   }
@@ -142,6 +143,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasks) {
     std::for_each(t.begin(), t.end(), [](gdf_column* col) {
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
+      delete col;
     });
     delete[] t.begin();
   }
