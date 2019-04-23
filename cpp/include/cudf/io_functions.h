@@ -24,6 +24,14 @@ gdf_error read_csv(csv_read_arg *args);
 
 /*
  * @brief Interface to output GDF columns to CSV format
+ *
+ * This function accepts an array of gdf_columns and creates a CSV
+ * formatted file using the formatting parameters provided in the
+ * specified structure argument.
+ *
+ * @param[in] args This structure is defined in io_types.h and provides the columns and formatting parameters needed by this function.
+ *
+ * @returns GDF_SUCCESS if the CSV format was created successfully.
  */
 gdf_error write_csv(csv_write_arg* args);
 
