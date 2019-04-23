@@ -174,8 +174,11 @@ TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
       [](auto row) { return true; });
 
   std::vector<TypeParam> expected_values(size);
-  std::iota(expected_values.begin(), expected_values.end(),
-            static_cast<TypeParam>(0));
+  std::generate(expected_values.begin(), expected_values.end(), [](){
+    static cudf::detail::unwrapped_type_t<TypeParam> ut{0}; 
+    return TypeParam{ut++};
+  });
+
   std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size),
                                                0xff);
   test_column(col, expected_values, expected_bitmask);

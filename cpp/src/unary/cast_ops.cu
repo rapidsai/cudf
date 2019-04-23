@@ -118,7 +118,7 @@ struct CastDateTo_Dispatcher {
             return GDF_UNSUPPORTED_DTYPE;
     }
 
-    // Cast to arithmetic, cudf::category, or cudf::nvstring_category
+    // Cast to arithmetic, cudf::bool8, cudf::category, or cudf::nvstring_category
     template <typename TypeTo>
     typename std::enable_if_t<
         std::is_arithmetic<TypeTo>::value ||
@@ -195,7 +195,7 @@ struct CastTimestampTo_Dispatcher {
             return GDF_TIMESTAMP_RESOLUTION_MISMATCH;
     }
 
-    // Cast to arithmetic, cudf::category, or cudf::nvstring_category
+    // Cast to arithmetic, cudf::bool8, cudf::category, or cudf::nvstring_category
     template <typename TypeTo>
     typename std::enable_if_t<
         std::is_arithmetic<TypeTo>::value ||
@@ -232,7 +232,7 @@ struct CastFrom_Dispatcher
                                     input, output);
     }
     
-    // Cast from arithmetic, cudf::category, or cudf::nvstring_category
+    // Cast from arithmetic, cudf::bool8, cudf::category, or cudf::nvstring_category
     template <typename TypeFrom>
     typename std::enable_if_t<
         std::is_arithmetic<TypeFrom>::value ||
