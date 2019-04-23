@@ -25,8 +25,6 @@
 
 #include <thrust/host_vector.h>
 
-#include "../csv/type_conversion.cuh"
-
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
 #include "utilities/trie.cuh"
@@ -44,6 +42,7 @@ using string_pair = std::pair<const char*,size_t>;
 
 gdf_error read_json(json_read_arg *args) {
   JsonReader reader(args);
+  // TODO validate arguments
 
   reader.parse();
 
@@ -86,15 +85,16 @@ void JsonReader::parse(){
 
   uploadDataToDevice();
   
-  // Determine column names - only when lines are objects
-  // TODO
+  // TODO Determine column names - only when lines are objects
+  for (int col = 0; col < args_->num_cols; ++col) {
+    column_names_.emplace_back(std::to_string(col));
+  }
 
-  // Determine data types - require dtype for now
-  CUDF_EXPECTS(args_->dtype != nullptr, "Data type inference is not supported!");
+  determineDataTypes();
 
   // Allocate columns
-  for (int col = 0; col < args_->num_cols; ++col) {
-    columns_.emplace_back(rec_starts_.size(), convertStringToDtype(args_->dtype[col]), gdf_dtype_extra_info{TIME_UNIT_NONE}, std::to_string(col));
+  for (size_t col = 0; col < dtypes_.size(); ++col) {
+    columns_.emplace_back(rec_starts_.size(), dtypes_[col], gdf_dtype_extra_info{TIME_UNIT_NONE}, column_names_[col]);
     CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
   }
 
@@ -328,15 +328,15 @@ __inline__ __device__ int whichBit(long record) { return (record % 8);  }
 
 __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
 {
-	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((size_t)address & 3));
-	int32_t int_val = (int32_t)val << (((size_t) address & 3) * 8);
+  int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((size_t)address & 3));
+  int32_t int_val = (int32_t)val << (((size_t) address & 3) * 8);
 
-	atomicOr(base_address, int_val);
+  atomicOr(base_address, int_val);
 }
 
 __inline__ __device__ void setBit(gdf_valid_type* address, int bit) {
-	gdf_valid_type bitMask[8] 		= {1, 2, 4, 8, 16, 32, 64, 128};
-	validAtomicOR(address, bitMask[bit]);
+  gdf_valid_type bitMask[8]     = {1, 2, 4, 8, 16, 32, 64, 128};
+  validAtomicOR(address, bitMask[bit]);
 }
 
 /**---------------------------------------------------------------------------*
@@ -422,21 +422,248 @@ __global__ void convertJsonToGdf(char * const data, size_t data_size,
  *
  * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
-void JsonReader::convertJsonToColumns(gdf_dtype * const dtypes, void **gdf_columns,
+void JsonReader::convertJsonToColumns(gdf_dtype * const dtypes,
+                                      void **gdf_columns,
                                       gdf_valid_type **valid_fields, gdf_size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
 
   const int grid_size = (rec_starts_.size() + block_size - 1)/block_size;
-  const ParseOptions opts{',', '\n', '\"','.'};
 
   convertJsonToGdf <<< grid_size, block_size >>> (
     d_uncomp_data_.data(), d_uncomp_data_.size(),
     rec_starts_.data(), rec_starts_.size(),
-    dtypes, opts,
+    dtypes, opts_,
     gdf_columns, columns_.size(),
     valid_fields, num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
+}
+
+/**
+* @brief Returns true is the input character is a valid digit.
+* Supports both decimal and hexadecimal digits (uppercase and lowercase).
+*/
+__device__ __forceinline__
+bool isDigit(char c, bool is_hex){
+  if (c >= '0' && c <= '9') return true;
+  if (is_hex) {
+    if (c >= 'A' && c <= 'F') return true;
+    if (c >= 'a' && c <= 'f') return true;
+  }
+  return false;
+}
+
+/**
+* @brief Returns true if the counters indicate a potentially valid float.
+* False positives are possible because positions are not taken into account.
+* For example, field "e.123-" would match the pattern.
+*/
+__device__ __forceinline__
+bool isLikeFloat(long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+  // Can't have more than one exponent and one decimal point
+  if (decimal_cnt > 1) return false;
+  if (exponent_cnt > 1) return false;
+  // Without the exponent or a decimal point, this is an integer, not a float
+  if (decimal_cnt == 0 && exponent_cnt == 0) return false;
+
+  // Can only have one '-' per component
+  if (dash_cnt > 1 + exponent_cnt) return false;
+
+  // If anything other than these characters is present, it's not a float
+  if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len) return false;
+
+  // Needs at least 1 digit, 2 if exponent is present
+  if (digit_cnt < 1 + exponent_cnt) return false;
+
+  return true;
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief CUDA kernel that parses and converts data into cuDF column data.
+ *
+ * Data is processed in one row/record at a time, so the number of total
+ * threads (tid) is equal to the number of rows.
+ *
+ * @param[in] data The entire plain text data to read
+ * @param[in] data_size Size of the data buffer, in bytes
+ * @param[in] opts A set of parsing options
+ * @param[in] num_columns The number of columns of input data
+ * @param[in] rec_starts The start the input data of interest
+ * @param[in] num_records The number of lines/rows of input data
+ * @param[out] column_infos The count for each column data type
+ *
+ * @returns GDF_SUCCESS upon successful computation
+ *---------------------------------------------------------------------------**/
+__global__
+void detectJsonDataTypes(char *data, size_t data_size,
+                         const ParseOptions opts, int num_columns,
+                         uint64_t *rec_starts, gdf_size_type num_records,
+                         JsonReader::ColumnInfo *column_infos)
+{
+  long  rec_id  = threadIdx.x + (blockDim.x * blockIdx.x); 
+  if ( rec_id >= num_records)
+    return;
+
+  long start = rec_starts[rec_id];
+  // has the same semantics as end() in STL containers (one past last element)
+  long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+
+  // Adjust for brackets
+  while(data[start++] != '[');
+  while(data[--stop] != ']');
+
+  for (int col = 0; col < num_columns; col++) {
+    const long field_end = seekFieldEnd(data, opts, start, stop);
+    long field_data_last = field_end - 1;
+    adjustForWhitespaceAndQuotes(data, &start, &field_data_last);
+
+    // Checking if the field is empty
+    if(start > field_data_last){
+      atomicAdd(&column_infos[col].null_count, 1);
+      start = field_end + 1;
+      continue;
+    }
+
+    int digit_count = 0;
+    int decimal_count = 0;
+    int slash_count = 0;
+    int dash_count = 0;
+    int colon_count = 0;
+    int exponent_count = 0;
+    int other_count = 0;
+
+    const int field_len = field_data_last - start + 1;
+    const bool maybe_hex = ((field_len > 2 && data[start] == '0' && data[start + 1] == 'x') ||
+      (field_len > 3 && data[start] == '-' && data[start + 1] == '0' && data[start + 2] == 'x'));
+    for(long pos = start; pos <= field_data_last; pos++){
+      if(isDigit(data[pos], maybe_hex)){
+        digit_count++;
+        continue;
+      }
+      // Looking for unique characters that will help identify column types
+      switch (data[pos]){
+        case '.':
+          decimal_count++; break;
+        case '-':
+          dash_count++; break;
+        case '/':
+          slash_count++; break;
+        case ':':
+          colon_count++; break;
+        case 'e':
+        case 'E':
+          if (!maybe_hex && pos > start && pos < field_data_last) 
+            exponent_count++; break;
+        default:
+        other_count++; break;
+      }
+    }
+
+    // Integers have to have the length of the string
+    int int_req_number_cnt = field_len;
+    // Off by one if they start with a minus sign
+    if(data[start] == '-' && field_len > 1){
+      --int_req_number_cnt;
+    }
+    // Off by one if they are a hexadecimal number
+    if(maybe_hex) {
+      --int_req_number_cnt;
+    }
+    if(digit_count == int_req_number_cnt){
+        atomicAdd(&column_infos[col].int_count, 1);
+    }
+    else if(isLikeFloat(field_len, digit_count, decimal_count, dash_count, exponent_count)){
+        atomicAdd(&column_infos[col].float_count, 1);
+    }
+    // A date-time field cannot have more than 3 non-special characters
+    // A number field cannot have more than one decimal point
+    else if(other_count > 3 || decimal_count > 1){
+      atomicAdd(&column_infos[col].string_count, 1);
+    }
+    else {
+      // A date field can have either one or two '-' or '\'; A legal combination will only have one of them
+      // To simplify the process of auto column detection, we are not covering all the date-time formation permutations
+      if((dash_count > 0 && dash_count <= 2 && slash_count == 0) || 
+         (dash_count == 0 && slash_count > 0 && slash_count <= 2)){
+        if(colon_count <= 2){
+          atomicAdd(&column_infos[col].datetime_count, 1);
+        }
+        else{
+          atomicAdd(&column_infos[col].string_count, 1);
+        }
+      }
+      else{
+        // Default field type is string
+        atomicAdd(&column_infos[col].string_count, 1);
+      }
+    }
+    start = field_end + 1;
+  }
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Set up and launches JSON data type detect CUDA kernel.
+ * 
+ * @param[out] column_infos The count for each column data type
+ *
+ * @return void
+ *---------------------------------------------------------------------------**/
+void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
+  int block_size;
+  int min_grid_size;
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detectJsonDataTypes));
+
+  // Calculate actual block count to use based on records count
+  const int grid_size = (rec_starts_.size() + block_size - 1) / block_size;
+
+  detectJsonDataTypes <<< grid_size, block_size >>> (
+      d_uncomp_data_.data(), d_uncomp_data_.size(),
+      opts_, column_names_.size(),
+      rec_starts_.data(), rec_starts_.size(),
+      column_infos);
+
+  CUDA_TRY(cudaGetLastError());
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Set the data type array data member
+ * 
+ * If user does not pass the data types, deduces types from the file content
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
+void JsonReader::setDataTypes() {
+  if (args_->dtype != nullptr) {
+    CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.");
+    for (int col = 0; col < args_->num_cols; ++col) {
+      dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
+    }
+  }
+  else {
+    CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference");
+    const auto num_columns = column_names_.size();
+
+    rmm::device_vector<ColumnInfo> d_column_infos(num_columns, ColumnInfo{});
+    detectDataTypes(d_column_infos.data().get());
+    thrust::host_vector<ColumnInfo> h_column_infos = d_column_infos;
+
+    for(const auto& cinfo: h_column_infos){
+      CUDF_EXPECTS(cinfo.null_count == 0, "All fields must contain valid objects");
+
+      if(cinfo.string_count > 0){
+        dtypes_.push_back(GDF_STRING);
+      } else if(cinfo.datetime_count > 0){
+        dtypes_.push_back(GDF_DATE64);
+      } else if(cinfo.float_count > 0) {
+        dtypes_.push_back(GDF_FLOAT64);
+      } else if(cinfo.int_count > 0) {
+        dtypes_.push_back(GDF_INT64);
+      }
+      else {
+        CUDF_FAIL("Data type detection failed");
+      }
+    }
+  }
 }
