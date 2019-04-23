@@ -32,6 +32,14 @@ std::tuple<cudf::table, cudf::table> distributive(
       static_cast<gdf_size_type>(operators.size()) == values.num_columns(),
       "Size mismatch between operators and value columns");
 
+  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+    if ((operators[i] == SUM) and
+        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
+      CUDF_FAIL(
+          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
+    }
+  }
+
   return cudf::detail::hash_groupby(keys, values, operators, output_dtypes);
 }
 }  // namespace groupby
