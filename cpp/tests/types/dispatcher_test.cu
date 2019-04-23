@@ -42,7 +42,7 @@ struct DispatcherTest : public GdfTest {
   std::vector<gdf_dtype> supported_dtypes{
       GDF_INT8,      GDF_INT16,    GDF_INT32,  GDF_INT64,
       GDF_FLOAT32,   GDF_FLOAT64,  GDF_DATE32, GDF_DATE64,
-      GDF_TIMESTAMP, GDF_CATEGORY, GDF_STRING_CATEGORY, GDF_BOOL};
+      GDF_TIMESTAMP, GDF_CATEGORY, GDF_STRING_CATEGORY, GDF_BOOL8};
 
   // These types are not supported by the type_dispatcher
   std::vector<gdf_dtype> unsupported_dtypes{GDF_invalid, GDF_STRING};
