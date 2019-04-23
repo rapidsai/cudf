@@ -84,7 +84,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
 
     // probably could collapse this more
     bool bquoted = (column->dtype==GDF_STRING);
-    // check for delimeters and quotes
+    // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
     if( rtn->contains("\"",bmatches) > 0 )
@@ -173,7 +173,7 @@ gdf_error write_csv(csv_write_arg* args)
     // The entire CSV must fit in CPU memory before writing it out.
     //
     // Compute string lengths for each string to go into the CSV output.
-    std::unique_ptr<int> pstring_lengths(new int[rows*count]); // matrix of lengths
+    std::unique_ptr<int[]> pstring_lengths(new int[rows*count]); // matrix of lengths
     int* string_lengths = pstring_lengths.get(); // each string length in each row,column
     size_t memsize = 0;
     for( unsigned int idx=0; idx < count; ++idx )
