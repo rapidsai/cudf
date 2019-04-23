@@ -75,8 +75,8 @@ using WrappersNoBoolTest = WrappersTest<T>;
 using WrappersNoBool = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                         cudf::date64>;
 
-using Wrappers = ::testing::Types</*cudf::category, cudf::timestamp, cudf::date32,
-                                  cudf::date64,*/ cudf::bool8>;
+using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
+                                  cudf::date64, cudf::bool8>;
 
 TYPED_TEST_CASE(WrappersTest, Wrappers);
 TYPED_TEST_CASE(WrappersNoBoolTest, WrappersNoBool);
@@ -160,9 +160,6 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
         TypeParam const w0{t0};
         TypeParam const w1{t1};
 
-        std::cout << "t0: " << t0 << " t1: " << t1 << " w0: " << bool(w0) << " w1: " << bool(w1) << "\n";
-        std::cout << "TypeParam{w0 + w1}.value: " << bool(TypeParam{w0 + w1}.value) << "\n";
-
         // Types smaller than int are implicitly promoted to `int` for
         // arithmetic operations. Therefore, need to convert it back to the
         // original type
@@ -177,32 +174,6 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
                     static_cast<UnderlyingType>(TypeParam{w0 / w1}.value));
     }
 }
-
-// note testing increment on everything but cudf::bool8 since ++ on bool is 
-// deprecated
-/*TYPED_TEST(WrappersNoBoolTest, IncrementOperators){
-    using UnderlyingType = typename TypeToUse<TypeParam>::type;
-
-    for(int i = 0; i < NUM_TRIALS; ++i){
-        UnderlyingType t{this->rand()};
-        TypeParam w{t};
-        EXPECT_EQ(t++, (w++).value);
-        EXPECT_EQ(++t, (++w).value);
-    }
-}*/
-
-// note testing decrement on everything but cudf::bool8 since -- is not allowed
-// on bool
-/*TYPED_TEST(WrappersNoBoolTest, DecrementOperators){
-    using UnderlyingType = typename TypeToUse<TypeParam>::type;
-
-    for(int i = 0; i < NUM_TRIALS; ++i){
-        UnderlyingType t{this->rand()};
-        TypeParam w{t};
-        EXPECT_EQ(t--, (w--).value);
-        EXPECT_EQ(--t, (--w).value);
-    }
-}*/
 
 TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
 {
