@@ -93,5 +93,6 @@ cpdef cpp_read_parquet(path, columns=None):
     # Set column to use as row indexes if available
     if pq_reader.index_col is not NULL:
         df = df.set_index(df.columns[pq_reader.index_col[0]])
+        free(pq_reader.index_col)
 
     return df
