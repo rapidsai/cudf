@@ -185,19 +185,20 @@ class MultiIndex(indexPackage.Index):
         result = DataFrame()
         for ix, col in enumerate(df.columns):
             if ix in valid_indices:
-                result[col] = df[col]
+                result[ix] = df._cols[ix]
         # Build new index - COLUMN based MultiIndex
         # ---------------
-        out_index = DataFrame()
-        # If every level is homogeneous except the last do the out_index
-        # case above for columns.
-        for ix, col in enumerate(df.multi_cols.codes):
-            if ix in valid_indices:
-                out_index[col] = df.multi_cols.codes[col]
-        for k in range(len(row_tuple), len(df.multi_cols.levels)):
-            out_index.add_column(df.multi_cols.names[k],
-                                 df.multi_cols.codes[df.multi_cols.codes.columns[k]])
-        result.columns = out_index
+        if len(row_tuple) < len(self.levels):
+            columns = self._popn(len(row_tuple))
+            result.columns = columns.take(valid_indices)
+        else:
+            result.columns = self.take(valid_indices)
+        if len(result.columns.levels) == 1:
+            columns = []
+            for code in result.columns.codes[result.columns.codes.columns[0]]:
+                columns.append(result.columns.levels[0][code])
+            name = result.columns.names[0]
+            result.columns = StringIndex(columns, name=name)
         return result
 
 
@@ -252,6 +253,27 @@ class MultiIndex(indexPackage.Index):
     @property
     def _values(self):
         return list([i for i in self])
+
+    @classmethod
+    def from_tuples(cls, tuples, names):
+        # cheating
+        pdi = pd.MultiIndex.from_tuples(tuples, names=names)
+        result = cls.from_pandas(pdi)
+        return result
+
+    @classmethod
+    def from_frame(cls, dataframe, names):
+        # cheating
+        pdi = pd.MultiIndex.from_frame(dataframe.to_pandas(), names=names)
+        result = cls.from_pandas(pdi)
+        return result
+
+    @classmethod
+    def from_product(cls, arrays, names):
+        # cheating
+        pdi = pd.MultiIndex.from_product(arrays, names=names)
+        result = cls.from_pandas(pdi)
+        return result
 
     def to_pandas(self):
         pandas_codes = []

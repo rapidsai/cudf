@@ -594,6 +594,15 @@ class StringIndex(GenericIndex):
     def categories(self):
         return self._values.categories
 
+    def to_pandas(self):
+        result = pd.Index(self.values, name=self.name)
+        return result
+
+    def __repr__(self):
+        return "{}({}, dtype='object', name={})".format(self.__class__.__name__,
+                                         self._values.to_array(), self.name)
+
+
 
 def as_index(arbitrary, name=None):
     """Create an Index from an arbitrary object

@@ -200,8 +200,6 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
     assert_eq(pdf.loc[('a', 'store', 'storm')],
               gdf.loc[('a', 'store', 'storm')])
     # return 2 rows, 2 remaining keys = dataframe with n-k index columns
-    print(pdf.loc[('a', 'store')])
-    print(gdf.loc[('a', 'store')].to_pandas())
     assert_eq(pdf.loc[('a', 'store')],
               gdf.loc[('a', 'store')])
     assert_eq(pdf.loc[('b', 'house')],
@@ -224,10 +222,6 @@ def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    print(pdf.loc[('a', 'store', 'clouds', 'fire')])
-    print(gdf.loc[('a', 'store', 'clouds', 'fire')].to_pandas())
-    print(pdf.loc[('a', 'store', 'clouds', 'fire')][0])
-    print(gdf.loc[('a', 'store', 'clouds', 'fire')][0])
     assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire')][0],
               gdf.loc[('a', 'store', 'clouds', 'fire')][0])
 
@@ -275,41 +269,29 @@ def test_multiindex_column_shape():
         gdf.columns = gdfIndex
 
 
-def test_multiindex_iteration():
-    assert False
-
-
-def test_multiindex_columns():
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+def test_multiindex_columns(pdf, gdf, pdfIndex):
+    pdf = pdf.T
     gdf = cudf.from_pandas(pdf)
-    pdfIndex = pd.MultiIndex([['a', 'b', 'c'],
-                              ['house', 'store', 'forest'],
-                              ['clouds', 'clear', 'storm']],
-                             [[0, 0, 1, 1, 2],
-                              [1, 1, 0, 0, 2],
-                              [2, 2, 2, 0, 1]])
-    pdfIndex.names = ['alpha', 'location', 'weather']
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    for x, col in enumerate(pdf.columns):
-        print(col)
-        print(pdf.columns[x])
-        print(pdf[col])
-        print(x)
-    print(gdf.columns)
-    for col in gdf.columns:
-        print('toot')
-        print(col)
-    print(gdf.to_pandas())
+    assert_eq(pdf[('a', 'store', 'clouds', 'fire')],
+              gdf[('a', 'store', 'clouds', 'fire')])
+    assert_eq(pdf[('a', 'store', 'storm', 'smoke')],
+              gdf[('a', 'store', 'storm', 'smoke')])
     assert_eq(pdf[('a', 'store')],
               gdf[('a', 'store')])
     assert_eq(pdf[('b', 'house')],
               gdf[('b', 'house')])
-    assert_eq(pdf[('a', 'store'), ('b', 'house')],
-              gdf[('a', 'store'), ('b', 'house')])
-    assert_eq(pdf.loc[slice('a', 'b'), slice('store')])
+    assert_eq(pdf[('a', 'store', 'storm')],
+              gdf[('a', 'store', 'storm')])
+    assert_eq(pdf[('a',)],
+              gdf[('a',)])
+    assert_eq(pdf[('c', 'forest', 'clear')],
+              gdf[('c', 'forest', 'clear')])
+    # assert_eq(pdf[('a', 'store'): ('b', 'house')],
+    #           gdf[('a', 'store'): ('b', 'house')])
 
 
 def test_multiindex_from_tuples():
@@ -322,17 +304,17 @@ def test_multiindex_from_tuples():
 
 
 def test_multiindex_from_dataframe():
-    pdf = pd.DataFrame([['a', 'a', 'b', 'b'],
-                        ['house', 'store', 'house', 'store']])
+    pdf = pd.DataFrame([['a', 'house'], ['a', 'store'],
+                        ['b', 'house'], ['b', 'store']])
     gdf = cudf.from_pandas(pdf)
-    pmi = pd.MultiIndex.from_dataframe(pdf, names=['alpha', 'location'])
-    gmi = cudf.MultiIndex.from_dataframe(gdf, names=['alpha', 'location'])
+    pmi = pd.MultiIndex.from_frame(pdf, names=['alpha', 'location'])
+    gmi = cudf.MultiIndex.from_frame(gdf, names=['alpha', 'location'])
     assert_eq(pmi, gmi)
 
 
 def test_multiindex_from_product():
     arrays = [['a', 'a', 'b', 'b'],
               ['house', 'store', 'house', 'store']]
-    pmi = pd.MultiIndex.from_product(arrays)
-    gmi = cudf.MultiIndex.from_product(arrays)
+    pmi = pd.MultiIndex.from_product(arrays, names=['alpha', 'location'])
+    gmi = cudf.MultiIndex.from_product(arrays, names=['alpha', 'location'])
     assert_eq(pmi, gmi)

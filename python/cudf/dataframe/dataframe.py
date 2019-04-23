@@ -210,7 +210,8 @@ class DataFrame(object):
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(self.columns, MultiIndex):
+        if isinstance(self.columns, MultiIndex) and\
+           isinstance(arg, tuple):
             return self.columns.get_column_major(self, arg)
         if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
            isinstance(arg, tuple):
@@ -623,27 +624,20 @@ class DataFrame(object):
         """Returns a tuple of columns
         """
         if hasattr(self, 'multi_cols'):
-            # TODO: Broken for the same reason as below. I'm including
-            # it here because it doesn't break anything except for
-            # the growing MultiIndex implementation.
             return self.multi_cols
         else:
             return pd.Index(self._cols)
 
     @columns.setter
     def columns(self, columns):
-        if isinstance(columns, MultiIndex):
+        if isinstance(columns, Index):
             if len(columns) != len(self.columns):
                 msg = f'Length mismatch: Expected axis has {len(self.columns)} elements, new values have {len(columns)} elements'  # noqa: E501
                 raise ValueError(msg)
             self.multi_cols = columns
-            # TODO: Broken, this strategy doesn't work.
-            # The strategy was to use the MultiIndex as a wrapper
-            # over a set of integer named columns. This doesn't work
-            # because .columns returns the multi_cols object as soon as
-            # it is set.
-            self._rename_columns(list(range(len(self._cols))))
         else:
+            if hasattr(self, 'multi_cols'):
+                delattr(self, 'multi_cols')
             self._rename_columns(columns)
 
     def _rename_columns(self, new_names):
@@ -2095,6 +2089,12 @@ class DataFrame(object):
         out = pd.DataFrame(index=index)
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
+        if isinstance(self.columns, Index):
+            out.columns = self.columns
+            if isinstance(self.columns, MultiIndex):
+                out.columns.names = self.columns.names
+            else:
+                out.columns.name = self.columns.name
         return out
 
     @classmethod
