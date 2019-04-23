@@ -120,7 +120,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasks) {
                                 cudf::gdf_dtype_of<TypeParam>()};
 
   if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
-    // Can't invoke a constructor with mutliple arguments in the body of a macro
+    // Can't invoke a constructor with multiple arguments in the body of a macro
     // because the comma confuses the macro. Use a lambda wrapper as a
     // workaround
     auto constructor = [size, dtypes]() { cudf::table{size, dtypes}; };
