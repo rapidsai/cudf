@@ -25,7 +25,6 @@
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
-#include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <cstring>
@@ -446,11 +445,11 @@ size_t gather_stream_info(const size_t stripe_index,
  * @param[in] stream_info List of stream to column mappings
  * @param[in] num_stripes Number of stripes making up column chunks
  *
- * @return uint8_t* Device pointer to decompressed page data
+ * @return device_buffer<uint8_t> Device buffer to decompressed page data
  **/
-uint8_t *decompress_stripe_data(
+device_buffer<uint8_t> decompress_stripe_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-    const std::vector<device_ptr<uint8_t>> &stripe_data,
+    const std::vector<device_buffer<uint8_t>> &stripe_data,
     const orc::OrcDecompressor *decompressor,
     std::vector<OrcStreamInfo> &stream_info, size_t num_stripes) {
 
@@ -458,7 +457,7 @@ uint8_t *decompress_stripe_data(
   hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
   for (size_t i = 0; i < compinfo.max_size(); ++i) {
     compinfo.insert(orc::gpu::CompressedStreamInfo(
-        stripe_data[stream_info[i].stripe_idx].get() + stream_info[i].dst_pos,
+        stripe_data[stream_info[i].stripe_idx].data() + stream_info[i].dst_pos,
         stream_info[i].length));
   }
   CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
@@ -484,22 +483,21 @@ uint8_t *decompress_stripe_data(
       "compressed blocks: %zd\n Codec: %d\n",
       total_decompressed_size, num_compressed_blocks, decompressor->GetKind());
 
-  uint8_t *decompressed_data = nullptr;
-  RMM_ALLOC(&decompressed_data, total_decompressed_size, 0);
+  device_buffer<uint8_t> decomp_data(total_decompressed_size);
   rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
 
   // Parse again to populate the decompression input/output buffers
-  size_t decompressed_ofs = 0;
+  size_t decomp_offset = 0;
   uint32_t start_pos = 0;
   for (size_t i = 0; i < compinfo.size(); ++i) {
-    compinfo[i].uncompressed_data = decompressed_data + decompressed_ofs;
+    compinfo[i].uncompressed_data = decomp_data.data() + decomp_offset;
     compinfo[i].decctl = inflate_in.data().get() + start_pos;
     compinfo[i].decstatus = inflate_out.data().get() + start_pos;
     compinfo[i].max_compressed_blocks = compinfo[i].num_compressed_blocks;
 
-    stream_info[i].dst_pos = decompressed_ofs;
-    decompressed_ofs += compinfo[i].max_uncompressed_size;
+    stream_info[i].dst_pos = decomp_offset;
+    decomp_offset += compinfo[i].max_uncompressed_size;
     start_pos += compinfo[i].num_compressed_blocks;
   }
   CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
@@ -548,7 +546,7 @@ uint8_t *decompress_stripe_data(
     }
   }
 
-  return decompressed_data;
+  return decomp_data;
 }
 
 /**
@@ -654,7 +652,7 @@ gdf_error read_orc(orc_read_arg *args) {
   std::vector<OrcStreamInfo> stream_info;
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<device_ptr<uint8_t>> stripe_data;
+  std::vector<device_buffer<uint8_t>> stripe_data;
 
   if (num_rows > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
@@ -672,9 +670,8 @@ gdf_error read_orc(orc_read_arg *args) {
           md.ff.types, &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
-      uint8_t *d_data = nullptr;
-      RMM_TRY(RMM_ALLOC(&d_data, total_data_size, 0));
-      stripe_data.emplace_back(d_data);
+      stripe_data.emplace_back(total_data_size);
+      uint8_t *d_data = stripe_data.back().data();
 
       // Coalesce consecutive streams into one read
       while (stream_count < stream_info.size()) {
@@ -709,11 +706,11 @@ gdf_error read_orc(orc_read_arg *args) {
     }
 
     if (md.ps.compression != orc::NONE) {
-      uint8_t *d_decomp_data =
+      auto decomp_data =
           decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
                                  stream_info, selected_stripes.size());
       stripe_data.clear();
-      stripe_data.emplace_back(d_decomp_data);
+      stripe_data.push_back(std::move(decomp_data));
     }
 
     for (auto &column : columns) {
