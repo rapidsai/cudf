@@ -11,20 +11,29 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
+cimport cython
 
+import collections
 import numpy as np
-import pandas as pd
-import pyarrow as pa
+from pandas.api.types import is_categorical_dtype
+from numbers import Number
 
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.categorical import CategoricalColumn
+from cudf.utils.cudautils import zeros
+from cudf.bindings.nvtx import nvtx_range_pop
+import cudf.dataframe.index as index
 from librmm_cffi import librmm as rmm
 import nvcategory
 import nvstrings
 
-cimport cython
 
 
 cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
-                gdf_context* ctx, val_columns, val_columns_out, sort_result=True):
+                gdf_context* ctx, val_columns, val_columns_out,
+                sort_results=True):
     """
         Parameters
         ----------
@@ -46,11 +55,11 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         val_columns_out : list of *str*
             The list of columns names that the aggregation results should be
             output into.
-        sort_result : bool
-            Boolean indicating whether to sort the results or not
+        sort_results : bool
+            Boolean indicating whether to sort the results or not.
         """
 
-    if sort_result:
+    if sort_results:
         ctx.flag_sort_result = 1
 
     ncols = len(groupby_class._by)
@@ -68,7 +77,7 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
 
     cdef gdf_column* out_col_indices
     cdef vector[gdf_column*] vector_out_col_values
-    cdef gdf_error err
+    cdef gdf_error err = GDF_CUDA_ERROR
     for val_col in val_columns:
         # Need to free this or change cudf_cpp.pyx to use `unique_ptr`
         col_agg = column_view_from_column(groupby_class._df[val_col]._column)
@@ -270,5 +279,166 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
 
         first_run = False
         col_count = col_count + 1
+
+    return result
+
+def agg(groupby_class, args):
+    """ Invoke aggregation functions on the groups.
+
+    Parameters
+    ----------
+    args : dict, list, str, callable
+        - str
+            The aggregate function name.
+        - list
+            List of *str* of the aggregate function.
+        - dict
+            key-value pairs of source column name and list of
+            aggregate functions as *str*.
+
+    Returns
+    -------
+    result : DataFrame
+
+    Notes
+    -----
+    Since multi-indexes aren't supported aggregation results are returned
+    in columns using the naming scheme of `aggregation_columnname`.
+    """
+    result = DataFrame()
+    add_col_values = True
+
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+
+    sort_results = True
+
+    # TODO: Use MultiColumn here instead of use_prefix
+    # use_prefix enables old functionality - prefixing column
+    # groupby names since we don't support MultiColumn quite yet
+    use_prefix = 1 < len(groupby_class._val_columns) or 1 < len(args)
+    if not isinstance(args, str) and isinstance(
+            args, collections.abc.Sequence):
+        for agg_type in args:
+            val_columns_out = [
+                agg_type + '_' + val for val in groupby_class._val_columns
+            ]
+            if not use_prefix:
+                val_columns_out = groupby_class._val_columns
+            result = _apply_agg(
+                groupby_class,
+                agg_type,
+                result,
+                add_col_values,
+                ctx,
+                groupby_class._val_columns,
+                val_columns_out,
+                sort_results=sort_results
+            )
+            add_col_values = False  # we only want to add them once
+        # TODO: Do multindex here
+        if(groupby_class._as_index) and 1 == len(groupby_class._by):
+            idx = index.as_index(result[groupby_class._by[0]])
+            idx.name = groupby_class._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
+    elif isinstance(args, collections.abc.Mapping):
+        if (len(args.keys()) == 1):
+            if(len(list(args.values())[0]) == 1):
+                sort_results = False
+        for val, agg_type in args.items():
+
+            if not isinstance(agg_type, str) and \
+                    isinstance(agg_type, collections.abc.Sequence):
+                for sub_agg_type in agg_type:
+                    val_columns_out = [sub_agg_type + '_' + val]
+                    if not use_prefix:
+                        val_columns_out = groupby_class._val_columns
+                    result = _apply_agg(
+                        groupby_class,
+                        sub_agg_type,
+                        result,
+                        add_col_values,
+                        ctx,
+                        [val],
+                        val_columns_out,
+                        sort_results=sort_results
+                    )
+            elif isinstance(agg_type, str):
+                val_columns_out = [agg_type + '_' + val]
+                if not use_prefix:
+                    val_columns_out = groupby_class._val_columns
+                result = _apply_agg(
+                    groupby_class,
+                    agg_type,
+                    result,
+                    add_col_values,
+                    ctx,
+                    [val],
+                    val_columns_out,
+                    sort_results=sort_results
+                )
+            add_col_values = False  # we only want to add them once
+        # TODO: Do multindex here
+        if(groupby_class._as_index) and 1 == len(groupby_class._by):
+            idx = index.as_index(result[groupby_class._by[0]])
+            idx.name = groupby_class._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
+    else:
+        result = groupby_class.agg([args])
+
+    nvtx_range_pop()
+    return result
+
+def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
+    """
+    Parameters
+    ----------
+    agg_type : str
+        The aggregation function to run.
+    """
+    result = DataFrame()
+    add_col_values = True
+
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+
+    val_columns = groupby_class._val_columns
+    val_columns_out = groupby_class._val_columns
+
+    result = _apply_agg(
+        groupby_class,
+        agg_type,
+        result,
+        add_col_values,
+        ctx,
+        val_columns,
+        val_columns_out,
+        sort_results=sort_results
+    )
+
+    # If a Groupby has one index column and one value column
+    # and as_index is set, return a Series instead of a df
+    if isinstance(val_columns, (str, Number)) and groupby_class._as_index:
+        result_series = result[val_columns]
+        idx = index.as_index(result[groupby_class._by[0]])
+        if groupby_class.level == 0:
+            idx.name = groupby_class._original_index_name
+        else:
+            idx.name = groupby_class._by[0]
+        result_series = result_series.set_index(idx)
+        return result_series
+
+    # TODO: Do MultiIndex here
+    if(groupby_class._as_index):
+        idx = index.as_index(result[groupby_class._by[0]])
+        idx.name = groupby_class._by[0]
+        result.drop_column(idx.name)
+        if groupby_class.level == 0:
+            idx.name = groupby_class._original_index_name
+        else:
+            idx.name = groupby_class._by[0]
+        result = result.set_index(idx)
+
+    nvtx_range_pop()
 
     return result
