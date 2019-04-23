@@ -72,6 +72,8 @@ void initialize_with_identity(
     cudf::table const& table,
     std::vector<cudf::groupby::distributive_operators> const& operators,
     cudaStream_t stream = 0) {
+  // TODO: Initialize all the columns in a single kernel instead of invoking one
+  // kernel per column
   for (gdf_size_type i = 0; i < table.num_columns(); ++i) {
     gdf_column const* col = table.get_column(i);
     cudf::type_dispatcher(col->dtype, identity_initializer{}, *col,
@@ -85,6 +87,8 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
     std::vector<cudf::groupby::distributive_operators> const& operators,
     std::vector<gdf_dtype> const& output_dtypes, cudaStream_t stream) {
   // Create the output key and value tables
+  // The exact output size is unknown a priori, therefore, use the input size as
+  // an upper bound
   std::vector<gdf_dtype> key_dtypes(keys.num_columns());
   std::transform(keys.begin(), keys.end(), key_dtypes.begin(),
                  [](gdf_column const* col) { return col->dtype; });
@@ -99,6 +103,8 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   std::unique_ptr<map_type> map =
       std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()), 0);
+
+  CHECK_STREAM(stream);
 
   return std::make_tuple(output_keys, output_values);
 }
