@@ -43,6 +43,7 @@
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 - PR #1453 Convert CSV Reader CFFI to Cython
+- PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
 - PR #1463 Allow and default melt keyword argument var_name to be None

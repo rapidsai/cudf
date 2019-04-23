@@ -120,7 +120,7 @@ class Column(object):
         """
         from cudf.dataframe import columnops
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data_mem, data_mem.dtype)
+            return columnops.build_column(data_mem, np.dtype("object"))
         else:
             data_buf = Buffer(data_mem)
             mask = None
