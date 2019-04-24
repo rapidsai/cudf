@@ -42,12 +42,16 @@ Parameters
 ----------
 path : string or path object
     Path of file to be read
-engine : { 'cudf', 'pyarrow' }, default='cudf'
+engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
-row_group : int, default=None
-    If not None, only the row group with the specified index will be read.
-columns : list, default=None
+columns : list, default None
     If not None, only these columns will be read.
+row_group : int, default None
+    If not None, only the row group with the specified index will be read.
+skip_rows : int, default None
+    If not None, the nunber of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 
 Returns
 -------

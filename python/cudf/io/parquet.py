@@ -40,7 +40,6 @@ def read_parquet(path, engine='cudf', columns=None, row_group=None,
         pa_table = pq.read_pandas(
             path,
             columns=columns,
-            row_group=row_group,
             *args,
             **kwargs
         )

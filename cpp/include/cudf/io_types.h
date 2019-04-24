@@ -177,7 +177,6 @@ typedef struct {
   size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
 
   int           row_group;                  ///< In: Row group index of interest; only data in this row group will be returned.
-
   int           skip_rows;                  ///< In: Rows to skip from the start of the dataset
   int           num_rows;                   ///< In: Number of rows to read and return
 
