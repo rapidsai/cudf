@@ -3,7 +3,7 @@
 import pytest
 import cudf
 
-dask = pytest.importorskip('dask')
+dask = pytest.importorskip('dask', minversion='1.1.0')
 
 from dask.dataframe.utils import (
     is_dataframe_like, is_series_like, is_index_like
