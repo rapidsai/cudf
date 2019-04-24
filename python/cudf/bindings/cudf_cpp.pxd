@@ -35,7 +35,7 @@ cpdef check_gdf_error(errcode)
 
 cdef extern from "cudf.h" nogil:
 
-    ctypedef size_t gdf_size_type
+    ctypedef int     gdf_size_type
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
