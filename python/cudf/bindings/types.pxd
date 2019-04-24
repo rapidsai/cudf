@@ -10,7 +10,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "types.hpp" namespace "cudf" nogil:
     
-    cdef struct table:
+    cdef cppclass table:
 
         table(gdf_column* cols[], gdf_size_type num_cols) except +
 

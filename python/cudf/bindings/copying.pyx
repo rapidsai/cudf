@@ -25,13 +25,14 @@ from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
 
-cdef table_from_cols(cols):
+cdef cudf_table* table_from_cols(cols):
     col_counts=len(cols)
-    gdf_column** c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
+    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
 
+    cdef i
     for i in range(col_count):
         check_gdf_compatibility(cols[i])
-        c_cols = column_view_from_column(cols[i])
+        c_cols[i] = column_view_from_column(cols[i])
 
     cdef cudf_table* table  = new cudf_table(c_cols, col_count)
     return table
@@ -46,7 +47,7 @@ def clone_columns_with_size(in_cols, size):
     out_cols = []
     for col in in_cols:
         o_col = clone_column_with_size(col, size)
-        out_cols.append()
+        out_cols.append(o_col)
 
     return out_cols
 
@@ -65,18 +66,18 @@ def apply_gather(in_cols, maps, out_cols=None):
     cdef cudf_table* c_in_table = table_from_cols(in_cols)
 
     cdef cudf_table* c_out_table
-    if( out_cols == in_cols ):
+    if out_cols == in_cols :
         c_out_table = c_in_table
-    elif( out_cols != None ):
+    elif out_cols != None :
         c_out_table = table_from_cols(out_cols)
     else:
         out_cols = clone_table_with_size(in_cols, size)
         c_out_table = table_from_cols(out_cols)
 
     # size check, cudf::gather requires same length for maps and out table.
-    assert len(maps) == len(out_cols)
+#    assert len(maps) == len(out_cols)
 
-    c_def gdf_index_type* c_maps　= <gdf_index_type*>maps.device_ctypes_pointer.value
+    cdef gdf_index_type* c_maps = <gdf_index_type*> get_ctype_ptr(maps)
 
     with nogil:
         gather(c_in_table, c_maps, c_out_table)
