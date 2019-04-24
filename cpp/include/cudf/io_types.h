@@ -138,6 +138,23 @@ typedef struct {
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
 } csv_read_arg;
 
+/**---------------------------------------------------------------------------*
+ * @brief These are the arguments to the CSV writer function.
+ *---------------------------------------------------------------------------**/
+typedef struct
+{
+    gdf_column** columns;         // columns to output
+    int num_cols;                 // number of columns
+
+    const char* filepath;         // full path to file to create
+    const char* line_terminator;  // character to use for separating lines (default "\n")
+    char delimiter;               // character to use between each column entry (default ',')
+
+    const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
+    const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
+    const char* na_rep;           // string to use for null entries
+
+} csv_write_arg;
 
 /**---------------------------------------------------------------------------*
  * @brief Input and output arguments to the read_parquet interface.
