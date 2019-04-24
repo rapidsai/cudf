@@ -83,6 +83,7 @@
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1498 Add missing include guard to device_atomics.cuh
 
 
 # cuDF 0.6.1 (25 Mar 2019)

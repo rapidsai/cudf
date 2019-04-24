@@ -122,15 +122,11 @@ struct AtomicsTest : public GdfTest
         if( block_size == 0) block_size = vec_size;
 
         if( is_cas_test ){
-            gpu_atomicCAS_test<T> <<<grid_size, block_size>>> (
-                reinterpret_cast<T*>( dev_result.data().get() ),
-                reinterpret_cast<T*>( dev_data.data().get() ),
-                vec_size);
+          gpu_atomicCAS_test<<<grid_size, block_size>>>(
+              dev_result.data().get(), dev_data.data().get(), vec_size);
         }else{
-            gpu_atomic_test<T> <<<grid_size, block_size>>> (
-                reinterpret_cast<T*>( dev_result.data().get() ),
-                reinterpret_cast<T*>( dev_data.data().get() ),
-                vec_size);
+          gpu_atomic_test<<<grid_size, block_size>>>(
+              dev_result.data().get(), dev_data.data().get(), vec_size);
         }
 
         thrust::host_vector<T> host_result(dev_result);
