@@ -1541,10 +1541,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
         }
         if (tz_len > 0)
         {
-            if (tz_len > 400)
+            if (tz_len > 800) // 2 entries/year for 400 years
             {
-                s->top.data.tz_num_entries = tz_len - 400;
-                s->top.data.tz_dst_cycle = 400;
+                s->top.data.tz_num_entries = tz_len - 800;
+                s->top.data.tz_dst_cycle = 800;
             }
             else
             {
