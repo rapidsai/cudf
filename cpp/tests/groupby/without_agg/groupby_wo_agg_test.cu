@@ -525,8 +525,6 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
 
       this->gdf_cpu_data_cols_out_columns = this->initialize_gdf_columns_with_nulls(this->cpu_data_cols_out, cpu_data_cols_out_valid);
 
-      auto str = gdf::util::gdf_valid_to_str(cpu_out_indices_valid.data(), column_length);
-
       this->gdf_output_indices_column.resize(this->cpu_out_indices.size());
       cudaMemcpy(this->gdf_output_indices_column.data().get(), this->cpu_out_indices.data(), this->cpu_out_indices.size() * sizeof(gdf_size_type), cudaMemcpyHostToDevice);
       // this->gdf_output_indices_column = this->create_gdf_column(this->cpu_out_indices, 0, cpu_out_indices_valid.data());

@@ -10,12 +10,13 @@
 #include <random>
 
 #include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 
 #include "rmm/rmm.h"
 #include <cstring>
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
-#include "bitmask/bit_mask.h"
+#include "bitmask/bit_mask.cuh"
 
 // See this header for all of the handling of valids' vectors 
 #include "tests/utilities/valid_vectors.h"

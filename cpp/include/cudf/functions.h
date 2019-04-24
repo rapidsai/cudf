@@ -606,23 +606,6 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              int partition_offsets[],
                              gdf_hash_func hash);
 
-/* prefixsum */
-/** --------------------------------------------------------------------------*
- * @brief  Computes the prefix sum of a column.
- * The null values are skipped for the operation, and if an input element
- * at `i` is null, then the output element at `i` will also be null.
- *
- * @param[in] input The input column for prefix sum
- * @param[out] output The pre-allocated output column containing
- * the prefix sum of the input
- * @param[in] inclusive The flag for applying an inclusive prefix sum if true,
- * an exclusive prefix sum if false.
- *
- * @returns   GDF_SUCCESS if the operation was successful,
- * otherwise an appropriate error code.
- * GDF_UNSUPPORTED_DTYPE if input->dtype is not an arithmetic type.
- * ----------------------------------------------------------------------------**/
-gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive);
 
 /* unary operators */
 
@@ -910,111 +893,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-/* reductions
-
-The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
-size for this use.
-*/
-
-
-/**
- * @brief  Reports the intermediate buffer size in elements required for 
- *         all cuDF reduction operations (gdf_sum, gdf_product, 
- *         gdf_sum_of_squares, gdf_min and gdf_max)
- *
- * @returns  The size of output/intermediate buffer to allocate for reductions
- * 
- * @todo Reductions should be re-implemented to use an atomic add for each
- *       block sum rather than launch a second kernel. When that happens, this
- *       function can go away and the output can be a single element.
- */
-unsigned int gdf_reduction_get_intermediate_output_size();
-
-/**
- * @brief  Computes the sum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output sum 
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the multiplicative product of the values in all rows of 
- *         a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output product
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- */
-gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the sum of squares of the values in all rows of a column
- * 
- * Sum of squares is useful for variance implementation.
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output sum of squares
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- * @todo could be implemented using inner_product if that function is 
- *       implemented
- */
-gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the minimum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output minimum
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
-/**
- * @brief  Computes the maximum of the values in all rows of a column
- * 
- * @param[in] col Input column
- * @param[out] dev_result The output maximum
- * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduction_get_intermediate_output_size
- *                            This is used as intermediate storage, and the 
- *                            first element contains the total result
- * 
- * @returns    GDF_SUCCESS if the operation was successful, otherwise an 
- *            appropriate error code. 
- * 
- */
-gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-
 
 /**
  * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
@@ -1204,12 +1082,13 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_context* ctxt);
 
 /**
- * @brief  Calculates exact quantiles
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
  * @param[in] requested quantile in [0,1]
- * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
+ * @param[out] result the result as double. The type can be changed in future
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
@@ -1217,22 +1096,24 @@ gdf_error gdf_group_by_count(int ncols,
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
-                            void* t_erased_res,                            
+                            gdf_scalar*  result,
                             gdf_context* ctxt);
 
 /**
- * @brief  Calculates approximate quantiles
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result; type-erased result of same type as column;
+ * @param[out] result quantile, with the same type as @p col_in
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
-                              void* t_erased_res,
+                              gdf_scalar*  result,
                               gdf_context* ctxt);
 
 /**

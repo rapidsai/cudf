@@ -312,10 +312,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
-
-
 def apply_segsort(col_keys, col_vals, segments, descending=False,
                   plan=None):
     """Inplace segemented sort
@@ -479,46 +475,3 @@ def rmm_initialize():
 def rmm_finalize():
     rmm.finalize()
     return True
-
-
-_GDF_QUANTILE_METHODS = {
-    'linear': libgdf.GDF_QUANT_LINEAR,
-    'lower': libgdf.GDF_QUANT_LOWER,
-    'higher': libgdf.GDF_QUANT_HIGHER,
-    'midpoint': libgdf.GDF_QUANT_MIDPOINT,
-    'nearest': libgdf.GDF_QUANT_NEAREST,
-}
-
-
-def get_quantile_method(method):
-    """Util to convert method to gdf gdf_quantile_method.
-    """
-    return _GDF_QUANTILE_METHODS[method]
-
-
-def quantile(column, quant, method, exact):
-    """ Calculate the `quant` quantile for the column
-    Returns value with the quantile specified by quant
-    """
-    gdf_context = ffi.new('gdf_context*')
-    method_api = _join_method_api['sort']
-    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
-    libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
-                              null_sort_behavior_api)
-    # px = ffi.new("double *")
-    res = []
-    for q in quant:
-        px = ffi.new("double *")
-        if exact:
-            libgdf.gdf_quantile_exact(column.cffi_view,
-                                      get_quantile_method(method),
-                                      q,
-                                      ffi.cast('void *', px),
-                                      gdf_context)
-        else:
-            libgdf.gdf_quantile_approx(column.cffi_view,
-                                       q,
-                                       ffi.cast('void *', px),
-                                       gdf_context)
-        res.append(px[0])
-    return res

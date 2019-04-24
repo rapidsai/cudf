@@ -18,7 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, gen_rand
 
 
 def test_buffer_basic():
@@ -1312,11 +1312,6 @@ def test_from_arrow_missing_categorical():
     )
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="PyArrow does not yet support validity masks in creating "
-           "DictionaryArray objects"
-)
 def test_to_arrow_missing_categorical():
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
     pa_cat = pa.array(pd_cat, from_pandas=True)
@@ -2231,3 +2226,22 @@ def test_get_numeric_data():
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    shifted_outcome = gdf.a.shift(period)
+    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+
+    assert_eq(shifted_outcome, expected_outcome)
