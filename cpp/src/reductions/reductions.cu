@@ -99,7 +99,9 @@ template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
 public:
     template <typename T_out, typename std::enable_if<
-                std::is_convertible<T_in, T_out>::value >::type* = nullptr >
+                std::is_convertible<T_in, T_out>::value ||
+                (std::is_same<T_in, cudf::bool8>::value && 
+                 std::is_convertible<bool, T_out>::value) >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -107,7 +109,9 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-                ! std::is_convertible<T_in, T_out>::value >::type* = nullptr >
+                not (std::is_convertible<T_in, T_out>::value ||
+                     (std::is_same<T_in, cudf::bool8>::value && 
+                      std::is_convertible<bool, T_out>::value)) >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -124,6 +128,7 @@ private:
     static constexpr bool is_supported()
     {
         return std::is_arithmetic<T>::value ||
+               std::is_same<T, cudf::bool8>::value ||
                std::is_same<Op, cudf::reductions::ReductionMin>::value ||
                std::is_same<Op, cudf::reductions::ReductionMax>::value ;
     }
@@ -139,7 +144,7 @@ public:
     }
 
     template <typename T, typename std::enable_if<
-        !is_supported<T>()>::type* = nullptr>
+        not is_supported<T>()>::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {

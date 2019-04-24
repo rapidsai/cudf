@@ -267,6 +267,21 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
     EXPECT_TRUE(w6 <= w7);
 }
 
+// This ensures that casting cudf::bool8 to int, doing arithmetic, and casting
+// the result to bool results in the right answer. If the arithmetic is done
+// on random underlying values you can get the wrong answer.
+TEST_F(WrappersTestBool8, CastArithmeticTest)
+{
+    cudf::bool8 w1{42};
+    cudf::bool8 w2{-42};
+
+    bool t1{42};
+    bool t2{-42};
+
+    EXPECT_EQ(static_cast<bool>(static_cast<int>(w1) + static_cast<int>(w2)),
+              static_cast<bool>(static_cast<int>(t1) + static_cast<int>(t2)));
+}
+
 TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
 {
     using UnderlyingType = typename TypeToUse<TypeParam>::type;

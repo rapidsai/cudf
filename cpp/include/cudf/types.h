@@ -113,6 +113,7 @@ typedef union {
   long          si64;  /**< GDF_INT64     */
   float         fp32;  /**< GDF_FLOAT32   */
   double        fp64;  /**< GDF_FLOAT64   */
+  char           b08;  /**< GDF_BOOL8     */
   gdf_date32    dt32;  /**< GDF_DATE32    */
   gdf_date64    dt64;  /**< GDF_DATE64    */
   gdf_timestamp tmst;  /**< GDF_TIMESTAMP */
