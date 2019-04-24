@@ -65,8 +65,9 @@ class device_table {
    * some_kernel<<<...>>>(*device_table_ptr);
    * ```
    *
-   * @param num_columns The number of columns
-   * @param cols Array of columns
+   * @param[in] num_columns The number of columns
+   * @param[in] cols Array of columns
+   * @param[in] stream CUDA stream to use for device operations
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
   static auto create(gdf_size_type num_columns, gdf_column* cols[],
@@ -84,8 +85,8 @@ class device_table {
   /**---------------------------------------------------------------------------*
    * @brief Create a device_table from a `cudf::table`
    *
-   * @param t The `cudf::table` to wrap
-   * @param stream The stream to use for allocations/frees
+   * @param[in] t The `cudf::table` to wrap
+   * @param[in] stream The stream to use for allocations/frees
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
   static auto create(cudf::table const& t, cudaStream_t stream = 0) {
@@ -166,7 +167,7 @@ class device_table {
                              num_cols * sizeof(gdf_column),
                              cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
-  }
+  
 };
 
 namespace {
