@@ -115,18 +115,6 @@ struct DeviceXor{
     }
 };
 
-/* @brief `count` operator */
-struct DeviceCount{
-    template<typename T>
-    __device__
-    T operator() (T const&, const T &rhs) {
-        return ++rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
 
 namespace detail {
 
