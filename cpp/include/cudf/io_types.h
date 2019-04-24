@@ -16,12 +16,14 @@
 
 #pragma once
 
+
 /*
  * @brief Enumeration of supported input types for cudf reader interfaces
  */
 typedef enum {
-  FILE_PATH,        ///< Source is specified as a file path
-  HOST_BUFFER,      ///< Source is specified as a buffer in host memory
+  FILE_PATH,                 ///< Source is specified as a file path
+  HOST_BUFFER,               ///< Source is specified as a buffer in host memory,
+  ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
 } gdf_input_type;
 
 /*
