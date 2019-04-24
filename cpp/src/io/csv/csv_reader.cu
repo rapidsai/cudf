@@ -55,6 +55,8 @@
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/cudf_utils.h" 
 
+#include <nvstrings/NVStrings.h>
+
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
@@ -347,7 +349,7 @@ gdf_error setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv)
 	// Passing offset = 1 to return positions AFTER the found character
 	findAllFromSet(h_data, h_size, chars_to_find, 1, find_result_ptr);
 
-	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
+	// Previous call stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
 	// certain rows or other processing on specific records
 	thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart.data(), raw_csv->recStart.data() + raw_csv->num_records);

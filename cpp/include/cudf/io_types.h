@@ -16,12 +16,14 @@
 
 #pragma once
 
+
 /*
  * @brief Enumeration of supported input types for cudf reader interfaces
  */
 typedef enum {
-  FILE_PATH,        ///< Source is specified as a file path
-  HOST_BUFFER,      ///< Source is specified as a buffer in host memory
+  FILE_PATH,                 ///< Source is specified as a file path
+  HOST_BUFFER,               ///< Source is specified as a buffer in host memory,
+  ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
 } gdf_input_type;
 
 /*
@@ -138,6 +140,23 @@ typedef struct {
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
 } csv_read_arg;
 
+/**---------------------------------------------------------------------------*
+ * @brief These are the arguments to the CSV writer function.
+ *---------------------------------------------------------------------------**/
+typedef struct
+{
+    gdf_column** columns;         // columns to output
+    int num_cols;                 // number of columns
+
+    const char* filepath;         // full path to file to create
+    const char* line_terminator;  // character to use for separating lines (default "\n")
+    char delimiter;               // character to use between each column entry (default ',')
+
+    const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
+    const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
+    const char* na_rep;           // string to use for null entries
+
+} csv_write_arg;
 
 /**---------------------------------------------------------------------------*
  * @brief Input and output arguments to the read_parquet interface.
@@ -157,8 +176,7 @@ typedef struct {
    */
   gdf_input_type source_type;               ///< In: Type of data source
   const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
-
+  size_t        buffer_size;                ///< In: If source_type is   HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
   const char    **use_cols;                 ///< In: Columns of interest. Only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
 
