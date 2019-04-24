@@ -15,11 +15,12 @@
  */
 
 #include <cudf.h>
+#include <dataframe/device_table.cuh>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <types.hpp>
+#include <utilities/device_atomics.cuh>
 #include <utilities/type_dispatcher.hpp>
-#include "aggregation_operations.hpp"
 #include "new_hash_groupby.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -37,13 +38,13 @@ struct identity_initializer {
   T get_identity(groupby::distributive_operators op) {
     switch (op) {
       case groupby::distributive_operators::SUM:
-        return sum_op<T>::IDENTITY;
+        return cudf::DeviceSum::identity<T>();
       case groupby::distributive_operators::MIN:
-        return min_op<T>::IDENTITY;
+        return cudf::DeviceMin::identity<T>();
       case groupby::distributive_operators::MAX:
-        return max_op<T>::IDENTITY;
+        return cudf::DeviceMax::identity<T>();
       case groupby::distributive_operators::COUNT:
-        return sum_op<T>::IDENTITY;
+        return cudf::DeviceCount::identity<T>();
       default:
         CUDF_FAIL("Invalid aggregation operation.");
     }
@@ -127,6 +128,45 @@ struct result_type<
     typename std::enable_if<std::is_floating_point<T>::value>::type> {
   using type = T;
 };
+
+struct aggregate {
+  template <typename SourceType>
+  void operator()(gdf_column const& target, gdf_size_type target_index,
+                  gdf_column const& source, gdf_size_type source_index,
+                  cudf::groupby::distributive_operators op) {
+    switch (op) {
+      case groupby::distributive_operators::MIN:
+      case groupby::distributive_operators::MAX:
+      case groupby::distributive_operators::SUM:
+      case groupby::distributive_operators::COUNT:
+      default:
+        return;
+    }
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Updates a target row by performing a set of aggregation operations
+ * between it and a source row.
+ *
+ * @param target Table containing the target row
+ * @param target_index Index of the target row
+ * @param source Table cotaning the source row
+ * @param source_index Index of the source row
+ * @param ops Array of operators to perform between the elements of the
+ * target and source rows
+ *---------------------------------------------------------------------------**/
+__device__ inline void aggregate_row(
+    device_table const& target, gdf_size_type target_index,
+    device_table const& source, gdf_size_type source_index,
+    cudf::groupby::distributive_operators* ops) {
+  thrust::for_each(thrust::seq, thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(target.num_columns()),
+                   [target, source, ops](gdf_size_type i) {
+                     gdf_column const* target_column{target.get_column(i)};
+                     gdf_column const* source_column{source.get_column(i)};
+                   });
+}
 
 struct type_mapper {
   template <typename InputT>
