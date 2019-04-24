@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DEVICE_ATOMICS_CUH
+#define DEVICE_ATOMICS_CUH
+
 /** ---------------------------------------------------------------------------*
  * @brief overloads for CUDA atomic operations
  * @file device_atomics.cuh
@@ -110,6 +113,18 @@ struct DeviceXor{
     T operator() (const T &lhs, const T &rhs) {
         return (lhs ^ rhs );
     }
+};
+
+/* @brief `count` operator */
+struct DeviceCount{
+    template<typename T>
+    __device__
+    T operator() (T const&, const T &rhs) {
+        return ++rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
 };
 
 
@@ -1155,3 +1170,5 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
 
+
+#endif
