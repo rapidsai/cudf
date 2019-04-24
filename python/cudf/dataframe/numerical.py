@@ -7,8 +7,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-
-from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
@@ -25,26 +23,6 @@ import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-
-
-# Operator mappings
-
-_binary_impl = {
-    # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-    # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-    # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
-}
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -461,12 +439,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype or op not in _binary_impl:
-        # Use JIT implementation
-        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-    else:
-        # Use compiled implementation
-        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)

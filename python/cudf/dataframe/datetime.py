@@ -15,18 +15,7 @@ from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.reduce as cpp_reduce
-
-_unordered_impl = {
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-}
-
-_ordered_impl = {
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-}
+import cudf.bindings.binops as cpp_binops
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -149,7 +138,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         lhs, rhs = self, rhs
         return binop(
             lhs, rhs,
-            op=_unordered_impl[cmpop],
+            op=cmpop,
             out_dtype=np.bool
         )
 
@@ -157,7 +146,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         lhs, rhs = self, rhs
         return binop(
             lhs, rhs,
-            op=_ordered_impl[cmpop],
+            op=cmpop,
             out_dtype=np.bool
         )
 
@@ -237,7 +226,7 @@ def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
-    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    null_count = cpp_binops.apply_op(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
     nvtx_range_pop()
     return out

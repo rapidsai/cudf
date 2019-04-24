@@ -96,22 +96,6 @@ def columnview(size, data, mask=None, dtype=None, null_count=None,
                        dtype=dtype, null_count=null_count, nvcat=nvcat)
 
 
-def apply_binaryop(binop, lhs, rhs, out):
-    """Apply binary operator *binop* to operands *lhs* and *rhs*.
-    The result is stored to *out*.
-
-    Returns the number of null values.
-    """
-    args = (lhs.cffi_view, rhs.cffi_view, out.cffi_view)
-    # apply binary operator
-    binop(*args)
-    # validity mask
-    if out.has_null_mask:
-        return apply_mask_and(lhs, rhs, out)
-    else:
-        return 0
-
-
 def apply_unaryop(unaop, inp, out):
     """Apply unary operator *unaop* to *inp* and store to *out*.
 
@@ -119,13 +103,6 @@ def apply_unaryop(unaop, inp, out):
     args = (inp.cffi_view, out.cffi_view)
     # apply unary operator
     unaop(*args)
-
-
-def apply_mask_and(col, mask, out):
-    args = (col.cffi_view, mask.cffi_view, out.cffi_view)
-    libgdf.gdf_validity_and(*args)
-    nnz = count_nonzero_mask(out.mask.mem, size=len(out))
-    return len(out) - nnz
 
 
 np_gdf_dict = {

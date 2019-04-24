@@ -7,6 +7,9 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.GDFError import GDFError
+from libcpp.vector cimport vector
+from libc.stdint cimport uintptr_t
+from libc.stdlib cimport calloc, malloc, free
 
 import numpy as np
 import pandas as pd
@@ -17,10 +20,6 @@ from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
-
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
-
 
 
 dtypes = {
@@ -315,7 +314,19 @@ cpdef check_gdf_error(errcode):
 
             raise GDFError(errname, msg)
 
+def count_nonzero_mask(mask, size):
+    assert mask.size * mask_bitsize >= size
+    cdef vector[int] nnz = [0]
+    cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
 
+    if mask_ptr:
+        gdf_count_nonzero_mask(
+            <gdf_valid_type*>mask_ptr,
+            size,
+            nnz.data()
+        )
+
+    return nnz[0]
 
 
 
