@@ -182,12 +182,12 @@ protected:
     // copy output data to host
     gdf_size_type nrows = in_col.size();
     std::vector<T> out_col(nrows);
-    cudaMemcpy(out_col.data(), static_cast<T*>(out_gdf_col->data), nrows * sizeof(T), cudaMemcpyDefault);
+    CUDA_TRY(cudaMemcpy(out_col.data(), static_cast<T*>(out_gdf_col->data), nrows * sizeof(T), cudaMemcpyDefault));
       
     // copy output valid mask to host
     gdf_size_type nmasks = gdf_valid_allocation_size(nrows);
     std::vector<gdf_valid_type> out_col_mask(nmasks);
-    cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault);
+    CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault));
       
     // create column wrappers and compare
     cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
@@ -212,17 +212,16 @@ protected:
 
     // copy sizes to the gpu
     if (window.size() > 0) {
-      // TODO: use RMM to allocate?
-      cudaMalloc(&d_window, window.size() * sizeof(gdf_size_type));
-      cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+      EXPECT_EQ(RMM_ALLOC(&d_window, window.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
     }
     if (min_periods.size() > 0) {
-      cudaMalloc(&d_min_periods, min_periods.size() * sizeof(gdf_size_type));
-      cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+      EXPECT_EQ(RMM_ALLOC(&d_min_periods, min_periods.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
     }
     if (forward_window.size() > 0) {
-      cudaMalloc(&d_forward_window, forward_window.size() * sizeof(gdf_size_type));
-      cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+      EXPECT_EQ(RMM_ALLOC(&d_forward_window, forward_window.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
     }
 
     out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
@@ -232,15 +231,15 @@ protected:
     compare_gdf_result();
   
     // free GPU memory 
-    if (d_window != NULL) cudaFree(d_window);
-    if (d_min_periods != NULL) cudaFree(d_min_periods);
-    if (d_forward_window != NULL) cudaFree(d_forward_window);
+    if (d_window != NULL) EXPECT_EQ(RMM_FREE(d_window, 0), RMM_SUCCESS);
+    if (d_min_periods != NULL) EXPECT_EQ(RMM_FREE(d_min_periods, 0), RMM_SUCCESS);
+    if (d_forward_window != NULL) EXPECT_EQ(RMM_FREE(d_forward_window, 0), RMM_SUCCESS);
   }
 
-  // test all supported aggregators
   template<class... TArgs>
   void run_test_all_agg(TArgs... FArgs)
   {
+    // test all supported aggregators
     run_test(FArgs..., GDF_SUM);
     run_test(FArgs..., GDF_MIN);
     run_test(FArgs..., GDF_MAX);
@@ -248,7 +247,7 @@ protected:
     run_test(FArgs..., GDF_AVG);
     
     // this aggregation function is not supported yet - expected to throw an exception
-    //run_test(FArgs..., GDF_COUNT_DISTINCT);
+    EXPECT_THROW(run_test(FArgs..., GDF_COUNT_DISTINCT), cudf::logic_error);
   }
 
   // input
@@ -306,8 +305,8 @@ TYPED_TEST(RollingTest, SimpleDynamic)
 // all rows are invalid, easy check
 TYPED_TEST(RollingTest, AllInvalid)
 {
-  gdf_size_type num_rows = 10;
-  gdf_size_type window = 10;
+  gdf_size_type num_rows = 1000;
+  gdf_size_type window = 100;
   gdf_size_type periods = window;
 
   this->in_col.resize(num_rows);
@@ -323,7 +322,7 @@ TYPED_TEST(RollingTest, AllInvalid)
 // window = forward_window = 0
 TYPED_TEST(RollingTest, ZeroWindow)
 {
-  gdf_size_type num_rows = 5;
+  gdf_size_type num_rows = 1000;
   gdf_size_type window = 0;
   gdf_size_type periods = num_rows;
 
@@ -341,7 +340,7 @@ TYPED_TEST(RollingTest, ZeroWindow)
 // min_periods = 0
 TYPED_TEST(RollingTest, ZeroPeriods)
 {
-  gdf_size_type num_rows = 5;
+  gdf_size_type num_rows = 1000;
   gdf_size_type window = num_rows;
   gdf_size_type periods = 0;
 
@@ -361,7 +360,7 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 // also tests out of boundary accesses
 TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
-  gdf_size_type num_rows = 5;
+  gdf_size_type num_rows = 1000;
   gdf_size_type window = num_rows;
   gdf_size_type periods = num_rows;
 
@@ -379,9 +378,9 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // random input data, static parameters, no nulls
 TYPED_TEST(RollingTest, RandomStaticAllValid)
 {
-  gdf_size_type num_rows = 5;
-  gdf_size_type window = 3;
-  gdf_size_type min_periods = 3;
+  gdf_size_type num_rows = 10000;
+  gdf_size_type window = 50;
+  gdf_size_type min_periods = 50;
 
   // random input
   this->make_random_input(num_rows, false);
@@ -395,9 +394,9 @@ TYPED_TEST(RollingTest, RandomStaticAllValid)
 // random input data, static parameters, with nulls
 TYPED_TEST(RollingTest, RandomStaticWithInvalid)
 {
-  gdf_size_type num_rows = 5;
-  gdf_size_type window = 3;
-  gdf_size_type min_periods = 3;
+  gdf_size_type num_rows = 10000;
+  gdf_size_type window = 50;
+  gdf_size_type min_periods = 25;
 
   // random input with nulls
   this->make_random_input(num_rows, true);
@@ -411,8 +410,8 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid)
 // random input data, dynamic parameters, no nulls
 TYPED_TEST(RollingTest, RandomDynamicAllValid)
 {
-  gdf_size_type num_rows = 5;
-  gdf_size_type max_window_size = 3;
+  gdf_size_type num_rows = 50000;
+  gdf_size_type max_window_size = 50;
 
   // random input
   this->make_random_input(num_rows, false);
@@ -438,8 +437,8 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
 // random input data, dynamic parameters, with nulls
 TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 {
-  gdf_size_type num_rows = 5;
-  gdf_size_type max_window_size = 3;
+  gdf_size_type num_rows = 50000;
+  gdf_size_type max_window_size = 50;
 
   // random input
   this->make_random_input(num_rows, true);
@@ -465,9 +464,9 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 // mix of static and dynamic parameters
 TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
 {
-  gdf_size_type num_rows = 5;
-  gdf_size_type max_window_size = 3;
-  gdf_size_type min_periods = 3;
+  gdf_size_type num_rows = 50000;
+  gdf_size_type max_window_size = 50;
+  gdf_size_type min_periods = 25;
 
   // random input
   this->make_random_input(num_rows, true);
