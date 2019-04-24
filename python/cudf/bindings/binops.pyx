@@ -8,6 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.binops cimport *
+from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
@@ -139,7 +140,13 @@ def apply_op(lhs, rhs, out, op):
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
 
     if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
-        nullct = apply_compiled_op(c_lhs, c_rhs, c_out, op)
+        try:
+            nullct = apply_compiled_op(c_lhs, c_rhs, c_out, op)
+        except GDFError as e:
+            if e.errcode == b'GDF_UNSUPPORTED_DTYPE':
+                nullct = apply_jit_op(c_lhs, c_rhs, c_out, op)
+            else:
+                raise e
     else:
         nullct = apply_jit_op(c_lhs, c_rhs, c_out, op)
 
