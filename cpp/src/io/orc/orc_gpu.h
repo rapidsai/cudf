@@ -142,12 +142,14 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
  * @param[in] num_stripes Number of stripes
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
+ * @param[in] tz_table Timezone translation table
+ * @param[in] tz_len Length of timezone translation table
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
-
+cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
+                                size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0, cudaStream_t stream = (cudaStream_t)0);
 
 
 };}; // orc::gpu namespace

@@ -47,7 +47,7 @@
 
 namespace orc { namespace gpu {
 
-static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
+static __device__ __constant__ int64_t kORCTimeToUTC = 1420099200; // Seconds from January 1st, 1970 to January 1st, 2015
 
 struct orc_bytestream_s
 {
@@ -120,6 +120,10 @@ struct orc_datadec_state_s
     uint32_t max_vals;                  // max # of non-zero values to decode in this batch
     uint32_t nrows;                     // # of rows in current batch (up to NTHREADS)
     uint32_t buffered_count;            // number of buffered values in the secondary data stream
+    uint32_t tz_num_entries;            // number of entries in timezone table
+    uint32_t tz_dst_cycle;              // number of entries in timezone daylight savings cycle
+    int64_t first_tz_transition;        // first transition in timezone table
+    int64_t last_tz_transition;         // last transition in timezone table
 };
 
 
@@ -1415,6 +1419,77 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
 }
 
 
+/**
+ * @brief Convert seconds from writer timezone to UTC
+ *
+ * @param[in] s Orc data decoder state
+ * @param[in] table Timezone translation table
+ * @param[in] ts Local time in seconds
+ *
+ * @return UTC time in seconds
+ *
+ **/
+static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s, const int64_t *table, int64_t ts)
+{
+    uint32_t num_entries = s->tz_num_entries;
+    uint32_t dst_cycle = s->tz_dst_cycle;
+    int64_t first_transition = s->first_tz_transition;
+    int64_t last_transition = s->last_tz_transition;
+    int64_t tsbase;
+    uint32_t first, last;
+
+    if (ts <= first_transition)
+    {
+        return ts + table[0 * 2 + 1];
+    }
+    else if (ts <= last_transition)
+    {
+        first = 0;
+        last = num_entries - 1;
+        tsbase = ts;
+    }
+    else if (!dst_cycle)
+    {
+        return ts + table[(num_entries - 1) * 2 + 1];
+    }
+    else
+    {
+        // Apply 400-year cycle rule
+        const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
+        tsbase = ts;
+        ts %= k400Years;
+        if (ts < 0)
+        {
+            ts += k400Years;
+        }
+        first = num_entries;
+        last = num_entries + dst_cycle - 1;
+        if (ts < table[num_entries * 2])
+        {
+            return tsbase + table[last * 2 + 1];
+        }
+    }
+    // Binary search the table from first to last for ts
+    do
+    {
+        uint32_t mid = first + ((last - first + 1) >> 1);
+        int64_t tmid = table[mid * 2];
+        if (tmid <= ts)
+        {
+            first = mid;
+        }
+        else
+        {
+            if (mid == last)
+            {
+                break;
+            }
+            last = mid;
+        }
+    } while (first < last);
+    return tsbase + table[first * 2 + 1];
+}
+
 
 /**
  * @brief Trailing zeroes for decoding timestamp nanoseconds
@@ -1438,7 +1513,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
  **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
-gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, size_t max_num_rows, size_t first_row, uint32_t num_chunks)
+gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, size_t max_num_rows, size_t first_row, uint32_t num_chunks, uint32_t tz_len)
 {
     __shared__ __align__(16) orcdec_state_s state_g;
 
@@ -1463,6 +1538,24 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
         if (!IS_DICTIONARY(s->chunk.encoding_kind))
         {
             s->chunk.dictionary_start = 0;
+        }
+        if (tz_len > 0)
+        {
+            if (tz_len > 400)
+            {
+                s->top.data.tz_num_entries = tz_len - 400;
+                s->top.data.tz_dst_cycle = 400;
+            }
+            else
+            {
+                s->top.data.tz_num_entries = tz_len;
+                s->top.data.tz_dst_cycle = 0;
+            }
+            if (tz_len > 0)
+            {
+                s->top.data.first_tz_transition = tz_table[0];
+                s->top.data.last_tz_transition = tz_table[(s->top.data.tz_num_entries - 1) * 2];
+            }
         }
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
         bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1549,14 +1642,6 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                 else
                 {
                     numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
-                }
-                __syncthreads();
-                if (t == 0)
-                {
-                    if (numvals > 0 && numvals < s->top.data.max_vals)
-                    {
-                        s->top.data.max_vals = numvals;
-                    }
                 }
                 __syncthreads();
             }
@@ -1714,6 +1799,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, s
                         {
                             seconds -= 1;
                         }
+                        if (tz_len > 0)
+                        {
+                            seconds = ConvertToUTC(&s->top.data, tz_table, seconds);
+                        }
                         reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000ll + nanos; // Output nanoseconds
                         break;
                     }
@@ -1777,16 +1866,19 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, Dictio
  * @param[in] num_stripes Number of stripes
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
+ * @param[in] tz_table Timezone translation table
+ * @param[in] tz_len Length of timezone translation table
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row, cudaStream_t stream)
+cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row,
+    int64_t *tz_table, size_t tz_len, cudaStream_t stream)
 {
     uint32_t num_chunks = num_columns * num_stripes;
     dim3 dim_block(NTHREADS, 1);
     dim3 dim_grid(num_chunks, 1); // 1024 threads per chunk
-    gpuDecodeOrcColumnData <<< dim_grid, dim_block, 0, stream >>>(chunks, global_dictionary, max_num_rows, first_row, num_chunks);
+    gpuDecodeOrcColumnData <<< dim_grid, dim_block, 0, stream >>>(chunks, global_dictionary, tz_table, max_num_rows, first_row, num_chunks, (uint32_t)(tz_len >> 1));
     return cudaSuccess;
 }
 
