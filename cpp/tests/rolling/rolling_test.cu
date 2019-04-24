@@ -22,7 +22,7 @@
 
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
-#include <utilities/column_wrapper.cuh>
+#include "tests/utilities/column_wrapper.cuh"
 
 #include <groupby/aggregation_operations.hpp>
 
