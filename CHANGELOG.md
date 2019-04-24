@@ -1,8 +1,7 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
-- PR #1142 Added `GDF_BOOL` column type
-
+- PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
@@ -92,7 +91,6 @@
 
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
-- PR #817 Added GDF_BOOL data type to CUDA code
 - PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
