@@ -72,6 +72,7 @@
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
+- PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 
 # cuDF 0.6.1 (25 Mar 2019)
 
