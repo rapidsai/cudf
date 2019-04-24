@@ -178,7 +178,6 @@ typedef enum {
 } gdf_agg_op;
 
 
-
 /** 
  * @brief  Colors for use with NVTX ranges.
  *
@@ -225,6 +224,26 @@ typedef enum {
 } gdf_binary_operator;
 
 
+/**
+ * @brief Types of unary math operations that can be performed on data.
+ */
+typedef enum {
+  GDF_SIN,          ///< Trigonometric sine
+  GDF_COS,          ///< Trigonometric cosine
+  GDF_TAN,          ///< Trigonometric tangent
+  GDF_ARCSIN,       ///< Trigonometric sine inverse
+  GDF_ARCCOS,       ///< Trigonometric cosine inverse
+  GDF_ARCTAN,       ///< Trigonometric tangent inverse
+  GDF_EXP,          ///< Exponential (base e, Euler number)
+  GDF_LOG,          ///< Natural Logarithm (base e)
+  GDF_SQRT,         ///< Square-root (x^0.5)
+  GDF_CEIL,         ///< Smallest integer value not less than arg
+  GDF_FLOOR,        ///< largest integer value not greater than arg
+  GDF_ABS,          ///< Absolute value
+  GDF_BIT_INVERT,   ///< Bitwise Not (~)
+} gdf_unary_math_op;
+
+
 /** 
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
@@ -255,15 +274,6 @@ typedef enum{
   GDF_ORDER_ASC,
   GDF_ORDER_DESC
 } order_by_type;
-
-typedef enum{
-  GDF_EQUALS,
-  GDF_NOT_EQUALS,
-  GDF_LESS_THAN,
-  GDF_LESS_THAN_OR_EQUALS,
-  GDF_GREATER_THAN,
-  GDF_GREATER_THAN_OR_EQUALS
-} gdf_comparison_operator;
 
 typedef enum{
   GDF_WINDOW_RANGE,

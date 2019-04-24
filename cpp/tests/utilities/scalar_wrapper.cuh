@@ -68,6 +68,16 @@ struct scalar_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a new scalar wrapper object
+   *
+   * Constructs a scalar_wrapper using a gdf_scalar
+   *
+   * @param scalar The scalar value to hold
+   *---------------------------------------------------------------------------**/
+  scalar_wrapper(const gdf_scalar& scalar) : the_scalar(scalar) {
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_scalar.
    *---------------------------------------------------------------------------**/
   gdf_scalar* get() { return &the_scalar; }
