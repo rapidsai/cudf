@@ -24,6 +24,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
+#include <type_traits>
 #include <vector>
 
 namespace cudf {
@@ -81,14 +82,73 @@ void initialize_with_identity(
   }
 }
 
-constexpr inline bool is_an_integer(gdf_dtype element_type) {
-  return (element_type == GDF_INT8) or (element_type == GDF_INT16) or
-         (element_type == GDF_INT32) or (element_type == GDF_INT64);
-}
+/**---------------------------------------------------------------------------*
+ * @brief Determines accumulator type based on input type and operation.
+ *
+ * @tparam InputType The type of the input to the aggregation operation
+ * @tparam op The aggregation operation performed
+ * @tparam dummy Dummy for SFINAE
+ *---------------------------------------------------------------------------**/
+template <typename InputType, groupby::distributive_operators op,
+          typename dummy = void>
+struct result_type {
+  using type = void;
+};
 
-constexpr inline bool is_floating_point(gdf_dtype element_type) {
-  return (element_type == GDF_FLOAT32) or (element_type == GDF_FLOAT64);
-}
+// Computing MIN of T, use T accumulator
+template <typename T>
+struct result_type<T, groupby::distributive_operators::MIN> {
+  using type = T;
+};
+
+// Computing MAX of T, use T accumulator
+template <typename T>
+struct result_type<T, groupby::distributive_operators::MAX> {
+  using type = T;
+};
+
+// Counting T, always use int64_t accumulator
+template <typename T>
+struct result_type<T, groupby::distributive_operators::COUNT> {
+  using type = int64_t;
+};
+
+// Summing integers of any type, always used int64_t
+template <typename T>
+struct result_type<T, groupby::distributive_operators::SUM,
+                   typename std::enable_if<std::is_integral<T>::value>::type> {
+  using type = int64_t;
+};
+
+// Summing float/doubles, use same type
+template <typename T>
+struct result_type<
+    T, groupby::distributive_operators::SUM,
+    typename std::enable_if<std::is_floating_point<T>::value>::type> {
+  using type = T;
+};
+
+struct type_mapper {
+  template <typename InputT>
+  gdf_dtype operator()(groupby::distributive_operators op) {
+    switch (op) {
+      case groupby::distributive_operators::MIN:
+        return gdf_dtype_of<typename result_type<
+            InputT, groupby::distributive_operators::MIN>::type>();
+      case groupby::distributive_operators::MAX:
+        return gdf_dtype_of<typename result_type<
+            InputT, groupby::distributive_operators::MAX>::type>();
+      case groupby::distributive_operators::COUNT:
+        return gdf_dtype_of<typename result_type<
+            InputT, groupby::distributive_operators::COUNT>::type>();
+      case groupby::distributive_operators::SUM:
+        return gdf_dtype_of<typename result_type<
+            InputT, groupby::distributive_operators::SUM>::type>();
+      default:
+        return GDF_invalid;
+    }
+  }
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Determines the output that should be used for a given input type and
@@ -98,34 +158,9 @@ constexpr inline bool is_floating_point(gdf_dtype element_type) {
  * @param op The aggregation operation
  * @return gdf_dtype Type to use for output aggregation column
  *---------------------------------------------------------------------------**/
-constexpr gdf_dtype output_type(gdf_dtype input_type,
-                                cudf::groupby::distributive_operators op) {
-  switch (op) {
-    // Use same type for min/max
-    case groupby::distributive_operators::MIN:
-      return input_type;
-    case groupby::distributive_operators::MAX:
-      return input_type;
-
-    // Always use int64_t for count
-    case groupby::distributive_operators::COUNT:
-      return GDF_INT64;
-
-    case groupby::distributive_operators::SUM: {
-      // Always use the largest int when computing the sum of integers
-      if (is_an_integer(input_type)) {
-        return GDF_INT64;
-      }
-
-      // Use same type as input when computing sum of floating point values
-      if (is_floating_point(input_type)) {
-        return input_type;
-      }
-      return GDF_invalid;
-    }
-    default:
-      return GDF_invalid;
-  }
+gdf_dtype output_dtype(gdf_dtype input_type,
+                       cudf::groupby::distributive_operators op) {
+  return cudf::type_dispatcher(input_type, type_mapper{}, op);
 }
 }  // namespace
 
@@ -148,7 +183,11 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   std::transform(
       values.begin(), values.end(), operators.begin(), output_dtypes.begin(),
       [](gdf_column const* input_col, groupby::distributive_operators op) {
-        return output_type(input_col->dtype, op);
+        gdf_dtype t = output_dtype(input_col->dtype, op);
+        CUDF_EXPECTS(
+            t != GDF_invalid,
+            "Invalid combination of input type and aggregation operation.");
+        return t;
       });
   cudf::table output_values{output_size, output_dtypes, true, stream};
   initialize_with_identity(output_values, operators, stream);
