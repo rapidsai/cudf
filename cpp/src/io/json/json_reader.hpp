@@ -1,11 +1,31 @@
 # pragma once
 
 #include <vector>
+#include <memory>
 
 #include <cudf.h>
 
 #include "../csv/type_conversion.cuh"
 #include "io/utilities/wrapper_utils.hpp"
+
+
+// TODO move to common?
+class MappedFile{
+  int fd_ = -1;
+  size_t size_ = 0;
+  void * map_data_ = nullptr;
+  size_t map_size_ = 0;
+  size_t map_offset_ = 0;
+public:
+  MappedFile(const char *path, int oflag);
+  MappedFile() noexcept = default;
+  ~MappedFile();
+
+  auto size() {return size_;}
+  auto data() {return map_data_;}
+
+  void map(size_t size, off_t offset);
+};
 
 // DOXY
 class JsonReader {
@@ -21,21 +41,20 @@ public:
 private:
   const json_read_arg* args_ = nullptr;
 
-  // TODO munmap in destructor
-	void * 	map_data = nullptr;
-	size_t	map_size = 0;
-
-  const char *h_uncomp_data_ = nullptr;
-  size_t h_uncomp_size_ = 0;
-	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
-  std::vector<char> h_uncomp_data_owner;
-  device_buffer<char> d_uncomp_data_;
+  std::unique_ptr<MappedFile> map_file_;
+  const char *input_data_ = nullptr;
+  size_t input_size_ = 0;
+  const char *uncomp_data_ = nullptr;
+  size_t uncomp_size_ = 0;
+  // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
+  std::vector<char> uncomp_data_owner_;
+  device_buffer<char> d_data_;
 
   std::vector<std::string> column_names_;
   std::vector<gdf_dtype> dtypes_;
   std::vector<gdf_column_wrapper> columns_;
 
-  // tweaks/corner cases
+  // parsing options
   const bool allow_newlines_in_strings_ = false;
   const ParseOptions opts_{',', '\n', '\"','.'};
 

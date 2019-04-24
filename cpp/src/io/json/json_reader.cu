@@ -13,13 +13,11 @@
 #include <stdlib.h>
 
 #include <unistd.h>
-#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 
-#include <thrust/scan.h>
-#include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 
@@ -27,7 +25,6 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
-#include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/cudf_utils.h" 
 
@@ -140,39 +137,17 @@ void JsonReader::parse(){
  * @return void
  *---------------------------------------------------------------------------**/
 void JsonReader::ingestInput(){
-  // TODO clean up
-  size_t  map_offset = 0;
-  int fd = 0;
-  size_t input_bytes = 0;
-
-  const std::string compression_type = "none";
-
   if (args_->source_type == gdf_csv_input_form::FILE_PATH){
-    fd = open(args_->source, O_RDONLY);
-    if (fd < 0) {
-      close(fd);
-      CUDF_FAIL("Error opening file");
-    }
-
-    struct stat st{};
-    if (fstat(fd, &st)) {
-      close(fd);
-      CUDF_FAIL("Cannot stat input file");
-    }
-
-    const auto file_size = st.st_size;
-    const auto page_size = sysconf(_SC_PAGESIZE);
-
-    if (byte_range_offset_ >= (size_t)file_size) { 
-      close(fd); 
-      CUDF_FAIL("The byte_range offset is larger than the file size");
-    }
-
+    map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
+    CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty");
+    CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "The byte_range offset is too big for the input file size");
+    
     // Have to align map offset to page size
-    map_offset = (byte_range_offset_/page_size)*page_size;
+    const auto page_size = sysconf(_SC_PAGESIZE);
+    size_t map_offset = (byte_range_offset_/page_size)*page_size;
 
     // Set to rest-of-the-file size, will reduce based on the byte range size
-    map_size = file_size - map_offset;
+    size_t map_size = map_file_->size() - map_offset;
 
     // Include the page padding in the mapped size
     const size_t page_padding = byte_range_offset_ - map_offset;
@@ -181,42 +156,36 @@ void JsonReader::ingestInput(){
     if (byte_range_size_ != 0 && padded_byte_range_size < map_size) {
       // Need to make sure that w/ padding we don't overshoot the end of file
       map_size = min(padded_byte_range_size + calculateMaxRowSize(args_->num_cols), map_size);
-
     }
 
+    map_file_->map(map_size, map_offset);
+    input_data_ = static_cast<const char*>(map_file_->data()) + page_padding;
     // Ignore page padding for parsing purposes
-    input_bytes = map_size - page_padding;
-
-    map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
-  
-    if (map_data == MAP_FAILED || map_size==0) {
-      close(fd);
-      CUDF_FAIL("Error mapping file");
-    }
+    input_size_ = map_size - page_padding;
   }
   else if (args_->source_type == gdf_csv_input_form::HOST_BUFFER) {
-    map_data = (void *)args_->source;
-    input_bytes = map_size = args_->buffer_size;
+    input_data_ = args_->source;
+    input_size_ = args_->buffer_size;
   }
   else {
     CUDF_FAIL("Invalid input type");
   }
 
-  // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
+  const std::string compression_type = "none";
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid copying the whole file to the heap
-    h_uncomp_data_ = (const char*)map_data + (byte_range_offset_ - map_offset);
-    h_uncomp_size_ = input_bytes;
+    uncomp_data_ = input_data_;
+    uncomp_size_ = input_size_;
   }
   else {
     // TODO add compression support
     //const auto error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
     //CUDF_EXPECTS(error == GDF_SUCCESS, "Input data decompressino failed");
-    //h_uncomp_data_ = h_uncomp_data_owner.data();
-    //h_uncomp_size_ = h_uncomp_data_owner.size();
+    //uncomp_data_ = h_uncomp_data_owner.data();
+    //uncomp_size_ = h_uncomp_data_owner.size();
   }
-  CUDF_EXPECTS(h_uncomp_data_ != nullptr, "Ingest failed: raw host input data is null");
-  CUDF_EXPECTS(h_uncomp_size_ != 0, "Ingest failed: raw host input data has zero size");
+  CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: raw host input data is null");
+  CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: raw host input data has zero size");
 }
 
 device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
@@ -224,7 +193,7 @@ device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
   if (allow_newlines_in_strings_) {
     chars_to_count.push_back('\"');
   }
-  auto count = countAllFromSet(h_uncomp_data_, h_uncomp_size_, chars_to_count);
+  auto count = countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count);
   // If not starting at an offset, add an extra row to account for the first row in the file
   if (byte_range_offset_ == 0) {
     ++count;
@@ -243,7 +212,7 @@ device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
     chars_to_find.push_back('\"');
   }
   // Passing offset = 1 to return positions AFTER the found character
-  findAllFromSet(h_uncomp_data_, h_uncomp_size_, chars_to_find, 1, find_result_ptr);
+  findAllFromSet(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
@@ -267,13 +236,13 @@ device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newli
 
     bool quotation = false;
     for (gdf_size_type i = 1; i < prefilter_count; ++i) {
-      if (h_uncomp_data_[h_rec_starts[i] - 1] == '\"') {
+      if (uncomp_data_[h_rec_starts[i] - 1] == '\"') {
         quotation = !quotation;
-        h_rec_starts[i] = h_uncomp_size_;
+        h_rec_starts[i] = uncomp_size_;
         filtered_count--;
       }
       else if (quotation) {
-        h_rec_starts[i] = h_uncomp_size_;
+        h_rec_starts[i] = uncomp_size_;
         filtered_count--;
       }
     }
@@ -281,7 +250,7 @@ device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newli
     CUDA_TRY(cudaMemcpy(newlines_and_quotes.data(), h_rec_starts.data(), prefilter_count, cudaMemcpyHostToDevice));
     thrust::sort(rmm::exec_policy()->on(0), newlines_and_quotes.data(), newlines_and_quotes.data() + prefilter_count);
   }
-  if (h_uncomp_data_[h_uncomp_size_ - 1] == '\n') {
+  if (uncomp_data_[uncomp_size_ - 1] == '\n') {
     filtered_count--;
   }
 
@@ -293,7 +262,7 @@ device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newli
 void JsonReader::uploadDataToDevice() {
   CUDF_EXPECTS(rec_starts_.size() > 0, "No data to process");
   size_t start_offset = 0;
-  size_t bytes_to_upload = h_uncomp_size_;
+  size_t bytes_to_upload = uncomp_size_;
 
   // Trim lines that are outside range
   if (byte_range_size_ != 0) {
@@ -311,7 +280,7 @@ void JsonReader::uploadDataToDevice() {
 
     start_offset = h_rec_starts.front();
     bytes_to_upload = end_offset - start_offset;
-    CUDF_EXPECTS(bytes_to_upload <= h_uncomp_size_,
+    CUDF_EXPECTS(bytes_to_upload <= uncomp_size_,
       "Error finding the record within the specified byte range.");
 
     // Resize to exclude rows outside of the range; adjust row start positions to account for the data subcopy
@@ -323,8 +292,8 @@ void JsonReader::uploadDataToDevice() {
   }
 
   // Upload the raw data that is within the rows of interest
-  d_uncomp_data_ = device_buffer<char>(bytes_to_upload);
-  CUDA_TRY(cudaMemcpy(d_uncomp_data_.data(), h_uncomp_data_ + start_offset,
+  d_data_ = device_buffer<char>(bytes_to_upload);
+  CUDA_TRY(cudaMemcpy(d_data_.data(), uncomp_data_ + start_offset,
                       bytes_to_upload, cudaMemcpyHostToDevice));
 }
 
@@ -550,7 +519,7 @@ void JsonReader::convertJsonToColumns(gdf_dtype * const dtypes,
   const int grid_size = (rec_starts_.size() + block_size - 1)/block_size;
 
   convertJsonToGdf <<< grid_size, block_size >>> (
-    d_uncomp_data_.data(), d_uncomp_data_.size(),
+    d_data_.data(), d_data_.size(),
     rec_starts_.data(), rec_starts_.size(),
     dtypes, opts_,
     gdf_columns, columns_.size(),
@@ -737,7 +706,7 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
   const int grid_size = (rec_starts_.size() + block_size - 1) / block_size;
 
   detectJsonDataTypes <<< grid_size, block_size >>> (
-      d_uncomp_data_.data(), d_uncomp_data_.size(),
+      d_data_.data(), d_data_.size(),
       opts_, column_names_.size(),
       rec_starts_.data(), rec_starts_.size(),
       column_infos);
@@ -784,4 +753,28 @@ void JsonReader::setDataTypes() {
       }
     }
   }
+}
+
+MappedFile::MappedFile(const char *path, int oflag){
+  CUDF_EXPECTS((fd_ = open(path, oflag)) != -1, "Cannot open input file");
+
+  struct stat st{};
+  if (fstat(fd_, &st) == -1 || st.st_size < 0) {
+    close(fd_);
+    CUDF_FAIL("Cannot stat input file");
+  }
+  size_ = static_cast<size_t>(st.st_size);
+}
+
+void MappedFile::map(size_t size, off_t offset){
+  CUDF_EXPECTS(size > 0, "Cannot have zero size mapping");
+  
+  map_data_ = mmap(0, size, PROT_READ, MAP_PRIVATE, fd_, offset);
+  CUDF_EXPECTS(map_data_ != MAP_FAILED, "Error mapping input file");
+  map_offset_ = offset;
+  map_size_ = size;
+}
+
+MappedFile::~MappedFile() {
+  close(fd_);
 }

@@ -108,7 +108,9 @@ TEST(gdf_json_test, BasicJsonLines)
   args.buffer_size = strlen(args.source);
   args.dtype = types;
   args.num_cols = 2;
-  read_json(&args);
+  try {
+    read_json(&args);
+  } catch(std::exception &e){std::cerr<< e.what();}
 
   ASSERT_EQ(args.num_cols_out, 2);
   ASSERT_EQ(args.num_rows_out, 3);
@@ -135,7 +137,9 @@ TEST(gdf_json_test, JsonLinesStrings)
   args.buffer_size = strlen(args.source);
   args.dtype = types;
   args.num_cols = 3;
-  read_json(&args);
+  try {
+    read_json(&args);
+  } catch(std::exception &e){std::cerr<< e.what();}
 
   ASSERT_EQ(args.num_cols_out, 3);
   ASSERT_EQ(args.num_rows_out, 2);
@@ -184,7 +188,9 @@ TEST(gdf_json_test, JsonLinesDtypeInference)
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
   args.num_cols = 3;
-  read_json(&args);
+  try {
+    read_json(&args);
+  } catch(std::exception &e){std::cerr<< e.what();}
 
   ASSERT_EQ(args.num_cols_out, 3);
   ASSERT_EQ(args.num_rows_out, 2);
@@ -238,7 +244,9 @@ TEST(gdf_json_test, JsonLinesFileInput)
   args.source = fname;
   args.source_type = FILE_PATH;
   args.num_cols = 2;
-  read_json(&args);
+  try {
+    read_json(&args);
+  } catch(std::exception &e){std::cerr<< e.what();}
 
   ASSERT_EQ(args.num_cols_out, 2);
   ASSERT_EQ(args.num_rows_out, 2);
