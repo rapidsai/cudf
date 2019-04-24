@@ -51,7 +51,7 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1492 Convert transpose CFFI to Cython
-- PR #XXXX Convert binaryops CFFI to Cython
+- PR #1495 Convert binaryops CFFI to Cython
 
 ## Bug Fixes
 
