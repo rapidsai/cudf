@@ -38,6 +38,16 @@ cdef cudf_table* table_from_cols(cols):
     return table
 
 
+cdef free_table(cudf_table* table):
+    cdef i
+    cdef gdf_column *c_col
+    for i in range(table[0].num_columns()) :
+        c_col = table[0].get_column(i)
+        free(c_col)
+
+    del table
+
+
 def clone_column_with_size(col, size):
     from cudf.dataframe import columnops
     return columnops.column_empty(size, col.dtype, cols.has_null_mask())
@@ -65,8 +75,10 @@ def apply_gather(in_cols, maps, out_cols=None):
 
     cdef cudf_table* c_in_table = table_from_cols(in_cols)
 
+    cdef bool is_same_input = false
     cdef cudf_table* c_out_table
     if out_cols == in_cols :
+        is_same_input = true
         c_out_table = c_in_table
     elif out_cols != None :
         c_out_table = table_from_cols(out_cols)
@@ -75,12 +87,19 @@ def apply_gather(in_cols, maps, out_cols=None):
         c_out_table = table_from_cols(out_cols)
 
     # size check, cudf::gather requires same length for maps and out table.
-#    assert len(maps) == len(out_cols)
+    assert len(maps) == len(out_cols)
 
     cdef gdf_index_type* c_maps = <gdf_index_type*> get_ctype_ptr(maps)
 
     with nogil:
         gather(c_in_table, c_maps, c_out_table)
+
+    if is_same_input == false :
+        free_table(c_out_table)
+    
+    free_table(c_in_table)
+    
+    return out_cols
 
 
 def apply_gather_column(in_col, maps, out_col=None):
@@ -97,7 +116,7 @@ def apply_gather_column(in_col, maps, out_col=None):
     in_cols = [in_col]
     out_cols = None if out_col == None else [out_col]
 
-    apply_gather(in_cols, maps, out_cols)
+    out_cols = apply_gather(in_cols, maps, out_cols)
 
     return out_cols[0]
 
