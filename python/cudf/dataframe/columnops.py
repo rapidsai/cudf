@@ -91,6 +91,15 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value):
         raise NotImplementedError
 
+def column_empty(data_size, dtype, masked):
+    """Allocate a new column like the given *column*
+    """
+    data = rmm.device_array(shape=data_size, dtype=dtype)
+    params = dict(data=Buffer(data))
+    if masked:
+        mask = utils.make_mask(data.size)
+        params.update(dict(mask=Buffer(mask), null_count=data.size))
+    return Column(**params)
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
