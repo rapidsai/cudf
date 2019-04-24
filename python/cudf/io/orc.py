@@ -10,7 +10,8 @@ import warnings
 
 
 @ioutils.doc_read_orc()
-def read_orc(path, engine='pyarrow', columns=None, skip_rows=None, num_rows=None):
+def read_orc(path, engine='pyarrow', columns=None, skip_rows=None,
+             num_rows=None):
     """{docstring}"""
 
     if engine == 'cudf':

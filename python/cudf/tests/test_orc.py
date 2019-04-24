@@ -15,7 +15,7 @@ def datadir(datadir):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
-@pytest.mark.parametrize('engine', ['cudf'])
+@pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize(
     'orc_args',
     [
@@ -26,6 +26,11 @@ def datadir(datadir):
     ]
 )
 def test_orc_reader(datadir, orc_args, engine):
+    # cuDF only handles milliseconds when converting from pa_table
+    # This causes an error of data loss when casting from nanoseconds
+    if engine == 'pyarrow' and orc_args[0] == 'TestOrcFile.testDate1900.orc':
+        return
+
     path = datadir / orc_args[0]
     orcfile = pa.orc.ORCFile(path)
     columns = orc_args[1]
@@ -38,11 +43,6 @@ def test_orc_reader(datadir, orc_args, engine):
         # cuDF doesn't support bool so convert to int8
         if 'boolean1' in expect.columns:
             expect['boolean1'] = expect['boolean1'].astype('int8')
-        # cuDF doesn't support nanosecond units so convert to datetime[ms]
-        if 'time' in expect.columns:
-            expect['time'] = pd.to_datetime(expect['time'], unit='ms')
-        if 'date' in expect.columns:
-            expect['date'] = pd.to_datetime(expect['date'], unit='ms')
 
     # Debug code for timestamps
     if 'time' in got.columns:
