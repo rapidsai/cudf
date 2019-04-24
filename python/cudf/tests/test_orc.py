@@ -3,7 +3,6 @@
 import cudf
 from cudf.tests.utils import assert_eq
 
-import pandas as pd
 import pytest
 import pyarrow as pa
 
