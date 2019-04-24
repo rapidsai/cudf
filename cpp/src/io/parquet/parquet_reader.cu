@@ -307,6 +307,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
         for (const auto name : get_column_names()) {
           if (name == use_name) {
             selection.emplace_back(index, name);
+            break;
           }
           index++;
         }
