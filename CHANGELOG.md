@@ -12,6 +12,8 @@
 - PR #1396 Add DataFrame.drop method
 - PR #1413 Add DataFrame.melt method
 - PR #1412 Add DataFrame.pop()
+- PR #1419 Initial CSV writer function
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1420 Add script to build and test on a local gpuCI image
 - PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
 - PR #1455 Add Series.Shift via Numba kernel
@@ -43,8 +45,10 @@
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
 - PR #1453 Convert CSV Reader CFFI to Cython
+- PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1463 Allow and default melt keyword argument var_name to be None
 
 ## Bug Fixes
 
@@ -72,6 +76,7 @@
 - PR #1328 Fix CategoricalColumn to_arrow() null mask
 - PR #1433 Fix NVStrings/categories includes
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
+- PR #1483 Modify CSV reader to avoid cropping blank quoted characters in non-string fields
 - PR #1446 Merge 1275 hotfix from master into branch-0.7
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
