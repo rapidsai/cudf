@@ -167,7 +167,7 @@ class device_table {
                              num_cols * sizeof(gdf_column),
                              cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
-  
+  }
 };
 
 namespace {

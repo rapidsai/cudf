@@ -26,7 +26,7 @@
 #include "types.hpp"
 #include <hash/helper_functions.cuh>
 
-#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 #include <limits>
 #include <memory>
 #include <thrust/device_vector.h>
