@@ -238,10 +238,17 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - device atomics tests -------------------------------------------------------------------------------
+
+set(DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/device_atomics_test.cu")
+
+ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------

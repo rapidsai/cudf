@@ -10,7 +10,7 @@ from cudf.utils import cudautils
 from cudf.dataframe.categorical import CategoricalColumn
 
 
-def melt(frame, id_vars=None, value_vars=None, var_name='variable',
+def melt(frame, id_vars=None, value_vars=None, var_name=None,
          value_name='value'):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
@@ -132,6 +132,10 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
         var_cols.append(Series(Buffer(
             cudautils.full(size=N, value=i, dtype=np.int8))))
     temp = Series._concat(objs=var_cols, index=None)
+
+    if not var_name:
+        var_name = 'variable'
+
     mdata[var_name] = Series(CategoricalColumn(
         categories=tuple(value_vars), data=temp._column.data, ordered=False))
 
