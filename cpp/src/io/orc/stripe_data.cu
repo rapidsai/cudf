@@ -1795,13 +1795,13 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         int64_t seconds = s->vals.i64[t] + kORCTimeToUTC;
                         uint32_t nanos = secondary_val;
                         nanos = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-                        if (seconds < 0 && nanos != 0)
-                        {
-                            seconds -= 1;
-                        }
                         if (tz_len > 0)
                         {
                             seconds = ConvertToUTC(&s->top.data, tz_table, seconds);
+                        }
+                        if (seconds < 0 && nanos != 0)
+                        {
+                            seconds -= 1;
                         }
                         reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000ll + nanos; // Output nanoseconds
                         break;
