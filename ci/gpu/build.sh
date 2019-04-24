@@ -95,3 +95,6 @@ conda install -c conda-forge -y feather-format
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term
+
+logger "Upload CodeCov results..."
+curl -s https://codecov.io/bash | bash -s -- -c -F aFlag -f ${WORKSPACE}/cudf-coverage.xml
