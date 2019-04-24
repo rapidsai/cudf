@@ -85,8 +85,6 @@ void gpu_rolling(gdf_size_type nrows,
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
 
-  // TODO: need a more generic way to handle aggregators (check groupby)
-  // TODO: currently only sum is supported
   agg_op<ColumnType> op;
 
   auto active_threads = __ballot_sync(0xffffffff, i < nrows);
@@ -97,7 +95,7 @@ void gpu_rolling(gdf_size_type nrows,
 
     // dynamic window handling
     if (window_col != NULL) window = window_col[i];
-    if (min_periods_col != NULL) min_periods = min_periods_col[i];
+    if (min_periods_col != NULL) min_periods = max(min_periods_col[i], 1);	// at least one observation is required
     if (forward_window_col != NULL) forward_window = forward_window_col[i];
 
     // compute bounds
@@ -242,6 +240,9 @@ gdf_column* rolling_window(const gdf_column *input_col,
 
   // Allocate memory for the output column
   CUDF_EXPECTS(output_col.allocate() == GDF_SUCCESS, "Cannot allocate the output column");
+
+  // At least one observation is required to procude a valid output
+  min_periods = std::max(min_periods, 1);
 
   // Launch type dispatcher
   cudf::type_dispatcher(input_col->dtype,

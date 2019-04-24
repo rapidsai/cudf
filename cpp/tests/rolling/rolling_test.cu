@@ -37,6 +37,8 @@ template <typename T>
 class RollingTest : public GdfTest {
 
 protected:
+  // only for integral types
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value, std::nullptr_t> = nullptr>
   void make_random_input(size_t nrows, bool add_nulls)
   {
     // generate random numbers for the vector
@@ -57,6 +59,36 @@ protected:
       in_col_valid.resize(nrows);
       std::generate(in_col_valid.begin(), in_col_valid.end(), valid_generator);
     }
+    else {
+      in_col_valid.resize(0);
+    }
+  }
+ 
+  // floats go here
+  template <typename U = T, typename std::enable_if_t<!std::is_integral<U>::value, std::nullptr_t> = nullptr>
+  void make_random_input(size_t nrows, bool add_nulls)
+  {
+    // generate random numbers for the vector
+    std::mt19937 rng(1);
+    auto generator = [&](){ 
+      return rng() / 10000.0;
+    };
+
+    in_col.resize(nrows);
+    std::generate(in_col.begin(), in_col.end(), generator);
+
+    // generate a random validity mask
+    if (add_nulls) {
+      auto valid_generator = [&](){ 
+        return static_cast<bool>(rng() % 2);
+      };
+     
+      in_col_valid.resize(nrows);
+      std::generate(in_col_valid.begin(), in_col_valid.end(), valid_generator);
+    }
+    else {
+      in_col_valid.resize(0);
+    }
   }
 
   void create_gdf_input_buffers()
@@ -73,31 +105,32 @@ protected:
   }
 
   template<template <typename AggType> class agg_op, bool average>
-  void create_reference_output(size_t window,
-			       size_t min_periods,
-			       size_t forward_window,
+  void create_reference_output(gdf_size_type window,
+			       gdf_size_type min_periods,
+			       gdf_size_type forward_window,
 			       const std::vector<gdf_size_type> &window_col,
 			       const std::vector<gdf_size_type> &min_periods_col,
 			       const std::vector<gdf_size_type> &forward_window_col)
   {
     // compute the reference solution on the cpu
-    size_t nrows = in_col.size();
+    gdf_size_type nrows = in_col.size();
     ref_data.resize(nrows);
     ref_data_valid.resize(nrows);
     agg_op<T> op;
-    for(size_t i = 0; i < nrows; i++) {
+    for(gdf_size_type i = 0; i < nrows; i++) {
       T val = agg_op<T>::IDENTITY;
-      size_t count = 0;
+      gdf_size_type count = 0;
       // load sizes
       if (window_col.size() > 0) window = window_col[i];
       if (min_periods_col.size() > 0) min_periods = min_periods_col[i];
+      min_periods = std::max(min_periods, 1);	// at least one observation is required
       if (forward_window_col.size() > 0) forward_window = forward_window_col[i];
       // compute bounds
-      size_t start_index = std::max((size_t)0, i - window + 1);
-      size_t end_index = std::min(nrows, i + forward_window + 1);	// exclusive
+      gdf_size_type start_index = std::max((gdf_size_type)0, i - window + 1);
+      gdf_size_type end_index = std::min(nrows, i + forward_window + 1);	// exclusive
       // aggregate
-      for (size_t j = start_index; j < end_index; j++) {
-        if (in_col_valid[j]) {
+      for (gdf_size_type j = start_index; j < end_index; j++) {
+        if (in_col_valid.size() == 0 || in_col_valid[j]) {
           val = op(in_col[j], val);
           count++;
         }
@@ -113,9 +146,9 @@ protected:
   }
 
   void create_reference_output(gdf_agg_op agg,
-			       size_t window,
-			       size_t min_periods,
-			       size_t forward_window,
+			       gdf_size_type window,
+			       gdf_size_type min_periods,
+			       gdf_size_type forward_window,
 			       const std::vector<gdf_size_type> &window_col,
 			       const std::vector<gdf_size_type> &min_periods_col,
 			       const std::vector<gdf_size_type> &forward_window_col)
@@ -159,51 +192,63 @@ protected:
     // create column wrappers and compare
     cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
     cudf::test::column_wrapper<T> ref(ref_data, [&](gdf_index_type i) { return ref_data_valid[i]; } );
+
+    // print the columns for debugging
+    //out.print();
+    //ref.print();
+
     ASSERT_TRUE(out == ref);
-
-    // print the column
-    out.print();
   }
 
-  // static windows
-  void run_test(size_t window, size_t min_periods, size_t forward_window, gdf_agg_op agg)
+  void run_test(gdf_size_type w, gdf_size_type m, gdf_size_type f,
+		std::vector<gdf_size_type> &window, std::vector<gdf_size_type> &min_periods, std::vector<gdf_size_type> &forward_window,
+		gdf_agg_op agg)
   {
     create_gdf_input_buffers();
 
-    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), window, min_periods, forward_window, agg, NULL, NULL, NULL), deleter };
-
-    create_reference_output(agg, window, min_periods, forward_window, std::vector<gdf_size_type>(), std::vector<gdf_size_type>(), std::vector<gdf_size_type>());
-
-    compare_gdf_result();
-  }
-
-  // dynamic windows
-  void run_test(std::vector<gdf_size_type> window, std::vector<gdf_size_type> min_periods, std::vector<gdf_size_type> forward_window, gdf_agg_op agg)
-  {
-    create_gdf_input_buffers();
+    gdf_size_type *d_window = NULL;
+    gdf_size_type *d_min_periods = NULL;
+    gdf_size_type *d_forward_window = NULL;
 
     // copy sizes to the gpu
-    // TODO: use RMM to allocate stuff?
-    gdf_size_type *d_window;
-    gdf_size_type *d_min_periods;
-    gdf_size_type *d_forward_window;
-    cudaMalloc(&d_window, window.size() * sizeof(gdf_size_type));
-    cudaMalloc(&d_min_periods, min_periods.size() * sizeof(gdf_size_type));
-    cudaMalloc(&d_forward_window, forward_window.size() * sizeof(gdf_size_type));
-    cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
-    cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
-    cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    if (window.size() > 0) {
+      // TODO: use RMM to allocate?
+      cudaMalloc(&d_window, window.size() * sizeof(gdf_size_type));
+      cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    }
+    if (min_periods.size() > 0) {
+      cudaMalloc(&d_min_periods, min_periods.size() * sizeof(gdf_size_type));
+      cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    }
+    if (forward_window.size() > 0) {
+      cudaMalloc(&d_forward_window, forward_window.size() * sizeof(gdf_size_type));
+      cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault);
+    }
 
-    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), 0, 0, 0, agg, d_window, d_min_periods, d_forward_window), deleter };
+    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
 
-    create_reference_output(agg, 0, 0, 0, window, min_periods, forward_window);
+    create_reference_output(agg, w, m, f, window, min_periods, forward_window);
 
     compare_gdf_result();
   
     // free GPU memory 
-    cudaFree(d_window);
-    cudaFree(d_min_periods);
-    cudaFree(d_forward_window);
+    if (d_window != NULL) cudaFree(d_window);
+    if (d_min_periods != NULL) cudaFree(d_min_periods);
+    if (d_forward_window != NULL) cudaFree(d_forward_window);
+  }
+
+  // test all supported aggregators
+  template<class... TArgs>
+  void run_test_all_agg(TArgs... FArgs)
+  {
+    run_test(FArgs..., GDF_SUM);
+    run_test(FArgs..., GDF_MIN);
+    run_test(FArgs..., GDF_MAX);
+    run_test(FArgs..., GDF_COUNT);
+    run_test(FArgs..., GDF_AVG);
+    
+    // this aggregation function is not supported yet - expected to throw an exception
+    //run_test(FArgs..., GDF_COUNT_DISTINCT);
   }
 
   // input
@@ -230,37 +275,216 @@ using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, double>;
 
 TYPED_TEST_CASE(RollingTest, TestTypes);
 
-TYPED_TEST(RollingTest, Simple)
+TYPED_TEST(RollingTest, SimpleStatic)
 {
   // simple example from Pandas docs:
   //   https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
   this->in_col 	     = {0, 1, 2, 0, 4};
   this->in_col_valid = {1, 1, 1, 0, 1};
 
-  this->run_test(2, 2, 0, GDF_SUM);
-  this->run_test(2, 2, 0, GDF_MIN);
-  this->run_test(2, 2, 0, GDF_MAX);
-  this->run_test(2, 2, 0, GDF_COUNT);
-  this->run_test(2, 2, 0, GDF_AVG);
+  // static sizes
+  this->run_test_all_agg(2, 2, 0,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+TYPED_TEST(RollingTest, SimpleDynamic)
+{
+  // simple example from Pandas docs:
+  //   https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  this->in_col 	     = {0, 1, 2, 0, 4};
+  this->in_col_valid = {1, 1, 1, 0, 1};
 
   // dynamic sizes
-  this->run_test({ 1, 2, 3, 4, 2 }, { 2, 1, 2, 1, 2 }, { 1, 0, 1, 0, 1 }, GDF_SUM);
-  
-  /*
-     correct output (int):
-	@ 1 3 @ @ 
-	@ 0 1 @ @ 
-	@ 1 2 @ @ 
-	@ 2 2 @ @ 
-	@ 0 1 @ @ 
-	1 1 3 3 @ 
-
-     corrrect output (float):
-	@ 1 3 @ @ 
-	@ 0 1 @ @ 
-	@ 1 2 @ @ 
-	@ 2 2 @ @ 
-	@ 0.5 1.5 @ @ 
-	1 1 3 3 @ 
-  */  
+  this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 4, 2 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1, 2 }),
+			 std::vector<gdf_size_type>({ 1, 0, 1, 0, 1 }));
 }
+
+// all rows are invalid, easy check
+TYPED_TEST(RollingTest, AllInvalid)
+{
+  gdf_size_type num_rows = 10;
+  gdf_size_type window = 10;
+  gdf_size_type periods = window;
+
+  this->in_col.resize(num_rows);
+  this->in_col_valid.resize(num_rows);
+
+  std::fill(this->in_col_valid.begin(), this->in_col_valid.end(), 0);
+  this->run_test_all_agg(window, periods, window,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// window = forward_window = 0
+TYPED_TEST(RollingTest, ZeroWindow)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type window = 0;
+  gdf_size_type periods = num_rows;
+
+  this->in_col.resize(num_rows);
+  this->in_col_valid.resize(num_rows);
+
+  std::fill(this->in_col_valid.begin(), this->in_col_valid.end(), 1);
+  std::fill(this->in_col.begin(), this->in_col.end(), 1);
+  this->run_test_all_agg(window, periods, window,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// min_periods = 0
+TYPED_TEST(RollingTest, ZeroPeriods)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type window = num_rows;
+  gdf_size_type periods = 0;
+
+  this->in_col.resize(num_rows);
+  this->in_col_valid.resize(num_rows);
+
+  std::fill(this->in_col_valid.begin(), this->in_col_valid.end(), 1);
+  std::fill(this->in_col.begin(), this->in_col.end(), 1);
+  this->run_test_all_agg(window, periods, window,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// window in one direction is not large enough to collect enough samples, 
+//   but if using both directions we should get == min_periods,
+// also tests out of boundary accesses
+TYPED_TEST(RollingTest, BackwardForwardWindow)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type window = num_rows;
+  gdf_size_type periods = num_rows;
+
+  this->in_col.resize(num_rows);
+  this->in_col_valid.resize(num_rows);
+
+  std::fill(this->in_col_valid.begin(), this->in_col_valid.end(), 1);
+  std::fill(this->in_col.begin(), this->in_col.end(), 1);
+  this->run_test_all_agg(window, periods, window,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// random input data, static parameters, no nulls
+TYPED_TEST(RollingTest, RandomStaticAllValid)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type window = 3;
+  gdf_size_type min_periods = 3;
+
+  // random input
+  this->make_random_input(num_rows, false);
+
+  this->run_test_all_agg(window, min_periods, 0,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// random input data, static parameters, with nulls
+TYPED_TEST(RollingTest, RandomStaticWithInvalid)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type window = 3;
+  gdf_size_type min_periods = 3;
+
+  // random input with nulls
+  this->make_random_input(num_rows, true);
+
+  this->run_test_all_agg(window, min_periods, window,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>());
+}
+
+// random input data, dynamic parameters, no nulls
+TYPED_TEST(RollingTest, RandomDynamicAllValid)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type max_window_size = 3;
+
+  // random input
+  this->make_random_input(num_rows, false);
+
+  // random parameters
+  std::mt19937 rng(1);
+  auto generator = [&](){ return rng() % max_window_size; };
+
+  std::vector<gdf_size_type> window(num_rows);
+  std::vector<gdf_size_type> min_periods(num_rows);
+  std::vector<gdf_size_type> forward_window(num_rows);
+
+  std::generate(window.begin(), window.end(), generator);
+  std::generate(min_periods.begin(), min_periods.end(), generator);
+  std::generate(forward_window.begin(), forward_window.end(), generator);
+
+  this->run_test_all_agg(0, 0, 0,
+			 window,
+			 min_periods,
+			 forward_window);
+}
+
+// random input data, dynamic parameters, with nulls
+TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type max_window_size = 3;
+
+  // random input
+  this->make_random_input(num_rows, true);
+
+  // random parameters
+  std::mt19937 rng(1);
+  auto generator = [&](){ return rng() % max_window_size; };
+
+  std::vector<gdf_size_type> window(num_rows);
+  std::vector<gdf_size_type> min_periods(num_rows);
+  std::vector<gdf_size_type> forward_window(num_rows);
+
+  std::generate(window.begin(), window.end(), generator);
+  std::generate(min_periods.begin(), min_periods.end(), generator);
+  std::generate(forward_window.begin(), forward_window.end(), generator);
+
+  this->run_test_all_agg(0, 0, 0,
+			 window,
+			 min_periods,
+			 forward_window);
+}
+
+// mix of static and dynamic parameters
+TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
+{
+  gdf_size_type num_rows = 5;
+  gdf_size_type max_window_size = 3;
+  gdf_size_type min_periods = 3;
+
+  // random input
+  this->make_random_input(num_rows, true);
+
+  // random parameters
+  std::mt19937 rng(1);
+  auto generator = [&](){ return rng() % max_window_size; };
+
+  std::vector<gdf_size_type> window(num_rows);
+  std::vector<gdf_size_type> forward_window(num_rows);
+
+  std::generate(window.begin(), window.end(), generator);
+  std::generate(forward_window.begin(), forward_window.end(), generator);
+
+  this->run_test_all_agg(0, min_periods, 0,
+			 window,
+			 std::vector<gdf_size_type>(),
+			 forward_window);
+}
+
