@@ -21,14 +21,19 @@ public:
 private:
   const json_read_arg* args_ = nullptr;
 
+  // TODO munmap in destructor
+	void * 	map_data = nullptr;
+	size_t	map_size = 0;
+
   const char *h_uncomp_data_ = nullptr;
   size_t h_uncomp_size_ = 0;
+	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
+  std::vector<char> h_uncomp_data_owner;
+  device_buffer<char> d_uncomp_data_;
 
   std::vector<std::string> column_names_;
   std::vector<gdf_dtype> dtypes_;
   std::vector<gdf_column_wrapper> columns_;
-
-  device_buffer<char> d_uncomp_data_;
 
   // tweaks/corner cases
   const bool allow_newlines_in_strings_ = false;
@@ -39,6 +44,7 @@ private:
 
   device_buffer<uint64_t> rec_starts_;
 
+  void ingestInput();
   device_buffer<uint64_t> enumerateNewlinesAndQuotes();
   device_buffer<uint64_t> filterNewlines(device_buffer<uint64_t> newlines_and_quotes);
   void uploadDataToDevice();

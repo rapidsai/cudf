@@ -40,6 +40,32 @@
 
 using string_pair = std::pair<const char*,size_t>;
 
+// TODO move to common file
+/**---------------------------------------------------------------------------*
+ * @brief Estimates the maximum expected length or a row, based on the number 
+ * of columns
+ * 
+ * If the number of columns is not available, it will return a value large 
+ * enough for most use cases
+ * 
+ * @param[in] num_columns Number of columns in the CSV file (optional)
+ * 
+ * @return Estimated maximum size of a row, in bytes
+ *---------------------------------------------------------------------------**/
+ constexpr size_t calculateMaxRowSize(int num_columns=0) noexcept {
+	constexpr size_t max_row_bytes = 16*1024; // 16KB
+	constexpr size_t column_bytes = 64;
+	constexpr size_t base_padding = 1024; // 1KB
+	if (num_columns == 0){
+		// Use flat size if the number of columns is not known
+		return max_row_bytes;
+	}
+	else {
+		// Expand the size based on the number of columns, if available
+		return base_padding + num_columns * column_bytes; 
+	}
+}
+
 gdf_error read_json(json_read_arg *args) {
   JsonReader reader(args);
   // TODO validate arguments
@@ -73,10 +99,15 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
   return GDF_invalid;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Parse the input JSON file specified in the args_ data member
+ * 
+ * Stores the parsed gdf columns in an internal data member
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
 void JsonReader::parse(){
-  // no file input and compression support for now
-  h_uncomp_data_ = args_->source;
-  h_uncomp_size_ = strlen(h_uncomp_data_);
+  ingestInput();
 
   // Currently, ignoring lineterminations within quotes is handled by recording
   // the records of both, and then filtering out the records that is a quotechar
@@ -90,7 +121,7 @@ void JsonReader::parse(){
     column_names_.emplace_back(std::to_string(col));
   }
 
-  determineDataTypes();
+  setDataTypes();
 
   // Allocate columns
   for (size_t col = 0; col < dtypes_.size(); ++col) {
@@ -99,6 +130,93 @@ void JsonReader::parse(){
   }
 
   convertDataToColumns();
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Parse the input JSON file specified in the args_ data member
+ * 
+ * Stores the parsed gdf columns in an internal data member
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
+void JsonReader::ingestInput(){
+  // TODO clean up
+  size_t  map_offset = 0;
+  int fd = 0;
+  size_t input_bytes = 0;
+
+  const std::string compression_type = "none";
+
+  if (args_->source_type == gdf_csv_input_form::FILE_PATH){
+    fd = open(args_->source, O_RDONLY);
+    if (fd < 0) {
+      close(fd);
+      CUDF_FAIL("Error opening file");
+    }
+
+    struct stat st{};
+    if (fstat(fd, &st)) {
+      close(fd);
+      CUDF_FAIL("Cannot stat input file");
+    }
+
+    const auto file_size = st.st_size;
+    const auto page_size = sysconf(_SC_PAGESIZE);
+
+    if (byte_range_offset_ >= (size_t)file_size) { 
+      close(fd); 
+      CUDF_FAIL("The byte_range offset is larger than the file size");
+    }
+
+    // Have to align map offset to page size
+    map_offset = (byte_range_offset_/page_size)*page_size;
+
+    // Set to rest-of-the-file size, will reduce based on the byte range size
+    map_size = file_size - map_offset;
+
+    // Include the page padding in the mapped size
+    const size_t page_padding = byte_range_offset_ - map_offset;
+    const size_t padded_byte_range_size = byte_range_size_ + page_padding;
+
+    if (byte_range_size_ != 0 && padded_byte_range_size < map_size) {
+      // Need to make sure that w/ padding we don't overshoot the end of file
+      map_size = min(padded_byte_range_size + calculateMaxRowSize(args_->num_cols), map_size);
+
+    }
+
+    // Ignore page padding for parsing purposes
+    input_bytes = map_size - page_padding;
+
+    map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
+  
+    if (map_data == MAP_FAILED || map_size==0) {
+      close(fd);
+      CUDF_FAIL("Error mapping file");
+    }
+  }
+  else if (args_->source_type == gdf_csv_input_form::HOST_BUFFER) {
+    map_data = (void *)args_->source;
+    input_bytes = map_size = args_->buffer_size;
+  }
+  else {
+    CUDF_FAIL("Invalid input type");
+  }
+
+  // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
+  if (compression_type == "none") {
+    // Do not use the owner vector here to avoid copying the whole file to the heap
+    h_uncomp_data_ = (const char*)map_data + (byte_range_offset_ - map_offset);
+    h_uncomp_size_ = input_bytes;
+  }
+  else {
+    // TODO add compression support
+    //const auto error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
+    //CUDF_EXPECTS(error == GDF_SUCCESS, "Input data decompressino failed");
+    //h_uncomp_data_ = h_uncomp_data_owner.data();
+    //h_uncomp_size_ = h_uncomp_data_owner.size();
+  }
+  CUDF_EXPECTS(h_uncomp_data_ != nullptr, "Ingest failed: raw host input data is null");
+  CUDF_EXPECTS(h_uncomp_size_ != 0, "Ingest failed: raw host input data has zero size");
 }
 
 device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
