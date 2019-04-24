@@ -50,7 +50,7 @@
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
-- PR #XXXX Convert transpose CFFI to Cython
+- PR #1492 Convert transpose CFFI to Cython
 
 ## Bug Fixes
 
