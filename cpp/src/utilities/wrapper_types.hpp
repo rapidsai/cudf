@@ -333,6 +333,9 @@ using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 using bool8 = detail::wrapper<gdf_bool8, GDF_BOOL8>;
 
 // This is necessary for global, constant, non-fundamental types
+// We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
+// scalar type. See CUDA Programming guide
+// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
 #define HOST_DEVICE_CONSTANT
 #ifdef __CUDA_ARCH__
 __device__ __constant__ static bool8 true_v{gdf_bool8{1}};
@@ -493,7 +496,7 @@ struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
   * Required since the underlying type, int8_t, has different limits than bool
   * --------------------------------------------------------------------------**/
 template <>
-struct numeric_limits< cudf::detail::wrapper<gdf_bool8, GDF_BOOL8> > {
+struct numeric_limits< cudf::bool8 > {
   
   static constexpr cudf::bool8 max() noexcept {
     // tried using `return cudf::true_v` but it causes a compiler segfault!
