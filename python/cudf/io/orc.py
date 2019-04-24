@@ -1,91 +1,25 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from libgdf_cffi import libgdf, ffi
-import nvstrings
-
-from cudf.dataframe.column import Column
+from cudf.bindings.orc import cpp_read_orc
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.datetime import DatetimeColumn
-from cudf.dataframe.numerical import NumericalColumn
 from cudf.utils import ioutils
 
 import pyarrow.orc as orc
-import numpy as np
 
 import warnings
-import os
-import errno
-
-
-def _wrap_string(text):
-    if text is None:
-        return ffi.NULL
-    else:
-        return ffi.new("char[]", text.encode())
 
 
 @ioutils.doc_read_orc()
-def read_orc(path, engine='pyarrow', columns=None, skip_rows=0, num_rows=None):
+def read_orc(path, engine='pyarrow', columns=None, skip_rows=None, num_rows=None):
     """{docstring}"""
 
     if engine == 'cudf':
-        # Setup arguments
-        orc_reader = ffi.new('orc_read_arg*')
-
-        if not os.path.isfile(path) and not os.path.exists(path):
-            raise FileNotFoundError(errno.ENOENT,
-                                    os.strerror(errno.ENOENT), path)
-        source_ptr = _wrap_string(str(path))
-        orc_reader.source_type = libgdf.FILE_PATH
-        orc_reader.source = source_ptr
-
-        if columns is not None:
-            arr_cols = []
-            for col in columns:
-                arr_cols.append(_wrap_string(col))
-            use_cols_ptr = ffi.new('char*[]', arr_cols)
-            orc_reader.use_cols = use_cols_ptr
-            orc_reader.use_cols_len = len(columns)
-
-        orc_reader.skip_rows = skip_rows
-        if num_rows is not None:
-            orc_reader.num_rows = num_rows
-
-        # Call to libcudf
-        libgdf.read_orc(orc_reader)
-        out = orc_reader.data
-        if out == ffi.NULL:
-            raise ValueError("Failed to parse data")
-
-        # Extract parsed columns
-        outcols = []
-        new_names = []
-        for i in range(orc_reader.num_cols_out):
-            if out[i].dtype == libgdf.GDF_STRING:
-                ptr = int(ffi.cast("uintptr_t", out[i].data))
-                new_names.append(ffi.string(out[i].col_name).decode())
-                outcols.append(nvstrings.bind_cpointer(ptr))
-            else:
-                newcol = Column.from_cffi_view(out[i])
-                new_names.append(ffi.string(out[i].col_name).decode())
-                if newcol.dtype.type == np.datetime64:
-                    if (out[i].dtype_info.time_unit == libgdf.TIME_UNIT_ns):
-                        outcols.append(
-                            newcol.view(DatetimeColumn, dtype='datetime64[ns]')
-                        )
-                    else:
-                        outcols.append(
-                            newcol.view(DatetimeColumn, dtype='datetime64[ms]')
-                        )
-                else:
-                    outcols.append(
-                        newcol.view(NumericalColumn, dtype=newcol.dtype)
-                    )
-
-        # Construct dataframe from columns
-        df = DataFrame()
-        for k, v in zip(new_names, outcols):
-            df[k] = v
+        df = cpp_read_orc(
+            path,
+            columns,
+            skip_rows,
+            num_rows
+        )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
         orc_file = orc.ORCFile(path)

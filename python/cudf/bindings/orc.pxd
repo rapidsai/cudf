@@ -11,13 +11,12 @@ from cudf.bindings.io cimport *
 
 cdef extern from "cudf.h" nogil:
 
-    # See cpp/include/cudf/io_types.h:189
-    ctypedef struct pq_read_arg:
+    # See cpp/include/cudf/io_types.h:162
+    ctypedef struct orc_read_arg:
         # Output Arguments - Allocated in reader
         int             num_cols_out
         int             num_rows_out
         gdf_column      **data
-        int             *index_col
 
         # Input arguments
         gdf_input_type  source_type
@@ -27,5 +26,8 @@ cdef extern from "cudf.h" nogil:
         const char      **use_cols
         int             use_cols_len
 
+        int             skip_rows
+        int             num_rows
 
-    cdef gdf_error read_parquet(pq_read_arg *args) except +
+
+    cdef gdf_error read_orc(orc_read_arg *args) except +

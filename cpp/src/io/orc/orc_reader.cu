@@ -240,6 +240,12 @@ class OrcMetadata {
     std::vector<OrcStripeInfo> selection;
 
     // Exclude non-needed stripes
+    row_start = std::max(row_start, 0);
+    if (row_count == -1) {
+      row_count = get_total_rows();
+    }
+    CUDF_EXPECTS(row_count >= 0, "Invalid row count");
+    CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
     while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= uint32_t(row_start)) {
       ff.numberOfRows -= ff.stripes[0].numberOfRows;
       row_start -= ff.stripes[0].numberOfRows;

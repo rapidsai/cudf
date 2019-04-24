@@ -2,6 +2,42 @@
 
 from cudf.utils.docutils import docfmt_partial
 
+_docstring_read_orc = """
+Load an ORC object from the file path, returning a DataFrame.
+
+Parameters
+----------
+path : string
+    File path
+engine : { 'cudf', 'pyarrow' }, default='cudf'
+    Parser engine to use.
+columns : list, default None
+    If not None, only these columns will be read from the file.
+skip_rows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read
+kwargs are passed to the engine
+
+Returns
+-------
+DataFrame
+
+Examples
+--------
+>>> import cudf
+>>> df = cudf.read_orc(filename)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+"""
+doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
+
 _docstring_read_parquet = """
 Read a Parquet file into DataFrame
 
@@ -31,7 +67,6 @@ Examples
 See Also
 --------
 cudf.io.parquet.to_parquet
-cudf.io.orc.read_orc
 """
 doc_read_parquet = docfmt_partial(docstring=_docstring_read_parquet)
 
@@ -56,43 +91,8 @@ partition_cols : list, optional, default None
 See Also
 --------
 cudf.io.parquet.read_parquet
-cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
-
-_docstring_read_orc = """
-Load an orc object from the file path, returning a DataFrame.
-
-Parameters
-----------
-path : string
-    File path
-engine : { 'cudf', 'pyarrow' }, default='cudf'
-    Parser engine to use.
-columns : list, default=None
-    If not None, only these columns will be read from the file.
-kwargs are passed to the engine
-
-Returns
--------
-DataFrame
-
-Examples
---------
->>> import cudf
->>> df = cudf.read_orc(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
-
-See Also
---------
-cudf.io.parquet.read_parquet
-cudf.io.parquet.to_parquet
-"""
-doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
 _docstring_read_json = """
 Convert a JSON string to a cuDF object.
