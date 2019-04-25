@@ -8,13 +8,16 @@ from itertools import product
 from cudf.dataframe import Series, column, columnops
 from cudf.tests import utils
 from cudf.tests.utils import gen_rand
+from librmm_cffi import librmm as rmm
 
 import cudf.bindings.copying as cpp_copying
 
 
 def test_gather_single_col():
     col = columnops.as_column(np.arange(100))
-    gather_map = [0, 1, 2, 3, 5, 8, 13, 21]
+    gather_map = np.array([0, 1, 2, 3, 5, 8, 13, 21])
+
+    print("cols :", type(col))
 
     device_gather_map = rmm.to_device(gather_map)
 
@@ -25,7 +28,7 @@ def test_gather_single_col():
 
 def test_gather_cols():
     cols = [columnops.as_column(np.arange(10)), columnops.as_column(np.arange(10))]
-    gather_map = [0, 1, 2, 3, 5, 8, 13, 21]
+    gather_map = np.array([0, 1, 2, 3, 5, 8, 13, 21])
 
     device_gather_map = rmm.to_device(gather_map)
 

@@ -91,6 +91,7 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value):
         raise NotImplementedError
 
+
 def column_empty(data_size, dtype, masked):
     """Allocate a new column like the given *column*
     """
@@ -100,6 +101,7 @@ def column_empty(data_size, dtype, masked):
         mask = utils.make_mask(data.size)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
+
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*

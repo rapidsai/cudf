@@ -26,7 +26,7 @@ from libcpp.string  cimport string as cstring
 
 
 cdef cudf_table* table_from_cols(cols):
-    col_counts=len(cols)
+    col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
 
     cdef i
@@ -48,15 +48,17 @@ cdef free_table(cudf_table* table):
     del table
 
 
-def clone_column_with_size(col, size):
+def clone_single_column_with_size(col, row_size):
     from cudf.dataframe import columnops
-    return columnops.column_empty(size, col.dtype, cols.has_null_mask())
+    return columnops.column_empty(row_size, 
+                                  col.dtype(),
+                                  col.has_null_mask())
 
 
 def clone_columns_with_size(in_cols, size):
     out_cols = []
     for col in in_cols:
-        o_col = clone_column_with_size(col, size)
+        o_col = clone_single_column_with_size(col, size)
         out_cols.append(o_col)
 
     return out_cols
@@ -75,28 +77,22 @@ def apply_gather(in_cols, maps, out_cols=None):
 
     cdef cudf_table* c_in_table = table_from_cols(in_cols)
 
-    cdef bool is_same_input = false
+    cdef bool is_same_input = False
     cdef cudf_table* c_out_table
     if out_cols == in_cols :
-        is_same_input = true
+        is_same_input = True
         c_out_table = c_in_table
     elif out_cols != None :
         c_out_table = table_from_cols(out_cols)
     else:
-        out_cols = clone_table_with_size(in_cols, size)
+        out_cols = clone_columns_with_size(in_cols, len(maps))
         c_out_table = table_from_cols(out_cols)
 
     # size check, cudf::gather requires same length for maps and out table.
     assert len(maps) == len(out_cols)
 
-    cdef uintptr_t c_maps_ptr
-    cdef gdf_index_type* c_maps
-    c_maps_ptr = get_ctype_ptr(maps)
-    c_maps = <gdf_index_type*>c_maps_ptr
-
-    #cdef void* void_ptr = <void*> get_ctype_ptr(maps)
-    #cdef gdf_index_type* c_maps = <gdf_index_type*>void_ptr
-
+    cdef uintptr_t c_maps_ptr = get_ctype_ptr(maps)
+    cdef gdf_index_type* c_maps = <gdf_index_type*>c_maps_ptr
 
     with nogil:
         gather(c_in_table, c_maps, c_out_table)
