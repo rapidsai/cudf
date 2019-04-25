@@ -150,16 +150,6 @@ def np_to_pa_dtype(dtype):
     }[np.dtype(dtype).type]
 
 
-def apply_reduce(fn, inp):
-    # allocate output+temp array
-    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
-    out = rmm.device_array(outsz, dtype=inp.dtype)
-    # call reduction
-    fn(inp.cffi_view, unwrap_devary(out), outsz)
-    # return 1st element
-    return out[0]
-
-
 _join_how_api = {
     'inner': libgdf.gdf_inner_join,
     'outer': libgdf.gdf_full_join,
