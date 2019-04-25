@@ -21,6 +21,7 @@
 #include <hash/concurrent_unordered_map.cuh>
 #include <types.hpp>
 #include <utilities/device_atomics.cuh>
+#include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include "new_hash_groupby.hpp"
 
@@ -131,26 +132,40 @@ struct result_type<
   using type = T;
 };
 
-struct aggregate {
+template <typename TargetType, typename SourceType, typename Op,
+          std::enable_if_t<std::is_void<TargetType>::value, int>* = nullptr>
+void perform_op(void* target_data, gdf_size_type target_index,
+                SourceType const& val, Op op) {
+  release_assert(false && "Invalid type and aggregation combination.");
+}
+
+template <typename TargetType, typename SourceType, typename Op,
+          std::enable_if_t<not std::is_void<TargetType>::value, int>* = nullptr>
+void perform_op(void* target_data, gdf_size_type target_index,
+                SourceType const& val, Op op) {
+  cudf::genericAtomicOperation(
+      &(static_cast<TargetType*>(target_data)[target_index]),
+      static_cast<TargetType>(val), op);
+}
+
+struct aggregate_elements {
   template <typename SourceType>
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
                                     gdf_column const& source,
                                     gdf_size_type source_index,
                                     distributive_operators op) {
+    SourceType const* const typed_source{
+        static_cast<SourceType const*>(source.data)};
     switch (op) {
       case distributive_operators::MIN: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::MIN>::type;
 
         if (gdf_is_valid(source.valid, source_index)) {
-          TargetType& target_element{
-              static_cast<TargetType*>(target.data)[target_index]};
-          SourceType const& source_element{
-              static_cast<SourceType const*>(source.data)[source_index]};
-          cudf::genericAtomicOperation(&target_element,
-                                       static_cast<TargetType>(source_element),
-                                       DeviceMin{});
+          perform_op<TargetType>(target.data, target_index,
+                                 typed_source[source_index], DeviceMin{});
+
           // TODO Inefficient to always check the target's validity bit
           // We only need to set the target's validity bit on the first
           // succesful update of the target element
@@ -167,13 +182,9 @@ struct aggregate {
             typename result_type<SourceType, distributive_operators::MAX>::type;
 
         if (gdf_is_valid(source.valid, source_index)) {
-          TargetType& target_element{
-              static_cast<TargetType*>(target.data)[target_index]};
-          SourceType const& source_element{
-              static_cast<SourceType const*>(source.data)[source_index]};
-          cudf::genericAtomicOperation(&target_element,
-                                       static_cast<TargetType>(source_element),
-                                       DeviceMax{});
+          perform_op<TargetType>(target.data, target_index,
+                                 typed_source[source_index], DeviceMax{});
+
           // TODO Inefficient to always check the target's validity bit
           // We only need to set the target's validity bit on the first
           // succesful update of the target element
@@ -185,21 +196,14 @@ struct aggregate {
         }
         break;
       }
-      case distributive_operators::SUM:
+      case distributive_operators::SUM: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::SUM>::type;
 
-        static_assert(std::is_arithmetic<TargetType>::value,
-                      "SUM aggregation invalid on non-arithmetic types.");
-
         if (gdf_is_valid(source.valid, source_index)) {
-          TargetType& target_element{
-              static_cast<TargetType*>(target.data)[target_index]};
-          SourceType const& source_element{
-              static_cast<SourceType const*>(source.data)[source_index]};
-          cudf::genericAtomicOperation(&target_element,
-                                       static_cast<TargetType>(source_element),
-                                       DeviceSum{});
+          perform_op<TargetType>(target.data, target_index,
+                                 typed_source[source_index], DeviceSum{});
+
           // TODO Inefficient to always check the target's validity bit
           // We only need to set the target's validity bit on the first
           // succesful update of the target element
@@ -210,30 +214,26 @@ struct aggregate {
           }
         }
         break;
-      case distributive_operators::COUNT:
+      }
+      case distributive_operators::COUNT: {
         using TargetType =
             typename result_type<SourceType,
                                  distributive_operators::COUNT>::type;
-        static_assert(std::is_integral<TargetType>::value,
-                      "COUNT aggregation invalid on non-integral accumulator.");
-
         if (gdf_is_valid(source.valid, source_index)) {
-          TargetType& target_element{
-              static_cast<TargetType*>(target.data)[target_index]};
-          SourceType const& source_element{
-              static_cast<SourceType const*>(source.data)[source_index]};
-          cudf::genericAtomicOperation(&target_element, TargetType{1},
-                                       DeviceSum{});
+          perform_op<TargetType>(target.data, target_index, TargetType{1},
+                                 DeviceSum{});
         }
 
         // For COUNT, the output can never be NULL. The count of a columns of
-        // all NULLs is just zero. Therefore, always set the output validity bit
+        // all NULLs is just zero. Therefore, always set the output validity
+        // bit
         if (not gdf_is_valid(target.valid, target_index)) {
           bit_mask::set_bit_safe(
               reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
               target_index);
         }
         break;
+      }
       default:
         return;
     }
@@ -256,12 +256,14 @@ __device__ inline void aggregate_row(device_table const& target,
                                      device_table const& source,
                                      gdf_size_type source_index,
                                      distributive_operators* ops) {
-  thrust::for_each(thrust::seq, thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(target.num_columns()),
-                   [target, source, ops](gdf_size_type i) {
-                     gdf_column const* target_column{target.get_column(i)};
-                     gdf_column const* source_column{source.get_column(i)};
-                   });
+  thrust::for_each(
+      thrust::seq, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(target.num_columns()),
+      [target, target_index, source, source_index, ops](gdf_size_type i) {
+        cudf::type_dispatcher(source.get_column(i)->dtype, aggregate_elements{},
+                              *target.get_column(i), target_index,
+                              *source.get_column(i), source_index, ops[i]);
+      });
 }
 
 struct type_mapper {
@@ -330,7 +332,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   using map_type = concurrent_unordered_map<
       gdf_size_type, gdf_size_type, std::numeric_limits<gdf_size_type>::max(),
       default_hash<gdf_size_type>, equal_to<gdf_size_type>,
-      legacy_allocator<thrust::pair<gdf_size_type, gdf_size_type> > >;
+      legacy_allocator<thrust::pair<gdf_size_type, gdf_size_type>>>;
 
   std::unique_ptr<map_type> map =
       std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()), 0);
