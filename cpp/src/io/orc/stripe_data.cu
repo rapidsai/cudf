@@ -1067,7 +1067,7 @@ static const __device__ __constant__ int64_t kPow10[19] =
 static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int col_scale, int t)
 {
 #if DECIMALS_AS_FLOAT64
-    double scale = exp10((double)-(int)vals[t]);
+    double scale = (t < numvals) ? exp10((double)-vals[t]) : 0.0;
 #else
     int scale = (t < numvals) ? col_scale - (int)vals[t] : 0;
 #endif
@@ -1092,7 +1092,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
     if (t < numvals)
     {
         int pos = *(volatile int32_t *)&vals[t];
-        int64_t v = pos;
+        int64_t v;
         decode_varint(bs, pos, v);
 #if DECIMALS_AS_FLOAT64
         reinterpret_cast<volatile double *>(vals)[t] = scale * v;
