@@ -44,6 +44,7 @@
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
+- PR #1462 Add ability to read parquet files from arrow::io::RandomAccessFile
 - PR #1453 Convert CSV Reader CFFI to Cython
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
@@ -52,6 +53,7 @@
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binaryops CFFI to Cython
+- PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 
 ## Bug Fixes
 
@@ -84,6 +86,8 @@
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
+- PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 
 
 # cuDF 0.6.1 (25 Mar 2019)
