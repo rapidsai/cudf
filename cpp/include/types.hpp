@@ -64,14 +64,15 @@ struct table {
    * appropriately sized bitmask
    *---------------------------------------------------------------------------**/
   table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
-        bool allocate_bitmasks = false, cudaStream_t stream = 0)
+        bool allocate_bitmasks = false, bool all_valid = false,
+        cudaStream_t stream = 0)
       : _num_columns{static_cast<gdf_size_type>(dtypes.size())},
         _num_rows{num_rows} {
     _columns = new gdf_column*[_num_columns];
     std::transform(
         _columns, _columns + _num_columns, dtypes.begin(), _columns,
-        [num_rows, allocate_bitmasks, stream](gdf_column*& col,
-                                              gdf_dtype dtype) {
+        [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
+                                                         gdf_dtype dtype) {
           CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
           CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
           col = new gdf_column;
@@ -88,13 +89,15 @@ struct table {
 
           RMM_ALLOC(&col->data, gdf_dtype_size(dtype) * num_rows, stream);
           if (allocate_bitmasks) {
+            int fill_value = (all_valid) ? 0xff : 0;
+
             RMM_ALLOC(
                 &col->valid,
                 gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
                 stream);
 
             CUDA_TRY(cudaMemsetAsync(
-                col->valid, 0,
+                col->valid, fill_value,
                 gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
                 stream));
           }
@@ -166,9 +169,15 @@ struct table {
   gdf_column** columns() const { return _columns; }
 
  private:
+<<<<<<< HEAD
   gdf_column** _columns{nullptr};       ///< The set of gdf_columns
   gdf_size_type _num_columns{0};  ///< The number of columns in the set
   gdf_size_type _num_rows{0};  ///< The number of elements in each column
+=======
+  gdf_column** _columns{nullptr};  ///< The set of gdf_columns
+  gdf_size_type _num_columns{0};   ///< The number of columns in the set
+  gdf_size_type _num_rows{0};      ///< The number of elements in each column
+>>>>>>> fea-ext-table-create
 };
 
 }  // namespace cudf
