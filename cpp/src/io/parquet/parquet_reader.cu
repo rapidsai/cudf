@@ -597,9 +597,6 @@ void decode_page_data(
   }
 }
 
-
-
-
 /**
  * @brief Reads Apache Parquet data and returns an array of gdf_columns.
  *
