@@ -1,9 +1,8 @@
 from __future__ import division, print_function
 
-import pytest
 import numpy as np
 
-from cudf.dataframe import column, columnops
+from cudf.dataframe import columnops
 from librmm_cffi import librmm as rmm
 
 import cudf.bindings.copying as cpp_copying
@@ -21,7 +20,7 @@ def test_gather_single_col():
 
 
 def test_gather_cols():
-    cols = [columnops.as_column(np.arange(10), dtype=np.int32), 
+    cols = [columnops.as_column(np.arange(10), dtype=np.int32),
             columnops.as_column(np.arange(0.0, 2.0, 0.2), dtype=np.float32)]
     gather_map = np.array([0, 1, 2, 3, 5, 8], dtype=np.int32)
 

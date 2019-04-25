@@ -24,8 +24,8 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.copying as cpp_copying
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-
 
 # Operator mappings
 
@@ -237,7 +237,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out = cudautils.gather(data=sortedvals, index=segs)
+        out = cpp_copying.apply_gather_column(sortedvals, segs)
         return self.replace(data=Buffer(out), mask=None)
 
     def unique_count(self, method='sort', dropna=True):
