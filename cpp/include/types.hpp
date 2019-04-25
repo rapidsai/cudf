@@ -92,6 +92,11 @@ struct table {
                 &col->valid,
                 gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
                 stream);
+
+            CUDA_TRY(cudaMemsetAsync(
+                col->valid, 0,
+                gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+                stream));
           }
           return col;
         });
