@@ -99,9 +99,7 @@ template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
 public:
     template <typename T_out, typename std::enable_if<
-                std::is_convertible<T_in, T_out>::value ||
-                (std::is_same<T_in, cudf::bool8>::value &&
-                 std::is_convertible<bool, T_out>::value) >::type* = nullptr >
+        std::is_constructible<T_out, T_in>::value >::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -109,9 +107,7 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-                not (std::is_convertible<T_in, T_out>::value ||
-                     (std::is_same<T_in, cudf::bool8>::value &&
-                      std::is_convertible<bool, T_out>::value)) >::type* = nullptr >
+        not std::is_constructible<T_out, T_in>::value >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
