@@ -50,7 +50,9 @@ bool extra_type_info_is_compatible(
     const gdf_dtype_extra_info& rhs_extra_type_info) noexcept
 {
     switch(common_dtype) {
-    case GDF_CATEGORY:  return lhs_extra_type_info.category == rhs_extra_type_info.category;
+    // Skipping this check, for now, due to the "hackiness" of
+    // how the category type is currently supported
+    // case GDF_CATEGORY:  return lhs_extra_type_info.category == rhs_extra_type_info.category;
     case GDF_TIMESTAMP: return lhs_extra_type_info.time_unit == rhs_extra_type_info.time_unit;
     default:            return true;
     }
