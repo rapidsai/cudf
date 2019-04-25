@@ -30,6 +30,30 @@ namespace groupby {
 enum distributive_operators { SUM, MIN, MAX, COUNT };
 
 /**---------------------------------------------------------------------------*
+ * @brief Options for controlling behavior of the groupby operation.
+ *
+ *---------------------------------------------------------------------------**/
+struct Options {
+  Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
+
+  /**---------------------------------------------------------------------------*
+   * Determines if key rows with null values are ignored.
+   *
+   * If `true`, any row in the `keys` table that contains a NULL value will be
+   * ignored. That is, the row will not be present in the output keys, and it's
+   * associated row in the `values` table will also be ignored.
+   *
+   * If `false`, rows in the `keys` table with NULL values will be treated as
+   * any other row. Furthermore, a NULL value will be considered equal to
+   * another NULL value. For example, two rows `{1, 2, 3, NULL}` and `{1, 2, 3,
+   * NULL}` will be considered equal, and their associated rows in the `values`
+   * table will be aggregated.
+   *
+   *---------------------------------------------------------------------------**/
+  bool const ignore_null_keys{true};
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Performs distributive groupby operation(s).
  *
  * Given a table of keys and corresponding table of values, equivalent keys will
@@ -40,7 +64,8 @@ enum distributive_operators { SUM, MIN, MAX, COUNT };
  *
  * The output of the operation is the table of key columns that hold all the
  * unique keys from the input key columns and a table of aggregation columns
- * that hold the specified reduction among all identical keys.
+ * that hold the specified reduction across associated values among all
+ * identical keys.
  *
  * @param keys The table of keys
  * @param values The table of aggregation values
@@ -50,7 +75,7 @@ enum distributive_operators { SUM, MIN, MAX, COUNT };
  *---------------------------------------------------------------------------**/
 std::tuple<cudf::table, cudf::table> distributive(
     cudf::table const& keys, cudf::table const& values,
-    std::vector<distributive_operators> const& operators);
+    std::vector<distributive_operators> const& operators, Options options);
 
 }  // namespace groupby
 }  // namespace cudf

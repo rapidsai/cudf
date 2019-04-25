@@ -27,7 +27,7 @@ namespace groupby {
 
 std::tuple<cudf::table, cudf::table> distributive(
     cudf::table const& keys, cudf::table const& values,
-    std::vector<distributive_operators> const& operators) {
+    std::vector<distributive_operators> const& operators, Options options) {
   CUDF_EXPECTS(
       static_cast<gdf_size_type>(operators.size()) == values.num_columns(),
       "Size mismatch between operators and value columns");
@@ -43,7 +43,7 @@ std::tuple<cudf::table, cudf::table> distributive(
   cudf::table output_keys;
   cudf::table output_values;
   std::tie(output_keys, output_values) =
-      cudf::detail::hash_groupby(keys, values, operators);
+      cudf::detail::hash_groupby(keys, values, operators, options);
 
   // Compact NVCategory columns to contain only the strings referenced by the
   // indices in the output key/value columns

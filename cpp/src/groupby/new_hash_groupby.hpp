@@ -31,7 +31,7 @@ namespace detail {
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<cudf::groupby::distributive_operators> const& operators,
-    cudaStream_t stream = 0);
+    groupby::Options options, cudaStream_t stream = 0);
 }  // namespace detail
 
 }  // namespace cudf

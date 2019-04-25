@@ -269,17 +269,17 @@ struct type_mapper {
   gdf_dtype operator()(distributive_operators op) {
     switch (op) {
       case distributive_operators::MIN:
-        return gdf_dtype_of<typename result_type<
-            InputT, distributive_operators::MIN>::type>();
+        return gdf_dtype_of<
+            typename result_type<InputT, distributive_operators::MIN>::type>();
       case distributive_operators::MAX:
-        return gdf_dtype_of<typename result_type<
-            InputT, distributive_operators::MAX>::type>();
+        return gdf_dtype_of<
+            typename result_type<InputT, distributive_operators::MAX>::type>();
       case distributive_operators::COUNT:
         return gdf_dtype_of<typename result_type<
             InputT, distributive_operators::COUNT>::type>();
       case distributive_operators::SUM:
-        return gdf_dtype_of<typename result_type<
-            InputT, distributive_operators::SUM>::type>();
+        return gdf_dtype_of<
+            typename result_type<InputT, distributive_operators::SUM>::type>();
       default:
         return GDF_invalid;
     }
@@ -294,8 +294,7 @@ struct type_mapper {
  * @param op The aggregation operation
  * @return gdf_dtype Type to use for output aggregation column
  *---------------------------------------------------------------------------**/
-gdf_dtype output_dtype(gdf_dtype input_type,
-                       distributive_operators op) {
+gdf_dtype output_dtype(gdf_dtype input_type, distributive_operators op) {
   return cudf::type_dispatcher(input_type, type_mapper{}, op);
 }
 }  // namespace
@@ -303,7 +302,7 @@ gdf_dtype output_dtype(gdf_dtype input_type,
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<cudf::groupby::distributive_operators> const& operators,
-    cudaStream_t stream) {
+    groupby::Options options, cudaStream_t stream) {
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size{keys.num_rows()};
