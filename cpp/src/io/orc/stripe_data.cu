@@ -929,18 +929,20 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
 
 
 /**
- * @brief Reads a 32-bit value at an arbitrary bit position
+ * @brief Reads 32 booleans as a packed 32-bit value
  *
- * @param[in] vals 32-bit array of values
+ * @param[in] vals 32-bit array of values (little-endian)
  * @param[in] bitpos bit position
  *
  * @return 32-bit value
  **/
-inline __device__ uint32_t rle8_read_u32(volatile uint32_t *vals, uint32_t bitpos)
+inline __device__ uint32_t rle8_read_bool32(volatile uint32_t *vals, uint32_t bitpos)
 {
     uint32_t a = vals[(bitpos >> 5) + 0];
     uint32_t b = vals[(bitpos >> 5) + 1];
-    return __funnelshift_r(a, b, bitpos & 0x1f);
+    a = __byte_perm(a, 0, 0x0123);
+    b = __byte_perm(b, 0, 0x0123);
+    return __brev(__funnelshift_l(b, a, bitpos));
 }
 
 
@@ -1191,7 +1193,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
                     if (t == 0)
                     {
                         uint32_t mask = ((1 << n) - 1) << bitpos;
-                        uint32_t bits = (rle8_read_u32(s->vals.u32, startbit) << bitpos) & mask;
+                        uint32_t bits = (rle8_read_bool32(s->vals.u32, startbit) << bitpos) & mask;
                         atomicAnd(valid, ~mask);
                         atomicOr(valid, bits);
                         null_count += __popc((~bits) & mask);
@@ -1203,7 +1205,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
                 // Store bits aligned
                 if (t * 32 + 32 <= nbits)
                 {
-                    uint32_t bits = rle8_read_u32(s->vals.u32, startbit + t * 32);
+                    uint32_t bits = rle8_read_bool32(s->vals.u32, startbit + t * 32);
                     valid[t] = bits;
                     null_count += __popc(~bits);
                 }
@@ -1211,7 +1213,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
                 {
                     uint32_t n = nbits - t*32;
                     uint32_t mask = (1 << n) - 1;
-                    uint32_t bits = rle8_read_u32(s->vals.u32, startbit + t * 32) & mask;
+                    uint32_t bits = rle8_read_bool32(s->vals.u32, startbit + t * 32) & mask;
                     atomicAnd(valid + t, ~mask);
                     atomicOr(valid + t, bits);
                     null_count += __popc((~bits) & mask);
