@@ -29,11 +29,11 @@ namespace cudf {
  */
 void validate(const gdf_column& column)
 {
-    CUDF_EXPECTS ( (column.data != nullptr or column.size == 0)          , "No column data despite there supposedly being rows.");
-    CUDF_EXPECTS ( (column.dtype != GDF_invalid)                         , "Cannot use the 'invalid' column element type.");
+    CUDF_EXPECTS ( (column.data != nullptr or column.size == 0)          , "Supposedly non-empty column is missing its data");
+    CUDF_EXPECTS ( (column.dtype != GDF_invalid)                         , "Cannot use the 'invalid' column element type");
     CUDF_EXPECTS ( (column.dtype < N_GDF_TYPES)                          , "Unknown column data type");
-    CUDF_EXPECTS ( (is_nullable(column) or (column.null_count == 0))     , "Column supposedly has null values, but no place to expose its record");
-    CUDF_EXPECTS ( (column.null_count <= column.size)                    , "Column claims to have more null elements than elements overall");
+    CUDF_EXPECTS ( (is_nullable(column) or (column.null_count == 0))     , "Column claims to have null elements but has no validity mask to indicate element nullness");
+    CUDF_EXPECTS ( (column.null_count <= column.size)                    , "Column's null element count exceeds its overall number of elements");
 }
 
 void validate(const gdf_column* column_ptr)
