@@ -113,12 +113,18 @@ class SegmentedRadixSortPlan(object):
         self.sizeof_key = key_dtype.itemsize
         self.sizeof_val = val_dtype.itemsize
         end_bit = self.sizeof_key * 8
-        cdef uintptr_t plan = <uintptr_t>gdf_segmented_radixsort_plan(
-            nelem,
-            descending,
-            begin_bit,
-            end_bit
-        )
+        cdef uintptr_t plan
+        cdef size_t c_nelem = nelem
+        cdef int c_descending = descending
+        cdef unsigned c_begin_bit = begin_bit
+        cdef unsigned c_end_bit = end_bit
+        with nogil:
+            plan = <uintptr_t>gdf_segmented_radixsort_plan(
+                c_nelem,
+                c_descending,
+                c_begin_bit,
+                c_end_bit
+            )
         self.plan = int(plan)
         self.nelem = nelem
         self.is_closed = False
@@ -130,19 +136,23 @@ class SegmentedRadixSortPlan(object):
 
     def close(self):
         cdef uintptr_t c_plan = self.plan
-        gdf_segmented_radixsort_plan_free(
-            <gdf_segmented_radixsort_plan_type*>c_plan
-        )
+        with nogil:
+            gdf_segmented_radixsort_plan_free(
+                <gdf_segmented_radixsort_plan_type*>c_plan
+            )
         self.is_closed = True
-        self.plan = 0
+        self.plan = None
 
     def setup(self):
         cdef uintptr_t c_plan = self.plan
-        gdf_segmented_radixsort_plan_setup(
-            <gdf_segmented_radixsort_plan_type*>c_plan,
-            self.sizeof_key,
-            self.sizeof_val
-        )
+        cdef size_t c_sizeof_key = self.sizeof_key
+        cdef size_t c_sizeof_val = self.sizeof_val
+        with nogil:
+            gdf_segmented_radixsort_plan_setup(
+                <gdf_segmented_radixsort_plan_type*>c_plan,
+                c_sizeof_key,
+                c_sizeof_val
+            )
         self.plan = int(c_plan)
 
     def sort(self, segments, col_keys, col_vals):
@@ -161,9 +171,10 @@ class SegmentedRadixSortPlan(object):
         d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
         d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
 
+        cdef uintptr_t c_plan = self.plan
         cdef uintptr_t d_begins_ptr
         cdef uintptr_t d_end_ptr
-        cdef uintptr_t c_plan = self.plan
+        cdef unsigned segsize
 
         # The following is to handle the segument size limit due to
         # max CUDA grid size.
@@ -173,14 +184,15 @@ class SegmentedRadixSortPlan(object):
             d_begins_ptr = get_ctype_ptr(d_begins[s:])
             d_end_ptr = get_ctype_ptr(d_ends[s:])
             segsize = e - s
-            gdf_segmented_radixsort(
-                <gdf_segmented_radixsort_plan_type*>c_plan,
-                c_col_keys,
-                c_col_keys,
-                segsize,
-                <unsigned*>d_begins_ptr,
-                <unsigned*>d_end_ptr
-            )
+            with nogil:
+                gdf_segmented_radixsort(
+                    <gdf_segmented_radixsort_plan_type*>c_plan,
+                    c_col_keys,
+                    c_col_vals,
+                    segsize,
+                    <unsigned*>d_begins_ptr,
+                    <unsigned*>d_end_ptr
+                )
 
         self.plan = int(c_plan)
         free(c_col_keys)

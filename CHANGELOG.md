@@ -54,7 +54,7 @@
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
-- PR #XXXX Convert sorting and hashing ops CFFI to Cython
+- PR #1503 Convert sorting and hashing ops CFFI to Cython
 
 ## Bug Fixes
 
