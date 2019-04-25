@@ -127,11 +127,10 @@ def test_sum_boolean():
 
     assert expect == got
 
-    # TODO: this is failing, not sure why
-    # got = (s > 1).sum(dtype=np.bool_)
-    # expect = True
+    got = (s > 1).sum(dtype=np.bool_)
+    expect = True
 
-    # assert expect == got
+    assert expect == got
 
 
 
