@@ -132,20 +132,81 @@ struct result_type<
   using type = T;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Error case for invalid combinations of SourceType and operator.
+ *
+ * For an invalid combination of SourceType and operator,
+ * `result_type<SourceType, operator>::type` yields a `void` TargetType. This
+ * specialization will be invoked for any invalid combination and cause a
+ *runtime error.
+ *---------------------------------------------------------------------------**/
 template <typename TargetType, typename SourceType, typename Op,
           std::enable_if_t<std::is_void<TargetType>::value, int>* = nullptr>
-void perform_op(void* target_data, gdf_size_type target_index,
-                SourceType const& val, Op op) {
+__device__ inline void binary_op(gdf_column const& target,
+                                 gdf_size_type target_index,
+                                 gdf_column const& source,
+                                 gdf_size_type source_index, Op&& op) {
   release_assert(false && "Invalid type and aggregation combination.");
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Performs a binary operation between two elements in two columns.
+ *
+ * @tparam TargetType
+ * @tparam SourceType
+ * @tparam Op
+ * @tparam nullptr
+ * @param target
+ * @param target_index
+ * @param source
+ * @param source_index
+ * @param op
+ *---------------------------------------------------------------------------**/
 template <typename TargetType, typename SourceType, typename Op,
           std::enable_if_t<not std::is_void<TargetType>::value, int>* = nullptr>
-void perform_op(void* target_data, gdf_size_type target_index,
-                SourceType const& val, Op op) {
-  cudf::genericAtomicOperation(
-      &(static_cast<TargetType*>(target_data)[target_index]),
-      static_cast<TargetType>(val), op);
+__device__ inline void binary_op(gdf_column const& target,
+                                 gdf_size_type target_index,
+                                 gdf_column const& source,
+                                 gdf_size_type source_index, Op&& op) {
+  if (gdf_is_valid(source.valid, source_index)) {
+    cudf::genericAtomicOperation(
+        &(static_cast<TargetType*>(target.data)[target_index]),
+        static_cast<TargetType>(*static_cast<SourceType*>(source.data)), op);
+
+    // TODO Inefficient to always check the target's validity bit
+    // We only need to set the target's validity bit on the first
+    // succesful update of the target element
+    if (not gdf_is_valid(target.valid, target_index)) {
+      bit_mask::set_bit_safe(
+          reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
+    }
+  }
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief
+ *
+ * @tparam TargetType
+ * @param target
+ * @param target_index
+ * @param source_is_valid
+ *---------------------------------------------------------------------------**/
+template <typename TargetType>
+__device__ inline void count_op(gdf_column const& target,
+                                gdf_size_type target_index,
+                                bool source_is_valid) {
+  if (source_is_valid) {
+    cudf::genericAtomicOperation(
+        &(static_cast<TargetType*>(target.data)[target_index]), TargetType{1},
+        DeviceSum{});
+  }
+  // For COUNT, the output can never be NULL. The count of a columns of
+  // all NULLs is just zero. Therefore, always set the output validity
+  // bit
+  if (not gdf_is_valid(target.valid, target_index)) {
+    bit_mask::set_bit_safe(
+        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
+  }
 }
 
 struct aggregate_elements {
@@ -155,90 +216,42 @@ struct aggregate_elements {
                                     gdf_column const& source,
                                     gdf_size_type source_index,
                                     distributive_operators op) {
-    SourceType const* const typed_source{
-        static_cast<SourceType const*>(source.data)};
     switch (op) {
       case distributive_operators::MIN: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::MIN>::type;
 
-        if (gdf_is_valid(source.valid, source_index)) {
-          perform_op<TargetType>(target.data, target_index,
-                                 typed_source[source_index], DeviceMin{});
-
-          // TODO Inefficient to always check the target's validity bit
-          // We only need to set the target's validity bit on the first
-          // succesful update of the target element
-          if (not gdf_is_valid(target.valid, target_index)) {
-            bit_mask::set_bit_safe(
-                reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
-                target_index);
-          }
-        }
+        binary_op<TargetType, SourceType>(target, target_index, source,
+                                          source_index, DeviceMin{});
         break;
       }
       case distributive_operators::MAX: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::MAX>::type;
-
-        if (gdf_is_valid(source.valid, source_index)) {
-          perform_op<TargetType>(target.data, target_index,
-                                 typed_source[source_index], DeviceMax{});
-
-          // TODO Inefficient to always check the target's validity bit
-          // We only need to set the target's validity bit on the first
-          // succesful update of the target element
-          if (not gdf_is_valid(target.valid, target_index)) {
-            bit_mask::set_bit_safe(
-                reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
-                target_index);
-          }
-        }
+        binary_op<TargetType, SourceType>(target, target_index, source,
+                                          source_index, DeviceMax{});
         break;
       }
       case distributive_operators::SUM: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::SUM>::type;
-
-        if (gdf_is_valid(source.valid, source_index)) {
-          perform_op<TargetType>(target.data, target_index,
-                                 typed_source[source_index], DeviceSum{});
-
-          // TODO Inefficient to always check the target's validity bit
-          // We only need to set the target's validity bit on the first
-          // succesful update of the target element
-          if (not gdf_is_valid(target.valid, target_index)) {
-            bit_mask::set_bit_safe(
-                reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
-                target_index);
-          }
-        }
+        binary_op<TargetType, SourceType>(target, target_index, source,
+                                          source_index, DeviceSum{});
         break;
       }
       case distributive_operators::COUNT: {
         using TargetType =
             typename result_type<SourceType,
                                  distributive_operators::COUNT>::type;
-        if (gdf_is_valid(source.valid, source_index)) {
-          perform_op<TargetType>(target.data, target_index, TargetType{1},
-                                 DeviceSum{});
-        }
-
-        // For COUNT, the output can never be NULL. The count of a columns of
-        // all NULLs is just zero. Therefore, always set the output validity
-        // bit
-        if (not gdf_is_valid(target.valid, target_index)) {
-          bit_mask::set_bit_safe(
-              reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
-              target_index);
-        }
+        count_op<TargetType>(target, target_index,
+                             gdf_is_valid(source.valid, source_index));
         break;
       }
       default:
         return;
     }
   }
-};
+};  // namespace
 
 /**---------------------------------------------------------------------------*
  * @brief Updates a target row by performing a set of aggregation operations
@@ -276,12 +289,12 @@ struct type_mapper {
       case distributive_operators::MAX:
         return gdf_dtype_of<
             typename result_type<InputT, distributive_operators::MAX>::type>();
-      case distributive_operators::COUNT:
-        return gdf_dtype_of<typename result_type<
-            InputT, distributive_operators::COUNT>::type>();
       case distributive_operators::SUM:
         return gdf_dtype_of<
             typename result_type<InputT, distributive_operators::SUM>::type>();
+      case distributive_operators::COUNT:
+        return gdf_dtype_of<typename result_type<
+            InputT, distributive_operators::COUNT>::type>();
       default:
         return GDF_invalid;
     }
@@ -289,8 +302,8 @@ struct type_mapper {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Determines the output that should be used for a given input type and
- * operator.
+ * @brief Determines the output gdf_dtype that should be used for a given input
+ * gdf_dtype and operator.
  *
  * @param input_type The type of the input aggregation column
  * @param op The aggregation operation
