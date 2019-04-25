@@ -281,7 +281,18 @@ cdef gdf_column_to_column_mem(gdf_column* input_col):
         )
 
     return data, mask
-    
+
+
+cdef update_nvstrings_col(col, uintptr_t category_ptr):
+    nvcat_ptr = int(category_ptr)
+    nvcat_obj = None
+    if nvcat_ptr:
+        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+        nvstr_obj = nvcat_obj.to_strings()
+    else:
+        nvstr_obj = nvstrings.to_device([])
+    col._data = nvstr_obj
+    col._nvcategory = nvcat_obj
 
 # gdf_context functions
 
@@ -348,6 +359,3 @@ cpdef count_nonzero_mask(mask, size):
         )
 
     return nnz
-
-
-

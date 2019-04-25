@@ -61,11 +61,12 @@ def transpose(df):
     for i in range(0, new_ncol):
         new_cols.push_back(column_view_from_column(new_col_series[i]._column))
 
-    result = gdf_transpose(
-        ncols,
-        cols.data(),
-        new_cols.data()
-    )
+    with nogil:
+        result = gdf_transpose(
+            ncols,
+            cols.data(),
+            new_cols.data()
+        )
 
     for i in range(ncols):
         free(cols[i])
