@@ -10,7 +10,6 @@ from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 import cudf.dataframe.index as indexPackage
 from cudf.dataframe.index import StringIndex
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 
 class MultiIndex(indexPackage.Index):

@@ -324,14 +324,16 @@ def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
     gdf['x'] = np.random.randint(0, 5, 5)
     gdf['y'] = np.random.randint(0, 5, 5)
-    gdf['val'] = np.random.random(5)
     pdf = gdf.to_pandas()
-    pdg = pdf.groupby(['x', 'y']).agg(['mean', 'min'])
-    gdg = gdf.groupby(['x', 'y']).agg(['mean', 'min'])
     mi = cudf.MultiIndex(levels=[[0, 1, 2], [3, 4]], codes=[[0, 0, 1, 1, 2],
-             [0, 1, 0, 1, 1]], names=['x', 'y'])
+                         [0, 1, 0, 1, 1]], names=['x', 'y'])
     gdf.index = mi
-    gdf = gdf.drop('val')
     mc = cudf.MultiIndex(levels=[['val'], ['mean', 'min']],
-            codes=[[0, 0], [0, 1]])
+                         codes=[[0, 0], [0, 1]])
     gdf.columns = mc
+    pdf.index = mi
+    pdf.index.names = ['x', 'y']
+    pdf.columns = mc
+    print(pdf)
+    print(gdf.to_pandas())
+    assert_eq(pdf, gdf)
