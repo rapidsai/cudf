@@ -16,9 +16,7 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
-#include <utilities/error_utils.hpp>
 #include "cudf.h"
-#include <algorithm>
 #include <cassert>
 
 namespace cudf {
@@ -34,17 +32,7 @@ struct table {
    * @param cols The array of columns wrapped by the table
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
-  table(gdf_column* cols[], gdf_size_type num_cols)
-      : columns{cols}, _num_columns{num_cols} {
-    CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-
-    this->_num_rows = cols[0]->size;
-
-    std::for_each(columns, columns + _num_columns, [this](gdf_column* col) {
-      CUDF_EXPECTS(nullptr != col, "Null input column");
-      CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
-    });
-  }
+  table(gdf_column* cols[], gdf_size_type num_cols);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns const pointer to const of the first `gdf_column` in the

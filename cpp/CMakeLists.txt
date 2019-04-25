@@ -270,6 +270,7 @@ add_library(cudf SHARED
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
+            src/utilities/types.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/gather.cu
             src/copying/scatter.cu

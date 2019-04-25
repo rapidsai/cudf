@@ -21,6 +21,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include <algorithm>
 
 namespace cudf {
 

@@ -23,6 +23,8 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
 #include <bitmask/legacy_bitmask.hpp>
+#include <algorithm>
+
 
 /**
  * @brief Operations for copying from one column to another
