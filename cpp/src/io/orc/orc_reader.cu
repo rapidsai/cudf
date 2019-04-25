@@ -120,7 +120,9 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       // There isn't a GDF_DATE32 -> np.dtype mapping so use np.datetime64
       return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ns});
     case orc::DECIMAL:
-      // Currently unhandled as there isn't an explicit mapping
+      // There isn't an arbitrary-precision type in cuDF, so map as float
+      static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
+      return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{TIME_UNIT_NONE});
     default:
       break;
   }
@@ -702,6 +704,7 @@ gdf_error read_orc(orc_read_arg *args) {
         chunk.num_rows = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer.columns[selected_cols[j]].kind;
         chunk.type_kind = md.ff.types[selected_cols[j]].kind;
+        chunk.decimal_scale = md.ff.types[selected_cols[j]].scale;
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
             chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
