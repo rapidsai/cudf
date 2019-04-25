@@ -21,6 +21,8 @@
 
 namespace orc { namespace gpu {
 
+#define DECIMALS_AS_FLOAT64     1   // 0: store decimals as INT64, 1: store decimals as FLOAT64
+
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(uint8_t *compressed_data_,
@@ -90,7 +92,8 @@ struct ColumnDesc
     uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
-    uint8_t pad[5];
+    uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
+    uint8_t pad[4];
 };
 
 

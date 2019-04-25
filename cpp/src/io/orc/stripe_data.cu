@@ -1028,6 +1028,7 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
  * @brief Powers of 10
  *
  **/
+#if !DECIMALS_AS_FLOAT64
 static const __device__ __constant__ int64_t kPow10[19] =
 {
     1,
@@ -1050,6 +1051,7 @@ static const __device__ __constant__ int64_t kPow10[19] =
     100000000000000000ll,
     1000000000000000000ll
 };
+#endif // DECIMALS_AS_FLOAT64
 
 /**
  * @brief ORC Decimal decoding (unbounded base-128 varints)
@@ -1062,9 +1064,13 @@ static const __device__ __constant__ int64_t kPow10[19] =
  * @return number of values decoded
  *
  **/
-static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int t)
+static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int col_scale, int t)
 {
-    int scale = (t < numvals) ? (int)vals[t] : 0;
+#if DECIMALS_AS_FLOAT64
+    double scale = exp10((double)-(int)vals[t]);
+#else
+    int scale = (t < numvals) ? col_scale - (int)vals[t] : 0;
+#endif
     if (t == 0)
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
@@ -1073,7 +1079,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
         for (n = 0; n < numvals; n++)
         {
             uint32_t pos = lastpos;
-            *(volatile int32_t *)&vals[t] = lastpos;
+            *(volatile int32_t *)&vals[n] = lastpos;
             pos += varint_length<uint4>(bs, pos);
             if (pos > maxpos)
                 break;
@@ -1086,8 +1092,11 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
     if (t < numvals)
     {
         int pos = *(volatile int32_t *)&vals[t];
-        int64_t v;
+        int64_t v = pos;
         decode_varint(bs, pos, v);
+#if DECIMALS_AS_FLOAT64
+        reinterpret_cast<volatile double *>(vals)[t] = scale * v;
+#else
         if (scale > 0)
         {
             v *= kPow10[min(scale, 18)];
@@ -1097,6 +1106,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
             v /= kPow10[min(-scale, 18)];
         }
         vals[t] = v;
+#endif
     }
     return numvals;
 }
@@ -1672,7 +1682,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 if (s->chunk.type_kind == DECIMAL)
                 {
                     __syncthreads();
-                    numvals = Decode_Decimals(&s->bs, &s->u.rle8, s->vals.i64, numvals, t);
+                    numvals = Decode_Decimals(&s->bs, &s->u.rle8, s->vals.i64, numvals, s->chunk.decimal_scale, t);
                 }
                 __syncthreads();
             }
