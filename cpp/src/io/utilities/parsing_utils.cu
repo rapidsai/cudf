@@ -193,10 +193,11 @@ template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h
  **/
 struct BlockSumArray {
 		int16_t* d_sums = nullptr;	///< Array of partial sums
-		uint64_t length;			///< Length of the array
-		uint64_t block_size;		///< The number of elements aggregated into each partial sum
+		uint64_t length = 0;		///< Length of the array
+		uint64_t block_size = 1;	///< The number of elements aggregated into each partial sum
 
 		BlockSumArray(uint64_t len, uint64_t bsize): length(len), block_size(bsize){}
+		BlockSumArray() noexcept = default;
 };
 
 /**
