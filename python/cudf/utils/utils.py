@@ -9,7 +9,7 @@ from numba import njit
 from librmm_cffi import librmm as rmm
 
 
-mask_dtype = np.dtype(np.uint8)
+mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
 mask_byte_padding = 64
 

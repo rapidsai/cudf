@@ -58,7 +58,7 @@ def test_radixsort(nelem, descending, dtype):
     plan = libgdf.gdf_radixsort_plan(nelem, descending, begin_bit, end_bit)
     libgdf.gdf_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
     # Sort
-    libgdf.gdf_radixsort_generic(plan, col_key, col_val)
+    libgdf.gdf_radixsort(plan, col_key, col_val)
     # Cleanup
     libgdf.gdf_radixsort_plan_free(plan)
 

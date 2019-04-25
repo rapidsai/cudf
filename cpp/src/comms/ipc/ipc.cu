@@ -128,7 +128,7 @@ public:
     void open(const uint8_t *schema, size_t length) {
         try {
             read_schema(schema, length);
-        } catch ( ParseError e ) {
+        } catch ( ParseError const &e ) {
             std::ostringstream oss;
             oss << "ParseError: " << e.what();
             _error_message = oss.str();
@@ -139,7 +139,7 @@ public:
     void open_recordbatches(const uint8_t *recordbatches, size_t length) {
         try {
             read_record_batch(recordbatches, length);
-        } catch ( ParseError e ) {
+        } catch ( ParseError const &e ) {
             std::ostringstream oss;
             oss << "ParseError: " << e.what();
             _error_message = oss.str();

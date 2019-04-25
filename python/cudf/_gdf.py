@@ -303,10 +303,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
-
-
 def apply_segsort(col_keys, col_vals, segments, descending=False,
                   plan=None):
     """Inplace segemented sort
@@ -377,12 +373,12 @@ class SegmentedRadixortPlan(object):
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
-            libgdf.gdf_segmented_radixsort_generic(self.plan,
-                                                   col_keys.cffi_view,
-                                                   col_vals.cffi_view,
-                                                   segsize,
-                                                   unwrap_devary(d_begins[s:]),
-                                                   unwrap_devary(d_ends[s:]))
+            libgdf.gdf_segmented_radixsort(self.plan,
+                                           col_keys.cffi_view,
+                                           col_vals.cffi_view,
+                                           segsize,
+                                           unwrap_devary(d_begins[s:]),
+                                           unwrap_devary(d_ends[s:]))
 
 
 def hash_columns(columns, result, initial_hash_values=None):
@@ -462,53 +458,6 @@ def count_nonzero_mask(mask, size):
     return nnz[0]
 
 
-_GDF_COLORS = {
-    'green':    libgdf.GDF_GREEN,
-    'blue':     libgdf.GDF_BLUE,
-    'yellow':   libgdf.GDF_YELLOW,
-    'purple':   libgdf.GDF_PURPLE,
-    'cyan':     libgdf.GDF_CYAN,
-    'red':      libgdf.GDF_RED,
-    'white':    libgdf.GDF_WHITE,
-    'darkgreen': libgdf.GDF_DARK_GREEN,
-    'orange':   libgdf.GDF_ORANGE,
-}
-
-
-def str_to_gdf_color(s):
-    """Util to convert str to gdf_color type.
-    """
-    return _GDF_COLORS[s.lower()]
-
-
-def nvtx_range_push(name, color='green'):
-    """
-    Demarcate the beginning of a user-defined NVTX range.
-
-    Parameters
-    ----------
-    name : str
-        The name of the NVTX range
-    color : str
-        The color to use for the range.
-        Can be named color or hex RGB string.
-    """
-    name_c = ffi.new("char[]", name.encode('ascii'))
-
-    try:
-        color = int(color, 16)  # only works if color is a hex string
-        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
-    except ValueError:
-        color = str_to_gdf_color(color)
-        libgdf.gdf_nvtx_range_push(name_c, color)
-
-
-def nvtx_range_pop():
-    """ Demarcate the end of the inner-most range.
-    """
-    libgdf.gdf_nvtx_range_pop()
-
-
 def rmm_initialize():
     rmm.initialize()
     return True
@@ -517,45 +466,3 @@ def rmm_initialize():
 def rmm_finalize():
     rmm.finalize()
     return True
-
-
-_GDF_QUANTILE_METHODS = {
-    'linear': libgdf.GDF_QUANT_LINEAR,
-    'lower': libgdf.GDF_QUANT_LOWER,
-    'higher': libgdf.GDF_QUANT_HIGHER,
-    'midpoint': libgdf.GDF_QUANT_MIDPOINT,
-    'nearest': libgdf.GDF_QUANT_NEAREST,
-}
-
-
-def get_quantile_method(method):
-    """Util to convert method to gdf gdf_quantile_method.
-    """
-    return _GDF_QUANTILE_METHODS[method]
-
-
-def quantile(column, quant, method, exact):
-    """ Calculate the `quant` quantile for the column
-    Returns value with the quantile specified by quant
-    """
-    gdf_context = ffi.new('gdf_context*')
-    method_api = _join_method_api['sort']
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-    # libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
-    # px = ffi.new("double *")
-    res = []
-    for q in quant:
-        px = ffi.new("double *")
-        if exact:
-            libgdf.gdf_quantile_exact(column.cffi_view,
-                                      get_quantile_method(method),
-                                      q,
-                                      ffi.cast('void *', px),
-                                      gdf_context)
-        else:
-            libgdf.gdf_quantile_approx(column.cffi_view,
-                                       q,
-                                       ffi.cast('void *', px),
-                                       gdf_context)
-        res.append(px[0])
-    return res

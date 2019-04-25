@@ -176,6 +176,15 @@ class Index(object):
 
     __div__ = __truediv__
 
+    def __and__(self, other):
+        return self._apply_op('__and__', other)
+
+    def __or__(self, other):
+        return self._apply_op('__or__', other)
+
+    def __xor__(self, other):
+        return self._apply_op('__xor__', other)
+
     def __eq__(self, other):
         return self._apply_op('__eq__', other)
 
