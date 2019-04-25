@@ -100,7 +100,7 @@ struct ReduceOutputDispatcher {
 public:
     template <typename T_out, typename std::enable_if<
                 std::is_convertible<T_in, T_out>::value ||
-                (std::is_same<T_in, cudf::bool8>::value && 
+                (std::is_same<T_in, cudf::bool8>::value &&
                  std::is_convertible<bool, T_out>::value) >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
@@ -110,7 +110,7 @@ public:
 
     template <typename T_out, typename std::enable_if<
                 not (std::is_convertible<T_in, T_out>::value ||
-                     (std::is_same<T_in, cudf::bool8>::value && 
+                     (std::is_same<T_in, cudf::bool8>::value &&
                       std::is_convertible<bool, T_out>::value)) >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
@@ -148,14 +148,16 @@ public:
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
-        CUDF_FAIL("Non-arithmetic operation except for `min` or `max`"
-                  "is not supported");
+        CUDF_FAIL("Reduction operators other than `min` and `max`"
+                  " are not supported for non-arithmetic types");
     }
 };
 
 }   // anonymous namespace
 
+
 namespace cudf{
+
 
 gdf_scalar reduction(const gdf_column *col,
                   gdf_reduction_op op, gdf_dtype output_dtype)
@@ -190,7 +192,7 @@ gdf_scalar reduction(const gdf_column *col,
             ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
         break;
     default:
-        CUDF_FAIL("The input enum `gdf_reduction_op` is out of the range");
+        CUDF_FAIL("Unsupported reduction operator");
     }
 
     return scalar;
