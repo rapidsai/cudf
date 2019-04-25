@@ -43,12 +43,12 @@ gdf_dtypes = {
     GDF_INT32:             np.int32,
     GDF_INT16:             np.int16,
     GDF_INT8:              np.int8,
-    GDF_BOOL8:             np.bool,
+    GDF_BOOL8:             np.bool_,
     GDF_DATE64:            np.datetime64,
-    N_GDF_TYPES:           np.int32,
     GDF_CATEGORY:          np.int32,
     GDF_STRING_CATEGORY:   np.object_,
     GDF_STRING:            np.object_,
+    N_GDF_TYPES:           np.int32
 }
 
 def gdf_to_np_dtype(dtype):
