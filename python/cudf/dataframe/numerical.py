@@ -23,6 +23,7 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 
@@ -495,7 +496,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
-    _gdf.hash_columns(columns, result, initial_hash_values)
+    cpp_hash.hash_columns(columns, result, initial_hash_values)
     return result
 
 

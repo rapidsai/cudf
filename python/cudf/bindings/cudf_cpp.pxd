@@ -8,7 +8,7 @@
 from cudf.bindings.dlpack cimport DLManagedTensor
 
 from libcpp cimport bool
-from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
+from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -88,10 +88,6 @@ cdef extern from "cudf.h" nogil:
         GDF_NULL_NVTX_NAME,
         GDF_NOTIMPLEMENTED_ERROR,
         N_GDF_ERRORS
-
-    ctypedef enum gdf_hash_func:
-        GDF_HASH_MURMUR3=0,
-        GDF_HASH_IDENTITY,
 
     ctypedef enum gdf_time_unit:
         TIME_UNIT_NONE=0
@@ -277,17 +273,6 @@ cdef extern from "cudf.h" nogil:
                              gdf_column * right_indices,
                              gdf_context *join_context) except +
 
-    cdef gdf_error gdf_hash_partition(int num_input_cols,
-                                 gdf_column * input[],
-                                 int columns_to_hash[],
-                                 int num_cols_to_hash,
-                                 int num_partitions,
-                                 gdf_column * partitioned_output[],
-                                 int partition_offsets[],
-                                 gdf_hash_func hash)
-
-    cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
-
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output)
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
@@ -295,8 +280,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
-
-    cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
 
