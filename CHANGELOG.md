@@ -52,6 +52,7 @@
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
 - PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1463 Allow and default melt keyword argument var_name to be None
+- PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 
 
 ## Bug Fixes
@@ -86,7 +87,9 @@
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
-- PR #1498 Add missing include guard to device_atomics.cuh
+- PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
+- PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
+
 
 
 # cuDF 0.6.1 (25 Mar 2019)

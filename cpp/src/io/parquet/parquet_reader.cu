@@ -330,9 +330,9 @@ void decode_page_headers(
  * @param[in] chunks List of column chunk descriptors
  * @param[in] pages List of page information
  *
- * @return uint8_t* Device pointer to decompressed page data
+ * @return device_buffer<uint8_t> Device buffer to decompressed page data
  **/
-uint8_t *decompress_page_data(
+device_buffer<uint8_t> decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -377,13 +377,11 @@ uint8_t *decompress_page_data(
       codecs[1].second);
 
   // Dispatch batches of pages to decompress for each codec
-  uint8_t *decompressed_pages = nullptr;
-  RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0);
-
+  device_buffer<uint8_t> decomp_pages(total_decompressed_size);
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
-  size_t decompressed_ofs = 0;
+  size_t decomp_offset = 0;
   int32_t argc = 0;
   for (const auto &codec : codecs) {
     if (codec.second > 0) {
@@ -392,7 +390,7 @@ uint8_t *decompress_page_data(
       for_each_codec_page(codec.first, [&](size_t page) {
         inflate_in[argc].srcDevice = pages[page].page_data;
         inflate_in[argc].srcSize = pages[page].compressed_page_size;
-        inflate_in[argc].dstDevice = decompressed_pages + decompressed_ofs;
+        inflate_in[argc].dstDevice = decomp_pages.data() + decomp_offset;
         inflate_in[argc].dstSize = pages[page].uncompressed_page_size;
 
         inflate_out[argc].bytes_written = 0;
@@ -400,7 +398,7 @@ uint8_t *decompress_page_data(
         inflate_out[argc].reserved = 0;
 
         pages[page].page_data = (uint8_t *)inflate_in[argc].dstDevice;
-        decompressed_ofs += inflate_in[argc].dstSize;
+        decomp_offset += inflate_in[argc].dstSize;
         argc++;
       });
 
@@ -448,7 +446,7 @@ uint8_t *decompress_page_data(
   CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(), pages.host_ptr(),
                            pages.memory_size(), cudaMemcpyHostToDevice));
 
-  return decompressed_pages;
+  return decomp_pages;
 }
 
 /**
@@ -609,7 +607,7 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
   std::vector<gdf_column *> chunk_map(num_column_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<device_ptr<void>> page_data;
+  std::vector<device_buffer<uint8_t>> page_data;
 
   // Initialize column chunk info
   LOG_PRINTF("[+] Column Chunk Description\n");
@@ -648,9 +646,9 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        RMM_TRY(RMM_ALLOC(&d_compdata, col_meta.total_compressed_size, 0));
-        page_data.emplace_back(d_compdata);
-        const auto buffer = input.get_buffer(offset,col_meta.total_compressed_size);
+        page_data.emplace_back(col_meta.total_compressed_size);
+        d_compdata = page_data.back().data();
+        const auto buffer = input.get_buffer(offset, col_meta.total_compressed_size);
         CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
                                  col_meta.total_compressed_size,
                                  cudaMemcpyHostToDevice));
@@ -696,9 +694,9 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
 
     decode_page_headers(chunks, pages);
     if (total_decompressed_size > 0) {
-      uint8_t* d_decomp_data = decompress_page_data(chunks, pages);
+      auto decomp_page_data = decompress_page_data(chunks, pages);
       page_data.clear();
-      page_data.emplace_back(d_decomp_data);
+      page_data.push_back(std::move(decomp_page_data));
     }
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
@@ -711,24 +709,26 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
     }
   }
 
+  // For string dtype, allocate an NvStrings container instance, deallocating
+  // the original string list memory in the process.
+  // This container takes a list of string pointers and lengths, and copies
+  // into its own memory so the source memory must not be released yet.
+  for (auto &column : columns) {
+    if (column->dtype == GDF_STRING) {
+      using str_pair = std::pair<const char *, size_t>;
+      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
+      auto str_list = static_cast<str_pair *>(column->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
+                       &NVStrings::destroy);
+      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+    }
+  }
+
   // Transfer ownership to raw pointer output arguments
   args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
-
-    // For string dtype, allocate and return an NvStrings container instance,
-    // deallocating the original string list memory in the process.
-    // This container takes a list of string pointers and lengths, and copies
-    // into its own memory so the source memory must not be released yet.
-    if (args->data[i]->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s),
-                    "Unexpected nvstrdesc_s size");
-
-      auto str_list = static_cast<str_pair *>(args->data[i]->data);
-      auto str_data = NVStrings::create_from_index(str_list, num_rows);
-      RMM_FREE(std::exchange(args->data[i]->data, str_data), 0);
-    }
   }
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
