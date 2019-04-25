@@ -93,25 +93,6 @@ class MultiIndex(indexPackage.Index):
         return "MultiIndex(levels=" + str(self.levels) +\
                ",\ncodes=" + str(self.codes) + ")"
 
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            # a new MultiIndex with the sliced codes, same levels and names
-            None
-        elif isinstance(index, int):
-            # a tuple of the labels of the item defined by the set of codes
-            # at the ith positionjA
-            None
-        elif isinstance(index, (list, np.ndarray)):
-            result = MultiIndex(self.levels, self.codes.iloc[index])
-            result.names = self.names
-            return result
-        if isinstance(index, (DeviceNDArray)):
-            return self.take(index)
-        else:
-            raise IndexError('only integers, slices (`:`), ellipsis (`...`),'
-            'numpy.newaxis (`None`) and integer or boolean arrays are valid '
-            'indices')  # noqa: E128
-
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
         """
@@ -122,7 +103,7 @@ class MultiIndex(indexPackage.Index):
                 if self.levels[i][level_index] == element:
                     index_of_code_at_level = level_index
                     break
-            if index_of_code_at_level == None:
+            if index_of_code_at_level is None:
                 raise KeyError(element)
             matches = []
             for k, code in enumerate(self.codes[self.codes.columns[i]]):
@@ -204,7 +185,6 @@ class MultiIndex(indexPackage.Index):
             result.columns = StringIndex(columns, name=name)
         return result
 
-
     def __len__(self):
         return len(self.codes[self.codes.columns[0]])
 
@@ -252,6 +232,27 @@ class MultiIndex(indexPackage.Index):
         for level, item in enumerate(match.codes):
             result.append(match.levels[level][match.codes[item][0]])
         return tuple(result)
+
+    """
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            # a new MultiIndex with the sliced codes, same levels and names
+            None
+        elif isinstance(index, int):
+            # a tuple of the labels of the item defined by the set of codes
+            # at the ith positionjA
+            None
+        elif isinstance(index, (list, np.ndarray)):
+            result = MultiIndex(self.levels, self.codes.iloc[index])
+            result.names = self.names
+            return result
+        if isinstance(index, (DeviceNDArray)):
+            return self.take(index)
+        else:
+            raise IndexError('only integers, slices (`:`), ellipsis (`...`),'
+            'numpy.newaxis (`None`) and integer or boolean arrays are valid '
+            'indices')  # noqa: E128
+    """
 
     @property
     def _values(self):

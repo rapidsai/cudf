@@ -599,9 +599,8 @@ class StringIndex(GenericIndex):
         return result
 
     def __repr__(self):
-        return "{}({}, dtype='object', name={})".format(self.__class__.__name__,
-                                         self._values.to_array(), self.name)
-
+        return "{}({}, dtype='object', name={})".format(
+                self.__class__.__name__, self._values.to_array(), self.name)
 
 
 def as_index(arbitrary, name=None):
