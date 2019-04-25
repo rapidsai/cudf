@@ -19,6 +19,7 @@
 - PR #1455 Add Series.Shift via Numba kernel
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
+- PR #1445 Parquet Reader: Add selective reading of rows and row group
 
 ## Improvements
 
