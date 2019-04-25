@@ -14,10 +14,10 @@ from cudf.dataframe import columnops, numerical
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf import _gdf
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
 
 
