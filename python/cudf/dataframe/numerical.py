@@ -237,8 +237,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out = cpp_copying.apply_gather_column(sortedvals, segs)
-        return self.replace(data=Buffer(out), mask=None)
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        return self.replace(data=out_col.data, mask=None)
 
     def unique_count(self, method='sort', dropna=True):
         if method != 'sort':

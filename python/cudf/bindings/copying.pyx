@@ -10,6 +10,7 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.types cimport table as cudf_table
 from cudf.bindings.types import *
 from librmm_cffi import librmm as rmm
+from cudf.dataframe import columnops
 
 import numpy as np
 import pandas as pd
@@ -118,6 +119,20 @@ def apply_gather_column(in_col, maps, out_col=None):
     out_cols = apply_gather(in_cols, maps, out_cols)
 
     return out_cols[0]
+
+def apply_gather_array(dev_array, maps, out_col=None):
+    """
+      Call cudf::gather.
+
+     * in_cols input column
+     * maps device array
+     * out_cols the destination column to output
+
+     * returns out_col
+    """
+    
+    in_col = columnops.as_column(dev_array)
+    return apply_gather_column(in_col, maps, out_col)
 
 
 
