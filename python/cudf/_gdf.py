@@ -96,15 +96,6 @@ def columnview(size, data, mask=None, dtype=None, null_count=None,
                        dtype=dtype, null_count=null_count, nvcat=nvcat)
 
 
-def apply_unaryop(unaop, inp, out):
-    """Apply unary operator *unaop* to *inp* and store to *out*.
-
-    """
-    args = (inp.cffi_view, out.cffi_view)
-    # apply unary operator
-    unaop(*args)
-
-
 np_gdf_dict = {
     np.float64:      libgdf.GDF_FLOAT64,
     np.float32:      libgdf.GDF_FLOAT32,

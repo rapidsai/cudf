@@ -185,21 +185,6 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_STDDEV,
         GDF_WINDOW_VA
 
-    ctypedef enum gdf_unary_math_op:
-        GDF_SIN,
-        GDF_COS,
-        GDF_TAN,
-        GDF_ARCSIN,
-        GDF_ARCCOS,
-        GDF_ARCTAN,
-        GDF_EXP,
-        GDF_LOG,
-        GDF_SQRT,
-        GDF_CEIL,
-        GDF_FLOOR,
-        GDF_ABS,
-        GDF_BIT_INVERT,
-
     ctypedef union gdf_data:
         char          si08
         short         si16
@@ -338,16 +323,7 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
-    cdef gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op)
-
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output)
-
-    cdef gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output)
-    cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output)
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     

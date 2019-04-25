@@ -65,7 +65,11 @@ cdef apply_mask_and(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out):
 
     """
     cdef gdf_error result
-    result = gdf_validity_and(c_lhs, c_rhs, c_out)
+    result = gdf_validity_and(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
     check_gdf_error(result)
 
     cdef int nnz = 0
@@ -86,40 +90,104 @@ cdef apply_compiled_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, 
     cdef gdf_error result = GDF_CUDA_ERROR
     with nogil:
         if op == 'add':
-            result = gdf_add_generic(c_lhs, c_rhs, c_out)
+            result = gdf_add_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'sub':
-            result = gdf_sub_generic(c_lhs, c_rhs, c_out)
+            result = gdf_sub_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'mul':
-            result = gdf_mul_generic(c_lhs, c_rhs, c_out)
+            result = gdf_mul_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'div':
-            result = gdf_div_generic(c_lhs, c_rhs, c_out)
+            result = gdf_div_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'truediv':
-            result = gdf_div_generic(c_lhs, c_rhs, c_out)
+            result = gdf_div_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'floordiv':
-            result = gdf_floordiv_generic(c_lhs, c_rhs, c_out)
+            result = gdf_floordiv_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'eq':
-            result = gdf_eq_generic(c_lhs, c_rhs, c_out)
+            result = gdf_eq_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'ne':
-            result = gdf_ne_generic(c_lhs, c_rhs, c_out)
+            result = gdf_ne_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'lt':
-            result = gdf_lt_generic(c_lhs, c_rhs, c_out)
+            result = gdf_lt_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'gt':
-            result = gdf_gt_generic(c_lhs, c_rhs, c_out)
+            result = gdf_gt_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'le':
-            result = gdf_le_generic(c_lhs, c_rhs, c_out)
+            result = gdf_le_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'ge':
-            result = gdf_ge_generic(c_lhs, c_rhs, c_out)
+            result = gdf_ge_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'and':
-            result = gdf_bitwise_and_generic(c_lhs, c_rhs, c_out)
+            result = gdf_bitwise_and_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'or':
-            result = gdf_bitwise_or_generic(c_lhs, c_rhs, c_out)
+            result = gdf_bitwise_or_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
         elif op == 'xor':
-            result = gdf_bitwise_xor_generic(c_lhs, c_rhs, c_out)
+            result = gdf_bitwise_xor_generic(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out
+            )
 
     check_gdf_error(result)
 
     if c_out.valid is not NULL:
-        return apply_mask_and(c_lhs, c_rhs, c_out)
+        return apply_mask_and(
+            <gdf_column*>c_lhs,
+            <gdf_column*>c_rhs,
+            <gdf_column*>c_out
+        )
     else:
         return 0
 
@@ -141,14 +209,29 @@ def apply_op(lhs, rhs, out, op):
 
     if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
         try:
-            nullct = apply_compiled_op(c_lhs, c_rhs, c_out, op)
+            nullct = apply_compiled_op(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out,
+                op
+            )
         except GDFError as e:
             if e.errcode == b'GDF_UNSUPPORTED_DTYPE':
-                nullct = apply_jit_op(c_lhs, c_rhs, c_out, op)
+                nullct = apply_jit_op(
+                    <gdf_column*>c_lhs,
+                    <gdf_column*>c_rhs,
+                    <gdf_column*>c_out,
+                    op
+                )
             else:
                 raise e
     else:
-        nullct = apply_jit_op(c_lhs, c_rhs, c_out, op)
+        nullct = apply_jit_op(
+            <gdf_column*>c_lhs,
+            <gdf_column*>c_rhs,
+            <gdf_column*>c_out,
+            op
+        )
 
     free(c_lhs)
     free(c_rhs)

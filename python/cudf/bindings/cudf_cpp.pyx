@@ -49,10 +49,28 @@ gdf_dtypes = {
     GDF_STRING:            np.object_,
 }
 
+np_pa_dtypes = {
+    np.float64:     pa.float64(),
+    np.float32:     pa.float32(),
+    np.int64:       pa.int64(),
+    np.int32:       pa.int32(),
+    np.int16:       pa.int16(),
+    np.int8:        pa.int8(),
+    np.bool_:       pa.int8(),
+    np.datetime64:  pa.date64(),
+    np.object_:     pa.string(),
+    np.str_:        pa.string(),
+}
+
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
     return np.dtype(gdf_dtypes[dtype])
+
+def np_to_pa_dtype(dtype):
+    """Util to convert numpy dtype to PyArrow dtype
+    """
+    return np_pa_dtypes[np.dtype(dtype).type]
 
 def check_gdf_compatibility(col):
     """
