@@ -158,19 +158,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef struct  gdf_ipc_parser_type:
         pass
 
-    ctypedef struct _OpaqueRadixsortPlan:
-        pass
-    ctypedef struct  gdf_radixsort_plan_type:
-        pass
-
-    ctypedef struct _OpaqueSegmentedRadixsortPlan:
-        pass
-    ctypedef struct  gdf_segmented_radixsort_plan_type:
-        pass
-
-    ctypedef enum order_by_type:
-        GDF_ORDER_ASC,
-        GDF_ORDER_DESC
+    
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -248,28 +236,6 @@ cdef extern from "cudf.h" nogil:
     cdef const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle)
     cdef const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle)
 
-    cdef gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
-                                            unsigned begin_bit, unsigned end_bit)
-    cdef gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
-                                       size_t sizeof_key, size_t sizeof_val)
-    cdef gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl)
-
-    cdef gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
-
-    cdef gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,
-        unsigned begin_bit, unsigned end_bit)
-    cdef gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *hdl,
-    size_t sizeof_key, size_t sizeof_val)
-    cdef gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl)
-
-    cdef gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
-                                         gdf_column *keycol, gdf_column *valcol,
-                                         unsigned num_segments,
-                                         unsigned *d_begin_offsets,
-                                         unsigned *d_end_offsets)
-
     cdef gdf_error gdf_inner_join(
                              gdf_column **left_cols,
                              int num_left_cols,
@@ -334,12 +300,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream)
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
-
-    cdef gdf_error gdf_order_by(gdf_column** input_columns,
-                                int8_t* asc_desc,
-                                size_t num_inputs,
-                                gdf_column* output_indices,
-                                int flag_nulls_are_smallest)
 
     cdef gdf_error gdf_filter(size_t nrows,
                  gdf_column* cols,
