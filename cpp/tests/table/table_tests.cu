@@ -115,7 +115,7 @@ TYPED_TEST(TableTest, ConstructColumns) {
   }
 }
 
-TYPED_TEST(TableTest, ConstructColumnsWithBitmasks) {
+TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
   const auto size = this->random_size();
   std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8,
                                 cudf::gdf_dtype_of<TypeParam>()};
@@ -127,8 +127,9 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasks) {
     auto constructor = [size, dtypes]() { cudf::table{size, dtypes}; };
     EXPECT_THROW(constructor(), cudf::logic_error);
   } else {
-    // Construct columns, each with a bitmask allocation
-    cudf::table t{size, dtypes, true};
+    // Construct columns, each with a bitmask allocation indicating all values
+    // are null
+    cudf::table t{size, dtypes, true, false};
 
     for (gdf_size_type i = 0; i < t.num_columns(); ++i) {
       gdf_column* col = t.get_column(i);
@@ -137,6 +138,49 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasks) {
       EXPECT_EQ(size, col->size);
       EXPECT_EQ(0, col->null_count);
       EXPECT_EQ(dtypes[i], col->dtype);
+
+      gdf_size_type valid_count{-1};
+      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
+      EXPECT_EQ(0, valid_count);
+    }
+
+    // User responsible for freeing columns...
+    std::for_each(t.begin(), t.end(), [](gdf_column* col) {
+      RMM_FREE(col->data, 0);
+      RMM_FREE(col->valid, 0);
+      delete col;
+    });
+    delete[] t.begin();
+  }
+}
+
+TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
+  const auto size = this->random_size();
+  std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8,
+                                cudf::gdf_dtype_of<TypeParam>()};
+
+  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
+    // Can't invoke a constructor with multiple arguments in the body of a macro
+    // because the comma confuses the macro. Use a lambda wrapper as a
+    // workaround
+    auto constructor = [size, dtypes]() { cudf::table{size, dtypes}; };
+    EXPECT_THROW(constructor(), cudf::logic_error);
+  } else {
+    // Construct columns, each with a bitmask allocation indicating all values
+    // are null
+    cudf::table t{size, dtypes, true, true};
+
+    for (gdf_size_type i = 0; i < t.num_columns(); ++i) {
+      gdf_column* col = t.get_column(i);
+      EXPECT_NE(nullptr, col->data);
+      EXPECT_NE(nullptr, col->valid);
+      EXPECT_EQ(size, col->size);
+      EXPECT_EQ(0, col->null_count);
+      EXPECT_EQ(dtypes[i], col->dtype);
+
+      gdf_size_type valid_count{-1};
+      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
+      EXPECT_EQ(size, valid_count);
     }
 
     // User responsible for freeing columns...
