@@ -39,6 +39,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <memory>
+#include <arrow/io/interfaces.h>
+#include <arrow/io/file.h>
+#include <arrow/buffer.h>
+#include <arrow/io/memory.h>
+
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -50,36 +56,42 @@
  **/
 class DataSource {
  public:
+  explicit DataSource(){
+    this->file_handler = nullptr;
+  }
   explicit DataSource(const char *filepath) {
-    fd = open(filepath, O_RDONLY);
-    CUDF_EXPECTS(fd > 0, "Cannot open file");
+    std::shared_ptr<arrow::io::ReadableFile> file;
+    CUDF_EXPECTS(arrow::io::ReadableFile::Open(std::string(filepath), &file).ok() == true, "Error opening parquet file");
+    this->file_handler = file;
+  }
 
-    struct stat st {};
-    CUDF_EXPECTS(fstat(fd, &st) == 0, "Cannot query file size");
+  explicit DataSource(const char *filepath, size_t buffer_length) {
+      this->file_handler = std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(filepath), buffer_length);
+    }
 
-    mapped_size = st.st_size;
-    CUDF_EXPECTS(mapped_size > 0, "Unexpected zero-sized file");
-
-    mapped_data = mmap(NULL, mapped_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Cannot memory-mapping file");
+  explicit DataSource(std::shared_ptr<arrow::io::RandomAccessFile> file_handler) {
+    this->file_handler = file_handler;
   }
 
   ~DataSource() {
-    if (mapped_data) {
-      munmap(mapped_data, mapped_size);
-    }
-    if (fd) {
-      close(fd);
-    }
+
   }
 
-  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
-  size_t size() const { return mapped_size; }
+  const std::shared_ptr<arrow::Buffer> get_buffer(int64_t position, int64_t nbytes) const {
+    std::shared_ptr< arrow::Buffer > out;
+    this->file_handler->ReadAt ( position,  nbytes, &out);
+    return out;
+  }
+//  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
+  size_t size() const {
+    int64_t size;
+    this->file_handler->GetSize(&size);
+    return size;
+  }
 
  private:
-  void *mapped_data = nullptr;
-  size_t mapped_size = 0;
-  int fd = 0;
+  std::shared_ptr<arrow::io::RandomAccessFile> file_handler;
+
 };
 
 /**
@@ -145,25 +157,34 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(const uint8_t *data, size_t len) {
+  explicit ParquetMetadata(const DataSource data) {
+    size_t len = data.size();
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
-    const auto header = (const parquet::file_header_s *)data;
-    const auto ender = (const parquet::file_ender_s *)(data + len - ender_len);
-    CUDF_EXPECTS(
-        data && len > header_len + ender_len,
-        "Incorrect data source");
-    CUDF_EXPECTS(
-        header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
-        "Corrupted header or footer");
-    CUDF_EXPECTS(
-        ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
-        "Incorrect footer length");
 
-    parquet::CompactProtocolReader cp(
-        data + len - ender->footer_len - ender_len, ender->footer_len);
-    CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+    {
+      const auto header_buffer = data.get_buffer(0,sizeof(parquet::file_header_s));
+      const auto header = (const parquet::file_header_s *)header_buffer->data();
+      const auto ender_buffer = data.get_buffer(len - ender_len,sizeof(parquet::file_ender_s));
+      const auto ender = (const parquet::file_ender_s *)ender_buffer->data();
+      CUDF_EXPECTS(
+           len > header_len + ender_len,
+          "Incorrect data source");
+      CUDF_EXPECTS(
+          header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+          "Corrupted header or footer");
+      CUDF_EXPECTS(
+          ender->footer_len != 0 && ender->footer_len <= len - header_len - ender_len,
+          "Incorrect footer length");
+
+
+      const auto buffer = data.get_buffer(len - ender->footer_len - ender_len,ender->footer_len);
+      parquet::CompactProtocolReader cp(
+          buffer->data(), ender->footer_len);
+      CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+      CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+
+    }
 
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" version = %d\n", version);
@@ -309,9 +330,9 @@ void decode_page_headers(
  * @param[in] chunks List of column chunk descriptors
  * @param[in] pages List of page information
  *
- * @return uint8_t* Device pointer to decompressed page data
+ * @return device_buffer<uint8_t> Device buffer to decompressed page data
  **/
-uint8_t *decompress_page_data(
+device_buffer<uint8_t> decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -356,13 +377,11 @@ uint8_t *decompress_page_data(
       codecs[1].second);
 
   // Dispatch batches of pages to decompress for each codec
-  uint8_t *decompressed_pages = nullptr;
-  RMM_ALLOC(&decompressed_pages, total_decompressed_size, 0);
-
+  device_buffer<uint8_t> decomp_pages(total_decompressed_size);
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
-  size_t decompressed_ofs = 0;
+  size_t decomp_offset = 0;
   int32_t argc = 0;
   for (const auto &codec : codecs) {
     if (codec.second > 0) {
@@ -371,7 +390,7 @@ uint8_t *decompress_page_data(
       for_each_codec_page(codec.first, [&](size_t page) {
         inflate_in[argc].srcDevice = pages[page].page_data;
         inflate_in[argc].srcSize = pages[page].compressed_page_size;
-        inflate_in[argc].dstDevice = decompressed_pages + decompressed_ofs;
+        inflate_in[argc].dstDevice = decomp_pages.data() + decomp_offset;
         inflate_in[argc].dstSize = pages[page].uncompressed_page_size;
 
         inflate_out[argc].bytes_written = 0;
@@ -379,7 +398,7 @@ uint8_t *decompress_page_data(
         inflate_out[argc].reserved = 0;
 
         pages[page].page_data = (uint8_t *)inflate_in[argc].dstDevice;
-        decompressed_ofs += inflate_in[argc].dstSize;
+        decomp_offset += inflate_in[argc].dstSize;
         argc++;
       });
 
@@ -427,7 +446,7 @@ uint8_t *decompress_page_data(
   CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(), pages.host_ptr(),
                            pages.memory_size(), cudaMemcpyHostToDevice));
 
-  return decompressed_pages;
+  return decomp_pages;
 }
 
 /**
@@ -500,6 +519,9 @@ void decode_page_data(
   }
 }
 
+
+
+
 /**
  * @brief Reads Apache Parquet data and returns an array of gdf_columns.
  *
@@ -507,15 +529,22 @@ void decode_page_data(
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  **/
-gdf_error read_parquet(pq_read_arg *args) {
+gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> file_handle) {
 
   int num_columns = 0;
   int num_rows = 0;
   int index_col = -1;
+  DataSource input;
+  if(args->source_type == FILE_PATH){
+    input = DataSource(args->source);
+  }else if(args->source_type == ARROW_RANDOM_ACCESS_FILE){
+    CUDF_EXPECTS(file_handle != nullptr,"read_parquet_arrow was used but no file handle set");
+    input = DataSource(file_handle);
+  }else{
+    input = DataSource(args->source, args->buffer_size);
+  }
 
-  DataSource input(args->source);
-
-  ParquetMetadata md(input.data(), input.size());
+  ParquetMetadata md(input);
   CUDF_EXPECTS(md.get_num_rowgroups() > 0, "No row groups found");
   CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
 
@@ -578,7 +607,7 @@ gdf_error read_parquet(pq_read_arg *args) {
   std::vector<gdf_column *> chunk_map(num_column_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<device_ptr<void>> page_data;
+  std::vector<device_buffer<uint8_t>> page_data;
 
   // Initialize column chunk info
   LOG_PRINTF("[+] Column Chunk Description\n");
@@ -617,11 +646,13 @@ gdf_error read_parquet(pq_read_arg *args) {
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        RMM_TRY(RMM_ALLOC(&d_compdata, col_meta.total_compressed_size, 0));
-        page_data.emplace_back(d_compdata);
-        CUDA_TRY(cudaMemcpyAsync(d_compdata, input.data() + offset,
+        page_data.emplace_back(col_meta.total_compressed_size);
+        d_compdata = page_data.back().data();
+        const auto buffer = input.get_buffer(offset, col_meta.total_compressed_size);
+        CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
                                  col_meta.total_compressed_size,
                                  cudaMemcpyHostToDevice));
+        CUDA_TRY(cudaStreamSynchronize(0));
       }
       chunks.insert(parquet::gpu::ColumnChunkDesc(
           col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -663,9 +694,9 @@ gdf_error read_parquet(pq_read_arg *args) {
 
     decode_page_headers(chunks, pages);
     if (total_decompressed_size > 0) {
-      uint8_t* d_decomp_data = decompress_page_data(chunks, pages);
+      auto decomp_page_data = decompress_page_data(chunks, pages);
       page_data.clear();
-      page_data.emplace_back(d_decomp_data);
+      page_data.push_back(std::move(decomp_page_data));
     }
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
@@ -678,24 +709,26 @@ gdf_error read_parquet(pq_read_arg *args) {
     }
   }
 
+  // For string dtype, allocate an NvStrings container instance, deallocating
+  // the original string list memory in the process.
+  // This container takes a list of string pointers and lengths, and copies
+  // into its own memory so the source memory must not be released yet.
+  for (auto &column : columns) {
+    if (column->dtype == GDF_STRING) {
+      using str_pair = std::pair<const char *, size_t>;
+      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
+      auto str_list = static_cast<str_pair *>(column->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
+                       &NVStrings::destroy);
+      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+    }
+  }
+
   // Transfer ownership to raw pointer output arguments
   args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
   for (int i = 0; i < num_columns; ++i) {
     args->data[i] = columns[i].release();
-
-    // For string dtype, allocate and return an NvStrings container instance,
-    // deallocating the original string list memory in the process.
-    // This container takes a list of string pointers and lengths, and copies
-    // into its own memory so the source memory must not be released yet.
-    if (args->data[i]->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      static_assert(sizeof(str_pair) == sizeof(parquet::gpu::nvstrdesc_s),
-                    "Unexpected nvstrdesc_s size");
-
-      auto str_list = static_cast<str_pair *>(args->data[i]->data);
-      auto str_data = NVStrings::create_from_index(str_list, num_rows);
-      RMM_FREE(std::exchange(args->data[i]->data, str_data), 0);
-    }
   }
   args->num_cols_out = num_columns;
   args->num_rows_out = num_rows;
@@ -707,4 +740,8 @@ gdf_error read_parquet(pq_read_arg *args) {
   }
 
   return GDF_SUCCESS;
+}
+
+gdf_error read_parquet(pq_read_arg *args) {
+  return read_parquet_arrow(args, nullptr);
 }

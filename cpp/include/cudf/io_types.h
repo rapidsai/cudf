@@ -16,12 +16,14 @@
 
 #pragma once
 
+
 /*
  * @brief Enumeration of supported input types for cudf reader interfaces
  */
 typedef enum {
-  FILE_PATH,        ///< Source is specified as a file path
-  HOST_BUFFER,      ///< Source is specified as a buffer in host memory
+  FILE_PATH,                 ///< Source is specified as a file path
+  HOST_BUFFER,               ///< Source is specified as a buffer in host memory,
+  ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
 } gdf_input_type;
 
 /*
@@ -174,8 +176,7 @@ typedef struct {
    */
   gdf_input_type source_type;               ///< In: Type of data source
   const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
-
+  size_t        buffer_size;                ///< In: If source_type is   HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
   const char    **use_cols;                 ///< In: Columns of interest. Only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
 
