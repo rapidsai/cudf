@@ -42,12 +42,16 @@ struct Options {
    * If `true`, any row in the `keys` table that contains a NULL value will be
    * ignored. That is, the row will not be present in the output keys, and it's
    * associated row in the `values` table will also be ignored.
+   * 
    *
    * If `false`, rows in the `keys` table with NULL values will be treated as
    * any other row. Furthermore, a NULL value will be considered equal to
    * another NULL value. For example, two rows `{1, 2, 3, NULL}` and `{1, 2, 3,
    * NULL}` will be considered equal, and their associated rows in the `values`
    * table will be aggregated.
+   * 
+   * @note The behavior for a Pandas groupby operation is `ignore_null_keys == true`.
+   * @note The behavior for a SQL groupby operation is `ignore_null_keys == false`.
    *
    *---------------------------------------------------------------------------**/
   bool const ignore_null_keys{true};
