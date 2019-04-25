@@ -207,8 +207,6 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_column_free(gdf_column *column)
 
-    cdef gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns)
-
     cdef gdf_error gdf_context_view(gdf_context *context,
                                     int flag_sorted,
                                     gdf_method flag_method,

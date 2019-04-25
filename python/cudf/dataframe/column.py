@@ -18,6 +18,7 @@ from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.cudf_cpp import count_nonzero_mask
+from cudf.bindings.concat import _column_concat
 
 
 class Column(object):
@@ -93,7 +94,7 @@ class Column(object):
 
         # Performance the actual concatenation
         if newsize > 0:
-            col = _gdf._column_concat(objs, col)
+            col = _column_concat(objs, col)
 
         return col
 
