@@ -89,7 +89,14 @@ def apply_gather(in_cols, maps, out_cols=None):
     # size check, cudf::gather requires same length for maps and out table.
     assert len(maps) == len(out_cols)
 
-    cdef gdf_index_type* c_maps = <gdf_index_type*> get_ctype_ptr(maps)
+    cdef uintptr_t c_maps_ptr
+    cdef gdf_index_type* c_maps
+    c_maps_ptr = get_ctype_ptr(maps)
+    c_maps = <gdf_index_type*>c_maps_ptr
+
+    #cdef void* void_ptr = <void*> get_ctype_ptr(maps)
+    #cdef gdf_index_type* c_maps = <gdf_index_type*>void_ptr
+
 
     with nogil:
         gather(c_in_table, c_maps, c_out_table)
