@@ -26,6 +26,9 @@ class MultiIndex(indexPackage.Index):
     """
 
     def __init__(self, levels, codes, names=None):
+        if isinstance(names, Sequence):
+            if all(x is None for x in names):
+                names = None
         if names is None:
             column_names = list(range(len(codes)))
         else:
@@ -255,21 +258,22 @@ class MultiIndex(indexPackage.Index):
         return list([i for i in self])
 
     @classmethod
-    def from_tuples(cls, tuples, names):
+    def from_tuples(cls, tuples, names=None):
         # cheating
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
+        print(pdi)
         result = cls.from_pandas(pdi)
         return result
 
     @classmethod
-    def from_frame(cls, dataframe, names):
+    def from_frame(cls, dataframe, names=None):
         # cheating
         pdi = pd.MultiIndex.from_frame(dataframe.to_pandas(), names=names)
         result = cls.from_pandas(pdi)
         return result
 
     @classmethod
-    def from_product(cls, arrays, names):
+    def from_product(cls, arrays, names=None):
         # cheating
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         result = cls.from_pandas(pdi)

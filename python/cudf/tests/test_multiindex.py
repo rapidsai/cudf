@@ -298,8 +298,8 @@ def test_multiindex_from_tuples():
     arrays = [['a', 'a', 'b', 'b'],
               ['house', 'store', 'house', 'store']]
     tuples = list(zip(*arrays))
-    pmi = pd.MultiIndex.from_tuples(tuples, names=['alpha', 'location'])
-    gmi = cudf.MultiIndex.from_tuples(tuples, names=['alpha', 'location'])
+    pmi = pd.MultiIndex.from_tuples(tuples)
+    gmi = cudf.MultiIndex.from_tuples(tuples)
     assert_eq(pmi, gmi)
 
 
@@ -318,3 +318,20 @@ def test_multiindex_from_product():
     pmi = pd.MultiIndex.from_product(arrays, names=['alpha', 'location'])
     gmi = cudf.MultiIndex.from_product(arrays, names=['alpha', 'location'])
     assert_eq(pmi, gmi)
+
+
+def test_multiindex_index_and_columns():
+    gdf = cudf.DataFrame()
+    gdf['x'] = np.random.randint(0, 5, 5)
+    gdf['y'] = np.random.randint(0, 5, 5)
+    gdf['val'] = np.random.random(5)
+    pdf = gdf.to_pandas()
+    pdg = pdf.groupby(['x', 'y']).agg(['mean', 'min'])
+    gdg = gdf.groupby(['x', 'y']).agg(['mean', 'min'])
+    mi = cudf.MultiIndex(levels=[[0, 1, 2], [3, 4]], codes=[[0, 0, 1, 1, 2],
+             [0, 1, 0, 1, 1]], names=['x', 'y'])
+    gdf.index = mi
+    gdf = gdf.drop('val')
+    mc = cudf.MultiIndex(levels=[['val'], ['mean', 'min']],
+            codes=[[0, 0], [0, 1]])
+    gdf.columns = mc

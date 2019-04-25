@@ -381,6 +381,9 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
+        if isinstance(self.index, MultiIndex) or isinstance(self.columns,
+                MultiIndex):
+            raise TypeError("You're trying to print a DataFrame that contains a  MultiIndex. Print this dataframe with .to_pandas()")  # noqa: E501
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
         if ncols is NOTSET:
@@ -2090,9 +2093,11 @@ class DataFrame(object):
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
         if isinstance(self.columns, Index):
+            print(self.columns)
             out.columns = self.columns
             if isinstance(self.columns, MultiIndex):
-                out.columns.names = self.columns.names
+                if self.columns.names is not None:
+                    out.columns.names = self.columns.names
             else:
                 out.columns.name = self.columns.name
         return out
