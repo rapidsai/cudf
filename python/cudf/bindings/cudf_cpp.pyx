@@ -81,7 +81,10 @@ def check_gdf_compatibility(col):
 
 
 cpdef get_ctype_ptr(obj):
-    return obj.device_ctypes_pointer.value
+    if obj.device_ctypes_pointer.value is None:
+        return 0
+    else:
+        return obj.device_ctypes_pointer.value
 
 cpdef get_column_data_ptr(obj):
     return get_ctype_ptr(obj._data.mem)
@@ -332,19 +335,19 @@ cpdef check_gdf_error(errcode):
 
             raise GDFError(errname, msg)
 
-def count_nonzero_mask(mask, size):
+cpdef count_nonzero_mask(mask, size):
     assert mask.size * mask_bitsize >= size
-    cdef vector[int] nnz = [0]
+    cdef int nnz = 0
     cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
 
     if mask_ptr:
         gdf_count_nonzero_mask(
             <gdf_valid_type*>mask_ptr,
             size,
-            nnz.data()
+            &nnz
         )
 
-    return nnz[0]
+    return nnz
 
 
 
