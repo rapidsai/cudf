@@ -48,17 +48,13 @@ cdef free_table(cudf_table* table):
     del table
 
 
-def clone_single_column_with_size(col, row_size):
+def clone_columns_with_size(in_cols, row_size):
     from cudf.dataframe import columnops
-    return columnops.column_empty(row_size, 
-                                  col.dtype(),
-                                  col.has_null_mask())
-
-
-def clone_columns_with_size(in_cols, size):
     out_cols = []
     for col in in_cols:
-        o_col = clone_single_column_with_size(col, size)
+        o_col = columnops.column_empty(row_size, 
+                                       masked = col.has_null_mask,
+                                       dtype = col.dtype)
         out_cols.append(o_col)
 
     return out_cols
@@ -89,7 +85,7 @@ def apply_gather(in_cols, maps, out_cols=None):
         c_out_table = table_from_cols(out_cols)
 
     # size check, cudf::gather requires same length for maps and out table.
-    assert len(maps) == len(out_cols)
+    assert len(maps) == out_cols[0].data.size
 
     cdef uintptr_t c_maps_ptr = get_ctype_ptr(maps)
     cdef gdf_index_type* c_maps = <gdf_index_type*>c_maps_ptr
@@ -97,7 +93,7 @@ def apply_gather(in_cols, maps, out_cols=None):
     with nogil:
         gather(c_in_table, c_maps, c_out_table)
 
-    if is_same_input == false :
+    if is_same_input == False :
         free_table(c_out_table)
     
     free_table(c_in_table)
