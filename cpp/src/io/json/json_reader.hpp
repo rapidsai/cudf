@@ -44,7 +44,8 @@ private:
   const size_t byte_range_size_ = 0;
 
   device_buffer<uint64_t> rec_starts_;
-
+  void ingestRawInput();
+  void decompressInput();
   void ingestInput();
   device_buffer<uint64_t> enumerateNewlinesAndQuotes();
   device_buffer<uint64_t> filterNewlines(device_buffer<uint64_t> newlines_and_quotes);

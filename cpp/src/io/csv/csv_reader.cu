@@ -916,34 +916,6 @@ gdf_error inferCompressionType(const char* compression_arg, const char* filepath
 	return GDF_SUCCESS;
 }
 
-
-/**---------------------------------------------------------------------------*
- * @brief Uncompresses the input data and stores the allocated result into 
- * a vector.
- * 
- * @param[in] h_data Pointer to the csv data in host memory
- * @param[in] num_bytes Size of the input data, in bytes
- * @param[in] compression String describing the compression type
- * @param[out] h_uncomp_data Vector containing the output uncompressed data
- * 
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
- *---------------------------------------------------------------------------**/
-gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const string& compression, vector<char>& h_uncomp_data) 
-{	
-	int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-	if (compression == "gzip")
-		comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
-	else if (compression == "zip")
-		comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
-	else if (compression == "bz2")
-		comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
-	else if (compression == "xz")
-		comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
-
-	return io_uncompress_single_h2d(h_data, num_bytes, comp_type, h_uncomp_data);
-}
-
-
 /**---------------------------------------------------------------------------*
  * @brief Uploads the relevant segment of the input csv data onto the GPU.
  * 

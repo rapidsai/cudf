@@ -168,7 +168,6 @@ typedef struct {
  * @brief Input and output arguments to the read_json interface.
  *---------------------------------------------------------------------------**/
 typedef struct {
-
   /*
    * Output arguments
    */
@@ -187,4 +186,5 @@ typedef struct {
   int           num_cols;                   ///< Number of columns in the dtype array
   const char    **dtype;                    ///< Ordered List of data types
 
+  char          *compression;               ///< Compression type ("none", "infer", "gzip", "zip"); default(nullptr) is uncompressed
 } json_read_arg;

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -125,13 +126,49 @@ void JsonReader::parse(){
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Parse the input JSON file specified in the args_ data member
+ * @brief Infer the compression type from the compression parameter and 
+ * the input file name
  * 
- * Stores the parsed gdf columns in an internal data member
+ * Returns "none" if the input is not compressed.
+ * 
+ * @param[in] compression_arg Input string that is potentially describing 
+ * the compression type. Can also be nullptr, "none", or "infer"
+ * @param[in] filepath path + name of the input file
+ * 
+ * @return string representing the compression type
+ *---------------------------------------------------------------------------**/
+std::string inferCompressionType(const char* compression_arg, const char* filepath)
+{
+  if (compression_arg == nullptr || 0 == strcasecmp(compression_arg, "none")){
+    return "none";
+  }
+  if (0 != strcasecmp(compression_arg, "infer")){
+    return std::string(compression_arg);
+  }
+  else {
+    const char *file_ext = strrchr(filepath, '.');
+    if (file_ext){
+      if (!strcasecmp(file_ext, ".gz"))
+        return "gzip";
+      else if (!strcasecmp(file_ext, ".zip"))
+        return "zip";
+      else if (!strcasecmp(file_ext, ".bz2"))
+        return "bz2";
+      else if (!strcasecmp(file_ext, ".xz"))
+        return "xz";
+    }
+    CUDF_FAIL("Invalid compression argument");
+  }
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Ingest input JSON file/buffer, without decompression
+ * 
+ * Sets the input_data_ and input_size_ data members
  * 
  * @return void
  *---------------------------------------------------------------------------**/
-void JsonReader::ingestInput(){
+ void JsonReader::ingestRawInput(){
   if (args_->source_type == gdf_csv_input_form::FILE_PATH){
     map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
     CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty");
@@ -165,22 +202,43 @@ void JsonReader::ingestInput(){
   else {
     CUDF_FAIL("Invalid input type");
   }
+}
 
-  const std::string compression_type = "none";
+/**---------------------------------------------------------------------------*
+ * @brief Decompress the input data, if needed
+ * 
+ * Sets the uncomp_data_ and uncomp_size_ data members
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
+ void JsonReader::decompressInput(){
+  const std::string compression_type = inferCompressionType(args_->compression, args_->source);
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid copying the whole file to the heap
     uncomp_data_ = input_data_;
     uncomp_size_ = input_size_;
   }
   else {
-    // TODO add compression support
-    //const auto error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
-    //CUDF_EXPECTS(error == GDF_SUCCESS, "Input data decompressino failed");
-    //uncomp_data_ = h_uncomp_data_owner.data();
-    //uncomp_size_ = h_uncomp_data_owner.size();
+    CUDF_EXPECTS(getUncompressedHostData(input_data_, input_size_, compression_type, uncomp_data_owner_) == GDF_SUCCESS,
+      "Input data decompression failed");
+    uncomp_data_ = uncomp_data_owner_.data();
+    uncomp_size_ = uncomp_data_owner_.size();
   }
-  CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: raw host input data is null");
-  CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: raw host input data has zero size");
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief ingest the input JSON file, including decompression
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
+void JsonReader::ingestInput(){
+  ingestRawInput();
+  CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null");
+  CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size");
+
+  decompressInput();
+  CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null");
+  CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size");
 }
 
 device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
