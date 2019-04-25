@@ -160,8 +160,8 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         out_col_agg = column_view_from_column(out_col_agg_series._column)
 
         if agg_type is None:
-            raise RuntimeError(
-                "ERROR: this aggregator has not been implemented yet"
+            raise NotImplementedError(
+                "this aggregator has not been implemented yet"
             )
         else:
             with nogil:
@@ -225,30 +225,16 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         # try to free the memory
         for i, col in enumerate(out_col_values_series):
             if col.dtype == np.dtype("object") and len(col) > 0:
-                import nvcategory
-                nvcat_ptr = int(<uintptr_t>vector_out_col_values[i].dtype_info.category)
-                nvcat_obj = None
-                if nvcat_ptr:
-                    nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                    nvstr_obj = nvcat_obj.to_strings()
-                else:
-                    import nvstrings
-                    nvstr_obj = nvstrings.to_device([])
-                out_col_values_series[i]._column._data = nvstr_obj
-                out_col_values_series[i]._column._nvcategory = nvcat_obj
+                update_nvstrings_col(
+                    out_col_values_series[i]._column,
+                    <uintptr_t>vector_out_col_values[i].dtype_info.category
+                )
         if out_col_agg_series.dtype == np.dtype("object") and \
                 len(out_col_agg_series) > 0:
-            import nvcategory
-            nvcat_ptr = int(<uintptr_t>out_col_agg.dtype_info.category)
-            nvcat_obj = None
-            if nvcat_ptr:
-                nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                nvstr_obj = nvcat_obj.to_strings()
-            else:
-                import nvstrings
-                nvstr_obj = nvstrings.to_device([])
-            out_col_agg_series._column._data = nvstr_obj
-            out_col_agg_series._column._nvcategory = nvcat_obj
+            update_nvstrings_col(
+                out_col_agg_series._column,
+                <uintptr_t>out_col_agg.dtype_info.category
+            )
 
         if first_run:
             for i, thisBy in enumerate(groupby_class._by):
@@ -327,6 +313,7 @@ def agg(groupby_class, args):
     # TODO: Use MultiColumn here instead of use_prefix
     # use_prefix enables old functionality - prefixing column
     # groupby names since we don't support MultiColumn quite yet
+    # https://github.com/rapidsai/cudf/issues/483
     use_prefix = 1 < len(groupby_class._val_columns) or 1 < len(args)
     if not isinstance(args, str) and isinstance(
             args, collections.abc.Sequence):
