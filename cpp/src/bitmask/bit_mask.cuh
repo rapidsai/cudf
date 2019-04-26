@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
+   * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -14,143 +14,224 @@
  * limitations under the License.
  */
 
-#ifndef _BIT_MASK_H_
-#define _BIT_MASK_H_
+#ifndef CUDF_BIT_MASK_CUH
+#define CUDF_BIT_MASK_CUH
 
-#include "cudf.h"
-#include "bit_mask.h"
-#include "rmm/rmm.h"
-#include "utilities/error_utils.h"
-#include <cuda_runtime_api.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/bit_util.cuh>
+#include <utilities/integer_utils.hpp>
+#include <utilities/error_utils.hpp>
 
-using bit_mask_t = bit_mask::bit_mask_t;
-
-
-/* ---------------------------------------------------------------------------- *
- * @brief  Class for managing bit containers on the device
- * ---------------------------------------------------------------------------- */
-class BitMask {
-public:
-   __host__ __device__ BitMask(bit_mask_t *valid, int bitlength): valid_(valid), bitlength_(bitlength) {}
+namespace bit_mask {
+  typedef uint32_t     bit_mask_t;
+  enum { bits_per_element = gdf::util::size_in_bits<bit_mask_t>() };
 
   /**
-   * @brief Check to see if a record is Valid (aka not null)
+   * @brief determine the number of bit_mask_t elements are used
    *
-   * @param[in] record_idx   the record index to check
-   *
-   * @return  true if record is valid, false if record is null
-   */
-  template <typename T>
-  __device__ bool is_valid(T record_idx) const {
-    return bit_mask::is_valid(valid_, record_idx);
-  }
-
-  /**
-   * @brief Set a bit (not thread-save)
-   *
-   * @param[in] record_idx    the record index
-   */
-  template <typename T>
-  __device__ void set_bit_unsafe(T record_idx) {
-    bit_mask::set_bit_unsafe(valid_, record_idx);
-  }
-
-
-  /**
-   * @brief Clear a bit (not thread-safe)
-   *
-   * @param[in] record_idx    the record index
-   */
-  template <typename T>
-  __device__ void clear_bit_unsafe(T record_idx) {
-    bit_mask::clear_bit_unsafe(valid_, record_idx);
-  }
-
-  /**
-   * @brief Set a bit in a thread-safe manner
-   *
-   * @param[in] record_idx    the record index
-   */
-  template <typename T>
-  __device__ void set_bit(T record_idx) {
-    bit_mask::set_bit_safe(valid_, record_idx);
-  }
-
-
-  /**
-   * @brief Clear a bit in a thread-safe manner
-   *
-   * @param[in] record_idx    the record index
-   */
-  template <typename T>
-  __device__ void clear_bit(T record_idx) {
-    bit_mask::clear_bit_safe(valid_, record_idx);
-  }
-
-  /**
-   * @brief Get the number of elements in this bit container
+   * @param[in]  size    Number of bits in the bitmask
    *
    * @return the number of elements
    */
-  __device__ gdf_size_type num_elements() const {
-    return bit_mask::num_elements(bitlength_);
+  CUDA_HOST_DEVICE_CALLABLE
+  constexpr gdf_size_type num_elements(gdf_size_type size) {
+//    return (( size + ( bits_per_element - 1)) / bits_per_element );
+    return cudf::util::div_rounding_up_unsafe<gdf_size_type>(size, bits_per_element);
   }
 
   /**
-   * @brief Get a reference to a specific element (device only)
+   *  @brief Copy data between host and device
    *
-   * @param[in] element_idx
-   *
-   * @return reference to the specified element
-   */
-  __device__ bit_mask_t &get_element_device(gdf_size_type element_idx) {
-    return valid_[element_idx];
-  }
-
-  /**
-   * @brief Get a specific element (host only)
-   *
-   *  @param[in]  element_idx
-   *  @param[out] element
+   *  @param[out] dst      - the address of the destination
+   *  @param[in] src       - the address of the source
+   *  @param[in] num_bits  - the number of bits in the bit container
+   *  @param[in] kind      - the direction of the copy
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ gdf_error get_element_host(gdf_size_type element_idx, bit_mask_t &element) const {
-    return bit_mask::get_element(&element, valid_ + element_idx);
+  inline gdf_error copy_bit_mask(bit_mask_t *dst, const bit_mask_t *src, size_t num_bits, enum cudaMemcpyKind kind) {
+    CUDA_TRY(cudaMemcpy(dst, src, num_elements(num_bits) * sizeof(bit_mask_t), kind));
+    return GDF_SUCCESS;
   }
 
   /**
-   * @brief Set a specific element (host only)
+   *  @brief Deallocate device space for the valid bit mask
    *
-   * @param[in] element_idx
+   *  @param[in]  valid   The pointer to device space that we wish to deallocate
    *
-   * @return the specified element
+   *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ gdf_error set_element_host(gdf_size_type element_idx, const bit_mask_t &element) {
-    return bit_mask::put_element(element, valid_ + element_idx);
+  inline gdf_error destroy_bit_mask(bit_mask_t *valid) {
+    RMM_TRY(RMM_FREE(valid, 0));
+    return GDF_SUCCESS;
   }
 
   /**
-   * @brief Getter for valid
+   *  @brief Get a single element of bits from the device
    *
-   * @return pointer to valid bit container
+   *  @param[out]  element - address on host where the bits will be stored
+   *  @param[out]  device_element - address on the device containing the bits to fetch
+   *
+   *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ __device__ bit_mask_t *get_valid() const {
-    return valid_;
+  inline gdf_error get_element(bit_mask_t *element, const bit_mask_t *device_element) {
+    CUDA_TRY(cudaMemcpy(element, device_element, sizeof(bit_mask_t), cudaMemcpyDeviceToHost));
+    return GDF_SUCCESS;
   }
 
   /**
-   * @brief Get length
+   *  @brief Put a single element of bits to the device
    *
-   * @return length of bit container in bits
+   *  @param[out]  element - address on host containing bits to store
+   *  @param[out]  device_element - address on the device where the bits will be stored
+   *
+   *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ __device__ gdf_size_type length() const {
-    return bitlength_;
+  inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
+    CUDA_TRY(cudaMemcpy(device_element, &element, sizeof(bit_mask_t), cudaMemcpyHostToDevice));
+    return GDF_SUCCESS;
   }
 
-private:
-  bit_mask_t      *valid_;
-  gdf_size_type    bitlength_;
+  /**
+   *  @brief Allocate device space for the valid bit mask.
+   *
+   *  @param[out] mask                  address of the bit mask pointer
+   *  @param[in]  number_of_records     number of records
+   *  @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All other
+   *                                    values indicate un-initialized.  Default is uninitialized
+   *  @param[in]  padding_bytes         optional, specifies byte boundary the data should be padded to.
+   *                                    Defaults to 64 bytes, meaning the space allocated will be rounded
+   *                                    up to the next multiple of 64 bytes.
+   *
+   *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
+   */
+  gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
+    //
+    //  To handle padding, we will round the number_of_records up to the next padding boundary, then identify how many element
+    //  that equates to.  Then we can allocate the appropriate amount of storage.
+    //
+    gdf_size_type num_bytes = (number_of_records + 7) / 8;
+    gdf_size_type num_padding_blocks = (num_bytes + padding_bytes - 1) / padding_bytes;
+    gdf_size_type num_elements = bit_mask::num_elements(num_padding_blocks * 8 * padding_bytes);
+
+    RMM_TRY(RMM_ALLOC(mask, sizeof(bit_mask_t) * num_elements, 0));
+
+    if (fill_value == 0) {
+      CUDA_TRY(cudaMemset(*mask, 0, sizeof(bit_mask_t) * num_elements));
+    } else if (fill_value == 1) {
+      //
+      //  Value outside range of [0, num_rows) is undefined, so we will
+      //  initialize in the simplest manner... we'll initialize all
+      //  elements to 1.
+      //
+      CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * num_elements));
+    }
+
+    return GDF_SUCCESS;
+  }
+
+  /**
+   *  @brief check to see if the specified bit is set to one
+   *
+   *  @param[in]  valid         The bit mask to update
+   *  @param[in]  record_idx    The record index
+   *
+   *  @return which bit within the bit mask
+   */
+  template <typename T>
+  CUDA_HOST_DEVICE_CALLABLE
+  bool is_valid(const bit_mask_t *valid, T record_idx) {
+    static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
+
+    return gdf::util::bit_is_set<bit_mask_t, T>(valid, record_idx);
+  }
+
+  /**
+   *  @brief set the specified bit in the bit mask in an unsafe manner
+   *
+   *  This function sets the specified bit in an unsafe manner.  It assumes that
+   *  that the calling code guarantees a thread-safe context.  That is, either
+   *  the function is called from a block of serial code, or the data is distributed
+   *  among the threads such that no two threads could be updating a bit in the
+   *  same memory location concurrently.
+   *
+   *  @param[in,out]  valid         The bit mask to update
+   *  @param[in]      record_idx    The record index
+   *
+   */
+  template <typename T>
+  CUDA_HOST_DEVICE_CALLABLE
+  void set_bit_unsafe(bit_mask_t *valid, T record_idx) {
+    static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
+
+    gdf::util::turn_bit_on(valid, record_idx);
+  }
+
+  /**
+   *  @brief clear the specified bit in the bit mask in an unsafe manner.
+   *
+   *  This function clears the specified bit in an unsafe manner.  It assumes that
+   *  that the calling code guarantees a thread-safe context.  That is, either
+   *  the function is called from a block of serial code, or the data is distributed
+   *  among the threads such that no two threads could be updating a bit in the
+   *  same memory location concurrently.
+   *
+   *  @param[in,out]  valid         The bit mask to update
+   *  @param[in]      record_idx    The record index
+   *
+   */
+  template <typename T>
+  CUDA_HOST_DEVICE_CALLABLE
+  void clear_bit_unsafe(bit_mask_t *valid, T record_idx) {
+    static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
+
+    return gdf::util::turn_bit_off(valid, record_idx);
+  }
+
+  /**
+   *  @brief set the specified bit in the bit mask in an threadsafe manner
+   *
+   *  This function sets the specified bit in an threadsafe manner.  It uses
+   *  atomic memory operations to guarantee that no update interferes with
+   *  on another.
+   *
+   *  @param[in,out]  valid         The bit mask to update
+   *  @param[in]      record_idx    The record index
+   *
+   */
+  template <typename T>
+  CUDA_DEVICE_CALLABLE
+  void set_bit_safe(bit_mask_t *valid, T record_idx) {
+    static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
+
+    const gdf_size_type rec{gdf::util::detail::bit_container_index<bit_mask_t, T>(record_idx)};
+    const gdf_size_type bit{gdf::util::detail::intra_container_index<bit_mask_t, T>(record_idx)};
+
+    atomicOr( &valid[rec], (bit_mask_t{1} << bit));
+  }
+
+  /**
+   *  @brief clear the specified bit in the bit mask in an threadsafe manner
+   *
+   *  This function clear the specified bit in an threadsafe manner.  It uses
+   *  atomic memory operations to guarantee that no update interferes with
+   *  on another.
+   *
+   *  @param[in,out]  valid         The bit mask to update
+   *  @param[in]      record_idx    The record index
+   *
+   */
+  template <typename T>
+  CUDA_DEVICE_CALLABLE
+  void clear_bit_safe(bit_mask_t *valid, T record_idx) {
+    static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
+
+    const gdf_size_type rec{gdf::util::detail::bit_container_index<bit_mask_t, T>(record_idx)};
+    const gdf_size_type bit{gdf::util::detail::intra_container_index<bit_mask_t, T>(record_idx)};
+
+    atomicAnd( &valid[rec], ~(bit_mask_t{1} << bit));
+  }
+
 };
 
 #endif

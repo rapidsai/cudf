@@ -1,7 +1,9 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
+#include "utilities/type_dispatcher.hpp"
+#include "utilities/wrapper_types.hpp"
 
 #include <cub/device/device_radix_sort.cuh>
 
@@ -164,52 +166,41 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl) {
     return status;
 }
 
+template <typename Tv>
+struct gdf_radixsort_functor
+{
+    template <typename Tk>
+    gdf_error
+    operator()( gdf_radixsort_plan_type *hdl,
+                gdf_column *keycol,
+                gdf_column *valcol)
+    {
+        /* validity mask must be empty */
+        GDF_REQUIRE(!keycol->valid || !keycol->null_count, GDF_VALIDITY_UNSUPPORTED);
+        GDF_REQUIRE(!valcol->valid || !valcol->null_count, GDF_VALIDITY_UNSUPPORTED);
+        /* size of columns must match */
+        GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);
+        RadixSortPlan *plan = cffi_unwrap(hdl);
+        /* num_items must match */
+        GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH);
+        /* back buffer size must match */
+        GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,
+                    GDF_COLUMN_SIZE_MISMATCH);
+        GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,
+                    GDF_COLUMN_SIZE_MISMATCH);
+        /* Do sort */
+        return RadixSort<Tk, Tv>::sort(plan, (Tk*)keycol->data, (Tv*)valcol->data);
+    }
+};
 
-#define WRAP(Fn, Tk, Tv)                                                            \
-gdf_error gdf_radixsort_##Fn(gdf_radixsort_plan_type *hdl,                          \
-                             gdf_column *keycol,                                    \
-                             gdf_column *valcol)                                    \
-{                                                                                   \
-    /* validity mask must be empty */                                               \
-    GDF_REQUIRE(!keycol->valid || !keycol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
-    GDF_REQUIRE(!valcol->valid || !valcol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
-    /* size of columns must match */                                                \
-    GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);            \
-    RadixSortPlan *plan = cffi_unwrap(hdl);                                         \
-    /* num_items must match */                                                      \
-    GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH);         \
-    /* back buffer size must match */                                               \
-    GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,                \
-                GDF_COLUMN_SIZE_MISMATCH);                                          \
-    GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,                \
-                GDF_COLUMN_SIZE_MISMATCH);                                          \
-    /* Do sort */                                                                   \
-    return RadixSort<Tk, Tv>::sort(plan,                                            \
-                                   (Tk*)keycol->data, (Tv*)valcol->data);           \
-}
-
-
-
-WRAP(f32, float,   int64_t)
-WRAP(f64, double,  int64_t)
-WRAP(i8,  int8_t,  int64_t)
-WRAP(i32, int32_t, int64_t)
-WRAP(i64, int64_t, int64_t)
-
-
-gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
-                                gdf_column *keycol,
-                                gdf_column *valcol)
+gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
+                        gdf_column *keycol,
+                        gdf_column *valcol)
 {
     GDF_REQUIRE(valcol->dtype == GDF_INT64, GDF_UNSUPPORTED_DTYPE);
-    // dispatch table
-    switch ( keycol->dtype ) {
-    case GDF_INT8:    return gdf_radixsort_i8(hdl, keycol, valcol);
-    case GDF_INT32:   return gdf_radixsort_i32(hdl, keycol, valcol);
-    case GDF_INT64:   return gdf_radixsort_i64(hdl, keycol, valcol);
-    case GDF_FLOAT32: return gdf_radixsort_f32(hdl, keycol, valcol);
-    case GDF_FLOAT64: return gdf_radixsort_f64(hdl, keycol, valcol);
-    default:          return GDF_UNSUPPORTED_DTYPE;
-    }
+
+    return cudf::type_dispatcher(keycol->dtype,
+                                gdf_radixsort_functor<int64_t>{},
+                                hdl, keycol, valcol);
 }
 

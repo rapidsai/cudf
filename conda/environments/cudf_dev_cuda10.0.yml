@@ -1,0 +1,30 @@
+name: cudf_dev
+channels:
+- rapidsai/label/cuda10.0
+- nvidia/label/cuda10.0
+- rapidsai-nightly/label/cuda10.0
+- conda-forge
+dependencies:
+- nvstrings=0.7.*
+- rmm=0.7.*
+- cmake>=3.12
+- python>=3.6,<3.8
+- numba>=0.41
+- pandas>=0.23.4
+- pyarrow=0.12.1
+- notebook>=0.5.0
+- boost
+- cffi>=1.10.0   
+- distributed>=1.23.0
+- cython>=0.29,<0.30
+- pytest
+- sphinx
+- sphinx_rtd_theme
+- sphinxcontrib-websupport
+- nbsphinx
+- numpydoc
+- ipython
+- recommonmark
+- cudatoolkit=10.0
+- pip:
+  - sphinx-markdown-tables

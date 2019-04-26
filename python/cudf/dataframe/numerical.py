@@ -5,49 +5,45 @@ from __future__ import print_function, division
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api.types import is_integer_dtype
+
 
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops, datetime
+from cudf.dataframe import columnops, datetime, string
 from cudf.utils import cudautils, utils
 from cudf import _gdf
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.replace as cpp_replace
+import cudf.bindings.binops as cpp_binops
+import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
+from cudf.bindings.cudf_cpp import get_ctype_ptr
+
 
 # Operator mappings
 
-#   Unordered comparators
-_unordered_impl = {
+_binary_impl = {
+    # Unordered comparators
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
-}
-
-#   Ordered comparators
-_ordered_impl = {
+    # Ordered comparators
     'lt': libgdf.gdf_lt_generic,
     'le': libgdf.gdf_le_generic,
     'gt': libgdf.gdf_gt_generic,
     'ge': libgdf.gdf_ge_generic,
-}
-
-#   Binary operators
-_binary_impl = {
+    # Binary operators
     'add': libgdf.gdf_add_generic,
     'sub': libgdf.gdf_sub_generic,
     'mul': libgdf.gdf_mul_generic,
     'floordiv': libgdf.gdf_floordiv_generic,
     'truediv': libgdf.gdf_div_generic,
-}
-
-#   Unary operators
-_unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
 }
 
 
@@ -88,30 +84,35 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
-            op = _binary_impl[binop]
-            lhs, rhs = numeric_normalize_types(self, rhs)
-            return numeric_column_binop(lhs=lhs, rhs=rhs, op=op,
-                                        out_dtype=lhs.dtype)
+            out_dtype = np.result_type(self.dtype, rhs.dtype)
+            return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
+                                        out_dtype=out_dtype)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+        return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
-        lhs, rhs = numeric_normalize_types(self, rhs)
-        return numeric_column_compare(lhs, rhs, op=_unordered_impl[cmpop])
+        return numeric_column_compare(self, rhs, op=cmpop)
 
     def ordered_compare(self, cmpop, rhs):
-        lhs, rhs = numeric_normalize_types(self, rhs)
-        return numeric_column_compare(lhs, rhs, op=_ordered_impl[cmpop])
+        return numeric_column_compare(self, rhs, op=cmpop)
+
+    def _apply_scan_op(self, op):
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
+        cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
+        return out_col
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            # Temporary workaround since libcudf doesn't support int16 ops
+            if other_dtype == np.dtype('int16'):
+                other_dtype = np.dtype('int32')
             ary = utils.scalar_broadcast_to(other, shape=len(self),
                                             dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
@@ -121,6 +122,50 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif (dtype == np.dtype('object') or
+              np.issubdtype(dtype, np.dtype('U').type)):
+            import nvstrings
+            if np.issubdtype(self.dtype, np.signedinteger):
+                if len(self) > 0:
+                    dev_array = self.astype('int32').data.mem
+                    dev_ptr = get_ctype_ptr(dev_array)
+                    null_ptr = None
+                    if self.mask is not None:
+                        null_ptr = get_ctype_ptr(self.mask.mem)
+                    return string.StringColumn(
+                        data=nvstrings.itos(
+                            dev_ptr,
+                            count=len(self),
+                            nulls=null_ptr,
+                            bdevmem=True
+                        )
+                    )
+                else:
+                    return string.StringColumn(
+                        data=nvstrings.to_device(
+                            []
+                        )
+                    )
+            elif np.issubdtype(self.dtype, np.floating):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # dev_array = self.astype('float32').data.mem
+                # dev_ptr = get_ctype_ptr(self.data.mem)
+                # return string.StringColumn(
+                #     data=nvstrings.ftos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
+            elif self.dtype == np.dtype('bool'):
+                raise NotImplementedError(
+                    f"Casting object of {self.dtype} dtype "
+                    "to str dtype is not yet supported"
+                )
+                # return string.StringColumn(
+                #     data=nvstrings.btos(dev_ptr, count=len(self),
+                #                         bdevmem=True)
+                # )
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
@@ -187,7 +232,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unique(self, method='sort'):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -195,15 +240,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
 
-    def unique_count(self, method='sort'):
-        if method is not 'sort':
+    def unique_count(self, method='sort', dropna=True):
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -217,32 +264,32 @@ class NumericalColumn(columnops.TypedColumnBase):
     def all(self):
         return bool(self.min())
 
-    def min(self):
-        return cpp_reduce.apply_reduce('min', self)
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
 
-    def max(self):
-        return cpp_reduce.apply_reduce('max', self)
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
-    def sum(self):
-        return cpp_reduce.apply_reduce('sum', self)
+    def sum(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
 
-    def product(self):
-        return cpp_reduce.apply_reduce('product', self)
+    def product(self, dtype=None):
+        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self):
-        return self.sum().astype('f8') / self.valid_count
+    def mean(self, dtype=None):
+        return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1):
+    def mean_var(self, ddof=1, dtype=None):
         x = self.astype('f8')
-        mu = x.mean()
+        mu = x.mean(dtype=dtype)
         n = x.valid_count
-        asum = x.sum_of_squares()
+        asum = x.sum_of_squares(dtype=dtype)
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
 
-    def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_of_squares', self)
+    def sum_of_squares(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -271,7 +318,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == 'f':
-            return np.nan
+            return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
         else:
@@ -294,7 +341,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def _hashjoin(self, other, how='left', return_indexers=False):
 
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -340,7 +387,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         When the column is a index, set *return_indexers* to obtain
         the indices for shuffling the remaining columns.
         """
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -381,17 +428,46 @@ class NumericalColumn(columnops.TypedColumnBase):
             else:
                 return joined_index
 
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
+        to_replace_col = columnops.as_column(to_replace)
+        value_col = columnops.as_column(value)
+        replaced = self.copy()
+        to_replace_col, value_col, replaced = numeric_normalize_types(
+               to_replace_col, value_col, replaced)
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+        return replaced
+
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with *fill_value*
+        """
+        result = self.copy()
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        if is_integer_dtype(result.dtype):
+            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        else:
+            fill_value_col = fill_value_col.astype(result.dtype)
+        cpp_replace.replace_nulls(result, fill_value_col)
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
-    if lhs.dtype != rhs.dtype:
-        raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
-
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    if lhs.dtype != rhs.dtype or op not in _binary_impl:
+        # Use JIT implementation
+        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    else:
+        # Use compiled implementation
+        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
     nvtx_range_pop()
@@ -400,7 +476,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 def numeric_column_unaryop(operand, op, out_dtype):
     out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    _gdf.apply_unaryop(op, operand, out)
+    cpp_unaryops.apply_math_op(operand, out, op)
     return out.view(NumericalColumn, dtype=out_dtype)
 
 
@@ -412,18 +488,63 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
+    # Temporary workaround since libcudf doesn't support int16 ops
+    if dtype == np.dtype('int16'):
+        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 
-def column_hash_values(column0, *other_columns):
+def safe_cast_to_int(col, dtype):
+    """
+    Cast given NumericalColumn to given integer dtype safely.
+    """
+    assert is_integer_dtype(dtype)
+
+    if col.dtype == dtype:
+        return col
+
+    new_col = col.astype(dtype)
+    if new_col.unordered_compare('eq', col).all():
+        return new_col
+    else:
+        raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
+            col.dtype.type.__name__,
+            np.dtype(dtype).type.__name__))
+
+
+def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
     columns = [column0] + list(other_columns)
     buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
-    _gdf.hash_columns(columns, result)
+    if initial_hash_values:
+        initial_hash_values = rmm.to_device(initial_hash_values)
+    _gdf.hash_columns(columns, result, initial_hash_values)
     return result
+
+
+def digitize(column, bins, right=False):
+    """Return the indices of the bins to which each value in column belongs.
+
+    Parameters
+    ----------
+    column : Column
+        Input column.
+    bins : np.array
+        1-D monotonically increasing array of bins with same type as `column`.
+    right : bool
+        Indicates whether interval contains the right or left bin edge.
+
+    Returns
+    -------
+    A device array containing the indices
+    """
+    assert column.dtype == bins.dtype
+    bins_buf = Buffer(rmm.to_device(bins))
+    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    return cpp_sort.digitize(column, bin_col, right)
 
 
 register_distributed_serializer(NumericalColumn)

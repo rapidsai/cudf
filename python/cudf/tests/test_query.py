@@ -3,7 +3,7 @@
 from __future__ import print_function, division
 
 import inspect
-
+import datetime
 import pytest
 import numpy as np
 import pandas as pd
@@ -99,6 +99,25 @@ def test_query_env_changing():
     c = 50
     got = df.query(expr)
     np.testing.assert_array_equal(aa[aa < c], got['a'].to_array())
+
+
+def test_query_local_dict():
+    df = DataFrame()
+    df['a'] = aa = np.arange(100)
+    expr = "a < @val"
+
+    got = df.query(expr, local_dict={'val': 10})
+    np.testing.assert_array_equal(aa[aa < 10], got['a'].to_array())
+
+    # test for datetime
+    df = DataFrame()
+    data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+    df['datetimes'] = data
+    search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+    expr = 'datetimes==@search_date'
+
+    got = df.query(expr, local_dict={'search_date': search_date})
+    np.testing.assert_array_equal(data[1], got['datetimes'].to_array())
 
 
 def test_query_splitted_combine():

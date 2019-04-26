@@ -20,7 +20,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -66,17 +66,17 @@ namespace{ //annonymus
 /** 
  * @brief Sorts an array of gdf_column.
  * 
- * @Param[in] cols Array of gdf_columns
- * @Param[in] asc_desc Device array of sort order types for each column
+ * @param[in] cols Array of gdf_columns
+ * @param[in] asc_desc Device array of sort order types for each column
  * (0 is ascending order and 1 is descending). If NULL is provided defaults
  * to ascending order for evey column.
- * @Param[in] ncols # columns
- * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ * @param[in] ncols # columns
+ * @param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
  * smaller than non-nulls or viceversa
- * @Param[out] output_indices Pre-allocated gdf_column to be filled
+ * @param[out] output_indices Pre-allocated gdf_column to be filled
  * with sorted indices
  * 
- * @Returns GDF_SUCCESS upon successful completion
+ * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** cols,

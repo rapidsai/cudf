@@ -149,6 +149,45 @@ class Groupby(object):
             - df : DataFrame
             - segs : Series
                 Beginning offsets of each group.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'], method='cudf')
+
+          df_groups = groups.as_df()
+
+          # DataFrame indexes of group starts
+          print(df_groups[1])
+
+          # DataFrame itself
+          print(df_groups[0])
+
+        Output:
+
+        .. code-block:: python
+
+          # DataFrame indexes of group starts
+          0    0
+          1    2
+          2    4
+
+          # DataFrame itself
+             key  val
+          0    0    0
+          1    0    1
+          2    1    2
+          3    1    3
+          4    2    4
+          5    2    5
+          6    2    6
+
         """
         return self._group_dataframe(self._df, self._by)
 
@@ -183,7 +222,8 @@ class Groupby(object):
         segs = sr_segs.to_array()
 
         for k in self._by:
-            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array()).reset_index()
+            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array())\
+                                    .reset_index(drop=True)
 
         size = len(outdf)
 
@@ -191,7 +231,7 @@ class Groupby(object):
         for k, infos in functors_mapping.items():
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
-            sr = grouped_df[k].reset_index()
+            sr = grouped_df[k].reset_index(drop=True)
             for newk, functor in infos.items():
                 if functor.__name__ == 'mean':
                     dev_begins = rmm.to_device(np.asarray(begin))
@@ -255,7 +295,7 @@ class Groupby(object):
             return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
         # Prepare dataframe
         orig_df = df.copy()
-        df = df.loc[:, levels].reset_index()
+        df = df.loc[:, levels].reset_index(drop=True)
         rowid_column = '__cudf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
@@ -363,7 +403,7 @@ class Groupby(object):
         and store the new columns into *out_df*
         """
         for k in src_df.columns:
-            col = src_df[k].reset_index()
+            col = src_df[k].reset_index(drop=True)
             newcol = col.take(reordering_indices, ignore_index=True)
             out_df[k] = newcol
         return out_df
@@ -414,7 +454,45 @@ class Groupby(object):
     _auto_generate_grouper_agg(locals())
 
     def apply(self, function):
-        """Apply a transformation function over the grouped chunk.
+        """Apply a python transformation function over the grouped chunk.
+
+
+        Parameters
+        ----------
+        func : function
+          The python transformation function that will be applied
+          on the grouped chunk.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'], method='cudf')
+
+          # Define a function to apply to each row in a group
+          def mult(df):
+            df['out'] = df['key'] * df['val']
+            return df
+
+          result = groups.apply(mult)
+          print(result)
+
+        Output:
+
+        .. code-block:: python
+
+             key  val  out
+          0    0    0    0
+          1    0    1    0
+          2    1    2    2
+          3    1    3    3
+          4    2    4    8
+          5    2    5   10
+          6    2    6   12
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
@@ -425,6 +503,66 @@ class Groupby(object):
         return concat([function(chk) for chk in chunks])
 
     def apply_grouped(self, function, **kwargs):
+        """Apply a transformation function over the grouped chunk.
+
+        This uses numba's CUDA JIT compiler to convert the Python
+        transformation function into a CUDA kernel, thus will have a
+        compilation overhead during the first run.
+
+        Parameters
+        ----------
+        func : function
+          The transformation function that will be executed on the CUDA GPU.
+        incols: list
+          A list of names of input columns.
+        outcols: list
+          A dictionary of output column names and their dtype.
+        kwargs : dict
+          name-value of extra arguments. These values are passed directly into
+          the function.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from cudf import DataFrame
+            from numba import cuda
+            import numpy as np
+
+            df = DataFrame()
+            df['key'] = [0, 0, 1, 1, 2, 2, 2]
+            df['val'] = [0, 1, 2, 3, 4, 5, 6]
+            groups = df.groupby(['key'], method='cudf')
+
+            # Define a function to apply to each group
+            def mult_add(key, val, out1, out2):
+                for i in range(cuda.threadIdx.x, len(key), cuda.blockDim.x):
+                    out1[i] = key[i] * val[i]
+                    out2[i] = key[i] + val[i]
+
+            result = groups.apply_grouped(mult_add,
+                                          incols=['key', 'val'],
+                                          outcols={'out1': np.int32,
+                                                   'out2': np.int32},
+                                          # threads per block
+                                          tpb=8)
+
+            print(result)
+
+        Output:
+
+        .. code-block:: python
+
+               key  val out1 out2
+            0    0    0    0    0
+            1    0    1    0    1
+            2    1    2    2    3
+            3    1    3    3    4
+            4    2    4    8    6
+            5    2    5   10    7
+            6    2    6   12    8
+
+        """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
 

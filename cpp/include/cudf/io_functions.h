@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -17,7 +16,30 @@
 
 #pragma once
 
-
+/*
+ * @brief Interface to parse CSV data to GDF columns
+ */
 gdf_error read_csv(csv_read_arg *args);
 
+/*
+ * @brief Interface to output GDF columns to CSV format
+ *
+ * This function accepts an array of gdf_columns and creates a CSV
+ * formatted file using the formatting parameters provided in the
+ * specified structure argument.
+ *
+ * @param[in] args This structure is defined in io_types.h and provides the columns and formatting parameters needed by this function.
+ *
+ * @returns GDF_SUCCESS if the CSV format was created successfully.
+ */
+gdf_error write_csv(csv_write_arg* args);
+
+/*
+ * @brief Interface to parse Parquet data to GDF columns
+ */
+gdf_error read_parquet(pq_read_arg *args);
+
+/*
+ * @brief Interface to convert GDF Columns to Compressed Sparse Row
+ */
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
