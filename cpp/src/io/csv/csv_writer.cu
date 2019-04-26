@@ -61,7 +61,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
             rtn = NVStrings::dtos(static_cast<const double*>(column->data),rows,valid);
             break;
         case GDF_DATE64:
-            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::seconds,valid);
+            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::seconds,nullptr,valid);
             break;
         default:
             break;
