@@ -23,10 +23,10 @@ def read_data():
     basedir = os.path.dirname(__file__)
     datapath = os.path.join(basedir, 'data', 'ipums.pkl')
     try:
-       df = pd.read_pickle(datapath)
+        df = pd.read_pickle(datapath)
     except Exception as excpr:
-       if type(excpr).__name__ == 'FileNotFoundError':
-          pytest.skip('.pkl file is not found')
+        if type(excpr).__name__ == 'FileNotFoundError':
+            pytest.skip('.pkl file is not found')
 
     names = []
     arrays = []
