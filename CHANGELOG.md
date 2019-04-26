@@ -50,6 +50,7 @@
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 
@@ -87,7 +88,9 @@
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
+- PR #1506 Fix csv-write call to updated NVStrings method
 - PR #1507 Parquet Reader: Default string data to GDF_STRING
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
