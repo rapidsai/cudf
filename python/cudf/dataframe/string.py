@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical
+from cudf.dataframe import columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
@@ -521,3 +521,29 @@ class StringColumn(columnops.TypedColumnBase):
     def copy(self, deep=True):
         params = self._replace_defaults()
         return type(self)(**params)
+
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with * fill_value *
+        """
+        result = self.copy()
+        if not isinstance(fill_value, str) and \
+            not(
+                isinstance(fill_value, series.Series) and
+                isinstance(fill_value._column, StringColumn)
+                ):
+            raise TypeError("fill_value must be a string or a string series")
+
+        # replace fill_value with nvstrings
+        # if it is a column
+
+        if isinstance(fill_value, series.Series):
+            if len(fill_value) < len(result):
+                raise ValueError("fill value series must be of same or "
+                                 "greater length than the series to be filled")
+
+            fill_value = fill_value[: len(self)]._column._data
+
+        result._data = result._data.fillna(fill_value)
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
