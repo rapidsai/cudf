@@ -1086,6 +1086,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
             lastpos = pos;
         }
         scratch->num_vals = n;
+        bytestream_flush_bytes(bs, lastpos - bs->pos);
     }
     __syncthreads();
     numvals = scratch->num_vals;
