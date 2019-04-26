@@ -174,6 +174,14 @@ struct table {
   gdf_size_type _num_rows{0};      ///< The number of elements in each column
 };
 
+std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
+  std::vector<gdf_dtype> dtypes(table.num_columns());
+
+  std::transform(table.begin(), table.end(), dtypes.begin(),
+                 [](gdf_column const* col) { return col->dtype; });
+  return dtypes;
+}
+
 }  // namespace cudf
 
 #endif
