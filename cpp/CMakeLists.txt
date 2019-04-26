@@ -223,6 +223,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
+            src/dataframe/table.cu
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -271,7 +272,6 @@ add_library(cudf SHARED
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
-            src/utilities/types.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
