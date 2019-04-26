@@ -198,7 +198,7 @@ def test_fillna_dataframe(fill_type, inplace):
 
     assert_eq(expect, got)
 
-    
+
 @pytest.mark.parametrize(
     'fill_type',
     ['scalar', 'series'])
@@ -206,12 +206,12 @@ def test_fillna_dataframe(fill_type, inplace):
     'inplace',
     [True, False])
 def test_fillna_string(fill_type, inplace):
-    psr = pd.Series(['z',None,'z',None])
+    psr = pd.Series(['z', None, 'z', None])
 
     if fill_type == 'scalar':
         fill_value = 'a'
     elif fill_type == 'series':
-        fill_value = Series(['a','b','c','d'])
+        fill_value = Series(['a', 'b', 'c', 'd'])
 
     sr = Series.from_pandas(psr)
 
@@ -223,7 +223,7 @@ def test_fillna_string(fill_type, inplace):
 
     assert_eq(expect, got)
 
-    
+
 @pytest.mark.parametrize(
     'data_dtype',
     ['int8', 'int16', 'int32', 'int64'])
