@@ -2289,3 +2289,40 @@ def test_isnull_isna():
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.isnull(), gs.isnull())
     assert_eq(ps.isna(), gs.isna())
+
+
+def test_notna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.notna(), gs.notna())
