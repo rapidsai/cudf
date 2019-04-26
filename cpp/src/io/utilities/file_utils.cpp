@@ -1,18 +1,18 @@
 #include "file_utils.hpp"
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
 
-MappedFile::MappedFile(const char *path, int oflag){
+MappedFile::MappedFile(const char *path, int oflag) {
   CUDF_EXPECTS((fd_ = open(path, oflag)) != -1, "Cannot open input file");
 
-  struct stat st{};
+  struct stat st {};
   if (fstat(fd_, &st) == -1 || st.st_size < 0) {
     close(fd_);
     CUDF_FAIL("Cannot stat input file");
@@ -20,7 +20,7 @@ MappedFile::MappedFile(const char *path, int oflag){
   size_ = static_cast<size_t>(st.st_size);
 }
 
-void MappedFile::map(size_t size, off_t offset){
+void MappedFile::map(size_t size, off_t offset) {
   CUDF_EXPECTS(size > 0, "Cannot have zero size mapping");
 
   map_data_ = mmap(0, size, PROT_READ, MAP_PRIVATE, fd_, offset);

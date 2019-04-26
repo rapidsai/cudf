@@ -1,13 +1,13 @@
-# pragma once
+#pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include <cudf.h>
 
 #include "../csv/type_conversion.cuh"
-#include "io/utilities/wrapper_utils.hpp"
 #include "io/utilities/file_utils.hpp"
+#include "io/utilities/wrapper_utils.hpp"
 
 // DOXY
 class JsonReader {
@@ -21,7 +21,7 @@ public:
   };
 
 private:
-  const json_read_arg* args_ = nullptr;
+  const json_read_arg *args_ = nullptr;
 
   std::unique_ptr<MappedFile> map_file_;
   const char *input_data_ = nullptr;
@@ -40,7 +40,7 @@ private:
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
-  const ParseOptions opts_{',', '\n', '\"','.'};
+  const ParseOptions opts_{',', '\n', '\"', '.'};
 
   const size_t byte_range_offset_ = 0;
   const size_t byte_range_size_ = 0;
@@ -53,11 +53,11 @@ private:
   void setDataTypes();
   void detectDataTypes(ColumnInfo *d_columnData);
   void convertDataToColumns();
-  void convertJsonToColumns(gdf_dtype * const dtypes, void **gdf_columns,
-                            gdf_valid_type **valid, gdf_size_type *num_valid);
+  void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid,
+                            gdf_size_type *num_valid);
 
 public:
-  JsonReader(json_read_arg* args): args_(args){}
+  JsonReader(json_read_arg *args) : args_(args) {}
 
   void parse();
 
