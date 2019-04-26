@@ -24,7 +24,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 
 /*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
@@ -318,29 +318,29 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input->size);
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_year_from_unixtime_op op(TIME_UNIT_ms);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_year_from_date32_op op;
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_year_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {
@@ -363,29 +363,29 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_month_from_unixtime_op op(TIME_UNIT_ms);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_month_from_date32_op op;
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_month_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {
@@ -408,28 +408,28 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_day_from_unixtime_op op(TIME_UNIT_ms);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_day_from_date32_op op;
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_day_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {
@@ -453,22 +453,22 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_hour_from_unixtime_op op(TIME_UNIT_ms);;
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_hour_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {
@@ -492,21 +492,21 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_minute_from_unixtime_op op(TIME_UNIT_ms);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_minute_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {
@@ -530,21 +530,21 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 
 
     if (input->valid){
-      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-      thrust::copy(rmm::exec_policy(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+      gdf_size_type num_bitmask_elements = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(rmm::exec_policy(stream)->on(stream), input->valid, input->valid + num_bitmask_elements, output->valid); // copy over valid bitmask
     }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_second_from_unixtime_op op(TIME_UNIT_ms);;
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_TIMESTAMP) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
 		gdf_extract_second_from_unixtime_op op(input->dtype_info.time_unit);
-		thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(input_ptr),
+		thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	} else {

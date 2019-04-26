@@ -12,10 +12,15 @@ function logger() {
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export CMAKE_BUILD_PARALLEL_LEVEL=4
+export PARALLEL_LEVEL=4
+export CUDA_REL=${CUDA_VERSION%.*}
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
+
+# Set versions of packages needed to be grabbed
+export NVSTRINGS_VERSION=0.7.*
+export RMM_VERSION=0.7.*
 
 ################################################################################
 # SETUP - Check environment
@@ -29,9 +34,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-
-logger "Bump pyarrow"
-conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION}
 
 logger "Check versions..."
 python --version
@@ -47,16 +50,16 @@ logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
 logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
 
 logger "Clean up make..."
 make clean
 
 logger "Make libcudf..."
-make -j${CMAKE_BUILD_PARALLEL_LEVEL}
+make -j${PARALLEL_LEVEL}
 
 logger "Install libcudf..."
-make -j${CMAKE_BUILD_PARALLEL_LEVEL} install
+make -j${PARALLEL_LEVEL} install
 
 logger "Install libcudf for Python..."
 make python_cffi
@@ -75,12 +78,20 @@ nvidia-smi
 
 logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
-GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${CMAKE_BUILD_PARALLEL_LEVEL} test
+GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
 
+# Temporarily install cupy for testing
+logger "pip install cupy"
+pip install cupy-cuda92
+
+# Temporarily install feather for testing
+logger "conda install feather-format"
+conda install -c conda-forge -y feather-format
+
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v
+py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term

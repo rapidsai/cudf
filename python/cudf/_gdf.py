@@ -12,6 +12,7 @@ import pyarrow as pa
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
+import nvcategory
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
@@ -32,32 +33,37 @@ def unwrap_mask(devary):
 def columnview_from_devary(devary, dtype=None):
     return _columnview(size=devary.size,  data=unwrap_devary(devary),
                        mask=ffi.NULL, dtype=dtype or devary.dtype,
-                       null_count=0)
+                       null_count=0, nvcat=None)
 
 
-def _columnview(size, data, mask, dtype, null_count):
+def _columnview(size, data, mask, dtype, null_count, nvcat):
     colview = ffi.new('gdf_column*')
-    if null_count is None:
-        libgdf.gdf_column_view(
-            colview,
-            data,
-            mask,
-            size,
-            np_to_gdf_dtype(dtype),
-            )
+    extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
+    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
+    if nvcat is not None:
+        extra_dtype_info.category = ffi.cast('void*', nvcat.get_cpointer())
     else:
-        libgdf.gdf_column_view_augmented(
-            colview,
-            data,
-            mask,
-            size,
-            np_to_gdf_dtype(dtype),
-            null_count,
-            )
+        extra_dtype_info.category = ffi.NULL
+
+    if mask is None:
+        null_count = 0
+        mask = ffi.NULL
+
+    libgdf.gdf_column_view_augmented(
+        colview,
+        data,
+        mask,
+        size,
+        np_to_gdf_dtype(dtype),
+        null_count,
+        extra_dtype_info[0],
+    )
+
     return colview
 
 
-def columnview(size, data, mask=None, dtype=None, null_count=None):
+def columnview(size, data, mask=None, dtype=None, null_count=None,
+               nvcat=None):
     """
     Make a column view.
 
@@ -81,9 +87,13 @@ def columnview(size, data, mask=None, dtype=None, null_count=None):
 
     if mask is not None:
         assert null_count is not None
+
     dtype = dtype or data.dtype
+    if pd.api.types.is_categorical_dtype(dtype):
+        dtype = data.dtype
+
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
-                       dtype=dtype, null_count=null_count)
+                       dtype=dtype, null_count=null_count, nvcat=nvcat)
 
 
 def apply_binaryop(binop, lhs, rhs, out):
@@ -118,23 +128,24 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
-np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
-               np.float32: libgdf.GDF_FLOAT32,
-               np.int64:   libgdf.GDF_INT64,
-               np.int32:   libgdf.GDF_INT32,
-               np.int16:   libgdf.GDF_INT16,
-               np.int8:    libgdf.GDF_INT8,
-               np.bool_:   libgdf.GDF_INT8,
-               np.datetime64: libgdf.GDF_DATE64}
+np_gdf_dict = {
+    np.float64:      libgdf.GDF_FLOAT64,
+    np.float32:      libgdf.GDF_FLOAT32,
+    np.int64:        libgdf.GDF_INT64,
+    np.int32:        libgdf.GDF_INT32,
+    np.int16:        libgdf.GDF_INT16,
+    np.int8:         libgdf.GDF_INT8,
+    np.bool_:        libgdf.GDF_INT8,
+    np.datetime64:   libgdf.GDF_DATE64,
+    np.object_:      libgdf.GDF_STRING_CATEGORY,
+    np.str_:         libgdf.GDF_STRING_CATEGORY,
+    }
 
 
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if pd.api.types.is_categorical_dtype(dtype):
-        return libgdf.GDF_INT8
-    else:
-        return np_gdf_dict[np.dtype(dtype).type]
+    return np_gdf_dict[np.dtype(dtype).type]
 
 
 def gdf_to_np_dtype(dtype):
@@ -150,6 +161,7 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_DATE64: np.datetime64,
          libgdf.N_GDF_TYPES: np.int32,
          libgdf.GDF_CATEGORY: np.int32,
+         libgdf.GDF_STRING_CATEGORY: np.object_,
      }[dtype])
 
 
@@ -165,12 +177,14 @@ def np_to_pa_dtype(dtype):
         np.int8:        pa.int8(),
         np.bool_:       pa.int8(),
         np.datetime64:  pa.date64(),
+        np.object_:     pa.string(),
+        np.str_:        pa.string(),
     }[np.dtype(dtype).type]
 
 
 def apply_reduce(fn, inp):
     # allocate output+temp array
-    outsz = libgdf.gdf_reduce_optimal_output_size()
+    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
@@ -191,24 +205,48 @@ _join_method_api = {
 
 
 def cffi_view_to_column_mem(cffi_view):
-    intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
-    data = rmm.device_array_from_ptr(intaddr,
-                                     nelem=cffi_view.size,
-                                     dtype=gdf_to_np_dtype(cffi_view.dtype),
-                                     finalizer=rmm._make_finalizer(intaddr, 0))
-
-    if cffi_view.valid:
-        intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
-        mask = rmm.device_array_from_ptr(intaddr,
-                                         nelem=calc_chunk_size(cffi_view.size,
-                                                               mask_bitsize),
-                                         dtype=mask_dtype,
-                                         finalizer=rmm._make_finalizer(intaddr,
-                                                                       0))
-    else:
+    gdf_dtype = cffi_view.dtype
+    if gdf_dtype == libgdf.GDF_STRING_CATEGORY:
+        data_ptr = int(ffi.cast("uintptr_t", cffi_view.data))
+        # We need to create this just to make sure the memory is properly freed
+        data = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=cffi_view.size,
+            dtype='int32',
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+        nvcat_ptr = int(ffi.cast("uintptr_t", cffi_view.dtype_info.category))
+        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+        nvstr_obj = nvcat_obj.to_strings()
         mask = None
+        if cffi_view.valid:
+            mask_ptr = int(ffi.cast("uintptr_t", cffi_view.valid))
+            mask = rmm.device_array_from_ptr(
+                    mask_ptr,
+                    nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
+                    dtype=mask_dtype,
+                    finalizer=rmm._make_finalizer(mask_ptr, 0)
+                )
+        return nvstr_obj, mask
+    else:
+        intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
+        data = rmm.device_array_from_ptr(
+            intaddr,
+            nelem=cffi_view.size,
+            dtype=gdf_to_np_dtype(cffi_view.dtype),
+            finalizer=rmm._make_finalizer(intaddr, 0)
+        )
+        mask = None
+        if cffi_view.valid:
+            intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
+            mask = rmm.device_array_from_ptr(
+                intaddr,
+                nelem=calc_chunk_size(cffi_view.size, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=rmm._make_finalizer(intaddr, 0)
+            )
 
-    return data, mask
+        return data, mask
 
 
 @contextlib.contextmanager
@@ -263,87 +301,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     libgdf.gdf_column_free(col_result_l)
     libgdf.gdf_column_free(col_result_r)
-
-
-def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
-    joiner = _join_how_api[how]
-    method_api = _join_method_api[method]
-    gdf_context = ffi.new('gdf_context*')
-
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-
-    if how not in ['left', 'inner', 'outer']:
-        msg = "new join api only supports left or inner"
-        raise ValueError(msg)
-
-    list_lhs = []
-    list_rhs = []
-    result_cols = []
-
-    result_col_names = []
-
-    left_idx = []
-    right_idx = []
-    # idx = 0
-    for name, col in col_lhs.items():
-        list_lhs.append(col._column.cffi_view)
-        if name not in on:
-            result_cols.append(columnview(0, None, dtype=col._column.dtype))
-            result_col_names.append(name)
-
-    for name in on:
-        result_cols.append(columnview(0, None,
-                                      dtype=col_lhs[name]._column.dtype))
-        result_col_names.append(name)
-        left_idx.append(list(col_lhs.keys()).index(name))
-        right_idx.append(list(col_rhs.keys()).index(name))
-
-    for name, col in col_rhs.items():
-        list_rhs.append(col._column.cffi_view)
-        if name not in on:
-            result_cols.append(columnview(0, None, dtype=col._column.dtype))
-            result_col_names.append(name)
-
-    num_cols_to_join = len(on)
-    result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
-
-    joiner(list_lhs,
-           len(list_lhs),
-           left_idx,
-           list_rhs,
-           len(list_rhs),
-           right_idx,
-           num_cols_to_join,
-           result_num_cols,
-           result_cols,
-           ffi.NULL,
-           ffi.NULL,
-           gdf_context)
-
-    res = []
-    valids = []
-
-    for col in result_cols:
-
-        intaddr = int(ffi.cast("uintptr_t", col.data))
-        res.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                             nelem=col.size,
-                                             dtype=gdf_to_np_dtype(col.dtype),
-                                             finalizer=rmm._make_finalizer(
-                                                 intaddr, 0)))
-        intaddr = int(ffi.cast("uintptr_t", col.valid))
-        valids.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                                nelem=calc_chunk_size(
-                                                    col.size, mask_bitsize),
-                                                dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(
-                                                    intaddr, 0)))
-
-    return res, valids
-
-
-def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,
@@ -416,15 +373,15 @@ class SegmentedRadixortPlan(object):
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
-            libgdf.gdf_segmented_radixsort_generic(self.plan,
-                                                   col_keys.cffi_view,
-                                                   col_vals.cffi_view,
-                                                   segsize,
-                                                   unwrap_devary(d_begins[s:]),
-                                                   unwrap_devary(d_ends[s:]))
+            libgdf.gdf_segmented_radixsort(self.plan,
+                                           col_keys.cffi_view,
+                                           col_vals.cffi_view,
+                                           segsize,
+                                           unwrap_devary(d_begins[s:]),
+                                           unwrap_devary(d_ends[s:]))
 
 
-def hash_columns(columns, result):
+def hash_columns(columns, result, initial_hash_values=None):
     """Hash the *columns* and store in *result*.
     Returns *result*
     """
@@ -437,7 +394,11 @@ def hash_columns(columns, result):
     col_out = result.cffi_view
     ncols = len(col_input)
     hashfn = libgdf.GDF_HASH_MURMUR3
-    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    if initial_hash_values is None:
+        initial_hash_values = ffi.NULL
+    else:
+        initial_hash_values = unwrap_devary(initial_hash_values)
+    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
     return result
 
 
@@ -497,53 +458,6 @@ def count_nonzero_mask(mask, size):
     return nnz[0]
 
 
-_GDF_COLORS = {
-    'green':    libgdf.GDF_GREEN,
-    'blue':     libgdf.GDF_BLUE,
-    'yellow':   libgdf.GDF_YELLOW,
-    'purple':   libgdf.GDF_PURPLE,
-    'cyan':     libgdf.GDF_CYAN,
-    'red':      libgdf.GDF_RED,
-    'white':    libgdf.GDF_WHITE,
-    'darkgreen': libgdf.GDF_DARK_GREEN,
-    'orange':   libgdf.GDF_ORANGE,
-}
-
-
-def str_to_gdf_color(s):
-    """Util to convert str to gdf_color type.
-    """
-    return _GDF_COLORS[s.lower()]
-
-
-def nvtx_range_push(name, color='green'):
-    """
-    Demarcate the beginning of a user-defined NVTX range.
-
-    Parameters
-    ----------
-    name : str
-        The name of the NVTX range
-    color : str
-        The color to use for the range.
-        Can be named color or hex RGB string.
-    """
-    name_c = ffi.new("char[]", name.encode('ascii'))
-
-    try:
-        color = int(color, 16)  # only works if color is a hex string
-        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
-    except ValueError:
-        color = str_to_gdf_color(color)
-        libgdf.gdf_nvtx_range_push(name_c, color)
-
-
-def nvtx_range_pop():
-    """ Demarcate the end of the inner-most range.
-    """
-    libgdf.gdf_nvtx_range_pop()
-
-
 def rmm_initialize():
     rmm.initialize()
     return True
@@ -552,45 +466,3 @@ def rmm_initialize():
 def rmm_finalize():
     rmm.finalize()
     return True
-
-
-_GDF_QUANTILE_METHODS = {
-    'linear': libgdf.GDF_QUANT_LINEAR,
-    'lower': libgdf.GDF_QUANT_LOWER,
-    'higher': libgdf.GDF_QUANT_HIGHER,
-    'midpoint': libgdf.GDF_QUANT_MIDPOINT,
-    'nearest': libgdf.GDF_QUANT_NEAREST,
-}
-
-
-def get_quantile_method(method):
-    """Util to convert method to gdf gdf_quantile_method.
-    """
-    return _GDF_QUANTILE_METHODS[method]
-
-
-def quantile(column, quant, method, exact):
-    """ Calculate the `quant` quantile for the column
-    Returns value with the quantile specified by quant
-    """
-    gdf_context = ffi.new('gdf_context*')
-    method_api = _join_method_api['sort']
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-    # libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
-    # px = ffi.new("double *")
-    res = []
-    for q in quant:
-        px = ffi.new("double *")
-        if exact:
-            libgdf.gdf_quantile_exact(column.cffi_view,
-                                      get_quantile_method(method),
-                                      q,
-                                      ffi.cast('void *', px),
-                                      gdf_context)
-        else:
-            libgdf.gdf_quantile_aprrox(column.cffi_view,
-                                       q,
-                                       ffi.cast('void *', px),
-                                       gdf_context)
-        res.append(px[0])
-    return res

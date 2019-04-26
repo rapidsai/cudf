@@ -197,7 +197,7 @@ def test_dataframe_multi_column(num_cols, num_rows, dtype, ascending,
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
 
     assert_eq(
-        got[by].reset_index(),
+        got[by].reset_index(drop=True),
         expect[by].reset_index(drop=True)
     )
 
@@ -238,6 +238,6 @@ def test_dataframe_multi_column_nulls(num_cols, num_rows, dtype, nulls,
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
 
     assert_eq(
-        got[by].reset_index(),
+        got[by].reset_index(drop=True),
         expect[by].reset_index(drop=True)
     )

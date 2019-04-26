@@ -15,19 +15,18 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-
-#include "gtest/gtest.h"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 
 #include <cudf.h>
-#include <cudf/functions.h>
 
 #include <thrust/device_vector.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
+#include <gtest/gtest.h>
+
+#include <cstdlib>
+#include <iostream>
+#include <vector>
 
 // This is the main test feature
 template <class T>
@@ -60,10 +59,10 @@ struct ReplaceTest : public GdfTest
   /* --------------------------------------------------------------------------*
    * @brief Initializes the input columns with the given values.
    *
-   * @Param replace_column_list The original values
-   * @Param old_values_column_list The values that will be replaced
-   * @Param new_values_column_list The new values
-   * @Param print Optionally print the set of columns for debug
+   * @param replace_column_list The original values
+   * @param old_values_column_list The values that will be replaced
+   * @param new_values_column_list The new values
+   * @param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input(const std::initializer_list<T> &replace_column_list,
                     const std::initializer_list<T> &old_values_column_list,
@@ -94,9 +93,9 @@ struct ReplaceTest : public GdfTest
   /**
    * @brief Computes a reference solution
    *
-   * @Param print Option to print the solution for debug
+   * @param print Option to print the solution for debug
    *
-   * @Returns A vector of 'T' with the old values replaced  
+   * @returns A vector of 'T' with the old values replaced  
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<T> compute_reference_solution(bool print = false)
@@ -136,9 +135,9 @@ struct ReplaceTest : public GdfTest
    * @brief Replaces the values in a column given a map of old values to be replaced
    * and new values with the libgdf functions
    *
-   * @Param print Option to print the result computed by the libgdf function
+   * @param print Option to print the result computed by the libgdf function
    * 
-   * @Returns A vector of 'T' with the old values replaced  
+   * @returns A vector of 'T' with the old values replaced  
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<T> compute_gdf_result(bool print = false, gdf_error expected_result = GDF_SUCCESS)

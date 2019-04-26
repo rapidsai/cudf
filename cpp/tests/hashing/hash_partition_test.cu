@@ -13,31 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstdlib>
+
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+
+#include <utilities/int_fastdiv.h>
+#include <dataframe/cudf_table.cuh>
+#include <hash/hash_functions.cuh>
+
+#include <cudf.h>
+
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
+#include <thrust/gather.h>
+
+#include <rmm/thrust_rmm_allocator.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <iostream>
 #include <vector>
 #include <map>
 #include <type_traits>
 #include <memory>
 
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/gather.h>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <dataframe/cudf_table.cuh>
-#include <hash/hash_functions.cuh>
-#include <utilities/int_fastdiv.h>
-#include <rmm/thrust_rmm_allocator.h>
-
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-
-
+#include <cstdlib>
 
 template <template <typename> class hash_function,
          typename size_type>
@@ -279,7 +280,7 @@ typedef ::testing::Types< TestParameters< VTuple<int32_t>, GDF_HASH_IDENTITY, 0 
                           TestParameters< VTuple<int64_t, int32_t>, GDF_HASH_MURMUR3, 1>,
                           TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
                           TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_IDENTITY, 2, 3>,
-                          TestParameters< VTuple<uint32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
+                          TestParameters< VTuple<int32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
                           TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_MURMUR3, 1, 3>,
                           TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
                           TestParameters< VTuple<float, int32_t>, GDF_HASH_MURMUR3, 0>

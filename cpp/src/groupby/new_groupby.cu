@@ -2,9 +2,10 @@
 #include "cudf.h"
 #include "new_groupby.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
+#include "string/nvcategory_util.hpp"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -17,10 +18,10 @@ namespace{
    *
    * Also ensures that the columns do not contain any null values
    * 
-   * @Param[in] first Pointer to first gdf_column in set
-   * @Param[in] last Pointer to one past the last column in set
+   * @param[in] first Pointer to first gdf_column in set
+   * @param[in] last Pointer to one past the last column in set
    * 
-   * @Returns GDF_DATASET_EMPTY if a column contains a null data buffer, 
+   * @returns GDF_DATASET_EMPTY if a column contains a null data buffer, 
    * GDF_COLUMN_SIZE_MISMATCH if the columns are not of equal length, 
    */
   /* ----------------------------------------------------------------------------*/
@@ -56,22 +57,22 @@ namespace{
  * from the input key columns and a set of aggregation columns that hold the specified
  * reduction among all identical keys.
  * 
- * @Param[in] in_key_columns[] The input key columns
- * @Param[in] num_key_columns The number of input columns to groupby
- * @Param[in] in_aggregation_columns[] The columns that will be aggregated
- * @Param[in] num_aggregation_columns The number of columns that will be aggregated
- * @Param[in] agg_ops[] The aggregation operations to perform. The number of aggregation
+ * @param[in] in_key_columns[] The input key columns
+ * @param[in] num_key_columns The number of input columns to groupby
+ * @param[in] in_aggregation_columns[] The columns that will be aggregated
+ * @param[in] num_aggregation_columns The number of columns that will be aggregated
+ * @param[in] agg_ops[] The aggregation operations to perform. The number of aggregation
  * operations must be equal to the number of aggregation columns, such that agg_op[i]
  * will be applied to in_aggregation_columns[i]
- * @Param[in,out] out_key_columns[] Preallocated buffers for the output key columns
+ * @param[in,out] out_key_columns[] Preallocated buffers for the output key columns
  * columns
- * @Param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
+ * @param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
  * aggregation columns
- * @Param[in] options Structure that controls behavior of groupby operation, i.e.,
+ * @param[in] options Structure that controls behavior of groupby operation, i.e.,
  * sort vs. hash-based implementation, whether or not the output will be sorted,
  * etc. See definition of gdf_context.
  * 
- * @Returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
+ * @returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by(gdf_column* in_key_columns[],
@@ -124,6 +125,16 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
 
   if( 0 != options->flag_sort_result){
     sort_result = true;
+  }
+
+  //Check that user is not trying to sum or avg string columns
+  for(int aggregation_index = 0; aggregation_index < num_aggregation_columns; aggregation_index++){
+	  if(( agg_ops[aggregation_index] == GDF_SUM ||
+		   agg_ops[aggregation_index] == GDF_AVG ) &&
+		   in_aggregation_columns[aggregation_index]->dtype == GDF_STRING_CATEGORY){
+		  return GDF_UNSUPPORTED_DTYPE;
+	  }
+
   }
 
   // TODO: Only a single aggregator supported right now
@@ -184,6 +195,24 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
     default:
       std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
       gdf_error_code = GDF_UNSUPPORTED_METHOD;
+  }
+
+  GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+  
+  //The following code handles propogating an NVCategory into columns which are of type nvcategory
+  for(int key_index = 0; key_index < num_key_columns; key_index++){
+    if(out_key_columns[key_index]->dtype == GDF_STRING_CATEGORY){
+      gdf_error_code = nvcategory_gather(out_key_columns[key_index],
+                                         static_cast<NVCategory *>(in_key_columns[key_index]->dtype_info.category));
+      GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+    }
+  }
+  for(int out_column_index = 0; out_column_index < num_aggregation_columns; out_column_index++){
+    if(out_aggregation_columns[out_column_index]->dtype == GDF_STRING_CATEGORY){
+      gdf_error_code = nvcategory_gather(out_aggregation_columns[out_column_index],
+                                         static_cast<NVCategory *>(in_aggregation_columns[out_column_index]->dtype_info.category));
+      GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+    }
   }
 
   POP_RANGE();

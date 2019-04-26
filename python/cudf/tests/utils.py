@@ -51,6 +51,8 @@ def assert_eq(a, b, **kwargs):
         tm.assert_series_equal(a, b, **kwargs)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, **kwargs)
+    elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
+        assert np.allclose(a, b, equal_nan=True)
     else:
         if a == b:
             return True
@@ -58,5 +60,28 @@ def assert_eq(a, b, **kwargs):
             if np.isnan(a):
                 assert np.isnan(b)
             else:
-                assert np.allclose(a, b)
+                assert np.allclose(a, b, equal_nan=True)
     return True
+
+
+def gen_rand(dtype, size, **kwargs):
+    dtype = np.dtype(dtype)
+    if dtype.kind == 'f':
+        res = np.random.random(size=size).astype(dtype)
+        if kwargs.get('positive_only', False):
+            return res
+        else:
+            return (res * 2 - 1)
+    elif dtype == np.int8 or np.int16:
+        low = kwargs.get('low', -32)
+        high = kwargs.get('high', 32)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype.kind == 'i':
+        low = kwargs.get('low', -10000)
+        high = kwargs.get('high', 10000)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype.kind == 'b':
+        low = kwargs.get('low', 0)
+        high = kwargs.get('high', 1)
+        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+    raise NotImplementedError('dtype.kind={}'.format(dtype.kind))

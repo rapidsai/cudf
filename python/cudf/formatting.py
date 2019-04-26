@@ -3,11 +3,11 @@
 """
 Define how data are formatted
 """
-import numbers
+import numpy as np
 
 
-def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
-           min_width=4):
+def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
+           min_width=4, series_spacing=False):
     """
     Format columnar data.
 
@@ -47,20 +47,33 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     headers = tuple(cols.keys())
     lastcol = headers[-1] if more_cols > 0 else None
 
+    # offset because Series get more spaces than DFs
+    col0_offset = 3 if series_spacing else 1
+
     # compute column widths
     widths = {}
-    for k, vs in cols.items():
-        if isinstance(k, numbers.Integral):
-            widths[k] = min_width
-        else:
-            widths[k] = max(len(k), max(map(len, vs), default=0), min_width)
-    # format table
+    for k_idx, (k, vs) in enumerate(cols.items()):
+        widths[k] = max(len(str(k))+1,
+                        max(map(len, vs), default=0)+col0_offset,
+                        min_width)
+
+        for v_idx, v in enumerate(vs):
+            if len(str(v)) == max(map(len, vs), default=0) and '-' in v and\
+                    len(str(v)) > len(str(k)):
+                if dtypes[k] == np.dtype('object'):
+                    widths[k] = max(min_width, widths[k])
+                else:
+                    if v_idx == 0:
+                        widths[k] = widths[k] - 1
+                    else:
+                        widths[k] = max(min_width, widths[k])
+
     out = []
-    widthkey = len(str(nrows))
+    widthkey = min(len(str(nrows)), len(str(headers[0])))
 
     cell_template = "{:>{}}"
     #   format headers
-    if show_headers:
+    if show_headers and headers[0] != '':
         header = [' ' * widthkey]
         header += [cell_template.format(k, widths[k]) for k in headers[:-1]]
         if lastcol is not None:
@@ -68,8 +81,10 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
         header += [cell_template.format(k, widths[k]) for k in headers[-1:]]
         out.append(' '.join(header))
     #   format rows
+    if index.name:
+        out.append(cell_template.format(str(index.name), 0))
     for i in range(nrows):
-        row = [cell_template.format(str(index[i]), widthkey)]
+        row = [cell_template.format(str(index[i]), 0)]
         for k, vs in cols.items():
             if k == lastcol:
                 row.append('...')
