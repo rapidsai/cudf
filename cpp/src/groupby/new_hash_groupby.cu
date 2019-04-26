@@ -106,31 +106,31 @@ void initialize_with_identity(
  * @tparam dummy Dummy for SFINAE
  *---------------------------------------------------------------------------**/
 template <typename SourceType, distributive_operators op, typename dummy = void>
-struct result_type {
+struct target_type {
   using type = void;
 };
 
 // Computing MIN of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct result_type<SourceType, distributive_operators::MIN> {
+struct target_type<SourceType, distributive_operators::MIN> {
   using type = SourceType;
 };
 
 // Computing MAX of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct result_type<SourceType, distributive_operators::MAX> {
+struct target_type<SourceType, distributive_operators::MAX> {
   using type = SourceType;
 };
 
 // Always use int64_t accumulator for COUNT
 template <typename SourceType>
-struct result_type<SourceType, distributive_operators::COUNT> {
+struct target_type<SourceType, distributive_operators::COUNT> {
   using type = int64_t;
 };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
-struct result_type<
+struct target_type<
     SourceType, distributive_operators::SUM,
     typename std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
@@ -138,17 +138,75 @@ struct result_type<
 
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
-struct result_type<
+struct target_type<
     SourceType, distributive_operators::SUM,
     typename std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Functor that uses the target_type trait to map the combination of a
+ * dispatched SourceType and aggregation operation to required target gdf_dtype.
+ *
+ *---------------------------------------------------------------------------**/
+struct type_mapper {
+  template <typename SourceType>
+  gdf_dtype operator()(distributive_operators op) {
+    switch (op) {
+      case distributive_operators::MIN:
+        return gdf_dtype_of<typename target_type<
+            SourceType, distributive_operators::MIN>::type>();
+      case distributive_operators::MAX:
+        return gdf_dtype_of<typename target_type<
+            SourceType, distributive_operators::MAX>::type>();
+      case distributive_operators::SUM:
+        return gdf_dtype_of<typename target_type<
+            SourceType, distributive_operators::SUM>::type>();
+      case distributive_operators::COUNT:
+        return gdf_dtype_of<typename target_type<
+            SourceType, distributive_operators::COUNT>::type>();
+      default:
+        return GDF_invalid;
+    }
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Deteremines target gdf_dtypes to use for combinations of source
+ * gdf_dtypes and aggregation operations.
+ *
+ * Given vectors of source gdf_dtypes and corresponding aggregation operations
+ * to be performed on that type, returns a vector the gdf_dtypes to use to store
+ * the result of the aggregation operations.
+ *
+ * @param source_dtypes The source types
+ * @param op The aggregation operations
+ * @return Target gdf_dtypes to use for the target aggregation columns
+ *---------------------------------------------------------------------------**/
+std::vector<gdf_dtype> target_dtypes(
+    std::vector<gdf_dtype> const& source_dtypes,
+    std::vector<distributive_operators> const& operators) {
+  std::vector<gdf_dtype> output_dtypes(source_dtypes.size());
+
+  std::transform(
+      source_dtypes.begin(), source_dtypes.end(), operators.begin(),
+      output_dtypes.begin(),
+      [](gdf_dtype source_dtype, distributive_operators op) {
+        gdf_dtype t = cudf::type_dispatcher(source_dtype, type_mapper{}, op);
+        CUDF_EXPECTS(
+            t != GDF_invalid,
+            "Invalid combination of input type and aggregation operation.");
+        return t;
+      });
+
+  return output_dtypes;
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Error case for invalid combinations of SourceType and operator.
  *
  * For an invalid combination of SourceType and operator,
- * `result_type<SourceType, operator>::type` yields a `void` TargetType. This
+ * `target_type<SourceType, operator>::type` yields a `void` TargetType. This
  * specialization will be invoked for any invalid combination and cause a
  * runtime error.
  *---------------------------------------------------------------------------**/
@@ -242,7 +300,7 @@ struct elementwise_aggregator {
     switch (op) {
       case distributive_operators::MIN: {
         using TargetType =
-            typename result_type<SourceType, distributive_operators::MIN>::type;
+            typename target_type<SourceType, distributive_operators::MIN>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceMin{});
         set_valid_bit(target, target_index);
@@ -250,7 +308,7 @@ struct elementwise_aggregator {
       }
       case distributive_operators::MAX: {
         using TargetType =
-            typename result_type<SourceType, distributive_operators::MAX>::type;
+            typename target_type<SourceType, distributive_operators::MAX>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceMax{});
         set_valid_bit(target, target_index);
@@ -258,7 +316,7 @@ struct elementwise_aggregator {
       }
       case distributive_operators::SUM: {
         using TargetType =
-            typename result_type<SourceType, distributive_operators::SUM>::type;
+            typename target_type<SourceType, distributive_operators::SUM>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceSum{});
         set_valid_bit(target, target_index);
@@ -266,7 +324,7 @@ struct elementwise_aggregator {
       }
       case distributive_operators::COUNT: {
         using TargetType =
-            typename result_type<SourceType,
+            typename target_type<SourceType,
                                  distributive_operators::COUNT>::type;
         count_op<TargetType>(target, target_index);
         break;
@@ -275,7 +333,7 @@ struct elementwise_aggregator {
         return;
     }
   }
-};  // namespace
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Performs an in-place update by performing elementwise aggregation
@@ -323,39 +381,6 @@ __device__ inline void aggregate_row(device_table const& target,
       });
 }
 
-struct type_mapper {
-  template <typename InputT>
-  gdf_dtype operator()(distributive_operators op) {
-    switch (op) {
-      case distributive_operators::MIN:
-        return gdf_dtype_of<
-            typename result_type<InputT, distributive_operators::MIN>::type>();
-      case distributive_operators::MAX:
-        return gdf_dtype_of<
-            typename result_type<InputT, distributive_operators::MAX>::type>();
-      case distributive_operators::SUM:
-        return gdf_dtype_of<
-            typename result_type<InputT, distributive_operators::SUM>::type>();
-      case distributive_operators::COUNT:
-        return gdf_dtype_of<typename result_type<
-            InputT, distributive_operators::COUNT>::type>();
-      default:
-        return GDF_invalid;
-    }
-  }
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Returns the output gdf_dtype to use for a combination of input
- * gdf_dtype and aggregation operation.
- *
- * @param input_type The type of the input aggregation column
- * @param op The aggregation operation
- * @return gdf_dtype Type to use for output aggregation column
- *---------------------------------------------------------------------------**/
-gdf_dtype output_dtype(gdf_dtype input_type, distributive_operators op) {
-  return cudf::type_dispatcher(input_type, type_mapper{}, op);
-}
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
@@ -367,24 +392,12 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   gdf_size_type const output_size{keys.num_rows()};
 
   // Allocate output keys
-  std::vector<gdf_dtype> key_dtypes(keys.num_columns());
-  std::transform(keys.begin(), keys.end(), key_dtypes.begin(),
-                 [](gdf_column const* col) { return col->dtype; });
-  cudf::table output_keys{output_size, key_dtypes, true, stream};
+  cudf::table output_keys{output_size, column_dtypes(keys), true, stream};
 
-  // Allocate/initialize output values
-  // TODO: Move to function.
-  std::vector<gdf_dtype> output_dtypes(values.num_columns());
-  std::transform(
-      values.begin(), values.end(), operators.begin(), output_dtypes.begin(),
-      [](gdf_column const* input_col, groupby::distributive_operators op) {
-        gdf_dtype t = output_dtype(input_col->dtype, op);
-        CUDF_EXPECTS(
-            t != GDF_invalid,
-            "Invalid combination of input type and aggregation operation.");
-        return t;
-      });
-  cudf::table output_values{output_size, output_dtypes, true, stream};
+  cudf::table output_values{output_size,
+                            target_dtypes(column_dtypes(values), operators),
+                            true, stream};
+
   initialize_with_identity(output_values, operators, stream);
 
   using map_type = concurrent_unordered_map<
