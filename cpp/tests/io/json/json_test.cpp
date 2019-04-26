@@ -230,7 +230,7 @@ TEST(gdf_json_test, JsonLinesDtypeInference) {
 }
 
 TEST(gdf_json_test, JsonLinesFileInput) {
-  const char *fname = "/tmp/CsvNumbersTest.csv";
+  const char *fname = "/tmp/JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
@@ -258,4 +258,32 @@ TEST(gdf_json_test, JsonLinesFileInput) {
   EXPECT_THAT(firstCol, ::testing::ElementsAre(11, 22));
   const auto secondCol = gdf_column_to_host<double>(args.data[1]);
   EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+}
+
+TEST(gdf_json_test, JsonLinesByteRange) {
+  const char *fname = "/tmp/JsonLinesByteRangeTest.json";
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  json_read_arg args{};
+  args.source = fname;
+  args.source_type = FILE_PATH;
+  args.byte_range_offset = 11;
+  args.byte_range_size = 20;
+  try {
+    read_json(&args);
+  } catch (std::exception &e) {
+    std::cerr << e.what();
+  }
+
+  ASSERT_EQ(args.num_cols_out, 1);
+  ASSERT_EQ(args.num_rows_out, 3);
+
+  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
+  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
+
+  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
+  EXPECT_THAT(firstCol, ::testing::ElementsAre(3000, 4000, 5000));
 }

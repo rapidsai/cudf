@@ -42,9 +42,6 @@ private:
   const bool allow_newlines_in_strings_ = false;
   const ParseOptions opts_{',', '\n', '\"', '.'};
 
-  const size_t byte_range_offset_ = 0;
-  const size_t byte_range_size_ = 0;
-
   void ingestRawInput();
   void decompressInput();
   void setRecordStarts();

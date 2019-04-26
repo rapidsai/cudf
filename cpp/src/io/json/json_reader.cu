@@ -189,20 +189,20 @@ void JsonReader::ingestRawInput() {
   if (args_->source_type == gdf_csv_input_form::FILE_PATH) {
     map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
     CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
-    CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "The byte_range offset is too big for the input file size.\n");
+    CUDF_EXPECTS(args_->byte_range_offset < map_file_->size(), "byte_range offset is too big for the input size.\n");
 
     // Have to align map offset to page size
     const auto page_size = sysconf(_SC_PAGESIZE);
-    size_t map_offset = (byte_range_offset_ / page_size) * page_size;
+    size_t map_offset = (args_->byte_range_offset / page_size) * page_size;
 
     // Set to rest-of-the-file size, will reduce based on the byte range size
     size_t map_size = map_file_->size() - map_offset;
 
     // Include the page padding in the mapped size
-    const size_t page_padding = byte_range_offset_ - map_offset;
-    const size_t padded_byte_range_size = byte_range_size_ + page_padding;
+    const size_t page_padding = args_->byte_range_offset - map_offset;
+    const size_t padded_byte_range_size = args_->byte_range_size + page_padding;
 
-    if (byte_range_size_ != 0 && padded_byte_range_size < map_size) {
+    if (args_->byte_range_size != 0 && padded_byte_range_size < map_size) {
       // Need to make sure that w/ padding we don't overshoot the end of file
       map_size = min(padded_byte_range_size + calculateMaxRowSize(args_->num_cols), map_size);
     }
@@ -250,13 +250,13 @@ void JsonReader::setRecordStarts() {
   }
   // If not starting at an offset, add an extra row to account for the first row in the file
   const auto prefilter_count =
-      countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) + ((byte_range_offset_ == 0) ? 1 : 0);
+      countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) + ((args_->byte_range_offset == 0) ? 1 : 0);
 
   rec_starts_ = device_buffer<uint64_t>(prefilter_count);
 
   auto *find_result_ptr = rec_starts_.data();
   // Manually adding an extra row to account for the first row in the file
-  if (byte_range_offset_ == 0) {
+  if (args_->byte_range_offset == 0) {
     find_result_ptr++;
     CUDA_TRY(cudaMemsetAsync(rec_starts_.data(), 0ull, sizeof(uint64_t)));
   }
@@ -308,13 +308,13 @@ void JsonReader::uploadDataToDevice() {
   size_t bytes_to_upload = uncomp_size_;
 
   // Trim lines that are outside range
-  if (byte_range_size_ != 0) {
+  if (args_->byte_range_size != 0) {
     std::vector<uint64_t> h_rec_starts(rec_starts_.size());
     CUDA_TRY(
         cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t) * h_rec_starts.size(), cudaMemcpyDefault));
 
     auto it = h_rec_starts.end() - 1;
-    while (it >= h_rec_starts.begin() && *it > byte_range_size_) {
+    while (it >= h_rec_starts.begin() && *it > args_->byte_range_size) {
       --it;
     }
     const auto end_offset = *(it + 1);
