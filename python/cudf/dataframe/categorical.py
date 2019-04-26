@@ -12,6 +12,7 @@ from cudf.comm.serialize import register_distributed_serializer
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.copying as cpp_copying
 
+
 class CategoricalAccessor(object):
     """
     This mimicks pandas `df.cat` interface.

@@ -6,7 +6,7 @@ import pyarrow as pa
 
 from cudf.dataframe import columnops, numerical
 from cudf import _gdf
-from cudf.utils import utils, cudautils
+from cudf.utils import utils
 from cudf.dataframe.buffer import Buffer
 from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer

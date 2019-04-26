@@ -144,7 +144,6 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
-    import cudf.bindings.copying as cpp_copying
 
     assert column.null_count == 0
 
@@ -153,9 +152,6 @@ def column_select_by_position(column, positions):
     selvals = cudautils.gather(column.data.to_gpu_array(),
                                positions.data.to_gpu_array())
     selected_values = column.replace(data=Buffer(selvals))
-#    out_col = cpp_copying.apply_gather_column(column,
-#                                              positions.data.to_gpu_array())
-#    selected_values = column.replace(data=out_col.data)
     selected_index = Buffer(positions.data.to_gpu_array())
 
     return selected_values, NumericalColumn(data=selected_index,
@@ -235,8 +231,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        if (data.dtype in [np.float16, np.float32, np.float64]
-                and arbitrary.size > 0):
+        if (data.dtype in
+           [np.float16, np.float32, np.float64] and arbitrary.size > 0):
             if nan_as_null:
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)
