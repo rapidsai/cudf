@@ -60,7 +60,7 @@ def clone_columns_with_size(in_cols, row_size):
 
     return out_cols
 
-git
+
 def apply_gather(in_cols, maps, out_cols=None):
     """
       Call cudf::gather.
@@ -71,6 +71,8 @@ def apply_gather(in_cols, maps, out_cols=None):
 
      * returns out_cols
     """
+    # TODO check the dtype of `maps` is compatible with gdf_index_type
+
     col_count=len(in_cols)
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
