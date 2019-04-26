@@ -105,42 +105,43 @@ void initialize_with_identity(
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
  *---------------------------------------------------------------------------**/
-template <typename InputType, distributive_operators op, typename dummy = void>
+template <typename SourceType, distributive_operators op, typename dummy = void>
 struct result_type {
   using type = void;
 };
 
-// Computing MIN of T, use T accumulator
-template <typename T>
-struct result_type<T, distributive_operators::MIN> {
-  using type = T;
+// Computing MIN of SourceType, use SourceType accumulator
+template <typename SourceType>
+struct result_type<SourceType, distributive_operators::MIN> {
+  using type = SourceType;
 };
 
-// Computing MAX of T, use T accumulator
-template <typename T>
-struct result_type<T, distributive_operators::MAX> {
-  using type = T;
+// Computing MAX of SourceType, use SourceType accumulator
+template <typename SourceType>
+struct result_type<SourceType, distributive_operators::MAX> {
+  using type = SourceType;
 };
 
-// Counting T, always use int64_t accumulator
-template <typename T>
-struct result_type<T, distributive_operators::COUNT> {
+// Always use int64_t accumulator for COUNT
+template <typename SourceType>
+struct result_type<SourceType, distributive_operators::COUNT> {
   using type = int64_t;
 };
 
-// Summing integers of any type, always use int64_t
-template <typename T>
-struct result_type<T, distributive_operators::SUM,
-                   typename std::enable_if<std::is_integral<T>::value>::type> {
-  using type = int64_t;
-};
-
-// Summing float/doubles, use same type
-template <typename T>
+// Summing integers of any type, always use int64_t accumulator
+template <typename SourceType>
 struct result_type<
-    T, distributive_operators::SUM,
-    typename std::enable_if<std::is_floating_point<T>::value>::type> {
-  using type = T;
+    SourceType, distributive_operators::SUM,
+    typename std::enable_if_t<std::is_integral<SourceType>::value>> {
+  using type = int64_t;
+};
+
+// Summing float/doubles, use same type accumulator
+template <typename SourceType>
+struct result_type<
+    SourceType, distributive_operators::SUM,
+    typename std::enable_if_t<std::is_floating_point<SourceType>::value>> {
+  using type = SourceType;
 };
 
 /**---------------------------------------------------------------------------*
@@ -161,17 +162,20 @@ __device__ inline void binary_op(gdf_column const& target,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Performs a binary operation between two elements in two columns.
+ * @brief Performs inplace update of a target element via a binary operation
+ * with a source element.
  *
- * @tparam TargetType
- * @tparam SourceType
- * @tparam Op
- * @tparam nullptr
- * @param target
- * @param target_index
- * @param source
- * @param source_index
- * @param op
+ * Atomically performs `target[target_index] = target[target_index] op
+ * source[source_index]`
+ *
+ * @tparam TargetType Type of the target element
+ * @tparam SourceType Type of the source element
+ * @tparam Op Type of the binary operation to perform
+ * @param target Column containing target element
+ * @param target_index Index of the target element
+ * @param source Column containing source element
+ * @param source_index Index of the source element
+ * @param op The aggregation operation to perform
  *---------------------------------------------------------------------------**/
 template <typename TargetType, typename SourceType, typename Op,
           std::enable_if_t<not std::is_void<TargetType>::value, int>* = nullptr>
@@ -179,33 +183,50 @@ __device__ inline void binary_op(gdf_column const& target,
                                  gdf_size_type target_index,
                                  gdf_column const& source,
                                  gdf_size_type source_index, Op&& op) {
+  assert(gdf_dtype_of<TargetType>() == target.dtype);
+
+  SourceType const& source_element{
+      static_cast<SourceType const*>(source.data)[source_index]};
+
   cudf::genericAtomicOperation(
       &(static_cast<TargetType*>(target.data)[target_index]),
-      static_cast<TargetType>(*static_cast<SourceType*>(source.data)), op);
-
-  // TODO Inefficient to always check the target's validity bit
-  // We only need to set the target's validity bit on the first
-  // succesful update of the target element
-  if (not gdf_is_valid(target.valid, target_index)) {
-    bit_mask::set_bit_safe(
-        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
-  }
+      static_cast<TargetType>(source_element), op);
 }
 
 /**---------------------------------------------------------------------------*
- * @brief
+ * @brief Increments a target value by one.
  *
- * @tparam TargetType
- * @param target
- * @param target_index
- * @param source_is_valid
+ * @tparam TargetType Target element's type
+ * @param target The column containing the target element
+ * @param target_index Index of the target element
  *---------------------------------------------------------------------------**/
 template <typename TargetType>
 __device__ inline void count_op(gdf_column const& target,
                                 gdf_size_type target_index) {
+  static_assert(std::is_integral<TargetType>::value,
+                "TargetType of count operation must be integral.");
+  assert(gdf_dtype_of<TargetType>() == target.dtype);
   cudf::genericAtomicOperation(
       &(static_cast<TargetType*>(target.data)[target_index]), TargetType{1},
       DeviceSum{});
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Sets the specified bit in a column's validity bitmask.
+ *
+ * @note Setting a bit invokes an atomic operation. Therefore, to avoid
+ * unnecessary/expensive atomic operations, the bit is only set if it is not
+ * already set.
+ *
+ * @param target Column whose bitmask will be set
+ * @param target_index Index of the bit to set
+ *---------------------------------------------------------------------------**/
+__device__ inline void set_valid_bit(gdf_column const& target,
+                                     gdf_size_type target_index) {
+  if (not gdf_is_valid(target.valid, target_index)) {
+    bit_mask::set_bit_safe(
+        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
+  }
 }
 
 struct elementwise_aggregator {
@@ -215,12 +236,16 @@ struct elementwise_aggregator {
                                     gdf_column const& source,
                                     gdf_size_type source_index,
                                     distributive_operators op) {
+    // TODO Can we avoid setting the target's valid bit for every binary
+    // operation? Technically, it only needs to be set upon the first succesful
+    // update of the target element.
     switch (op) {
       case distributive_operators::MIN: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::MIN>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceMin{});
+        set_valid_bit(target, target_index);
         break;
       }
       case distributive_operators::MAX: {
@@ -228,6 +253,7 @@ struct elementwise_aggregator {
             typename result_type<SourceType, distributive_operators::MAX>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceMax{});
+        set_valid_bit(target, target_index);
         break;
       }
       case distributive_operators::SUM: {
@@ -235,6 +261,7 @@ struct elementwise_aggregator {
             typename result_type<SourceType, distributive_operators::SUM>::type;
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceSum{});
+        set_valid_bit(target, target_index);
         break;
       }
       case distributive_operators::COUNT: {
@@ -254,8 +281,22 @@ struct elementwise_aggregator {
  * @brief Performs an in-place update by performing elementwise aggregation
  * operations between a target and source row.
  *
- * @note If an element in the source row is NULL, the aggregation operation for
+ * For `i` in `[0, num_columns)`, each element in the target row is updated as:
+ *
+ *```
+ * target_row[i] = target_row[i] op[i] source_row[i]
+ *```
+ * @note If a source element is NULL, the aggregation operation for
  * that column is skipped.
+ *
+ * @note If a target element is NULL, it is assumed that the value of the NULL
+ * element is the identity value of the aggregation operation being performed.
+ * The aggregation operation is performed between the source element and the
+ * identity value, and the target element's bit is set to indicate it is no
+ * longer NULL.
+ *
+ * @note It is assumed that the target element of a COUNT operation is *never*
+ * NULL.
  *
  * @param target Table containing the target row
  * @param target_index Index of the target row
@@ -305,8 +346,8 @@ struct type_mapper {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Determines the output gdf_dtype that should be used for a given input
- * gdf_dtype and operator.
+ * @brief Returns the output gdf_dtype to use for a combination of input
+ * gdf_dtype and aggregation operation.
  *
  * @param input_type The type of the input aggregation column
  * @param op The aggregation operation
@@ -332,6 +373,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   cudf::table output_keys{output_size, key_dtypes, true, stream};
 
   // Allocate/initialize output values
+  // TODO: Move to function.
   std::vector<gdf_dtype> output_dtypes(values.num_columns());
   std::transform(
       values.begin(), values.end(), operators.begin(), output_dtypes.begin(),
