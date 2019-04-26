@@ -13,28 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <map>
-#include <utility>
-#include <type_traits>
-#include <typeinfo>
-#include <memory>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-
-#include "utilities/cudf_utils.h"
-
-#include <tests/utilities/cudf_test_fixtures.h>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters.cuh"
 #include "groupby_test_helpers.cuh"
+
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <utilities/cudf_utils.h>
+
+#include <cudf.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+#include <iostream>
+#include <vector>
+#include <utility>
+#include <type_traits>
+#include <typeinfo>
+#include <memory>
+#include <cstdlib>
+
 
 // A new instance of this class will be created for each *TEST(GroupTest, ...)
 // Put all repeated setup and validation stuff here
@@ -128,7 +128,7 @@ struct GroupTest : public GdfTest {
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    int valid_size = gdf_valid_allocation_size(host_vector.size());
     EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
@@ -155,13 +155,13 @@ struct GroupTest : public GdfTest {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Initializes key columns and aggregation column for gdf group by call
+   * @brief  Initializes key columns and aggregation column for gdf group by call
    *
-   * @Param key_count The number of unique keys
-   * @Param value_per_key The number of times a random aggregation value is generated for a key
-   * @Param max_key The maximum value of the key columns
-   * @Param max_val The maximum value of aggregation column
-   * @Param print Optionally print the keys and aggregation columns for debugging
+   * @param key_count The number of unique keys
+   * @param value_per_key The number of times a random aggregation value is generated for a key
+   * @param max_key The maximum value of the key columns
+   * @param max_val The maximum value of aggregation column
+   * @param print Optionally print the keys and aggregation columns for debugging
    */
   /* ----------------------------------------------------------------------------*/
   void create_input(const size_t key_count, const size_t value_per_key,
@@ -192,11 +192,11 @@ struct GroupTest : public GdfTest {
 
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+     * @brief  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
      *
-     * @Param host_vector The host vector whose data is used to initialize the gdf_column
+     * @param host_vector The host vector whose data is used to initialize the gdf_column
      *
-     * @Returns A unique_ptr wrapping the new gdf_column
+     * @returns A unique_ptr wrapping the new gdf_column
      */
     /* ----------------------------------------------------------------------------*/
   // Compile time recursion to convert each vector in a tuple of vectors into
@@ -270,7 +270,7 @@ struct GroupTest : public GdfTest {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
+   * @brief  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
   void compute_gdf_result(const gdf_error expected_error = GDF_SUCCESS)

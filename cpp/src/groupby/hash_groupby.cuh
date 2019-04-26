@@ -19,26 +19,29 @@
 #include <cuda_runtime.h>
 
 #include "cudf.h"
-#include "utilities/error_utils.h"
+#include "utilities/error_utils.hpp"
+// #include "utilities/device_atomics.cuh"
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
 
+#include <type_traits>
+
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Calls the Hash Based group by compute API to compute the groupby with 
+ * @brief Calls the Hash Based group by compute API to compute the groupby with 
  * aggregation.
  * 
- * @Param groupby_input_table The input groupby table
- * @Param in_aggregation_column The input aggregation column
- * @Param groupby_output_table The output groupby table
- * @Param out_aggregation_column The output aggregation column
- * @Param sort_result Flag to optionally sort the output
+ * @param groupby_input_table The input groupby table
+ * @param in_aggregation_column The input aggregation column
+ * @param groupby_output_table The output groupby table
+ * @param out_aggregation_column The output aggregation column
+ * @param sort_result Flag to optionally sort the output
  * @tparam aggregation_type  The type of the aggregation column
  * @tparam op A binary functor that implements the aggregation operation
  * 
- * @Returns On failure, returns appropriate error code. Otherwise, GDF_SUCCESS
+ * @returns On failure, returns appropriate error code. Otherwise, GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 template <typename aggregation_type, 
@@ -80,9 +83,23 @@ struct is_same_functor : std::false_type{};
 template <template <typename> class T>
 struct is_same_functor<T,T> : std::true_type{};
 
+/**---------------------------------------------------------------------------*
+ * @brief Functor for `typed_groupby` to use with `type_dispatcher`
+ * 
+ *---------------------------------------------------------------------------**/
+template <template <typename T> class op>
+struct typed_groupby_functor
+{
+  template <typename TypeAgg, typename... Ts>
+  gdf_error operator()(Ts&&... args)
+  {
+    return typed_groupby<TypeAgg, op>(std::forward<Ts>(args)...);    
+  }
+};
+
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Helper function for gdf_groupby_hash. Deduces the type of the aggregation
+ * @brief  Helper function for gdf_groupby_hash. Deduces the type of the aggregation
  * column and calls another function to perform the group by.
  * 
  */
@@ -112,101 +129,30 @@ gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_t
     aggregation_column_type = in_aggregation_column->dtype;
   }
 
-  // Deduce the type of the aggregation column and call function to perform GroupBy
-  switch(aggregation_column_type)
-  {
-    case GDF_INT8:   
-      { 
-        return typed_groupby<int8_t, op>(groupby_input_table, 
-                                         in_aggregation_column, 
-                                         groupby_output_table, 
-                                         out_aggregation_column, 
-                                         sort_result);
-      }
-    case GDF_INT16:  
-      { 
-        return typed_groupby<int16_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    case GDF_INT32:  
-      { 
-        return typed_groupby<int32_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    case GDF_INT64:  
-      { 
-        return typed_groupby<int64_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    case GDF_FLOAT32:
-      { 
-        return typed_groupby<float, op>(groupby_input_table, 
-                                        in_aggregation_column, 
-                                        groupby_output_table, 
-                                        out_aggregation_column, 
-                                        sort_result);
-      }
-    case GDF_FLOAT64:
-      { 
-        return typed_groupby<double, op>(groupby_input_table, 
-                                         in_aggregation_column, 
-                                         groupby_output_table, 
-                                         out_aggregation_column, 
-                                         sort_result);
-      }
-    case GDF_DATE32:    
-      {
-        return typed_groupby<int32_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    case GDF_DATE64:   
-      {
-        return typed_groupby<int64_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    case GDF_TIMESTAMP:
-      {
-        return typed_groupby<int64_t, op>(groupby_input_table, 
-                                          in_aggregation_column, 
-                                          groupby_output_table, 
-                                          out_aggregation_column, 
-                                          sort_result);
-      }
-    default:
-      std::cerr << "Unsupported aggregation column type: " << aggregation_column_type << std::endl;
-      return GDF_UNSUPPORTED_DTYPE;
-  }
+  return cudf::type_dispatcher(aggregation_column_type,
+                              typed_groupby_functor<op>{},
+                              groupby_input_table, 
+                              in_aggregation_column, 
+                              groupby_output_table, 
+                              out_aggregation_column, 
+                              sort_result);
+
 }
 
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  This function provides the libgdf entry point for a hash-based group-by.
+ * @brief  This function provides the libgdf entry point for a hash-based group-by.
  * Performs a Group-By operation on an arbitrary number of columns with a single aggregation column.
  * 
- * @Param[in] ncols The number of columns to group-by
- * @Param[in] in_groupby_columns[] The columns to group-by
- * @Param[in,out] in_aggregation_column The column to perform the aggregation on
- * @Param[in,out] out_groupby_columns[] A preallocated buffer to store the resultant group-by columns
- * @Param[in,out] out_aggregation_column A preallocated buffer to store the resultant aggregation column
+ * @param[in] ncols The number of columns to group-by
+ * @param[in] in_groupby_columns[] The columns to group-by
+ * @param[in,out] in_aggregation_column The column to perform the aggregation on
+ * @param[in,out] out_groupby_columns[] A preallocated buffer to store the resultant group-by columns
+ * @param[in,out] out_aggregation_column A preallocated buffer to store the resultant aggregation column
  * @tparam[in] aggregation_operation A functor that defines the aggregation operation
  * 
- * @Returns gdf_error
+ * @returns gdf_error
  */
 /* ----------------------------------------------------------------------------*/
 template <template <typename aggregation_type> class aggregation_operation,
@@ -255,12 +201,12 @@ gdf_error gdf_group_by_hash(size_type ncols,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Creates a gdf_column of a specified size and data type
+ * @brief  Creates a gdf_column of a specified size and data type
  * 
- * @Param size The number of elements in the gdf_column
+ * @param size The number of elements in the gdf_column
  * @tparam col_type The datatype of the gdf_column
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 template<typename col_type>
@@ -299,12 +245,12 @@ gdf_column create_gdf_column(const size_t size)
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Given a column for the SUM and COUNT aggregations, computes the AVG
+ * @brief Given a column for the SUM and COUNT aggregations, computes the AVG
  * aggregation column result as AVG[i] = SUM[i] / COUNT[i].
  * 
- * @Param[out] avg_column The output AVG aggregation column
- * @Param count_column The input COUNT aggregation column
- * @Param sum_column The input SUM aggregation column
+ * @param[out] avg_column The output AVG aggregation column
+ * @param count_column The input COUNT aggregation column
+ * @param sum_column The input SUM aggregation column
  * @tparam sum_type The type used for the SUM column
  * @tparam avg_type The type used for the AVG column
  */
@@ -322,25 +268,47 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
   auto average_op =  [] __device__ (sum_type sum, size_t count)->avg_type { return (sum / static_cast<avg_type>(count)); };
 
   // Computes the average into the passed in output buffer for the average column
-  thrust::transform(rmm::exec_policy(cudaStream_t{0}), d_sums, d_sums + output_size, d_counts, d_avg, average_op);
+  thrust::transform(rmm::exec_policy()->on(0), d_sums, d_sums + output_size, d_counts, d_avg, average_op);
 
   // Update the size of the average column
   avg_column->size = output_size;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Functor for `compute_average` to be used with `type_dispatcher`
+ * 
+ *---------------------------------------------------------------------------**/
+template <typename sum_type>
+struct compute_average_functor {
+  template <typename T, typename... Ts>
+  typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
+  operator()(Ts&&... args)
+  {
+    compute_average<sum_type, T>(std::forward<Ts>(args)...);
+    return GDF_SUCCESS;
+  }
+
+  template <typename T, typename... Ts>
+  typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
+  operator()(Ts&&... args)
+  {
+    return GDF_UNSUPPORTED_DTYPE;
+  }
+};
+
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Computes the SUM and COUNT aggregations for the group by inputs. Calls 
+ * @brief Computes the SUM and COUNT aggregations for the group by inputs. Calls 
  * another function to compute the AVG aggregator based on the SUM and COUNT results.
  * 
- * @Param ncols The number of input groupby columns
- * @Param in_groupby_columns[] The groupby input columns
- * @Param in_aggregation_column The aggregation input column
- * @Param out_groupby_columns[] The output groupby columns
- * @Param out_aggregation_column The output aggregation column
+ * @param ncols The number of input groupby columns
+ * @param in_groupby_columns[] The groupby input columns
+ * @param in_aggregation_column The aggregation input column
+ * @param out_groupby_columns[] The output groupby columns
+ * @param out_aggregation_column The output aggregation column
  * @tparam sum_type The type used for the SUM aggregation output column
  * 
- * @Returns gdf_error with error code on failure, otherwise GDF_SUCCESS
+ * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 template <typename sum_type>
@@ -368,36 +336,49 @@ gdf_error multi_pass_avg(int ncols,
   gdf_group_by_hash<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, sort_result); 
 
   // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
-  const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
-  switch(gdf_output_type){
-    case GDF_INT8:    { compute_average<sum_type, int8_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT16:   { compute_average<sum_type, int16_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT32:   { compute_average<sum_type, int32_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT64:   { compute_average<sum_type, int64_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_FLOAT32: { compute_average<sum_type, float>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_FLOAT64: { compute_average<sum_type, double>( out_aggregation_column, count_output, sum_output); break; }
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
+  auto result = cudf::type_dispatcher(out_aggregation_column->dtype,
+                                      compute_average_functor<sum_type>{},
+                                      out_aggregation_column, count_output, sum_output);
 
   // Free intermediate storage
   RMM_TRY( RMM_FREE(count_output.data, 0) );
   RMM_TRY( RMM_FREE(sum_output.data, 0) );
   
-  return GDF_SUCCESS;
+  return result;
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Functor for `multi_pass_avg` to be used with `type_dispatcher`
+ * 
+ *---------------------------------------------------------------------------**/
+struct multi_pass_avg_functor {
+  template <typename T, typename... Ts>
+  typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
+  operator()(Ts&&... args)
+  {
+    return multi_pass_avg<T>(std::forward<Ts>(args)...);
+  }
+
+  template <typename T, typename... Ts>
+  typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
+  operator()(Ts&&... args)
+  {
+    return GDF_UNSUPPORTED_DTYPE;
+  }
+};
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the AVG aggregation for a hash-based group by. This aggregator
+ * @brief  Computes the AVG aggregation for a hash-based group by. This aggregator
  * requires its own function as AVG is implemented via the COUNT and SUM aggregators.
  * 
- * @Param ncols The number of columns to groupby
- * @Param in_groupby_columns[] The input groupby columns
- * @Param in_aggregation_column The input aggregation column
- * @Param out_groupby_columns[] The output groupby columns
- * @Param out_aggregation_column The output aggregation column
+ * @param ncols The number of columns to groupby
+ * @param in_groupby_columns[] The input groupby columns
+ * @param in_aggregation_column The input aggregation column
+ * @param out_groupby_columns[] The output groupby columns
+ * @param out_aggregation_column The output aggregation column
  * 
- * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+ * @returns gdf_error with error code on failure, otherwise GDF_SUCESS
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_hash_avg(int ncols,               
@@ -407,16 +388,10 @@ gdf_error gdf_group_by_hash_avg(int ncols,
                                 gdf_column* out_aggregation_column)
 {
   // Deduce the type used for the SUM aggregation, assuming we use the same type as the aggregation column
-  const gdf_dtype gdf_sum_type = in_aggregation_column->dtype;
-  switch(gdf_sum_type){
-    case GDF_INT8:   { return multi_pass_avg<int8_t>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    case GDF_INT16:  { return multi_pass_avg<int16_t>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    case GDF_INT32:  { return multi_pass_avg<int32_t>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    case GDF_INT64:  { return multi_pass_avg<int64_t>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    case GDF_FLOAT32:{ return multi_pass_avg<float>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    case GDF_FLOAT64:{ return multi_pass_avg<double>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
+
+  return cudf::type_dispatcher(in_aggregation_column->dtype,
+                              multi_pass_avg_functor{},
+                              ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);
 }
 
 #endif

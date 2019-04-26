@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <random>
-#include "gtest/gtest.h"
 
 #include <utilities/wrapper_types.hpp>
-
 #include <cudf.h>
 
+#include <gtest/gtest.h>
+
+#include <random>
 
 
 /**
@@ -137,6 +137,29 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
         EXPECT_EQ(t0*t1, TypeParam{w0*w1}.value);
         if(0 != t1)
             EXPECT_EQ(t0/t1, TypeParam{w0/w1}.value);
+    }
+}
+
+
+TYPED_TEST(WrappersTest, IncrementOperators){
+    using UnderlyingType = typename TypeParam::value_type;
+
+    for(int i = 0; i < NUM_TRIALS; ++i){
+        UnderlyingType t{this->rand()};
+        TypeParam w{t};
+        EXPECT_EQ(t++, (w++).value);
+        EXPECT_EQ(++t, (++w).value);
+    }
+}
+
+TYPED_TEST(WrappersTest, DecrementOperators){
+    using UnderlyingType = typename TypeParam::value_type;
+
+    for(int i = 0; i < NUM_TRIALS; ++i){
+        UnderlyingType t{this->rand()};
+        TypeParam w{t};
+        EXPECT_EQ(t--, (w--).value);
+        EXPECT_EQ(--t, (--w).value);
     }
 }
 

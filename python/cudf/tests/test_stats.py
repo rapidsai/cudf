@@ -12,13 +12,6 @@ params_dtypes = [np.int32, np.float32, np.float64]
 methods = ['min', 'max', 'sum', 'mean', 'var', 'std']
 
 interpolation_methods = ['linear', 'lower', 'higher', 'midpoint', 'nearest']
-exact_results = {
-    'linear': [-1.01, 0.3125, 0.7805, 1.62, 6.8],
-    'lower': [-1.01, 0.15, 0.15, 1.11, 6.8],
-    'higher': [0.15, 0.8, 0.8, 2.13, 6.8],
-    'midpoint': [-0.43, 0.475, 0.475, 1.62, 6.8],
-    'nearest': [-1.01, 0.15, 0.8, 2.13, 6.8]}
-approx_results = [-1.01, 0.15, 0.15, 1.11, 6.8]
 
 
 @pytest.mark.parametrize('method', methods)
@@ -86,13 +79,46 @@ def test_series_unique():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
-        assert len(set(arr[mask])) == sr.unique_count()
+        assert len(set(arr[mask])) == sr.nunique()
         df = pd.DataFrame(data=arr[mask], columns=['col'])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().to_pandas().sort_index()
         print(expect.head())
         print(got.head())
         assert got.equals(expect)
+
+
+@pytest.mark.parametrize('nan_as_null, dropna',
+                         [(True, True), (True, False),
+                          (False, True), (False, False)])
+def test_series_nunique(nan_as_null, dropna):
+    # We remove nulls as opposed to NaNs using the dropna parameter,
+    # so to test against pandas we replace NaN with another discrete value
+    cudf_series = Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
+    pd_series = pd.Series([1, 2, 2, 3, 3])
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
+
+    cudf_series = Series([1.0, 2.0, 3.0, np.nan, None],
+                         nan_as_null=nan_as_null)
+    if nan_as_null is True:
+        pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
+    else:
+        pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, None])
+
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
+
+    cudf_series = Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
+    if nan_as_null is True:
+        pd_series = pd.Series([1.0, np.nan, np.nan])
+    else:
+        pd_series = pd.Series([1.0, -1.0, -1.0])
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
 
 
 def test_series_scale():
@@ -112,18 +138,39 @@ def test_exact_quantiles(int_method):
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
+    df = pd.DataFrame(arr)
     gdf_series = Series(arr)
 
     q1 = gdf_series.quantile(quant_values, interpolation=int_method,
                              exact=True)
 
+    q2 = df.quantile(quant_values, interpolation=int_method)
+
     np.testing.assert_allclose(q1.to_pandas().values,
-                               exact_results[int_method], rtol=1e-10)
+                               np.array(q2.values).T.flatten(), rtol=1e-10)
+
+
+@pytest.mark.parametrize('int_method', interpolation_methods)
+def test_exact_quantiles_int(int_method):
+    arr = np.asarray([7, 0, 3, 4, 2, 1, -1, 1, 6])
+    quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
+
+    df = pd.DataFrame(arr)
+    gdf_series = Series(arr)
+
+    q1 = gdf_series.quantile(quant_values, interpolation=int_method,
+                             exact=True)
+
+    q2 = df.quantile(quant_values, interpolation=int_method)
+
+    np.testing.assert_allclose(q1.to_pandas().values,
+                               np.array(q2.values).T.flatten(), rtol=1e-10)
 
 
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
+    approx_results = [-1.01, 0.8, 0.8, 2.13, 6.8]
 
     gdf_series = Series(arr)
 
@@ -131,3 +178,15 @@ def test_approx_quantiles():
 
     np.testing.assert_allclose(q1.to_pandas().values, approx_results,
                                rtol=1e-10)
+
+
+def test_approx_quantiles_int():
+    arr = np.asarray([1, 2, 3])
+    quant_values = [0.5]
+    approx_results = [2]
+
+    gdf_series = Series(arr)
+
+    q1 = gdf_series.quantile(quant_values, exact=False)
+
+    assert approx_results == q1.to_pandas().values

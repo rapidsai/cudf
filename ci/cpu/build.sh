@@ -12,7 +12,7 @@ function logger() {
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export CMAKE_BUILD_PARALLEL_LEVEL=4
+export PARALLEL_LEVEL=4
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
@@ -33,9 +33,6 @@ env
 
 logger "Activate conda env..."
 source activate gdf
-
-logger "Bump pyarrow"
-conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
 
 logger "Check versions..."
 python --version
@@ -69,7 +66,7 @@ logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 
 logger "Build conda pkg for libcudf_cffi..."
-source ci/cpu/libcudf/build_libcudf_cffi.sh
+source ci/cpu/libcudf_cffi/build_libcudf_cffi.sh
 
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
@@ -78,8 +75,5 @@ source ci/cpu/cudf/build_cudf.sh
 # UPLOAD - Conda packages
 ################################################################################
 
-logger "Upload conda pkgs for libcudf and libcudf_cffi..."
-source ci/cpu/libcudf/upload.sh
-
-logger "Upload conda pkg..."
-source ci/cpu/cudf/upload-anaconda.sh
+logger "Upload conda pkgs..."
+source ci/cpu/upload_anaconda.sh

@@ -1,9 +1,14 @@
 #ifndef GDF_CPPTYPES_H
 #define GDF_CPPTYPES_H
 
-#include "cudf/types.h"
+#include <cudf/types.h>
 #include "cudf_utils.h"
-#include <iostream>
+
+#include <cub/util_type.cuh>
+
+#include <iosfwd>
+#include <type_traits>
+#include <limits>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -58,7 +63,7 @@ struct wrapper
   value_type value;                                              ///< The wrapped value
 
   CUDA_HOST_DEVICE_CALLABLE
-  explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(T v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }
@@ -176,13 +181,49 @@ wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> c
   return wrapper<T, type_id>{lhs.value / rhs.value};
 }
 
+// prefix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator++(wrapper<T,type_id> & w)
+{
+  w.value++;
+  return w;
+}
+
+// postfix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator++(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value++};
+}
+
+// prefix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator--(wrapper<T,type_id> & w)
+{
+  w.value--;
+  return w;
+}
+
+// postfix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator--(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value--};
+}
+
+
+
 /* --------------------------------------------------------------------------*/
 /** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
-     * @Param[in] wrapped A non-const reference to the wrapper struct to unwrap
+     * @param[in] wrapped A non-const reference to the wrapper struct to unwrap
      * 
-     * @Returns A reference to the underlying wrapped value  
+     * @returns A reference to the underlying wrapped value  
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
@@ -197,9 +238,9 @@ CUDA_HOST_DEVICE_CALLABLE
 /** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
-     * @Param[in] wrapped A const reference to the wrapper struct to unwrap
+     * @param[in] wrapped A const reference to the wrapper struct to unwrap
      * 
-     * @Returns A const reference to the underlying wrapped value  
+     * @returns A const reference to the underlying wrapped value  
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
@@ -218,9 +259,9 @@ CUDA_HOST_DEVICE_CALLABLE
      * code that is agnostic to whether or not the type being operated on is a wrapper
      * struct or a fundamental type
      * 
-     * @Param[in] value Reference to a fundamental type to passthrough
+     * @param[in] value Reference to a fundamental type to passthrough
      * 
-     * @Returns Reference to the value passed in
+     * @returns Reference to the value passed in
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
@@ -240,9 +281,9 @@ CUDA_HOST_DEVICE_CALLABLE
      * code that is agnostic to whether or not the type being operated on is a wrapper
      * struct or a fundamental type
      * 
-     * @Param[in] value const reference to a fundamental type to passthrough
+     * @param[in] value const reference to a fundamental type to passthrough
      * 
-     * @Returns const reference to the value passed in
+     * @returns const reference to the value passed in
      */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
@@ -253,9 +294,53 @@ CUDA_HOST_DEVICE_CALLABLE
 {
   return value;
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Trait to use to get underlying type of wrapped object
+ * 
+ * This struct can be used with either a fundamental type or a wrapper type and
+ * it uses unwrap to get the underlying type.
+ * 
+ * Example use case: 
+ *  Making a functor to use with a `type_dispatcher` that works on the
+ *  underlying type of all `gdf_dtype`
+ *  
+ * ```c++
+ * struct example_functor{
+ *  template <typename T>
+ *  int operator()(){
+ *    using T1 = cudf::detail::unwrapped_type<T>::type;
+ *    return sizeof(T1);
+ *  }
+ * };
+ * ```
+ * 
+ * @tparam T Either wrapped object type or fundamental type
+ *---------------------------------------------------------------------------**/
+template <typename T>
+struct unwrapped_type {
+  using type = std::decay_t<decltype(unwrap(std::declval<T&>()))>;
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Helper type for `unwrapped_type`
+ * 
+ * Example:
+ * ```c++
+ * using T1 = cudf::detail::unwrapped_type_t<date32>; // T1 = int 
+ * using T2 = cudf::detail::unwrapped_type_t<float>;  // T2 = float 
+ * ```
+ * 
+ * @tparam T Either wrapped object type or fundamental type
+ *---------------------------------------------------------------------------**/
+template <typename T>
+using unwrapped_type_t = typename unwrapped_type<T>::type;
+
 } // namespace detail
 
 using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
+
+using nvstring_category = detail::wrapper<gdf_nvstring_category, GDF_STRING_CATEGORY>;
 
 using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
 
@@ -264,5 +349,76 @@ using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 
 } // namespace cudf
+
+namespace std
+{
+
+/**---------------------------------------------------------------------------*
+ * @brief Specialization of std::numeric_limits for wrapper types
+ *---------------------------------------------------------------------------**/
+template <typename T, gdf_dtype type_id>
+struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
+  
+  using wrapper_t = cudf::detail::wrapper<T, type_id>;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the maximum finite value representable by the numeric type T
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t max() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::max() };
+  }
+  
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the lowest finite value representable by the numeric type T
+   * 
+   * Returns a finite value x such that there is no other finite value y where y < x
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t lowest() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::lowest() };
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the minimum finite value representable by the numeric type T
+   * 
+   * For floating-point types with denormalization, min returns the minimum
+   * positive normalized value.
+   *---------------------------------------------------------------------------**/
+  static constexpr wrapper_t min() noexcept {
+    return wrapper_t{ std::numeric_limits<T>::min() };
+  }
+
+};
+
+} // std
+
+namespace cub
+{
+
+template <> struct NumericTraits<cudf::date32> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date32>>,
+    cudf::detail::unwrapped_type_t<cudf::date32>> {};
+
+template <> struct NumericTraits<cudf::timestamp> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::timestamp>>,
+    cudf::detail::unwrapped_type_t<cudf::timestamp>> {};
+
+template <> struct NumericTraits<cudf::date64> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date64>>,
+    cudf::detail::unwrapped_type_t<cudf::date64>> {};
+
+template <> struct NumericTraits<cudf::category> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::category>>,
+    cudf::detail::unwrapped_type_t<cudf::category>> {};
+
+template <> struct NumericTraits<cudf::nvstring_category> :
+  BaseTraits<SIGNED_INTEGER, true, false,
+    std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
+    cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
+
+} // cub
 
 #endif

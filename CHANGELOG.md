@@ -1,13 +1,277 @@
-# cuDF 0.5.0 (Date TBD)
+# cuDF 0.7.0 (Date TBD)
 
 ## New Features
 
+- PR #1194 Implement overloads for CUDA atomic operations
+- PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
+- PR #1235 Add GPU-accelerated Parquet Reader
+- PR #1335 Added local_dict arg in `DataFrame.query()`.
+- PR #1282 Add Series and DataFrame.describe()
+- PR #1381 Add DataFrame._get_numeric_data
+- PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
+- PR #1396 Add DataFrame.drop method
+- PR #1413 Add DataFrame.melt method
+- PR #1412 Add DataFrame.pop()
+- PR #1419 Initial CSV writer function
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1420 Add script to build and test on a local gpuCI image
+- PR #1440 Add DatetimeColumn.min(), DatetimeColumn.max()
+- PR #1455 Add Series.Shift via Numba kernel
+- PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
+- PR #1461 Add Python coverage test to gpu build
+- PR #1445 Parquet Reader: Add selective reading of rows and row group
+
+## Improvements
+
+- PR #1404 Parquet reader page data decoding speedup
+- PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
+- PR #1202 Simplify README.md
+- PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
+- PR #1238 Improve performance of the CUDA trie used in the CSV reader
+- PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
+- PR #1163 Refactored UnaryOps. Reduced API to two functions: `gdf_unary_math` and `gdf_cast`. Added `abs`, `-`, and `~` ops. Changed bindings to Cython
+- PR #1284 Update docs version
+- PR #1287 add exclude argument to cudf.select_dtype function
+- PR #1286 Refactor some of the CSV Reader kernels into generic utility functions
+- PR #1291 fillna in `Series.to_gpu_array()` and `Series.to_array()` can accept the scalar too now.
+- PR #1005 generic `reduction` and `scan` support
+- PR #1349 Replace modernGPU sort join with thrust.
+- PR #1363 Add a dataframe.mean(...) that raises NotImplementedError to satisfy `dask.dataframe.utils.is_dataframe_like`
+- PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
+- PR #1376 Change series quantile default to linear
+- PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1389 Refactored `set_null_count()`
+- PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
+- PR #1435 Rework CMake and conda recipes to depend on installed libraries
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
+- PR #1462 Add ability to read parquet files from arrow::io::RandomAccessFile
+- PR #1453 Convert CSV Reader CFFI to Cython
+- PR #1479 Convert Parquet Reader CFFI to Cython
+- PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
+- PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1484 Convert GroupBy CFFI to Cython
+- PR #1463 Allow and default melt keyword argument var_name to be None
+- PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+
+## Bug Fixes
+
+- PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
+- PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
+- PR #1289 Fix looping over each value instead of each category in concatenation
+- PR #1293 Fix Inaccurate error message in join.pyx
+- PR #1308 Add atomicCAS overload for `int8_t`, `int16_t`
+- PR #1317 Fix catch polymorphic exception by reference in ipc.cu
+- PR #1325 Fix dtype of null bitmasks to int8
+- PR #1326 Update build documentation to use -DCMAKE_CXX11_ABI=ON
+- PR #1334 Add "na_position" argument to CategoricalColumn sort_by_values
+- PR #1321 Fix out of bounds warning when checking Bzip2 header
+- PR #1359 Add atomicAnd/Or/Xor for integers
+- PR #1354 Fix `fillna()` behaviour when replacing values with different dtypes
+- PR #1347 Fixed core dump issue while passing dict_dtypes without column names in `cudf.read_csv()`
+- PR #1379 Fixed build failure caused due to error: 'col_dtype' may be used uninitialized
+- PR #1392 Update cudf Dockerfile and package_versions.sh
+- PR #1385 Added INT8 type to `_schema_to_dtype` for use in GpuArrowReader
+- PR #1393 Fixed a bug in `gdf_count_nonzero_mask()` for the case of 0 bits to count
+- PR #1395 Update CONTRIBUTING to use the environment variable CUDF_HOME
+- PR #1416 Fix bug at gdf_quantile_exact and gdf_quantile_appox
+- PR #1421 Fix remove creation of series multiple times during `add_column()`
+- PR #1405 CSV Reader: Fix memory leaks on read_csv() failure
+- PR #1328 Fix CategoricalColumn to_arrow() null mask
+- PR #1433 Fix NVStrings/categories includes
+- PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
+- PR #1483 Modify CSV reader to avoid cropping blank quoted characters in non-string fields
+- PR #1446 Merge 1275 hotfix from master into branch-0.7
+- PR #1447 Fix legacy groupby apply docstring
+- PR #1451 Fix hash join estimated result size is not correct
+- PR #1454 Fix local build script improperly change directory permissions
+- PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
+- PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
+- PR #1506 Fix csv-write call to updated NVStrings method
+
+
+# cuDF 0.6.1 (25 Mar 2019)
+
+## Bug Fixes
+
+- PR #1275 Fix CentOS exception in DataFrame.hash_partition from using value "returned" by a void function
+
+
+# cuDF 0.6.0 (22 Mar 2019)
+
+## New Features
+
+- PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
+- PR #539 Add Python bindings for replace function
+- PR #823 Add Doxygen configuration to enable building HTML documentation for libcudf C/C++ API
+- PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
+- PR #858 Add series feature hashing support
+- PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues
+- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #887 Add Series digitize method
+- PR #895 Add Series groupby
+- PR #898 Add DataFrame.groupby(level=0) support
+- PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
+- PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #913 Add DLPack support: convert between cuDF DataFrame and DLTensor
+- PR #939 Add ORC reader from PyArrow
+- PR #918 Add Series.groupby(level=0) support
+- PR #906 Add binary and comparison ops to DataFrame
+- PR #958 Support unary and binary ops on indexes
+- PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #985 Add `Series.to_frame` method
+- PR #985 Add `drop=` keyword to reset_index method
+- PR #994 Remove references to pygdf
+- PR #990 Add external series groupby support
+- PR #988 Add top-level merge function to cuDF
+- PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
+- PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1004 Add `from_gpu_matrix` method to DataFrame
+- PR #997 Add property index setter
+- PR #1007 Replace relative path imports with absolute paths in cudf
+- PR #1013 select columns with df.columns
+- PR #1016 Rename Series.unique_count() to nunique() to match pandas API
+- PR #947 Prefixsum to handle nulls and float types
+- PR #1029 Remove rest of relative path imports
+- PR #1021 Add filtered selection with assignment for Dataframes
+- PR #872 Adding NVCategory support to cudf apis
+- PR #1052 Add left/right_index and left/right_on keywords to merge
+- PR #1091 Add `indicator=` and `suffixes=` keywords to merge
+- PR #1107 Add unsupported keywords to Series.fillna
+- PR #1032 Add string support to cuDF python
+- PR #1136 Removed `gdf_concat`
+- PR #1153 Added function for getting the padded allocation size for valid bitmask
+- PR #1148 Add cudf.sqrt for dataframes and Series
+- PR #1159 Add Python bindings for libcudf dlpack functions
+- PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
+- PR #1168 to_frame for series accepts a name argument
+
+## Improvements
+
+- PR #1218 Add dask-cudf page to API docs
+- PR #892 Add support for heterogeneous types in binary ops with JIT
+- PR #730 Improve performance of `gdf_table` constructor
+- PR #561 Add Doxygen style comments to Join CUDA functions
+- PR #813 unified libcudf API functions by replacing gpu_ with gdf_
+- PR #822 Add support for `__cuda_array_interface__` for ingest
+- PR #756 Consolidate common helper functions from unordered map and multimap
+- PR #753 Improve performance of groupby sum and average, especially for cases with few groups.
+- PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
+- PR #763 Format doxygen comments for csv_read_arg struct
+- PR #532 CSV Reader: Use type dispatcher instead of switch block
+- PR #694 Unit test utilities improvements
+- PR #878 Add better indexing to Groupby
+- PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #1040 Fixed up Doxygen comment tags
+- PR #909 CSV Reader: Avoid host->device->host copy for header row data
+- PR #916 Improved unit testing and error checking for `gdf_column_concat`
+- PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
+- PR #942 Added increment/decrement operators for wrapper types
+- PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
+- PR #952 Added trait to map C++ type to `gdf_dtype`
+- PR #966 Updated RMM submodule.
+- PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
+- PR #1017 concatenate along columns for Series and DataFrames
+- PR #1002 Support indexing a dataframe with another boolean dataframe
+- PR #1018 Better concatenation for Series and Dataframes
+- PR #1036 Use Numpydoc style docstrings
+- PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
+- PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
+- PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
+- PR #1033 Update `fillna()` to use libcudf function `gdf_replace_nulls`
+- PR #1066 Added inplace assignment for columns and select_dtypes for dataframes
+- PR #1026 CSV Reader: Change the meaning and type of the quoting parameter to match Pandas
+- PR #1100 Adds `CUDF_EXPECTS` error-checking macro
+- PR #1092 Fix select_dtype docstring
+- PR #1111 Added cudf::table
+- PR #1108 Sorting for datetime columns
+- PR #1120 Return a `Series` (not a `Column`) from `Series.cat.set_categories()`
+- PR #1128 CSV Reader: The last data row does not need to be line terminated
+- PR #1183 Bump Arrow version to 0.12.1
+- PR #1208 Default to CXX11_ABI=ON
+- PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
+
+## Bug Fixes
+
+- PR #821 Fix flake8 issues revealed by flake8 update
+- PR #808 Resolved renamed `d_columns_valids` variable name
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
+- PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
+- PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
+- PR #861 Fix memory leak by preserving the boolean mask index
+- PR #875 Handle unnamed indexes in to/from arrow functions
+- PR #877 Fix ingest of 1 row arrow tables in from arrow function
+- PR #876 Added missing `<type_traits>` include
+- PR #889 Deleted test_rmm.py which has now moved to RMM repo
+- PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
+- PR #917 value_counts return int type on empty columns
+- PR #611 Renamed `gdf_reduce_optimal_output_size()` -> `gdf_reduction_get_intermediate_output_size()`
+- PR #923 fix index for negative slicing for cudf dataframe and series
+- PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
+- PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+- PR #933 Fix handling objects of all nulls in series creation
+- PR #940 CSV Reader: Fix an issue where the last data row is missing when using byte_range
+- PR #945 CSV Reader: Fix incorrect datetime64 when milliseconds or space separator are used
+- PR #959 Groupby: Problem with column name lookup
+- PR #950 Converting dataframe/recarry with non-contiguous arrays
+- PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
+- PR #999 Fix 0 sized kernel launches and empty sort_index exception
+- PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1009 Fix performance regression in `to_pandas` method on DataFrame
+- PR #1008 Remove custom dask communication approach
+- PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
+- PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
+- PR #1014 CSV Reader: Fix false positives in bool value detection
+- PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
+- PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
+- PR #1058 Added support for `DataFrame.loc[scalar]`
+- PR #1060 Fix column creation with all valid nan values
+- PR #1073 CSV Reader: Fix an issue where a column name includes the return character
+- PR #1090 Updating Doxygen Comments
+- PR #1080 Fix dtypes returned from loc / iloc because of lists
+- PR #1102 CSV Reader: Minor fixes and memory usage improvements
+- PR #1174: Fix release script typo
+- PR #1137 Add prebuild script for CI
+- PR #1118 Enhanced the `DataFrame.from_records()` feature
+- PR #1129 Fix join performance with index parameter from using numpy array
+- PR #1145 Issue with .agg call on multi-column dataframes
+- PR #908 Some testing code cleanup
+- PR #1167 Fix issue with null_count not being set after inplace fillna()
+- PR #1184 Fix iloc performance regression
+- PR #1185 Support left_on/right_on and also on=str in merge
+- PR #1200 Fix allocating bitmasks with numba instead of rmm in allocate_mask function
+- PR #1213 Fix bug with csv reader requesting subset of columns using wrong datatype
+- PR #1223 gpuCI: Fix label on rapidsai channel on gpu build scripts
+- PR #1242 Add explicit Thrust exec policy to fix NVCATEGORY_TEST segfault on some platforms
+- PR #1246 Fix categorical tests that failed due to bad implicit type conversion
+- PR #1255 Fix overwriting conda package main label uploads
+- PR #1259 Add dlpack includes to pip build
+
+
+# cuDF 0.5.1 (05 Feb 2019)
+
+## Bug Fixes
+
+- PR #842 Avoid using numpy via cimport to prevent ABI issues in Cython compilation
+
+
+# cuDF 0.5.0 (28 Jan 2019)
+
+## New Features
+
+- PR #722 Add bzip2 decompression support to `read_csv()`
 - PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #356 add `DataFrame.transpose` method and `DataFrame.T` property similar to pandas
 - PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
@@ -20,16 +284,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
-- PR #576 Create BitMask class and unit test to make 32-bit bit masks
-- PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
-- PR #600 Enable deep or shallow copy
-- PR #635 Add Doxygen template
-- PR #649 Add `cudf.from_pandas` function
-- PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
-- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29, GLIBCXX11 ABI compatibility; align with gcc7 conda update
-- PR #679 Test Series indexing, support integer scalars and integer sequences
-- PR #567 Adds setup for a wheel which is installable by pip
-- PR #718 Expose `product` reduction method to Python and add `GDF_NOTIMPLEMENTED_ERROR` error value
+- PR #643 added a new api gdf_replace_nulls that allows a user to replace nulls in a column
 
 ## Improvements
 
@@ -43,8 +298,11 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #577 Added external C++ API for scatter/gather functions
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
 - PR #664 Added Debuging instructions to README
@@ -54,6 +312,10 @@
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
+- PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
+- PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
+- PR #781 Move thirdparty submodules to root and symlink in /cpp
+- PR #843 Fix broken cudf/python API examples, add new methods to the API index
 
 ## Bug Fixes
 
@@ -101,6 +363,10 @@
 - PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
 - PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
+- PR #778 Fix hard coded ABI off setting
+- PR #784 Update RMM submodule commit-ish and pip paths
+- PR #794 Update `rmm::exec_policy` usage to fix segmentation faults when used as temprory allocator.
+- PR #800 Point git submodules to branches of forks instead of exact commits
 
 
 # cuDF 0.4.0 (05 Dec 2018)
@@ -174,4 +440,3 @@
 # cuDF 0.2.0 and cuDF 0.1.0
 
 These were initial releases of cuDF based on previously separate pyGDF and libGDF libraries.
-
