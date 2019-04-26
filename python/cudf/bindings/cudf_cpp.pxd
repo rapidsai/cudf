@@ -8,7 +8,7 @@
 from cudf.bindings.dlpack cimport DLManagedTensor
 
 from libcpp cimport bool
-from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
+from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -23,6 +23,8 @@ cdef get_scalar_value(gdf_scalar scalar)
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
+cdef gdf_column_to_column_mem(gdf_column* input_col)
+cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace)
@@ -39,8 +41,8 @@ cdef extern from "cudf.h" nogil:
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
     ctypedef long    gdf_date64
-    ctypedef long    gdf_timestamp
     ctypedef int     gdf_date32
+    ctypedef long    gdf_timestamp
     ctypedef int     gdf_category
     ctypedef int     gdf_nvstring_category
 
@@ -535,18 +537,18 @@ cdef extern from "cudf.h" nogil:
                                  gdf_column* out_col_agg,
                                  gdf_context* ctxt)
 
-    cdef gdf_error gdf_quantile_exact(   gdf_column*         col_in,
+
+    cdef gdf_error gdf_quantile_exact(gdf_column*       col_in,
                                     gdf_quantile_method prec,
                                     double              q,
-                                    void*               t_erased_res,
+                                    gdf_scalar*         result,
+                                    gdf_context*        ctxt) except +
 
-
-                                    gdf_context*        ctxt)
 
     cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
                                     double       q,
-                                    void*        t_erased_res,
-                                    gdf_context* ctxt)
+                                    gdf_scalar*  result,
+                                    gdf_context* ctxt) except +
 
 
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
@@ -576,3 +578,4 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
 
     cdef gdf_error gdf_nvtx_range_pop() except +
+
