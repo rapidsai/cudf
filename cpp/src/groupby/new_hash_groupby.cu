@@ -164,9 +164,8 @@ struct target_type<SourceType, COUNT> {
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
-struct target_type<
-    SourceType, SUM,
-    typename std::enable_if_t<std::is_integral<SourceType>::value>> {
+struct target_type<SourceType, SUM,
+                   std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
 };
 
@@ -174,7 +173,7 @@ struct target_type<
 template <typename SourceType>
 struct target_type<
     SourceType, SUM,
-    typename std::enable_if_t<std::is_floating_point<SourceType>::value>> {
+    std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
 
@@ -262,9 +261,9 @@ struct update_target_element {
  * @tparam op The operation to perform
  *---------------------------------------------------------------------------**/
 template <typename SourceType, distributive_operators op>
-struct update_target_element<SourceType, op,
-                             typename std::enable_if_t<not std::is_void<
-                                 target_type_t<SourceType, op>>::value>> {
+struct update_target_element<
+    SourceType, op,
+    std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Performs in-place update of a target element via a binary operation
    * with a source element.
@@ -315,7 +314,7 @@ struct update_target_element<SourceType, op,
  *---------------------------------------------------------------------------**/
 template <typename SourceType>
 struct update_target_element<SourceType, COUNT,
-                             typename std::enable_if_t<not std::is_void<
+                             std::enable_if_t<not std::is_void<
                                  target_type_t<SourceType, COUNT>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Increments the target_element by 1.
