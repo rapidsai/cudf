@@ -2245,3 +2245,47 @@ def test_shift(dtype, period):
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
+
+
+def test_isnull_isna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = cudf.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = cudf.from_pandas(ps)
+    assert_eq(ps.isnull(), gs.isnull())
+    assert_eq(ps.isna(), gs.isna())
