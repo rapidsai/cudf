@@ -60,13 +60,13 @@ def clone_columns_with_size(in_cols, row_size):
 
     return out_cols
 
-
+git
 def apply_gather(in_cols, maps, out_cols=None):
     """
       Call cudf::gather.
 
      * in_cols input column array
-     * maps RMM device array
+     * maps RMM device array with gdf_index_type (np.int32 compatible dtype)
      * out_cols the destination column array to output
 
      * returns out_cols

@@ -749,7 +749,7 @@ def find_segments(arr, segs=None, markers=None):
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments
-    begins = rmm.device_array(shape=int(ct), dtype=np.intp)
+    begins = rmm.device_array(shape=int(ct), dtype=np.int32)
     if markers.size > 0:
         gpu_scatter_segment_begins.forall(markers.size)(markers, scanned,
                                                         begins)
