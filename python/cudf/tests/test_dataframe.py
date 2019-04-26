@@ -2286,7 +2286,7 @@ def test_isnull_isna():
 
     # unnamed series
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
-    gs = DataFrame.from_pandas(ps)
+    gs = Series.from_pandas(ps)
     assert_eq(ps.isnull(), gs.isnull())
     assert_eq(ps.isna(), gs.isna())
 
@@ -2324,5 +2324,5 @@ def test_notna():
 
     # unnamed series
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
-    gs = DataFrame.from_pandas(ps)
+    gs = Series.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
