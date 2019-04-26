@@ -99,7 +99,7 @@ def column_empty_like(row_count, dtype, masked):
     params = dict(data=Buffer(data))
     if masked:
         mask = utils.make_mask(row_count)
-        # TODO: fill mask by 0
+        cudautils.fill_value(mask, 0)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
 
