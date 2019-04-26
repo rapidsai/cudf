@@ -97,6 +97,7 @@ struct orc_byterle_state_s
 struct orc_rowdec_state_s
 {
     uint32_t nz_count;
+    uint32_t last_row[NWARPS];
     uint32_t row[ROWDEC_BFRSZ];     // 0=skip, >0: row position relative to cur_row
 };
 
@@ -1380,32 +1381,52 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
             uint32_t valid = (t < nrows && r < rmax) ? (((const uint8_t *)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1 : 0;
             volatile uint32_t *rows = &s->u.rowdec.row[s->u.rowdec.nz_count];
             volatile uint16_t *row_ofs_plus1 = (volatile uint16_t *)rows;
-            uint32_t nz_pos, row_plus1, nz_prev = s->u.rowdec.nz_count;
+            uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
             if (t < nrows)
             {
                 row_ofs_plus1[t] = valid;
             }
             lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
+            if (t < nrows)
+            {
+                nz_count += row_ofs_plus1[t];
+                row_plus1 = s->top.data.nrows + t + 1;
+            }
+            else
+            {
+                row_plus1 = 0;
+            }
             if (t == nrows - 1)
             {
-                s->u.rowdec.nz_count += row_ofs_plus1[t];
+                s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals);
             }
-            row_plus1 = s->top.data.nrows + t + 1;
             __syncthreads();
-            if (t == 0)
+            // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the last row
+            last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
+            last_row = max(last_row, SHFL_XOR(last_row, 1));
+            last_row = max(last_row, SHFL_XOR(last_row, 2));
+            last_row = max(last_row, SHFL_XOR(last_row, 4));
+            last_row = max(last_row, SHFL_XOR(last_row, 8));
+            last_row = max(last_row, SHFL_XOR(last_row, 16));
+            if (!(t & 0x1f))
             {
-                if (s->u.rowdec.nz_count > s->top.data.max_vals)
-                {
-                    s->u.rowdec.nz_count = s->top.data.max_vals;
-                    s->top.data.nrows = row_ofs_plus1[s->u.rowdec.nz_count - nz_prev] - 1;
-                }
-                else
-                {
-                    s->top.data.nrows += nrows;
-                }
+                *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row;
             }
             nz_pos = (valid) ? row_ofs_plus1[t] : 0;
             __syncthreads();
+            if (t < 32)
+            {
+                last_row = (t < NWARPS) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
+                last_row = max(last_row, SHFL_XOR(last_row, 1));
+                last_row = max(last_row, SHFL_XOR(last_row, 2));
+                last_row = max(last_row, SHFL_XOR(last_row, 4));
+                last_row = max(last_row, SHFL_XOR(last_row, 8));
+                last_row = max(last_row, SHFL_XOR(last_row, 16));
+                if (t == 0)
+                {
+                    s->top.data.nrows = last_row;
+                }
+            }
             if (valid && nz_pos - 1 < s->u.rowdec.nz_count)
             {
                 rows[nz_pos - 1] = row_plus1;
