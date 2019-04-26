@@ -26,7 +26,7 @@ from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
 
-cdef cudf_table* table_from_cols(cols):
+cdef gdf_column** cols_view_from_cols(cols):
     col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
 
@@ -35,11 +35,10 @@ cdef cudf_table* table_from_cols(cols):
         check_gdf_compatibility(cols[i])
         c_cols[i] = column_view_from_column(cols[i])
 
-    cdef cudf_table* table  = new cudf_table(c_cols, col_count)
-    return table
+    return c_cols
 
 
-cdef free_table(cudf_table* table):
+cdef free_table(cudf_table* table, gdf_column** cols):
     cdef i
     cdef gdf_column *c_col
     for i in range(table[0].num_columns()) :
@@ -47,15 +46,16 @@ cdef free_table(cudf_table* table):
         free(c_col)
 
     del table
+    free(cols)
 
 
 def clone_columns_with_size(in_cols, row_size):
     from cudf.dataframe import columnops
     out_cols = []
     for col in in_cols:
-        o_col = columnops.column_empty(row_size, 
-                                       masked = col.has_null_mask,
-                                       dtype = col.dtype)
+        o_col = columnops.column_empty_like(row_size,
+                                       dtype = col.dtype,
+                                       masked = col.has_null_mask)
         out_cols.append(o_col)
 
     return out_cols
@@ -71,19 +71,24 @@ def apply_gather(in_cols, maps, out_cols=None):
 
      * returns out_cols
     """
+    col_count=len(in_cols)
+    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
+    cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
 
-    cdef cudf_table* c_in_table = table_from_cols(in_cols)
 
     cdef bool is_same_input = False
+    cdef gdf_column** c_out_cols
     cdef cudf_table* c_out_table
     if out_cols == in_cols :
         is_same_input = True
         c_out_table = c_in_table
     elif out_cols != None :
-        c_out_table = table_from_cols(out_cols)
+        c_out_cols = cols_view_from_cols(out_cols)
+        c_out_table = new cudf_table(c_out_cols, col_count)
     else:
         out_cols = clone_columns_with_size(in_cols, len(maps))
-        c_out_table = table_from_cols(out_cols)
+        c_out_cols = cols_view_from_cols(out_cols)
+        c_out_table = new cudf_table(c_out_cols, col_count)
 
     # size check, cudf::gather requires same length for maps and out table.
     assert len(maps) == out_cols[0].data.size
@@ -95,9 +100,9 @@ def apply_gather(in_cols, maps, out_cols=None):
         gather(c_in_table, c_maps, c_out_table)
 
     if is_same_input == False :
-        free_table(c_out_table)
+        free_table(c_out_table, c_out_cols)
     
-    free_table(c_in_table)
+    free_table(c_in_table, c_in_cols)
     
     return out_cols
 

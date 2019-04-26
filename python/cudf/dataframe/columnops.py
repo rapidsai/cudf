@@ -92,24 +92,14 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
 
-def column_empty(data_size, dtype, masked):
-    """Allocate a new column like the given *column*
+def column_empty_like(row_count, dtype, masked):
+    """Allocate a new column like the given row_count and dtype.
     """
-    data = rmm.device_array(shape=data_size, dtype=dtype)
+    data = rmm.device_array(shape=row_count, dtype=dtype)
     params = dict(data=Buffer(data))
     if masked:
-        mask = utils.make_mask(data.size)
-        params.update(dict(mask=Buffer(mask), null_count=data.size))
-    return Column(**params)
-
-
-def column_empty_like(column, dtype, masked):
-    """Allocate a new column like the given *column*
-    """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
-    params = dict(data=Buffer(data))
-    if masked:
-        mask = utils.make_mask(data.size)
+        mask = utils.make_mask(row_count)
+        # TODO: fill mask by 0
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
 
