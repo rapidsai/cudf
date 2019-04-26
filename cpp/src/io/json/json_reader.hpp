@@ -54,7 +54,7 @@ private:
                             gdf_size_type *num_valid);
 
 public:
-  JsonReader(json_read_arg *args) : args_(args) {}
+  JsonReader(json_read_arg *args);
 
   void parse();
 

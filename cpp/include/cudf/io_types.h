@@ -186,9 +186,11 @@ typedef struct {
   int           num_cols;                   ///< Number of columns in the dtype array
   const char    **dtype;                    ///< Ordered List of data types
 
-  char          *compression;               ///< Compression type ("none", "infer", "gzip", "zip"); default(nullptr) is uncompressed
+  char          *compression;               ///< Compression type ("none", "infer", "gzip", "zip"); set to nullptr for uncompressed input
 
-  size_t        byte_range_offset;          ///< offset of the byte range to read. 
+  bool          lines;                      ///< Read the file as a json object per line
+
+  size_t        byte_range_offset;          ///< offset of the byte range to read.
   size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
 } json_read_arg;

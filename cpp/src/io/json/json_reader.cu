@@ -33,7 +33,22 @@
 
 using string_pair = std::pair<const char *, size_t>;
 
-// TODO move to common file
+gdf_error read_json(json_read_arg *args) {
+  // TODO check if arguments are valid (don't check if arguments are supported here)
+  JsonReader reader(args);
+
+  reader.parse();
+
+  reader.storeColumns(args);
+
+  return GDF_SUCCESS;
+}
+
+JsonReader::JsonReader(json_read_arg *args) : args_(args) {
+  // Check if the passed arguments are supported
+  CUDF_EXPECTS(args_->lines, "Only Json Lines format is currently supported.");
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
@@ -56,17 +71,6 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
     // Expand the size based on the number of columns, if available
     return base_padding + num_columns * column_bytes;
   }
-}
-
-gdf_error read_json(json_read_arg *args) {
-  JsonReader reader(args);
-  // TODO validate arguments
-
-  reader.parse();
-
-  reader.storeColumns(args);
-
-  return GDF_SUCCESS;
 }
 
 /*

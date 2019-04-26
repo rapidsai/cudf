@@ -101,6 +101,7 @@ TEST(gdf_json_test, BasicJsonLines) {
   args.source = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
+  args.lines = true;
   args.dtype = types;
   args.num_cols = 2;
   try {
@@ -130,6 +131,7 @@ TEST(gdf_json_test, JsonLinesStrings) {
   args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
+  args.lines = true;
   args.dtype = types;
   args.num_cols = 3;
   try {
@@ -183,6 +185,7 @@ TEST(gdf_json_test, JsonLinesDtypeInference) {
   args.source = "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
+  args.lines = true;
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -239,6 +242,7 @@ TEST(gdf_json_test, JsonLinesFileInput) {
   json_read_arg args{};
   args.source = fname;
   args.source_type = FILE_PATH;
+  args.lines = true;
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -270,6 +274,7 @@ TEST(gdf_json_test, JsonLinesByteRange) {
   json_read_arg args{};
   args.source = fname;
   args.source_type = FILE_PATH;
+  args.lines = true;
   args.byte_range_offset = 11;
   args.byte_range_size = 20;
   try {
