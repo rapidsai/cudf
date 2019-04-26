@@ -417,6 +417,28 @@ __device__ inline void aggregate_row(device_table const& target,
       });
 }
 
+template <typename Map>
+__global__ void compute_hash_groupby(Map const& map, device_table input_keys,
+                                     device_table input_values,
+                                     device_table output_keys,
+                                     device_table output_values,
+                                     distributive_operators* ops){
+
+};
+
+/**
+ * @brief  Computes the validity mask for the rows in the gdf_table.
+ */
+struct row_masker {
+  row_masker(bit_mask::bit_mask_t** column_masks, gdf_size_type num_cols)
+      : column_valid_masks{column_masks}, num_columns(num_cols) {}
+
+  // TODO IMPLEMENT
+
+  gdf_size_type num_columns;
+  bit_mask::bit_mask_t** column_valid_masks;
+};
+
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
@@ -445,10 +467,54 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   rmm::device_vector<groupby::distributive_operators> d_operators(operators);
 
+  if (options.ignore_null_keys) {
+    using namespace bit_mask;
+
+    bit_mask_t* row_bitmask;
+
+    rmm::device_vector<bit_mask_t> row_masks;
+
+    bool const keys_have_nulls{
+        std::any_of(keys.begin(), keys.end(), [](gdf_column const* col) {
+          return (nullptr != col->valid) and (col->null_count > 0);
+        })};
+
+    if (keys_have_nulls) {
+      // Compute bitwise AND of all key columns
+      row_masks.resize(num_elements(keys.num_rows()));
+
+      // Populate vector of pointers to the bitmasks of columns that contain
+      // NULL values
+      std::vector<bit_mask_t*> column_bitmasks;
+      std::for_each(keys.begin(), keys.end(),
+                    [&column_bitmasks](gdf_column const* col) {
+                      if ((nullptr != col->valid) and (col->null_count > 0)) {
+                        column_bitmasks.push_back(
+                            reinterpret_cast<bit_mask_t*>(col->valid));
+                      }
+                    });
+      rmm::device_vector<bit_mask_t*> d_column_bitmasks{column_bitmasks};
+
+      //thrust::tabulate(
+      //    rmm::exec_policy(stream)->on(stream), row_masks.begin(),
+      //    row_masks.end(),
+      //    row_masker(d_column_bitmasks.data().get(), d_column_bitmasks.size()));
+      row_bitmask = row_masks.data().get();
+    }
+  } else {
+  }
+
+  // TODO Set output key/value columns null counts
+
+  // cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
+
+  // compute_hash_groupby<<<grid_params.num_blocks,
+  //                       grid_params.num_threads_per_block, 0, stream>>>();
+
   CHECK_STREAM(stream);
 
   return std::make_tuple(output_keys, output_values);
-}
+}  // namespace detail
 
 }  // namespace detail
 }  // namespace cudf
