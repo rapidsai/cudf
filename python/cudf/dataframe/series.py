@@ -297,6 +297,7 @@ class Series(object):
         if self.dtype == np.dtype("object"):
             return self[indices]
 
+        # TODO replace by `apply_gather_array` 
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
         if self._column.mask:

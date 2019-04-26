@@ -10,7 +10,6 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.types cimport table as cudf_table
 from cudf.bindings.types import *
 from librmm_cffi import librmm as rmm
-from cudf.dataframe import columnops
 
 import numpy as np
 import pandas as pd
@@ -74,10 +73,11 @@ def apply_gather(in_cols, maps, out_cols=None):
     # TODO check the dtype of `maps` is compatible with gdf_index_type
 
     col_count=len(in_cols)
+    gather_count = len(maps)
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
 
-
+    # check out_cols == in_cols and out_cols=None cases
     cdef bool is_same_input = False
     cdef gdf_column** c_out_cols
     cdef cudf_table* c_out_table
@@ -88,18 +88,21 @@ def apply_gather(in_cols, maps, out_cols=None):
         c_out_cols = cols_view_from_cols(out_cols)
         c_out_table = new cudf_table(c_out_cols, col_count)
     else:
-        out_cols = clone_columns_with_size(in_cols, len(maps))
+        out_cols = clone_columns_with_size(in_cols, gather_count)
         c_out_cols = cols_view_from_cols(out_cols)
         c_out_table = new cudf_table(c_out_cols, col_count)
 
-    # size check, cudf::gather requires same length for maps and out table.
-    assert len(maps) == out_cols[0].data.size
+    cdef uintptr_t c_maps_ptr
+    cdef gdf_index_type* c_maps
+    if gather_count != 0 :
+        # size check, cudf::gather requires same length for maps and out table.
+        assert gather_count == out_cols[0].data.size
 
-    cdef uintptr_t c_maps_ptr = get_ctype_ptr(maps)
-    cdef gdf_index_type* c_maps = <gdf_index_type*>c_maps_ptr
+        c_maps_ptr = get_ctype_ptr(maps)
+        c_maps = <gdf_index_type*>c_maps_ptr
 
-    with nogil:
-        gather(c_in_table, c_maps, c_out_table)
+        with nogil:
+            gather(c_in_table, c_maps, c_out_table)
 
     if is_same_input == False :
         free_table(c_out_table, c_out_cols)
@@ -127,6 +130,7 @@ def apply_gather_column(in_col, maps, out_col=None):
 
     return out_cols[0]
 
+
 def apply_gather_array(dev_array, maps, out_col=None):
     """
       Call cudf::gather.
@@ -137,10 +141,9 @@ def apply_gather_array(dev_array, maps, out_col=None):
 
      * returns out_col
     """
-    
+    from cudf.dataframe import columnops
+
     in_col = columnops.as_column(dev_array)
     return apply_gather_column(in_col, maps, out_col)
-
-
 
 

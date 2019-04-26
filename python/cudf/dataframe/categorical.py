@@ -10,7 +10,7 @@ from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
 import cudf.bindings.replace as cpp_replace
-
+import cudf.bindings.copying as cpp_copying
 
 class CategoricalAccessor(object):
     """
@@ -214,10 +214,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out1 = cudautils.gather(data=sortedvals, index=segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=Buffer(out1), mask=None)
-        out_counts = numerical.NumericalColumn(data=Buffer(out2),
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=out_col.data, mask=None)
+        out_counts = numerical.NumericalColumn(data=Buffer(out),
                                                dtype=np.intp)
         return out_vals, out_counts
 

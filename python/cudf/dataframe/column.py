@@ -578,11 +578,15 @@ class Column(object):
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
         """
+        import cudf.bindings.copying as cpp_copying
+
         indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return self.copy()
 
+        # TODO replace by `apply_gather_array` 
+        # this is tested by `test_merge_left_right_index`
         data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
 
         if self._mask:

@@ -144,12 +144,18 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
+    import cudf.bindings.copying as cpp_copying
+
     assert column.null_count == 0
 
+    # TODO replace by `apply_gather_array`
+    # this is tested by `test_series_indexing`
     selvals = cudautils.gather(column.data.to_gpu_array(),
                                positions.data.to_gpu_array())
-
     selected_values = column.replace(data=Buffer(selvals))
+#    out_col = cpp_copying.apply_gather_column(column,
+#                                              positions.data.to_gpu_array())
+#    selected_values = column.replace(data=out_col.data)
     selected_index = Buffer(positions.data.to_gpu_array())
 
     return selected_values, NumericalColumn(data=selected_index,
