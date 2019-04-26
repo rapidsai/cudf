@@ -60,6 +60,14 @@ struct identity_initializer {
     T* typed_data = static_cast<T*>(col.data);
     thrust::fill(rmm::exec_policy(stream)->on(stream), typed_data,
                  typed_data + col.size, get_identity<T>(op));
+
+    // For COUNT operator, initialize column's bitmask to be all valid
+    if ((nullptr != col.valid) and (distributive_operators::COUNT == op)) {
+      CUDA_TRY(cudaMemsetAsync(
+          col.valid, 0xff,
+          sizeof(gdf_valid_type) * gdf_valid_allocation_size(col.size),
+          stream));
+    }
   }
 };
 
@@ -69,6 +77,9 @@ struct identity_initializer {
  *
  * The `i`th column will be initialized with the identity value of the `i`th
  * aggregation operation.
+ *
+ * @note The validity bitmask for the column corresponding to a COUNT operator
+ * will be initialized to all valid.
  *
  * @param table The table of columns to initialize.
  * @param operators The aggregation operations whose identity values will be
@@ -138,7 +149,7 @@ struct result_type<
  * For an invalid combination of SourceType and operator,
  * `result_type<SourceType, operator>::type` yields a `void` TargetType. This
  * specialization will be invoked for any invalid combination and cause a
- *runtime error.
+ * runtime error.
  *---------------------------------------------------------------------------**/
 template <typename TargetType, typename SourceType, typename Op,
           std::enable_if_t<std::is_void<TargetType>::value, int>* = nullptr>
@@ -146,7 +157,7 @@ __device__ inline void binary_op(gdf_column const& target,
                                  gdf_size_type target_index,
                                  gdf_column const& source,
                                  gdf_size_type source_index, Op&& op) {
-  release_assert(false && "Invalid type and aggregation combination.");
+  release_assert(false && "Invalid Source type and Aggregation combination.");
 }
 
 /**---------------------------------------------------------------------------*
@@ -168,18 +179,16 @@ __device__ inline void binary_op(gdf_column const& target,
                                  gdf_size_type target_index,
                                  gdf_column const& source,
                                  gdf_size_type source_index, Op&& op) {
-  if (gdf_is_valid(source.valid, source_index)) {
-    cudf::genericAtomicOperation(
-        &(static_cast<TargetType*>(target.data)[target_index]),
-        static_cast<TargetType>(*static_cast<SourceType*>(source.data)), op);
+  cudf::genericAtomicOperation(
+      &(static_cast<TargetType*>(target.data)[target_index]),
+      static_cast<TargetType>(*static_cast<SourceType*>(source.data)), op);
 
-    // TODO Inefficient to always check the target's validity bit
-    // We only need to set the target's validity bit on the first
-    // succesful update of the target element
-    if (not gdf_is_valid(target.valid, target_index)) {
-      bit_mask::set_bit_safe(
-          reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
-    }
+  // TODO Inefficient to always check the target's validity bit
+  // We only need to set the target's validity bit on the first
+  // succesful update of the target element
+  if (not gdf_is_valid(target.valid, target_index)) {
+    bit_mask::set_bit_safe(
+        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
   }
 }
 
@@ -193,23 +202,13 @@ __device__ inline void binary_op(gdf_column const& target,
  *---------------------------------------------------------------------------**/
 template <typename TargetType>
 __device__ inline void count_op(gdf_column const& target,
-                                gdf_size_type target_index,
-                                bool source_is_valid) {
-  if (source_is_valid) {
-    cudf::genericAtomicOperation(
-        &(static_cast<TargetType*>(target.data)[target_index]), TargetType{1},
-        DeviceSum{});
-  }
-  // For COUNT, the output can never be NULL. The count of a columns of
-  // all NULLs is just zero. Therefore, always set the output validity
-  // bit
-  if (not gdf_is_valid(target.valid, target_index)) {
-    bit_mask::set_bit_safe(
-        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
-  }
+                                gdf_size_type target_index) {
+  cudf::genericAtomicOperation(
+      &(static_cast<TargetType*>(target.data)[target_index]), TargetType{1},
+      DeviceSum{});
 }
 
-struct aggregate_elements {
+struct elementwise_aggregator {
   template <typename SourceType>
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
@@ -220,7 +219,6 @@ struct aggregate_elements {
       case distributive_operators::MIN: {
         using TargetType =
             typename result_type<SourceType, distributive_operators::MIN>::type;
-
         binary_op<TargetType, SourceType>(target, target_index, source,
                                           source_index, DeviceMin{});
         break;
@@ -243,8 +241,7 @@ struct aggregate_elements {
         using TargetType =
             typename result_type<SourceType,
                                  distributive_operators::COUNT>::type;
-        count_op<TargetType>(target, target_index,
-                             gdf_is_valid(source.valid, source_index));
+        count_op<TargetType>(target, target_index);
         break;
       }
       default:
@@ -254,8 +251,11 @@ struct aggregate_elements {
 };  // namespace
 
 /**---------------------------------------------------------------------------*
- * @brief Updates a target row by performing a set of aggregation operations
- * between it and a source row.
+ * @brief Performs an in-place update by performing elementwise aggregation
+ * operations between a target and source row.
+ *
+ * @note If an element in the source row is NULL, the aggregation operation for
+ * that column is skipped.
  *
  * @param target Table containing the target row
  * @param target_index Index of the target row
@@ -273,9 +273,12 @@ __device__ inline void aggregate_row(device_table const& target,
       thrust::seq, thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(target.num_columns()),
       [target, target_index, source, source_index, ops](gdf_size_type i) {
-        cudf::type_dispatcher(source.get_column(i)->dtype, aggregate_elements{},
-                              *target.get_column(i), target_index,
-                              *source.get_column(i), source_index, ops[i]);
+        if (gdf_is_valid(source.get_column(i)->valid, source_index)) {
+          cudf::type_dispatcher(source.get_column(i)->dtype,
+                                elementwise_aggregator{}, *target.get_column(i),
+                                target_index, *source.get_column(i),
+                                source_index, ops[i]);
+        }
       });
 }
 
