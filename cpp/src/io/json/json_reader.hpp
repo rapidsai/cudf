@@ -36,6 +36,8 @@ private:
   std::vector<gdf_dtype> dtypes_;
   std::vector<gdf_column_wrapper> columns_;
 
+  device_buffer<uint64_t> rec_starts_;
+
   // parsing options
   const bool allow_newlines_in_strings_ = false;
   const ParseOptions opts_{',', '\n', '\"','.'};
@@ -43,11 +45,9 @@ private:
   const size_t byte_range_offset_ = 0;
   const size_t byte_range_size_ = 0;
 
-  device_buffer<uint64_t> rec_starts_;
   void ingestRawInput();
   void decompressInput();
-  device_buffer<uint64_t> enumerateNewlinesAndQuotes();
-  device_buffer<uint64_t> filterNewlines(device_buffer<uint64_t> newlines_and_quotes);
+  void setRecordStarts();
   void uploadDataToDevice();
   void setColumnNames();
   void setDataTypes();

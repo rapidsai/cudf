@@ -108,10 +108,7 @@ void JsonReader::parse(){
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
-  // Currently, ignoring lineterminations within quotes is handled by recording
-  // the records of both, and then filtering out the records that is a quotechar
-  // or a linetermination within a quotechar pair.
-  rec_starts_ = filterNewlines(enumerateNewlinesAndQuotes());
+  setRecordStarts();
   CUDF_EXPECTS(!rec_starts_.empty(), "Error enumerating records.\n");
 
   uploadDataToDevice();
@@ -234,23 +231,25 @@ std::string inferCompressionType(const char* compression_arg, const char* filepa
   }
 }
 
-device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
+void JsonReader::setRecordStarts() {
   std::vector<char> chars_to_count{'\n'};
+  // Currently, ignoring lineterminations within quotes is handled by recording
+  // the records of both, and then filtering out the records that is a quotechar
+  // or a linetermination within a quotechar pair.
   if (allow_newlines_in_strings_) {
     chars_to_count.push_back('\"');
   }
-  auto count = countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count);
   // If not starting at an offset, add an extra row to account for the first row in the file
-  if (byte_range_offset_ == 0) {
-    ++count;
-  }
+  const auto prefilter_count = countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) +
+                               ((byte_range_offset_ == 0) ? 1 : 0);
 
-  // Allocate space to hold the record starting points
-  device_buffer<uint64_t> rec_starts(count); 
-  auto* find_result_ptr = rec_starts.data();
+  rec_starts_ = device_buffer<uint64_t>(prefilter_count);
+
+  auto* find_result_ptr = rec_starts_.data();
+  // Manually adding an extra row to account for the first row in the file
   if (byte_range_offset_ == 0) {
     find_result_ptr++;
-    CUDA_TRY(cudaMemsetAsync(rec_starts.data(), 0ull, sizeof(uint64_t)));
+    CUDA_TRY(cudaMemsetAsync(rec_starts_.data(), 0ull, sizeof(uint64_t)));
   }
 
   std::vector<char> chars_to_find{'\n'};
@@ -263,22 +262,12 @@ device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy()->on(0), rec_starts.data(), rec_starts.data() + count);
+  thrust::sort(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + prefilter_count);
 
-  return std::move(rec_starts);
-}
-
-device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newlines_and_quotes) {
-  const int prefilter_count = newlines_and_quotes.size();
   auto filtered_count = prefilter_count;
-
   if (allow_newlines_in_strings_) {
     std::vector<uint64_t> h_rec_starts(prefilter_count);
-    const size_t prefilter_size = sizeof(uint64_t) * (prefilter_count);
-    CUDA_TRY(cudaMemcpy(h_rec_starts.data(), newlines_and_quotes.data(), prefilter_size, cudaMemcpyDeviceToHost));
-    for (auto elem: h_rec_starts)
-      std::cout << elem << ' ';
-    std::cout << '\n';
+    CUDA_TRY(cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t)*prefilter_count, cudaMemcpyDefault));
 
     bool quotation = false;
     for (gdf_size_type i = 1; i < prefilter_count; ++i) {
@@ -293,16 +282,16 @@ device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newli
       }
     }
 
-    CUDA_TRY(cudaMemcpy(newlines_and_quotes.data(), h_rec_starts.data(), prefilter_count, cudaMemcpyHostToDevice));
-    thrust::sort(rmm::exec_policy()->on(0), newlines_and_quotes.data(), newlines_and_quotes.data() + prefilter_count);
+    CUDA_TRY(cudaMemcpy(rec_starts_.data(), h_rec_starts.data(), prefilter_count, cudaMemcpyHostToDevice));
+    thrust::sort(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + prefilter_count);
   }
+
+  // Exclude the ending newline as it does not precede a record start
   if (uncomp_data_[uncomp_size_ - 1] == '\n') {
     filtered_count--;
   }
 
-  newlines_and_quotes.resize(filtered_count);
-  
-  return newlines_and_quotes;
+  rec_starts_.resize(filtered_count);
 }
 
 void JsonReader::uploadDataToDevice() {
