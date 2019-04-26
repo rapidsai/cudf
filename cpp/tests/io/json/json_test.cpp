@@ -187,7 +187,6 @@ TEST(gdf_json_test, JsonLinesDtypeInference)
   args.source = "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
-  args.num_cols = 3;
   try {
     read_json(&args);
   } catch(std::exception &e){std::cerr<< e.what();}
@@ -243,7 +242,6 @@ TEST(gdf_json_test, JsonLinesFileInput)
   json_read_arg args{};
   args.source = fname;
   args.source_type = FILE_PATH;
-  args.num_cols = 2;
   try {
     read_json(&args);
   } catch(std::exception &e){std::cerr<< e.what();}

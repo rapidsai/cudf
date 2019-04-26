@@ -41,22 +41,22 @@ using string_pair = std::pair<const char*,size_t>;
  * If the number of columns is not available, it will return a value large 
  * enough for most use cases
  * 
- * @param[in] num_columns Number of columns in the CSV file (optional)
+ * @param[in] num_columns Number of columns in the JSON file (optional)
  * 
  * @return Estimated maximum size of a row, in bytes
  *---------------------------------------------------------------------------**/
- constexpr size_t calculateMaxRowSize(int num_columns=0) noexcept {
-	constexpr size_t max_row_bytes = 16*1024; // 16KB
-	constexpr size_t column_bytes = 64;
-	constexpr size_t base_padding = 1024; // 1KB
-	if (num_columns == 0){
-		// Use flat size if the number of columns is not known
-		return max_row_bytes;
-	}
-	else {
-		// Expand the size based on the number of columns, if available
-		return base_padding + num_columns * column_bytes; 
-	}
+constexpr size_t calculateMaxRowSize(int num_columns=0) noexcept {
+  constexpr size_t max_row_bytes = 16*1024; // 16KB
+  constexpr size_t column_bytes = 64;
+  constexpr size_t base_padding = 1024; // 1KB
+  if (num_columns == 0){
+    // Use flat size if the number of columns is not known
+    return max_row_bytes;
+  }
+  else {
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes; 
+  }
 }
 
 gdf_error read_json(json_read_arg *args) {
@@ -100,27 +100,35 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
  * @return void
  *---------------------------------------------------------------------------**/
 void JsonReader::parse(){
-  ingestInput();
+  ingestRawInput();
+  CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
+  CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size.\n");
+
+  decompressInput();
+  CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
+  CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
   // Currently, ignoring lineterminations within quotes is handled by recording
   // the records of both, and then filtering out the records that is a quotechar
   // or a linetermination within a quotechar pair.
   rec_starts_ = filterNewlines(enumerateNewlinesAndQuotes());
+  CUDF_EXPECTS(!rec_starts_.empty(), "Error enumerating records.\n");
 
   uploadDataToDevice();
+  CUDF_EXPECTS(!d_data_.empty(), "Error uploading input data to the GPU.\n");
   
-  // TODO Determine column names - only when lines are objects
-  for (int col = 0; col < args_->num_cols; ++col) {
-    column_names_.emplace_back(std::to_string(col));
-  }
+  setColumnNames();
+  CUDF_EXPECTS(!column_names_.empty(), "Error determining column names.\n");
 
   setDataTypes();
+  CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
   // Allocate columns
   for (size_t col = 0; col < dtypes_.size(); ++col) {
     columns_.emplace_back(rec_starts_.size(), dtypes_[col], gdf_dtype_extra_info{TIME_UNIT_NONE}, column_names_[col]);
-    CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
+    CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns.\n");
   }
+  CUDF_EXPECTS(!columns_.empty(), "Error allocating gdf columns.\n");
 
   convertDataToColumns();
 }
@@ -171,8 +179,8 @@ std::string inferCompressionType(const char* compression_arg, const char* filepa
  void JsonReader::ingestRawInput(){
   if (args_->source_type == gdf_csv_input_form::FILE_PATH){
     map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
-    CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty");
-    CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "The byte_range offset is too big for the input file size");
+    CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
+    CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "The byte_range offset is too big for the input file size.\n");
     
     // Have to align map offset to page size
     const auto page_size = sysconf(_SC_PAGESIZE);
@@ -220,25 +228,10 @@ std::string inferCompressionType(const char* compression_arg, const char* filepa
   }
   else {
     CUDF_EXPECTS(getUncompressedHostData(input_data_, input_size_, compression_type, uncomp_data_owner_) == GDF_SUCCESS,
-      "Input data decompression failed");
+      "Input data decompression failed.\n");
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
-}
-
-/**---------------------------------------------------------------------------*
- * @brief ingest the input JSON file, including decompression
- * 
- * @return void
- *---------------------------------------------------------------------------**/
-void JsonReader::ingestInput(){
-  ingestRawInput();
-  CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null");
-  CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size");
-
-  decompressInput();
-  CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null");
-  CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size");
 }
 
 device_buffer<uint64_t> JsonReader::enumerateNewlinesAndQuotes() {
@@ -313,7 +306,6 @@ device_buffer<uint64_t> JsonReader::filterNewlines(device_buffer<uint64_t> newli
 }
 
 void JsonReader::uploadDataToDevice() {
-  CUDF_EXPECTS(rec_starts_.size() > 0, "No data to process");
   size_t start_offset = 0;
   size_t bytes_to_upload = uncomp_size_;
 
@@ -334,7 +326,7 @@ void JsonReader::uploadDataToDevice() {
     start_offset = h_rec_starts.front();
     bytes_to_upload = end_offset - start_offset;
     CUDF_EXPECTS(bytes_to_upload <= uncomp_size_,
-      "Error finding the record within the specified byte range.");
+      "Error finding the record within the specified byte range.\n");
 
     // Resize to exclude rows outside of the range; adjust row start positions to account for the data subcopy
     rec_starts_.resize(h_rec_starts.size());
@@ -348,6 +340,31 @@ void JsonReader::uploadDataToDevice() {
   d_data_ = device_buffer<char>(bytes_to_upload);
   CUDA_TRY(cudaMemcpy(d_data_.data(), uncomp_data_ + start_offset,
                       bytes_to_upload, cudaMemcpyHostToDevice));
+}
+
+void JsonReader::setColumnNames() {
+  // If file only contains one row, use the file size for the row size
+  uint64_t first_row_len = d_data_.size() / sizeof(char);
+  if (rec_starts_.size() > 1) {
+    // Set first_row_len to the offset of the second row, if it exists
+    CUDA_TRY(cudaMemcpy(&first_row_len, rec_starts_.data() + 1, sizeof(uint64_t), cudaMemcpyDefault));
+  }
+  std::vector<char> first_row(first_row_len);
+  CUDA_TRY(cudaMemcpy(first_row.data(), d_data_.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
+
+  int num_cols = 0;
+  bool quotation  = false;
+  for (size_t pos = 0; pos < first_row.size(); ++pos) {
+    // Flip the quotation flag if current character is a quotechar
+    if(first_row[pos] == opts_.quotechar) {
+      quotation = !quotation;
+    }
+    // Check if end of a column/row
+    else if (pos == first_row.size() - 1 ||
+            (!quotation && first_row[pos] == opts_.delimiter)) {
+      column_names_.emplace_back(std::to_string(num_cols++));
+    }
+  }
 }
 
 void JsonReader::convertDataToColumns(){
@@ -671,13 +688,13 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
  *---------------------------------------------------------------------------**/
 void JsonReader::setDataTypes() {
   if (args_->dtype != nullptr) {
-    CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.");
+    CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.\n");
     for (int col = 0; col < args_->num_cols; ++col) {
       dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
     }
   }
   else {
-    CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference");
+    CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = column_names_.size();
 
     rmm::device_vector<ColumnInfo> d_column_infos(num_columns, ColumnInfo{});
@@ -685,7 +702,7 @@ void JsonReader::setDataTypes() {
     thrust::host_vector<ColumnInfo> h_column_infos = d_column_infos;
 
     for(const auto& cinfo: h_column_infos){
-      CUDF_EXPECTS(cinfo.null_count == 0, "All fields must contain valid objects");
+      CUDF_EXPECTS(cinfo.null_count == 0, "All fields must contain valid objects.\n");
 
       if(cinfo.string_count > 0){
         dtypes_.push_back(GDF_STRING);
@@ -697,7 +714,7 @@ void JsonReader::setDataTypes() {
         dtypes_.push_back(GDF_INT64);
       }
       else {
-        CUDF_FAIL("Data type detection failed");
+        CUDF_FAIL("Data type detection failed.\n");
       }
     }
   }

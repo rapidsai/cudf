@@ -46,10 +46,10 @@ private:
   device_buffer<uint64_t> rec_starts_;
   void ingestRawInput();
   void decompressInput();
-  void ingestInput();
   device_buffer<uint64_t> enumerateNewlinesAndQuotes();
   device_buffer<uint64_t> filterNewlines(device_buffer<uint64_t> newlines_and_quotes);
   void uploadDataToDevice();
+  void setColumnNames();
   void setDataTypes();
   void detectDataTypes(ColumnInfo *d_columnData);
   void convertDataToColumns();

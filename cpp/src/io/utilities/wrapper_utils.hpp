@@ -170,6 +170,7 @@ public:
 
   T* data() const noexcept {return d_data_;}
   size_t size() const noexcept {return count_;}
+  bool empty() const noexcept {return count_ == 0;}
 
   void resize(size_t cnt) {
     if (cnt == count_) {
