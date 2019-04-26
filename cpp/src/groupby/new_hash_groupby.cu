@@ -38,6 +38,101 @@ namespace {
 using namespace groupby;
 
 /**---------------------------------------------------------------------------*
+ * @brief Maps a distributive_operators enum value to it's corresponding binary
+ * operator functor.
+ *
+ * @tparam op The enum to map to its corresponding functor
+ *---------------------------------------------------------------------------**/
+template <distributive_operators op>
+struct corresponding_functor {
+  using type = void;
+};
+
+template <>
+struct corresponding_functor<MIN> {
+  using type = DeviceMin;
+};
+
+template <>
+struct corresponding_functor<MAX> {
+  using type = DeviceMax;
+};
+
+template <>
+struct corresponding_functor<SUM> {
+  using type = DeviceSum;
+};
+
+template <>
+struct corresponding_functor<COUNT> {
+  using type = DeviceSum;
+};
+
+template <distributive_operators op>
+using corresponding_functor_t = typename corresponding_functor<op>::type;
+
+struct identity_initializer {
+  template <typename T>
+  T get_identity(distributive_operators op) {
+    switch (op) {
+      case SUM:
+        return corresponding_functor_t<SUM>::identity<T>();
+      case MIN:
+        return corresponding_functor_t<MIN>::identity<T>();
+      case MAX:
+        return corresponding_functor_t<MAX>::identity<T>();
+      case COUNT:
+        return corresponding_functor_t<COUNT>::identity<T>();
+      default:
+        CUDF_FAIL("Invalid aggregation operation.");
+    }
+  }
+
+  template <typename T>
+  void operator()(gdf_column const& col, distributive_operators op,
+                  cudaStream_t stream = 0) {
+    T* typed_data = static_cast<T*>(col.data);
+    thrust::fill(rmm::exec_policy(stream)->on(stream), typed_data,
+                 typed_data + col.size, get_identity<T>(op));
+
+    // For COUNT operator, initialize column's bitmask to be all valid
+    if ((nullptr != col.valid) and (COUNT == op)) {
+      CUDA_TRY(cudaMemsetAsync(
+          col.valid, 0xff,
+          sizeof(gdf_valid_type) * gdf_valid_allocation_size(col.size),
+          stream));
+    }
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Initializes each column in a table with a corresponding identity value
+ * of an aggregation operation.
+ *
+ * The `i`th column will be initialized with the identity value of the `i`th
+ * aggregation operation.
+ *
+ * @note The validity bitmask for the column corresponding to a COUNT operator
+ * will be initialized to all valid.
+ *
+ * @param table The table of columns to initialize.
+ * @param operators The aggregation operations whose identity values will be
+ *used to initialize the columns.
+ *---------------------------------------------------------------------------**/
+void initialize_with_identity(
+    cudf::table const& table,
+    std::vector<distributive_operators> const& operators,
+    cudaStream_t stream = 0) {
+  // TODO: Initialize all the columns in a single kernel instead of invoking one
+  // kernel per column
+  for (gdf_size_type i = 0; i < table.num_columns(); ++i) {
+    gdf_column const* col = table.get_column(i);
+    cudf::type_dispatcher(col->dtype, identity_initializer{}, *col,
+                          operators[i]);
+  }
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Determines accumulator type based on input type and operation.
  *
  * @tparam InputType The type of the input to the aggregation operation
@@ -51,26 +146,26 @@ struct target_type {
 
 // Computing MIN of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct target_type<SourceType, distributive_operators::MIN> {
+struct target_type<SourceType, MIN> {
   using type = SourceType;
 };
 
 // Computing MAX of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct target_type<SourceType, distributive_operators::MAX> {
+struct target_type<SourceType, MAX> {
   using type = SourceType;
 };
 
 // Always use int64_t accumulator for COUNT
 template <typename SourceType>
-struct target_type<SourceType, distributive_operators::COUNT> {
+struct target_type<SourceType, COUNT> {
   using type = int64_t;
 };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
 struct target_type<
-    SourceType, distributive_operators::SUM,
+    SourceType, SUM,
     typename std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
 };
@@ -78,32 +173,31 @@ struct target_type<
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
 struct target_type<
-    SourceType, distributive_operators::SUM,
+    SourceType, SUM,
     typename std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
+
+template <typename SourceType, distributive_operators op>
+using target_type_t = typename target_type<SourceType, op>::type;
 
 /**---------------------------------------------------------------------------*
  * @brief Functor that uses the target_type trait to map the combination of a
  * dispatched SourceType and aggregation operation to required target gdf_dtype.
  *
  *---------------------------------------------------------------------------**/
-struct type_mapper {
+struct dtype_mapper {
   template <typename SourceType>
   gdf_dtype operator()(distributive_operators op) {
     switch (op) {
-      case distributive_operators::MIN:
-        return gdf_dtype_of<typename target_type<
-            SourceType, distributive_operators::MIN>::type>();
-      case distributive_operators::MAX:
-        return gdf_dtype_of<typename target_type<
-            SourceType, distributive_operators::MAX>::type>();
-      case distributive_operators::SUM:
-        return gdf_dtype_of<typename target_type<
-            SourceType, distributive_operators::SUM>::type>();
-      case distributive_operators::COUNT:
-        return gdf_dtype_of<typename target_type<
-            SourceType, distributive_operators::COUNT>::type>();
+      case MIN:
+        return gdf_dtype_of<target_type_t<SourceType, MIN>>();
+      case MAX:
+        return gdf_dtype_of<target_type_t<SourceType, MAX>>();
+      case SUM:
+        return gdf_dtype_of<target_type_t<SourceType, SUM>>();
+      case COUNT:
+        return gdf_dtype_of<target_type_t<SourceType, COUNT>>();
       default:
         return GDF_invalid;
     }
@@ -131,7 +225,7 @@ std::vector<gdf_dtype> target_dtypes(
       source_dtypes.begin(), source_dtypes.end(), operators.begin(),
       output_dtypes.begin(),
       [](gdf_dtype source_dtype, distributive_operators op) {
-        gdf_dtype t = cudf::type_dispatcher(source_dtype, type_mapper{}, op);
+        gdf_dtype t = cudf::type_dispatcher(source_dtype, dtype_mapper{}, op);
         CUDF_EXPECTS(
             t != GDF_invalid,
             "Invalid combination of input type and aggregation operation.");
@@ -142,36 +236,16 @@ std::vector<gdf_dtype> target_dtypes(
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Maps a distributive_operators enum value to it's corresponding binary
- * operator functor.
+ * @brief Base case for invalid SourceType and op combinations.
  *
- * @tparam op The enum to map to its corresponding functor
+ * For an invalid combination of SourceType and operator,
+ *`target_type_t<SourceType, operator>` yields a `void` TargetType. This
+ * specialization will be invoked for any invalid combination and cause a
+ * runtime error.
+ *
+ * @note A struct is used instead of a function to allow for partial
+ * specialization.
  *---------------------------------------------------------------------------**/
-template <distributive_operators op>
-struct corresponding_functor {
-  using type = void;
-};
-
-template <>
-struct corresponding_functor<distributive_operators::MIN> {
-  using type = DeviceMin;
-};
-
-template <>
-struct corresponding_functor<distributive_operators::MAX> {
-  using type = DeviceMax;
-};
-
-template <>
-struct corresponding_functor<distributive_operators::SUM> {
-  using type = DeviceSum;
-};
-
-template <>
-struct corresponding_functor<distributive_operators::COUNT> {
-  using type = DeviceSum;
-};
-
 template <typename SourceType, distributive_operators op,
           typename Enable = void>
 struct update_target_element {
@@ -181,11 +255,34 @@ struct update_target_element {
   }
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Specialization for valid SourceType and op combinations.
+ *
+ * @tparam SourceType Type of the source element
+ * @tparam op The operation to perform
+ *---------------------------------------------------------------------------**/
 template <typename SourceType, distributive_operators op>
-struct update_target_element<
-    SourceType, op,
-    typename std::enable_if_t<
-        not std::is_void<typename target_type<SourceType, op>::type>::value>> {
+struct update_target_element<SourceType, op,
+                             typename std::enable_if_t<not std::is_void<
+                                 target_type_t<SourceType, op>>::value>> {
+  /**---------------------------------------------------------------------------*
+   * @brief Performs in-place update of a target element via a binary operation
+   * with a source element.
+   *
+   * @note It is assumed the source element is not NULL, i.e., a NULL source
+   * element should be detected before calling this function.
+   *
+   * If the target element is NULL, it is assumed that the target element was
+   * initialized with the identity of the aggregation operation. The target is
+   * updated with the result of the aggregation with the source element, and the
+   * target column's bitmask is updated to indicate the target element is no
+   * longer NULL.
+   *
+   * @param target Column containing target element
+   * @param target_index Index of target element
+   * @param source Column containing source element
+   * @param source_index Index of source element
+   *---------------------------------------------------------------------------**/
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
                                     gdf_column const& source,
@@ -200,41 +297,38 @@ struct update_target_element<
 
     SourceType const source_element{source_data[source_index]};
 
-    // Target element is NULL
-    if (not gdf_is_valid(target.valid, target_index)) {
-      TargetType const expected = target_data[target_index];
-
-      TargetType const actual =
-          atomicCAS(&target_data[target_index], expected,
-                    static_cast<TargetType>(source_element));
-
-      if (expected == actual) {
-        bit_mask::set_bit_safe(
-            reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
-            target_index);
-        return;
-      }
-    }
-
-    using FunctorType = typename corresponding_functor<op>::type;
+    using FunctorType = corresponding_functor_t<op>;
 
     cudf::genericAtomicOperation(&target_data[target_index],
                                  static_cast<TargetType>(source_element),
                                  FunctorType{});
+
+    if (not gdf_is_valid(target.valid, target_index)) {
+      bit_mask::set_bit_safe(
+          reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
+    }
   }
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Specialization for COUNT.
+ *---------------------------------------------------------------------------**/
 template <typename SourceType>
-struct update_target_element<
-    SourceType, distributive_operators::COUNT,
-    typename std::enable_if_t<not std::is_void<typename target_type<
-        SourceType, distributive_operators::COUNT>::type>::value>> {
+struct update_target_element<SourceType, COUNT,
+                             typename std::enable_if_t<not std::is_void<
+                                 target_type_t<SourceType, COUNT>>::value>> {
+  /**---------------------------------------------------------------------------*
+   * @brief Increments the target_element by 1.
+   *
+   * @note Assumes the target element is never NULL, and was intialized to 0.
+   *
+   * @param target Column containing target element
+   * @param target_index Index of target element
+   *---------------------------------------------------------------------------**/
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
-                                    gdf_column const& source,
-                                    gdf_size_type source_index) {
-    using TargetType =
-        typename target_type<SourceType, distributive_operators::COUNT>::type;
+                                    gdf_column const&, gdf_size_type) {
+    using TargetType = target_type_t<SourceType, COUNT>;
     assert(gdf_dtype_of<TargetType>() == target.dtype);
 
     TargetType* const __restrict__ target_data{
@@ -253,24 +347,24 @@ struct elementwise_aggregator {
                                     gdf_size_type source_index,
                                     distributive_operators op) {
     switch (op) {
-      case distributive_operators::MIN: {
-        update_target_element<SourceType, distributive_operators::MIN>{}(
-            target, target_index, source, source_index);
+      case MIN: {
+        update_target_element<SourceType, MIN>{}(target, target_index, source,
+                                                 source_index);
         break;
       }
-      case distributive_operators::MAX: {
-        update_target_element<SourceType, distributive_operators::MAX>{}(
-            target, target_index, source, source_index);
+      case MAX: {
+        update_target_element<SourceType, MAX>{}(target, target_index, source,
+                                                 source_index);
         break;
       }
-      case distributive_operators::SUM: {
-        update_target_element<SourceType, distributive_operators::SUM>{}(
-            target, target_index, source, source_index);
+      case SUM: {
+        update_target_element<SourceType, SUM>{}(target, target_index, source,
+                                                 source_index);
         break;
       }
-      case distributive_operators::COUNT: {
-        update_target_element<SourceType, distributive_operators::COUNT>{}(
-            target, target_index, source, source_index);
+      case COUNT: {
+        update_target_element<SourceType, COUNT>{}(target, target_index, source,
+                                                   source_index);
       }
       default:
         return;
@@ -290,7 +384,14 @@ struct elementwise_aggregator {
  * @note If a source element is NULL, the aggregation operation for
  * that column is skipped.
  *
- * @note If a target element is NULL,
+ * @note If a target element is NULL, it is assumed that the value of the NULL
+ * element is the identity value of the aggregation operation being performed.
+ * The aggregation operation is performed between the source element and the
+ * identity value, and the target element's bit is set to indicate it is no
+ * longer NULL.
+ *
+ * @note For COUNT, it is assumed the target element can *never* be NULL. As
+ * such, it is expected the target element's bit is already set.
  *
  * @param target Table containing the target row
  * @param target_index Index of the target row
@@ -321,7 +422,7 @@ __device__ inline void aggregate_row(device_table const& target,
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
-    std::vector<cudf::groupby::distributive_operators> const& operators,
+    std::vector<groupby::distributive_operators> const& operators,
     groupby::Options options, cudaStream_t stream) {
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
@@ -330,10 +431,10 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   cudf::table output_keys{output_size_estimate, column_dtypes(keys), true,
                           stream};
 
-  // TODO Initialize any COUNT columns bitmasks to be all valid
   cudf::table output_values{output_size_estimate,
                             target_dtypes(column_dtypes(values), operators),
                             true, stream};
+  initialize_with_identity(output_values, operators, stream);
 
   using map_type = concurrent_unordered_map<
       gdf_size_type, gdf_size_type, std::numeric_limits<gdf_size_type>::max(),
