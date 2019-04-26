@@ -2280,12 +2280,12 @@ def test_isnull_isna():
 
     # strings none missing
     ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
-    gs = cudf.from_pandas(ps)
+    gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.a.isna(), gs.a.isna())
 
     # unnamed series
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
-    gs = cudf.from_pandas(ps)
+    gs = DataFrame.from_pandas(ps)
     assert_eq(ps.isnull(), gs.isnull())
     assert_eq(ps.isna(), gs.isna())
