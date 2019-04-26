@@ -141,6 +141,12 @@ std::vector<gdf_dtype> target_dtypes(
   return output_dtypes;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Maps a distributive_operators enum value to it's corresponding binary
+ * operator functor.
+ *
+ * @tparam op The enum to map to its corresponding functor
+ *---------------------------------------------------------------------------**/
 template <distributive_operators op>
 struct corresponding_functor {
   using type = void;
@@ -166,74 +172,78 @@ struct corresponding_functor<distributive_operators::COUNT> {
   using type = DeviceSum;
 };
 
-template <typename TargetType, typename SourceType, distributive_operators op>
-struct source_element_as_target_type {
-  __device__ inline TargetType operator()(SourceType const* source_data,
-                                          gdf_size_type index) {
-    return static_cast<TargetType>(source_data[index]);
-  }
-};
-
-template <typename TargetType, typename SourceType>
-struct source_element_as_target_type<TargetType, SourceType,
-                                     distributive_operators::COUNT> {
-  __device__ inline TargetType operator()(SourceType const* source_data,
-                                          gdf_size_type index) {
-    return TargetType{1};
-  }
-};
-
 template <typename SourceType, distributive_operators op,
-          std::enable_if_t<
-              std::is_void<typename target_type<SourceType, op>::type>::value,
-              int>* = nullptr>
-__device__ inline void update_target(gdf_column const& target,
-                                     gdf_size_type target_index,
-                                     gdf_column const& source,
-                                     gdf_size_type source_index) {
-  release_assert(false && "Invalid Source type and Aggregation combination.");
-}
-
-template <
-    typename SourceType, distributive_operators op,
-    std::enable_if_t<
-        not std::is_void<typename target_type<SourceType, op>::type>::value,
-        int>* = nullptr>
-__device__ inline void update_target(gdf_column const& target,
-                                     gdf_size_type target_index,
-                                     gdf_column const& source,
-                                     gdf_size_type source_index) {
-  using TargetType = typename target_type<SourceType, op>::type;
-  assert(gdf_dtype_of<TargetType>() == target.dtype);
-
-  TargetType* const __restrict__ target_data{
-      static_cast<TargetType*>(target.data)};
-  SourceType const* const __restrict__ source_data{
-      static_cast<SourceType const*>(source.data)};
-
-  TargetType const update_value{
-      source_element_as_target_type<TargetType, SourceType, op>{}(
-          source_data, source_index)};
-
-  // Target element is NULL
-  if (not gdf_is_valid(target.valid, target_index)) {
-    TargetType const expected = target_data[target_index];
-
-    TargetType const actual =
-        atomicCAS(&target_data[target_index], expected, update_value);
-
-    if (expected == actual) {
-      bit_mask::set_bit_safe(
-          reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
-      return;
-    }
+          typename Enable = void>
+struct update_target_element {
+  void operator()(gdf_column const& target, gdf_size_type target_index,
+                  gdf_column const& source, gdf_size_type source_index) {
+    release_assert(false && "Invalid Source type and Aggregation combination.");
   }
+};
 
-  using FunctorType = typename corresponding_functor<op>::type;
+template <typename SourceType, distributive_operators op>
+struct update_target_element<
+    SourceType, op,
+    typename std::enable_if_t<
+        not std::is_void<typename target_type<SourceType, op>::type>::value>> {
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    using TargetType = typename target_type<SourceType, op>::type;
+    assert(gdf_dtype_of<TargetType>() == target.dtype);
 
-  cudf::genericAtomicOperation(&target_data[target_index], update_value,
-                               FunctorType{});
-}
+    TargetType* const __restrict__ target_data{
+        static_cast<TargetType*>(target.data)};
+    SourceType const* const __restrict__ source_data{
+        static_cast<SourceType const*>(source.data)};
+
+    SourceType const source_element{source_data[source_index]};
+
+    // Target element is NULL
+    if (not gdf_is_valid(target.valid, target_index)) {
+      TargetType const expected = target_data[target_index];
+
+      TargetType const actual =
+          atomicCAS(&target_data[target_index], expected,
+                    static_cast<TargetType>(source_element));
+
+      if (expected == actual) {
+        bit_mask::set_bit_safe(
+            reinterpret_cast<bit_mask::bit_mask_t*>(target.valid),
+            target_index);
+        return;
+      }
+    }
+
+    using FunctorType = typename corresponding_functor<op>::type;
+
+    cudf::genericAtomicOperation(&target_data[target_index],
+                                 static_cast<TargetType>(source_element),
+                                 FunctorType{});
+  }
+};
+
+template <typename SourceType>
+struct update_target_element<
+    SourceType, distributive_operators::COUNT,
+    typename std::enable_if_t<not std::is_void<typename target_type<
+        SourceType, distributive_operators::COUNT>::type>::value>> {
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    using TargetType =
+        typename target_type<SourceType, distributive_operators::COUNT>::type;
+    assert(gdf_dtype_of<TargetType>() == target.dtype);
+
+    TargetType* const __restrict__ target_data{
+        static_cast<TargetType*>(target.data)};
+
+    cudf::genericAtomicOperation(&target_data[target_index], TargetType{1},
+                                 DeviceSum{});
+  }
+};
 
 struct elementwise_aggregator {
   template <typename SourceType>
@@ -244,22 +254,22 @@ struct elementwise_aggregator {
                                     distributive_operators op) {
     switch (op) {
       case distributive_operators::MIN: {
-        update_target<SourceType, distributive_operators::MIN>(
+        update_target_element<SourceType, distributive_operators::MIN>{}(
             target, target_index, source, source_index);
         break;
       }
       case distributive_operators::MAX: {
-        update_target<SourceType, distributive_operators::MAX>(
+        update_target_element<SourceType, distributive_operators::MAX>{}(
             target, target_index, source, source_index);
         break;
       }
       case distributive_operators::SUM: {
-        update_target<SourceType, distributive_operators::SUM>(
+        update_target_element<SourceType, distributive_operators::SUM>{}(
             target, target_index, source, source_index);
         break;
       }
       case distributive_operators::COUNT: {
-        update_target<SourceType, distributive_operators::COUNT>(
+        update_target_element<SourceType, distributive_operators::COUNT>{}(
             target, target_index, source, source_index);
       }
       default:
@@ -280,14 +290,7 @@ struct elementwise_aggregator {
  * @note If a source element is NULL, the aggregation operation for
  * that column is skipped.
  *
- * @note If a target element is NULL, it is assumed that the value of the NULL
- * element is the identity value of the aggregation operation being performed.
- * The aggregation operation is performed between the source element and the
- * identity value, and the target element's bit is set to indicate it is no
- * longer NULL.
- *
- * @note It is assumed that the target element of a COUNT operation is *never*
- * NULL.
+ * @note If a target element is NULL,
  *
  * @param target Table containing the target row
  * @param target_index Index of the target row
@@ -326,6 +329,8 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   cudf::table output_keys{output_size_estimate, column_dtypes(keys), true,
                           stream};
+
+  // TODO Initialize any COUNT columns bitmasks to be all valid
   cudf::table output_values{output_size_estimate,
                             target_dtypes(column_dtypes(values), operators),
                             true, stream};
