@@ -166,56 +166,22 @@ struct corresponding_functor<distributive_operators::COUNT> {
   using type = DeviceSum;
 };
 
-/**---------------------------------------------------------------------------*
- * @brief Performs inplace update of a target element via a binary operation
- * with a source element.
- *
- * Atomically performs `target[target_index] = target[target_index] op
- * source[source_index]`
- *
- * @tparam TargetType Type of the target element
- * @tparam SourceType Type of the source element
- * @tparam Op Type of the binary operation to perform
- * @param target Column containing target element
- * @param target_index Index of the target element
- * @param source Column containing source element
- * @param source_index Index of the source element
- * @param op The aggregation operation to perform
- *---------------------------------------------------------------------------**/
-// template <typename TargetType, typename SourceType, typename Op,
-//          std::enable_if_t<not std::is_void<TargetType>::value, int>* =
-//          nullptr>
-//__device__ inline void binary_op(gdf_column const& target,
-//                                 gdf_size_type target_index,
-//                                 gdf_column const& source,
-//                                 gdf_size_type source_index, Op&& op) {
-//  assert(gdf_dtype_of<TargetType>() == target.dtype);
-//
-//  SourceType const& source_element{
-//      static_cast<SourceType const*>(source.data)[source_index]};
-//
-//  cudf::genericAtomicOperation(
-//      &(static_cast<TargetType*>(target.data)[target_index]),
-//      static_cast<TargetType>(source_element), op);
-//}
-//
-///**---------------------------------------------------------------------------*
-// * @brief Increments a target value by one.
-// *
-// * @tparam TargetType Target element's type
-// * @param target The column containing the target element
-// * @param target_index Index of the target element
-// *---------------------------------------------------------------------------**/
-// template <typename TargetType>
-//__device__ inline void count_op(gdf_column const& target,
-//                                gdf_size_type target_index) {
-//  static_assert(std::is_integral<TargetType>::value,
-//                "TargetType of count operation must be integral.");
-//  assert(gdf_dtype_of<TargetType>() == target.dtype);
-//  cudf::genericAtomicOperation(
-//      &(static_cast<TargetType*>(target.data)[target_index]), TargetType{1},
-//      DeviceSum{});
-//}
+template <typename TargetType, typename SourceType, distributive_operators op>
+struct source_element_as_target_type {
+  __device__ inline TargetType operator()(SourceType const* source_data,
+                                          gdf_size_type index) {
+    return static_cast<TargetType>(source_data[index]);
+  }
+};
+
+template <typename TargetType, typename SourceType>
+struct source_element_as_target_type<TargetType, SourceType,
+                                     distributive_operators::COUNT> {
+  __device__ inline TargetType operator()(SourceType const* source_data,
+                                          gdf_size_type index) {
+    return TargetType{1};
+  }
+};
 
 template <typename SourceType, distributive_operators op,
           std::enable_if_t<
@@ -237,7 +203,6 @@ __device__ inline void update_target(gdf_column const& target,
                                      gdf_size_type target_index,
                                      gdf_column const& source,
                                      gdf_size_type source_index) {
-
   using TargetType = typename target_type<SourceType, op>::type;
   assert(gdf_dtype_of<TargetType>() == target.dtype);
 
@@ -245,15 +210,17 @@ __device__ inline void update_target(gdf_column const& target,
       static_cast<TargetType*>(target.data)};
   SourceType const* const __restrict__ source_data{
       static_cast<SourceType const*>(source.data)};
-  SourceType const& source_element{source_data[source_index]};
+
+  TargetType const update_value{
+      source_element_as_target_type<TargetType, SourceType, op>{}(
+          source_data, source_index)};
 
   // Target element is NULL
   if (not gdf_is_valid(target.valid, target_index)) {
     TargetType const expected = target_data[target_index];
 
     TargetType const actual =
-        atomicCAS(&target_data[target_index], expected,
-                  static_cast<TargetType>(source_element));
+        atomicCAS(&target_data[target_index], expected, update_value);
 
     if (expected == actual) {
       bit_mask::set_bit_safe(
@@ -264,8 +231,7 @@ __device__ inline void update_target(gdf_column const& target,
 
   using FunctorType = typename corresponding_functor<op>::type;
 
-  cudf::genericAtomicOperation(&target_data[target_index],
-                               static_cast<TargetType>(source_element),
+  cudf::genericAtomicOperation(&target_data[target_index], update_value,
                                FunctorType{});
 }
 
@@ -276,9 +242,6 @@ struct elementwise_aggregator {
                                     gdf_column const& source,
                                     gdf_size_type source_index,
                                     distributive_operators op) {
-    // TODO Can we avoid setting the target's valid bit for every binary
-    // operation? Technically, it only needs to be set upon the first succesful
-    // update of the target element.
     switch (op) {
       case distributive_operators::MIN: {
         update_target<SourceType, distributive_operators::MIN>(
@@ -296,12 +259,8 @@ struct elementwise_aggregator {
         break;
       }
       case distributive_operators::COUNT: {
-        // using TargetType =
-        //    typename target_type<SourceType,
-        //                         distributive_operators::COUNT>::type;
-        // update_target<TargetType, SourceType>(target, target_index, source,
-        //                                      source_index, DeviceCount{});
-        // break;
+        update_target<SourceType, distributive_operators::COUNT>(
+            target, target_index, source, source_index);
       }
       default:
         return;
