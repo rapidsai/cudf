@@ -30,7 +30,7 @@ def test_orc_reader_basic(datadir, orc_args, engine):
     orcfile = pa.orc.ORCFile(path)
     columns = orc_args[1]
 
-    expect = orcfile.read(columns=columns).to_pandas(date_as_object=False)
+    expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(path, engine=engine, columns=columns)
 
     # cuDF's default currently handles some types differently
@@ -42,7 +42,6 @@ def test_orc_reader_basic(datadir, orc_args, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 def test_orc_reader_decimal(datadir):
     path = datadir / 'TestOrcFile.decimal.orc'
     orcfile = pa.orc.ORCFile(path)
@@ -54,13 +53,22 @@ def test_orc_reader_decimal(datadir):
     # This is because cuDF returns as float64 as it lacks equivalent dtype
     pdf = pdf.apply(pd.to_numeric)
 
-    if '_col0' in gdf.columns:
-        expectcol = pdf['_col0']
-        gotcol = gdf['_col0']
-        for i in range(len(gotcol)):
-            if expectcol[i] != gotcol[i]:
-                print("Time mismatched at [", i, "] expect: ",
-                      expectcol[i], " got: ", gotcol[i])
-                break
-
     np.testing.assert_allclose(pdf, gdf)
+
+
+@pytest.mark.parametrize('inputfile', ['TestOrcFile.testDate1900.orc',
+                                       'TestOrcFile.testDate2038.orc'])
+def test_orc_reader_datetimestamp(datadir, inputfile):
+    path = datadir / inputfile
+    orcfile = pa.orc.ORCFile(path)
+
+    pdf = orcfile.read().to_pandas(date_as_object=False)
+    gdf = cudf.read_orc(path, engine='cudf')
+
+    # cuDF DatetimeColumn currenly only supports millisecond units
+    # Convert to lesser precision int64 for comparison
+    timedelta = np.timedelta64(1, 'ms').astype('timedelta64[ns]')
+    pdf['time'] = pdf['time'].astype(np.int64) // timedelta.astype(np.int64)
+    gdf['time'] = gdf['time'].astype(np.int64)
+
+    assert_eq(pdf, gdf, check_categorical=False)

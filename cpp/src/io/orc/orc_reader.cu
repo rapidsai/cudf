@@ -16,6 +16,7 @@
 
 #include "orc.h"
 #include "orc_gpu.h"
+#include "timezone.h"
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
@@ -115,10 +116,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::TIMESTAMP:
       // There isn't a GDF_TIMESTAMP -> np.dtype mapping so use np.datetime64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ns});
+      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
     case orc::DATE:
       // There isn't a GDF_DATE32 -> np.dtype mapping so use np.datetime64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ns});
+      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float
       static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
@@ -299,10 +300,12 @@ class OrcMetadata {
    *
    * @param[in] use_cols Array of column names to select
    * @param[in] use_cols_len Length of the column name array
+   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
    * @return A list of ORC column indexes
    **/
-  auto select_columns(const char **use_cols, int use_cols_len) {
+  auto select_columns(const char **use_cols, int use_cols_len,
+                      bool &has_timestamp_column) {
     std::vector<int> selection;
 
     if (use_cols) {
@@ -316,6 +319,9 @@ class OrcMetadata {
           if (ff.GetColumnName(index) == use_name) {
             selection.emplace_back(index);
             index++;
+            if (ff.types[i].kind == orc::TIMESTAMP) {
+              has_timestamp_column = true;
+            }
             break;
           }
         }
@@ -325,6 +331,9 @@ class OrcMetadata {
       for (int i = 0; i < get_num_columns(); ++i) {
         if (ff.types[i].subtypes.size() == 0) {
           selection.emplace_back(i);
+          if (ff.types[i].kind == orc::TIMESTAMP) {
+            has_timestamp_column = true;
+          }
         }
       }
     }
@@ -367,13 +376,17 @@ struct OrcStreamInfo {
 };
 
 /**
- * @brief 
+ * @brief Helper function that populates column descriptors stream/chunk
  *
  * @param[in] chunks List of column chunk descriptors
- * @param[in] stripe_data List of source stripe column data
- * @param[in] decompressor Originally host decompressor
- * @param[in] stream_info List of stream to column mappings
- * @param[in] num_stripes Number of stripes making up column chunks
+ * @param[in] stripeinfo List of stripe metadata
+ * @param[in] stripefooter List of stripe footer metadata
+ * @param[in] orc2gdf Mapping of ORC columns to cuDF columns
+ * @param[in] gdf2orc Mapping of cuDF columns to ORC columns
+ * @param[in] types List of schema types in the dataset
+ * @param[out] num_dictionary_entries Number of required dictionary entries
+ * @param[in,out] chunks List of column chunk descriptions
+ * @param[in,out] stream_info List of column stream info
  *
  * @return size_t Size in bytes of readable stream data found
  **/
@@ -562,10 +575,13 @@ device_buffer<uint8_t> decompress_stripe_data(
  *
  * @param[in] chunks List of column chunk descriptors
  * @param[in] num_dicts Number of dictionary entries required
+ * @param[in] skip_rows Number of rows to offset from start
+ * @param[in] timezone_table Local time to UTC conversion table
  * @param[in,out] columns List of gdf_columns
  **/
 void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                         size_t num_dicts, size_t skip_rows,
+                        const std::vector<int64_t> &timezone_table,
                         const std::vector<gdf_column_wrapper> &columns) {
 
   const size_t num_columns = columns.size();
@@ -587,13 +603,17 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
   // Allocate global dictionary for deserializing
   rmm::device_vector<orc::gpu::DictionaryEntry> global_dict(num_dicts);
 
+  // Allocate timezone transition table timestamp conversion
+  rmm::device_vector<int64_t> tz_table = timezone_table;
+
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
                            chunks.memory_size(), cudaMemcpyHostToDevice));
   CUDA_TRY(DecodeNullsAndStringDictionaries(
       chunks.device_ptr(), global_dict.data().get(), num_columns, num_stripes,
       num_rows, skip_rows));
   CUDA_TRY(DecodeOrcColumnData(chunks.device_ptr(), global_dict.data().get(),
-                               num_columns, num_stripes, num_rows, skip_rows));
+                               num_columns, num_stripes, num_rows, skip_rows,
+                               tz_table.data().get(), tz_table.size()));
   CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
                            chunks.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
@@ -611,13 +631,9 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
   }
 }
 
-/**
- * @brief Reads Apache ORC data and returns an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
- **/
+//
+// Implementation for reading Apache ORC data and outputting to cuDF columns.
+//
 gdf_error read_orc(orc_read_arg *args) {
 
   DataSource input(args->source);
@@ -631,7 +647,9 @@ gdf_error read_orc(orc_read_arg *args) {
   const auto selected_stripes = md.select_stripes(skip_rows, num_rows);
 
   // Select only columns required
-  const auto selected_cols = md.select_columns(args->use_cols, args->use_cols_len);
+  bool has_time_stamp_column = false;
+  const auto selected_cols = md.select_columns(
+      args->use_cols, args->use_cols_len, has_time_stamp_column);
   const int num_columns = selected_cols.size();
 
   // Association between each ORC column and its gdf_column
@@ -714,6 +732,14 @@ gdf_error read_orc(orc_read_arg *args) {
       stripe_start_row += stripe_info->numberOfRows;
     }
 
+    // Setup table for converting timestamp columns from local to UTC time
+    std::vector<int64_t> tz_table;
+    if (has_time_stamp_column && !selected_stripes.empty()) {
+      CUDF_EXPECTS(BuildTimezoneTransitionTable(
+                       tz_table, selected_stripes[0].second.writerTimezone),
+                   "Cannot setup timezone LUT");
+    }
+
     if (md.ps.compression != orc::NONE) {
       auto decomp_data =
           decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
@@ -725,7 +751,7 @@ gdf_error read_orc(orc_read_arg *args) {
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
     }
-    decode_stream_data(chunks, num_dict_entries, skip_rows, columns);
+    decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
