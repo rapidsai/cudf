@@ -35,6 +35,8 @@
 
 #include <thrust/host_vector.h>
 
+#include <nvstrings/NVStrings.h>
+
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
