@@ -25,22 +25,28 @@ class MultiIndex(indexPackage.Index):
     """
 
     def __init__(self, levels, codes, names=None):
-        if isinstance(names, Sequence):
-            if all(x is None for x in names):
-                names = None
-        if names is None:
+        self.names = names
+        column_names = []
+        if isinstance(names, (Sequence,
+                              pd.core.indexes.frozen.FrozenNDArray,
+                              pd.core.indexes.frozen.FrozenList)):
+            if sum(x is None for x in names) > 1:
+                column_names = list(range(len(codes)))
+            else:
+                column_names = names
+        elif names is None:
             column_names = list(range(len(codes)))
         else:
             column_names = names
         if len(codes) == 0:
             raise ValueError('MultiIndex codes can not be empty.')
-        from cudf import DataFrame
-        if not isinstance(codes, DataFrame) and\
+        import cudf
+        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame) and\
                 not isinstance(codes[0], (Sequence,
                                pd.core.indexes.frozen.FrozenNDArray)):
             raise TypeError('Codes is not a Sequence of sequences')
-        if not isinstance(codes, DataFrame):
-            self.codes = DataFrame()
+        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
+            self.codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
                 self.codes.add_column(column_names[idx],
                                       columnops.as_column(code))
@@ -168,7 +174,7 @@ class MultiIndex(indexPackage.Index):
         result = DataFrame()
         for ix, col in enumerate(df.columns):
             if ix in valid_indices:
-                result[ix] = df._cols[ix]
+                result[ix] = list(df._cols.values())[ix]
         # Build new index - COLUMN based MultiIndex
         # ---------------
         if len(row_tuple) < len(self.levels):
@@ -261,7 +267,6 @@ class MultiIndex(indexPackage.Index):
     def from_tuples(cls, tuples, names=None):
         # cheating
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
-        print(pdi)
         result = cls.from_pandas(pdi)
         return result
 

@@ -271,7 +271,6 @@ class DataFrame(object):
     def __setitem__(self, name, col):
         """Add/set column by *name or DataFrame*
         """
-        # div[div < 0] = 0
         if isinstance(name, DataFrame):
             for col_name in self._cols:
                 mask = name[col_name]
@@ -680,6 +679,12 @@ class DataFrame(object):
             if len(columns) != len(self.columns):
                 msg = f'Length mismatch: Expected axis has {len(self.columns)} elements, new values have {len(columns)} elements'  # noqa: E501
                 raise ValueError(msg)
+            """
+            new_names = []
+            for idx, name in enumerate(columns):
+                new_names.append(name)
+            self._rename_columns(new_names)
+            """
             self.multi_cols = columns
         else:
             if hasattr(self, 'multi_cols'):

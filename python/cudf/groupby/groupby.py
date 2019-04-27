@@ -352,22 +352,48 @@ class Groupby(object):
             else:
                 idx.name = self._by[0]
             result_series = result_series.set_index(idx)
+            if(self._as_index):
+                result = self._apply_multiindex_or_single_index(result)
+                result_series.index = result.index
             return result_series
 
-        # TODO: Do MultiIndex here
         if(self._as_index):
-            idx = index.as_index(result[self._by[0]])
-            idx.name = self._by[0]
-            result.drop_column(idx.name)
-            if self.level == 0:
-                idx.name = self._original_index_name
-            else:
-                idx.name = self._by[0]
-            result = result.set_index(idx)
-
+            result = self._apply_multiindex_or_single_index(result)
         nvtx_range_pop()
 
         return result
+
+    def _apply_multiindex_or_single_index(self, result):
+        if 9 == len(self._by):
+            idx = index.as_index(result[self._by[0]])
+            idx.name = self._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
+            return result
+        else:
+            levels = []
+            codes = DataFrame()
+            names = []
+            # Note: This is an O(N^2) solution using gpu masking
+            # to compute new codes for the MultiIndex. There may be
+            # a faster solution that could be executed on gpu at the same
+            # time the groupby is calculated.
+            for by in self._by:
+                level = result[by].unique()
+                code = result[by]
+                for idx, value in enumerate(level):
+                    level_mask = code == value
+                    code = code.masked_assign(idx, level_mask)
+                levels.append(level)
+                codes[by] = code
+                names.append(by)
+            from cudf import MultiIndex
+            multi_index = MultiIndex(levels=levels,
+                                     codes=codes,
+                                     names=names)
+            for by in self._by:
+                result.drop_column(by)
+            return result.set_index(multi_index)
 
     def __getitem__(self, arg):
         if isinstance(arg, (str, Number)):
@@ -458,12 +484,8 @@ class Groupby(object):
                     agg_type, result, add_col_values, ctx, self._val_columns,
                     val_columns_out, sort_result=sort_result)
                 add_col_values = False  # we only want to add them once
-            # TODO: Do multindex here
-            if(self._as_index) and 1 == len(self._by):
-                idx = index.as_index(result[self._by[0]])
-                idx.name = self._by[0]
-                result = result.set_index(idx)
-                result.drop_column(idx.name)
+            if(self._as_index):
+                result = self._apply_multiindex_or_single_index(result)
         elif isinstance(args, collections.abc.Mapping):
             if (len(args.keys()) == 1):
                 if(len(list(args.values())[0]) == 1):
@@ -489,12 +511,8 @@ class Groupby(object):
                                              val_columns_out,
                                              sort_result=sort_result)
                 add_col_values = False  # we only want to add them once
-            # TODO: Do multindex here
-            if(self._as_index) and 1 == len(self._by):
-                idx = index.as_index(result[self._by[0]])
-                idx.name = self._by[0]
-                result = result.set_index(idx)
-                result.drop_column(idx.name)
+            if(self._as_index):
+                result = self._apply_multiindex_or_single_index(result)
         else:
             result = self.agg([args])
 

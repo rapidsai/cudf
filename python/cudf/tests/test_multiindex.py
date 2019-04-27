@@ -334,6 +334,22 @@ def test_multiindex_index_and_columns():
     pdf.index = mi
     pdf.index.names = ['x', 'y']
     pdf.columns = mc
-    print(pdf)
-    print(gdf.to_pandas())
     assert_eq(pdf, gdf)
+
+
+def test_multiindex_multiple_groupby():
+    pdf = pd.DataFrame(
+        {
+            "a": [4, 17, 4, 9, 5],
+            "b": [1, 4, 4, 3, 2],
+            "x": np.random.normal(size=5),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby(['a', 'b']).sum()
+    gdg = gdf.groupby(['a', 'b']).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(['a', 'b']).x.sum()
+    gdg = gdf.groupby(['a', 'b']).x.sum()
+    breakpoint()
+    assert_eq(pdg, gdg)
