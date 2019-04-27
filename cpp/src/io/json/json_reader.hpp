@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 
 #include <memory>
@@ -9,7 +25,10 @@
 #include "io/utilities/file_utils.hpp"
 #include "io/utilities/wrapper_utils.hpp"
 
-// DOXY
+/**---------------------------------------------------------------------------*
+ * @brief Class used to parse Json input and convert it into gdf columns
+ *
+ *---------------------------------------------------------------------------**/
 class JsonReader {
 public:
   struct ColumnInfo {
@@ -42,21 +61,116 @@ private:
   const bool allow_newlines_in_strings_ = false;
   const ParseOptions opts_{',', '\n', '\"', '.'};
 
+  /**---------------------------------------------------------------------------*
+   * @brief Ingest input JSON file/buffer, without decompression
+   *
+   * Sets the input_data_ and input_size_ data members
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void ingestRawInput();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Decompress the input data, if needed
+   *
+   * Sets the uncomp_data_ and uncomp_size_ data members
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void decompressInput();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Finds all record starts in the file and stores them in rec_starts_
+   *
+   * Does not upload the entire file to the GPU
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void setRecordStarts();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Uploads the relevant segment of the input json data onto the GPU.
+   *
+   * Sets the d_data_ data member.
+   * Only rows that need to be parsed are copied, based on the byte range
+   * Also updates the array of record starts to match the device data offset.
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void uploadDataToDevice();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the first row to set the column name
+   *
+   * Sets the column_names_ data member
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void setColumnNames();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Set the data type array data member
+   *
+   * If user does not pass the data types, deduces types from the file content
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void setDataTypes();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Set up and launches JSON data type detect CUDA kernel.
+   *
+   * @param[out] column_infos The count for each column data type
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void detectDataTypes(ColumnInfo *d_columnData);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the input data and store results in dsf columns
+   *
+   * Allocates columns in the column_names_ data member and populates them with
+   * parsed data
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void convertDataToColumns();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Helper function to setup and launch JSON parsing CUDA kernel.
+   *
+   * @param[in] dtypes The data type of each column
+   * @param[out] gdf_columns The output column data
+   * @param[out] valid_fields The bitmaps indicating whether column fields are valid
+   * @param[out] num_valid_fields The numbers of valid fields in columns
+   *
+   * @return gdf_error GDF_SUCCESS upon completion
+   *---------------------------------------------------------------------------**/
   void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid,
                             gdf_size_type *num_valid);
 
 public:
-  JsonReader(json_read_arg *args);
+  /**---------------------------------------------------------------------------*
+   * @brief JsonReader constructor; throws if the arguments are not supported
+   *---------------------------------------------------------------------------**/
+  explicit JsonReader(json_read_arg *args);
 
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the input JSON file as specified with the args_ data member
+   *
+   * Stores the parsed gdf columns in an internal data member
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
   void parse();
 
-  void storeColumns(json_read_arg *out_args);
+  /**---------------------------------------------------------------------------*
+   * @brief Sets the output paramenters of the read_json call
+   *
+   * Transfers the ownership from private data members without copying
+   * the gdf column data
+   *
+   * @return void
+   *---------------------------------------------------------------------------**/
+  void setOutputArguments(json_read_arg *out_args);
 };

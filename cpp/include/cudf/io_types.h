@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ typedef struct {
    */
   int           num_cols_out;               ///< Out: Number of columns returned
   int           num_rows_out;               ///< Out: Number of rows returned
-  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+  gdf_column    **data;                     ///< Out: Array of gdf_column*
   int           *index_col;                 ///< Out: If available, column index to use as row labels
 
   /*

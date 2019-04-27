@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "json_reader.hpp"
 
 #include <cuda_runtime.h>
@@ -33,20 +49,30 @@
 
 using string_pair = std::pair<const char *, size_t>;
 
+/**---------------------------------------------------------------------------*
+ * @brief Reads JSON-structured data and returns an array of gdf_columns.
+ *
+ * @param[in,out] args Structure containing input and output args
+ *
+ * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
+ *---------------------------------------------------------------------------**/
 gdf_error read_json(json_read_arg *args) {
-  // TODO check if arguments are valid (don't check if arguments are supported here)
+  // Check if the passed arguments are valid
+  CUDF_EXPECTS(args != nullptr, "The args parameter cannot be null.\n");
+  CUDF_EXPECTS(args->source != nullptr, "Input source cannot be null.\n");
+
   JsonReader reader(args);
 
   reader.parse();
 
-  reader.storeColumns(args);
+  reader.setOutputArguments(args);
 
   return GDF_SUCCESS;
 }
 
 JsonReader::JsonReader(json_read_arg *args) : args_(args) {
   // Check if the passed arguments are supported
-  CUDF_EXPECTS(args_->lines, "Only Json Lines format is currently supported.");
+  CUDF_EXPECTS(args_->lines, "Only Json Lines format is currently supported.\n");
 }
 
 /**---------------------------------------------------------------------------*
@@ -74,7 +100,9 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
 }
 
 /*
- * Convert dtype strings into gdf_dtype enum
+ * @brief Convert dtype strings into gdf_dtype enum;
+ *
+ * Returns GDF_invalid if the input string is not a valid dtype string
  */
 gdf_dtype convertStringToDtype(const std::string &dtype) {
   if (dtype == "str")
@@ -110,13 +138,6 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
   return GDF_invalid;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Parse the input JSON file specified in the args_ data member
- *
- * Stores the parsed gdf columns in an internal data member
- *
- * @return void
- *---------------------------------------------------------------------------**/
 void JsonReader::parse() {
   ingestRawInput();
   CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
@@ -138,14 +159,8 @@ void JsonReader::parse() {
   setDataTypes();
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
-  // Allocate columns
-  for (size_t col = 0; col < dtypes_.size(); ++col) {
-    columns_.emplace_back(rec_starts_.size(), dtypes_[col], gdf_dtype_extra_info{TIME_UNIT_NONE}, column_names_[col]);
-    CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns.\n");
-  }
-  CUDF_EXPECTS(!columns_.empty(), "Error allocating gdf columns.\n");
-
   convertDataToColumns();
+  CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
 }
 
 /**---------------------------------------------------------------------------*
@@ -153,6 +168,7 @@ void JsonReader::parse() {
  * the input file name
  *
  * Returns "none" if the input is not compressed.
+ * Throws if the input is not not valid.
  *
  * @param[in] compression_arg Input string that is potentially describing
  * the compression type. Can also be nullptr, "none", or "infer"
@@ -167,7 +183,7 @@ std::string inferCompressionType(const char *compression_arg, const char *filepa
   if (0 != strcasecmp(compression_arg, "infer")) {
     return std::string(compression_arg);
   } else {
-    const char *file_ext = strrchr(filepath, '.');
+    const char *const file_ext = strrchr(filepath, '.');
     if (file_ext) {
       if (!strcasecmp(file_ext, ".gz"))
         return "gzip";
@@ -182,13 +198,6 @@ std::string inferCompressionType(const char *compression_arg, const char *filepa
   }
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Ingest input JSON file/buffer, without decompression
- *
- * Sets the input_data_ and input_size_ data members
- *
- * @return void
- *---------------------------------------------------------------------------**/
 void JsonReader::ingestRawInput() {
   if (args_->source_type == gdf_csv_input_form::FILE_PATH) {
     map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
@@ -223,13 +232,6 @@ void JsonReader::ingestRawInput() {
   }
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Decompress the input data, if needed
- *
- * Sets the uncomp_data_ and uncomp_size_ data members
- *
- * @return void
- *---------------------------------------------------------------------------**/
 void JsonReader::decompressInput() {
   const std::string compression_type = inferCompressionType(args_->compression, args_->source);
   if (compression_type == "none") {
@@ -246,9 +248,8 @@ void JsonReader::decompressInput() {
 
 void JsonReader::setRecordStarts() {
   std::vector<char> chars_to_count{'\n'};
-  // Currently, ignoring lineterminations within quotes is handled by recording
-  // the records of both, and then filtering out the records that is a quotechar
-  // or a linetermination within a quotechar pair.
+  // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
+  // and then filtering out the records that is a quotechar or a linetermination within a quotechar pair.
   if (allow_newlines_in_strings_) {
     chars_to_count.push_back('\"');
   }
@@ -364,7 +365,12 @@ void JsonReader::setColumnNames() {
 }
 
 void JsonReader::convertDataToColumns() {
-  const auto num_columns = columns_.size();
+  const auto num_columns = dtypes_.size();
+
+  for (size_t col = 0; col < num_columns; ++col) {
+    columns_.emplace_back(rec_starts_.size(), dtypes_[col], gdf_dtype_extra_info{TIME_UNIT_NONE}, column_names_[col]);
+    CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns.\n");
+  }
 
   thrust::host_vector<gdf_dtype> h_dtypes(num_columns);
   thrust::host_vector<void *> h_data(num_columns);
@@ -400,7 +406,7 @@ void JsonReader::convertDataToColumns() {
   }
 }
 
-void JsonReader::storeColumns(json_read_arg *out_args) {
+void JsonReader::setOutputArguments(json_read_arg *out_args) {
 
   // Transfer ownership to raw pointer output arguments
   out_args->data = (gdf_column **)malloc(sizeof(gdf_column *) * columns_.size());
@@ -463,11 +469,7 @@ __global__ void convertJsonToGdf(char *const data, size_t data_size, uint64_t *c
   while (data[--stop] != ']') {
   }
 
-  for (int col = 0; col < num_columns; col++) {
-
-    if (start >= stop)
-      return;
-
+  for (int col = 0; col < num_columns && start < stop; col++) {
     // field_end is at the next delimiter/newline
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
@@ -497,16 +499,6 @@ __global__ void convertJsonToGdf(char *const data, size_t data_size, uint64_t *c
   }
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Helper function to setup and launch JSON parsing CUDA kernel.
- *
- * @param[in] dtypes The data type of each column
- * @param[out] gdf_columns The output column data
- * @param[out] valid_fields The bitmaps indicating whether column fields are valid
- * @param[out] num_valid_fields The numbers of valid fields in columns
- *
- * @return gdf_error GDF_SUCCESS upon completion
- *---------------------------------------------------------------------------**/
 void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid_fields,
                                       gdf_size_type *num_valid_fields) {
   int block_size;
@@ -646,13 +638,6 @@ __global__ void detectJsonDataTypes(char *data, size_t data_size, const ParseOpt
   }
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Set up and launches JSON data type detect CUDA kernel.
- *
- * @param[out] column_infos The count for each column data type
- *
- * @return void
- *---------------------------------------------------------------------------**/
 void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
   int block_size;
   int min_grid_size;
@@ -667,13 +652,6 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
   CUDA_TRY(cudaGetLastError());
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Set the data type array data member
- *
- * If user does not pass the data types, deduces types from the file content
- *
- * @return void
- *---------------------------------------------------------------------------**/
 void JsonReader::setDataTypes() {
   if (args_->dtype != nullptr) {
     CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.\n");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,6 +104,7 @@ TEST(gdf_json_test, BasicJsonLines) {
   args.lines = true;
   args.dtype = types;
   args.num_cols = 2;
+
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -134,6 +135,7 @@ TEST(gdf_json_test, JsonLinesStrings) {
   args.lines = true;
   args.dtype = types;
   args.num_cols = 3;
+
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -186,6 +188,7 @@ TEST(gdf_json_test, JsonLinesDtypeInference) {
   args.source_type = HOST_BUFFER;
   args.buffer_size = strlen(args.source);
   args.lines = true;
+
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -243,6 +246,7 @@ TEST(gdf_json_test, JsonLinesFileInput) {
   args.source = fname;
   args.source_type = FILE_PATH;
   args.lines = true;
+
   try {
     read_json(&args);
   } catch (std::exception &e) {
@@ -277,6 +281,7 @@ TEST(gdf_json_test, JsonLinesByteRange) {
   args.lines = true;
   args.byte_range_offset = 11;
   args.byte_range_size = 20;
+
   try {
     read_json(&args);
   } catch (std::exception &e) {
