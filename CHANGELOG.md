@@ -20,6 +20,7 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
+- PR #1512 Add GPU-accelerated JSON Lines parser with limited feature set
 
 ## Improvements
 
