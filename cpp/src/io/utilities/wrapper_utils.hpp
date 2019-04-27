@@ -71,9 +71,9 @@ class gdf_column_wrapper {
     return GDF_SUCCESS;
   }
 
-  gdf_column *operator->() const { return col; }
-  gdf_column *get() const { return col; }
-  gdf_column *release() {
+  gdf_column *operator->() const noexcept { return col; }
+  gdf_column *get() const noexcept { return col; }
+  gdf_column *release() noexcept {
     auto temp = col;
     col = nullptr;
     return temp;
@@ -108,7 +108,7 @@ class hostdevice_vector {
 
   ~hostdevice_vector() {
     RMM_FREE(d_data, 0);
-    CUDA_TRY(cudaFreeHost(h_data));
+    cudaFreeHost(h_data);
   }
 
   bool insert(const T &data) {
@@ -120,9 +120,9 @@ class hostdevice_vector {
     return false;
   }
 
-  size_t max_size() const { return max_elements; }
-  size_t size() const { return num_elements; }
-  size_t memory_size() const { return sizeof(T) * num_elements; }
+  size_t max_size() const noexcept { return max_elements; }
+  size_t size() const noexcept { return num_elements; }
+  size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
 
   T &operator[](size_t i) const { return h_data[i]; }
   T *host_ptr(size_t offset = 0) const { return h_data + offset; }
@@ -134,19 +134,6 @@ class hostdevice_vector {
   T *h_data = nullptr;
   T *d_data = nullptr;
 };
-
-/**
- * @brief A unique_ptr and custom deleter that frees device memory back to RMM
- *
- * This ptr object is used to automatically release device memory of raw
- * pointers manually allocated with RMM_ALLOC
- **/
-template <typename T>
-struct rmm_deleter {
-  void operator()(T *ptr) { RMM_FREE(ptr, 0); }
-};
-template <typename T>
-using device_ptr = std::unique_ptr<T, rmm_deleter<T>>;
 
 /**
  * @brief A helper class that owns a resizable device memory buffer.

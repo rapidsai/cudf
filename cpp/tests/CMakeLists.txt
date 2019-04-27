@@ -19,18 +19,19 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${GTEST_INCLUDE_DIR}"
+                    "${ARROW_INCLUDE_DIR}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${RMM_INCLUDE}"
+                    "${NVSTRINGS_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -38,7 +39,11 @@ include_directories("${GTEST_INCLUDE_DIR}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${FLATBUFFERS_LIBRARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
+                 "${GTEST_LIBRARY_DIR}"
+                 "${RMM_LIBRARY}"
+                 "${NVSTRINGS_LIBRARY}"
+                 "${NVCATEGORY_LIBRARY}"
+                 "${NVTEXT_LIBRARY}")
 
 ###################################################################################################
 ### test sources ##################################################################################
@@ -233,10 +238,17 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - device atomics tests -------------------------------------------------------------------------------
+
+set(DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/device_atomics_test.cu")
+
+ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------

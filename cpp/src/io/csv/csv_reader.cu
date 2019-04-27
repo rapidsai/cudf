@@ -55,6 +55,8 @@
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/cudf_utils.h" 
 
+#include <nvstrings/NVStrings.h>
+
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
