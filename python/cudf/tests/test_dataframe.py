@@ -2254,5 +2254,5 @@ def test_ndim():
     assert pdf.x.ndim == gdf.x.ndim
 
     s = pd.Series()
-    gs = DataFrame.Series()
+    gs = Series()
     assert s.ndim == gs.ndim
