@@ -2245,3 +2245,14 @@ def test_shift(dtype, period):
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
+
+
+def test_ndim():
+    pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
+    gdf = DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim
+    assert pdf.x.ndim == gdf.x.ndim
+
+    s = pd.Series()
+    gs = DataFrame.Series()
+    assert s.ndim == s.ndim
