@@ -2255,4 +2255,4 @@ def test_ndim():
 
     s = pd.Series()
     gs = DataFrame.Series()
-    assert s.ndim == s.ndim
+    assert s.ndim == gs.ndim
