@@ -10,6 +10,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils.utils import mask_dtype, mask_bitsize
 from cudf.dataframe import Series
+from libgdf_cffi import ffi, libgdf
 
 
 _logger = logging.getLogger(__name__)
@@ -239,7 +240,6 @@ class GpuArrowReader(Sequence):
 
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
-        from libgdf_cffi import ffi, libgdf
 
         # get void* from the gpu array
         schema_ptr = ffi.cast("void*", self._schema_data.ctypes.data)
