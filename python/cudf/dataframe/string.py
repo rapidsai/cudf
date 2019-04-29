@@ -10,7 +10,7 @@ import warnings
 
 from libgdf_cffi import libgdf
 
-from cudf.dataframe import columnops, numerical
+from cudf.dataframe import columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf import _gdf
@@ -568,3 +568,30 @@ def string_column_binop(lhs, rhs, op):
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
     return result
+ 
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with * fill_value *
+        """
+
+        if not isinstance(fill_value, str) and \
+            not(
+                isinstance(fill_value, series.Series) and
+                isinstance(fill_value._column, StringColumn)
+                ):
+            raise TypeError("fill_value must be a string or a string series")
+
+        # replace fill_value with nvstrings
+        # if it is a column
+
+        if isinstance(fill_value, series.Series):
+            if len(fill_value) < len(self):
+                raise ValueError("fill value series must be of same or "
+                                 "greater length than the series to be filled")
+
+            fill_value = fill_value[: len(self)]._column._data
+
+        filled_data = self._data.fillna(fill_value)
+        result = StringColumn(filled_data)
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
