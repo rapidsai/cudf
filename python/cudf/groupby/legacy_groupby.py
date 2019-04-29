@@ -13,9 +13,9 @@ from cudf.dataframe.series import Series
 from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.multi import concat
-from cudf import _gdf
 from cudf.utils import cudautils
 from cudf.comm.serialize import register_distributed_serializer
+from cudf.bindings.sort import apply_segsort
 
 
 def _auto_generate_grouper_agg(members):
@@ -385,7 +385,7 @@ class Groupby(object):
 
             cache_key = (len(srkeys), srkeys.dtype, shuf.dtype)
             plan = plan_cache.get(cache_key)
-            plan = _gdf.apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
+            plan = apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
             plan_cache[cache_key] = plan
 
             sorted_keys.append(srkeys)   # keep sorted key cols
