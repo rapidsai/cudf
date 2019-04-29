@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cooperative_groups.h>
-#include <thrust/gather.h>
 #include "copying.hpp"
 #include "cudf.h"
 #include "gather.hpp"
@@ -23,6 +21,9 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
 #include <bitmask/legacy_bitmask.hpp>
+
+#include <algorithm>
+#include <thrust/gather.h>
 
 /**
  * @brief Operations for copying from one column to another

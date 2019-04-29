@@ -32,6 +32,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
+#include <algorithm>
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 

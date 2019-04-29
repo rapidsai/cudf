@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#include <thrust/scatter.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include "copying.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+
+#include <algorithm>
+#include <thrust/scatter.h>
 
 namespace cudf {
 
