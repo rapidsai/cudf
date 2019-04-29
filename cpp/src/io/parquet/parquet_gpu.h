@@ -22,6 +22,8 @@
 
 namespace parquet { namespace gpu {
 
+#define INT96_TS_CLKRATE        1000 // Clock frequency for INT96 timestamp conversion (1000=ms, 1000000000=ns)
+
 /**
  * @brief Enums for the flags in the page header
  **/
