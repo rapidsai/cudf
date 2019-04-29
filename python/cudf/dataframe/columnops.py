@@ -15,8 +15,8 @@ import nvstrings
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
-from cudf import _gdf
 from cudf.utils.utils import buffers_from_pyarrow
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 
 import warnings
 
@@ -288,7 +288,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
-                    arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
                 else:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
@@ -393,7 +393,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
-            data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
+            data_type = np_to_pa_dtype(arbitrary.dtype)
             if data_type in (pa.date64(), pa.date32()):
                 # PyArrow can't construct date64 or date32 arrays from np
                 # datetime types
@@ -420,7 +420,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
+                            pa_type = np_to_pa_dtype(np.dtype(dtype).type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null
