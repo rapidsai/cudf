@@ -241,65 +241,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def hash_columns(columns, result, initial_hash_values=None):
-    """Hash the *columns* and store in *result*.
-    Returns *result*
-    """
-    assert len(columns) > 0
-    assert result.dtype == np.int32
-    # No-op for 0-sized
-    if len(result) == 0:
-        return result
-    col_input = [col.cffi_view for col in columns]
-    col_out = result.cffi_view
-    ncols = len(col_input)
-    hashfn = libgdf.GDF_HASH_MURMUR3
-    if initial_hash_values is None:
-        initial_hash_values = ffi.NULL
-    else:
-        initial_hash_values = unwrap_devary(initial_hash_values)
-    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
-    return result
-
-
-def hash_partition(input_columns, key_indices, nparts, output_columns):
-    """Partition the input_columns by the hash values on the keys.
-
-    Parameters
-    ----------
-    input_columns : sequence of Column
-    key_indices : sequence of int
-        Indices into `input_columns` that indicates the key columns.
-    nparts : int
-        number of partitions
-
-    Returns
-    -------
-    partition_offsets : list of int
-        Each index indicates the start of a partition.
-    """
-    assert len(input_columns) == len(output_columns)
-
-    col_inputs = [col.cffi_view for col in input_columns]
-    col_outputs = [col.cffi_view for col in output_columns]
-    offsets = ffi.new('int[]', nparts)
-    hashfn = libgdf.GDF_HASH_MURMUR3
-
-    libgdf.gdf_hash_partition(
-        len(col_inputs),
-        col_inputs,
-        key_indices,
-        len(key_indices),
-        nparts,
-        col_outputs,
-        offsets,
-        hashfn
-    )
-
-    offsets = list(offsets)
-    return offsets
-
-
 def rmm_initialize():
     rmm.initialize()
     return True
