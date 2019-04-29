@@ -24,6 +24,7 @@
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
+#include <utilities/cuda_utils.hpp>
 #include "new_hash_groupby.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -419,13 +420,11 @@ __device__ inline void aggregate_row(device_table const& target,
 }
 
 template <typename Map>
-__global__ void compute_hash_groupby(Map const& map, device_table input_keys,
-                                     device_table input_values,
-                                     device_table output_keys,
-                                     device_table output_values,
-                                     distributive_operators* ops){
-
-};
+__global__ void compute_hash_groupby(
+    Map const& map, device_table input_keys, device_table input_values,
+    device_table output_keys, device_table output_values,
+    distributive_operators* ops,
+    bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {}
 
 }  // namespace
 
@@ -455,21 +454,25 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
   rmm::device_vector<groupby::distributive_operators> d_operators(operators);
 
+  auto d_input_keys = device_table::create(keys);
+  auto d_input_values = device_table::create(values);
+  auto d_output_keys = device_table::create(output_keys);
+  auto d_output_values = device_table::create(output_values);
+
   if (options.ignore_null_keys) {
     using namespace bit_mask;
 
     if (cudf::have_nulls(keys)) {
-      rmm::device_vector<bit_mask_t> const row_bitmask{
-          cudf::row_bitmask(keys, stream)};
+      rmm::device_vector<bit_mask_t> const row_bitmask{cudf::row_bitmask(keys, stream)};
 
-      // TODO Invoke kernel using row_bitmask to skip null rows
+      cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
+
+      compute_hash_groupby<<<grid_params.num_blocks,
+                             grid_params.num_threads_per_block, 0, stream>>>(
+          map, *d_input_keys, *d_input_values, *d_output_keys, *d_output_values,
+          d_operators.data().get(), row_bitmask.data().get());
     }
   }
-
-  // cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
-
-  // compute_hash_groupby<<<grid_params.num_blocks,
-  //                       grid_params.num_threads_per_block, 0, stream>>>();
 
   // TODO Set output key/value columns null counts
 
