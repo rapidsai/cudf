@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DEVICE_ATOMICS_CUH
+#define DEVICE_ATOMICS_CUH
+
 /** ---------------------------------------------------------------------------*
  * @brief overloads for CUDA atomic operations
  * @file device_atomics.cuh
@@ -1164,3 +1167,5 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
     return cudf::detail::typesAtomicOperation64
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
+
+#endif
