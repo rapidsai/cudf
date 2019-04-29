@@ -54,6 +54,7 @@
 - PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
+- PR #1492 Convert transpose CFFI to Cython
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 
 ## Bug Fixes
@@ -91,7 +92,6 @@
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
-
 
 # cuDF 0.6.1 (25 Mar 2019)
 
