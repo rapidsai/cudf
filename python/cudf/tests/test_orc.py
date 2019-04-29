@@ -31,6 +31,8 @@ def test_orc_reader(datadir, orc_file):
     except Exception as excpr:
         if type(excpr).__name__ == 'ArrowIOError':
             pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
 
     expect = orcfile.read(columns=columns)
     got = cudf.read_orc(path, columns=columns)\

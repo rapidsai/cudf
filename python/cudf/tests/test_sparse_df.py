@@ -27,6 +27,8 @@ def read_data():
     except Exception as excpr:
         if type(excpr).__name__ == 'FileNotFoundError':
             pytest.skip('.pkl file is not found')
+        else:
+            print(type(excpr).__name__)
 
     names = []
     arrays = []
