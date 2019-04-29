@@ -351,5 +351,4 @@ def test_multiindex_multiple_groupby():
     assert_eq(pdg, gdg)
     pdg = pdf.groupby(['a', 'b']).x.sum()
     gdg = gdf.groupby(['a', 'b']).x.sum()
-    breakpoint()
     assert_eq(pdg, gdg)
