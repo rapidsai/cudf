@@ -91,6 +91,7 @@
 - PR #1506 Fix csv-write call to updated NVStrings method
 - PR #1510 Added nvstrings `fillna()` function
 
+
 # cuDF 0.6.1 (25 Mar 2019)
 
 ## Bug Fixes
