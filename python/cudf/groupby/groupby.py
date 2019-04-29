@@ -115,8 +115,10 @@ class Groupby(object):
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]
+            result = result.drop(idx.name)
+            if idx.name == self._LEVEL_0_INDEX_NAME:
+                idx.name = None
             result = result.set_index(idx)
-            result.drop_column(idx.name)
             return result
         else:
             levels = []
@@ -140,7 +142,7 @@ class Groupby(object):
                                      codes=codes,
                                      names=names)
             for by in self._by:
-                result.drop_column(by)
+                result = result.drop(by)
             return result.set_index(multi_index)
 
     def __getitem__(self, arg):

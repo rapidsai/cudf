@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 from cudf import dataframe
 from cudf import datasets
@@ -17,3 +17,4 @@ from cudf.ops import (sqrt, sin, cos, tan, arcsin, arccos, arctan, exp, log)
 from cudf._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
+

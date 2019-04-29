@@ -8,11 +8,11 @@ from copy import copy, deepcopy
 
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
-import cudf.dataframe.index as indexPackage
 from cudf.dataframe.index import StringIndex
+from . import Index
 
 
-class MultiIndex(indexPackage.Index):
+class MultiIndex(Index):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.

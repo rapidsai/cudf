@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 from __future__ import print_function, division
 
@@ -30,10 +30,10 @@ from types import GeneratorType
 from librmm_cffi import librmm as rmm
 from libgdf_cffi import libgdf
 
+import cudf
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.index import as_index, Index, RangeIndex
-from cudf.dataframe.multiindex import MultiIndex
 from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
@@ -219,7 +219,7 @@ class DataFrame(object):
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(self.columns, MultiIndex) and\
+        if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             return self.columns.get_column_major(self, arg)
         if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
@@ -397,8 +397,8 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
-        if isinstance(self.index, MultiIndex) or isinstance(self.columns,
-                                                            MultiIndex):
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
+           isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
             raise TypeError("You're trying to print a DataFrame that contains a  MultiIndex. Print this dataframe with .to_pandas()")  # noqa: E501
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
@@ -711,7 +711,7 @@ class DataFrame(object):
 
     @index.setter
     def index(self, _index):
-        if isinstance(_index, MultiIndex):
+        if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
             if len(_index) != len(self[self.columns[0]]):
                 msg = f'Length mismatch: Expected axis has {len(self[self.columns[0]])} elements, new values have {len(_index)} elements'  # noqa: E501
                 raise ValueError(msg)
@@ -938,8 +938,8 @@ class DataFrame(object):
         if axis == 0:
             raise NotImplementedError("Can only drop columns, not rows")
 
-        columns = [labels] if isinstance(labels, str) else list(labels)
-
+        columns = [labels] if isinstance(
+                labels, (str, numbers.Number)) else list(labels)
         outdf = self.copy()
         for c in columns:
             outdf._drop_column(c)
@@ -2321,7 +2321,7 @@ class DataFrame(object):
             out[c] = x.to_pandas(index=index)
         if isinstance(self.columns, Index):
             out.columns = self.columns
-            if isinstance(self.columns, MultiIndex):
+            if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out.columns.names = self.columns.names
             else:
@@ -2355,8 +2355,7 @@ class DataFrame(object):
             vals = dataframe[colk].values
             df[colk] = Series(vals, nan_as_null=nan_as_null)
         # Set index
-        from pandas import MultiIndex
-        if isinstance(dataframe.index, MultiIndex):
+        if isinstance(dataframe.index, pd.MultiIndex):
             import cudf
             index = cudf.from_pandas(dataframe.index)
         else:
@@ -2788,7 +2787,7 @@ class Loc(object):
         row_slice = None
         row_label = None
 
-        if isinstance(self._df.index, MultiIndex) and\
+        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             # Explicitly ONLY support tuple indexes into MultiIndex.
             # Pandas allows non tuple indices and warns "results may be
@@ -2906,7 +2905,7 @@ def from_pandas(obj):
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
-        return MultiIndex.from_pandas(obj)
+        return cudf.dataframe.multiindex.MultiIndex.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, and "

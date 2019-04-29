@@ -1,3 +1,5 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+
 from cudf.dataframe import (buffer, dataframe, series,
     index, numerical, datetime, categorical, string)
 

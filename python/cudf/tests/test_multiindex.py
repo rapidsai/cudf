@@ -352,3 +352,26 @@ def test_multiindex_multiple_groupby():
     pdg = pdf.groupby(['a', 'b']).x.sum()
     gdg = gdf.groupby(['a', 'b']).x.sum()
     assert_eq(pdg, gdg)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby(["x", "y"]).z.sum(),
+        lambda df: df.groupby(["x", "y"]).sum(),
+    ],
+)
+def test_multi_column(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=1000),
+            "y": np.random.randint(0, 10, size=1000),
+            "z": np.random.normal(size=1000),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    a = func(pdf)
+    b = func(gdf)
+
+    assert_eq(a, b)
