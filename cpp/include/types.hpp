@@ -22,6 +22,11 @@
 #include <utilities/error_utils.hpp>
 #include "cudf.h"
 
+
+namespace bit_mask{
+    using bit_mask_t = uint32_t;
+}
+
 namespace cudf {
 
 /**
