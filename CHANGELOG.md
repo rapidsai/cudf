@@ -82,7 +82,7 @@
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
-
+- PR #1491 Use more specific directories & groups in CODEOWNERS
 
 # cuDF 0.6.1 (25 Mar 2019)
 
