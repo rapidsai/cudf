@@ -474,6 +474,8 @@ def test_csv_reader_gzip_compression(tmpdir):
 
 
 @pytest.mark.parametrize('names, dtypes, data, trues, falses', [
+    (['A', 'B'], ['bool', 'bool'], 'True,True\nFalse,False\nTrue,False',
+        None, None),
     (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
     (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
         ["yes", "Yes", "YES"], ["no", "NO", "No"]),
