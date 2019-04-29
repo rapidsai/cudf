@@ -327,35 +327,39 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
 # # Error handling
 
 cpdef check_gdf_error(errcode):
-        """Get error message for the given error code.
-        """
-        cdef gdf_error c_errcode = errcode
+    """Get error message for the given error code.
+    """
+    cdef gdf_error c_errcode = errcode
 
-        if c_errcode != GDF_SUCCESS:
-            if c_errcode == GDF_CUDA_ERROR:
-                with nogil:
-                    cudaerr = gdf_cuda_last_error()
-                    errname = gdf_cuda_error_name(cudaerr)
-                    details = gdf_cuda_error_string(cudaerr)
-                msg = 'CUDA ERROR. {}: {}'.format(errname, details)
+    if c_errcode != GDF_SUCCESS:
+        if c_errcode == GDF_CUDA_ERROR:
+            with nogil:
+                cudaerr = gdf_cuda_last_error()
+                errname = gdf_cuda_error_name(cudaerr)
+                details = gdf_cuda_error_string(cudaerr)
+            msg = 'CUDA ERROR. {}: {}'.format(errname, details)
 
-            else:
-                with nogil:
-                    errname = gdf_error_get_name(c_errcode)
-                msg = errname
+        else:
+            with nogil:
+                errname = gdf_error_get_name(c_errcode)
+            msg = errname
 
-            raise GDFError(errname, msg)
+        raise GDFError(errname, msg)
 
 cpdef count_nonzero_mask(mask, size):
+    """ Counts the number of null bits in a given validity mask
+    """
     assert mask.size * mask_bitsize >= size
     cdef int nnz = 0
     cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
+    cdef int c_size = size
 
     if mask_ptr:
-        gdf_count_nonzero_mask(
-            <gdf_valid_type*>mask_ptr,
-            size,
-            &nnz
-        )
+        with nogil:
+            gdf_count_nonzero_mask(
+                <gdf_valid_type*>mask_ptr,
+                c_size,
+                &nnz
+            )
 
     return nnz
