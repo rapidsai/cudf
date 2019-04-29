@@ -96,6 +96,8 @@
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
 - PR #1510 Added nvstrings `fillna()` function
+- PR #1507 Parquet Reader: Default string data to GDF_STRING
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
