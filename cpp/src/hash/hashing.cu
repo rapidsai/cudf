@@ -20,7 +20,7 @@
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 #include "join/joining.h"
-#include "dataframe/device_table.cuh"
+#include <table/device_table.cuh>
 #include "hash/hash_functions.cuh"
 #include "utilities/int_fastdiv.h"
 #include "utilities/nvtx/nvtx_utils.h"
