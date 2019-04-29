@@ -2,7 +2,7 @@
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
-#include "bitmask/bit_mask.cuh"
+//#include "bitmask/bit_mask.cuh"
 #include "utilities/type_dispatcher.hpp"
 #include "bitmask/legacy_bitmask.hpp"
 

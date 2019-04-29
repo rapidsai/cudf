@@ -1249,3 +1249,9 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+void gdf_point_in_polygon(gdf_column* polygon_latitudes, 
+                          gdf_column* polygon_longitudes,
+                          gdf_column* point_latitudes, 
+                          gdf_column* point_longitudes,
+                          gdf_column* output);
