@@ -1,7 +1,7 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
-
+- PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
@@ -157,6 +157,7 @@
 - PR #1159 Add Python bindings for libcudf dlpack functions
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 - PR #1168 to_frame for series accepts a name argument
+
 
 ## Improvements
 

@@ -323,10 +323,36 @@ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
 //The purpose of this is merely to allow compilation
 //It should NOT be used
 template <>
-__host__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
+__device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
     const char* data, long start, long end, const ParseOptions& opts) {
   assert(false);
   return cudf::nvstring_category{0};
+}
+
+
+template <>
+__device__ cudf::bool8 convertStrToValue<cudf::bool8>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  cudf::bool8 return_value{cudf::false_v};
+
+  // Check for user-specified true/false values first
+  if (serializedTrieContains(opts.trueValuesTrie, data + start,
+                             end - start + 1)) {
+    return_value = cudf::true_v;
+  } else if (serializedTrieContains(opts.falseValuesTrie, data + start,
+                                    end - start + 1)) {
+    return_value = cudf::false_v;
+  } else {
+    // Expect 'false_v' or 'true_v' in data, but clamp any non-zero value to 1
+    // in case
+    if (convertStrToValue<typename cudf::bool8::value_type>(
+            data, start, end, opts) != cudf::detail::unwrap(cudf::false_v)) {
+      return_value = cudf::true_v;
+    } else {
+      return_value = cudf::false_v;
+    }
+  }
+  return return_value;
 }
 
 #endif
