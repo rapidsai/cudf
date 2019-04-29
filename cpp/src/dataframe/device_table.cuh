@@ -56,6 +56,7 @@ class device_table {
    * Instead, the underlying device memory will not be free'd until the returned
    * `unique_ptr` invokes its deleter.
    *
+   * The methods of this class with `stream` parameters are asynchronous with respect to other CUDA streams and do not synchronize `stream`.
    * Usage:
    * ```
    * gdf_column * col;
