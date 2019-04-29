@@ -123,6 +123,12 @@ class Series(object):
             raise AttributeError("Can only use .dt accessor with datetimelike "
                                  "values")
 
+    @property
+    def ndim(self):
+        """Dimension of the data. Series ndim is always 1.
+        """
+        return 1
+
     @classmethod
     def deserialize(cls, deserialize, header, frames):
         index_nframes = header['index_frame_count']
