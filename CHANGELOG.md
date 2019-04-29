@@ -97,6 +97,7 @@
 - PR #1506 Fix csv-write call to updated NVStrings method
 - PR #1510 Added nvstrings `fillna()` function
 - PR #1507 Parquet Reader: Default string data to GDF_STRING
+- PR #1535 Fix doc issue to ensure correct labelling of cudf.series
 
 
 # cuDF 0.6.1 (25 Mar 2019)
