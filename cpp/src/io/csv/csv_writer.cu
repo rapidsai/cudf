@@ -45,9 +45,9 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
         case GDF_STRING:
             rtn = (static_cast<NVStrings*>(column->data))->copy();
             break;
-        //case GDF_BOOL:
-        //    rtn = NVStrings::create_from_bools((const bool*)col->data,rows,true_string,false_string,valid);
-        //   break;
+        case GDF_BOOL8:
+            rtn = NVStrings::create_from_bools(static_cast<const bool*>(column->data),rows,true_string,false_string,valid);
+            break;
         case GDF_INT32:
             rtn = NVStrings::itos(static_cast<const int32_t*>(column->data),rows,valid);
             break;
@@ -171,7 +171,7 @@ gdf_error write_csv(csv_write_arg* args)
     {
         gdf_column* col = columns[idx];
         const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,true_value,narep,false_value);
+        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
         memsize += strs->byte_count(string_lengths + (idx*rows),false);
         NVStrings::destroy(strs);
     }
@@ -225,7 +225,7 @@ gdf_error write_csv(csv_write_arg* args)
     {
         gdf_column* col = columns[idx];
         const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,true_value,narep,false_value);
+        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
         size_t* colptrs = string_locations.data() + (idx*rows);
         // to_host places all the strings into their correct positions in host memory
         strs->to_host((char**)colptrs,0,rows);

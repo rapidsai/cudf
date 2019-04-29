@@ -756,15 +756,15 @@ TEST(gdf_csv_test, BlanksAndComments)
 TEST(gdf_csv_test, Writer)
 {
     const char* fname	= "/tmp/CsvWriteTest.csv";
-    const char* names[] = { "integer", "float", "string" };
-    const char* types[] = { "int32", "float32", "str" };
+    const char* names[] = { "boolean", "integer", "float", "string" };
+    const char* types[] = { "bool", "int32", "float32", "str" };
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "1,1.0,one" << '\n';
-    outfile << "2,2.25,two" << '\n';
-    outfile << "3,3.50,three" << '\n';
-    outfile << "4,4.75,four" << '\n';
-    outfile << "5,5.0,five" << '\n';
+    outfile << "true,1,1.0,one" << '\n';
+    outfile << "false,2,2.25,two" << '\n';
+    outfile << "false,3,3.50,three" << '\n';
+    outfile << "true,4,4.75,four" << '\n';
+    outfile << "false,5,5.0,five" << '\n';
     outfile.close();
 
     csv_read_arg rargs{};
@@ -785,7 +785,7 @@ TEST(gdf_csv_test, Writer)
     csv_write_arg wargs{};
     wargs.columns = rargs.data;  // columns from reader above
     wargs.filepath = ofname;
-    wargs.num_cols = std::extent<decltype(names)>::value;
+    wargs.num_cols = rargs.num_cols_out;
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
 
@@ -794,6 +794,12 @@ TEST(gdf_csv_test, Writer)
     // check result
     std::ifstream infile(ofname);
     std::string csv((std::istreambuf_iterator<char>(infile)),std::istreambuf_iterator<char>());
-    std::string verify = "\"integer\",\"float\",\"string\"\n1,1,\"one\"\n2,2.25,\"two\"\n3,3.5,\"three\"\n4,4.75,\"four\"\n5,5,\"five\"\n";
+    std::string verify =
+        "\"boolean\",\"integer\",\"float\",\"string\"\n"
+        "true,1,1,\"one\"\n"
+        "false,2,2.25,\"two\"\n"
+        "false,3,3.5,\"three\"\n"
+        "true,4,4.75,\"four\"\n"
+        "false,5,5,\"five\"\n";
     EXPECT_EQ( csv.compare(verify), 0 );
 }
