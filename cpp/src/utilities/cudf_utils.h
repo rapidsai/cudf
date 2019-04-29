@@ -3,6 +3,7 @@
 
 #include <utilities/error_utils.hpp>
 #include <cudf.h>
+#include <bitmask_ops.hpp>
 
 #include <cuda_runtime_api.h>
 

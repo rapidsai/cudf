@@ -28,9 +28,8 @@ except ImportError:
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
-from libgdf_cffi import libgdf
 
-from cudf import formatting, _gdf
+from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
@@ -43,6 +42,7 @@ from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 
 import cudf.bindings.join as cpp_join
+import cudf.bindings.hash as cpp_hash
 
 
 class DataFrame(object):
@@ -161,6 +161,12 @@ class DataFrame(object):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
         return len(self), len(self._cols)
+
+    @property
+    def ndim(self):
+        """Dimension of the data. DataFrame ndim is always 2.
+        """
+        return 2
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -1261,55 +1267,8 @@ class DataFrame(object):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        if len(self.columns) == 0:
-            return self
-
-        dtype = self.dtypes[0]
-        if pd.api.types.is_categorical_dtype(dtype):
-            raise NotImplementedError('Categorical columns are not yet '
-                                      'supported for function')
-        if any(t != dtype for t in self.dtypes):
-            raise ValueError('all columns must have the same dtype')
-        has_null = any(c.null_count for c in self._cols.values())
-
-        df = DataFrame()
-
-        ncols = len(self.columns)
-        cols = [self[col]._column.cffi_view for col in self._cols]
-
-        new_nrow = ncols
-        new_ncol = len(self)
-
-        if has_null:
-            new_col_series = [
-                Series.from_masked_array(
-                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                    mask=cudautils.make_empty_mask(size=new_nrow),
-                )
-                for i in range(0, new_ncol)]
-        else:
-            new_col_series = [
-                Series(
-                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                )
-                for i in range(0, new_ncol)]
-        new_col_ptrs = [
-            new_col_series[i]._column.cffi_view
-            for i in range(0, new_ncol)]
-
-        # TODO (dm): move to _gdf.py
-        libgdf.gdf_transpose(
-            ncols,
-            cols,
-            new_col_ptrs
-        )
-
-        for series in new_col_series:
-            series._column._update_null_count()
-
-        for i in range(0, new_ncol):
-            df[str(i)] = new_col_series[i]
-        return df
+        from cudf.bindings.transpose import transpose as cpp_tranpose
+        return cpp_tranpose(self)
 
     @property
     def T(self):
@@ -2046,7 +2005,7 @@ class DataFrame(object):
         # Allocate output buffers
         outputs = [col.copy() for col in cols]
         # Call hash_partition
-        offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
+        offsets = cpp_hash.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
         outdf = DataFrame()
         for k, col in zip(self._cols, outputs):
