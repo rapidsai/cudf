@@ -2746,8 +2746,7 @@ class Loc(object):
         row_slice = None
         row_label = None
 
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex) and\
-           isinstance(arg, tuple):
+        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex) and isinstance(arg, tuple):  # noqa: E501
             # Explicitly ONLY support tuple indexes into MultiIndex.
             # Pandas allows non tuple indices and warns "results may be
             # undefined."

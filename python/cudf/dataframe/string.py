@@ -568,7 +568,7 @@ def string_column_binop(lhs, rhs, op):
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
     return result
- 
+
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
