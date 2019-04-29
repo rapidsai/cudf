@@ -265,6 +265,13 @@ set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+###################################################################################################
+# - device table tests -----------------------------------------------------------------------------------
+
+set(DEVICE_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
+
+ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - json tests -------------------------------------------------------------------------------------
