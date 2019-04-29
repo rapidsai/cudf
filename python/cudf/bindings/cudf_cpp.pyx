@@ -352,12 +352,13 @@ cpdef count_nonzero_mask(mask, size):
     assert mask.size * mask_bitsize >= size
     cdef int nnz = 0
     cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
+    cdef int c_size = size
 
     if mask_ptr:
         with nogil:
             gdf_count_nonzero_mask(
                 <gdf_valid_type*>mask_ptr,
-                size,
+                c_size,
                 &nnz
             )
 
