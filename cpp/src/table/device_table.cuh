@@ -23,7 +23,7 @@
 #include <bitmask/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <table.hpp>
+#include <table/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
