@@ -119,6 +119,10 @@ void test_column(cudf::test::column_wrapper<T> const& col,
     EXPECT_EQ(nullptr, underlying_column->valid);
     EXPECT_EQ(0, underlying_column->null_count);
   }
+
+  // Ensure operator== for column_wrapper to it's underlying gdf_column
+  // returns true
+  EXPECT_TRUE(col == *col.get());
 }
 
 TYPED_TEST(ColumnWrapperTest, SizeConstructor) {
