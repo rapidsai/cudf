@@ -133,7 +133,6 @@ def test_sum_boolean():
     assert expect == got
 
 
-
 def test_date_minmax():
     np_data = np.random.normal(size=10**3)
     gdf_data = Series(np_data)
