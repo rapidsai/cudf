@@ -1,6 +1,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/bit_mask.cuh>
-#include <types.hpp>
+#include <table/table.hpp>
 #include "bitmask/legacy_bitmask.hpp"
 #include "cudf.h"
 #include "cudf/functions.h"
