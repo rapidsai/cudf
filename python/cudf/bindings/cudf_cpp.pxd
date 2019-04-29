@@ -8,7 +8,7 @@
 from cudf.bindings.dlpack cimport DLManagedTensor
 
 from libcpp cimport bool
-from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
+from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -24,6 +24,7 @@ cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask,
                                            dtype, null_count)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
+cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace)
