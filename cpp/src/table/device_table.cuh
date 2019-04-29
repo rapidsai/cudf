@@ -23,7 +23,7 @@
 #include <bitmask/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <types.hpp>
+#include <table/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -56,6 +56,7 @@ class device_table {
    * Instead, the underlying device memory will not be free'd until the returned
    * `unique_ptr` invokes its deleter.
    *
+   * The methods of this class with `stream` parameters are asynchronous with respect to other CUDA streams and do not synchronize `stream`.
    * Usage:
    * ```
    * gdf_column * col;
@@ -65,8 +66,9 @@ class device_table {
    * some_kernel<<<...>>>(*device_table_ptr);
    * ```
    *
-   * @param num_columns The number of columns
-   * @param cols Array of columns
+   * @param[in] num_columns The number of columns
+   * @param[in] cols Array of columns
+   * @param[in] stream CUDA stream to use for device operations
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
   static auto create(gdf_size_type num_columns, gdf_column* cols[],
@@ -84,8 +86,8 @@ class device_table {
   /**---------------------------------------------------------------------------*
    * @brief Create a device_table from a `cudf::table`
    *
-   * @param t The `cudf::table` to wrap
-   * @param stream The stream to use for allocations/frees
+   * @param[in] t The `cudf::table` to wrap
+   * @param[in] stream The stream to use for allocations/frees
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
   static auto create(cudf::table const& t, cudaStream_t stream = 0) {

@@ -1,6 +1,7 @@
 
 #include "nvcategory_util.hpp"
 #include <types.hpp>
+#include <table/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
