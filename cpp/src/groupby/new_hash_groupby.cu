@@ -16,15 +16,15 @@
 
 #include <cudf.h>
 #include <bitmask/bit_mask.cuh>
-#include <dataframe/device_table.cuh>
+#include <table/device_table.cuh>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
-#include <types.hpp>
+#include <table/table.hpp>
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include "new_hash_groupby.hpp"
-#include <bitmask/bitmask_ops.h>
+#include <bitmask_ops.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>

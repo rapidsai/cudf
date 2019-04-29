@@ -16,7 +16,7 @@
 
 #include <groupby.hpp>
 #include <string/nvcategory_util.hpp>
-#include <types.hpp>
+#include <table/table.hpp>
 #include <utilities/error_utils.hpp>
 #include "new_hash_groupby.hpp"
 

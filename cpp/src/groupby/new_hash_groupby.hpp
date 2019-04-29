@@ -19,12 +19,12 @@
 
 #include <cudf.h>
 #include <groupby.hpp>
+#include <types.hpp>
 
 #include <vector>
 
 namespace cudf {
 
-class table;
 
 namespace detail {
 
