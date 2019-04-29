@@ -4,17 +4,14 @@
 This file provide binding to the libgdf library.
 """
 import contextlib
-import itertools
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 import nvcategory
 
-from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
@@ -133,23 +130,6 @@ def gdf_to_np_dtype(dtype):
      }[dtype])
 
 
-def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype.
-    """
-    return {
-        np.float64:     pa.float64(),
-        np.float32:     pa.float32(),
-        np.int64:       pa.int64(),
-        np.int32:       pa.int32(),
-        np.int16:       pa.int16(),
-        np.int8:        pa.int8(),
-        np.bool_:       pa.int8(),
-        np.datetime64:  pa.date64(),
-        np.object_:     pa.string(),
-        np.str_:        pa.string(),
-    }[np.dtype(dtype).type]
-
-
 _join_how_api = {
     'inner': libgdf.gdf_inner_join,
     'outer': libgdf.gdf_full_join,
@@ -259,149 +239,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     libgdf.gdf_column_free(col_result_l)
     libgdf.gdf_column_free(col_result_r)
-
-
-def apply_segsort(col_keys, col_vals, segments, descending=False,
-                  plan=None):
-    """Inplace segemented sort
-
-    Parameters
-    ----------
-    col_keys : Column
-    col_vals : Column
-    segments : device array
-    """
-    # prepare
-    nelem = len(col_keys)
-    if nelem == segments.size:
-        # As many seguments as there are elements.
-        # Nothing to do.
-        return
-
-    if plan is None:
-        plan = SegmentedRadixortPlan(nelem, col_keys.dtype, col_vals.dtype,
-                                     descending=descending)
-
-    plan.sort(segments, col_keys, col_vals)
-    return plan
-
-
-class SegmentedRadixortPlan(object):
-    def __init__(self, nelem, key_dtype, val_dtype, descending=False):
-        begin_bit = 0
-        self.sizeof_key = key_dtype.itemsize
-        self.sizeof_val = val_dtype.itemsize
-        end_bit = self.sizeof_key * 8
-        plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
-                                                   begin_bit, end_bit)
-        self.plan = plan
-        self.nelem = nelem
-        self.is_closed = False
-        self.setup()
-
-    def __del__(self):
-        if not self.is_closed:
-            self.close()
-
-    def close(self):
-        libgdf.gdf_segmented_radixsort_plan_free(self.plan)
-        self.is_closed = True
-        self.plan = None
-
-    def setup(self):
-        libgdf.gdf_segmented_radixsort_plan_setup(self.plan, self.sizeof_key,
-                                                  self.sizeof_val)
-
-    def sort(self, segments, col_keys, col_vals):
-        seg_dtype = np.uint32
-        segsize_limit = 2 ** 16 - 1
-
-        d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
-        d_begins = d_fullsegs[:-1]
-        d_ends = d_fullsegs[1:]
-
-        # Note: .astype is required below because .copy_to_device
-        #       is just a plain memcpy
-        d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
-        d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
-
-        # The following is to handle the segument size limit due to
-        # max CUDA grid size.
-        range0 = range(0, segments.size, segsize_limit)
-        range1 = itertools.chain(range0[1:], [segments.size])
-        for s, e in zip(range0, range1):
-            segsize = e - s
-            libgdf.gdf_segmented_radixsort(self.plan,
-                                           col_keys.cffi_view,
-                                           col_vals.cffi_view,
-                                           segsize,
-                                           unwrap_devary(d_begins[s:]),
-                                           unwrap_devary(d_ends[s:]))
-
-
-def hash_columns(columns, result, initial_hash_values=None):
-    """Hash the *columns* and store in *result*.
-    Returns *result*
-    """
-    assert len(columns) > 0
-    assert result.dtype == np.int32
-    # No-op for 0-sized
-    if len(result) == 0:
-        return result
-    col_input = [col.cffi_view for col in columns]
-    col_out = result.cffi_view
-    ncols = len(col_input)
-    hashfn = libgdf.GDF_HASH_MURMUR3
-    if initial_hash_values is None:
-        initial_hash_values = ffi.NULL
-    else:
-        initial_hash_values = unwrap_devary(initial_hash_values)
-    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
-    return result
-
-
-def hash_partition(input_columns, key_indices, nparts, output_columns):
-    """Partition the input_columns by the hash values on the keys.
-
-    Parameters
-    ----------
-    input_columns : sequence of Column
-    key_indices : sequence of int
-        Indices into `input_columns` that indicates the key columns.
-    nparts : int
-        number of partitions
-
-    Returns
-    -------
-    partition_offsets : list of int
-        Each index indicates the start of a partition.
-    """
-    assert len(input_columns) == len(output_columns)
-
-    col_inputs = [col.cffi_view for col in input_columns]
-    col_outputs = [col.cffi_view for col in output_columns]
-    offsets = ffi.new('int[]', nparts)
-    hashfn = libgdf.GDF_HASH_MURMUR3
-
-    libgdf.gdf_hash_partition(
-        len(col_inputs),
-        col_inputs,
-        key_indices,
-        len(key_indices),
-        nparts,
-        col_outputs,
-        offsets,
-        hashfn
-    )
-
-    offsets = list(offsets)
-    return offsets
-
-
-def _column_concat(cols_to_concat, output_col):
-    col_inputs = [col.cffi_view for col in cols_to_concat]
-    libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
-    return output_col
 
 
 def rmm_initialize():

@@ -54,9 +54,10 @@
 - PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
+- PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binary and unary ops CFFI to Cython
-- PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1503 Convert sorting and hashing ops CFFI to Cython
 
 ## Bug Fixes
 

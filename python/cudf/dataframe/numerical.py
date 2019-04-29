@@ -15,6 +15,7 @@ from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
@@ -22,6 +23,7 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 
@@ -181,7 +183,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
-        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
@@ -494,7 +496,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
-    _gdf.hash_columns(columns, result, initial_hash_values)
+    cpp_hash.hash_columns(columns, result, initial_hash_values)
     return result
 
 

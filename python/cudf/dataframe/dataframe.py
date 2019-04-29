@@ -29,7 +29,7 @@ from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
 
-from cudf import formatting, _gdf
+from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
@@ -42,6 +42,7 @@ from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 
 import cudf.bindings.join as cpp_join
+import cudf.bindings.hash as cpp_hash
 
 
 class DataFrame(object):
@@ -1998,7 +1999,7 @@ class DataFrame(object):
         # Allocate output buffers
         outputs = [col.copy() for col in cols]
         # Call hash_partition
-        offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
+        offsets = cpp_hash.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
         outdf = DataFrame()
         for k, col in zip(self._cols, outputs):
