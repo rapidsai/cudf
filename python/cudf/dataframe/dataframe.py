@@ -162,6 +162,12 @@ class DataFrame(object):
         """
         return len(self), len(self._cols)
 
+    @property
+    def ndim(self):
+        """Dimension of the data. DataFrame ndim is always 2.
+        """
+        return 2
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
