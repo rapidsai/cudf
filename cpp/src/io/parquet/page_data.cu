@@ -766,10 +766,9 @@ inline __device__ void gpuStoreOutput(uint2 *dst, const uint8_t *src8, uint32_t 
 /**
  * @brief Convert an INT96 Spark timestamp to 64-bit timestamp
  *
- * @param[out] dst ptr to output
- * @param[in] src8 raw input bytes
- * @param[in] dict_pos byte position in dictionary
- * @param[in] dict_size size of dictionary
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
  **/
 inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src_pos, int64_t *dst)
 {
@@ -824,12 +823,12 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
 
 
 /**
-* @brief Output a small fixed-length value
-*
-* @param[in,out] s Page state input/output
-* @param[in] src_pos Source position
-* @param[in] dst Pointer to row output data
-**/
+ * @brief Output a small fixed-length value
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ **/
 template <typename T>
 inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *dst)
 {
