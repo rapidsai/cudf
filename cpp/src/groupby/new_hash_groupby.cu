@@ -16,15 +16,15 @@
 
 #include <cudf.h>
 #include <bitmask/bit_mask.cuh>
-#include <table/device_table.cuh>
+#include <bitmask_ops.hpp>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
+#include <table/device_table.cuh>
 #include <table/table.hpp>
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include "new_hash_groupby.hpp"
-#include <bitmask_ops.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
@@ -461,15 +461,17 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
     if (cudf::have_nulls(keys)) {
       rmm::device_vector<bit_mask_t> const row_bitmask{
           cudf::row_bitmask(keys, stream)};
+
+      // TODO Invoke kernel using row_bitmask to skip null rows
     }
   }
-
-  // TODO Set output key/value columns null counts
 
   // cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
 
   // compute_hash_groupby<<<grid_params.num_blocks,
   //                       grid_params.num_threads_per_block, 0, stream>>>();
+
+  // TODO Set output key/value columns null counts
 
   CHECK_STREAM(stream);
 
