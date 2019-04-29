@@ -526,7 +526,7 @@ class StringColumn(columnops.TypedColumnBase):
         """
         Fill null values with * fill_value *
         """
-        result = self.copy()
+
         if not isinstance(fill_value, str) and \
             not(
                 isinstance(fill_value, series.Series) and
@@ -538,12 +538,13 @@ class StringColumn(columnops.TypedColumnBase):
         # if it is a column
 
         if isinstance(fill_value, series.Series):
-            if len(fill_value) < len(result):
+            if len(fill_value) < len(self):
                 raise ValueError("fill value series must be of same or "
                                  "greater length than the series to be filled")
 
             fill_value = fill_value[: len(self)]._column._data
 
-        result._data = result._data.fillna(fill_value)
+        filled_data = self._data.fillna(fill_value)
+        result = StringColumn(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
