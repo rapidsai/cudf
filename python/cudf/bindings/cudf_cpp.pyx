@@ -30,7 +30,7 @@ dtypes = {
     np.int32:      GDF_INT32,
     np.int16:      GDF_INT16,
     np.int8:       GDF_INT8,
-    np.bool_:      GDF_INT8,
+    np.bool_:      GDF_BOOL8,
     np.datetime64: GDF_DATE64,
     np.object_:    GDF_STRING_CATEGORY,
     np.str_:       GDF_STRING_CATEGORY,
@@ -43,11 +43,12 @@ gdf_dtypes = {
     GDF_INT32:             np.int32,
     GDF_INT16:             np.int16,
     GDF_INT8:              np.int8,
+    GDF_BOOL8:             np.bool_,
     GDF_DATE64:            np.datetime64,
-    N_GDF_TYPES:           np.int32,
     GDF_CATEGORY:          np.int32,
     GDF_STRING_CATEGORY:   np.object_,
     GDF_STRING:            np.object_,
+    N_GDF_TYPES:           np.int32
 }
 
 def gdf_to_np_dtype(dtype):
@@ -87,6 +88,7 @@ cdef get_scalar_value(gdf_scalar scalar):
         GDF_INT32:   scalar.data.si32,
         GDF_INT16:   scalar.data.si16,
         GDF_INT8:    scalar.data.si08,
+        GDF_BOOL8:   np.array(scalar.data.b08).astype(np.bool_),
         GDF_DATE32:  np.array(scalar.data.dt32).astype('datetime64[D]'),
         GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
         GDF_TIMESTAMP: np.array(scalar.data.tmst).astype('datetime64[ns]'),

@@ -83,8 +83,21 @@ struct wrapper
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }
 
+  // enable conversion to arithmetic types *only* for the cudf::bool8 wrapper
+  // (defined later in this file as wrapper<gdf_bool8, GDF_BOOL8>)
+  template <gdf_dtype the_type = type_id,
+            typename T_out,
+            typename std::enable_if<(the_type == GDF_BOOL8) &&
+                                     std::is_arithmetic<T_out>::value,
+                                     int>::type* = nullptr >
   CUDA_HOST_DEVICE_CALLABLE
-  explicit operator bool() const { return static_cast<bool>(this->value); }
+  explicit operator T_out() const { 
+    // Casting a cudf::bool8 to arithmetic type should always be the same as
+    // casting a bool to arithmetic type, and not the same as casting the
+    // underlying type to arithmetic type. Therefore we cast the value to bool
+    // first, then the output type
+    return static_cast<T_out>(static_cast<bool>(this->value));
+  }
 
   wrapper(wrapper const& w) = default;
 
@@ -330,88 +343,93 @@ using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 
 using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
 
-using bool8 = detail::wrapper<gdf_bool, GDF_BOOL>;
+using bool8 = detail::wrapper<gdf_bool8, GDF_BOOL8>;
 
 // This is necessary for global, constant, non-fundamental types
+// We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
+// scalar type. See CUDA Programming guide
+// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
 #define HOST_DEVICE_CONSTANT
 #ifdef __CUDA_ARCH__
-__device__ __constant__ static bool8 true_v{gdf_bool{1}};
+__device__ __constant__ static bool8 true_v{gdf_bool8{1}};
 
-__device__ __constant__ static bool8 false_v{gdf_bool{0}};
+__device__ __constant__ static bool8 false_v{gdf_bool8{0}};
 #else
-static constexpr bool8 true_v{gdf_bool{1}};
-static constexpr bool8 false_v{gdf_bool{0}};
+static constexpr bool8 true_v{gdf_bool8{1}};
+static constexpr bool8 false_v{gdf_bool8{0}};
 #endif
 
 // Wrapper operator overloads for cudf::bool8 
 namespace detail {
 
-// For some reason, get a multiple definition error if this is defined.
-// But it would be nice for the output of cudf::bool8 in ostreams to be 
-// more useful than an int8 value...
-/*std::ostream& operator<<(std::ostream& os, cudf::bool8 const& w) 
+inline
+std::ostream& operator<<(std::ostream& os, cudf::bool8 const& w) 
 {
-  return os << bool(w);
-}*/
+  return os << static_cast<bool>(w);
+}
 
 CUDA_HOST_DEVICE_CALLABLE
 bool operator==(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return bool(lhs) == bool(rhs);
+  return static_cast<bool>(lhs) == static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 bool operator!=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return bool(lhs) != bool(rhs);
+  return static_cast<bool>(lhs) != static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 bool operator<=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 { 
-  return bool(lhs) <= bool(rhs); 
+  return static_cast<bool>(lhs) <= static_cast<bool>(rhs); 
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 bool operator>=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 { 
-  return bool(lhs) >= bool(rhs); 
+  return static_cast<bool>(lhs) >= static_cast<bool>(rhs); 
 }
 
 CUDA_HOST_DEVICE_CALLABLE 
 bool operator<(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return bool(lhs) < bool(rhs);
+  return static_cast<bool>(lhs) < static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE 
 bool operator>(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return bool(lhs) > bool(rhs);
+  return static_cast<bool>(lhs) > static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator+(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(bool(lhs) + bool(rhs));
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs) +
+                                  static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator-(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(bool(lhs) - bool(rhs));
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs) -
+                                  static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator*(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(bool(lhs) * bool(rhs));
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs) *
+                                  static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator/(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(bool(lhs) / bool(rhs));
+  return static_cast<cudf::bool8>(static_cast<bool>(lhs) /
+                                  static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
@@ -491,7 +509,7 @@ struct numeric_limits< cudf::detail::wrapper<T, type_id> > {
   * Required since the underlying type, int8_t, has different limits than bool
   * --------------------------------------------------------------------------**/
 template <>
-struct numeric_limits< cudf::detail::wrapper<gdf_bool, GDF_BOOL> > {
+struct numeric_limits< cudf::bool8 > {
   
   static constexpr cudf::bool8 max() noexcept {
     // tried using `return cudf::true_v` but it causes a compiler segfault!
