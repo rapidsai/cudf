@@ -122,7 +122,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   // format in combination with the encoding type.
   switch (physical) {
     case parquet::BOOLEAN:
-      return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT32:
       return std::make_pair(GDF_INT32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT64:

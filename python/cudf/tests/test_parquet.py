@@ -73,12 +73,8 @@ def test_parquet_reader(parquet_file, columns, engine):
         if 'col_category' in expect.columns:
             expect['col_category'] = expect['col_category'].astype('category')
 
-    # cuDF's default currently handles bools and categories differently
-    # For bool, cuDF doesn't support it so convert it to int8
-    # For categories, PANDAS originally returns as object whereas cuDF hashes
+    # PANDAS returns category objects whereas cuDF returns hashes
     if engine == 'cudf':
-        if 'col_bool' in expect.columns:
-            expect['col_bool'] = expect['col_bool'].astype('int8')
         if 'col_category' in expect.columns:
             expect = expect.drop(columns=['col_category'])
         if 'col_category' in got.columns:
@@ -104,7 +100,6 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert(a == b)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 5, 100])
 def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
@@ -115,8 +110,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     gdf = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
     gdf = cudf.concat(gdf).reset_index(drop=True)
 
-    if 'col_bool' in pdf.columns:
-        pdf['col_bool'] = pdf['col_bool'].astype('int8')
     if 'col_category' in pdf.columns:
         pdf = pdf.drop(columns=['col_category'])
     if 'col_category' in gdf.columns:
@@ -125,7 +118,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
@@ -137,8 +129,6 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     skip_rows = (total_rows - num_rows) // 2
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
 
-    if 'col_bool' in pdf.columns:
-        pdf['col_bool'] = pdf['col_bool'].astype('int8')
     if 'col_category' in pdf.columns:
         pdf = pdf.drop(columns=['col_category'])
     if 'col_category' in gdf.columns:
