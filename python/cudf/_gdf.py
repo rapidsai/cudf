@@ -96,38 +96,6 @@ def columnview(size, data, mask=None, dtype=None, null_count=None,
                        dtype=dtype, null_count=null_count, nvcat=nvcat)
 
 
-def apply_binaryop(binop, lhs, rhs, out):
-    """Apply binary operator *binop* to operands *lhs* and *rhs*.
-    The result is stored to *out*.
-
-    Returns the number of null values.
-    """
-    args = (lhs.cffi_view, rhs.cffi_view, out.cffi_view)
-    # apply binary operator
-    binop(*args)
-    # validity mask
-    if out.has_null_mask:
-        return apply_mask_and(lhs, rhs, out)
-    else:
-        return 0
-
-
-def apply_unaryop(unaop, inp, out):
-    """Apply unary operator *unaop* to *inp* and store to *out*.
-
-    """
-    args = (inp.cffi_view, out.cffi_view)
-    # apply unary operator
-    unaop(*args)
-
-
-def apply_mask_and(col, mask, out):
-    args = (col.cffi_view, mask.cffi_view, out.cffi_view)
-    libgdf.gdf_validity_and(*args)
-    nnz = count_nonzero_mask(out.mask.mem, size=len(out))
-    return len(out) - nnz
-
-
 np_gdf_dict = {
     np.float64:      libgdf.GDF_FLOAT64,
     np.float32:      libgdf.GDF_FLOAT32,
@@ -180,16 +148,6 @@ def np_to_pa_dtype(dtype):
         np.object_:     pa.string(),
         np.str_:        pa.string(),
     }[np.dtype(dtype).type]
-
-
-def apply_reduce(fn, inp):
-    # allocate output+temp array
-    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
-    out = rmm.device_array(outsz, dtype=inp.dtype)
-    # call reduction
-    fn(inp.cffi_view, unwrap_devary(out), outsz)
-    # return 1st element
-    return out[0]
 
 
 _join_how_api = {
@@ -444,18 +402,6 @@ def _column_concat(cols_to_concat, output_col):
     col_inputs = [col.cffi_view for col in cols_to_concat]
     libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
     return output_col
-
-
-def count_nonzero_mask(mask, size):
-    assert mask.size * mask_bitsize >= size
-    nnz = ffi.new('int*')
-    nnz[0] = 0
-    mask_ptr, addr = unwrap_mask(mask)
-
-    if addr != ffi.NULL:
-        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
-
-    return nnz[0]
 
 
 def rmm_initialize():

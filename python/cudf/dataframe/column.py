@@ -17,6 +17,7 @@ import cudf.bindings.quantile as cpp_quantile
 from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
+from cudf.bindings.cudf_cpp import count_nonzero_mask
 
 
 class Column(object):
@@ -159,8 +160,10 @@ class Column(object):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = _gdf.count_nonzero_mask(self._mask.mem,
-                                              size=len(self))
+                nnz = count_nonzero_mask(
+                    self._mask.mem,
+                    size=len(self)
+                )
                 null_count = len(self) - nnz
                 if null_count == 0:
                     self._mask = None

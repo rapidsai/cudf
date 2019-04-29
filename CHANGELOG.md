@@ -55,6 +55,7 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1492 Convert transpose CFFI to Cython
+- PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 
 ## Bug Fixes
