@@ -66,10 +66,10 @@ def _open_parser(schema_ptr, schema_len):
 
 def _check_error(ipcparser):
     if libgdf.gdf_ipc_parser_failed(ipcparser):
-	raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
-	error = ffi.string(raw_error).decode()
-	_logger.error('IPCParser failed: %s', error)
-	raise MetadataParsingError(error)
+        raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
+        error = ffi.string(raw_error).decode()
+        _logger.error('IPCParser failed: %s', error)
+        raise MetadataParsingError(error)
 
 
 def _load_json(jsonraw):
