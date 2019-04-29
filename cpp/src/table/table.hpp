@@ -194,7 +194,7 @@ std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
  * @return false If the table contains zero null values
 *---------------------------------------------------------------------------**/
 bool inline have_nulls(cudf::table const& table) {
-  return std::any_of(keys.begin(), keys.end(), [](gdf_column const* col) {
+  return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
     return (nullptr != col->valid) and (col->null_count > 0);
   });
 }
