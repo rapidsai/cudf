@@ -39,7 +39,7 @@ struct nonnull_and_true {
   nonnull_and_true(gdf_column const boolean_mask)
       : data{static_cast<cudf::bool8*>(boolean_mask.data)},
         bitmask{reinterpret_cast<uint32_t const *>(boolean_mask.valid)} {
-    CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL, "Expected boolean column");
+    CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Expected boolean column");
     CUDF_EXPECTS(boolean_mask.data != nullptr, "Null boolean_mask data");
     CUDF_EXPECTS(boolean_mask.valid != nullptr, "Null boolean_mask bitmask");
   }
@@ -317,7 +317,7 @@ gdf_column apply_boolean_mask(gdf_column const *input,
   CUDF_EXPECTS(nullptr != input, "Null input");
   CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
   CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
-  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL8, "Mask must be Boolean type");
 
   // High Level Algorithm:
   // First, compute a `scatter_map` from the boolean_mask that will scatter
