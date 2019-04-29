@@ -24,6 +24,7 @@
 #include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include "new_hash_groupby.hpp"
+#include <bitmask/bitmask_ops.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
@@ -426,19 +427,6 @@ __global__ void compute_hash_groupby(Map const& map, device_table input_keys,
 
 };
 
-/**
- * @brief  Computes the validity mask for the rows in the gdf_table.
- */
-struct row_masker {
-  row_masker(bit_mask::bit_mask_t** column_masks, gdf_size_type num_cols)
-      : column_valid_masks{column_masks}, num_columns(num_cols) {}
-
-  // TODO IMPLEMENT
-
-  gdf_size_type num_columns;
-  bit_mask::bit_mask_t** column_valid_masks;
-};
-
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
@@ -470,38 +458,15 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   if (options.ignore_null_keys) {
     using namespace bit_mask;
 
-    bit_mask_t* row_bitmask;
-
-    rmm::device_vector<bit_mask_t> row_masks;
-
     bool const keys_have_nulls{
         std::any_of(keys.begin(), keys.end(), [](gdf_column const* col) {
           return (nullptr != col->valid) and (col->null_count > 0);
         })};
 
     if (keys_have_nulls) {
-      // Compute bitwise AND of all key columns
-      row_masks.resize(num_elements(keys.num_rows()));
-
-      // Populate vector of pointers to the bitmasks of columns that contain
-      // NULL values
-      std::vector<bit_mask_t*> column_bitmasks;
-      std::for_each(keys.begin(), keys.end(),
-                    [&column_bitmasks](gdf_column const* col) {
-                      if ((nullptr != col->valid) and (col->null_count > 0)) {
-                        column_bitmasks.push_back(
-                            reinterpret_cast<bit_mask_t*>(col->valid));
-                      }
-                    });
-      rmm::device_vector<bit_mask_t*> d_column_bitmasks{column_bitmasks};
-
-      //thrust::tabulate(
-      //    rmm::exec_policy(stream)->on(stream), row_masks.begin(),
-      //    row_masks.end(),
-      //    row_masker(d_column_bitmasks.data().get(), d_column_bitmasks.size()));
-      row_bitmask = row_masks.data().get();
+      rmm::device_vector<bit_mask_t> const row_bitmask{
+          cudf::row_bitmask(keys, stream)};
     }
-  } else {
   }
 
   // TODO Set output key/value columns null counts
