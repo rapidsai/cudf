@@ -173,10 +173,18 @@ struct table {
   gdf_column** columns() const { return _columns; }
 
  private:
-  gdf_column** _columns{nullptr};       ///< The set of gdf_columns
-  gdf_size_type const _num_columns{0};  ///< The number of columns in the set
-  gdf_size_type _num_rows{0};  ///< The number of elements in each column
+  gdf_column** _columns{nullptr};  ///< The set of gdf_columns
+  gdf_size_type _num_columns{0};   ///< The number of columns in the set
+  gdf_size_type _num_rows{0};      ///< The number of elements in each column
 };
+
+std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
+  std::vector<gdf_dtype> dtypes(table.num_columns());
+
+  std::transform(table.begin(), table.end(), dtypes.begin(),
+                 [](gdf_column const* col) { return col->dtype; });
+  return dtypes;
+}
 
 }  // namespace cudf
 
