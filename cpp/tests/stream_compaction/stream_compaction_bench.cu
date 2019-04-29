@@ -100,11 +100,12 @@ void benchmark_types(gdf_dtype type, Init init, Bench bench,
     types = {type};
 
   for (gdf_dtype t : types) {
-    std::cout << name_from_type(type) << ",";
+    std::cout << name_from_type(t) << ",";
     if (shmoo) {
       for (int fraction = 0; fraction <= 100; fraction += pct_step)
         cudf::type_dispatcher(t, benchmark(), init, bench, iters, fraction, shmoo);
     }
+    std::cout << "\n";
   }
 }
 
