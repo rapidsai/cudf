@@ -2326,3 +2326,14 @@ def test_notna():
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
     gs = Series.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
+
+
+def test_ndim():
+    pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
+    gdf = DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim
+    assert pdf.x.ndim == gdf.x.ndim
+
+    s = pd.Series()
+    gs = Series()
+    assert s.ndim == gs.ndim

@@ -5,28 +5,17 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.dataframe import columnops, numerical
-from cudf import _gdf
 from cudf.utils import utils, cudautils
 from cudf.dataframe.buffer import Buffer
-from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.reduce as cpp_reduce
-
-_unordered_impl = {
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-}
-
-_ordered_impl = {
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-}
+import cudf.bindings.binops as cpp_binops
+import cudf.bindings.unaryops as cpp_unaryops
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -34,14 +23,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # we should support date32 and timestamp, but perhaps
     # only after we move to arrow
     # we also need to support other formats besides Date64
-    funcs = {
-        'year': libgdf.gdf_extract_datetime_year,
-        'month': libgdf.gdf_extract_datetime_month,
-        'day': libgdf.gdf_extract_datetime_day,
-        'hour': libgdf.gdf_extract_datetime_hour,
-        'minute': libgdf.gdf_extract_datetime_minute,
-        'second': libgdf.gdf_extract_datetime_second,
-    }
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
 
     def __init__(self, data, mask=None, null_count=None, dtype=None):
@@ -103,9 +84,11 @@ class DatetimeColumn(columnops.TypedColumnBase):
             self,
             dtype=np.int16
         )
-        _gdf.apply_unaryop(self.funcs[field],
-                           self,
-                           out)
+        cpp_unaryops.apply_dt_extract_op(
+            self,
+            out,
+            field
+        )
         return out
 
     def normalize_binop_value(self, other):
@@ -149,7 +132,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         lhs, rhs = self, rhs
         return binop(
             lhs, rhs,
-            op=_unordered_impl[cmpop],
+            op=cmpop,
             out_dtype=np.bool
         )
 
@@ -157,7 +140,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         lhs, rhs = self, rhs
         return binop(
             lhs, rhs,
-            op=_ordered_impl[cmpop],
+            op=cmpop,
             out_dtype=np.bool
         )
 
@@ -172,7 +155,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host().view('int64'))
-        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
@@ -237,7 +220,7 @@ def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
-    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs, rhs, out, op)
     out = out.replace(null_count=null_count)
     nvtx_range_pop()
     return out
