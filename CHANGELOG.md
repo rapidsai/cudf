@@ -53,6 +53,7 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1527 Support GDF_BOOL8 in readers and writers
 
 ## Bug Fixes
 
