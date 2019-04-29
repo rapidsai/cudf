@@ -9,6 +9,11 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.join cimport *
+from libcpp.vector cimport vector
+from libc.stdint cimport uintptr_t
+from libc.stdlib cimport calloc, malloc, free
+cimport cython
 
 import numpy as np
 import pandas as pd
@@ -17,11 +22,6 @@ import pyarrow as pa
 from librmm_cffi import librmm as rmm
 import nvcategory
 import nvstrings
-
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
-
-cimport cython
 
 
 @cython.boundscheck(False)

@@ -11,7 +11,6 @@ from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
 from cudf.utils import cudautils, utils
-from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
@@ -304,109 +303,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
-
-    def join(self, other, how='left', return_indexers=False, method='sort'):
-
-        # Single column join using sort-based implementation
-        if method == 'sort' or how == 'outer':
-            return self._sortjoin(other=other, how=how,
-                                  return_indexers=return_indexers)
-        elif method == 'hash':
-            # Get list of columns from self with left_on and
-            # from other with right_on
-            return self._hashjoin(other=other, how=how,
-                                  return_indexers=return_indexers)
-        else:
-            raise ValueError('Unsupported join method')
-
-    def _hashjoin(self, other, how='left', return_indexers=False):
-
-        from cudf.dataframe.series import Series
-
-        if not self.is_type_equivalent(other):
-            raise TypeError('*other* is not compatible')
-
-        with _gdf.apply_join(
-                [self], [other], how=how, method='hash') as (lidx, ridx):
-            if lidx.size > 0:
-                raw_index = cudautils.gather_joined_index(
-                        self.to_gpu_array(),
-                        other.to_gpu_array(),
-                        lidx,
-                        ridx,
-                        )
-                buf_index = Buffer(raw_index)
-            else:
-                buf_index = Buffer.null(dtype=self.dtype)
-
-            joined_index = self.replace(data=buf_index)
-
-            if return_indexers:
-                def gather(idxrange, idx):
-                    mask = (Series(idx) != -1).as_mask()
-                    return idxrange.take(idx).set_mask(mask).fillna(-1)
-
-                if len(joined_index) > 0:
-                    indexers = (
-                            gather(Series(range(0, len(self))), lidx),
-                            gather(Series(range(0, len(other))), ridx),
-                            )
-                else:
-                    indexers = (
-                            Series(Buffer.null(dtype=np.intp)),
-                            Series(Buffer.null(dtype=np.intp))
-                            )
-                return joined_index, indexers
-            else:
-                return joined_index
-        # return
-
-    def _sortjoin(self, other, how='left', return_indexers=False):
-        """Join with another column.
-
-        When the column is a index, set *return_indexers* to obtain
-        the indices for shuffling the remaining columns.
-        """
-        from cudf.dataframe.series import Series
-
-        if not self.is_type_equivalent(other):
-            raise TypeError('*other* is not compatible')
-
-        lkey, largsort = self.sort_by_values(True)
-        rkey, rargsort = other.sort_by_values(True)
-        with _gdf.apply_join(
-                [lkey], [rkey], how=how, method='sort') as (lidx, ridx):
-            if lidx.size > 0:
-                raw_index = cudautils.gather_joined_index(
-                        lkey.to_gpu_array(),
-                        rkey.to_gpu_array(),
-                        lidx,
-                        ridx,
-                        )
-                buf_index = Buffer(raw_index)
-            else:
-                buf_index = Buffer.null(dtype=self.dtype)
-
-            joined_index = lkey.replace(data=buf_index)
-
-            if return_indexers:
-                def gather(idxrange, idx):
-                    mask = (Series(idx) != -1).as_mask()
-                    return idxrange.take(idx).set_mask(mask).fillna(-1)
-
-                if len(joined_index) > 0:
-                    indexers = (
-                            gather(Series(largsort), lidx),
-                            gather(Series(rargsort), ridx),
-                            )
-                else:
-                    indexers = (
-                            Series(Buffer.null(dtype=np.intp)),
-                            Series(Buffer.null(dtype=np.intp))
-                            )
-                return joined_index, indexers
-            else:
-                return joined_index
 
     def find_and_replace(self, to_replace, value):
         """
