@@ -65,20 +65,26 @@ cdef apply_mask_and(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out):
 
     """
     cdef gdf_error result
-    result = gdf_validity_and(
-                <gdf_column*>c_lhs,
-                <gdf_column*>c_rhs,
-                <gdf_column*>c_out
-            )
+
+    with nogil:
+        result = gdf_validity_and(
+            <gdf_column*>c_lhs,
+            <gdf_column*>c_rhs,
+            <gdf_column*>c_out
+        )
+
     check_gdf_error(result)
 
     cdef int nnz = 0
     if c_out.valid is not NULL:
-        nnz = gdf_count_nonzero_mask(
-            c_out.valid,
-            c_out.size,
-            &nnz
-        )
+
+        with nogil:
+            nnz = gdf_count_nonzero_mask(
+                c_out.valid,
+                c_out.size,
+                &nnz
+            )
+
     return c_out.size - nnz
 
 
