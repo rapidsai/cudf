@@ -186,6 +186,19 @@ std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
   return dtypes;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if a table contains any null values.
+ * 
+ * @param table The table to check for null values
+ * @return true If the table contains one or more null values
+ * @return false If the table contains zero null values
+*---------------------------------------------------------------------------**/
+bool inline have_nulls(cudf::table const& table) {
+  return std::any_of(keys.begin(), keys.end(), [](gdf_column const* col) {
+    return (nullptr != col->valid) and (col->null_count > 0);
+  });
+}
+
 }  // namespace cudf
 
 #endif

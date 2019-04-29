@@ -458,12 +458,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   if (options.ignore_null_keys) {
     using namespace bit_mask;
 
-    bool const keys_have_nulls{
-        std::any_of(keys.begin(), keys.end(), [](gdf_column const* col) {
-          return (nullptr != col->valid) and (col->null_count > 0);
-        })};
-
-    if (keys_have_nulls) {
+    if (cudf::have_nulls(keys)) {
       rmm::device_vector<bit_mask_t> const row_bitmask{
           cudf::row_bitmask(keys, stream)};
     }
