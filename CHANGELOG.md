@@ -50,6 +50,7 @@
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
