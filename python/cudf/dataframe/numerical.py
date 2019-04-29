@@ -7,8 +7,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-
-from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
@@ -17,6 +15,7 @@ from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
@@ -24,27 +23,8 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-
-
-# Operator mappings
-
-_binary_impl = {
-    # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-    # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-    # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
-}
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -203,7 +183,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
-        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
@@ -461,12 +441,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype or op not in _binary_impl:
-        # Use JIT implementation
-        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-    else:
-        # Use compiled implementation
-        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
@@ -521,7 +496,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
-    _gdf.hash_columns(columns, result, initial_hash_values)
+    cpp_hash.hash_columns(columns, result, initial_hash_values)
     return result
 
 
