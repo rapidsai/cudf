@@ -28,6 +28,8 @@ requirements:
     - librmm 0.7.*
     - libnvstrings 0.7.*
     - cudatoolkit {{ cuda_version }}.*
+  run:
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   commands:
