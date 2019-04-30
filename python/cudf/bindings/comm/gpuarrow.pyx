@@ -254,29 +254,28 @@ class GpuArrowReader(Sequence):
         "Parse the metadata in the IPC handle"
 
         # get void* from the gpu array
-        schema_ptr = ffi.cast("void*", self._schema_data.ctypes.data)
+        cdef void* schema_ptr = self._schema_data.ctypes.data
 
         # parse schema
         with _open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
             # check for failure in parseing the schema
             _check_error(ipcparser)
 
-            gpu_addr = self._gpu_data.device_ctypes_pointer.value
-            gpu_ptr = ffi.cast("void*", gpu_addr)
-            libgdf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
-                                                     self._gpu_data.size)
+            cdef void* gpu_ptr = self._gpu_data.device_ctypes_pointer.value
+            gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
+                                              self._gpu_data.size)
             # check for failure in parsing the recordbatches
             _check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
             schemadct = _load_json(
-                libgdf.gdf_ipc_parser_get_schema_json(ipcparser))
+                gdf_ipc_parser_get_schema_json(ipcparser))
             layoutdct = _load_json(
-                libgdf.gdf_ipc_parser_get_layout_json(ipcparser))
+                gdf_ipc_parser_get_layout_json(ipcparser))
 
             # get data offset
             _logger.debug('IPCParser data region offset')
-            dataoffset = libgdf.gdf_ipc_parser_get_data_offset(ipcparser)
+            dataoffset = gdf_ipc_parser_get_data_offset(ipcparser)
             dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
 
