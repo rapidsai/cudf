@@ -13,7 +13,6 @@ from libgdf_cffi import libgdf
 from cudf.dataframe import columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
-from cudf import _gdf
 
 import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
@@ -558,12 +557,7 @@ def string_column_binop(lhs, rhs, op):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype or op not in _binary_impl:
-        # Use JIT implementation
-        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-    else:
-        # Use compiled implementation
-        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
 
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
