@@ -99,7 +99,7 @@ template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
 public:
     template <typename T_out, typename std::enable_if<
-                std::is_convertible<T_in, T_out>::value >::type* = nullptr >
+        std::is_constructible<T_out, T_in>::value >::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -107,7 +107,7 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-                ! std::is_convertible<T_in, T_out>::value >::type* = nullptr >
+        not std::is_constructible<T_out, T_in>::value >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -124,6 +124,7 @@ private:
     static constexpr bool is_supported()
     {
         return std::is_arithmetic<T>::value ||
+               std::is_same<T, cudf::bool8>::value ||
                std::is_same<Op, cudf::reductions::ReductionMin>::value ||
                std::is_same<Op, cudf::reductions::ReductionMax>::value ;
     }
@@ -139,18 +140,20 @@ public:
     }
 
     template <typename T, typename std::enable_if<
-        !is_supported<T>()>::type* = nullptr>
+        not is_supported<T>()>::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
-        CUDF_FAIL("Non-arithmetic operation except for `min` or `max`"
-                  "is not supported");
+        CUDF_FAIL("Reduction operators other than `min` and `max`"
+                  " are not supported for non-arithmetic types");
     }
 };
 
 }   // anonymous namespace
 
+
 namespace cudf{
+
 
 gdf_scalar reduction(const gdf_column *col,
                   gdf_reduction_op op, gdf_dtype output_dtype)
@@ -185,7 +188,7 @@ gdf_scalar reduction(const gdf_column *col,
             ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
         break;
     default:
-        CUDF_FAIL("The input enum `gdf_reduction_op` is out of the range");
+        CUDF_FAIL("Unsupported reduction operator");
     }
 
     return scalar;
