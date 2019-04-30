@@ -438,7 +438,7 @@ __global__ void compute_hash_groupby(
 
       aggregate_row(output_values, result.first->second, input_values, i, ops);
 
-      // Only do this on a new key insert...
+      // Only copy to the output if a new, unique key row was inserted
       if (true == result.second) {
         copy_row(output_keys, result.first->second, input_keys, i);
       }
