@@ -450,12 +450,30 @@ struct row_hasher {
   device_table const table;
 };
 
+struct row_equality {
+  row_equality(device_table const& _lhs, device_table const& _rhs,
+               gdf_size_type _unused_index)
+      : lhs{_lhs}, rhs{_rhs}, unused_index{_unused_index} {}
+
+  __device__ inline bool operator()(gdf_size_type lhs_index,
+                                    gdf_size_type rhs_index) {
+    // TODO Create a `rows_equal` function that doesn't check for NULLs
+    return rows_equal(lhs, lhs_index, rhs, rhs_index);
+  }
+
+  device_table const lhs;
+  device_table const rhs;
+  gdf_size_type const unused_index;
+};
+
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<groupby::distributive_operators> const& operators,
     groupby::Options options, cudaStream_t stream) {
+  CUDF_EXPECTS(keys.num_rows() < std::numeric_limits<gdf_size_type>::max(),
+               "Input too large.");
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
@@ -475,14 +493,20 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   auto d_output_keys = device_table::create(output_keys);
   auto d_output_values = device_table::create(output_values);
 
+  static constexpr gdf_size_type unused_key{
+      std::numeric_limits<gdf_size_type>::max()};
+
   using map_type = concurrent_unordered_map<
-      gdf_size_type, gdf_size_type, std::numeric_limits<gdf_size_type>::max(),
+      gdf_size_type, gdf_size_type, unused_key,
       decltype(row_hasher{std::declval<device_table>()}),
-      equal_to<gdf_size_type>,
+      decltype(row_equality{std::declval<device_table>(),
+                            std::declval<device_table>(),
+                            std::declval<gdf_size_type>()}),
       legacy_allocator<thrust::pair<gdf_size_type, gdf_size_type>>>;
 
   std::unique_ptr<map_type> map = std::make_unique<map_type>(
-      compute_hash_table_size(keys.num_rows()), 0, row_hasher{*d_input_keys});
+      compute_hash_table_size(keys.num_rows()), 0, row_hasher{*d_input_keys},
+      row_equality{*d_input_keys, *d_input_keys, unused_key});
 
   if (options.ignore_null_keys) {
     using namespace bit_mask;
