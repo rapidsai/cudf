@@ -122,7 +122,7 @@ __device__ __inline__ bool isLikeFloat(long len, long digit_cnt, long decimal_cn
  * @param[in] stop Offset of the end of the row
  *
  * @return long position of the last character in the field, including the
- *  delimiter(s) folloing the field data
+ *  delimiter(s) following the field data
  *---------------------------------------------------------------------------**/
 __inline__ __device__ long seekFieldEnd(const char *data, const ParseOptions opts, long pos, long stop) {
   bool quotation = false;

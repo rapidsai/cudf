@@ -45,6 +45,10 @@ gdf_error read_parquet(pq_read_arg *args);
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
 
 /*
- * @brief Interface to parse JSON data to GDF columns
+ * @brief Reads JSON-structured data and returns an array of gdf_columns.
+ *
+ * @param[in,out] args Structure containing input and output arguments
+ *
+ * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  */
 gdf_error read_json(json_read_arg *args);
