@@ -144,7 +144,7 @@ private:
    * @param[out] valid_fields The bitmaps indicating whether column fields are valid
    * @param[out] num_valid_fields The numbers of valid fields in columns
    *
-   * @return gdf_error GDF_SUCCESS upon completion
+   * @return void
    *---------------------------------------------------------------------------**/
   void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid,
                             gdf_size_type *num_valid);
