@@ -221,8 +221,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 add_library(cudf SHARED
             src/comms/ipc/ipc.cu
-            src/dataframe/column.cpp
-            src/dataframe/context.cpp
+            src/column/column.cpp
+            src/column/context.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -241,7 +241,6 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/bitmask/valid_ops.cu
             src/compaction/stream_compaction_ops.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu

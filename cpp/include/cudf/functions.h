@@ -41,21 +41,6 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  */
 gdf_error gdf_nvtx_range_pop();
 
-/**
- * @brief  Counts the number of valid bits for the specified number of rows
- * in a validity bitmask.
- *
- * If the bitmask is null, returns a count equal to the number of rows.
- *
- * @param[in] masks The validity bitmask buffer in device memory
- * @param[in] num_rows The number of bits to count
- * @param[out] count The number of valid bits in the buffer from [0, num_rows)
- *
- * @returns  GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
-                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
