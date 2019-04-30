@@ -66,25 +66,26 @@ def _schema_to_dtype(name, bitwidth):
 
 
 @contextmanager
-def _open_parser(schema_ptr, schema_len):
+def _open_parser(const uint8_t* schema_ptr, size_t schema_len):
     "context to destroy the parser"
     _logger.debug('open IPCParser')
-    ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
+    cdef gdf_ipc_parser_type* ipcparser = gdf_ipc_parser_open(schema_ptr,
+                                                              schema_len)
     yield ipcparser
     _logger.debug('close IPCParser')
-    libgdf.gdf_ipc_parser_close(ipcparser)
+    gdf_ipc_parser_close(ipcparser)
 
 
-def _check_error(ipcparser):
-    if libgdf.gdf_ipc_parser_failed(ipcparser):
-        raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
-        error = ffi.string(raw_error).decode()
+def _check_error(gdf_ipc_parser_type* ipcparser):
+    if gdf_ipc_parser_failed(ipcparser):
+        cdef const char* raw_error = gdf_ipc_parser_get_error(ipcparser)
+        cdef str error = raw_error.decode()
         _logger.error('IPCParser failed: %s', error)
         raise MetadataParsingError(error)
 
 
-def _load_json(jsonraw):
-    jsontext = ffi.string(jsonraw).decode()
+def _load_json(const char* jsonraw):
+    cdef str jsontext = jsonraw.decode()
     return json.loads(jsontext)
 
 
