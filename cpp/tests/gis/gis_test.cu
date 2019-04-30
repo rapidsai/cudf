@@ -73,12 +73,44 @@ struct GISTest : public GdfTest
         }
     }
 
+    T orientation(T p1_x, T p1_y, T p2_x, T p2_y, T p3_x, T p3_y)
+    {
+	    return ((p2_y - p1_y) * (p3_x - p2_x) - (p2_x - p1_x) * (p3_y - p2_y));
+    }
+
     // TODO: Implement  pip host
     std::vector<int32_t> compute_reference_pip(bool print = false)
     {
         // todo: pip host
-        std::vector<int32_t> h_inside_polygon(total_points, 0);//default 0
+        std::vector<int32_t> h_inside_polygon(total_points, -1);
 
+        for (size_t id_point = 0; id_point < point_lats.size(); ++id_point)
+        {
+            T point_lat = point_lats[id_point];
+            T point_lon = point_lons[id_point];
+            int count = 0;
+
+            for (size_t poly_idx = 0; poly_idx < polygon_lats.size() - 1; ++poly_idx)
+            {
+                if(polygon_lons[poly_idx] <= point_lon && point_lon < polygon_lons[poly_idx + 1])
+                {
+                    if (orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat) > 0)
+                    {
+                        count++;
+                    }
+                }
+                else if (point_lon <= polygon_lons[poly_idx] && polygon_lons[poly_idx + 1] < point_lon) 
+                {
+                    if (orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat) > 0)
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            if ((count > 0) && (count % 2 == 0)) h_inside_polygon[id_point] = 1;
+		    else h_inside_polygon[id_point] = 0;
+        }
 
         if(print)
         {
@@ -109,12 +141,11 @@ struct GISTest : public GdfTest
         return host_inside_polygon;
     }
 
-    // TODO: Function to check the range for latitude and longitude
-    
+    // TODO: Function to check the range for latitude and longitude  
 };
 
-
-using Types = testing::Types<float, double>;
+// for coordinates .. float and double
+using Types = testing::Types<double>;
 
 TYPED_TEST_CASE(GISTest, Types);
 
@@ -147,9 +178,4 @@ TYPED_TEST(GISTest, OutsidePolygon)
     for(size_t i = 0; i < reference_pip_result.size(); ++i) {
         EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
     }
-}
-
-TYPED_TEST(GISTest, EmptyPolygon)
-{
-
 }
