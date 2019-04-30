@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from cudf.bindings.csv import cpp_read_csv
+from cudf.bindings.csv import cpp_read_csv, cpp_write_csv
 
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
@@ -163,3 +163,36 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         prefix=prefix,
         index_col=index_col
     )
+
+
+def to_csv(df, path=None, sep=',', na_rep='',
+           columns=None, line_terminator='\n'):
+    """
+    Write a dataframe to csv file format
+
+    Parameters
+    ----------
+    df : DataFrame
+        DataFrame object to be written to csv
+    path : str, default None
+        Path of file where DataFrame will be written
+    sep : char, default ','
+        Delimiter to be used.
+    na_rep : str, default ''
+        String to use for null entries
+    columns : list of str, optional
+        Columns to write
+    line_terminator: char, default '\\n'
+
+    Notes
+    -----
+    Header and index is currently not supported by `to_csv`.
+    No headers or index will be written to the csv file.
+    """
+    return cpp_write_csv(
+        cols=df._cols,
+        path=path,
+        sep=sep,
+        na_rep=na_rep,
+        columns=columns,
+        line_terminator=line_terminator)

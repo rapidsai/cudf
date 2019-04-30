@@ -289,3 +289,73 @@ cpdef cpp_read_csv(
     nvtx_range_pop()
 
     return df
+
+cpdef cpp_write_csv(
+    cols, path = None,
+    sep=',', na_rep='',
+    columns = None, line_terminator = '\n'):
+    """
+    Cython function to call into libcudf API, see `write_csv`.
+
+    See Also
+    --------
+    cudf.io.csv.write_csv
+    """
+
+    nvtx_range_push("CUDF_WRITE_CSV", "purple")
+
+    cdef csv_write_arg csv_writer = csv_write_arg()
+
+    path = str(os.path.expanduser(str(path))).encode()
+
+    csv_writer.filepath = path
+
+    line_terminator = line_terminator.encode()
+    csv_writer.line_terminator = line_terminator
+
+    csv_writer.delimiter = sep.encode()[0]
+
+    na_rep = na_rep.encode()
+    csv_writer.na_rep = na_rep
+
+    # Do not expose true_value and false_value until gdf_bool type
+    # changes added to cpp API
+    true_value = 'true'.encode()
+    csv_writer.true_value = true_value
+    false_value = 'false'.encode()
+    csv_writer.false_value = false_value
+
+    cdef vector[gdf_column*] list_cols
+
+    if columns is not None:
+        if not isinstance(columns, list):
+            raise TypeError('columns must be a list')
+
+        for column_name in columns:
+            if column_name not in cols:
+                raise NameError('column {!r} does not exist in DataFrame'
+                                .format(column_name))
+
+            list_cols.push_back(column_view_from_column(
+                                cols[column_name]._column))
+
+    else:
+        for name, col in cols.items():
+            check_gdf_compatibility(col)
+            list_cols.push_back(column_view_from_column(col._column))
+
+    csv_writer.columns = list_cols.data()
+    csv_writer.num_cols = len(columns) if columns else len(cols)
+
+    # Call write_csv
+    with nogil:
+        result = write_csv(&csv_writer)
+
+    check_gdf_error(result)
+
+    for c_col in list_cols:
+        free(c_col)
+
+    nvtx_range_pop()
+
+    return None
