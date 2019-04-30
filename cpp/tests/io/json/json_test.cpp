@@ -301,11 +301,10 @@ TEST(gdf_json_test, JsonLinesByteRange) {
 TEST(gdf_json_test, JsonLinesObjects) {
   const char *fname = "/tmp/JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
-  outfile << "{\"col1\":1, \"col2\": 2.0}\n";
+  outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
-  const char *types[] = {"int64", "float64"};
   json_read_arg args{};
   args.source = fname;
   args.source_type = FILE_PATH;
@@ -321,7 +320,7 @@ TEST(gdf_json_test, JsonLinesObjects) {
   ASSERT_EQ(args.num_rows_out, 1);
 
   ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(std::string(args.data[0]->col_name), "col1");
+  ASSERT_EQ(std::string(args.data[0]->col_name), "co\\\"l1");
   ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
   ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
 
@@ -330,4 +329,58 @@ TEST(gdf_json_test, JsonLinesObjects) {
 
   const auto secondCol = gdf_column_to_host<double>(args.data[1]);
   EXPECT_THAT(secondCol, ::testing::ElementsAre(2.0));
+}
+
+TEST(gdf_json_test, JsonLinesObjectsStrings) {
+  json_read_arg args{};
+  args.source = "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
+                "{\"col1\":200, \"col2\":2.2, \"col3\":\"bbb\"}\n";
+  args.source_type = HOST_BUFFER;
+  args.buffer_size = strlen(args.source);
+  args.lines = true;
+
+  try {
+    read_json(&args);
+  } catch (std::exception &e) {
+    std::cerr << e.what();
+  }
+
+  ASSERT_EQ(args.num_cols_out, 3);
+  ASSERT_EQ(args.num_rows_out, 2);
+
+  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
+  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
+  ASSERT_EQ(args.data[2]->dtype, GDF_STRING);
+
+  ASSERT_EQ(std::string(args.data[0]->col_name), "col1");
+  ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
+  ASSERT_EQ(std::string(args.data[2]->col_name), "col3");
+
+  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
+  EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
+  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
+  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+
+  const auto stringList = reinterpret_cast<NVStrings *>(args.data[2]->data);
+
+  ASSERT_NE(stringList, nullptr);
+  const auto stringCount = stringList->size();
+  ASSERT_EQ(stringCount, 2u);
+  const auto stringLengths = std::unique_ptr<int[]>{new int[stringCount]};
+  ASSERT_NE(stringList->byte_count(stringLengths.get(), false), 0u);
+
+  // Check the actual strings themselves
+  auto strings = std::unique_ptr<char *[]> { new char *[stringCount] };
+  for (size_t i = 0; i < stringCount; ++i) {
+    ASSERT_GT(stringLengths[i], 0);
+    strings[i] = new char[stringLengths[i] + 1];
+    strings[i][stringLengths[i]] = 0;
+  }
+  EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
+
+  EXPECT_STREQ(strings[0], "aaa");
+  EXPECT_STREQ(strings[1], "bbb");
+  for (size_t i = 0; i < stringCount; ++i) {
+    delete[] strings[i];
+  }
 }

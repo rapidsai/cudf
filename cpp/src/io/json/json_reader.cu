@@ -342,8 +342,7 @@ void JsonReader::uploadDataToDevice() {
   CUDA_TRY(cudaMemcpy(d_data_.data(), uncomp_data_ + start_offset, bytes_to_upload, cudaMemcpyHostToDevice));
 }
 
-
-std::vector<std::string> setColumnNamesFromJsonObject(const std::vector<char>& row, const ParseOptions& opts) {
+std::vector<std::string> setColumnNamesFromJsonObject(const std::vector<char> &row, const ParseOptions &opts) {
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
   bool quotation = false;
@@ -376,7 +375,6 @@ std::vector<std::string> setColumnNamesFromJsonObject(const std::vector<char>& r
   return names;
 }
 
-
 void JsonReader::setColumnNames() {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = d_data_.size() / sizeof(char);
@@ -387,10 +385,13 @@ void JsonReader::setColumnNames() {
   std::vector<char> first_row(first_row_len);
   CUDA_TRY(cudaMemcpy(first_row.data(), d_data_.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
 
-  // TODO seek first bracket
-  bool is_object = (first_row[0] == '{');
-  if (!is_object) {
-    int num_cols = 0;
+  const auto first_square_bracket = std::find(first_row.begin(), first_row.end(), '[');
+  const auto first_curly_bracket = std::find(first_row.begin(), first_row.end(), '{');
+  const bool is_object = first_curly_bracket < first_square_bracket;
+  if (is_object) {
+    column_names_ = setColumnNamesFromJsonObject(first_row, opts_);
+  } else {
+    int cols_found = 0;
     bool quotation = false;
     for (size_t pos = 0; pos < first_row.size(); ++pos) {
       // Flip the quotation flag if current character is a quotechar
@@ -399,14 +400,11 @@ void JsonReader::setColumnNames() {
       }
       // Check if end of a column/row
       else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
-        column_names_.emplace_back(std::to_string(num_cols++));
+        column_names_.emplace_back(std::to_string(cols_found++));
       }
     }
-  } else {
-    column_names_ = setColumnNamesFromJsonObject(first_row, opts_);
   }
 }
-
 
 void JsonReader::convertDataToColumns() {
   const auto num_columns = dtypes_.size();
@@ -476,27 +474,26 @@ struct ConvertFunctor {
   }
 };
 
-
-__device__ void AdjustRangeForBrackets(const char *data, long& start, long& stop) {
+__device__ void AdjustRangeForBrackets(const char *data, long &start, long &stop) {
   while (data[start] != '[' && data[start] != '{') {
     start++;
   }
   start++;
 
-  while (data[stop] != ']' && data[stop] != '}') {
+  while (data[stop - 1] != ']' && data[stop - 1] != '}') {
     stop--;
   }
+  stop--;
 }
 
-__device__ long seekFieldKeyEnd(const char *data, const ParseOptions opts, long pos, long stop) {
+__device__ long seekFieldKeyEnd(const char *data, const ParseOptions opts, long start, long stop) {
   bool quotation = false;
-  for (auto i = pos; i < stop; ++i) {
-    if (data[i] == opts.quotechar) {
+  for (auto pos = start; pos < stop; ++pos) {
+    // Ignore escaped quotes
+    if (data[pos] == opts.quotechar && data[pos - 1] != '\\') {
       quotation = !quotation;
-    } else if (quotation == false) {
-      if (data[i] == ':') {
-        return i + 1;
-      }
+    } else if (!quotation && data[pos] == ':') {
+      return pos + 1;
     }
   }
   return stop;
