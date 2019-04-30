@@ -267,7 +267,7 @@ struct hash_element {
 template <template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
-    hash_value_type* initial_hash_values) {
+    hash_value_type const* __restrict__ initial_hash_values) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
@@ -314,8 +314,7 @@ __device__ inline hash_value_type hash_row(device_table const& t,
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
 
-  // Hashes an element in a column and optionally combines it with an initial
-  // hash value
+  // Hashes an element in a column
   auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
     return cudf::type_dispatcher(t.get_column(column_index)->dtype,
                                  hash_element<hash_function>{},
