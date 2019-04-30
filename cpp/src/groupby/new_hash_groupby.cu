@@ -457,6 +457,12 @@ struct row_equality {
 
   __device__ inline bool operator()(gdf_size_type lhs_index,
                                     gdf_size_type rhs_index) {
+
+    // `unused_index` is not a valid row index, therefore, compare the two
+    // indices directly
+    if ((unused_index == rhs_index) or (unused_index == lhs_index)) {
+      return lhs_index == rhs_index;
+    }
     // TODO Create a `rows_equal` function that doesn't check for NULLs
     return rows_equal(lhs, lhs_index, rhs, rhs_index);
   }
