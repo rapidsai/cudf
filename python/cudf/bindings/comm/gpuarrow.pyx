@@ -77,7 +77,7 @@ def _open_parser(const uint8_t* schema_ptr, size_t schema_len):
     gdf_ipc_parser_close(ipcparser)
 
 
-def _check_error(gdf_ipc_parser_type* ipcparser):
+cdef void _check_error(gdf_ipc_parser_type* ipcparser):
     cdef const char* raw_error
     cdef str error
 
