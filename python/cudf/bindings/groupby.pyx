@@ -336,6 +336,8 @@ def agg(groupby_class, args):
             add_col_values = False  # we only want to add them once
         if(groupby_class._as_index):
             result = groupby_class.apply_multiindex_or_single_index(result)
+        if use_prefix:
+            result = groupby_class.apply_multicolumn(result, args)
     elif isinstance(args, collections.abc.Mapping):
         if (len(args.keys()) == 1):
             if(len(list(args.values())[0]) == 1):
@@ -375,6 +377,8 @@ def agg(groupby_class, args):
             add_col_values = False  # we only want to add them once
         if groupby_class._as_index:
             result = groupby_class.apply_multiindex_or_single_index(result)
+        if use_prefix:
+            result = groupby_class.apply_multicolumn_mapped(result, args)
     else:
         result = groupby_class.agg([args])
 

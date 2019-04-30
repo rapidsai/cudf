@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import numpy as np
+
 from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame
@@ -144,6 +146,31 @@ class Groupby(object):
             for by in self._by:
                 result = result.drop(by)
             return result.set_index(multi_index)
+
+    def apply_multicolumn(self, result, aggs):
+        levels = []
+        codes = []
+        levels.append(self._val_columns)
+        levels.append(aggs)
+        codes.append(list(np.repeat(0, len(aggs))))
+        codes.append(list(range(len(aggs))))
+        from cudf import MultiIndex
+        result.columns = MultiIndex(levels, codes)
+        return result
+
+    def apply_multicolumn_mapped(self, result, aggs):
+        if len(set(aggs.keys())) == len(aggs.keys()) and\
+                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+            result.columns = aggs.keys()
+        else:
+            tuples = []
+            for k in aggs.keys():
+                for v in aggs[k]:
+                    tuples.append((k, v))
+            from cudf import MultiIndex
+            multiindex = MultiIndex.from_tuples(tuples)
+            result.columns = multiindex
+        return result
 
     def __getitem__(self, arg):
         if isinstance(arg, (str, Number)):

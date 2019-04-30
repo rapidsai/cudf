@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
-
+from cudf.tests.utils import assert_eq
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     np.random.seed(seed)
@@ -75,33 +75,30 @@ def test_groupby_agg_mean_min(nelem):
 @pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 def test_groupby_agg_min_max_dictargs(nelem):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ['x', 'y'], method="hash").agg({'a': 'min', 'b': 'max'})
-    got_min = np.sort(got_df['min_a'].to_array())
-    got_max = np.sort(got_df['max_b'].to_array())
-    # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ['x', 'y']).agg({'a': 'min', 'b': 'max'})
-    expect_min = np.sort(expect_df['a'].values)
-    expect_max = np.sort(expect_df['b'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect_min, got_min)
-    np.testing.assert_array_almost_equal(expect_max, got_max)
+    print(expect_df)
+    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ['x', 'y'], method="hash").agg({'a': 'min', 'b': 'max'})
+    assert_eq(expect_df, got_df)
 
 
 @pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 def test_groupby_agg_min_max_dictlist(nelem):
     # gdf (Note: lack of multindex)
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ['x', 'y']).agg({'a': ['min', 'max'], 'b': ['min', 'max']})
+    print(expect_df)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ['x', 'y'], method="hash").agg({'a': ['min', 'max'],
                                         'b': ['min', 'max']})
+    print(got_df.to_pandas())
+    assert_eq(got_df, expect_df)
     got_min_a = np.sort(got_df['min_a'].to_array())
     got_max_a = np.sort(got_df['max_a'].to_array())
     got_min_b = np.sort(got_df['min_b'].to_array())
     got_max_b = np.sort(got_df['max_b'].to_array())
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ['x', 'y']).agg({'a': ['min', 'max'], 'b': ['min', 'max']})
     expect_min_a = np.sort(expect_df['a']['min'].values)
     expect_max_a = np.sort(expect_df['a']['max'].values)
     expect_min_b = np.sort(expect_df['b']['min'].values)
