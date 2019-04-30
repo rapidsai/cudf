@@ -457,7 +457,6 @@ struct row_equality {
 
   __device__ inline bool operator()(gdf_size_type lhs_index,
                                     gdf_size_type rhs_index) {
-
     // `unused_index` is not a valid row index, therefore, compare the two
     // indices directly
     if ((unused_index == rhs_index) or (unused_index == lhs_index)) {
@@ -479,7 +478,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
     std::vector<groupby::distributive_operators> const& operators,
     groupby::Options options, cudaStream_t stream) {
   CUDF_EXPECTS(keys.num_rows() < std::numeric_limits<gdf_size_type>::max(),
-               "Input too large.");
+               "Groupby input size too large.");
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
