@@ -250,8 +250,10 @@ std::vector<gdf_dtype> target_dtypes(
 template <typename SourceType, distributive_operators op,
           typename Enable = void>
 struct update_target_element {
-  void operator()(gdf_column const& target, gdf_size_type target_index,
-                  gdf_column const& source, gdf_size_type source_index) {
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
     release_assert(false && "Invalid Source type and Aggregation combination.");
   }
 };
@@ -425,13 +427,18 @@ __global__ void compute_hash_groupby(
     device_table output_keys, device_table output_values,
     distributive_operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
-  using pair_t = thrust::pair<gdf_size_type, gdf_size_type>;
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
     // Skip rows that contain null keys
     if (bit_mask::is_valid(row_bitmask, i)) {
-      pair_t result = map->groupby_insert(i, input_keys);
+      auto result = map->groupby_insert(i, input_keys);
+      aggregate_row(output_values, result.first->second, input_values, i, ops);
+
+      // Only do this on a new key insert...
+      if (true == result.second) {
+        copy_row(output_keys, result.first->second, input_keys, i);
+      }
     }
     i += blockDim.x * gridDim.x;
   }
@@ -486,8 +493,8 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
       compute_hash_groupby<<<grid_params.num_blocks,
                              grid_params.num_threads_per_block, 0, stream>>>(
-          map.get(), *d_input_keys, *d_input_values, *d_output_keys, *d_output_values,
-          d_operators.data().get(), row_bitmask.data().get());
+          map.get(), *d_input_keys, *d_input_values, *d_output_keys,
+          *d_output_values, d_operators.data().get(), row_bitmask.data().get());
     }
   }
 

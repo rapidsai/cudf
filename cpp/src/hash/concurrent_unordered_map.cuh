@@ -319,7 +319,7 @@ public:
      * @return If an insert occurred, returns the inserted pair. Otherwise,
      * returns the existing pair.
      *---------------------------------------------------------------------------**/
-    __device__ inline value_type groupby_insert(key_type insert_row_index,
+    __device__ inline auto groupby_insert(key_type insert_row_index,
                                                device_table const& table) {
 
       hash_value_type const row_hash_value{hash_row(table, insert_row_index)};
@@ -340,12 +340,19 @@ public:
         if (unused_key == old_key) {
           // atomicaly increment a global counter for size of the hash table
           // value_type old_value = atomicAdd(size, value_type{1});
-          //return thrust::make_pair(insert_row_index, old_value);
+          //existing_value = old_value;
+          return thrust::make_pair(
+              iterator{m_hashtbl_values, m_hashtbl_values + m_hashtbl_capacity,
+                       current_pair},
+              true);
         }
 
         if (rows_equal(table, insert_row_index, table, old_key)) {
           //Just return the existing aggregation row index
-          return thrust::make_pair(insert_row_index, existing_value);
+          return thrust::make_pair(
+              iterator{m_hashtbl_values, m_hashtbl_values + m_hashtbl_capacity,
+                       current_pair},
+              false);
         }
 
         index = (index + 1) % m_hashtbl_size;
