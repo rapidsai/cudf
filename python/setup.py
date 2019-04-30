@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from glob import glob
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
 from Cython.Build import cythonize
@@ -13,7 +14,7 @@ install_requires = [
     'cython'
 ]
 
-cython_files = ['cudf/bindings/*.pyx']
+cython_files = glob('cudf/bindings/**/*.pyx', recursive=True)
 
 extensions = [
     Extension("*",
