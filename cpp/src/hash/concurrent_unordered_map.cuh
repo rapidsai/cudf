@@ -305,23 +305,29 @@ public:
      * corresponding device_table.
      *
      * If a row equal to the row at the key index does not exist in the hash
-     * table, the key and the current hash table size are stored as a (key,value)
-     * pair. The newly stored pair is then returned.
+     * table, the key and the current hash table size are stored as a
+     * (key,value) pair.
      *
-     * If a row equal to the row at the key index *does* exist in the table, the
-     * previously stored (row index, size) pair is returned.
+     * If a row equal to the row at the key index *does* exist in the table, no
+     * action occurs.
      *
-     * TODO: Can we avoid such a non-generic function?
+     * An iterator and boolean pair is returned. The iterator points either to
+     * the newly inserted key,value pair, or the already existing key value
+     * pair. If a new key,value pair was inserted, the boolean is true. If the
+     * key already existed, the boolean is false.
+     *
+     * TODO: Refactor this to be more generic.
+     * Perhaps an implementation using find/insert w/ hints.
      *
      * @param key The key to insert (assumed to be a row index)
      * @param table The table that contains the rows referenced by the inserted
      * key indices
-     * @return If an insert occurred, returns the inserted pair. Otherwise,
-     * returns the existing pair.
+     * @return If an insert occurred, returns an iterator to the insert location
+     * and a `true` boolean. Otherwise, returns an iterator to the existing key
+     * and a `false` boolean.
      *---------------------------------------------------------------------------**/
     __device__ inline auto groupby_insert(key_type insert_row_index,
-                                               device_table const& table) {
-
+                                          device_table const& table) {
       hash_value_type const row_hash_value{hash_row(table, insert_row_index)};
 
       size_type index = row_hash_value % m_hashtbl_size;

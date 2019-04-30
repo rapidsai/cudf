@@ -429,10 +429,13 @@ __global__ void compute_hash_groupby(
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
+  using result_t = thrust::pair<typename Map::iterator, bool>;
+
   while (i < input_keys.num_rows()) {
     // Skip rows that contain null keys
     if (bit_mask::is_valid(row_bitmask, i)) {
-      auto result = map->groupby_insert(i, input_keys);
+      result_t result = map->groupby_insert(i, input_keys);
+
       aggregate_row(output_values, result.first->second, input_values, i, ops);
 
       // Only do this on a new key insert...
