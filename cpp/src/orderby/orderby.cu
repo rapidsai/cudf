@@ -22,11 +22,13 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
+#include "dataframe/device_table.cuh"
+
 #include "rmm/thrust_rmm_allocator.h"
 
 #include "../sqls/sqls_rtti_comp.h"
 
-namespace{ //annonymus
+// namespace{ //annonymus
 
   // gdf_error multi_col_order_by(gdf_column** cols,
   //                              int8_t* asc_desc,
@@ -60,7 +62,7 @@ namespace{ //annonymus
   //   return GDF_SUCCESS;
   // }
 
-} //end unknown namespace
+// } //end unknown namespace
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -79,6 +81,8 @@ namespace{ //annonymus
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
+
+
 gdf_error gdf_order_by(gdf_column** cols,
                        int8_t* asc_desc,
                        size_t ncols,
@@ -90,20 +94,20 @@ gdf_error gdf_order_by(gdf_column** cols,
   /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
   GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
     
-  cudaStream_t  stream = NULL
-  gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data;
-  gdf_size_type = nrows = cols[0]->size
+  cudaStream_t stream = NULL;
+  gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
+  gdf_size_type nrows = cols[0]->size;
 
-  device_table table = device_table.create(ncols, cols, stream);
+  auto table = device_table::create(ncols, cols, stream);
   bool nulls_are_smallest = flag_nulls_are_smallest == 1;
 
-  inequality_comparator ineq_op(table, nulls_are_smallest, asc_desc);
+  inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc);
  
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
 
   thrust::sort(rmm::exec_policy(stream)->on(stream),
 				         d_indx, d_indx+nrows,
-				        ineq_op());
+                 ineq_op);				        
 
   return GDF_SUCCESS;
   
