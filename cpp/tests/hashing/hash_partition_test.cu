@@ -18,7 +18,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <utilities/int_fastdiv.h>
-#include <dataframe/device_table.cuh>
+#include <table/device_table.cuh>
 #include <hash/hash_functions.cuh>
 
 #include <cudf.h>
@@ -263,7 +263,12 @@ struct TestParameters
   // The indices of the columns that will be hashed to determine the partitions
   constexpr static const std::array<int, sizeof...(cols)> cols_to_hash{{cols...}};
 };
-
+// Some compilers require this extra declaration outside the class to avoid an
+// `undefined reference` link error with the array
+template< typename tuple_of_vectors,
+          gdf_hash_func hash,
+          int... cols>
+constexpr const std::array<int, sizeof...(cols)> TestParameters<tuple_of_vectors, hash, cols...>::cols_to_hash;
 
 // Using Google Tests "Type Parameterized Tests"
 // Every test defined as TYPED_TEST(HashPartitionTest, *) will be run once for every instance of

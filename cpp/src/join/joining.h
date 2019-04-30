@@ -22,7 +22,7 @@
 
 #include "cudf/functions.h"
 #include "cudf/types.h"
-#include "dataframe/device_table.cuh"
+#include <table/device_table.cuh>
 
 #include "sort_join.cuh"
 #include "join_compute_api.h"
