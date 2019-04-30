@@ -812,7 +812,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
         day = v.z;
         // Convert from Julian day at noon to UTC seconds
         day = (day - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
-        ts = (day * INT96_TS_CLKRATE) + (nanos + (499999999 / INT96_TS_CLKRATE)) / (1000000000 / INT96_TS_CLKRATE);
+        ts = (day * kINT96ClkRate) + (nanos + (499999999 / kINT96ClkRate)) / (1000000000 / kINT96ClkRate);
     }
     else
     {
