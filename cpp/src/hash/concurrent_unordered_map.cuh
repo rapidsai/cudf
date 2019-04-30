@@ -17,22 +17,21 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
+
+#include "cudf.h"
+#include "groupby/aggregation_operations.hpp"
+#include "managed_allocator.cuh"
+#include "managed.cuh"
+#include "hash_functions.cuh"
+#include "helper_functions.cuh"
+#include "utilities/device_atomics.cuh"
+#include <table/device_table.cuh>
+
 #include <iterator>
 #include <type_traits>
 #include <cassert>
 #include <iostream>
 #include <thrust/pair.h>
-
-#include "cudf.h"
-#include "groupby/aggregation_operations.hpp"
-
-#include "managed_allocator.cuh"
-#include "managed.cuh"
-#include "hash_functions.cuh"
-
-#include "helper_functions.cuh"
-
-#include "utilities/device_atomics.cuh"
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
@@ -295,65 +294,65 @@ public:
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
     }
-    
-    /* This function is not currently implemented
-    __forceinline__
-    __host__ __device__ iterator insert(const value_type& x)
-    {
-        const size_type hashtbl_size    = m_hashtbl_size;
-        value_type* hashtbl_values      = m_hashtbl_values;
-        const size_type key_hash        = m_hf( x.first );
-        size_type hash_tbl_idx          = key_hash%hashtbl_size;
-        
-        value_type* it = 0;
-        
-        while (0 == it) {
-            value_type* tmp_it = hashtbl_values + hash_tbl_idx;
-#ifdef __CUDA_ARCH__
-            if ( std::numeric_limits<key_type>::is_integer && std::numeric_limits<mapped_type>::is_integer &&
-                 sizeof(unsigned long long int) == sizeof(value_type) )
-            {
-                pair2longlong converter = {0ull};
-                converter.pair = thrust::make_pair( unused_key, m_unused_element );
-                const unsigned long long int unused = converter.longlong;
-                converter.pair = x;
-                const unsigned long long int value = converter.longlong;
-                const unsigned long long int old_val = atomicCAS( reinterpret_cast<unsigned long long int*>(tmp_it), unused, value );
-                if ( old_val == unused ) {
-                    it = tmp_it;
-                }
-                else if ( count_collisions )
-                {
-                    atomicAdd( &m_collisions, 1 );
-                }
-            } else {
-                const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
-                if ( m_equal( unused_key, old_key ) ) {
-                    (m_hashtbl_values+hash_tbl_idx)->second = x.second;
-                    it = tmp_it;
-                }
-                else if ( count_collisions )
-                {
-                    atomicAdd( &m_collisions, 1 );
-                }
-            }
-#else
-            
-            #pragma omp critical
-            {
-                if ( m_equal( unused_key, tmp_it->first ) ) {
-                    hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
-                    it = tmp_it;
-                }
-            }
-#endif
-            hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+
+    /**---------------------------------------------------------------------------*
+     * @brief Specialized insert for hash-based groupby
+     *
+     * This is a non-generic insert function tailor made for use in the
+     * hash-based groupby implementation.
+     *
+     * Inserts a key into the hash table. The key is the index of a row in a
+     * corresponding device_table.
+     *
+     * If a row equal to the row at the key index does not exist in the hash
+     * table, the key and the current hash table size are stored as a (key,value)
+     * pair. The newly stored pair is then returned.
+     *
+     * If a row equal to the row at the key index *does* exist in the table, the
+     * previously stored (row index, size) pair is returned.
+     *
+     * TODO: Can we avoid such a non-generic function?
+     *
+     * @param key The key to insert (assumed to be a row index)
+     * @param table The table that contains the rows referenced by the inserted
+     * key indices
+     * @return If an insert occurred, returns the inserted pair. Otherwise,
+     * returns the existing pair.
+     *---------------------------------------------------------------------------**/
+    __device__ inline value_type groupby_insert(key_type insert_row_index,
+                                               device_table const& table) {
+
+      hash_value_type const row_hash_value{hash_row(table, insert_row_index)};
+
+      size_type index = row_hash_value % m_hashtbl_size;
+      value_type* current_pair = &(m_hashtbl_values[index]);
+
+      while (true) {
+        key_type& existing_key = current_pair->first;
+        mapped_type& existing_value = current_pair->second;
+
+        // Try and set the existing_key for the current hash bucket to
+        // insert_key
+        const key_type old_key =
+            atomicCAS(&existing_key, unused_key, insert_row_index);
+
+        // New insert
+        if (unused_key == old_key) {
+          // atomicaly increment a global counter for size of the hash table
+          // value_type old_value = atomicAdd(size, value_type{1});
+          //return thrust::make_pair(insert_row_index, old_value);
         }
-        
-        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
+
+        if (rows_equal(table, insert_row_index, table, old_key)) {
+          //Just return the existing aggregation row index
+          return thrust::make_pair(insert_row_index, existing_value);
+        }
+
+        index = (index + 1) % m_hashtbl_size;
+        current_pair = &(m_hashtbl_values[index]);
+      }
     }
-    */
-    
+
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
     {
