@@ -27,6 +27,13 @@ Example Usage:
 
 For a full list of available gpuCI docker images, visit our [DockerHub](https://hub.docker.com/r/gpuci/rapidsai-base/tags) page.
 
+Style Check:
+```bash
+$ bash ci/local/build.sh -r ~/rapids/cuml -s
+$ source activate gdf    #Activate gpuCI conda environment
+$ cd rapids
+$ flake8 python
+```
 
 ## Information
 
