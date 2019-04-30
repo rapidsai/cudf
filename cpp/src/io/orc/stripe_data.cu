@@ -1029,7 +1029,16 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
  * @brief Powers of 10
  *
  **/
-#if !DECIMALS_AS_FLOAT64
+#if DECIMALS_AS_FLOAT64
+static const __device__ __constant__ double kPow10[40] =
+{
+    1.0,    1.e1,   1.e2,   1.e3,   1.e4,   1.e5,   1.e6,   1.e7,
+    1.e8,   1.e9,   1.e10,  1.e11,  1.e12,  1.e13,  1.e14,  1.e15,
+    1.e16,  1.e17,  1.e18,  1.e19,  1.e20,  1.e21,  1.e22,  1.e23,
+    1.e24,  1.e25,  1.e26,  1.e27,  1.e28,  1.e29,  1.e30,  1.e31,
+    1.e32,  1.e33,  1.e34,  1.e35,  1.e36,  1.e37,  1.e38,  1.e39,
+};
+#else // DECIMALS_AS_FLOAT64
 static const __device__ __constant__ int64_t kPow10[19] =
 {
     1,
@@ -1068,7 +1077,7 @@ static const __device__ __constant__ int64_t kPow10[19] =
 static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int col_scale, int t)
 {
 #if DECIMALS_AS_FLOAT64
-    double scale = (t < numvals) ? exp10((double)-vals[t]) : 0.0;
+    int scale = (t < numvals) ? (int)vals[t] : 0;
 #else
     int scale = (t < numvals) ? col_scale - (int)vals[t] : 0;
 #endif
@@ -1097,7 +1106,10 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
         int64_t v;
         decode_varint(bs, pos, v);
 #if DECIMALS_AS_FLOAT64
-        reinterpret_cast<volatile double *>(vals)[t] = scale * v;
+        if (scale >= 0)
+            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) / kPow10[min(scale, 39)];
+        else
+            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) * kPow10[min(-scale, 39)];
 #else
         if (scale > 0)
         {
