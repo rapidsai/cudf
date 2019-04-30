@@ -421,55 +421,21 @@ __device__ inline void aggregate_row(device_table const& target,
 
 template <typename Map>
 __global__ void compute_hash_groupby(
-    Map const& map, device_table input_keys, device_table input_values,
+    Map* map, device_table input_keys, device_table input_values,
     device_table output_keys, device_table output_values,
     distributive_operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+  using pair_t = thrust::pair<gdf_size_type, gdf_size_type>;
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
     // Skip rows that contain null keys
     if (bit_mask::is_valid(row_bitmask, i)) {
+      pair_t result = map->groupby_insert(i, input_keys);
     }
     i += blockDim.x * gridDim.x;
   }
 }
-
-struct row_hasher {
-  row_hasher(device_table const& _table) : table{_table} {}
-
-  // TODO Remove when old groupby implementation is removed.
-  // This is only to satisfy some old code in the
-  // concurrent_unordered_map::insert used in the old groupby impl
-  using result_type = hash_value_type;
-
-  __device__ inline hash_value_type operator()(gdf_size_type row_index) {
-    return hash_row(table, row_index);
-  }
-
-  device_table const table;
-};
-
-struct row_equality {
-  row_equality(device_table const& _lhs, device_table const& _rhs,
-               gdf_size_type _unused_index)
-      : lhs{_lhs}, rhs{_rhs}, unused_index{_unused_index} {}
-
-  __device__ inline bool operator()(gdf_size_type lhs_index,
-                                    gdf_size_type rhs_index) {
-    // `unused_index` is not a valid row index, therefore, compare the two
-    // indices directly
-    if ((unused_index == rhs_index) or (unused_index == lhs_index)) {
-      return lhs_index == rhs_index;
-    }
-    // TODO Create a `rows_equal` function that doesn't check for NULLs
-    return rows_equal(lhs, lhs_index, rhs, rhs_index);
-  }
-
-  device_table const lhs;
-  device_table const rhs;
-  gdf_size_type const unused_index;
-};
 
 }  // namespace
 
@@ -502,16 +468,12 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
       std::numeric_limits<gdf_size_type>::max()};
 
   using map_type = concurrent_unordered_map<
-      gdf_size_type, gdf_size_type, unused_key,
-      decltype(row_hasher{std::declval<device_table>()}),
-      decltype(row_equality{std::declval<device_table>(),
-                            std::declval<device_table>(),
-                            std::declval<gdf_size_type>()}),
+      gdf_size_type, gdf_size_type, unused_key, default_hash<gdf_size_type>,
+      equal_to<gdf_size_type>,
       legacy_allocator<thrust::pair<gdf_size_type, gdf_size_type>>>;
 
-  std::unique_ptr<map_type> map = std::make_unique<map_type>(
-      compute_hash_table_size(keys.num_rows()), 0, row_hasher{*d_input_keys},
-      row_equality{*d_input_keys, *d_input_keys, unused_key});
+  std::unique_ptr<map_type> map =
+      std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()), 0);
 
   if (options.ignore_null_keys) {
     using namespace bit_mask;
@@ -524,7 +486,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
 
       compute_hash_groupby<<<grid_params.num_blocks,
                              grid_params.num_threads_per_block, 0, stream>>>(
-          map, *d_input_keys, *d_input_values, *d_output_keys, *d_output_values,
+          map.get(), *d_input_keys, *d_input_values, *d_output_keys, *d_output_values,
           d_operators.data().get(), row_bitmask.data().get());
     }
   }
