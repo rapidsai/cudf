@@ -102,6 +102,7 @@
 - PR #1507 Parquet Reader: Default string data to GDF_STRING
 - PR #1535 Fix doc issue to ensure correct labelling of cudf.series
 - PR #1537 Fix `undefined reference` link error in HashPartitionTest
+- PR #1551 CSV Reader: Fix integer column name indexing
 
 
 # cuDF 0.6.1 (25 Mar 2019)
