@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <dataframe/device_table.cuh>
+#include <table/device_table.cuh>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"

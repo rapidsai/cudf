@@ -20,7 +20,7 @@
 
 #include <hash/managed.cuh>
 #include "hash_groupby_kernels.cuh"
-#include "dataframe/device_table.cuh"
+#include <table/device_table.cuh>
 #include <copying/gather.hpp>
 #include "rmm/thrust_rmm_allocator.h"
 #include "types.hpp"
@@ -32,6 +32,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
+#include <algorithm>
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
