@@ -51,13 +51,6 @@
 
 using string_pair = std::pair<const char *, size_t>;
 
-/**---------------------------------------------------------------------------*
- * @brief Reads JSON-structured data and returns an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
- *---------------------------------------------------------------------------**/
 gdf_error read_json(json_read_arg *args) {
   // Check if the passed arguments are valid
   CUDF_EXPECTS(args != nullptr, "The args parameter cannot be null.\n");
