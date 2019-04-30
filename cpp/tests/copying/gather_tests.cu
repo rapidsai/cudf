@@ -15,7 +15,7 @@
  */
 
 #include "copying.hpp"
-#include "types.hpp"
+#include <table/table.hpp>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -31,7 +31,7 @@ template <typename T>
 struct GatherTest : GdfTest {};
 
 using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, DtypeMistach){
@@ -98,7 +98,7 @@ TYPED_TEST(GatherTest, IdentityTest) {
   constexpr gdf_size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }};
 
   thrust::device_vector<gdf_index_type> gather_map(destination_size);
@@ -127,7 +127,7 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
                 "Source and destination columns must be the same size.");
 
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }};
 
   // Create gather_map that reverses order of source_column
@@ -173,7 +173,7 @@ TYPED_TEST(GatherTest, AllNull) {
 
   // source column has all null values
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return false; }};
 
   // Create gather_map that gathers to random locations
@@ -218,7 +218,7 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
 
   // elements with even indices are null
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return row % 2; }};
 
   // Gather null values to the last half of the destination column
