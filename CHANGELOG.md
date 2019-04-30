@@ -20,8 +20,9 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
-- PR #1508 Add Series isna, isnull, and notna
+- PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
+- PR #1508 Add Series isna, isnull, and notna
 
 ## Improvements
 
@@ -57,6 +58,7 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1503 Convert sorting and hashing ops CFFI to Cython
@@ -93,11 +95,14 @@
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1491 Use more specific directories & groups in CODEOWNERS
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
 - PR #1510 Added nvstrings `fillna()` function
 - PR #1507 Parquet Reader: Default string data to GDF_STRING
+- PR #1535 Fix doc issue to ensure correct labelling of cudf.series
+- PR #1537 Fix `undefined reference` link error in HashPartitionTest
 
 
 # cuDF 0.6.1 (25 Mar 2019)
