@@ -21,7 +21,6 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils.utils import mask_dtype, mask_bitsize
 from cudf.dataframe import Series
-from libgdf_cffi import ffi, libgdf
 
 
 _logger = logging.getLogger(__name__)
