@@ -18,7 +18,11 @@
 
 #include <stdlib.h>
 
-// DOXY
+
+// TODO merge with DataSource
+/**
+ * @brief Helper class for memory mapping a file source
+ **/
 class MappedFile {
   int fd_ = -1;
   size_t size_ = 0;

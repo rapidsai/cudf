@@ -124,7 +124,7 @@ private:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void detectDataTypes(ColumnInfo *d_columnData);
+  void detectDataTypes(ColumnInfo *column_infos);
 
   /**---------------------------------------------------------------------------*
    * @brief Parse the input data and store results in dsf columns
@@ -141,13 +141,13 @@ private:
    *
    * @param[in] dtypes The data type of each column
    * @param[out] gdf_columns The output column data
-   * @param[out] valid The bitmaps indicating whether column fields are valid
+   * @param[out] valid_fields The bitmaps indicating which column fields are valid
    * @param[out] num_valid_fields The numbers of valid fields in columns
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid,
-                            gdf_size_type *num_valid);
+  void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid_fields,
+                            gdf_size_type *num_valid_fields);
 
 public:
   /**---------------------------------------------------------------------------*
@@ -169,6 +169,8 @@ public:
    *
    * Transfers the ownership from private data members without copying
    * the gdf column data
+   *
+   * @param[out] out_args Pointer to the output structure to be populated
    *
    * @return void
    *---------------------------------------------------------------------------**/

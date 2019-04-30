@@ -544,10 +544,10 @@ __global__ void detectJsonDataTypes(char *data, size_t data_size, const ParseOpt
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
   // Adjust for brackets
-  while (data[start++] != '[')
-    ;
-  while (data[--stop] != ']')
-    ;
+  while (data[start++] != '[') {
+  }
+  while (data[--stop] != ']') {
+  }
 
   for (int col = 0; col < num_columns; col++) {
     const long field_end = seekFieldEnd(data, opts, start, stop);
