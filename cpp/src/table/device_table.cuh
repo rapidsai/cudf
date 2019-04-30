@@ -56,8 +56,8 @@ class device_table {
    * Instead, the underlying device memory will not be free'd until the returned
    * `unique_ptr` invokes its deleter.
    *
-   * The methods of this class with `stream` parameters are asynchronous with respect to other CUDA streams and do not synchronize `stream`.
-   * Usage:
+   * The methods of this class with `stream` parameters are asynchronous with
+   *respect to other CUDA streams and do not synchronize `stream`. Usage:
    * ```
    * gdf_column * col;
    * auto device_table_ptr = device_table::create(1, &col);
@@ -248,7 +248,8 @@ struct hash_element {
 
 /**
  * --------------------------------------------------------------------------*
- * @brief Computes the hash value for a row in a table
+ * @brief Computes the hash value for a row in a table with an initial hash
+ * value for each column.
  *
  * @note NULL values are treated as an implementation defined discrete value,
  * such that hashing any two NULL values in columns of the same type will return
@@ -256,7 +257,7 @@ struct hash_element {
  *
  * @param[in] t The table whose row will be hashed
  * @param[in] row_index The row of the table to compute the hash value for
- * @param[in] initial_hash_values Optional array of initial hash values for each
+ * @param[in] initial_hash_values Array of initial hash values for each
  * column
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
@@ -266,7 +267,7 @@ struct hash_element {
 template <template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
-    hash_value_type* initial_hash_values = nullptr) {
+    hash_value_type* initial_hash_values) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
@@ -279,11 +280,46 @@ __device__ inline hash_value_type hash_row(
         t.get_column(column_index)->dtype, hash_element<hash_function>{},
         *t.get_column(column_index), row_index);
 
-    if (initial_hash_values != nullptr) {
-      hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
-    }
+    hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
 
     return hash_value;
+  };
+
+  // Hash each element and combine all the hash values together
+  return thrust::transform_reduce(
+      thrust::seq, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(t.num_columns()), hasher,
+      hash_value_type{0}, hash_combiner);
+}
+
+/**
+ * --------------------------------------------------------------------------*
+ * @brief Computes the hash value for a row in a table
+ *
+ * @note NULL values are treated as an implementation defined discrete value,
+ * such that hashing any two NULL values in columns of the same type will return
+ * the same hash value.
+ *
+ * @param[in] t The table whose row will be hashed
+ * @param[in] row_index The row of the table to compute the hash value for
+ * @tparam hash_function The hash function that is used for each element in
+ * the row, as well as combine hash values
+ *
+ * @return The hash value of the row
+ * ----------------------------------------------------------------------------**/
+template <template <typename> class hash_function = default_hash>
+__device__ inline hash_value_type hash_row(device_table const& t,
+                                           gdf_size_type row_index) {
+  auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+    return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+  };
+
+  // Hashes an element in a column and optionally combines it with an initial
+  // hash value
+  auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
+    return cudf::type_dispatcher(t.get_column(column_index)->dtype,
+                                 hash_element<hash_function>{},
+                                 *t.get_column(column_index), row_index);
   };
 
   // Hash each element and combine all the hash values together
