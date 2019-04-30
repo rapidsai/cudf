@@ -70,6 +70,8 @@
 - PR #1446 Merge 1275 hotfix from master into branch-0.7
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1454 Fix local build script improperly change directory permissions
+- PR #1548 Fix ci/local/build.sh README from using an incorrect image example
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
