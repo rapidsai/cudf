@@ -64,6 +64,16 @@ const char* name_from_type(gdf_dtype type)
     default:          return "GDF_INVALID";
   }
 }
+ 
+struct warmup
+{
+  template <typename T, typename Init, typename Bench>
+  void operator()(Init init, Bench bench, int fraction=100)
+  {
+    auto columns = init(T{0}, fraction);
+    bench(columns.first, columns.second);
+  }
+};
 
 struct benchmark
 {
@@ -96,6 +106,7 @@ void benchmark_types(gdf_dtype type, Init init, Bench bench,
     types = {type};
 
   for (gdf_dtype t : types) {
+    cudf::type_dispatcher(t, warmup(), init, bench);
     std::cout << name_from_type(t) << ",";
     if (shmoo) {
       for (int fraction = 0; fraction <= 100; fraction += pct_step)

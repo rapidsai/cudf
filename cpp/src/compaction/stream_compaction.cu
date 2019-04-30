@@ -25,57 +25,49 @@
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
+#include <utilities/cuda_utils.hpp>
 #include <cub/cub.cuh>
 
 
 namespace {
 
+static constexpr int warp_size = 32;
+
 __device__ __forceinline__
-bool is_valid(uint32_t const * __restrict__ bitmask, gdf_index_type i) {
-  return (bitmask[i / 32] >> (i %32)) & 1;
+bool is_valid(uint32_t const * __restrict__ bitmask, gdf_index_type i)
+{
+  return (bitmask[i / warp_size] >> (i %warp_size)) & 1;
 }
 
-struct nonnull_and_true {
-  nonnull_and_true(gdf_column const boolean_mask)
-      : data{static_cast<cudf::bool8*>(boolean_mask.data)},
-        bitmask{reinterpret_cast<uint32_t const *>(boolean_mask.valid)} {
-    CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Expected boolean column");
-    CUDF_EXPECTS(boolean_mask.data != nullptr, "Null boolean_mask data");
-    CUDF_EXPECTS(boolean_mask.valid != nullptr, "Null boolean_mask bitmask");
-  }
+__device__ inline 
+bool valid_and_true(cudf::bool8 const* __restrict__ data,
+                    uint32_t    const* __restrict__ bitmask,
+                    gdf_index_type i)
+{
+  bool valid = is_valid(bitmask, i);
+  return (cudf::true_v == data[i]) && valid;
+}
 
-  __device__ bool operator()(gdf_index_type i) {
-    bool valid = is_valid(bitmask, i);//(bitmask[i / 32] >> (i %32)) & 1;
-    return ((cudf::true_v == data[i]) && valid);
-  }
-
- private:
-  cudf::bool8 const * __restrict__ const data;
-  uint32_t const * __restrict__ const bitmask;
-};
 }  // namespace
 
 namespace cudf {
 
-template <int block_size, int per_thread, typename MaskFunc>
+template <int block_size, int per_thread>
 __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
-                                     gdf_size_type                 mask_size,
-                                     MaskFunc                       mask)
+                                     cudf::bool8 const* __restrict__ mask_data,
+                                     uint32_t const* __restrict__ mask_valid,
+                                     gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
-
   int count = 0;
-  
+
   for (int i = 0; i < per_thread; i++) {
-    bool passes = (tid < mask_size) && mask(tid);
-    
-    count += __syncthreads_count(passes);
+    bool pass = (tid < mask_size) && valid_and_true(mask_data, mask_valid, tid);
+    count += __syncthreads_count(pass);
     tid += block_size;
   }
-  
-  if (threadIdx.x == 0) {
-    block_counts[blockIdx.x] = count;
-  }
+
+  if (threadIdx.x == 0) block_counts[blockIdx.x] = count;
 }
 
 template <int block_size>
@@ -91,63 +83,49 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
   return offset;
 }
 
-static constexpr int warp_size = 32;
-
-template <typename T, int block_size, int per_thread, typename MaskFunc>
-__global__ void scatter_no_valid(//gdf_column *output_column,
-                                 //gdf_column const * input_column,
-                                 T* __restrict__ output_data,
+template <typename T, int block_size, int per_thread>
+__launch_bounds__(block_size, 2048/block_size)
+__global__ void scatter_no_valid(T* __restrict__ output_data,
                                  gdf_valid_type * __restrict__ output_valid,
                                  gdf_size_type * output_null_count,
                                  T const * __restrict__ input_data,
                                  gdf_valid_type const * input_valid,
                                  gdf_size_type  * __restrict__ block_offsets,
-                                 gdf_size_type mask_size,
-                                 gdf_size_type num_columns,
-                                 MaskFunc mask)
+                                 cudf::bool8 const * __restrict__ mask_data,
+                                 uint32_t const * __restrict__ mask_valid,
+                                 gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
   
   for (int i = 0; i < per_thread; i++) {
 
-    bool mask_true = (tid < mask_size) && mask(tid);
+    bool mask_true = (tid < mask_size) && 
+                     valid_and_true(mask_data, mask_valid, tid);
 
     // get output location
     gdf_index_type block_sum = 0;
     const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
+    if (mask_true)
+      output_data[local_index + block_offset] = input_data[tid];
 
-    if (mask_true) {
-
-      const gdf_index_type in_index = tid;
-      const gdf_index_type out_index = local_index + block_offset;
-
-      //for (int c = 0; c < num_columns; c++) {
-
-      //T * __restrict__ out_ptr = static_cast<T*>(output_column->data);
-      //T const * __restrict__ in_ptr  = static_cast<T const*>(input_column->data);
-
-      //out_ptr[out_index] = in_ptr[in_index];
-      output_data[out_index] = input_data[in_index];
-    }
     block_offset += block_sum;
     tid += block_size;
   }
 }
 
-template <typename T, int block_size, int per_thread, typename MaskFunc>
-__global__ void scatter_with_valid(//gdf_column *output_column,
-                                   //gdf_column const * input_column,
-                                   T* __restrict__ output_data,
+template <typename T, int block_size, int per_thread>
+__launch_bounds__(block_size, 2048/block_size)
+__global__ void scatter_with_valid(T* __restrict__ output_data,
                                    gdf_valid_type * __restrict__ output_valid,
                                    gdf_size_type * output_null_count,
                                    T const * __restrict__ input_data,
                                    gdf_valid_type const * input_valid,
                                    gdf_size_type  * __restrict__ block_offsets,
-                                   gdf_size_type mask_size,
-                                   gdf_size_type num_columns,
-                                   MaskFunc mask)
+                                   cudf::bool8 const * __restrict__ mask_data,
+                                   uint32_t const * __restrict__ mask_valid,
+                                   gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
@@ -158,7 +136,8 @@ __global__ void scatter_with_valid(//gdf_column *output_column,
   
   for (int i = 0; i < per_thread; i++) {
 
-    bool mask_true = (tid < mask_size) && mask(tid);
+    bool mask_true = (tid < mask_size) && 
+                     valid_and_true(mask_data, mask_valid, tid);
 
     // get output location
     gdf_index_type block_sum = 0;
@@ -225,7 +204,6 @@ __global__ void scatter_with_valid(//gdf_column *output_column,
       if (wid == 0) {
         int32_t valid_warp =
           __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
-        //if (lane == 0) printf("X bid: %d, wid: %d, al_off: %d, valid_index: %d, valid_warp: %x\n", blockIdx.x, wid, aligned_offset, valid_index+num_warps, valid_warp);
         if (lane == 0 && valid_warp != 0) {
           warp_valid_counts[wid] += __popc(valid_warp);
           atomicOr(&valid_ptr[valid_index + num_warps], valid_warp);
@@ -243,7 +221,7 @@ __global__ void scatter_with_valid(//gdf_column *output_column,
       uint32_t block_valid_count =
         cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
       
-        if (lane == 0) {
+      if (lane == 0) {
         atomicAdd(output_null_count, block_sum - block_valid_count);
       }
     }
@@ -256,20 +234,23 @@ __global__ void scatter_with_valid(//gdf_column *output_column,
 template <int block_size, int per_thread>
 struct scatter_functor 
 {
-  template <typename T, typename MaskFunc>
+  template <typename T>
   void operator()(gdf_column *output_column,
                   gdf_column const * input_column,
                   gdf_size_type  *block_offsets,
+                  cudf::bool8 const * __restrict__ mask_data,
+                  uint32_t const * __restrict__ mask_valid,
                   gdf_size_type mask_size,
-                  gdf_size_type num_columns,
-                  bool has_valid,
-                  MaskFunc mask) {
-    constexpr int per_block = block_size * per_thread; 
-    int num_blocks = (mask_size + per_block - 1) / per_block;
+                  bool has_valid) {
+    cudf::util::cuda::grid_config_1d grid{mask_size, block_size, per_thread};
+    
+    auto scatter = (has_valid) ?
+      scatter_with_valid<T, block_size, per_thread> :
+      scatter_no_valid<T, block_size, per_thread>;
 
-    auto scatter_kernel = (has_valid) ? 
-      scatter_with_valid<T, block_size, per_thread, MaskFunc> :
-      scatter_no_valid<T, block_size, per_thread, MaskFunc>;
+    /*struct cudaFuncAttributes funcAttrib;
+    CUDA_TRY(cudaFuncGetAttributes(&funcAttrib, scatter));
+    printf("%s numRegs=%d\n", "scatter", funcAttrib.numRegs);*/
 
     gdf_size_type *null_count = nullptr;
     if (has_valid) {
@@ -277,18 +258,19 @@ struct scatter_functor
       CUDA_TRY(cudaMemset(null_count, 0, sizeof(gdf_size_type)));
     }
 
-    scatter_kernel<<<num_blocks, block_size>>>(static_cast<T*>(output_column->data),
-                                               output_column->valid,
-                                               null_count,
-                                               static_cast<T const*>(input_column->data),
-                                               input_column->valid,
-                                               block_offsets,
-                                               mask_size,
-                                               num_columns,
-                                               mask);
+    scatter<<<grid.num_blocks, block_size>>>(static_cast<T*>(output_column->data),
+                                             output_column->valid,
+                                             null_count,
+                                             static_cast<T const*>(input_column->data),
+                                             input_column->valid,
+                                             block_offsets,
+                                             mask_data,
+                                             mask_valid,
+                                             mask_size);
 
     if (has_valid) {
-      CUDA_TRY(cudaMemcpy(&output_column->null_count, null_count, sizeof(gdf_size_type), cudaMemcpyDefault));
+      CUDA_TRY(cudaMemcpy(&output_column->null_count, null_count, 
+                          sizeof(gdf_size_type), cudaMemcpyDefault));
       RMM_FREE(null_count, 0);
     }
   }
@@ -310,7 +292,6 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
 
 /**
  * @brief Filters a column using a column of boolean values as a mask.
- *
  */
 gdf_column apply_boolean_mask(gdf_column const *input,
                               gdf_column const *boolean_mask) {
@@ -318,40 +299,46 @@ gdf_column apply_boolean_mask(gdf_column const *input,
   CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
   CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
   CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL8, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask->data != nullptr, "Null boolean_mask data");
+  CUDF_EXPECTS(boolean_mask->valid != nullptr, "Null boolean_mask bitmask");
 
   // High Level Algorithm:
   // First, compute a `scatter_map` from the boolean_mask that will scatter
-  // input[i] if boolean_mask[i] is non-null and "true". This is simply an 
-  // exclusive scan of nonnull_and_true
-  // Second, use the `scatter_map` to scatter elements from the `input` column
-  // into the `output` column
+  // input[i] if boolean_mask[i] is non-null and "true". This is simply an
+  // exclusive scan of nonnull_and_true. Second, use the `scatter_map` to
+  // scatter elements from the `input` column into the `output` column
 
   gdf_size_type h_output_size = 0;
 
-  constexpr int block_size = 1024;
+  constexpr int block_size = 256;
   constexpr int per_thread = 32;
-  constexpr int per_block = block_size * per_thread;
-  int num_blocks = (boolean_mask->size + per_block - 1) / per_block;
+  cudf::util::cuda::grid_config_1d grid{boolean_mask->size, block_size, per_thread};
 
   gdf_size_type *block_counts = nullptr;
-  RMM_ALLOC(&block_counts, num_blocks * sizeof(gdf_size_type), 0);
+  RMM_ALLOC(&block_counts, grid.num_blocks * sizeof(gdf_size_type), 0);
+
+  // Convert the validity mask to a 32-bit type for higher efficiency
+  uint32_t const* __restrict__ mask_valid =
+    reinterpret_cast<uint32_t const *>(boolean_mask->valid);
+  cudf::bool8 const* __restrict__ mask_data =
+    reinterpret_cast<cudf::bool8 const *>(boolean_mask->data);
   
-  compute_block_counts<block_size, per_thread>
-    <<<num_blocks, block_size>>>(block_counts, boolean_mask->size,
-                                 nonnull_and_true{*boolean_mask});
+  // First find the count of elements that "pass" the mask in each block
+  compute_block_counts<block_size, per_thread><<<grid.num_blocks, block_size>>>
+    (block_counts, mask_data, mask_valid, boolean_mask->size);
 
   // Determine temporary device storage requirements
-  void     *d_temp_storage = NULL;
-  size_t   temp_storage_bytes = 0;
+  void *d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
   gdf_size_type *block_offsets = nullptr;
-  RMM_ALLOC(&block_offsets, num_blocks * sizeof(gdf_size_type), 0);
+  RMM_ALLOC(&block_offsets, grid.num_blocks * sizeof(gdf_size_type), 0);
   
-  if (num_blocks > 1) {
+  if (grid.num_blocks > 1) {
     cub::DeviceScan::ExclusiveSum(d_temp_storage,
                                   temp_storage_bytes,
                                   block_counts,
                                   block_offsets,
-                                  num_blocks);
+                                  grid.num_blocks);
     // Allocate temporary storage
     RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0);
 
@@ -360,13 +347,13 @@ gdf_column apply_boolean_mask(gdf_column const *input,
                                   temp_storage_bytes,
                                   block_counts,
                                   block_offsets,
-                                  num_blocks);
+                                  grid.num_blocks);
   }
   else {
-    cudaMemset(block_offsets, 0, num_blocks * sizeof(gdf_size_type));
+    cudaMemset(block_offsets, 0, grid.num_blocks * sizeof(gdf_size_type));
   }
 
-  h_output_size = get_output_size(block_counts, block_offsets, num_blocks);
+  h_output_size = get_output_size(block_counts, block_offsets, grid.num_blocks);
 
   gdf_column output;
   gdf_column_view(&output, 0, 0, 0, input->dtype);
@@ -389,31 +376,19 @@ gdf_column apply_boolean_mask(gdf_column const *input,
     CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, data, valid,
                                                 h_output_size, input->dtype),
                 "cudf::apply_boolean_mask failed to create output column view");
-    //gdf_column *d_input = nullptr, *d_output = nullptr;
-    //RMM_ALLOC(&d_input, sizeof(gdf_column), 0);
-    //RMM_ALLOC(&d_output, sizeof(gdf_column), 0);
-    //cudaMemcpy(d_input, input, sizeof(gdf_column), cudaMemcpyDefault);
-    //cudaMemcpy(d_output, &output, sizeof(gdf_column), cudaMemcpyDefault);
     
-    //gdf_column* outputs[1] = {&output};
-
     cudf::type_dispatcher(output.dtype, 
                           scatter_functor<block_size, per_thread>{},
                           &output, 
                           input, 
                           block_offsets,
+                          mask_data,
+                          mask_valid,
                           boolean_mask->size,
-                          gdf_size_type{1},
-                          input->valid != nullptr,
-                          nonnull_and_true{*boolean_mask});
+                          input->valid != nullptr);
 
     CHECK_STREAM(0);
-
-    //cudaMemcpy(&output, d_output, sizeof(gdf_column), cudaMemcpyDefault);
-    //RMM_FREE(d_input, 0);
-    //RMM_FREE(d_output, 0);
   }
-  //RMM_FREE(d_output_size, 0);
   return output;
 }
 
