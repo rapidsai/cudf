@@ -1,3 +1,5 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
 import logging
 import json
 from contextlib import contextmanager
