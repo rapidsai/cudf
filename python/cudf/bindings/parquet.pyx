@@ -25,15 +25,8 @@ import collections.abc
 import os
 
 
-def is_file_like(obj):
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
-        return False
-    if not hasattr(obj, "__iter__"):
-        return False
-    return True
-
-
-cpdef cpp_read_parquet(path, columns=None):
+cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
+                       num_rows=None, strings_to_categorical=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -64,13 +57,27 @@ cpdef cpp_read_parquet(path, columns=None):
         vector_use_cols = arr_cols
         pq_reader.use_cols = vector_use_cols.data()
         pq_reader.use_cols_len = len(usecols)
-        
+
+    if row_group is not None:
+        pq_reader.row_group = row_group
+    else:
+        pq_reader.row_group = -1
+
+    if skip_rows is not None:
+        pq_reader.skip_rows = skip_rows
+    if num_rows is not None:
+        pq_reader.num_rows = num_rows
+    else:
+        pq_reader.num_rows = -1
+
+    pq_reader.strings_to_categorical = strings_to_categorical
+
     # Call read_parquet
     with nogil:
         result = read_parquet(&pq_reader)
 
     check_gdf_error(result)
-    
+
     out = pq_reader.data
     if out is NULL:
         raise ValueError("Failed to parse Parquet")
