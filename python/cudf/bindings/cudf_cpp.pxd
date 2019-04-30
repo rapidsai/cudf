@@ -36,6 +36,7 @@ cpdef check_gdf_error(errcode)
 # mirrors the structure in cpp/include
 
 cdef extern from "cudf.h" nogil:
+cdef extern from "bitmask_ops.hpp" nogil:
 
     ctypedef int gdf_size_type
     ctypedef gdf_size_type gdf_index_type
