@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #982 Implement gdf_group_by_without_aggregations and gdf_unique_indices functions
+- PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
@@ -63,6 +64,9 @@
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1503 Convert sorting and hashing ops CFFI to Cython
 
+- PR #1492 Convert transpose CFFI to Cython
+- PR #1495 Convert binary and unary ops CFFI to Cython
+- PR #1503 Convert sorting and hashing ops CFFI to Cython
 
 ## Bug Fixes
 
@@ -99,6 +103,11 @@
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
+- PR #1510 Added nvstrings `fillna()` function
+- PR #1507 Parquet Reader: Default string data to GDF_STRING
+- PR #1535 Fix doc issue to ensure correct labelling of cudf.series
+- PR #1537 Fix `undefined reference` link error in HashPartitionTest
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
@@ -158,6 +167,7 @@
 - PR #1159 Add Python bindings for libcudf dlpack functions
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 - PR #1168 to_frame for series accepts a name argument
+
 
 ## Improvements
 

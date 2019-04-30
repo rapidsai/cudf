@@ -1,14 +1,17 @@
 #pragma once
 
 // TODO: Update to use fixed width types when CFFI goes away
-typedef int gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
+typedef int           gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
-typedef  long  gdf_date64;
-typedef  int    gdf_date32;
-typedef  int    gdf_category;
-typedef  long  gdf_timestamp;
-typedef int   gdf_nvstring_category;
+typedef char          gdf_bool8;     /*< Storage type for Boolean values. 
+                                        char is used to guarantee 8-bit storage. 
+                                        zero == false, nonzero == true. */
+typedef	long          gdf_date64;
+typedef	int           gdf_date32;
+typedef	int           gdf_category;
+typedef	long          gdf_timestamp;
+typedef int           gdf_nvstring_category;
 
 
  /**
@@ -22,6 +25,7 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
+    GDF_BOOL8,      ///< Boolean stored in 8 bits per Boolean. zero==false, nonzero==true.
     GDF_DATE32,     ///< int32_t days since the UNIX epoch
     GDF_DATE64,     ///< int64_t milliseconds since the UNIX epoch
     GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
@@ -30,7 +34,6 @@ typedef enum {
     GDF_STRING_CATEGORY, ///< Stores indices of an NVCategory in data and in extra col info a reference to the nv_category
     N_GDF_TYPES,   ///< additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
-
 
 
 /**
@@ -110,6 +113,7 @@ typedef union {
   long          si64;  /**< GDF_INT64     */
   float         fp32;  /**< GDF_FLOAT32   */
   double        fp64;  /**< GDF_FLOAT64   */
+  char           b08;  /**< GDF_BOOL8     */
   gdf_date32    dt32;  /**< GDF_DATE32    */
   gdf_date64    dt64;  /**< GDF_DATE64    */
   gdf_timestamp tmst;  /**< GDF_TIMESTAMP */

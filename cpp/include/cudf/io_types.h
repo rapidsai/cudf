@@ -185,4 +185,6 @@ typedef struct {
   const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
 
+  bool          strings_to_categorical;     ///< In: If TRUE, returns string data as GDF_CATEGORY, otherwise GDF_STRING
+
 } pq_read_arg;
