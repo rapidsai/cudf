@@ -5,6 +5,10 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
+from cudf.bindings.comm.gpuarrow cimport *
+
 import logging
 import json
 from contextlib import contextmanager
