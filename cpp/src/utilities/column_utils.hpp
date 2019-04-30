@@ -54,7 +54,7 @@ constexpr inline bool is_an_integer(gdf_dtype element_type)
 constexpr inline bool is_integral(const gdf_column& column) noexcept { return is_an_integer(column.dtype); }
 constexpr inline bool is_integral(const gdf_column* column) noexcept{ return is_integral(*column); }
 
-constexpr bool is_nullable(const gdf_column& column) noexcept { return column.valid != nullptr; }
+constexpr bool has_validity(const gdf_column& column) noexcept { return column.valid != nullptr; }
 
 namespace detail {
 
