@@ -13,7 +13,6 @@ from cudf.bindings.comm.gpuarrow cimport *
 
 import logging
 import json
-from contextlib import contextmanager
 from collections import namedtuple, OrderedDict
 from collections.abc import Sequence
 
@@ -64,17 +63,6 @@ def _schema_to_dtype(name, bitwidth):
         fmt = "unsupported type {} {}-bits"
         raise NotImplementedError(fmt.format(name, bitwidth))
     return np.dtype(ret)
-
-
-@contextmanager
-def _open_parser(const uint8_t* schema_ptr, size_t schema_len):
-    "context to destroy the parser"
-    _logger.debug('open IPCParser')
-    cdef gdf_ipc_parser_type* ipcparser = gdf_ipc_parser_open(schema_ptr,
-                                                              schema_len)
-    yield ipcparser
-    _logger.debug('close IPCParser')
-    gdf_ipc_parser_close(ipcparser)
 
 
 cdef void _check_error(gdf_ipc_parser_type* ipcparser):
@@ -259,12 +247,15 @@ class GpuArrowReader(Sequence):
 
         cdef uint8_t* schema_ptr
         cdef uint8_t* gpu_ptr
+        cdef gdf_ipc_parser_type* ipcparser
 
         # get void* from the gpu array
         schema_ptr = self._schema_data.ctypes.data
 
         # parse schema
-        with _open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
+        try:
+            _logger.debug('open IPCParser')
+            ipcparser = gdf_ipc_parser_open(schema_ptr, schema_len)
             # check for failure in parseing the schema
             _check_error(ipcparser)
 
@@ -285,5 +276,8 @@ class GpuArrowReader(Sequence):
             dataoffset = gdf_ipc_parser_get_data_offset(ipcparser)
             dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
+        finally:
+            _logger.debug('close IPCParser')
+            gdf_ipc_parser_close(ipcparser)
 
         return schemadct, layoutdct, dataptr
