@@ -254,6 +254,7 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
+            src/io/cuio_common.cpp
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp

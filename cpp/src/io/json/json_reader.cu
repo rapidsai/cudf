@@ -46,6 +46,7 @@
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 
+#include "io/cuio_common.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/wrapper_utils.hpp"
 
@@ -92,45 +93,6 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
     // Expand the size based on the number of columns, if available
     return base_padding + num_columns * column_bytes;
   }
-}
-
-/*
- * @brief Convert dtype strings into gdf_dtype enum;
- *
- * Returns GDF_invalid if the input string is not a valid dtype string
- */
-gdf_dtype convertStringToDtype(const std::string &dtype) {
-  if (dtype == "str")
-    return GDF_STRING;
-  if (dtype == "date")
-    return GDF_DATE64;
-  if (dtype == "date32")
-    return GDF_DATE32;
-  if (dtype == "date64")
-    return GDF_DATE64;
-  if (dtype == "timestamp")
-    return GDF_TIMESTAMP;
-  if (dtype == "category")
-    return GDF_CATEGORY;
-  if (dtype == "float")
-    return GDF_FLOAT32;
-  if (dtype == "float32")
-    return GDF_FLOAT32;
-  if (dtype == "float64")
-    return GDF_FLOAT64;
-  if (dtype == "double")
-    return GDF_FLOAT64;
-  if (dtype == "short")
-    return GDF_INT16;
-  if (dtype == "int")
-    return GDF_INT32;
-  if (dtype == "int32")
-    return GDF_INT32;
-  if (dtype == "int64")
-    return GDF_INT64;
-  if (dtype == "long")
-    return GDF_INT64;
-  return GDF_invalid;
 }
 
 void JsonReader::parse() {

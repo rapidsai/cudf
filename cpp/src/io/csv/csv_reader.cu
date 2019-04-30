@@ -61,6 +61,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
 
+#include "io/cuio_common.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/wrapper_utils.hpp"
 
@@ -126,7 +127,6 @@ gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes,
 	const string& compression, 
 	vector<char>& h_uncomp_data);
 gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
-gdf_dtype convertStringToDtype(std::string &dtype);
 
 #define checkError(error, txt)  if ( error != GDF_SUCCESS) { std::cerr << "ERROR:  " << error <<  "  in "  << txt << std::endl;  return error; }
 
@@ -828,33 +828,6 @@ gdf_error read_csv(csv_read_arg *args)
 
   return error;
 }
-
-
-
-/*
- * What is passed in is the data type as a string, need to convert that into gdf_dtype enum
- */
-gdf_dtype convertStringToDtype(std::string &dtype) {
-
-	if (dtype.compare( "str") == 0) 		return GDF_STRING;
-	if (dtype.compare( "date") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "date32") == 0) 		return GDF_DATE32;
-	if (dtype.compare( "date64") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "timestamp") == 0)	return GDF_TIMESTAMP;
-	if (dtype.compare( "category") == 0) 	return GDF_CATEGORY;
-	if (dtype.compare( "float") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float32") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float64") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "double") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "short") == 0)		return GDF_INT16;
-	if (dtype.compare( "int") == 0)			return GDF_INT32;
-	if (dtype.compare( "int32") == 0)		return GDF_INT32;
-	if (dtype.compare( "int64") == 0)		return GDF_INT64;
-	if (dtype.compare( "long") == 0)		return GDF_INT64;
-
-	return GDF_invalid;
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and 

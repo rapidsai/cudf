@@ -33,9 +33,12 @@
 #include <nvstrings/NVStrings.h>
 
 #include "io/utilities/parsing_utils.cuh"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 using std::string;
 using std::vector;
+
+struct gdf_json_test : GdfTest {};
 
 bool checkFile(std::string fname) {
   struct stat st;
