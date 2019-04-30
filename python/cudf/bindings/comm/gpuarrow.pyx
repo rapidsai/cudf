@@ -76,9 +76,12 @@ def _open_parser(const uint8_t* schema_ptr, size_t schema_len):
 
 
 def _check_error(gdf_ipc_parser_type* ipcparser):
+    cdef const char* raw_error
+    cdef str error
+
     if gdf_ipc_parser_failed(ipcparser):
-        cdef const char* raw_error = gdf_ipc_parser_get_error(ipcparser)
-        cdef str error = raw_error.decode()
+        raw_error = gdf_ipc_parser_get_error(ipcparser)
+        error = raw_error.decode()
         _logger.error('IPCParser failed: %s', error)
         raise MetadataParsingError(error)
 
@@ -252,15 +255,18 @@ class GpuArrowReader(Sequence):
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
 
+        cdef void* schema_ptr
+        cdef void* gpu_ptr
+
         # get void* from the gpu array
-        cdef void* schema_ptr = self._schema_data.ctypes.data
+        schema_ptr = self._schema_data.ctypes.data
 
         # parse schema
         with _open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
             # check for failure in parseing the schema
             _check_error(ipcparser)
 
-            cdef void* gpu_ptr = self._gpu_data.device_ctypes_pointer.value
+            gpu_ptr = self._gpu_data.device_ctypes_pointer.value
             gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
                                               self._gpu_data.size)
             # check for failure in parsing the recordbatches
