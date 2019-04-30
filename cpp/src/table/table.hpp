@@ -32,8 +32,8 @@ struct table {
   /**---------------------------------------------------------------------------*
    * @brief Constructs a table object from an array of `gdf_column`s
    *
-   * @param cols The array of _columns wrapped by the table
-   * @param num_cols  The number of _columns in the array
+   * @param cols The array of columns wrapped by the table
+   * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols)
       : _columns{cols}, _num_columns{num_cols} {

@@ -200,6 +200,31 @@ def test_fillna_dataframe(fill_type, inplace):
 
 
 @pytest.mark.parametrize(
+    'fill_type',
+    ['scalar', 'series'])
+@pytest.mark.parametrize(
+    'inplace',
+    [True, False])
+def test_fillna_string(fill_type, inplace):
+    psr = pd.Series(['z', None, 'z', None])
+
+    if fill_type == 'scalar':
+        fill_value = 'a'
+    elif fill_type == 'series':
+        fill_value = Series(['a', 'b', 'c', 'd'])
+
+    sr = Series.from_pandas(psr)
+
+    expect = psr.fillna(fill_value)
+    got = sr.fillna(fill_value, inplace=inplace)
+
+    if inplace:
+        got = sr
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
     'data_dtype',
     ['int8', 'int16', 'int32', 'int64'])
 def test_series_fillna_invalid_dtype(data_dtype):

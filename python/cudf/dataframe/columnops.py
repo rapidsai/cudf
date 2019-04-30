@@ -88,7 +88,7 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
 
