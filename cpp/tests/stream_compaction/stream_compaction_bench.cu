@@ -81,11 +81,7 @@ struct benchmark
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = end-start;
     cudaProfilerStop();
-    if (shmoo) 
-      std::cout << diff.count() / iters << ",";
-    else
-      std::cout << TypeName<T>::Get() << ": " << diff.count() / iters << " s\n";
-    std::cout << std::flush;
+    std::cout << diff.count() / iters << (shmoo ? "," : " s\n");
   }
 };
 
@@ -104,6 +100,9 @@ void benchmark_types(gdf_dtype type, Init init, Bench bench,
     if (shmoo) {
       for (int fraction = 0; fraction <= 100; fraction += pct_step)
         cudf::type_dispatcher(t, benchmark(), init, bench, iters, fraction, shmoo);
+    }
+    else {
+      cudf::type_dispatcher(t, benchmark(), init, bench, iters, 50);
     }
     std::cout << "\n";
   }
