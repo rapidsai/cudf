@@ -5,6 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from libc.stdint cimport uint8_t
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.comm.gpuarrow cimport *
@@ -255,8 +257,8 @@ class GpuArrowReader(Sequence):
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
 
-        cdef void* schema_ptr
-        cdef void* gpu_ptr
+        cdef uint8_t* schema_ptr
+        cdef uint8_t* gpu_ptr
 
         # get void* from the gpu array
         schema_ptr = self._schema_data.ctypes.data
