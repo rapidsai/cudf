@@ -141,13 +141,6 @@ _join_method_api = {
     'hash': libgdf.GDF_HASH
 }
 
-_null_sort_behavior_api = {
-    'null_as_largest': libgdf.GDF_NULL_AS_LARGEST,
-    'null_as_smallest': libgdf.GDF_NULL_AS_SMALLEST,
-    'null_as_largest_multisort': libgdf.GDF_NULL_AS_LARGEST_FOR_MULTISORT
-}
-
-
 def cffi_view_to_column_mem(cffi_view):
     gdf_dtype = cffi_view.dtype
     if gdf_dtype == libgdf.GDF_STRING_CATEGORY:
@@ -203,15 +196,12 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     joiner = _join_how_api[how]
     method_api = _join_method_api[method]
-    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
     gdf_context = ffi.new('gdf_context*')
 
     if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0,
-                                null_sort_behavior_api)
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
     elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0,
-                                null_sort_behavior_api)
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0)
     else:
         msg = "method not supported"
         raise ValueError(msg)

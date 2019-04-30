@@ -55,6 +55,7 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
                               <gdf_context*> context)
     
     check_gdf_error(result)
+    free(context)
 
 
 cpdef digitize(column, bins, right=False):
