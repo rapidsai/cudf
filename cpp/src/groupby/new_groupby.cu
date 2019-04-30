@@ -11,6 +11,7 @@
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 #include "string/nvcategory_util.hpp"
+#include "sqls/sqls_rtti_comp.h"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -303,7 +304,6 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
   GDF_REQUIRE((num_key_cols > 0), GDF_DATASET_EMPTY);
   GDF_REQUIRE((nullptr != key_col_indices), GDF_DATASET_EMPTY);
 
-
   gdf_size_type nrows = data_cols_in[0]->size;
 
   // setup for order by call
@@ -311,79 +311,63 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
   std::vector<gdf_column*> orderby_cols_vect(num_key_cols);
   for (gdf_size_type i = 0; i < num_key_cols; i++){
     orderby_cols_vect[i] = data_cols_in[key_col_indices[i]];
-    group_by_keys_contain_nulls = group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0;
+    group_by_keys_contain_nulls = (group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0);
   }
 
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
   gdf_column sorted_indices_col;
   gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
-                            nullptr, nrows, GDF_INT32);
+                                      nullptr, nrows, GDF_INT32);
   GDF_REQUIRE(GDF_SUCCESS == status, status);
 
   if (context->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
     // run order by and get new sort indexes
-    status = gdf_order_by(&orderby_cols_vect[0],       // input columns
+    status = gdf_order_by(orderby_cols_vect.data(),
                           nullptr,
-                          num_key_cols,                // number of columns in the first parameter (e.g. number of columsn to sort by)
-                          &sorted_indices_col,         // a gdf_column that is pre allocated for storing sorted indices
+                          num_key_cols,
+                          &sorted_indices_col,
                           context);
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
-    // run gather operation to establish new order
-    // run gather operation to establish new order
-    cudf::table table_in(data_cols_in, num_data_cols);
-    cudf::table table_out(data_cols_out, num_data_cols);
-
-    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
-
-    for (gdf_size_type i = 0; i < num_key_cols; i++){
-      orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
-    }
-
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
-
-    return status;
   } else {  // Pandas style
 
-    auto flag_null_sort_behavior = context->flag_null_sort_behavior;
-    context->flag_null_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT; // overide behaviour to filter out the nulls
+    gdf_context temp_ctx;
+    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT;
 
     // run order by and get new sort indexes
-    status = gdf_order_by(&orderby_cols_vect[0],   // input columns
+    status = gdf_order_by(orderby_cols_vect.data(),
                           nullptr,
-                          num_key_cols,            // number of columns in the first parameter (e.g. number of columsn to sort by)
-                          &sorted_indices_col,     // a gdf_column that is pre allocated for storing sorted indices
-                          context);
+                          num_key_cols,
+                          &sorted_indices_col,
+                          &temp_ctx);
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     // lets filter out all the nulls in the group by key column by:
     // we will take the data which has been sorted such that the nulls in the group by keys are all last
-    // then using the gdf_table's property of row-validity mask we can count how many rows have
-    // a null in the group by keys and use that to resize the data
-    std::unique_ptr< gdf_table<gdf_size_type> > group_by_keys_table{new gdf_table<gdf_size_type>{num_key_cols, &orderby_cols_vect[0]}};
+    // then using row_bitmask we can count how many rows have a null in the group by keys and use that 
+    // to resize the data
+    cudf::table orderby_cols_table(orderby_cols_vect.data(), orderby_cols_vect.size());
+    auto orderby_cols_bitmask = row_bitmask(orderby_cols_table);
     int valid_count;
-    status = group_by_keys_table->get_num_valid_rows(valid_count);
+    status =  gdf_count_nonzero_mask(reinterpret_cast<gdf_valid_type*>(orderby_cols_bitmask.data().get()), nrows, &valid_count);
+    
     GDF_REQUIRE(GDF_SUCCESS == status, status);
 
     for (gdf_size_type i = 0; i < num_data_cols; i++)    {
       data_cols_in[i]->size = valid_count;
       data_cols_out[i]->size = valid_count;
     }
-
-    // run gather operation to establish new order
-    cudf::table table_in(data_cols_in, num_data_cols);
-    cudf::table table_out(data_cols_out, num_data_cols);
-
-    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
-
-    for (gdf_size_type i = 0; i < num_key_cols; i++){
-      orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
-    }
-
-    context->flag_null_sort_behavior = flag_null_sort_behavior;
-
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
-
-    return status;
   }
+
+  cudf::table table_in(data_cols_in, num_data_cols);
+  cudf::table table_out(data_cols_out, num_data_cols);
+
+  // run gather operation to establish new order
+  cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
+
+  for (gdf_size_type i = 0; i < num_key_cols; i++){
+    orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
+  }
+
+  return gdf_unique_indices(num_key_cols, orderby_cols_vect.data(), group_start_indices, num_group_start_indices, context);
 }

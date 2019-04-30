@@ -207,10 +207,10 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     gdf_context = ffi.new('gdf_context*')
 
     if method == 'hash':
-        libgdf.gdf_create_context(gdf_context, 0, method_api, 0, 0, 0,
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0,
                                   null_sort_behavior_api)
     elif method == 'sort':
-        libgdf.gdf_create_context(gdf_context, 1, method_api, 0, 0, 0,
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0,
                                   null_sort_behavior_api)
     else:
         msg = "method not supported"

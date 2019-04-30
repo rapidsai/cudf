@@ -221,11 +221,9 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
 
       gdf_context ctxt;
       ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-      status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
-                       nullptr,
-                       groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                       &ctxt);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+      status = gdf_order_by(output_keys.begin(), nullptr,
+                            output_keys.num_columns(), &sorted_indices_col, &ctxt);
+
       if (status != GDF_SUCCESS)
         return status;
 

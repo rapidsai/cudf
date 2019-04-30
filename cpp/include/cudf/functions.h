@@ -165,7 +165,7 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_create_context(gdf_context *context, int flag_sorted, gdf_method flag_method,
+gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
                            int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
                            gdf_nulls_sort_behavior flag_null_sort_behavior);
 
