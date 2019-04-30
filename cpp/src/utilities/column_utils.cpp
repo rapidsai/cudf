@@ -18,9 +18,6 @@
 #include "column_utils.hpp"
 #include <utilities/error_utils.hpp>
 
-// This should go up into more general utility code...
-static constexpr inline bool logical_xor(bool x, bool y) { return (x and (not y)) or ((not x) and y) ; }
-
 namespace cudf {
 
 /**
@@ -29,7 +26,7 @@ namespace cudf {
  */
 void validate(const gdf_column& column)
 {
-    CUDF_EXPECTS ( (column.data != nullptr or column.size == 0)          , "Non-zero column size, but data pointer is null.");
+    CUDF_EXPECTS ( (column.data != nullptr or column.size == 0)          , "Supposedly non-empty column is missing its data");
     CUDF_EXPECTS ( (column.dtype != GDF_invalid)                         , "Cannot use the 'invalid' column element type");
     CUDF_EXPECTS ( (column.dtype < N_GDF_TYPES)                          , "Unknown column data type");
     CUDF_EXPECTS ( (has_validity(column) or (column.null_count == 0))    , "Column claims to have null elements but has no validity mask to indicate element nullness");
@@ -64,7 +61,7 @@ bool extra_type_info_is_compatible(
 bool have_same_type(const gdf_column& validated_column_1, const gdf_column& validated_column_2, bool ignore_extra_type_info) noexcept
 {
     if (validated_column_1.dtype != validated_column_2.dtype) { return false; }
-    if (logical_xor(has_validity(validated_column_1), has_validity(validated_column_2))) { return false; }
+    if ((has_validity(validated_column_1) != has_validity(validated_column_2))) { return false; }
     if (ignore_extra_type_info) { return true; }
     auto common_dtype = validated_column_1.dtype;
     return detail::extra_type_info_is_compatible(common_dtype, validated_column_1.dtype_info, validated_column_2.dtype_info);
