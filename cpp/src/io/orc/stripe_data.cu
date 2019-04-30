@@ -851,7 +851,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 else
                 {
                     int32_t delta = rle->delta.i32[r];
-                    uint32_t ofs = (i >= 2) ? ((w > 1) ? bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) : 0) : (i == 1) ? abs(delta) : 0;
+                    uint32_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) : abs(delta);
                     vals[base + i] = (delta < 0) ? -ofs : ofs;
                 }
             }
@@ -875,7 +875,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 else
                 {
                     int64_t delta = rle->delta.i64[r];
-                    uint64_t ofs = (i >= 2) ? ((w > 1) ? bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) : 0) : (i == 1) ? llabs(delta) : 0;
+                    uint64_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) : llabs(delta);
                     vals[base + i] = (delta < 0) ? -ofs : ofs;
                 }
             }
