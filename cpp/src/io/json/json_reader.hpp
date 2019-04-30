@@ -141,7 +141,7 @@ private:
    *
    * @param[in] dtypes The data type of each column
    * @param[out] gdf_columns The output column data
-   * @param[out] valid_fields The bitmaps indicating whether column fields are valid
+   * @param[out] valid The bitmaps indicating whether column fields are valid
    * @param[out] num_valid_fields The numbers of valid fields in columns
    *
    * @return void
