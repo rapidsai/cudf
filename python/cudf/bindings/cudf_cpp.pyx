@@ -7,6 +7,9 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.GDFError import GDFError
+from libcpp.vector cimport vector
+from libc.stdint cimport uintptr_t
+from libc.stdlib cimport calloc, malloc, free
 
 import numpy as np
 import pandas as pd
@@ -17,10 +20,6 @@ from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
-
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
-
 
 
 dtypes = {
@@ -51,10 +50,28 @@ gdf_dtypes = {
     N_GDF_TYPES:           np.int32
 }
 
+np_pa_dtypes = {
+    np.float64:     pa.float64(),
+    np.float32:     pa.float32(),
+    np.int64:       pa.int64(),
+    np.int32:       pa.int32(),
+    np.int16:       pa.int16(),
+    np.int8:        pa.int8(),
+    np.bool_:       pa.int8(),
+    np.datetime64:  pa.date64(),
+    np.object_:     pa.string(),
+    np.str_:        pa.string(),
+}
+
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
     return np.dtype(gdf_dtypes[dtype])
+
+def np_to_pa_dtype(dtype):
+    """Util to convert numpy dtype to PyArrow dtype
+    """
+    return np_pa_dtypes[np.dtype(dtype).type]
 
 def check_gdf_compatibility(col):
     """
@@ -65,7 +82,10 @@ def check_gdf_compatibility(col):
 
 
 cpdef get_ctype_ptr(obj):
-    return obj.device_ctypes_pointer.value
+    if obj.device_ctypes_pointer.value is None:
+        return 0
+    else:
+        return obj.device_ctypes_pointer.value
 
 cpdef get_column_data_ptr(obj):
     return get_ctype_ptr(obj._data.mem)
@@ -309,21 +329,39 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
 # # Error handling
 
 cpdef check_gdf_error(errcode):
-        """Get error message for the given error code.
-        """
-        cdef gdf_error c_errcode = errcode
+    """Get error message for the given error code.
+    """
+    cdef gdf_error c_errcode = errcode
 
-        if c_errcode != GDF_SUCCESS:
-            if c_errcode == GDF_CUDA_ERROR:
-                with nogil:
-                    cudaerr = gdf_cuda_last_error()
-                    errname = gdf_cuda_error_name(cudaerr)
-                    details = gdf_cuda_error_string(cudaerr)
-                msg = 'CUDA ERROR. {}: {}'.format(errname, details)
+    if c_errcode != GDF_SUCCESS:
+        if c_errcode == GDF_CUDA_ERROR:
+            with nogil:
+                cudaerr = gdf_cuda_last_error()
+                errname = gdf_cuda_error_name(cudaerr)
+                details = gdf_cuda_error_string(cudaerr)
+            msg = 'CUDA ERROR. {}: {}'.format(errname, details)
 
-            else:
-                with nogil:
-                    errname = gdf_error_get_name(c_errcode)
-                msg = errname
+        else:
+            with nogil:
+                errname = gdf_error_get_name(c_errcode)
+            msg = errname
 
-            raise GDFError(errname, msg)
+        raise GDFError(errname, msg)
+
+cpdef count_nonzero_mask(mask, size):
+    """ Counts the number of null bits in a given validity mask
+    """
+    assert mask.size * mask_bitsize >= size
+    cdef int nnz = 0
+    cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
+    cdef int c_size = size
+
+    if mask_ptr:
+        with nogil:
+            gdf_count_nonzero_mask(
+                <gdf_valid_type*>mask_ptr,
+                c_size,
+                &nnz
+            )
+
+    return nnz

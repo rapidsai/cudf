@@ -18,7 +18,7 @@
 #define GROUPBY_KERNELS_H
 
 #include "hash/concurrent_unordered_map.cuh"
-#include "dataframe/device_table.cuh"
+#include <table/device_table.cuh>
 
 #include "aggregation_operations.hpp"
 
