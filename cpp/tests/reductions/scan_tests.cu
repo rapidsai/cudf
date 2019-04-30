@@ -87,15 +87,15 @@ struct ScanTest : public GdfTest
     void range_check(std::vector<Ti> const & v){
         std::for_each(v.begin(), v.end(),
             [](Ti i){
-                ASSERT_GE(i, -128);
-                ASSERT_LT(i,  128);
+                ASSERT_GE(static_cast<int>(i), -128);
+                ASSERT_LT(static_cast<int>(i),  128);
             });
     }
 
 };
 
 using Types = testing::Types<
-    int8_t,int16_t, int32_t, int64_t, float, double>;
+    int8_t,int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 
 TYPED_TEST_CASE(ScanTest, Types);
 

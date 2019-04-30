@@ -127,6 +127,11 @@ def test_sum_boolean():
 
     assert expect == got
 
+    got = (s > 1).sum(dtype=np.bool_)
+    expect = True
+
+    assert expect == got
+
 
 def test_date_minmax():
     np_data = np.random.normal(size=10**3)
