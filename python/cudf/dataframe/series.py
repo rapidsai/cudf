@@ -10,6 +10,8 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from librmm_cffi import librmm as rmm
+
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
@@ -120,6 +122,12 @@ class Series(object):
         else:
             raise AttributeError("Can only use .dt accessor with datetimelike "
                                  "values")
+
+    @property
+    def ndim(self):
+        """Dimension of the data. Series ndim is always 1.
+        """
+        return 1
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -1478,6 +1486,33 @@ class Series(object):
         from cudf.dataframe import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values of an input array by periods positions and store the
+        output in a new array.
+
+        Notes
+        -----
+        Shift currently only supports float and integer dtype columns with
+        no null values.
+        """
+        assert axis in (None, 0) and freq is None and fill_value is None
+
+        if self.null_count != 0:
+            raise AssertionError("Shift currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Shift currently only supports "
+                                      "numeric dtypes")
+        if periods == 0:
+            return self
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
+                                                     periods)
+        return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy

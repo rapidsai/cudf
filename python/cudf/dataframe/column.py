@@ -12,10 +12,13 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 import nvstrings
+import cudf.bindings.quantile as cpp_quantile
 
 from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
+from cudf.bindings.cudf_cpp import count_nonzero_mask
+from cudf.bindings.concat import _column_concat
 
 
 class Column(object):
@@ -91,7 +94,7 @@ class Column(object):
 
         # Performance the actual concatenation
         if newsize > 0:
-            col = _gdf._column_concat(objs, col)
+            col = _column_concat(objs, col)
 
         return col
 
@@ -111,6 +114,21 @@ class Column(object):
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
             return columnops.build_column(data_buf, dtype, mask=mask)
+
+    @staticmethod
+    def from_mem_views(data_mem, mask_mem=None):
+        """Create a Column object from a data device array (or nvstrings
+           object), and an optional mask device array
+        """
+        from cudf.dataframe import columnops
+        if isinstance(data_mem, nvstrings.nvstrings):
+            return columnops.build_column(data_mem, np.dtype("object"))
+        else:
+            data_buf = Buffer(data_mem)
+            mask = None
+            if mask_mem is not None:
+                mask = Buffer(mask_mem)
+            return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """
@@ -143,8 +161,10 @@ class Column(object):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = _gdf.count_nonzero_mask(self._mask.mem,
-                                              size=len(self))
+                nnz = count_nonzero_mask(
+                    self._mask.mem,
+                    size=len(self)
+                )
                 null_count = len(self) - nnz
                 if null_count == 0:
                     self._mask = None
@@ -573,7 +593,7 @@ class Column(object):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return _gdf.quantile(self, quant, interpolation, exact)
+        return cpp_quantile.apply_quantile(self, quant, interpolation, exact)
 
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.

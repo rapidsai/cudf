@@ -18,7 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, gen_rand
 
 
 def test_buffer_basic():
@@ -2226,3 +2226,33 @@ def test_get_numeric_data():
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    shifted_outcome = gdf.a.shift(period)
+    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+
+    assert_eq(shifted_outcome, expected_outcome)
+
+
+def test_ndim():
+    pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
+    gdf = DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim
+    assert pdf.x.ndim == gdf.x.ndim
+
+    s = pd.Series()
+    gs = Series()
+    assert s.ndim == gs.ndim

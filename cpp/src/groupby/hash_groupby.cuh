@@ -17,11 +17,10 @@
  */
 
 #include <cuda_runtime.h>
-
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
-// #include "utilities/device_atomics.cuh"
-#include "dataframe/cudf_table.cuh"
+#include <utilities/error_utils.hpp>
+#include <table/device_table.cuh>
+#include <types.hpp>
+#include <cudf.h>
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
@@ -33,9 +32,9 @@
  * @brief Calls the Hash Based group by compute API to compute the groupby with 
  * aggregation.
  * 
- * @param groupby_input_table The input groupby table
+ * @param input_keys The input groupby table
  * @param in_aggregation_column The input aggregation column
- * @param groupby_output_table The output groupby table
+ * @param output_keys The output groupby table
  * @param out_aggregation_column The output aggregation column
  * @param sort_result Flag to optionally sort the output
  * @tparam aggregation_type  The type of the aggregation column
@@ -45,11 +44,10 @@
  */
 /* ----------------------------------------------------------------------------*/
 template <typename aggregation_type, 
-          template <typename T> class op,
-          typename size_type>
-gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
+          template <typename T> class op>
+gdf_error typed_groupby(cudf::table const & input_keys,
                         gdf_column* in_aggregation_column,       
-                        gdf_table<size_type> & groupby_output_table,
+                        cudf::table & output_keys,
                         gdf_column* out_aggregation_column,
                         bool sort_result = false)
 {
@@ -61,11 +59,11 @@ gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
   // TODO Need to allow for the aggregation output type to be different from the aggregation input type
   aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
-  size_type output_size{0};
+  gdf_size_type output_size{0};
 
-  gdf_error gdf_error_code = GroupbyHash(groupby_input_table, 
+  gdf_error gdf_error_code = GroupbyHash(input_keys, 
                                          in_agg_col, 
-                                         groupby_output_table, 
+                                         output_keys, 
                                          out_agg_col, 
                                          &output_size, 
                                          op_type(), 
@@ -104,11 +102,10 @@ struct typed_groupby_functor
  * 
  */
 /* ----------------------------------------------------------------------------*/
-template <template <typename T> class op,
-          typename size_type>
-gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_table,        
+template <template <typename T> class op>
+gdf_error dispatch_aggregation_type(cudf::table const & input_keys,        
                                     gdf_column* in_aggregation_column,       
-                                    gdf_table<size_type> & groupby_output_table,
+                                    cudf::table & output_keys,
                                     gdf_column* out_aggregation_column,
                                     bool sort_result = false)
 {
@@ -131,9 +128,9 @@ gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_t
 
   return cudf::type_dispatcher(aggregation_column_type,
                               typed_groupby_functor<op>{},
-                              groupby_input_table, 
+                              input_keys, 
                               in_aggregation_column, 
-                              groupby_output_table, 
+                              output_keys, 
                               out_aggregation_column, 
                               sort_result);
 
@@ -155,9 +152,8 @@ gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_t
  * @returns gdf_error
  */
 /* ----------------------------------------------------------------------------*/
-template <template <typename aggregation_type> class aggregation_operation,
-          typename size_type>
-gdf_error gdf_group_by_hash(size_type ncols,               
+template <template <typename aggregation_type> class aggregation_operation>
+gdf_error gdf_group_by_hash(gdf_size_type ncols,               
                             gdf_column* in_groupby_columns[],        
                             gdf_column* in_aggregation_column,       
                             gdf_column* out_groupby_columns[],
@@ -188,13 +184,12 @@ gdf_error gdf_group_by_hash(size_type ncols,
     return GDF_SUCCESS;
   }
 
-  // Wrap the groupby input and output columns in a gdf_table
-  std::unique_ptr< const gdf_table<size_type> > groupby_input_table{new gdf_table<size_type>(ncols, in_groupby_columns)};
-  std::unique_ptr< gdf_table<size_type> > groupby_output_table{new gdf_table<size_type>(ncols, out_groupby_columns)};
+  cudf::table input_keys{in_groupby_columns, ncols};
+  cudf::table output_keys{out_groupby_columns, ncols};
 
-  return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
+  return dispatch_aggregation_type<aggregation_operation>(input_keys, 
                                                           in_aggregation_column, 
-                                                          *groupby_output_table, 
+                                                          output_keys, 
                                                           out_aggregation_column, 
                                                           sort_result);
 }

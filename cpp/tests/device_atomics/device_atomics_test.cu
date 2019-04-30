@@ -92,26 +92,6 @@ void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
     }
 }
 
-// TODO: remove these explicit instantiation for kernels
-// At TYPED_TEST, the kernel for TypeParam of `wrapper` types won't be instantiated
-// because `TypeParam` is a private member of class ::testing::Test
-// then the kenrel call fails with `cudaErrorInvalidDeviceFunction`
-
-template  __global__ void gpu_atomic_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
-template  __global__ void gpu_atomic_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
-template  __global__ void gpu_atomic_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
-template  __global__ void gpu_atomic_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
-template  __global__ void gpu_atomic_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
-
-template  __global__ void gpu_atomicCAS_test<cudf::date32>(cudf::date32 *result, cudf::date32 *data, size_t size);
-template  __global__ void gpu_atomicCAS_test<cudf::date64>(cudf::date64 *result, cudf::date64 *data, size_t size);
-template  __global__ void gpu_atomicCAS_test<cudf::category>(cudf::category *result, cudf::category *data, size_t size);
-template  __global__ void gpu_atomicCAS_test<cudf::timestamp>(cudf::timestamp *result, cudf::timestamp *data, size_t size);
-template  __global__ void gpu_atomicCAS_test<cudf::nvstring_category>(cudf::nvstring_category *result, cudf::nvstring_category *data, size_t size);
-
-
-// ---------------------------------------------
-
 template <typename T>
 struct AtomicsTest : public GdfTest
 {
@@ -142,15 +122,11 @@ struct AtomicsTest : public GdfTest
         if( block_size == 0) block_size = vec_size;
 
         if( is_cas_test ){
-            gpu_atomicCAS_test<T> <<<grid_size, block_size>>> (
-                reinterpret_cast<T*>( dev_result.data().get() ),
-                reinterpret_cast<T*>( dev_data.data().get() ),
-                vec_size);
+          gpu_atomicCAS_test<<<grid_size, block_size>>>(
+              dev_result.data().get(), dev_data.data().get(), vec_size);
         }else{
-            gpu_atomic_test<T> <<<grid_size, block_size>>> (
-                reinterpret_cast<T*>( dev_result.data().get() ),
-                reinterpret_cast<T*>( dev_data.data().get() ),
-                vec_size);
+          gpu_atomic_test<<<grid_size, block_size>>>(
+              dev_result.data().get(), dev_data.data().get(), vec_size);
         }
 
         thrust::host_vector<T> host_result(dev_result);
