@@ -302,6 +302,19 @@ TYPED_TEST(RollingTest, SimpleDynamic)
 			 std::vector<gdf_size_type>({ 1, 0, 1, 0, 1 }));
 }
 
+TYPED_TEST(RollingTest, VolatileCount)
+{
+  // this is a test to verify the count volatile fix
+  this->in_col 	     = { 8, 70, 45, 20, 59, 80 };
+  this->in_col_valid = { 1, 1, 0, 0, 1, 0 };
+
+  // dynamic sizes
+  this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 5, 9, 4, 8, 3, 3 }),
+			 std::vector<gdf_size_type>({ 1, 1, 9, 2, 8, 9 }),
+			 std::vector<gdf_size_type>({ 6, 3, 3, 0, 2, 1 }));
+}
+
 // all rows are invalid, easy check
 TYPED_TEST(RollingTest, AllInvalid)
 {
@@ -447,9 +460,9 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   std::mt19937 rng(1);
   auto generator = [&](){ return rng() % max_window_size; };
 
-  std::vector<gdf_size_type> window(num_rows);
-  std::vector<gdf_size_type> min_periods(num_rows);
-  std::vector<gdf_size_type> forward_window(num_rows);
+  std::vector<gdf_size_type> window(this->in_col.size());
+  std::vector<gdf_size_type> min_periods(this->in_col.size());
+  std::vector<gdf_size_type> forward_window(this->in_col.size());
 
   std::generate(window.begin(), window.end(), generator);
   std::generate(min_periods.begin(), min_periods.end(), generator);

@@ -91,7 +91,7 @@ void gpu_rolling(gdf_size_type nrows,
   while(i < nrows)
   {
     ColumnType val = agg_op<ColumnType>::IDENTITY;
-    gdf_size_type count = 0;
+    volatile gdf_size_type count = 0;	// declare this as volatile to avoid the compiler optimizing the counter
 
     // dynamic window handling
     if (window_col != NULL) window = window_col[i];
