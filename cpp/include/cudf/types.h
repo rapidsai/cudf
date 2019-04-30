@@ -271,7 +271,7 @@ typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 
 typedef enum{
-  GDF_ORDER_ASC,
+  GDF_ORDER_ASC=0,
   GDF_ORDER_DESC
 } order_by_type;
 
