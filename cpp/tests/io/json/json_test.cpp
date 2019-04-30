@@ -48,6 +48,34 @@ template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
   return m_hostdata;
 }
 
+void checkStrColumn(gdf_column *col, vector<string> refs){
+  ASSERT_EQ(col->dtype, GDF_STRING);
+
+  const auto stringList = reinterpret_cast<NVStrings *>(col->data);
+  ASSERT_NE(stringList, nullptr);
+
+  const auto count = stringList->size();
+  ASSERT_EQ(count, refs.size());
+
+  std::vector<int> lengths(count);
+  ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
+
+  // Check the actual strings themselves
+  std::vector<char*> strings(count);
+  for (size_t i = 0; i < count; ++i) {
+    strings[i] = new char[lengths[i] + 1];
+    strings[i][lengths[i]] = 0;
+  }
+  EXPECT_EQ(stringList->to_host(strings.data(), 0, count), 0);
+
+  for (size_t i = 0; i < count; ++i) {
+    EXPECT_STREQ(strings[i], refs[i].c_str());
+  }
+  for (size_t i = 0; i < count; ++i) {
+    delete[] strings[i];
+  }
+}
+
 TEST(gdf_json_test, SquareBrackets) {
   const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
                          "\"index\":[\"row 1\",\"row 2\"] , "
@@ -147,7 +175,6 @@ TEST(gdf_json_test, JsonLinesStrings) {
 
   ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
   ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-  ASSERT_EQ(args.data[2]->dtype, GDF_STRING);
 
   ASSERT_EQ(std::string(args.data[0]->col_name), "0");
   ASSERT_EQ(std::string(args.data[1]->col_name), "1");
@@ -158,28 +185,7 @@ TEST(gdf_json_test, JsonLinesStrings) {
   const auto secondCol = gdf_column_to_host<double>(args.data[1]);
   EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
 
-  const auto stringList = reinterpret_cast<NVStrings *>(args.data[2]->data);
-
-  ASSERT_NE(stringList, nullptr);
-  const auto stringCount = stringList->size();
-  ASSERT_EQ(stringCount, 2u);
-  const auto stringLengths = std::unique_ptr<int[]>{new int[stringCount]};
-  ASSERT_NE(stringList->byte_count(stringLengths.get(), false), 0u);
-
-  // Check the actual strings themselves
-  auto strings = std::unique_ptr<char *[]> { new char *[stringCount] };
-  for (size_t i = 0; i < stringCount; ++i) {
-    ASSERT_GT(stringLengths[i], 0);
-    strings[i] = new char[stringLengths[i] + 1];
-    strings[i][stringLengths[i]] = 0;
-  }
-  EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
-
-  EXPECT_STREQ(strings[0], "aa ");
-  EXPECT_STREQ(strings[1], "  bbb");
-  for (size_t i = 0; i < stringCount; ++i) {
-    delete[] strings[i];
-  }
+  checkStrColumn(args.data[2], {"aa ", "  bbb"});
 }
 
 TEST(gdf_json_test, JsonLinesDtypeInference) {
@@ -200,7 +206,6 @@ TEST(gdf_json_test, JsonLinesDtypeInference) {
 
   ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
   ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-  ASSERT_EQ(args.data[2]->dtype, GDF_STRING);
 
   ASSERT_EQ(std::string(args.data[0]->col_name), "0");
   ASSERT_EQ(std::string(args.data[1]->col_name), "1");
@@ -211,28 +216,7 @@ TEST(gdf_json_test, JsonLinesDtypeInference) {
   const auto secondCol = gdf_column_to_host<double>(args.data[1]);
   EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
 
-  const auto stringList = reinterpret_cast<NVStrings *>(args.data[2]->data);
-
-  ASSERT_NE(stringList, nullptr);
-  const auto stringCount = stringList->size();
-  ASSERT_EQ(stringCount, 2u);
-  const auto stringLengths = std::unique_ptr<int[]>{new int[stringCount]};
-  ASSERT_NE(stringList->byte_count(stringLengths.get(), false), 0u);
-
-  // Check the actual strings themselves
-  auto strings = std::unique_ptr<char *[]> { new char *[stringCount] };
-  for (size_t i = 0; i < stringCount; ++i) {
-    ASSERT_GT(stringLengths[i], 0);
-    strings[i] = new char[stringLengths[i] + 1];
-    strings[i][stringLengths[i]] = 0;
-  }
-  EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
-
-  EXPECT_STREQ(strings[0], "aa ");
-  EXPECT_STREQ(strings[1], "  bbb");
-  for (size_t i = 0; i < stringCount; ++i) {
-    delete[] strings[i];
-  }
+  checkStrColumn(args.data[2], {"aa ", "  bbb"});
 }
 
 TEST(gdf_json_test, JsonLinesFileInput) {
@@ -350,7 +334,6 @@ TEST(gdf_json_test, JsonLinesObjectsStrings) {
 
   ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
   ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-  ASSERT_EQ(args.data[2]->dtype, GDF_STRING);
 
   ASSERT_EQ(std::string(args.data[0]->col_name), "col1");
   ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
@@ -361,26 +344,5 @@ TEST(gdf_json_test, JsonLinesObjectsStrings) {
   const auto secondCol = gdf_column_to_host<double>(args.data[1]);
   EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
 
-  const auto stringList = reinterpret_cast<NVStrings *>(args.data[2]->data);
-
-  ASSERT_NE(stringList, nullptr);
-  const auto stringCount = stringList->size();
-  ASSERT_EQ(stringCount, 2u);
-  const auto stringLengths = std::unique_ptr<int[]>{new int[stringCount]};
-  ASSERT_NE(stringList->byte_count(stringLengths.get(), false), 0u);
-
-  // Check the actual strings themselves
-  auto strings = std::unique_ptr<char *[]> { new char *[stringCount] };
-  for (size_t i = 0; i < stringCount; ++i) {
-    ASSERT_GT(stringLengths[i], 0);
-    strings[i] = new char[stringLengths[i] + 1];
-    strings[i][stringLengths[i]] = 0;
-  }
-  EXPECT_EQ(stringList->to_host(strings.get(), 0, stringCount), 0);
-
-  EXPECT_STREQ(strings[0], "aaa");
-  EXPECT_STREQ(strings[1], "bbb");
-  for (size_t i = 0; i < stringCount; ++i) {
-    delete[] strings[i];
-  }
+  checkStrColumn(args.data[2], {"aaa", "bbb"});
 }
