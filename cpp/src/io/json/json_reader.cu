@@ -342,6 +342,41 @@ void JsonReader::uploadDataToDevice() {
   CUDA_TRY(cudaMemcpy(d_data_.data(), uncomp_data_ + start_offset, bytes_to_upload, cudaMemcpyHostToDevice));
 }
 
+
+std::vector<std::string> setColumnNamesFromJsonObject(const std::vector<char>& row, const ParseOptions& opts) {
+  enum class ParseState { preColName, colName, postColName };
+  std::vector<std::string> names;
+  bool quotation = false;
+  auto state = ParseState::preColName;
+  int name_start = 0;
+  for (size_t pos = 0; pos < row.size(); ++pos) {
+    if (state == ParseState::preColName) {
+      if (row[pos] == opts.quotechar) {
+        name_start = pos + 1;
+        state = ParseState::colName;
+        continue;
+      }
+    } else if (state == ParseState::colName) {
+      if (row[pos] == opts.quotechar && row[pos - 1] != '\\') {
+        // if found a non-escaped quote character, it's the end of the column name
+        names.emplace_back(&row[name_start], &row[pos]);
+        state = ParseState::postColName;
+        continue;
+      }
+    } else if (state == ParseState::postColName) {
+      // TODO handle complex data types that might include unquoted commas
+      if (!quotation && row[pos] == opts.delimiter) {
+        state = ParseState::preColName;
+        continue;
+      } else if (row[pos] == opts.quotechar) {
+        quotation = !quotation;
+      }
+    }
+  }
+  return names;
+}
+
+
 void JsonReader::setColumnNames() {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = d_data_.size() / sizeof(char);
@@ -352,19 +387,26 @@ void JsonReader::setColumnNames() {
   std::vector<char> first_row(first_row_len);
   CUDA_TRY(cudaMemcpy(first_row.data(), d_data_.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
 
-  int num_cols = 0;
-  bool quotation = false;
-  for (size_t pos = 0; pos < first_row.size(); ++pos) {
-    // Flip the quotation flag if current character is a quotechar
-    if (first_row[pos] == opts_.quotechar) {
-      quotation = !quotation;
+  // TODO seek first bracket
+  bool is_object = (first_row[0] == '{');
+  if (!is_object) {
+    int num_cols = 0;
+    bool quotation = false;
+    for (size_t pos = 0; pos < first_row.size(); ++pos) {
+      // Flip the quotation flag if current character is a quotechar
+      if (first_row[pos] == opts_.quotechar) {
+        quotation = !quotation;
+      }
+      // Check if end of a column/row
+      else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
+        column_names_.emplace_back(std::to_string(num_cols++));
+      }
     }
-    // Check if end of a column/row
-    else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
-      column_names_.emplace_back(std::to_string(num_cols++));
-    }
+  } else {
+    column_names_ = setColumnNamesFromJsonObject(first_row, opts_);
   }
 }
+
 
 void JsonReader::convertDataToColumns() {
   const auto num_columns = dtypes_.size();
@@ -399,11 +441,11 @@ void JsonReader::convertDataToColumns() {
   }
 
   // Handle string columns
-  for (size_t i = 0; i < num_columns; ++i) {
-    if (columns_[i]->dtype == GDF_STRING) {
-      auto str_list = static_cast<string_pair *>(columns_[i]->data);
-      auto str_data = NVStrings::create_from_index(str_list, columns_[i]->size);
-      RMM_FREE(std::exchange(columns_[i]->data, str_data), 0);
+  for (auto &column : columns_) {
+    if (column->dtype == GDF_STRING) {
+      auto str_list = static_cast<string_pair *>(column->data);
+      auto str_data = NVStrings::create_from_index(str_list, column->size);
+      RMM_FREE(std::exchange(column->data, str_data), 0);
     }
   }
 }
@@ -434,6 +476,32 @@ struct ConvertFunctor {
   }
 };
 
+
+__device__ void AdjustRangeForBrackets(const char *data, long& start, long& stop) {
+  while (data[start] != '[' && data[start] != '{') {
+    start++;
+  }
+  start++;
+
+  while (data[stop] != ']' && data[stop] != '}') {
+    stop--;
+  }
+}
+
+__device__ long seekFieldKeyEnd(const char *data, const ParseOptions opts, long pos, long stop) {
+  bool quotation = false;
+  for (auto i = pos; i < stop; ++i) {
+    if (data[i] == opts.quotechar) {
+      quotation = !quotation;
+    } else if (quotation == false) {
+      if (data[i] == ':') {
+        return i + 1;
+      }
+    }
+  }
+  return stop;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
  *
@@ -452,8 +520,8 @@ struct ConvertFunctor {
  *
  * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
-__global__ void convertJsonToGdf(char *const data, size_t data_size, uint64_t *const rec_starts,
-                                 gdf_size_type num_records, gdf_dtype *const dtypes, ParseOptions opts,
+__global__ void convertJsonToGdf(const char *data, size_t data_size, const uint64_t *rec_starts,
+                                 gdf_size_type num_records, const gdf_dtype *dtypes, ParseOptions opts,
                                  void **gdf_columns, int num_columns, gdf_valid_type **valid_fields,
                                  gdf_size_type *num_valid_fields) {
   const long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -464,14 +532,13 @@ __global__ void convertJsonToGdf(char *const data, size_t data_size, uint64_t *c
   // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  // Adjust for brackets
-  while (data[start++] != '[') {
-  }
-
-  while (data[--stop] != ']') {
-  }
+  AdjustRangeForBrackets(data, start, stop);
+  const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns && start < stop; col++) {
+    if (is_object) {
+      start = seekFieldKeyEnd(data, opts, start, stop);
+    }
     // field_end is at the next delimiter/newline
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
@@ -532,8 +599,8 @@ void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_column
  *
  * @returns GDF_SUCCESS upon successful computation
  *---------------------------------------------------------------------------**/
-__global__ void detectJsonDataTypes(char *data, size_t data_size, const ParseOptions opts, int num_columns,
-                                    uint64_t *rec_starts, gdf_size_type num_records,
+__global__ void detectJsonDataTypes(const char *data, size_t data_size, const ParseOptions opts, int num_columns,
+                                    const uint64_t *rec_starts, gdf_size_type num_records,
                                     JsonReader::ColumnInfo *column_infos) {
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records)
@@ -543,13 +610,13 @@ __global__ void detectJsonDataTypes(char *data, size_t data_size, const ParseOpt
   // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  // Adjust for brackets
-  while (data[start++] != '[')
-    ;
-  while (data[--stop] != ']')
-    ;
+  AdjustRangeForBrackets(data, start, stop);
+  const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns; col++) {
+    if (is_object) {
+      start = seekFieldKeyEnd(data, opts, start, stop);
+    }
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
     adjustForWhitespaceAndQuotes(data, &start, &field_data_last);

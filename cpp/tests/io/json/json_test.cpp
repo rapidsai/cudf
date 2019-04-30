@@ -297,3 +297,37 @@ TEST(gdf_json_test, JsonLinesByteRange) {
   const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
   EXPECT_THAT(firstCol, ::testing::ElementsAre(3000, 4000, 5000));
 }
+
+TEST(gdf_json_test, JsonLinesObjects) {
+  const char *fname = "/tmp/JsonLinesObjectsTest.json";
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "{\"col1\":1, \"col2\": 2.0}\n";
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  const char *types[] = {"int64", "float64"};
+  json_read_arg args{};
+  args.source = fname;
+  args.source_type = FILE_PATH;
+  args.lines = true;
+
+  try {
+    read_json(&args);
+  } catch (std::exception &e) {
+    std::cerr << e.what();
+  }
+
+  ASSERT_EQ(args.num_cols_out, 2);
+  ASSERT_EQ(args.num_rows_out, 1);
+
+  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
+  ASSERT_EQ(std::string(args.data[0]->col_name), "col1");
+  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
+  ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
+
+  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
+  EXPECT_THAT(firstCol, ::testing::ElementsAre(1));
+
+  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
+  EXPECT_THAT(secondCol, ::testing::ElementsAre(2.0));
+}
