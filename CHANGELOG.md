@@ -23,6 +23,7 @@
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
 - PR #1466 Add GPU-accelerated ORC Reader
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
 
 ## Improvements
 
