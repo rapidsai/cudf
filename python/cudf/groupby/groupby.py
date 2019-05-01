@@ -143,9 +143,11 @@ class Groupby(object):
             multi_index = MultiIndex(levels=levels,
                                      codes=codes,
                                      names=names)
-            for by in self._by:
-                result = result.drop(by)
-            return result.set_index(multi_index)
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            return final_result.set_index(multi_index)
 
     def apply_multicolumn(self, result, aggs):
         levels = []
