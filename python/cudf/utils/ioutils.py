@@ -101,14 +101,20 @@ cudf.io.orc.read_orc
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_read_orc = """
-Load an orc object from the file path, returning a DataFrame.
+Load an ORC object from the file path, returning a DataFrame.
 
 Parameters
 ----------
 path : string
     File path
-columns : list, default=None
+engine : { 'cudf', 'pyarrow' }, default 'pyarrow'
+    Parser engine to use.
+columns : list, default None
     If not None, only these columns will be read from the file.
+skip_rows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 kwargs are passed to the engine
 
 Returns
