@@ -906,6 +906,20 @@ def test_csv_reader_index_col():
         assert(str(cu_idx) == str(pd_idx))
 
 
+@pytest.mark.parametrize('names', [['a', 'b', 'c'],
+                                   [416, 905, 647],
+                                   range(3),
+                                   None])
+def test_csv_reader_column_names(names):
+    buffer = '0,1,2\n3,4,5\n6,7,8'
+
+    df = read_csv(StringIO(buffer), names=names)
+    if names is None:
+        assert(list(df) == ['0', '1', '2'])
+    else:
+        assert(list(df) == list(names))
+
+
 def test_csv_reader_bools_false_positives(tmpdir):
     # values that are equal to ["True", "TRUE", "False", "FALSE"]
     # when using ints to detect bool values
