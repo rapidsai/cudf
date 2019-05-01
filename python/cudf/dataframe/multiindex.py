@@ -101,8 +101,10 @@ class MultiIndex(Index):
         return result
 
     def __repr__(self):
+        codes_repr = self.codes.as_matrix().T.tolist()
         return "MultiIndex(levels=" + str(self.levels) +\
-               ",\ncodes=" + str(self.codes) + ")"
+               ",\n" +\
+               "           codes=" + str(codes_repr) + ")"
 
     @property
     def labels(self):
