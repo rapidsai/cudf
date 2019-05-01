@@ -22,6 +22,8 @@ DataFrame
 
 Series
 ------
+.. currentmodule:: cudf.dataframe.series
+
 .. autoclass:: Series
     :members:
  
@@ -46,6 +48,8 @@ Groupby
 
 IO
 --
+.. currentmodule:: cudf.io
+
 .. automodule:: cudf.io.csv
     :members:
 .. automodule:: cudf.io.parquet
