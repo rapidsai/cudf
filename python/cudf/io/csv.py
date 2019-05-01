@@ -166,7 +166,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 
 def to_csv(df, path=None, sep=',', na_rep='',
-           columns=None, line_terminator='\n'):
+           columns=None, header=True, line_terminator='\n'):
     """
     Write a dataframe to csv file format
 
@@ -182,12 +182,14 @@ def to_csv(df, path=None, sep=',', na_rep='',
         String to use for null entries
     columns : list of str, optional
         Columns to write
+    header : bool, default True
+        Write out the column names
     line_terminator: char, default '\\n'
 
     Notes
     -----
-    Header and index is currently not supported by `to_csv`.
-    No headers or index will be written to the csv file.
+    Writing index is currently not supported by `to_csv`.
+    No indicies will be written to the csv file.
     """
     return cpp_write_csv(
         cols=df._cols,
@@ -195,4 +197,5 @@ def to_csv(df, path=None, sep=',', na_rep='',
         sep=sep,
         na_rep=na_rep,
         columns=columns,
+        header=header,
         line_terminator=line_terminator)

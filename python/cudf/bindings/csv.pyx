@@ -291,9 +291,9 @@ cpdef cpp_read_csv(
     return df
 
 cpdef cpp_write_csv(
-    cols, path = None,
+    cols, path=None,
     sep=',', na_rep='',
-    columns = None, line_terminator = '\n'):
+    columns=None, header=True, line_terminator='\n'):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
@@ -307,42 +307,41 @@ cpdef cpp_write_csv(
     cdef csv_write_arg csv_writer = csv_write_arg()
 
     path = str(os.path.expanduser(str(path))).encode()
-
     csv_writer.filepath = path
-
     line_terminator = line_terminator.encode()
     csv_writer.line_terminator = line_terminator
-
     csv_writer.delimiter = sep.encode()[0]
-
     na_rep = na_rep.encode()
     csv_writer.na_rep = na_rep
-
     # Do not expose true_value and false_value until gdf_bool type
     # changes added to cpp API
     true_value = 'true'.encode()
     csv_writer.true_value = true_value
     false_value = 'false'.encode()
     csv_writer.false_value = false_value
+    csv_writer.include_header = header
 
     cdef vector[gdf_column*] list_cols
 
     if columns is not None:
         if not isinstance(columns, list):
             raise TypeError('columns must be a list')
-
-        for column_name in columns:
-            if column_name not in cols:
+        for name in columns:
+            if name not in cols:
                 raise NameError('column {!r} does not exist in DataFrame'
-                                .format(column_name))
-
-            list_cols.push_back(column_view_from_column(
-                                cols[column_name]._column))
-
+                                .format(name))
+            check_gdf_compatibility(cols[name])
+            c_col = column_view_from_column(cols[name]._column)
+            name = str(name).encode()
+            c_col.col_name = name
+            list_cols.push_back(c_col)
     else:
         for name, col in cols.items():
             check_gdf_compatibility(col)
-            list_cols.push_back(column_view_from_column(col._column))
+            c_col = column_view_from_column(col._column)
+            name = str(name).encode()
+            c_col.col_name = name
+            list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()
     csv_writer.num_cols = len(columns) if columns else len(cols)
