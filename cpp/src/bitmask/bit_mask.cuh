@@ -107,7 +107,6 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
  *  @param[out] mask                  address of the bit mask pointer
  *  @param[in]  number_of_records     number of records
  *  @param[in]  fill_value            Initialize all bits to fill_value if and only if it is 0 or 1
- * uninitialized
  *  @param[in]  padding_bytes         optional, specifies byte boundary the data
  * Default: 64, meaning the allocation size is rounded up to next multiple of 64 bytes.
  *
