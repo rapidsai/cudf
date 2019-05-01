@@ -320,7 +320,7 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
     cdef int c_flag_distinct = flag_distinct
     cdef int c_flag_sort_result = flag_sort_result
     cdef int c_flag_sort_inplace = flag_sort_inplace
-    cdef gdf_nulls_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
+    cdef gdf_null_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
     
     with nogil:
         gdf_context_view(context,

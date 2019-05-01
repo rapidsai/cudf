@@ -4,8 +4,7 @@
 #include <limits>
 #include <type_traits>
 #include <bitmask/legacy_bitmask.hpp>
-
-using host_valid_pointer = std::vector<uint8_t>;
+#include <tests/utilities/valid_vectors.h>
 
 //Terminating call
 //Extract the value of the Ith element of a tuple of vectors keys
@@ -322,7 +321,7 @@ void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_va
     vec.resize(column->size);
     cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
 
-    cudaMemcpy((uint8_t*)output_valids.data(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost);
+    cudaMemcpy(output_valids.get(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost);
 }
 
 //Empty terminal call
@@ -374,75 +373,15 @@ void copy_output_with_array_with_nulls(
 // custom functions
 //
 
-// Prints a vector
-template<typename T>
-void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
-{
-    auto to_stringify_functor = [&valid, &v] (int index) -> std::string {
-        if ( gdf_is_valid(valid, index)) {
-            std::string ret;
-            if (sizeof(v[index]) == 1)
-                ret = std::to_string((int)v[index]);
-            else
-                ret = std::to_string(v[index]);
-            return ret;
-        }
-        std::string ret;
-        if (sizeof(v[index]) == 1)
-            ret = std::to_string((int)v[index]);
-        else
-            ret = std::to_string(v[index]);
-        return ret + "|" + std::string("@");
-    };
-    std::vector<int> indexes(v.size());
-    std::iota (std::begin(indexes), std::end(indexes), 0);
-    std::transform(indexes.begin(), indexes.end(), std::ostream_iterator<std::string>(std::cout, "; "), to_stringify_functor);
-}
-
-template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuple_vector(std::tuple<std::vector<Tp>...>& t, const std::vector<host_valid_pointer>& valids = {})
-{
-  //bottom of compile-time recursion
-  //purposely empty...
-}
-
-//compile time recursion to print a tuple of vectors
-template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I < sizeof...(Tp), void>::type
-print_tuple_vector(std::tuple<std::vector<Tp>...>& t, const std::vector<host_valid_pointer>& valids = {})
-{
-  // print the current vector:
-  if (valids.size() == 0)
-    print_vector(std::get<I>(t), nullptr);
-  else
-    print_vector(std::get<I>(t), valids[I].data());
-  std::cout << std::endl;
-
-  //recurse to next vector in tuple
-  print_tuple_vector<I + 1, Tp...>(t, valids);
-}
-
-
 //print a tuple recursively. Terminating empty call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...> t) { std::cout<<"\n"; }
+print_basic_tuple(std::tuple<Tp...> t) { std::cout<<"\n"; }
 
 //print a tuple recursively. Recursive call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...> t) {
+print_basic_tuple(std::tuple<Tp...> t) {
     std::cout<<std::get<I>(t)<<"\t";
-    print_tuple<I+1, Tp...>(t);
-}
-//compile time recursion to print a tuple of vectors
-template<typename... Tp>
-void
-print_tuple_vector_row_major(std::tuple<std::vector<Tp>...>& t)
-{
-    std::cout<<"\n";
-    for (size_t i = 0; i < std::get<0>(t).size(); ++i) {
-        print_tuple(extractKey(t, i));
-    }
+    print_basic_tuple<I+1, Tp...>(t);
 }

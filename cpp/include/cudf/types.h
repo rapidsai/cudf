@@ -256,7 +256,7 @@ typedef enum {
   GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
   GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< In multicolumn sorting, a row with NULL in any column is
                                           treated as the largest number in comparisons */
-} gdf_nulls_sort_behavior;
+} gdf_null_sort_behavior;
 
 
 /** 
@@ -272,10 +272,8 @@ typedef struct gdf_context_{
   bool flag_groupby_include_nulls; 
                                 /**< false = Nulls are ignored in group by keys (Pandas style), 
                                 true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
-  gdf_nulls_sort_behavior flag_null_sort_behavior; 
-                                /**< GDF_NULL_AS_LARGEST = Nulls are treated as largest,
-                                GDF_NULL_AS_SMALLEST    = Nulls are treated as smallest, 
-                                GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest*/ 
+  gdf_null_sort_behavior flag_null_sort_behavior;
+                                ///< Indicates how nulls are treated in group_by/order_by operations
 } gdf_context;
 
 

@@ -31,6 +31,7 @@
 #include "utilities/cudf_utils.h"
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters_wo.cuh"
@@ -82,17 +83,12 @@ struct GroupByWoAggTest : public GdfTest {
   //contains the aggregated output column
   std::vector<gdf_size_type> cpu_out_indices;
 
-  // Type for a unique_ptr to a gdf_column with a custom deleter
-  // Custom deleter is defined at construction
-  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-
   // Containers for unique_ptrs to gdf_columns that will be used in the gdf_group_by functions
   // unique_ptrs are used to automate freeing device memory
   std::vector<gdf_col_pointer> gdf_input_key_columns;
   gdf_col_pointer gdf_input_value_column;
 
   std::vector<gdf_col_pointer> gdf_cpu_data_cols_out_columns;
-  // gdf_col_pointer gdf_output_indices_column;
   rmm::device_vector<gdf_size_type> gdf_output_indices_column;
 
   // Containers for the raw pointers to the gdf_columns that will be used as input
@@ -100,7 +96,6 @@ struct GroupByWoAggTest : public GdfTest {
   std::vector<gdf_column*> gdf_raw_input_key_columns;
   gdf_column* gdf_raw_input_val_column;
   std::vector<gdf_column*> gdf_raw_gdf_data_cols_out_columns;
-  // gdf_column* gdf_raw_out_indices;
   gdf_size_type* gdf_raw_out_indices;
   gdf_size_type gdf_raw_out_indices_size;
 
@@ -124,67 +119,6 @@ struct GroupByWoAggTest : public GdfTest {
   {
   }
 
-  template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
-          const gdf_size_type n_count = 0, const gdf_valid_type* host_valid = nullptr)
-  {
-    // Deduce the type and set the gdf_dtype accordingly
-    gdf_dtype gdf_col_type = N_GDF_TYPES;
-    if     (std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
-    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
-
-    // Create a new instance of a gdf_column with a custom deleter that will free
-    // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
-    gdf_col_pointer the_column{new gdf_column, deleter};
-
-    // Allocate device storage for gdf_column and copy contents from host_vector
-    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
-    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
-    if(host_valid != nullptr) {
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, gdf_num_bitmask_elements(host_vector.size()), cudaMemcpyHostToDevice), cudaSuccess);
-    }
-    else {
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemset(the_column->valid, 0xff, gdf_num_bitmask_elements(host_vector.size())), cudaSuccess);
-    }
-
-     // Fill the gdf_column members
-    // the_column->null_count = n_count;
-
-    int valid_count;
-    auto gdf_status = gdf_count_nonzero_mask(the_column->valid, host_vector.size(), &valid_count);
-    the_column->null_count = host_vector.size() - valid_count;
-    assert (gdf_status == GDF_SUCCESS);
-
-    the_column->size = host_vector.size();
-    the_column->dtype = gdf_col_type;
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = TIME_UNIT_NONE;
-    the_column->dtype_info = extra_info;
-
-    return the_column;
-  }
-
-
-  // Converts a tuple of host vectors into a vector of gdf_columns
-  std::vector<gdf_col_pointer>
-  initialize_gdf_columns(multi_column_t host_columns)
-  {
-    std::vector<gdf_col_pointer> gdf_columns;
-    convert_tuple_to_gdf_columns(gdf_columns, host_columns);
-    return gdf_columns;
-  }
-
   /**
    * @Synopsis  Initializes key columns and aggregation column for gdf group by call
    *
@@ -196,13 +130,13 @@ struct GroupByWoAggTest : public GdfTest {
    */
   void create_input(const size_t key_count, const size_t value_per_key,
                     const size_t max_key, const size_t max_val,
-                    bool print = false, const gdf_size_type n_count = 0) {
+                    bool print = false) {
     size_t shuffle_seed = rand();
     initialize_keys(input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(input_value, key_count, value_per_key, max_val, shuffle_seed);
 
     gdf_input_key_columns = initialize_gdf_columns(input_key);
-    gdf_input_value_column = create_gdf_column(input_value, n_count);
+    gdf_input_value_column = init_gdf_column(input_value, 0, [](size_t row, size_t col) { return true; });
 
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : gdf_input_key_columns){
@@ -213,36 +147,14 @@ struct GroupByWoAggTest : public GdfTest {
     if(print)
     {
       std::cout << "Key column(s) created. Size: " << std::get<0>(input_key).size() << std::endl;
-      print_tuple_vector(input_key);
+      print_tuple(input_key);
 
       std::cout << "Value column(s) created. Size: " << input_value.size() << std::endl;
-      print_vector(input_value); //todo@!
+      print_vector(input_value);
 
       std::cout << "\n==============================================" << std::endl;
 
     }
-  }
-
-  // Compile time recursion to convert each vector in a tuple of vectors into
-  // a gdf_column and append it to a vector of gdf_columns
-  template<std::size_t I = 0, typename... Tp>
-  inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
-  {
-    //bottom of compile-time recursion
-    //purposely empty...
-  }
-
-  template<std::size_t I = 0, typename... Tp>
-  inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
-  {
-    // Creates a gdf_column for the current vector and pushes it onto
-    // the vector of gdf_columns
-    gdf_columns.push_back(create_gdf_column(std::get<I>(t)));
-
-    //recurse to next vector in tuple
-    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t);
   }
 
   void create_gdf_output_buffers(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
@@ -404,8 +316,6 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   //tuple_t is tuple of datatypes associated with each column to be grouped
   using tuple_t = typename test_parameters::tuple_t;
 
-  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-
   //contains input valid generated for gdf calculation and reference solution
   std::vector<host_valid_pointer> input_key_valids;
 
@@ -418,49 +328,14 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   //contains the aggregated output column valid
   host_valid_pointer cpu_out_indices_valid;
 
+  size_t shuffle_seed;
 
-  // Compile time recursion to convert each vector in a tuple of vectors into
-  // a gdf_column and append it to a vector of gdf_columns
-  template<std::size_t I = 0, typename... Tp>
-  inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns_with_nulls(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  GroupValidTest()
   {
-    //bottom of compile-time recursion
-    //purposely empty...
-  }
-
-  template<std::size_t I = 0, typename... Tp>
-  inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns_with_nulls(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
-  {
-    // Creates a gdf_column for the current vector and pushes it onto
-    // the vector of gdf_columns
-    if (valids.size() == 0) {
-      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t)));
-    }
-    else{
-      auto valid = valids[I].data();
-      auto column_size = std::get<I>(t).size();
-      // auto null_count = gdf::util::null_count(valid, column_size);
-      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t), 0, valid));
-    }
-
-    //recurse to next vector in tuple
-    convert_tuple_to_gdf_columns_with_nulls<I + 1, Tp...>(gdf_columns, t, valids);
-  }
-
-  host_valid_pointer create_and_init_valid(size_t length)
-  {
-    return host_valid_pointer(gdf_valid_allocation_size(length), 0x43);
-  }
-
-  // Converts a tuple of host vectors into a vector of gdf_columns
-  std::vector<gdf_col_pointer>
-  initialize_gdf_columns_with_nulls(multi_column_t host_columns, std::vector<host_valid_pointer>& cpu_data_cols_out_valid)
-  {
-    std::vector<gdf_col_pointer> gdf_columns;
-    convert_tuple_to_gdf_columns_with_nulls(gdf_columns, host_columns, cpu_data_cols_out_valid);
-    return gdf_columns;
+    // Use constant seed so the psuedo-random order is the same each time
+    // Each time the class is constructed a new constant seed is used
+    static size_t number_of_instantiations{0};
+    shuffle_seed = number_of_instantiations++;
   }
 
   /* --------------------------------------------------------------------------*/
@@ -477,20 +352,20 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   void create_input_with_nulls(const size_t key_count, const size_t value_per_key,
                     const size_t max_key, const size_t max_val,
                     bool print = false) {
-    size_t shuffle_seed = 2;//rand();
     initialize_keys(this->input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(this->input_value, key_count, value_per_key, max_val, shuffle_seed);
-    const gdf_size_type n_count = 0;
 
     // Init valids and so ON!!!
     auto column_length = this->input_value.size();
     auto n_tuples = std::tuple_size<multi_column_t>::value;
     for (size_t i = 0; i < n_tuples; i++)
-        input_key_valids.push_back(create_and_init_valid(column_length));
-    input_value_valid = create_and_init_valid(column_length);
+        input_key_valids.push_back(create_and_init_valid(column_length, column_length * 0.375));
+    input_value_valid = create_and_init_valid(column_length, column_length * 0.375);
 
-    this->gdf_input_key_columns = this->initialize_gdf_columns_with_nulls(this->input_key, input_key_valids);
-    this->gdf_input_value_column = this->create_gdf_column(this->input_value, n_count, input_value_valid.data());
+    this->gdf_input_key_columns = initialize_gdf_columns(this->input_key, 
+                                                        [&](size_t row, size_t col) { return gdf_is_valid(input_key_valids[col].get(), row); });
+    this->gdf_input_value_column = init_gdf_column(this->input_value, 0, 
+                                                  [&](size_t row, size_t col) { return gdf_is_valid(input_value_valid.get(), row); });
 
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : this->gdf_input_key_columns){
@@ -501,10 +376,10 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     if(print)
     {
       std::cout << "Key column(s) created. Size: " << std::get<0>(this->input_key).size() << std::endl;
-      print_tuple_vector(this->input_key, input_key_valids);
+      print_tuples_and_valids(this->input_key, input_key_valids);
 
       std::cout << "Value column(s) created. Size: " << this->input_value.size() << std::endl;
-      print_vector(this->input_value, input_value_valid.data()); //todo@!
+      print_vector_and_valid(this->input_value, input_value_valid.get());
 
       std::cout << "\n==============================================" << std::endl;
 
@@ -512,7 +387,6 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   }
 
   void create_gdf_output_buffers_with_nulls(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
-      size_t shuffle_seed = rand();
       this->cpu_data_cols_out = this->input_key;
       this->cpu_out_indices = this->input_value;
 
@@ -520,14 +394,15 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
       auto column_length = this->cpu_out_indices.size();
       auto n_tuples = std::tuple_size<multi_column_t>::value;
       for (size_t i = 0; i < n_tuples; i++)
-        cpu_data_cols_out_valid.push_back(create_and_init_valid(column_length));
-      cpu_out_indices_valid = create_and_init_valid(column_length);
+        cpu_data_cols_out_valid.push_back(create_and_init_valid(column_length, 0));
+      cpu_out_indices_valid = create_and_init_valid(column_length, 0);
 
-      this->gdf_cpu_data_cols_out_columns = this->initialize_gdf_columns_with_nulls(this->cpu_data_cols_out, cpu_data_cols_out_valid);
+      this->gdf_cpu_data_cols_out_columns = initialize_gdf_columns(this->cpu_data_cols_out, 
+                                                                   [&](size_t row, size_t col) { return true; });
 
       this->gdf_output_indices_column.resize(this->cpu_out_indices.size());
       cudaMemcpy(this->gdf_output_indices_column.data().get(), this->cpu_out_indices.data(), this->cpu_out_indices.size() * sizeof(gdf_size_type), cudaMemcpyHostToDevice);
-      // this->gdf_output_indices_column = this->create_gdf_column(this->cpu_out_indices, 0, cpu_out_indices_valid.data());
+
       for(auto const& c : this->gdf_cpu_data_cols_out_columns){
         this->gdf_raw_gdf_data_cols_out_columns.push_back(c.get());
       }
@@ -539,7 +414,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     std::for_each(valids.begin(),
                   valids.end(),
                   [&i, &valid_key, &all_valid_key](host_valid_pointer& valid){
-                      bool b1 = gdf_is_valid(valid.data(), i);
+                      bool b1 = gdf_is_valid(valid.get(), i);
                       all_valid_key = all_valid_key && b1;
                       valid_key.push_back(b1);
                   });
@@ -612,7 +487,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
         std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         size_t index = 0;
         tuple_each(this->cpu_data_cols_out, [this, &index](auto& v) {
-          auto valid = this->cpu_data_cols_out_valid[index].data();
+          auto valid = this->cpu_data_cols_out_valid[index].get();
           for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
             bool b1 = gdf_is_valid(valid, this->cpu_out_indices[j]); // too important
             if (b1) {
@@ -646,7 +521,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
 
           auto l_key = extractKeyWithNulls(this->cpu_data_cols_out, valid_key, this->cpu_out_indices[i]);
           std::cout <<  "lkey: \n  ";
-          print_tuple(l_key); //todo@!
+          print_basic_tuple(l_key);
 
           auto sch = reference_map.find(l_key);
           bool found = (sch != reference_map.end());

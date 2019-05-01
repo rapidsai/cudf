@@ -113,7 +113,7 @@ cdef extern from "bitmask_ops.hpp" nogil:
         gdf_dtype_extra_info dtype_info
         char *col_name
 
-    ctypedef enum gdf_nulls_sort_behavior:
+    ctypedef enum gdf_null_sort_behavior:
       GDF_NULL_AS_LARGEST = 0, 
       GDF_NULL_AS_SMALLEST,
       GDF_NULL_AS_LARGEST_FOR_MULTISORT,
@@ -219,7 +219,7 @@ cdef extern from "bitmask_ops.hpp" nogil:
                                     int flag_distinct,
                                     int flag_sort_result,
                                     int flag_sort_inplace,
-                                    gdf_nulls_sort_behavior flag_null_sort_behavior)
+                                    gdf_null_sort_behavior flag_null_sort_behavior)
 
     cdef const char * gdf_error_get_name(gdf_error errcode)
 
