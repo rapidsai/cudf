@@ -152,7 +152,7 @@ class Groupby(object):
         codes = []
         levels.append(self._val_columns)
         levels.append(aggs)
-        codes.append(list(np.repeat(0, len(aggs))))
+        codes.append(list(np.zeros(len(aggs), dtype='int64')))
         codes.append(list(range(len(aggs))))
         from cudf import MultiIndex
         result.columns = MultiIndex(levels, codes)

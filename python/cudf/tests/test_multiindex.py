@@ -213,8 +213,17 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
     # return 1 row and 1 remaining key = series
     assert_eq(pdf.loc[('c', 'forest', 'clear')],
               gdf.loc[('c', 'forest', 'clear')])
-    # assert_eq(pdf.loc[('a', 'store'): ('b', 'house')],
-    #           gdf.loc[('a', 'store'): ('b', 'house')])
+
+
+@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet",
+                   raises=AttributeError)
+def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
+    gdf = cudf.from_pandas(pdf)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.loc[('a', 'store'): ('b', 'house')],
+              gdf.loc[('a', 'store'): ('b', 'house')])
 
 
 def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
@@ -290,8 +299,17 @@ def test_multiindex_columns(pdf, gdf, pdfIndex):
               gdf[('a',)])
     assert_eq(pdf[('c', 'forest', 'clear')],
               gdf[('c', 'forest', 'clear')])
-    # assert_eq(pdf[('a', 'store'): ('b', 'house')],
-    #           gdf[('a', 'store'): ('b', 'house')])
+
+@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet",
+                   raises=TypeError)
+def test_multiindex_column_slice(pdf, gdf, pdfIndex):
+    pdf = pdf.T
+    gdf = cudf.from_pandas(pdf)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.columns = pdfIndex
+    gdf.columns = gdfIndex
+    assert_eq(pdf[('a', 'store'): ('b', 'house')],
+              gdf[('a', 'store'): ('b', 'house')])
 
 
 def test_multiindex_from_tuples():

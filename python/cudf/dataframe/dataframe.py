@@ -405,7 +405,9 @@ class DataFrame(object):
         """
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
            isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
-            raise TypeError("You're trying to print a DataFrame that contains a  MultiIndex. Print this dataframe with .to_pandas()")  # noqa: E501
+            raise TypeError("You're trying to print a DataFrame that contains "
+                            "a MultiIndex. Print this dataframe with "
+                            ".to_pandas()")
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
         if ncols is NOTSET:
@@ -683,7 +685,9 @@ class DataFrame(object):
     def columns(self, columns):
         if isinstance(columns, Index):
             if len(columns) != len(self.columns):
-                msg = f'Length mismatch: Expected axis has {len(self.columns)} elements, new values have {len(columns)} elements'  # noqa: E501
+                msg = f"Length mismatch: Expected axis has %d elements, "\
+                        "new values have %d elements"\
+                        % (len(self.columns), len(columns))
                 raise ValueError(msg)
             """
             new_names = []
@@ -719,7 +723,10 @@ class DataFrame(object):
     def index(self, _index):
         if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
             if len(_index) != len(self[self.columns[0]]):
-                msg = f'Length mismatch: Expected axis has {len(self[self.columns[0]])} elements, new values have {len(_index)} elements'  # noqa: E501
+                msg = f"Length mismatch: Expected axis has "\
+                       "%d elements, new values "\
+                       "have %d elements"\
+                       % (len(self[self.columns[0]]), len(_index))
                 raise ValueError(msg)
             self._index = _index
             for k in self.columns:
@@ -730,7 +737,10 @@ class DataFrame(object):
         old_length = len(self._index)
 
         if new_length != old_length:
-            msg = f'Length mismatch: Expected index has {old_length} elements, new values have {new_length} elements'  # noqa: E501
+            msg = f"Length mismatch: Expected axis has "\
+                   "%d elements, new values "\
+                   "have %d elements"\
+                   % (old_length, new_length)
             raise ValueError(msg)
 
         # try to build an index from generic _index
