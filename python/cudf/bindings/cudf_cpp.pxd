@@ -38,14 +38,15 @@ cpdef check_gdf_error(errcode)
 cdef extern from "cudf.h" nogil:
 cdef extern from "bitmask_ops.hpp" nogil:
 
-    ctypedef int gdf_size_type
+    ctypedef int           gdf_size_type
     ctypedef gdf_size_type gdf_index_type
     ctypedef unsigned char gdf_valid_type
-    ctypedef long    gdf_date64
-    ctypedef int     gdf_date32
-    ctypedef long    gdf_timestamp
-    ctypedef int     gdf_category
-    ctypedef int     gdf_nvstring_category
+    ctypedef char          gdf_bool8
+    ctypedef long          gdf_date64
+    ctypedef int           gdf_date32
+    ctypedef long          gdf_timestamp
+    ctypedef int           gdf_category
+    ctypedef int           gdf_nvstring_category
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -55,6 +56,7 @@ cdef extern from "bitmask_ops.hpp" nogil:
         GDF_INT64,
         GDF_FLOAT32,
         GDF_FLOAT64,
+        GDF_BOOL8,
         GDF_DATE32,
         GDF_DATE64,
         GDF_TIMESTAMP,
@@ -178,6 +180,7 @@ cdef extern from "bitmask_ops.hpp" nogil:
         long          si64
         float         fp32
         double        fp64
+        char          b08
         gdf_date32    dt32
         gdf_date64    dt64
         gdf_timestamp tmst
