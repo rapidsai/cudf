@@ -22,14 +22,14 @@
 
 #include "cudf/functions.h"
 #include "cudf/types.h"
-#include "dataframe/cudf_table.cuh"
+#include <table/device_table.cuh>
 
 #include "sort_join.cuh"
 #include "join_compute_api.h"
 
  /* --------------------------------------------------------------------------*/
  /**
-  * @brief  Computes the hash-based join between two sets of gdf_tables.
+  * @brief  Computes the hash-based join between two sets of device_tables.
   *
   * @param left_table The left table to be joined
   * @param right_table The right table to be joined
@@ -42,10 +42,9 @@
   */
  /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-         typename output_index_type,
-         typename size_type>
-gdf_error join_hash(gdf_table<size_type> const & left_table,
-                    gdf_table<size_type> const & right_table,
+         typename output_index_type>
+gdf_error join_hash(cudf::table const & left_table,
+                    cudf::table const & right_table,
                     gdf_column * const output_l,
                     gdf_column * const output_r,
                     bool flip_indices = false)
@@ -55,7 +54,7 @@ gdf_error join_hash(gdf_table<size_type> const & left_table,
   // For inner joins, doesn't matter which table is build/probe, so we want
   // to build the hash table on the smaller table.
   if((join_type == JoinType::INNER_JOIN) &&
-     (right_table.get_column_length() > left_table.get_column_length()))
+     (right_table.num_rows() > left_table.num_rows()))
   {
     return join_hash<join_type, output_index_type>(right_table, 
                                                    left_table, 

@@ -16,7 +16,7 @@ import gzip
 import shutil
 import os
 
-from libgdf_cffi import GDFError
+from cudf.bindings.GDFError import GDFError
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -341,7 +341,7 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ['float32']
-    empty_cells = '\n""\n"  "\n " " \n'
+    empty_cells = '\n""\n  \n "" \n'
     default_na_cells = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
                         '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
                         '1.#QNAN\nN/A\nNA\nNULL\n'

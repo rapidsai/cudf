@@ -18,7 +18,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <utilities/int_fastdiv.h>
-#include <dataframe/cudf_table.cuh>
+#include <table/device_table.cuh>
 #include <hash/hash_functions.cuh>
 
 #include <cudf.h>
@@ -40,26 +40,25 @@
 
 #include <cstdlib>
 
-template <template <typename> class hash_function,
-         typename size_type>
+template <template <typename> class hash_function>
 struct row_partition_mapper
 {
   __device__
-  row_partition_mapper(gdf_table<size_type> const & table_to_hash, const size_type _num_partitions)
+  row_partition_mapper(device_table table_to_hash, const gdf_size_type _num_partitions)
     : the_table{table_to_hash}, num_partitions{_num_partitions}
   {}
 
   __device__
-  hash_value_type operator()(size_type row_index) const
+  hash_value_type operator()(gdf_size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index) % num_partitions;
+    return hash_row<hash_function>(the_table, row_index) % num_partitions;
   }
 
-  gdf_table<size_type> const & the_table;
+  device_table the_table;
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
-  size_type num_partitions;
+  gdf_size_type num_partitions;
 };
 
 // Put all repeated setup and validation stuff here
@@ -173,9 +172,9 @@ struct HashPartitionTest : public GdfTest
     }
 
     // Create a table from the gdf output of only the columns that were hashed
-    std::unique_ptr< gdf_table<int> > table_to_hash{new gdf_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
+    auto table_to_hash = device_table::create(num_cols_to_hash, gdf_cols_to_hash.data());
 
-    rmm::device_vector<int> row_partition_numbers(table_to_hash->get_column_length());
+    rmm::device_vector<int> row_partition_numbers(table_to_hash->num_rows());
 
     // Compute the partition number for every row in the result
     switch(gdf_hash_function)
@@ -185,7 +184,7 @@ struct HashPartitionTest : public GdfTest
           thrust::tabulate(thrust::device,
                            row_partition_numbers.begin(),
                            row_partition_numbers.end(),
-                           row_partition_mapper<MurmurHash3_32,int>(*table_to_hash,num_partitions));
+                           row_partition_mapper<MurmurHash3_32>(*table_to_hash,num_partitions));
           break;
         }
       case GDF_HASH_IDENTITY:
@@ -193,7 +192,7 @@ struct HashPartitionTest : public GdfTest
           thrust::tabulate(thrust::device,
                            row_partition_numbers.begin(),
                            row_partition_numbers.end(),
-                           row_partition_mapper<IdentityHash,int>(*table_to_hash,num_partitions));
+                           row_partition_mapper<IdentityHash>(*table_to_hash,num_partitions));
 
           break;
         }
@@ -202,11 +201,11 @@ struct HashPartitionTest : public GdfTest
     }
 
 
-    std::vector<int> host_row_partition_numbers(table_to_hash->get_column_length());
+    std::vector<int> host_row_partition_numbers(table_to_hash->num_rows());
 
     cudaMemcpy(host_row_partition_numbers.data(), 
                row_partition_numbers.data().get(),
-               table_to_hash->get_column_length() * sizeof(int),
+               table_to_hash->num_rows() * sizeof(int),
                cudaMemcpyDeviceToHost);
 
     if(print)
@@ -231,7 +230,7 @@ struct HashPartitionTest : public GdfTest
       // The end of the last partition is the end of the table
       else
       {
-        partition_stop = table_to_hash->get_column_length();
+        partition_stop = table_to_hash->num_rows();
       }
 
       // Everything in the current partition should have the same partition
@@ -264,7 +263,12 @@ struct TestParameters
   // The indices of the columns that will be hashed to determine the partitions
   constexpr static const std::array<int, sizeof...(cols)> cols_to_hash{{cols...}};
 };
-
+// Some compilers require this extra declaration outside the class to avoid an
+// `undefined reference` link error with the array
+template< typename tuple_of_vectors,
+          gdf_hash_func hash,
+          int... cols>
+constexpr const std::array<int, sizeof...(cols)> TestParameters<tuple_of_vectors, hash, cols...>::cols_to_hash;
 
 // Using Google Tests "Type Parameterized Tests"
 // Every test defined as TYPED_TEST(HashPartitionTest, *) will be run once for every instance of

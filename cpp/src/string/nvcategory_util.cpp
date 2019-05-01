@@ -1,13 +1,11 @@
 
 #include "nvcategory_util.hpp"
-
-
+#include <types.hpp>
+#include <table/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include "rmm/rmm.h"
-
-#include "utilities/error_utils.hpp"
-#include "utilities/nvtx/nvtx_utils.h"
+#include <rmm/rmm.h>
+#include <utilities/error_utils.hpp>
 
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){

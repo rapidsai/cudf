@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-#include <thrust/scatter.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include "copying.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include <table/table.hpp>
+
+#include <algorithm>
+#include <thrust/scatter.h>
 
 namespace cudf {
 
@@ -165,8 +168,7 @@ struct column_scatterer {
                       scatter_map);
 
       // Update destination column's null count
-      gdf_error gdf_status = set_null_count(destination_column);
-      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
+      set_null_count(*destination_column);
     }
 
     CHECK_STREAM(stream);

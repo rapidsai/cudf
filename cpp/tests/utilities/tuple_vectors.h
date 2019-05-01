@@ -35,7 +35,7 @@ template<typename T>
 void initialize_vector(std::vector<T>& v, const size_t column_length, const size_t column_range, bool sorted = false)
 {
  v.resize(column_length);
- std::generate(v.begin(), v.end(), [column_range](){return std::rand() % column_range;});
+ std::generate(v.begin(), v.end(), [column_range](){return static_cast<T>(std::rand() % column_range);});
  if (sorted) { std::sort(v.begin(), v.end()); }
 }
 

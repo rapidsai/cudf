@@ -7,8 +7,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-
-from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
@@ -17,6 +15,7 @@ from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
@@ -24,27 +23,8 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-
-
-# Operator mappings
-
-_binary_impl = {
-    # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-    # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-    # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
-}
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -100,6 +80,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def ordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
+
+    def _apply_scan_op(self, op):
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
+        cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
+        return out_col
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
@@ -198,7 +183,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
-        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
@@ -259,32 +244,32 @@ class NumericalColumn(columnops.TypedColumnBase):
     def all(self):
         return bool(self.min())
 
-    def min(self):
-        return cpp_reduce.apply_reduce('min', self)
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
 
-    def max(self):
-        return cpp_reduce.apply_reduce('max', self)
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
-    def sum(self):
-        return cpp_reduce.apply_reduce('sum', self)
+    def sum(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
 
-    def product(self):
-        return cpp_reduce.apply_reduce('product', self)
+    def product(self, dtype=None):
+        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self):
-        return self.sum().astype('f8') / self.valid_count
+    def mean(self, dtype=None):
+        return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1):
+    def mean_var(self, ddof=1, dtype=None):
         x = self.astype('f8')
-        mu = x.mean()
+        mu = x.mean(dtype=dtype)
         n = x.valid_count
-        asum = x.sum_of_squares()
+        asum = x.sum_of_squares(dtype=dtype)
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
 
-    def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_of_squares', self)
+    def sum_of_squares(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -456,12 +441,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype or op not in _binary_impl:
-        # Use JIT implementation
-        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-    else:
-        # Use compiled implementation
-        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
@@ -516,7 +496,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
-    _gdf.hash_columns(columns, result, initial_hash_values)
+    cpp_hash.hash_columns(columns, result, initial_hash_values)
     return result
 
 

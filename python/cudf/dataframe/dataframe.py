@@ -28,9 +28,8 @@ except ImportError:
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
-from libgdf_cffi import libgdf
 
-from cudf import formatting, _gdf
+from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
@@ -43,6 +42,7 @@ from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 
 import cudf.bindings.join as cpp_join
+import cudf.bindings.hash as cpp_hash
 
 
 class DataFrame(object):
@@ -161,6 +161,12 @@ class DataFrame(object):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
         return len(self), len(self._cols)
+
+    @property
+    def ndim(self):
+        """Dimension of the data. DataFrame ndim is always 2.
+        """
+        return 2
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -772,11 +778,13 @@ class DataFrame(object):
             memo = {}
         return self.copy(deep=True)
 
-    def _sanitize_columns(self, col):
+    def _sanitize_columns(self, series):
         """Sanitize pre-appended
            col values
         """
-        series = Series(col)
+        if not isinstance(series, Series):
+            series = Series(series)
+
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
             dtype = np.float64
@@ -791,17 +799,16 @@ class DataFrame(object):
             self._index = series.index
             self._size = len(series)
 
-    def _sanitize_values(self, col):
+    def _sanitize_values(self, series, SCALAR):
         """Sanitize col values before
            being added
         """
+        if SCALAR:
+            col = series
+        if not isinstance(series, Series):
+            series = Series(series)
         index = self._index
-        series = Series(col)
         sind = series.index
-
-        # This won't handle 0 dimensional arrays which should be okay
-        SCALAR = np.isscalar(col)
-
         if len(self) > 0 and len(series) == 1 and SCALAR:
             if series.dtype == np.dtype("object"):
                 gather_map = cudautils.zeros(len(index), 'int32')
@@ -812,7 +819,7 @@ class DataFrame(object):
                 return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
-        return col
+        return series
 
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
@@ -826,11 +833,14 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        self._sanitize_columns(col)
-        col = self._sanitize_values(col)
+        # Check if the input is scalar before converting to a series
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+        series = Series(col) if not SCALAR else col
+        self._sanitize_columns(series)
+        series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        series = Series(col)
         if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
@@ -1257,55 +1267,8 @@ class DataFrame(object):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        if len(self.columns) == 0:
-            return self
-
-        dtype = self.dtypes[0]
-        if pd.api.types.is_categorical_dtype(dtype):
-            raise NotImplementedError('Categorical columns are not yet '
-                                      'supported for function')
-        if any(t != dtype for t in self.dtypes):
-            raise ValueError('all columns must have the same dtype')
-        has_null = any(c.null_count for c in self._cols.values())
-
-        df = DataFrame()
-
-        ncols = len(self.columns)
-        cols = [self[col]._column.cffi_view for col in self._cols]
-
-        new_nrow = ncols
-        new_ncol = len(self)
-
-        if has_null:
-            new_col_series = [
-                Series.from_masked_array(
-                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                    mask=cudautils.make_empty_mask(size=new_nrow),
-                )
-                for i in range(0, new_ncol)]
-        else:
-            new_col_series = [
-                Series(
-                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                )
-                for i in range(0, new_ncol)]
-        new_col_ptrs = [
-            new_col_series[i]._column.cffi_view
-            for i in range(0, new_ncol)]
-
-        # TODO (dm): move to _gdf.py
-        libgdf.gdf_transpose(
-            ncols,
-            cols,
-            new_col_ptrs
-        )
-
-        for series in new_col_series:
-            series._column._update_null_count()
-
-        for i in range(0, new_ncol):
-            df[str(i)] = new_col_series[i]
-        return df
+        from cudf.bindings.transpose import transpose as cpp_tranpose
+        return cpp_tranpose(self)
 
     @property
     def T(self):
@@ -2042,7 +2005,7 @@ class DataFrame(object):
         # Allocate output buffers
         outputs = [col.copy() for col in cols]
         # Call hash_partition
-        offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
+        offsets = cpp_hash.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
         outdf = DataFrame()
         for k, col in zip(self._cols, outputs):

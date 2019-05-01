@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DEVICE_ATOMICS_CUH
+#define DEVICE_ATOMICS_CUH
+
 /** ---------------------------------------------------------------------------*
  * @brief overloads for CUDA atomic operations
  * @file device_atomics.cuh
@@ -34,6 +37,85 @@
 
 namespace cudf {
 
+// ------------------------------------------------------------------------
+// Binary operators
+/* @brief binary `sum` operator */
+struct DeviceSum {
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs + rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
+
+/* @brief binary `min` operator */
+struct DeviceMin{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs <= rhs? lhs: rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
+};
+
+/* @brief binary `max` operator */
+struct DeviceMax{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs >= rhs? lhs: rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
+};
+
+/* @brief binary `product` operator */
+struct DeviceProduct {
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs * rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{1}; }
+};
+
+
+/* @brief binary `and` operator */
+struct DeviceAnd{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs & rhs );
+    }
+};
+
+/* @brief binary `or` operator */
+struct DeviceOr{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs | rhs );
+    }
+};
+
+/* @brief binary `xor` operator */
+struct DeviceXor{
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return (lhs ^ rhs );
+    }
+};
+
+
 namespace detail {
 
     template <typename T_output, typename T_input>
@@ -43,6 +125,32 @@ namespace detail {
         return *( reinterpret_cast<T_output*>(&value) );
     }
 
+    // call atomic function with type cast between same underlying type
+    template <typename T, typename Functor>
+    __forceinline__  __device__
+    T typesAtomicOperation32(T* addr, T val, Functor atomicFunc)
+    {
+        using T_int = int;
+        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
+            cudf::detail::type_reinterpret<T_int, T>(val));
+
+        return cudf::detail::type_reinterpret<T, T_int>(ret);
+    }
+
+    // call atomic function with type cast between same underlying type
+    template <typename T, typename Functor>
+    __forceinline__  __device__
+    T typesAtomicOperation64(T* addr, T val, Functor atomicFunc)
+    {
+        using T_int = long long int;
+        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
+            cudf::detail::type_reinterpret<T_int, T>(val));
+
+        return cudf::detail::type_reinterpret<T, T_int>(ret);
+    }
+
+
+    // -----------------------------------------------------------------------
     // the implementation of `genericAtomicOperation`
     template <typename T, typename Op, size_t n>
     struct genericAtomicOperationImpl;
@@ -160,6 +268,148 @@ namespace detail {
         }
     };
 
+    // -----------------------------------------------------------------------
+    // specialized functions for operators
+    // `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
+    // `atomicMin`, `atomicMax` support int32_t, int64_t
+    template<>
+    struct genericAtomicOperationImpl<float, DeviceSum, 4> {
+        using T = float;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+
+#if defined(__CUDA_ARCH__) && ( __CUDA_ARCH__ >= 600 )
+    template<>
+    struct genericAtomicOperationImpl<double, DeviceSum, 8> {
+        using T = double;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+#endif
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceSum, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            return atomicAdd(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceMin, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMin op)
+        {
+            return atomicMin(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int32_t, DeviceMax, 4> {
+        using T = int32_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMax op)
+        {
+            return atomicMax(addr, update_value);
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int64_t, DeviceMin, 8> {
+        using T = int64_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMin op)
+        {
+            using T_out = long long int;
+            T ret = atomicMin(reinterpret_cast<T_out*>(addr),
+                type_reinterpret<T_out, T>(update_value) );
+            return ret;
+        }
+    };
+
+    template<>
+    struct genericAtomicOperationImpl<int64_t, DeviceMax, 8> {
+        using T = int64_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceMax op)
+        {
+            using T_out = long long int;
+            T ret = atomicMax(reinterpret_cast<T_out*>(addr),
+                type_reinterpret<T_out, T>(update_value) );
+            return ret;
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceAnd, 4> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceAnd op)
+        {
+            return atomicAnd(addr, update_value);
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceAnd, 8> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceAnd op)
+        {
+            using T_int = long long int;
+            return cudf::detail::typesAtomicOperation64
+                (addr, update_value, [](T_int* a, T_int v){return atomicAnd(a, v);});
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceOr, 4> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceOr op)
+        {
+            return atomicOr(addr, update_value);
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceOr, 8> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceOr op)
+        {
+            using T_int = long long int;
+            return cudf::detail::typesAtomicOperation64
+                (addr, update_value, [](T_int* a, T_int v){return atomicOr(a, v);});
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceXor, 4> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceXor op)
+        {
+            return atomicXor(addr, update_value);
+        }
+    };
+
+    template<typename T>
+    struct genericAtomicOperationImpl<T, DeviceXor, 8> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceXor op)
+        {
+            using T_int = long long int;
+            return cudf::detail::typesAtomicOperation64
+                (addr, update_value, [](T_int* a, T_int v){return atomicXor(a, v);});
+        }
+    };
+    // -----------------------------------------------------------------------
     // the implementation of `typesAtomicCASImpl`
     template <typename T, size_t n>
     struct typesAtomicCASImpl;
@@ -196,30 +446,6 @@ namespace detail {
             return type_reinterpret<T, T_int>(ret);
         }
     };
-
-    // call atomic function with type cast between same underlying type
-    template <typename T, typename Functor>
-    __forceinline__  __device__
-    T typesAtomicOperation32(T* addr, T val, Functor atomicFunc)
-    {
-        using T_int = int;
-        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-            cudf::detail::type_reinterpret<T_int, T>(val));
-
-        return cudf::detail::type_reinterpret<T, T_int>(ret);
-    }
-
-    // call atomic function with type cast between same underlying type
-    template <typename T, typename Functor>
-    __forceinline__  __device__
-    T typesAtomicOperation64(T* addr, T val, Functor atomicFunc)
-    {
-        using T_int = long long int;
-        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-            cudf::detail::type_reinterpret<T_int, T>(val));
-
-        return cudf::detail::type_reinterpret<T, T_int>(ret);
-    }
 
     // atomicCAS implementation for int8_t
     __forceinline__  __device__
@@ -284,10 +510,22 @@ namespace detail {
         return target_value;
     }
 
+    // -----------------------------------------------------------------------
+    // intermediate function resolve underlying data type
+    template <typename T, typename BinaryOp>
+    __forceinline__  __device__
+    T genericAtomicOperationUnderlyingType(
+        T* address, T const & update_value, BinaryOp op)
+    {
+        T ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
+            (address, update_value, op);
+        return ret;
+    }
+
 } // namespace detail
 
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes 'BinaryOp'('old', 'update_value'),
  * and stores the result back to memory at the same address.
  * These three operations are performed in one atomic transaction.
@@ -305,68 +543,12 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
-    return cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
-        (address, update_value, op);
+    auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
+         &cudf::detail::unwrap(*address),
+         cudf::detail::unwrap(update_value),
+         op);
+    return T(ret);
 }
-
-// ------------------------------------------------------------------------
-// Binary ops for sum, min, max
-struct DeviceSum {
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceMin{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs <= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::max(); }
-};
-
-struct DeviceMax{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs >= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-};
-
-struct DeviceAnd{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs & rhs );
-    }
-};
-
-struct DeviceOr{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs | rhs );
-    }
-};
-
-struct DeviceXor{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs ^ rhs );
-    }
-};
 
 } // namespace cudf
 
@@ -374,7 +556,7 @@ struct DeviceXor{
 
 /* Overloads for `atomicAdd` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes (old + val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -481,7 +663,7 @@ cudf::nvstring_category atomicAdd(cudf::nvstring_category* address, cudf::nvstri
 
 /* Overloads for `atomicMin` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes the minimum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
@@ -599,7 +781,7 @@ cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstri
 
 /* Overloads for `atomicMax` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes the maximum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
@@ -716,9 +898,9 @@ cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstri
 
 /* Overloads for `atomicCAS` */
 /** --------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
- * computes (`old` == `compare` ? `val` : `old`), and stores the result back to memory
- * at the same address.
+ * @brief reads the `old` located at the `address` in global or shared memory,
+ * computes (`old` == `compare` ? `val` : `old`),
+ * and stores the result back to memory at the same address.
  * These three operations are performed in one atomic transaction.
  *
  * The supported cudf types for `atomicCAS` are:
@@ -763,11 +945,21 @@ T atomicCAS(T* address, T compare, T val)
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-
+/**
+ * @overload cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+ */
+__forceinline__ __device__
+cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+{
+    // TODO: not sure this is the right way...
+    return cudf::bool8{atomicCAS(reinterpret_cast<int8_t*>(address), 
+                                 cudf::detail::unwrap(compare), 
+                                 cudf::detail::unwrap(val))};
+}
 
 /* Overloads for `atomicAnd` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes (old & val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -837,7 +1029,7 @@ uint64_t atomicAnd(uint64_t* address, uint64_t val)
 
 /* Overloads for `atomicOr` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes (old | val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -908,7 +1100,7 @@ uint64_t atomicOr(uint64_t* address, uint64_t val)
 
 /* Overloads for `atomicXor` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory, 
+ * @brief reads the `old` located at the `address` in global or shared memory,
  * computes (old ^ val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -976,3 +1168,5 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
 
+
+#endif

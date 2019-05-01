@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cooperative_groups.h>
-#include <thrust/gather.h>
 #include "copying.hpp"
 #include "cudf.h"
 #include "gather.hpp"
@@ -23,6 +21,10 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
 #include <bitmask/legacy_bitmask.hpp>
+#include <table/table.hpp>
+
+#include <algorithm>
+#include <thrust/gather.h>
 
 /**
  * @brief Operations for copying from one column to another
@@ -332,8 +334,7 @@ struct column_gatherer {
                      gather_map, check_bounds, stream);
 
       // TODO compute the null count in the gather_bitmask kernels
-      gdf_error gdf_status = set_null_count(destination_column);
-      CUDF_EXPECTS(GDF_SUCCESS == gdf_status, "set_null_count failed");
+      set_null_count(*destination_column);
     }
 
     CHECK_STREAM(stream);
