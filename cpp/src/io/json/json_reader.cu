@@ -429,6 +429,20 @@ struct ConvertFunctor {
   }
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief CUDA Kernel that modifies the start and stop offsets to exclude
+ * the sections outside of the top level brackets.
+ *
+ * The top level brackets characters are excluded from the resulting range.
+ * Parameter stop has the same semantics as end() in STL containers
+ * (one past the last element)
+ *
+ * @param[in] data Pointer to the device buffer containing the data to preocess
+ * @param[in,out] start Offset of the first character in the range
+ * @param[in,out] stop Offset of the first character after the range
+ *
+ * @return void
+ *---------------------------------------------------------------------------**/
 __device__ void AdjustRangeForBrackets(const char *data, long &start, long &stop) {
   while (data[start] != '[' && data[start] != '{') {
     start++;
@@ -441,7 +455,20 @@ __device__ void AdjustRangeForBrackets(const char *data, long &start, long &stop
   stop--;
 }
 
-__device__ long seekFieldKeyEnd(const char *data, const ParseOptions opts, long start, long stop) {
+/**---------------------------------------------------------------------------*
+ * @brief CUDA kernel that finds the end position of the next field name,
+ * including the colon that separates the name from the field value.
+ *
+ * Returns the position after the colon that preceeds the value token.
+ *
+ * @param[in] data Pointer to the device buffer containing the data to preocess
+ * @param[in] opts Parsing options (e.g. delimiter and quotation character)
+ * @param[in] start Offset of the first character in the range
+ * @param[in] stop Offset of the first character after the range
+ *
+ * @return long Position of the first character after the field name.
+ *---------------------------------------------------------------------------**/
+__device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long start, long stop) {
   bool quotation = false;
   for (auto pos = start; pos < stop; ++pos) {
     // Ignore escaped quotes
@@ -470,7 +497,7 @@ __device__ long seekFieldKeyEnd(const char *data, const ParseOptions opts, long 
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
  * @param[out] num_valid_fields The numbers of valid fields in columns
  *
- * @return gdf_error GDF_SUCCESS upon completion
+ * @return void
  *---------------------------------------------------------------------------**/
 __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint64_t *rec_starts,
                                  gdf_size_type num_records, const gdf_dtype *dtypes, ParseOptions opts,
@@ -489,7 +516,7 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
 
   for (int col = 0; col < num_columns && start < stop; col++) {
     if (is_object) {
-      start = seekFieldKeyEnd(data, opts, start, stop);
+      start = seekFieldNameEnd(data, opts, start, stop);
     }
     // field_end is at the next delimiter/newline
     const long field_end = seekFieldEnd(data, opts, start, stop);
@@ -549,7 +576,7 @@ void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_column
  * @param[in] num_records The number of lines/rows of input data
  * @param[out] column_infos The count for each column data type
  *
- * @returns GDF_SUCCESS upon successful computation
+ * @returns void
  *---------------------------------------------------------------------------**/
 __global__ void detectJsonDataTypes(const char *data, size_t data_size, const ParseOptions opts, int num_columns,
                                     const uint64_t *rec_starts, gdf_size_type num_records,
@@ -567,7 +594,7 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
 
   for (int col = 0; col < num_columns; col++) {
     if (is_object) {
-      start = seekFieldKeyEnd(data, opts, start, stop);
+      start = seekFieldNameEnd(data, opts, start, stop);
     }
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
