@@ -109,7 +109,7 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
  *  @param[in]  fill_value            Initialize all bits to fill_value if and only if it is 0 or 1
  * uninitialized
  *  @param[in]  padding_bytes         optional, specifies byte boundary the data
- * should be padded to. Defaults to 64 bytes, meaning the space allocated will
+ * Default: 64, meaning the allocation size is rounded up to next multiple of 64 bytes.
  * be rounded up to the next multiple of 64 bytes.
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
