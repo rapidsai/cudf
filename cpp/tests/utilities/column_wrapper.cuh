@@ -354,7 +354,7 @@ struct column_wrapper {
    * @return false The two columns are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(column_wrapper<ColumnType> const& rhs) const {
-    return *this == rhs.the_column;
+    return *this == *rhs.get();
   }
 
  private:
