@@ -12,23 +12,23 @@ from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, u
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
-cpdef get_ctype_ptr(obj) except +*
-cpdef get_column_data_ptr(obj) except +*
-cpdef get_column_valid_ptr(obj) except +*
+cpdef get_ctype_ptr(obj)
+cpdef get_column_data_ptr(obj)
+cpdef get_column_valid_ptr(obj)
 
-cdef gdf_dtype get_dtype(dtype) except +*
+cdef gdf_dtype get_dtype(dtype)
 
-cdef get_scalar_value(gdf_scalar scalar) except +*
+cdef get_scalar_value(gdf_scalar scalar)
 
-cdef gdf_column* column_view_from_column(col) except +*
-cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count) except +*
-cdef gdf_column_to_column_mem(gdf_column* input_col) except +*
-cdef update_nvstrings_col(col, uintptr_t category_ptr) except +*
+cdef gdf_column* column_view_from_column(col)
+cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
+cdef gdf_column_to_column_mem(gdf_column* input_col)
+cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                      flag_sort_result, flag_sort_inplace) except +*
+                                      flag_sort_result, flag_sort_inplace)
 
-cpdef check_gdf_error(errcode) except +*
+cpdef check_gdf_error(errcode)
 
 # Import cudf.h header to import all functions
 # First version of bindings has no changes to the cudf.h header, so this file
