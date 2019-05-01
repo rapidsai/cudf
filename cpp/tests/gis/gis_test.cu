@@ -12,7 +12,7 @@ struct GISTest : public GdfTest
     std::vector<T> polygon_lons;
     std::vector<T> point_lats;
     std::vector<T> point_lons;
-    std::vector<int32_t> inside_polygon;
+    std::vector<int8_t> inside_polygon;
     size_t total_points;
 
     gdf_col_pointer gdf_col_ptr_polygon_lats;
@@ -52,7 +52,7 @@ struct GISTest : public GdfTest
         }
 
         total_points = point_lats.size();
-        inside_polygon.resize(total_points, -1);
+        inside_polygon.resize(total_points, -1.0);
 
         gdf_col_ptr_polygon_lats = create_gdf_column(polygon_lats);
         gdf_col_ptr_polygon_lons = create_gdf_column(polygon_lons);
@@ -65,6 +65,7 @@ struct GISTest : public GdfTest
         gdf_raw_point_lats = gdf_col_ptr_point_lats.get();
         gdf_raw_point_lons = gdf_col_ptr_point_lons.get();
         gdf_raw_inside_polygon = gdf_col_ptr_inside_points.get();
+
 
         if(print)
         {
@@ -79,10 +80,10 @@ struct GISTest : public GdfTest
     }
 
     // TODO: Implement  pip host
-    std::vector<int32_t> compute_reference_pip(bool print = false)
+    std::vector<int8_t> compute_reference_pip(bool print = false)
     {
         // todo: pip host
-        std::vector<int32_t> h_inside_polygon(total_points, -1);
+        std::vector<int8_t> h_inside_polygon(total_points, -1);
 
         for (size_t id_point = 0; id_point < point_lats.size(); ++id_point)
         {
@@ -122,14 +123,14 @@ struct GISTest : public GdfTest
         return h_inside_polygon;
     }
 
-    std::vector<int32_t> compute_gdf_pip(bool print = false)
+    std::vector<int8_t> compute_gdf_pip(bool print = false)
     {
         gdf_point_in_polygon(gdf_raw_polygon_lats, gdf_raw_polygon_lons, gdf_raw_point_lats, gdf_raw_point_lons, gdf_raw_inside_polygon);
       
         size_t output_size = gdf_raw_point_lats->size;
-        std::vector<int32_t> host_inside_polygon(output_size);
+        std::vector<int8_t> host_inside_polygon(output_size);
       
-        EXPECT_EQ(cudaMemcpy(host_inside_polygon.data(), gdf_raw_inside_polygon->data, output_size * sizeof(int32_t), cudaMemcpyDeviceToHost), cudaSuccess);
+        EXPECT_EQ(cudaMemcpy(host_inside_polygon.data(), gdf_raw_inside_polygon->data, output_size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
 
         if(print)
         {
@@ -137,14 +138,13 @@ struct GISTest : public GdfTest
             print_vector(host_inside_polygon);
             std::cout << std::endl;;
         }
-
+    
         return host_inside_polygon;
     }
 
     // TODO: Function to check the range for latitude and longitude  
 };
 
-// for coordinates .. float and double
 using Types = testing::Types<double>;
 
 TYPED_TEST_CASE(GISTest, Types);
@@ -152,12 +152,12 @@ TYPED_TEST_CASE(GISTest, Types);
 TYPED_TEST(GISTest, InsidePolygon)
 {
     // Latitudes polygon, longitudes polygon, latitudes of query points, longitudes of query points, print = false
-    this->create_input({0.0, 1.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0, 0.0}, {0.4, 0.5, 0.2, 0.6}, {0.2, 0.6, 0.5, 0.8}, false);
+    this->create_input({0.0, 1.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0, 0.0}, {0.4, 0.5, 0.2, 0.6, 0.32, 0.78}, {0.2, 0.6, 0.5, 0.8, 0.41, 0.63}, false);
 
-    std::vector<int32_t> reference_pip_result = this->compute_reference_pip(true);
-    std::vector<int32_t> gdf_pip_result = this->compute_gdf_pip(true);
+    std::vector<int8_t> reference_pip_result = this->compute_reference_pip(true);
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip(true);
 
-    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match";
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
 
     // Compare the GDF and reference solutions
     for(size_t i = 0; i < reference_pip_result.size(); ++i) {
@@ -167,12 +167,12 @@ TYPED_TEST(GISTest, InsidePolygon)
 
 TYPED_TEST(GISTest, OutsidePolygon)
 {
-    this->create_input({0.0, 1.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0, 0.0}, {-0.4, -0.5, -0.2}, {0.2, 0.6, 0.5}, false);
+    this->create_input({0.0, 1.0, 1.0, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0, 0.0}, {-0.4, -0.5, -0.2, 1.25, 5.36}, {-0.2, 0.6, 0.5, 0.22, 8.21}, false);
 
-    std::vector<int32_t> reference_pip_result = this->compute_reference_pip(true);
-    std::vector<int32_t> gdf_pip_result = this->compute_gdf_pip(true);
+    std::vector<int8_t> reference_pip_result = this->compute_reference_pip(false);
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip(false);
 
-    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match";
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
 
     // Compare the GDF and reference solutions
     for(size_t i = 0; i < reference_pip_result.size(); ++i) {

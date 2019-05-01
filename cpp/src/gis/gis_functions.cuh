@@ -1,5 +1,4 @@
 #include <bitmask/BitMask.cuh>
-#include <cudf.h>
 #include "cudf/functions.h"
 #include "bitmask/bitmask_ops.h"
 
@@ -35,7 +34,7 @@ __device__ T orientation(T p1_x, T p1_y, T p2_x, T p2_y, T p3_x, T p3_y)
  * @returns
  */
 template <typename T>
-__global__ void point_in_polygon(T* poly_lats, T* poly_lons, T* point_lats, T* point_lons, int poly_size, int point_size, int32_t* point_is_in_polygon)
+__global__ void point_in_polygon(T* poly_lats, T* poly_lons, T* point_lats, T* point_lons, int poly_size, int point_size, int8_t* point_is_in_polygon)
 {
 	int start_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -67,21 +66,25 @@ __global__ void point_in_polygon(T* poly_lats, T* poly_lons, T* point_lats, T* p
 	}
 }
 
-void gdf_point_in_polygon_caller(gdf_column* polygon_lats, gdf_column* polygon_lons, gdf_column* point_lats, gdf_column* point_lons, gdf_column* output)
+gdf_error gdf_point_in_polygon_caller(gdf_column* polygon_lats, gdf_column* polygon_lons, gdf_column* point_lats, gdf_column* point_lons, gdf_column* output)
 {
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-    //TODO: assert that sizes are the same etc.
-    //TODO: assert that null_count = 0 on latitudes and longitude in polygon
-    //    CUDF_EXPEpoint_in_polygonCTS(polygon_latitudes.null_count == 0, "message about error");
-    
-    int min_grid_size = 0, block_size = 0;
+
+	GDF_REQUIRE(polygon_lats != nullptr && polygon_lons != nullptr && point_lats != nullptr && point_lons != nullptr, GDF_DATASET_EMPTY);
+	GDF_REQUIRE(polygon_lats->size == polygon_lons->size, GDF_COLUMN_SIZE_MISMATCH);
+    GDF_REQUIRE(point_lats->size == point_lons->size, GDF_COLUMN_SIZE_MISMATCH);
+	GDF_REQUIRE(polygon_lats->dtype == polygon_lons->dtype, GDF_DTYPE_MISMATCH);
+	GDF_REQUIRE(polygon_lats->dtype == point_lats->dtype, GDF_DTYPE_MISMATCH);
+	GDF_REQUIRE(point_lats->dtype == point_lons->dtype, GDF_DTYPE_MISMATCH);
+    GDF_REQUIRE(polygon_lons->null_count == 0 || polygon_lats->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+
+	int min_grid_size = 0, block_size = 0;
 	cudaOccupancyMaxPotentialBlockSize( &min_grid_size, &block_size, point_in_polygon<double> );
-	
-    // Launch the kernel with 1024 threads by block
-	point_in_polygon<double> <<< min_grid_size, block_size >>> ( static_cast<double*>(polygon_lats->data), static_cast<double*>(polygon_lons->data),
-		static_cast<double*>(point_lats->data),static_cast<double*>(point_lons->data), polygon_lats->size, point_lats->size, 
-		static_cast<int32_t*>(output->data) );
+
+	point_in_polygon<double> <<< min_grid_size, block_size >>> (static_cast<double*>(polygon_lats->data), static_cast<double*>(polygon_lons->data),
+	static_cast<double*>(point_lats->data),static_cast<double*>(point_lons->data), polygon_lats->size, point_lats->size, 
+	static_cast<int8_t*>(output->data) );
 
 	if (point_lats->null_count == 0 && point_lons->null_count == 0) output->null_count = 0;
 	else {
@@ -95,7 +98,6 @@ void gdf_point_in_polygon_caller(gdf_column* polygon_lats, gdf_column* polygon_l
 	}
 
 	cudaStreamDestroy(stream);
+
+	return GDF_SUCCESS;
 }
-
-
-
