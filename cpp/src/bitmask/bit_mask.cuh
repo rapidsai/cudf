@@ -28,7 +28,7 @@ namespace bit_mask {
 enum { bits_per_element = gdf::util::size_in_bits<bit_mask_t>() };
 
 /**
- * @brief determine the number of bit_mask_t elements are used
+ * @brief determine the number of bit_mask_t elements required for @p size bits
  *
  * @param[in]  size    Number of bits in the bitmask
  *
