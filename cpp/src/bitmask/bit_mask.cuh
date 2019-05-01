@@ -42,7 +42,7 @@ constexpr gdf_size_type num_elements(gdf_size_type size) {
 }
 
 /**
- *  @brief Copy data between host and device
+ *  @brief Copy bit mask data between host and device
  *
  *  @param[out] dst      - the address of the destination
  *  @param[in] src       - the address of the source
