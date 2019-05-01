@@ -110,7 +110,6 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
  * uninitialized
  *  @param[in]  padding_bytes         optional, specifies byte boundary the data
  * Default: 64, meaning the allocation size is rounded up to next multiple of 64 bytes.
- * be rounded up to the next multiple of 64 bytes.
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
