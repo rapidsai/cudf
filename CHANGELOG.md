@@ -61,7 +61,7 @@
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1503 Convert sorting and hashing ops CFFI to Cython
-- PR #1533 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+- PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 
 ## Bug Fixes
 
