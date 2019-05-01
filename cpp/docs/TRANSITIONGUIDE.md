@@ -65,7 +65,7 @@ It is common for an API to work on a set of `N` `gdf_column`s of equal size whic
 void some_multi_col_function(gdf_column * cols[], int num_cols);
 ```
 
-A simple wrapper class called `cudf::table` is defined in `cudf/cpp/include/types.hpp` to provide a convenient abstraction for the above use case. This class should be used any time a function is operating on a collection of `gdf_column`s of equal size.
+A simple wrapper class called `cudf::table` is defined in `cudf/cpp/src/table/table.hpp` to provide a convenient abstraction for the above use case. This class should be used any time a function is operating on a collection of `gdf_column`s of equal size.
 
 For example, the above becomes:
 ```
