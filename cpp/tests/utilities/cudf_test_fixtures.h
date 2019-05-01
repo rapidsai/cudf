@@ -14,28 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef CUDF_TEST_FIXTURES_H
+#define CUDF_TEST_FIXTURES_H
 
 #include <cudf.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-
 #include <rmm/rmm.h>
 
-#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
-#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
-#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
-
-#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression) \
-do { \
-    gdf_error _assert_cudf_success_eval_result;\
-    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
-    const char* _assertion_failure_message = #gdf_error_expression; \
-    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) << "Failing expression: " << _assertion_failure_message; \
-} while (0)
-
+#include "cudf_test_utils.cuh"
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
@@ -50,22 +37,4 @@ struct GdfTest : public ::testing::Test
     }
 };
 
-// GTest / GMock utilities
-
-// Utility for testing the expectation that an expression x throws the specified
-// exception whose what() message ends with the msg
-#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
-  EXPECT_THROW({                                                     \
-    try { x; }                                                       \
-    catch (const exception &e) {                                     \
-    ASSERT_NE(nullptr, e.what());                                    \
-    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
-    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
-    throw;                                                           \
-  }}, exception);
-
-#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
-
-#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+#endif // CUDF_TEST_FIXTURES_H
