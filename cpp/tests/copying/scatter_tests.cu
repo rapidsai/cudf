@@ -21,14 +21,14 @@
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
-#include "types.hpp"
+#include <table/table.hpp>
 #include <random>
 
 template <typename T>
 struct ScatterTest : GdfTest {};
 
 using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(ScatterTest, test_types);
 
 
@@ -96,7 +96,7 @@ TYPED_TEST(ScatterTest, IdentityTest) {
   constexpr gdf_size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }};
 
   thrust::device_vector<gdf_index_type> scatter_map(source_size);
@@ -122,7 +122,7 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   constexpr gdf_size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }};
 
   // Create scatter_map that reverses order of source_column
@@ -168,7 +168,7 @@ TYPED_TEST(ScatterTest, AllNull) {
 
   // source column has all null values
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return false; }};
 
   // Create scatter_map that scatters to random locations
@@ -213,7 +213,7 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 
   // elements with even indices are null
   cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return row; },
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return row % 2; }};
 
   // Scatter null values to the last half of the destination column

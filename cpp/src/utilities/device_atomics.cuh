@@ -945,7 +945,17 @@ T atomicCAS(T* address, T compare, T val)
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-
+/**
+ * @overload cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+ */
+__forceinline__ __device__
+cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+{
+    // TODO: not sure this is the right way...
+    return cudf::bool8{atomicCAS(reinterpret_cast<int8_t*>(address), 
+                                 cudf::detail::unwrap(compare), 
+                                 cudf::detail::unwrap(val))};
+}
 
 /* Overloads for `atomicAnd` */
 /** -------------------------------------------------------------------------*
