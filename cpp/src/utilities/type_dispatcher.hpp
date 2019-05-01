@@ -31,20 +31,29 @@ namespace cudf {
 
 namespace detail {
 
+/**
+ * @brief Holder for a list of types
+ */
 template <typename... List> struct list { };
 
-template < typename Tp, typename... List >
+/**
+ * @brief Gadget for obtaining the first type within @tparam List which doesn't match the type @tparam Undesired
+ *
+ * @tparam List        a list of types to search
+ * @tparam Undesired   the "anti-search" type, i.e. the type such that we are searching for any other
+ */
+template < typename Undesired, typename... List >
 struct first_non_matching;
 
-template <typename T> struct non_match { using type = T; };
+template <typename T> struct not_undesired { using type = T; };
 
-template < typename Tp, typename Head, typename... Rest >
-struct first_non_matching<Tp, Head, Rest...> :
-    std::conditional<not std::is_same<Tp, Head>::value, non_match<Head>, first_non_matching<Tp, Rest...> >::type
+template < typename Undesired, typename Head, typename... Rest >
+struct first_non_matching<Undesired, Head, Rest...> :
+    std::conditional<not std::is_same<Undesired, Head>::value, not_undesired<Head>, first_non_matching<Undesired, Rest...> >::type
 {};
 
-template < typename Tp >
-struct first_non_matching<Tp> { }; // no type set
+template <typename Undesired>
+struct first_non_matching<Undesired> { }; // no type set
 
 using all_column_element_types =
     list<
@@ -65,26 +74,41 @@ static auto test_templated_invoke_operator(int) ->
 template <class, typename, typename... Us>
 static auto test_templated_invoke_operator(long) -> std::false_type;
 
-// A useful trait in itself:
+/**
+ * @brief This trait has its value field `true` if the class F has a (public) templated `F::operator()`,
+ * for template parameter T, and `false` otherwise.
+ */
 template <class F, typename T, typename... Us>
 struct has_templated_invoke_operator : decltype( test_templated_invoke_operator<F, T, Us...>(int{}) )
 { };
 
+/**
+ * Before C++17, we can't say "invoke the function if that's possible, otherwise do something else" -
+ * whatever you invoke for any template parameter must compile for all of them. In C++17 this was
+ * addressed with `if constexpr`, but for now - we use tagged dispatch to "hide" the non-compiling
+ * invocation from the compiler when necessary.
+ */
 template <bool ActuallyInvoke, typename R, class F, typename T, typename... Ts>
-struct invoke_if_possible_inner;
+struct invoke_or_fail_inner;
 
 template <class F, typename R, typename T, typename... Ts>
-struct invoke_if_possible_inner<false, R, F, T, Ts...>
+struct invoke_or_fail_inner<false, R, F, T, Ts...>
 {
     constexpr __host__ __device__
     R operator()(F functor, Ts&&... params) {
-        // throw std::invalid_argument("Unsupported column element type");
+#ifdef __CUDA_ARCH__
+        release_assert(false && "Unsupported column data type");
+
+        // The following code will never be reached
         return R();
+#else
+        throw std::invalid_argument("Unsupported column data type");
+#endif
     }
 };
 
 template <class F, typename R, typename T, typename... Ts>
-struct invoke_if_possible_inner<true, R, F, T, Ts...>
+struct invoke_or_fail_inner<true, R, F, T, Ts...>
 {
 // Note that some functors may only have their operator()'s defined for host-side code,
 // and other only for device-side code; but - since these decorators are not really part of
@@ -99,17 +123,19 @@ struct invoke_if_possible_inner<true, R, F, T, Ts...>
 };
 
 template <typename T, typename R>
-struct invoke_if_possible {
+struct invoke_or_fail {
     template <class F, typename... Ts>
     constexpr CUDA_HOST_DEVICE_CALLABLE
     R operator()(F functor, Ts&&... params)
     {
         constexpr bool actually_invoke = has_templated_invoke_operator<F, T, Ts...>::value;
-        static_assert(actually_invoke == true,"Should be able to invoke for now!");
-        return invoke_if_possible_inner<actually_invoke, R, F, T, Ts...>{}(functor, std::forward<Ts>(params)...);
+        return invoke_or_fail_inner<actually_invoke, R, F, T, Ts...>{}(functor, std::forward<Ts>(params)...);
     }
 };
 
+/**
+ * A dummy type used to determine which return type to use for the main dispatcher function
+ */
 struct no_invocation_operator_return_type {};
 
 template <class F, typename T, bool HaveOperator, typename... Us>
@@ -125,6 +151,10 @@ struct invocation_operator_return_type_inner<F, T, true, Us...> {
     using type = decltype(std::declval<F>().template operator()<T>(std::declval<Us>()... ));
 };
 
+/**
+ * The return type of a functor's first (templated) `operator()` which is actually defined
+ * (or a dummy type otherwise)
+ */
 template <class F, typename T, typename... Us>
 using invocation_operator_return_type =
     typename invocation_operator_return_type_inner<F, T, has_templated_invoke_operator<F, T, Us...>::value, Us...>::type;
@@ -145,9 +175,9 @@ struct fnm_helper {
 
 // As you read the above code (after the trait), you might be wondering:
 //
-// 1. Why is invoke_if_possible a struct, rather than a function? After all, the only thing we do
+// 1. Why is invoke_or_fail a struct, rather than a function? After all, the only thing we do
 //    with it is invoke it (with operator())?
-// 2. Why have two structs, an internal one (invoke_if_possible_inner) and an external one (invoke_if_possible)?
+// 2. Why have two structs, an internal one (invoke_or_fail_inner) and an external one (invoke_or_fail)?
 //    Isn't the internal one enough?
 //
 // Answers:
@@ -256,11 +286,14 @@ template <> inline constexpr gdf_dtype gdf_dtype_of< NVStrings         >() { ret
  * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
  * 
- * @note It is undefined behavior if an unsupported or invalid `gdf_dtype` is
- * supplied.
- * @note The function @p f does not need to have operator()<T> defined for all
+ * @note If the specified @p dtype value is either generally unsupported,
+ * or if the functor does not implement an operator() for this gdf_dtype,
+ * an std::invalid_argument exception is thrown - for host-side code; and the
+ * equivalent of an assertion failure (@ref __assertfail) occurs for device-side
+ * code.
+ * @note The functor @p f does not need to have operator()<T> defined for all
  * column element types - just the types with which it is used. However, it
- * must have at least
+ * must have this operator defined for at least one gdf_type value.
  *
  * @param dtype The gdf_dtype enum that determines which type will be dispatched
  * @param f The functor with a templated "operator()" that will be invoked with 
@@ -273,63 +306,51 @@ template <> inline constexpr gdf_dtype gdf_dtype_of< NVStrings         >() { ret
  */
 /* ----------------------------------------------------------------------------*/
 
-template < class functor_t, typename... Ts>
+template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE
-constexpr auto type_dispatcher(
+constexpr decltype(auto) type_dispatcher(
     gdf_dtype  dtype,
-    functor_t  f, 
+    F  f,
     Ts&&...    params)
 {
-  // TODO: It may be the case that since the operator() template must be at least
-  // declared, even if it isn't defined, that we can get the return type without
-  // resorting to the template metaprogramming voodoo below.
-  //
-  // This is how we would do it:
-  //
-  // using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(params)...));
+    using fnm_helper = typename detail::fnm_helper<F, Ts...>;
+    using return_type = typename fnm_helper::template transformed<
+        int8_t, int16_t, int32_t, int64_t, float, double, cudf::date32, cudf::date64,
+        cudf::timestamp, cudf::category, cudf::nvstring_category
+    >;
+    static_assert(not std::is_same<return_type, detail::no_invocation_operator_return_type>::value,
+        "No appropriate operator() defined for _any_ column element data type");
 
-  using fnm_helper = typename detail::fnm_helper<functor_t, Ts...>;
-  using return_type = typename fnm_helper::template transformed<
-          int8_t, int16_t, int32_t, int64_t, float, double, cudf::date32, cudf::date64,
-          cudf::timestamp, cudf::category, cudf::nvstring_category
-      >;
-  static_assert(not std::is_same<return_type, detail::no_invocation_operator_return_type>::value,
-      "No appropriate operator() defined for _any_ column element data type");
-
-  switch(dtype)
-  {
-    case gdf_dtype_of< int8_t            >(): { return detail::invoke_if_possible< int8_t           , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< int16_t           >(): { return detail::invoke_if_possible< int16_t          , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< int32_t           >(): { return detail::invoke_if_possible< int32_t          , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< int64_t           >(): { return detail::invoke_if_possible< int64_t          , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< float             >(): { return detail::invoke_if_possible< float            , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< double            >(): { return detail::invoke_if_possible< double           , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< date32            >(): { return detail::invoke_if_possible< date32           , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< date64            >(): { return detail::invoke_if_possible< date64           , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< timestamp         >(): { return detail::invoke_if_possible< timestamp        , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< category          >(): { return detail::invoke_if_possible< category         , return_type>{}(f,std::forward<Ts>(params)...); }
-    case gdf_dtype_of< nvstring_category >(): { return detail::invoke_if_possible< nvstring_category, return_type>{}(f,std::forward<Ts>(params)...); }
-    default: {
+    switch(dtype)
+    {
+    case gdf_dtype_of< int8_t            >(): { return detail::invoke_or_fail< int8_t           , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< int16_t           >(): { return detail::invoke_or_fail< int16_t          , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< int32_t           >(): { return detail::invoke_or_fail< int32_t          , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< int64_t           >(): { return detail::invoke_or_fail< int64_t          , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< float             >(): { return detail::invoke_or_fail< float            , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< double            >(): { return detail::invoke_or_fail< double           , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< date32            >(): { return detail::invoke_or_fail< date32           , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< date64            >(): { return detail::invoke_or_fail< date64           , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< timestamp         >(): { return detail::invoke_or_fail< timestamp        , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< category          >(): { return detail::invoke_or_fail< category         , return_type>{}(f, std::forward<Ts>(params)...); }
+    case gdf_dtype_of< nvstring_category >(): { return detail::invoke_or_fail< nvstring_category, return_type>{}(f, std::forward<Ts>(params)...); }
+    default:
 #ifdef __CUDA_ARCH__
       
-      // This will cause the calling kernel to crash as well as invalidate
-      // the GPU context
-      release_assert(false && "Invalid gdf_dtype in type_dispatcher");
+        // This will cause the calling kernel to crash as well as invalidate
+        // the GPU context
+        release_assert(false && "Invalid gdf_dtype in type_dispatcher");
 
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
+        // The following code will never be reached, but the compiler generates a
+        // warning if there isn't a return value.
 
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      return return_type();
+        return return_type();
 #else
-      // In host-code, the compiler is smart enough to know we don't need a
-      // default return type since we're throwing an exception.
-      throw std::invalid_argument("Invalid gdf_dtype in type_dispatcher");
+        // In host-code, the compiler is smart enough to know we don't need a
+        // default return type since we're throwing an exception.
+        throw std::invalid_argument("Invalid gdf_dtype in type_dispatcher");
 #endif
     }
-  }
 }
 
 

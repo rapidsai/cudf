@@ -41,7 +41,7 @@
 - PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuratio.
 - PR #1439 Add cmake variable to enable compiling CUDA code with -lineinfo
-- PR #890 Type dispatcher: Support functors implemented for some, not all, column types
+- PR #1471 Type dispatcher: Support functors implemented for some, not all, column types
 
 ## Bug Fixes
 

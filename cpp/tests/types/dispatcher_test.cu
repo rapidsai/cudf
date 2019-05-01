@@ -96,9 +96,31 @@ struct test_functor {
   }
 };
 
-__global__ void dispatch_test_kernel(gdf_dtype type, bool* d_result) {
+using single_type_for_second_functor = int32_t;
+constexpr const gdf_dtype single_dtype_for_second_functor { cudf::gdf_dtype_of<single_type_for_second_functor>() };
+constexpr const auto fixed_int_result { 123 };
+
+struct functor_with_invocation_implemented_partially {
+  template <typename T>
+  __host__ __device__ int operator()(gdf_dtype type_id) = delete;
+
+//  template <>
+//  __host__ __device__ int operator()<single_type_for_second_functor>(gdf_dtype type_id);
+};
+
+
+template <>
+__host__ __device__ int
+functor_with_invocation_implemented_partially::template operator()<single_type_for_second_functor>(gdf_dtype type_id)
+{
+  return fixed_int_result;
+}
+
+
+template <typename F, typename R>
+__global__ void dispatch_test_kernel(gdf_dtype type, R* d_result) {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::type_dispatcher(type, test_functor{}, type);
+    *d_result = cudf::type_dispatcher(type, F{}, type);
 }
 }  // namespace
 
@@ -108,21 +130,43 @@ TEST_F(DispatcherTest, HostDispatchFunctor) {
     bool result = cudf::type_dispatcher(t, test_functor{}, t);
     EXPECT_TRUE(result);
   }
+
+  EXPECT_TRUE(
+      cudf::type_dispatcher(
+          single_dtype_for_second_functor,
+          functor_with_invocation_implemented_partially{},
+          single_dtype_for_second_functor) == 123
+  );
 }
 
 TEST_F(DispatcherTest, DeviceDispatchFunctor) {
   thrust::device_vector<bool> result(1);
   for (auto const& t : this->supported_dtypes) {
-    dispatch_test_kernel<<<1, 1>>>(t, result.data().get());
+    dispatch_test_kernel<test_functor, bool><<<1, 1>>>(t, result.data().get());
     cudaDeviceSynchronize();
     EXPECT_EQ(true, result[0]);
   }
+
+  for (auto const& t : this->supported_dtypes) {
+      if (not (t == single_dtype_for_second_functor)) {
+          EXPECT_THROW(cudf::type_dispatcher(
+              t, functor_with_invocation_implemented_partially{}, t), std::invalid_argument);
+      }
+  }
+
+  thrust::device_vector<single_type_for_second_functor> second_result(1);
+  dispatch_test_kernel<functor_with_invocation_implemented_partially, single_type_for_second_functor><<<1, 1>>>(
+      single_dtype_for_second_functor, second_result.data().get());
+  cudaDeviceSynchronize();
+  EXPECT_EQ(fixed_int_result, second_result[0]);
+
 }
 
 // Unsuported gdf_dtypes should throw std::runtime_error in host code
 TEST_F(DispatcherTest, UnsuportedTypesTest) {
   for (auto const& t : unsupported_dtypes) {
     EXPECT_THROW(cudf::type_dispatcher(t, test_functor{}, t), std::invalid_argument);
+    EXPECT_THROW(cudf::type_dispatcher(t, functor_with_invocation_implemented_partially{}, t), std::invalid_argument);
   }
 }
 
@@ -136,7 +180,7 @@ TEST_F(DispatcherDeathTest, DeviceDispatchFunctor) {
   thrust::device_vector<bool> result(1);
 
   auto call_kernel = [&result](gdf_dtype t) {
-    dispatch_test_kernel<<<1, 1>>>(t, result.data().get());
+    dispatch_test_kernel<test_functor><<<1, 1>>>(t, result.data().get());
     auto error_code = cudaDeviceSynchronize();
 
     // Kernel should fail with `cudaErrorAssert` on an unsupported gdf_dtype
@@ -150,4 +194,27 @@ TEST_F(DispatcherDeathTest, DeviceDispatchFunctor) {
   for (auto const& t : unsupported_dtypes) {
     EXPECT_DEATH(call_kernel(t), "");
   }
+
+  thrust::device_vector<single_type_for_second_functor> second_result(1);
+  auto call_second_kernel = [&result](gdf_dtype t) {
+    dispatch_test_kernel<functor_with_invocation_implemented_partially><<<1, 1>>>(t, result.data().get());
+    auto error_code = cudaDeviceSynchronize();
+
+    // Kernel should fail with `cudaErrorAssert` on an unsupported gdf_dtype
+    // This error invalidates the current device context, so we need to kill
+    // the current process. Running with EXPECT_DEATH spawns a new process for
+    // each attempted kernel launch
+    EXPECT_EQ(cudaErrorAssert, error_code);
+    exit(-1);
+  };
+
+  for (auto const& t : unsupported_dtypes) {
+      EXPECT_DEATH(call_kernel(t), "");
+  }
+  for (auto const& t : supported_dtypes) {
+      if (t != single_dtype_for_second_functor) {
+          EXPECT_DEATH(call_kernel(t), "");
+      }
+  }
+
 }
