@@ -12,24 +12,23 @@ from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, u
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
-cpdef get_ctype_ptr(obj)
-cpdef get_column_data_ptr(obj)
-cpdef get_column_valid_ptr(obj)
+cpdef get_ctype_ptr(obj) except +*
+cpdef get_column_data_ptr(obj) except +*
+cpdef get_column_valid_ptr(obj) except +*
 
-cdef gdf_dtype get_dtype(dtype)
+cdef gdf_dtype get_dtype(dtype) except +*
 
-cdef get_scalar_value(gdf_scalar scalar)
+cdef get_scalar_value(gdf_scalar scalar) except +*
 
-cdef gdf_column* column_view_from_column(col)
-cdef gdf_column* column_view_from_NDArrays(size, data, mask,
-                                           dtype, null_count)
-cdef gdf_column_to_column_mem(gdf_column* input_col)
-cdef update_nvstrings_col(col, uintptr_t category_ptr)
+cdef gdf_column* column_view_from_column(col) except +*
+cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count) except +*
+cdef gdf_column_to_column_mem(gdf_column* input_col) except +*
+cdef update_nvstrings_col(col, uintptr_t category_ptr) except +*
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                      flag_sort_result, flag_sort_inplace)
+                                      flag_sort_result, flag_sort_inplace) except +*
 
-cpdef check_gdf_error(errcode)
+cpdef check_gdf_error(errcode) except +*
 
 # Import cudf.h header to import all functions
 # First version of bindings has no changes to the cudf.h header, so this file
@@ -189,12 +188,12 @@ cdef extern from "cudf.h" nogil:
         gdf_dtype dtype
         bool      is_valid
 
-    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
+    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count) except +
 
-    cdef gdf_size_type gdf_column_sizeof()
+    cdef gdf_size_type gdf_column_sizeof() except +
 
     gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
-                              gdf_size_type size, gdf_dtype dtype)
+                              gdf_size_type size, gdf_dtype dtype) except +
 
     cdef gdf_error gdf_column_view_augmented(gdf_column *column,
                                              void *data,
@@ -202,37 +201,37 @@ cdef extern from "cudf.h" nogil:
                                              gdf_size_type size,
                                              gdf_dtype dtype,
                                              gdf_size_type null_count,
-                                             gdf_dtype_extra_info extra_info)
+                                             gdf_dtype_extra_info extra_info) except +
 
-    cdef gdf_error gdf_column_free(gdf_column *column)
+    cdef gdf_error gdf_column_free(gdf_column *column) except +
 
     cdef gdf_error gdf_context_view(gdf_context *context,
                                     int flag_sorted,
                                     gdf_method flag_method,
                                     int flag_distinct,
                                     int flag_sort_result,
-                                    int flag_sort_inplace)
+                                    int flag_sort_inplace) except +
 
-    cdef const char * gdf_error_get_name(gdf_error errcode)
+    cdef const char * gdf_error_get_name(gdf_error errcode) except +
 
-    cdef int gdf_cuda_last_error()
-    cdef const char * gdf_cuda_error_string(int cuda_error)
-    cdef const char * gdf_cuda_error_name(int cuda_error)
+    cdef int gdf_cuda_last_error() except +
+    cdef const char * gdf_cuda_error_string(int cuda_error) except +
+    cdef const char * gdf_cuda_error_name(int cuda_error) except +
 
-    cdef gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length)
+    cdef gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) except +
     cdef void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
                                            const uint8_t *recordbatches,
-                                           size_t length)
+                                           size_t length) except +
 
-    cdef void gdf_ipc_parser_close(gdf_ipc_parser_type *handle)
-    cdef int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle)
-    cdef const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle)
-    cdef const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle)
-    cdef const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle)
-    cdef int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle)
+    cdef void gdf_ipc_parser_close(gdf_ipc_parser_type *handle) except +
+    cdef int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle) except +
+    cdef const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle) except +
+    cdef const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle) except +
+    cdef const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle) except +
+    cdef int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle) except +
 
-    cdef const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle)
-    cdef const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle)
+    cdef const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle) except +
+    cdef const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle) except +
 
     cdef gdf_error gdf_inner_join(
                              gdf_column **left_cols,
@@ -276,15 +275,15 @@ cdef extern from "cudf.h" nogil:
                              gdf_column * right_indices,
                              gdf_context *join_context) except +
 
-    cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output)
+    cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
 
-    cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+    cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
     
-    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output)
+    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output) except +
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
 
-    cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
+    cdef gdf_error get_column_byte_width(gdf_column * col, int * width) except +
 
     cdef gdf_error gdf_filter(size_t nrows,
                  gdf_column* cols,
@@ -293,7 +292,7 @@ cdef extern from "cudf.h" nogil:
                  int* d_types,
                  void** d_vals,
                  size_t* d_indx,
-                 size_t* new_sz)
+                 size_t* new_sz) except +
 
     cdef gdf_error gdf_group_by_sum(int ncols,
                                gdf_column** cols,
@@ -302,7 +301,7 @@ cdef extern from "cudf.h" nogil:
                                gdf_column** out_col_values,
 
                                gdf_column* out_col_agg,
-                               gdf_context* ctxt)
+                               gdf_context* ctxt) except +
 
     cdef gdf_error gdf_group_by_min(int ncols,
                                gdf_column** cols,
@@ -311,7 +310,7 @@ cdef extern from "cudf.h" nogil:
                                gdf_column** out_col_values,
 
                                gdf_column* out_col_agg,
-                               gdf_context* ctxt)
+                               gdf_context* ctxt) except +
 
 
     cdef gdf_error gdf_group_by_max(int ncols,
@@ -321,7 +320,7 @@ cdef extern from "cudf.h" nogil:
                                gdf_column** out_col_values,
 
                                gdf_column* out_col_agg,
-                               gdf_context* ctxt)
+                               gdf_context* ctxt) except +
 
 
     cdef gdf_error gdf_group_by_avg(int ncols,
@@ -331,7 +330,7 @@ cdef extern from "cudf.h" nogil:
                                gdf_column** out_col_values,
 
                                gdf_column* out_col_agg,
-                               gdf_context* ctxt)
+                               gdf_context* ctxt) except +
 
     cdef gdf_error gdf_group_by_count(int ncols,
                                  gdf_column** cols,
@@ -340,7 +339,7 @@ cdef extern from "cudf.h" nogil:
                                  gdf_column** out_col_values,
 
                                  gdf_column* out_col_agg,
-                                 gdf_context* ctxt)
+                                 gdf_context* ctxt) except +
 
 
     cdef gdf_error gdf_quantile_exact(gdf_column*       col_in,
@@ -358,17 +357,17 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    gdf_column* old_values,
-                                   gdf_column* new_values)
+                                   gdf_column* new_values) except +
 
 
     cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
-                                     const gdf_column* col_in)
+                                     const gdf_column* col_in) except +
 
 
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
-                                gdf_index_type* out_indices)
+                                gdf_index_type* out_indices) except +
 
     cdef gdf_error gdf_from_dlpack(gdf_column** columns,
                                    gdf_size_type *num_columns,
@@ -383,4 +382,3 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
 
     cdef gdf_error gdf_nvtx_range_pop() except +
-
