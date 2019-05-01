@@ -36,7 +36,6 @@ enum { bits_per_element = gdf::util::size_in_bits<bit_mask_t>() };
  */
 CUDA_HOST_DEVICE_CALLABLE
 constexpr gdf_size_type num_elements(gdf_size_type size) {
-  //    return (( size + ( bits_per_element - 1)) / bits_per_element );
   return cudf::util::div_rounding_up_unsafe<gdf_size_type>(size,
                                                            bits_per_element);
 }
@@ -44,10 +43,10 @@ constexpr gdf_size_type num_elements(gdf_size_type size) {
 /**
  *  @brief Copy bit mask data between host and device
  *
- *  @param[out] dst      - the address of the destination
- *  @param[in] src       - the address of the source
- *  @param[in] num_bits  - the number of bits in the bit container
- *  @param[in] kind      - the direction of the copy
+ *  @param[out] dst       the address of the destination
+ *  @param[in] src        the address of the source
+ *  @param[in] num_bits   the number of bits in the bit container
+ *  @param[in] kind       the direction of the copy
  *
  *  @return GDF_SUCCESS on success, the CUDA error on failure
  */
@@ -73,8 +72,8 @@ inline gdf_error destroy_bit_mask(bit_mask_t *valid) {
 /**
  *  @brief Get a single element of bits from the device
  *
- *  @param[out]  element - address on host where the bits will be stored
- *  @param[out]  device_element - address on the device containing the bits to
+ *  @param[out]  element  address on host where the bits will be stored
+ *  @param[out]  device_element  address on the device containing the bits to
  * fetch
  *
  *  @return GDF_SUCCESS on success, the CUDA error on failure
@@ -89,8 +88,8 @@ inline gdf_error get_element(bit_mask_t *element,
 /**
  *  @brief Put a single element of bits to the device
  *
- *  @param[out]  element - address on host containing bits to store
- *  @param[out]  device_element - address on the device where the bits will be
+ *  @param[out]  element  address on host containing bits to store
+ *  @param[out]  device_element address on the device where the bits will be
  * stored
  *
  *  @return GDF_SUCCESS on success, the CUDA error on failure
@@ -106,9 +105,11 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
  *
  *  @param[out] mask                  address of the bit mask pointer
  *  @param[in]  number_of_records     number of records
- *  @param[in]  fill_value            Initialize all bits to fill_value if and only if it is 0 or 1
- *  @param[in]  padding_bytes         The byte boundary allocation should be padded to.
- * Default: 64, meaning the allocation size is rounded up to next multiple of 64 bytes.
+ *  @param[in]  fill_value            Initialize all bits to fill_value if and
+ * only if it is 0 or 1
+ *  @param[in]  padding_bytes         The byte boundary allocation should be
+ * padded to. Default: 64, meaning the allocation size is rounded up to next
+ * multiple of 64 bytes.
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
@@ -121,9 +122,12 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
   //  padding boundary, then identify how many element that equates to.  Then we
   //  can allocate the appropriate amount of storage.
   //
-  gdf_size_type num_bytes = (number_of_records + 7) / 8;
+  gdf_size_type num_bytes =
+      cudf::util::div_rounding_up_unsafe<gdf_size_type>(number_of_records, 8);
+
   gdf_size_type num_padding_blocks =
-      (num_bytes + padding_bytes - 1) / padding_bytes;
+      cudf::util::div_rounding_up_unsafe<gdf_size_type>(num_bytes,
+                                                        padding_bytes);
   gdf_size_type num_elements =
       bit_mask::num_elements(num_padding_blocks * 8 * padding_bytes);
 
