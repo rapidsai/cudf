@@ -9,14 +9,33 @@ import pyarrow.parquet as pq
 import warnings
 
 
+@ioutils.doc_read_parquet_metadata()
+def read_parquet_metadata(path):
+    """{docstring}"""
+
+    pq_file = pq.ParquetFile(path)
+
+    num_rows = pq_file.metadata.num_rows
+    num_row_groups = pq_file.num_row_groups
+    col_names = pq_file.schema.names
+
+    return num_rows, num_row_groups, col_names
+
+
 @ioutils.doc_read_parquet()
-def read_parquet(path, engine='cudf', columns=None, *args, **kwargs):
+def read_parquet(path, engine='cudf', columns=None, row_group=None,
+                 skip_rows=None, num_rows=None, strings_to_categorical=False,
+                 *args, **kwargs):
     """{docstring}"""
 
     if engine == 'cudf':
         df = cpp_read_parquet(
             path,
-            columns
+            columns,
+            row_group,
+            skip_rows,
+            num_rows,
+            strings_to_categorical
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
