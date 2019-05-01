@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import warnings
 
 from collections.abc import Sequence
 from copy import copy, deepcopy
@@ -24,9 +25,13 @@ class MultiIndex(Index):
     names: Name for each level
     """
 
-    def __init__(self, levels, codes, names=None):
+    def __init__(self, levels, codes=None, labels=None, names=None):
         self.names = names
         column_names = []
+        if labels:
+            warnings.warn("the 'labels' keyword is deprecated, use 'codes' instead", FutureWarning)  # noqa: E501
+        if labels and not codes:
+            codes = labels
         if isinstance(names, (Sequence,
                               pd.core.indexes.frozen.FrozenNDArray,
                               pd.core.indexes.frozen.FrozenList)):
@@ -97,6 +102,12 @@ class MultiIndex(Index):
     def __repr__(self):
         return "MultiIndex(levels=" + str(self.levels) +\
                ",\ncodes=" + str(self.codes) + ")"
+
+    @property
+    def labels(self):
+        warnings.warn("This feature is deprecated in pandas and will be"
+                      "dropped from cudf as well.", FutureWarning)
+        return self.codes
 
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
@@ -288,7 +299,7 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
-        if hasattr(pd.MultiIndex([[]],[[]]), 'codes'):
+        if hasattr(pd.MultiIndex([[]], [[]]), 'codes'):
             return pd.MultiIndex(levels=self.levels, codes=pandas_codes,
                                  names=self.names)
         else:

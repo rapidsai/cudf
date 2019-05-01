@@ -304,7 +304,7 @@ def test_multiindex_from_tuples():
 
 
 def test_multiindex_from_dataframe():
-    if hasattr(pd.MultiIndex([[]], [[]]), 'labels'):
+    if not hasattr(pd.MultiIndex([[]], [[]]), 'codes'):
         pytest.skip()
     pdf = pd.DataFrame([['a', 'house'], ['a', 'store'],
                         ['b', 'house'], ['b', 'store']])
