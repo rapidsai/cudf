@@ -247,13 +247,16 @@ gdf_error write_csv(csv_write_arg* args)
     //buffer[memsize] = 0; // just so we can printf if needed
     // now write buffer to file
     // first write the header
-    for( unsigned int idx=0; idx < count; ++idx )
+    if(include_header)
     {
-        gdf_column* col = columns[idx];
-        const char* delim = ((idx+1)<count ? delimiter : terminator);
-        if( col->col_name )
-            filecsv << "\"" << col->col_name << "\"";
-        filecsv << delim;
+        for( unsigned int idx=0; idx < count; ++idx )
+        {
+            gdf_column* col = columns[idx];
+            const char* delim = ((idx+1)<count ? delimiter : terminator);
+            if( col->col_name )
+                filecsv << "\"" << col->col_name << "\"";
+            filecsv << delim;
+        }
     }
     // now write the data
     filecsv.write(buffer.data(),memsize);
