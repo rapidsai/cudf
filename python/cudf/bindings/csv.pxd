@@ -108,5 +108,6 @@ cdef extern from "cudf.h" nogil:
         const char*         true_value
         const char*         false_value
         const char*         na_rep
+        bool                include_header
 
     cdef gdf_error write_csv(csv_write_arg* args) except +

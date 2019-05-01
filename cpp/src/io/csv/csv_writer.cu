@@ -146,6 +146,7 @@ gdf_error write_csv(csv_write_arg* args)
     const char* narep = args->na_rep;
     const char* true_value = (args->true_value ? args->true_value : "true");
     const char* false_value = (args->false_value ? args->false_value : "false");
+    bool include_header = args->include_header;
 
     // check for issues here
     CUDF_EXPECTS( filepath!=nullptr, "write_csv: filepath not specified" );
