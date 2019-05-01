@@ -63,7 +63,7 @@
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1503 Convert sorting and hashing ops CFFI to Cython
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
-- PR #XXXX Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
 
 ## Bug Fixes
 
