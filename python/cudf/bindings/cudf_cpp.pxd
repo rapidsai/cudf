@@ -36,7 +36,6 @@ cpdef check_gdf_error(errcode)
 # mirrors the structure in cpp/include
 
 cdef extern from "cudf.h" nogil:
-cdef extern from "bitmask_ops.hpp" nogil:
 
     ctypedef int           gdf_size_type
     ctypedef gdf_size_type gdf_index_type
@@ -190,7 +189,6 @@ cdef extern from "bitmask_ops.hpp" nogil:
         gdf_dtype dtype
         bool      is_valid
 
-    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
 
     cdef gdf_size_type gdf_column_sizeof()
 
@@ -385,3 +383,7 @@ cdef extern from "bitmask_ops.hpp" nogil:
 
     cdef gdf_error gdf_nvtx_range_pop() except +
 
+
+cdef extern from "bitmask_ops.hpp" nogil:
+
+    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
