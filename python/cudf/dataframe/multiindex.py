@@ -288,8 +288,12 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
-        return pd.MultiIndex(levels=self.levels, codes=pandas_codes,
-                             names=self.names)
+        if hasattr(pd.MultiIndex([[]],[[]]), 'codes'):
+            return pd.MultiIndex(levels=self.levels, codes=pandas_codes,
+                                 names=self.names)
+        else:
+            return pd.MultiIndex(levels=self.levels, labels=pandas_codes,
+                                 names=self.names)
 
     @classmethod
     def from_pandas(cls, multiindex):
@@ -312,9 +316,14 @@ class MultiIndex(Index):
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError('not a pandas.MultiIndex')
 
-        mi = cls(levels=multiindex.levels,
-                 codes=multiindex.codes,
-                 names=multiindex.names)
+        if hasattr(multiindex, 'codes'):
+            mi = cls(levels=multiindex.levels,
+                     codes=multiindex.codes,
+                     names=multiindex.names)
+        else:
+            mi = cls(levels=multiindex.levels,
+                     codes=multiindex.labels,
+                     names=multiindex.names)
         return mi
 
 

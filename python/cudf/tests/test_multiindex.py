@@ -52,7 +52,7 @@ def test_multiindex_construction():
     pmi = pd.MultiIndex(levels, codes)
     mi = cudf.MultiIndex(levels, codes)
     assert_eq(pmi, mi)
-    pmi = pd.MultiIndex(levels=levels, codes=codes)
+    pmi = pd.MultiIndex(levels, codes)
     mi = cudf.MultiIndex(levels=levels, codes=codes)
     assert_eq(pmi, mi)
 
@@ -76,8 +76,8 @@ def test_multiindex_types():
 def test_multiindex_df_assignment():
     pdf = pd.DataFrame({'x': [1, 2, 3]})
     gdf = cudf.from_pandas(pdf)
-    pdf.index = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                              codes=[[0, 1, 0], [1, 0, 1]])
+    pdf.index = pd.MultiIndex([['a', 'b'], ['c', 'd']],
+                              [[0, 1, 0], [1, 0, 1]])
     gdf.index = cudf.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
                                 codes=[[0, 1, 0], [1, 0, 1]])
     assert_eq(pdf, gdf)
@@ -86,8 +86,8 @@ def test_multiindex_df_assignment():
 def test_multiindex_series_assignment():
     ps = pd.Series([1, 2, 3])
     gs = cudf.from_pandas(ps)
-    ps.index = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                             codes=[[0, 1, 0], [1, 0, 1]])
+    ps.index = pd.MultiIndex([['a', 'b'], ['c', 'd']],
+                             [[0, 1, 0], [1, 0, 1]])
     gs.index = cudf.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
                                codes=[[0, 1, 0], [1, 0, 1]])
     assert_eq(ps, gs)
@@ -304,6 +304,8 @@ def test_multiindex_from_tuples():
 
 
 def test_multiindex_from_dataframe():
+    if hasattr(pd.MultiIndex([[]], [[]]), 'labels'):
+        pytest.skip()
     pdf = pd.DataFrame([['a', 'house'], ['a', 'store'],
                         ['b', 'house'], ['b', 'store']])
     gdf = cudf.from_pandas(pdf)
