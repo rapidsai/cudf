@@ -384,6 +384,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_pop() except +
 
 
-cdef extern from "bitmask_ops.hpp" nogil:
+cdef extern from "bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count)
