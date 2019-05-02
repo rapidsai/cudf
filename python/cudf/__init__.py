@@ -12,6 +12,8 @@ from cudf.settings import set_options
 from cudf.reshape import melt
 from cudf.ops import (sqrt, sin, cos, tan, arcsin, arccos, arctan, exp, log)
 
+from librmm_cffi import librmm as rmm
+
 
 # Versioneer
 from cudf._version import get_versions

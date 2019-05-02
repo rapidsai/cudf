@@ -55,7 +55,6 @@ sed_runner 's/version=.*/version=\"'"${NEXT_FULL_TAG}"'\",/g' cpp/python/setup.p
 
 # Conda recipe updates
 sed_runner 's/libcudf .*/libcudf '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
-sed_runner 's/libcudf_cffi .*/libcudf_cffi '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
 
 # RTD update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/source/conf.py
