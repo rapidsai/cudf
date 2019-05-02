@@ -1538,7 +1538,7 @@ class Series(object):
         cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
                                                      periods)
         return Series(output_dary, name=self.name, index=self.index)
-      
+
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.

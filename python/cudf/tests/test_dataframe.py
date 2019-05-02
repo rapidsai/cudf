@@ -2245,7 +2245,7 @@ def test_shift(dtype, period):
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
-    
+
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
@@ -2262,6 +2262,7 @@ def test_diff(dtype, period):
 
     diffed_outcome = gdf.a.diff(period)
     expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
+    assert_eq(diffed_outcome, expected_outcome)
 
 
 def test_isnull_isna():
