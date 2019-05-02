@@ -29,6 +29,7 @@
 
 ## Improvements
 
+- PR #1589 Drop unused `libgdf_cffi` import
 - PR #1531 Refactor closures as private functions in gpuarrow
 - PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
