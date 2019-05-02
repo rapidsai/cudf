@@ -85,13 +85,33 @@ class Groupby(object):
             self._df[self._LEVEL_0_INDEX_NAME] = by
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level == 0:
-            self.level = level
-            self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
-            self._original_index_name = self._df.index.name
-            self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level and level > 0:
-            raise NotImplementedError('MultiIndex not supported yet in cudf')
+        elif level is not None:
+            if level == 0 and not hasattr(self._df.index, 'levels'):
+                self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
+                self._original_index_name = self._df.index.name
+                self._by = [self._LEVEL_0_INDEX_NAME]
+            else:
+                level = [level] if isinstance(
+                        level, (str, Number)) else list(level)
+                self._by = []
+                # This loop is much better executed by the gpu - every
+                # code is iterated over and replaced by a level.
+                for which_level in level:
+                    print(which_level)
+                    if isinstance(which_level, str):
+                        for idx, name in enumerate(self._df.index.names):
+                            if name == which_level:
+                                which_level = idx
+                                break
+                    levels = self._df.index.levels[which_level]
+                    code = self._df.index.codes[
+                            self._df.index.names[which_level]]
+                    result = code.copy()
+                    for idx, value in enumerate(levels):
+                        level_mask = code == idx
+                        result = result.masked_assign(value, level_mask)
+                    self._df[self._df.index.names[which_level]] = result
+                    self._by.append(self._df.index.names[which_level])
         else:
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
         self._val_columns = [idx for idx in self._df.columns

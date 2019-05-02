@@ -371,3 +371,13 @@ def test_groupby_external_series_incorrect_length(series):
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_eq(pxx, gxx)
+
+
+def test_advanced_groupby_levels():
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1], 'z': [1, 1, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(['x', 'y']).sum()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    pdh = pdg.groupby(level=0).sum()
+    gdh = gdg.groupby(level=0).sum()
+    assert_eq(pdh, gdh)
