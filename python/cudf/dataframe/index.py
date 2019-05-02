@@ -584,8 +584,6 @@ class StringIndex(GenericIndex):
     def __init__(self, values, name=None):
         if isinstance(values, StringColumn):
             self._values = values.copy()
-            if name is None:
-                name = values.name
         elif isinstance(values, StringIndex):
             if name is None:
                 name = values.name
@@ -593,7 +591,7 @@ class StringIndex(GenericIndex):
         else:
             self._values = columnops.build_column(nvstrings.to_device(values),
                                                   dtype='object')
-            self.name = name
+        self.name = name
 
     @property
     def codes(self):
@@ -636,8 +634,10 @@ def as_index(arbitrary, name=None):
     # This function should probably be moved to Index.__new__
     if isinstance(arbitrary, Index):
         return arbitrary
-    elif isinstance(arbitrary, (StringColumn, NumericalColumn)):
+    elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, StringColumn):
+        return StringIndex(arbitrary, name=name)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):

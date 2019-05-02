@@ -53,6 +53,7 @@ class MultiIndex(Index):
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
             self.codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
+                code = code.view(np.ndarray)
                 self.codes.add_column(column_names[idx],
                                       columnops.as_column(code))
         else:
