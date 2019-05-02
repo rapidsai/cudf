@@ -195,8 +195,8 @@ class MultiIndex(Index):
         if not hasattr(other, 'levels'):
             return False
         return self.levels == other.levels and\
-               self.codes == other.codes and\
-               self.names == other.names
+            self.codes == other.codes and\
+            self.names == other.names
 
     @property
     def is_contiguous(self):
