@@ -2247,6 +2247,87 @@ def test_shift(dtype, period):
     assert_eq(shifted_outcome, expected_outcome)
 
 
+def test_isnull_isna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.isnull(), gs.isnull())
+    assert_eq(ps.isna(), gs.isna())
+
+
+def test_notna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.notna(), gs.notna())
+
+
 def test_ndim():
     pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
     gdf = DataFrame.from_pandas(pdf)
