@@ -25,7 +25,7 @@
 - PR #1466 Add GPU-accelerated ORC Reader
 - PR #1565 Add build script for nightly doc builds
 - PR #1508 Add Series isna, isnull, and notna
-- PR #XXXX Add Index `astype` typecasting
+- PR #1588 Add Index `astype` typecasting
 
 ## Improvements
 
