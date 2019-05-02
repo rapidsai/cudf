@@ -213,7 +213,7 @@ class Index(object):
             if isinstance(result, bool):
                 return result
             else:
-                return (self == other)._values.all()
+                return result._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(

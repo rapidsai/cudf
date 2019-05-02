@@ -227,7 +227,7 @@ class DataFrame(object):
         """
         if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
-            return self.columns.get_column_major(self, arg)
+            return self.columns._get_column_major(self, arg)
         if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
            isinstance(arg, tuple):
             s = self._cols[arg]
@@ -2756,11 +2756,12 @@ class Loc(object):
         row_slice = None
         row_label = None
 
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex) and isinstance(arg, tuple):  # noqa: E501
+        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)\
+                and isinstance(arg, tuple):  # noqa: E501
             # Explicitly ONLY support tuple indexes into MultiIndex.
             # Pandas allows non tuple indices and warns "results may be
             # undefined."
-            return self._df._index.get_row_major(self._df, arg)
+            return self._df._index._get_row_major(self._df, arg)
 
         if isinstance(arg, int):
             if arg < 0 or arg >= len(self._df):

@@ -132,7 +132,7 @@ class MultiIndex(Index):
                 validity_mask = matches
         return validity_mask
 
-    def get_row_major(self, df, row_tuple):
+    def _get_row_major(self, df, row_tuple):
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import Series
         result = df.take(Series(valid_indices))
@@ -179,7 +179,7 @@ class MultiIndex(Index):
         """
         return result
 
-    def get_column_major(self, df, row_tuple):
+    def _get_column_major(self, df, row_tuple):
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import DataFrame
         result = DataFrame()

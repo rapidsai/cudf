@@ -550,19 +550,6 @@ class StringColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
 
-
-def string_column_binop(lhs, rhs, op):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
-    # Call and fix null_count
-    null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-
-    result = out.replace(null_count=null_count)
-    nvtx_range_pop()
-    return result
-
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
@@ -589,3 +576,16 @@ def string_column_binop(lhs, rhs, op):
         result = StringColumn(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
+
+
+def string_column_binop(lhs, rhs, op):
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
+    # Allocate output
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
+    # Call and fix null_count
+    null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+
+    result = out.replace(null_count=null_count)
+    nvtx_range_pop()
+    return result
