@@ -32,7 +32,7 @@ from librmm_cffi import librmm as rmm
 import cudf
 from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
-from cudf.dataframe.index import as_index, Index, RangeIndex
+from cudf.dataframe.index import as_index, Index, RangeIndex, StringIndex
 from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
@@ -575,13 +575,20 @@ class DataFrame(object):
     def _apply_support_method(self, method):
         result = [getattr(self[col], method)() for col in self._cols.keys()]
         result = Series(result)
-        print(result)
-        print(self._cols.keys())
-        result.set_index(self._cols.keys())
+        result = result.set_index(self._cols.keys())
         return result
 
     def sum(self):
         return self._apply_support_method('sum')
+
+    def mean(self):
+        return self._apply_support_method('mean')
+
+    def max(self):
+        return self._apply_support_method('max')
+
+    def min(self):
+        return self._apply_support_method('min')
 
     def __iter__(self):
         return iter(self.columns)
