@@ -456,7 +456,7 @@ struct ConvertFunctor {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-__device__ void LimitRangeToBrackets(const char *data, long &start, long &stop) {
+__device__ void limitRangeToBrackets(const char *data, long &start, long &stop) {
   while (data[start] != '[' && data[start] != '{') {
     start++;
   }
