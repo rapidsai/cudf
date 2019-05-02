@@ -63,7 +63,6 @@
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 
-
 ## Bug Fixes
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
@@ -106,6 +105,7 @@
 - PR #1537 Fix `undefined reference` link error in HashPartitionTest
 - PR #1548 Fix ci/local/build.sh README from using an incorrect image example
 - PR #1551 CSV Reader: Fix integer column name indexing
+- PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 
 
 # cuDF 0.6.1 (25 Mar 2019)
