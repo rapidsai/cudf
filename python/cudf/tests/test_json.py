@@ -132,3 +132,7 @@ def test_json_writer(tmpdir, pdf, gdf):
         got_series = pd.read_json(gdf_series_fname, typ='series')
 
         assert_eq(expect_series, got_series)
+
+def test_json_lines_basic():
+    df = cudf.read_json('[1,2,3]', lines=True)
+    assert(df.shape == (1,3))
