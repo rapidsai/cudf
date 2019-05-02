@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "types.hpp"
+#include <vector>
 
 // Forward declaration
 typedef struct CUstream_st* cudaStream_t;
@@ -160,9 +161,9 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * has a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
-void slice(gdf_column const*   input_column,
-           gdf_column const*   indexes,
-           cudf::column_array* output_columns);
+std::vector<gdf_column*> slice(gdf_column const*          input_column,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
 
 /**
  * @brief Splits all the column (including null values) into a set of columns
@@ -209,9 +210,9 @@ void slice(gdf_column const*   input_column,
  * has a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
-void split(gdf_column const*   input_column,
-           gdf_column const*   indexes,
-           cudf::column_array* output_columns);
+// void split(gdf_column const*   input_column,
+//            gdf_column const*   indexes,
+//            cudf::column_array* output_columns);
 
 }  // namespace cudf
 
