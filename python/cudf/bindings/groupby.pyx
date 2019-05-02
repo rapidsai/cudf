@@ -334,12 +334,10 @@ def agg(groupby_class, args):
                 sort_results=sort_results
             )
             add_col_values = False  # we only want to add them once
-        # TODO: Do multindex here
-        if(groupby_class._as_index) and 1 == len(groupby_class._by):
-            idx = index.as_index(result[groupby_class._by[0]])
-            idx.name = groupby_class._by[0]
-            result = result.set_index(idx)
-            result.drop_column(idx.name)
+        if(groupby_class._as_index):
+            result = groupby_class.apply_multiindex_or_single_index(result)
+        if use_prefix:
+            result = groupby_class.apply_multicolumn(result, args)
     elif isinstance(args, collections.abc.Mapping):
         if (len(args.keys()) == 1):
             if(len(list(args.values())[0]) == 1):
@@ -377,15 +375,13 @@ def agg(groupby_class, args):
                     sort_results=sort_results
                 )
             add_col_values = False  # we only want to add them once
-        # TODO: Do multindex here
-        if(groupby_class._as_index) and 1 == len(groupby_class._by):
-            idx = index.as_index(result[groupby_class._by[0]])
-            idx.name = groupby_class._by[0]
-            result = result.set_index(idx)
-            result.drop_column(idx.name)
+        if groupby_class._as_index:
+            result = groupby_class.apply_multiindex_or_single_index(result)
+        if use_prefix:
+            result = groupby_class.apply_multicolumn_mapped(result, args)
     else:
         result = groupby_class.agg([args])
-        
+
     free(ctx)
 
     nvtx_range_pop()
@@ -431,18 +427,13 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
         else:
             idx.name = groupby_class._by[0]
         result_series = result_series.set_index(idx)
+        if groupby_class._as_index:
+            result = groupby_class.apply_multiindex_or_single_index(result)
+            result_series.index = result.index
         return result_series
 
-    # TODO: Do MultiIndex here
-    if(groupby_class._as_index):
-        idx = index.as_index(result[groupby_class._by[0]])
-        idx.name = groupby_class._by[0]
-        result.drop_column(idx.name)
-        if groupby_class.level == 0:
-            idx.name = groupby_class._original_index_name
-        else:
-            idx.name = groupby_class._by[0]
-        result = result.set_index(idx)
+    if groupby_class._as_index:
+        result = groupby_class.apply_multiindex_or_single_index(result)
 
     nvtx_range_pop()
 

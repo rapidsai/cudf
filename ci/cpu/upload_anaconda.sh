@@ -27,14 +27,7 @@ if [ -z "$MY_UPLOAD_KEY" ]; then
 fi
 
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
-  if [ "$LABEL_MAIN" == "1" ]; then
-    LABEL_OPTION="--label main --label cuda${CUDA_REL}"
-  elif [ "$LABEL_MAIN" == "0" ]; then
-    LABEL_OPTION="--label dev --label cuda${CUDA_REL}"
-  else
-    echo "Unknown label configuration LABEL_MAIN='$LABEL_MAIN'"
-    exit 1
-  fi
+  LABEL_OPTION="--label main --label cuda${CUDA_REL}"
   echo "LABEL_OPTION=${LABEL_OPTION}"
 
   test -e ${LIBCUDF_FILE}
@@ -44,16 +37,7 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
-
-  # Have to label all CUDA versions due to the compatibility to work with any CUDA
-  if [ "$LABEL_MAIN" == "1" ]; then
-    LABEL_OPTION="--label main --label cuda9.2 --label cuda10.0"
-  elif [ "$LABEL_MAIN" == "0" ]; then
-    LABEL_OPTION="--label dev --label cuda9.2 --label cuda10.0"
-  else
-    echo "Unknown label configuration LABEL_MAIN='$LABEL_MAIN'"
-    exit 1
-  fi
+  LABEL_OPTION="--label main --label cuda9.2 --label cuda10.0"
   echo "LABEL_OPTION=${LABEL_OPTION}"
 
   test -e ${LIBCUDF_CFFI_FILE}
