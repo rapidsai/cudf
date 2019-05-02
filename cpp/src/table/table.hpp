@@ -36,12 +36,11 @@ struct table {
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols)
-      : _columns{cols}, _num_columns{num_cols} {
+      : _columns(cols, cols + num_cols) {
     CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-
     this->_num_rows = cols[0]->size;
 
-    std::for_each(_columns, _columns + _num_columns, [this](gdf_column* col) {
+    std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {
       CUDF_EXPECTS(nullptr != col, "Null input column");
       CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
     });
@@ -66,11 +65,9 @@ struct table {
   table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         bool allocate_bitmasks = false, bool all_valid = false,
         cudaStream_t stream = 0)
-      : _num_columns{static_cast<gdf_size_type>(dtypes.size())},
-        _num_rows{num_rows} {
-    _columns = new gdf_column*[_num_columns];
+      : _columns(dtypes.size()), _num_rows{num_rows} {
     std::transform(
-        _columns, _columns + _num_columns, dtypes.begin(), _columns,
+        _columns.begin(), _columns.end(), dtypes.begin(), _columns.begin(),
         [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
                                                          gdf_dtype dtype) {
           CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
@@ -112,26 +109,26 @@ struct table {
    * table.
    *
    *---------------------------------------------------------------------------**/
-  gdf_column const* const* begin() const { return _columns; }
+  gdf_column const* const* begin() const { return &(*_columns.begin()); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the first `gdf_column` in the table.
    *
    *---------------------------------------------------------------------------**/
-  gdf_column** begin() { return _columns; }
+  gdf_column** begin() { return &(*_columns.begin()); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns const pointer to const of one past the last `gdf_column` in
    * the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_column const* const* end() const { return _columns + _num_columns; }
+  gdf_column const* const* end() const { return &(*_columns.end()); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to one past the last `gdf_column` in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_column** end() { return _columns + _num_columns; }
+  gdf_column** end() { return &(*_columns.end()); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the column specified by an index.
@@ -140,7 +137,7 @@ struct table {
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
   gdf_column* get_column(gdf_index_type index) {
-    assert(index < _num_columns);
+    assert(index < _columns.size());
     return _columns[index];
   }
 
@@ -151,6 +148,7 @@ struct table {
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
   gdf_column const* get_column(gdf_index_type index) const {
+    assert(index < _num_columns);
     return _columns[index];
   }
 
@@ -158,7 +156,7 @@ struct table {
    * @brief Returns the number of _columns in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_columns() const { return _num_columns; }
+  gdf_size_type num_columns() const { return _columns.size(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of rows in the table
@@ -170,12 +168,17 @@ struct table {
    * @brief Returns the table's array of column pointers
    *
    *---------------------------------------------------------------------------**/
-  gdf_column** columns() const { return _columns; }
+  gdf_column const* const* columns() const { return &(*_columns.begin()); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the table's array of column pointers
+   *
+   *---------------------------------------------------------------------------**/
+  gdf_column** columns() { return &(*_columns.begin()); }
 
  private:
-  gdf_column** _columns{nullptr};       ///< The set of gdf_columns
-  gdf_size_type const _num_columns{0};  ///< The number of columns in the set
-  gdf_size_type _num_rows{0};  ///< The number of elements in each column
+  std::vector<gdf_column*> _columns;  ///< Pointers to the wrapped columns
+  gdf_size_type _num_rows{0};         ///< The number of elements in each column
 };
 
 }  // namespace cudf

@@ -71,7 +71,7 @@ class device_table {
    * @param[in] stream CUDA stream to use for device operations
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
-  static auto create(gdf_size_type num_columns, gdf_column* cols[],
+  static auto create(gdf_size_type num_columns, gdf_column const* const* cols,
                      cudaStream_t stream = 0) {
     auto deleter = [](device_table* d) { d->destroy(); };
 
@@ -143,7 +143,7 @@ class device_table {
    * @param num_cols The number of columns to wrap
    * @param columns An array of columns to copy to device memory
    *---------------------------------------------------------------------------**/
-  device_table(gdf_size_type num_cols, gdf_column** columns,
+  device_table(gdf_size_type num_cols, gdf_column const* const* columns,
                cudaStream_t stream = 0)
       : _num_columns(num_cols) {
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
