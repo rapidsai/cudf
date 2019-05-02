@@ -23,6 +23,8 @@
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
 - PR #1466 Add GPU-accelerated ORC Reader
+- PR #1565 Add build script for nightly doc builds
+- PR #1508 Add Series isna, isnull, and notna
 
 ## Improvements
 
@@ -66,6 +68,7 @@
 - PR #1533 Remove stale join CFFI, fix memory leaks in join Cython
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+- PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
 
 
 ## Bug Fixes
