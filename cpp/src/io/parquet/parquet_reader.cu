@@ -106,10 +106,10 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  constexpr static auto header_len = sizeof(parquet::file_header_s);
-  constexpr static auto ender_len = sizeof(parquet::file_ender_s);
-
   explicit ParquetMetadata(const DataSource& input) {
+    constexpr auto header_len = sizeof(parquet::file_header_s);
+    constexpr auto ender_len = sizeof(parquet::file_ender_s);
+
     const auto len = input.size();
     const auto header_buffer = input.get_buffer(0, header_len);
     const auto header = (const parquet::file_header_s *)header_buffer->data();
@@ -556,7 +556,7 @@ gdf_error read_parquet_arrow(
     pq_read_arg *args,
     std::shared_ptr<arrow::io::RandomAccessFile> rd_file) {
 
-  auto createDataSource = [&]() {
+  DataSource input = [&] {
     if (args->source_type == FILE_PATH) {
       return DataSource(args->source);
     } else if (args->source_type == ARROW_RANDOM_ACCESS_FILE) {
@@ -565,9 +565,7 @@ gdf_error read_parquet_arrow(
     } else {
       return DataSource(args->source, args->buffer_size);
     }
-  };
-
-  DataSource input = createDataSource();
+  }();
   ParquetMetadata md(input);
 
   // Select only row groups required

@@ -120,7 +120,7 @@ class OrcMetadata {
  public:
   explicit OrcMetadata(const DataSource &input_) : input(&input_) {
     const auto len = input->size();
-    const auto max_ps_size = std::min<size_t>(len, 256);
+    const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
     auto buffer = input->get_buffer(len - max_ps_size, max_ps_size);
@@ -220,7 +220,7 @@ class OrcMetadata {
    * @param[in] use_cols_len Length of the column name array
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
-   * @return A list of ORC column indexes
+   * @return List of ORC column indexes
    **/
   auto select_columns(const char **use_cols, int use_cols_len,
                       bool &has_timestamp_column) {
