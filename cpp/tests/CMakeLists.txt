@@ -95,7 +95,7 @@ ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
@@ -265,6 +265,13 @@ set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+###################################################################################################
+# - device table tests -----------------------------------------------------------------------------------
+
+set(DEVICE_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
+
+ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - json tests -------------------------------------------------------------------------------------

@@ -11,6 +11,11 @@ import pyarrow as pa
 from string import ascii_letters
 
 
+@pytest.fixture(scope='module')
+def datadir(datadir):
+    return datadir / 'parquet'
+
+
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -65,7 +70,7 @@ def parquet_file(request, tmp_path_factory, pdf):
                                      ['col_int32', 'col_float32'],
                                      ['col_int16', 'col_float64', 'col_int8'],
                                      None])
-def test_parquet_reader(parquet_file, columns, engine):
+def test_parquet_reader_basic(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
@@ -85,6 +90,34 @@ def test_parquet_reader(parquet_file, columns, engine):
             got = got.drop('col_category')
 
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize('strings_to_categorical', [False, True, None])
+def test_parquet_reader_strings(tmpdir, strings_to_categorical):
+    df = pd.DataFrame(
+        [(1, 'aaa', 9.0), (2, 'bbb', 8.0), (3, 'ccc', 7.0)],
+        columns=pd.Index(list('abc'))
+    )
+    fname = tmpdir.join("test_pq_reader_strings.parquet")
+    df.to_parquet(fname)
+    assert(os.path.exists(fname))
+
+    if strings_to_categorical is not None:
+        gdf = cudf.read_parquet(
+            fname,
+            engine='cudf',
+            strings_to_categorical=strings_to_categorical
+        )
+    else:
+        gdf = cudf.read_parquet(fname, engine='cudf')
+
+    if strings_to_categorical:
+        hash_ref = [989983842, 429364346, 1169108191]
+        assert(gdf['b'].dtype == np.dtype('int32'))
+        assert(list(gdf['b']) == list(hash_ref))
+    else:
+        assert(gdf['b'].dtype == np.dtype('object'))
+        assert(list(gdf['b']) == list(df['b']))
 
 
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
@@ -146,6 +179,15 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
     for row in range(num_rows):
         assert(gdf['col_int32'][row] == row + skip_rows)
+
+
+def test_parquet_spark_timestamps(datadir):
+    fname = datadir / 'spark_timestamp.snappy.parquet'
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

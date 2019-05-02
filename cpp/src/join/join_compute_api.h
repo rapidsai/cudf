@@ -21,10 +21,11 @@
 
 #include "join_kernels.cuh"
 
-#include "dataframe/cudf_table.cuh"
+#include <table/device_table.cuh>
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
 #include "full_join.cuh"
+#include <hash/helper_functions.cuh>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -37,7 +38,6 @@
 //   3) replace input iterators & input counts with arrow::Datum
 //   3) replace output iterators & output counts with arrow::ArrayData
 
-constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
@@ -58,22 +58,21 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type,
-          typename multimap_type,
-          typename size_type>
-gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
-                                    gdf_table<size_type> const & probe_table,
+          typename multimap_type>
+gdf_error estimate_join_output_size(device_table const & build_table,
+                                    device_table const & probe_table,
                                     multimap_type const & hash_table,
-                                    size_type * join_output_size_estimate)
+                                    gdf_size_type * join_output_size_estimate)
 {
-  const size_type build_table_num_rows{build_table.get_column_length()};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  const gdf_size_type build_table_num_rows{build_table.num_rows()};
+  const gdf_size_type probe_table_num_rows{probe_table.num_rows()};
   
   // If the probe table is significantly larger (5x) than the build table, 
   // then we attempt to only use a subset of the probe table rows to compute an
   // estimate of the join output size.
-  size_type probe_to_build_ratio{0};
+  gdf_size_type probe_to_build_ratio{0};
   if(build_table_num_rows > 0) {
-    probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows));
+    probe_to_build_ratio = static_cast<gdf_size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows));
   }
   else {
     // If the build table is empty, we know exactly how large the output
@@ -99,21 +98,22 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     return GDF_SUCCESS;
   }
 
-  size_type sample_probe_num_rows{probe_table_num_rows};
-  constexpr size_type MAX_RATIO{5};
+  gdf_size_type sample_probe_num_rows{probe_table_num_rows};
+  constexpr gdf_size_type MAX_RATIO{5};
   if(probe_to_build_ratio > MAX_RATIO)
   {
     sample_probe_num_rows = build_table_num_rows;
   }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type * d_size_estimate{nullptr};
-  size_type h_size_estimate{0};
+  gdf_size_type * d_size_estimate{nullptr};
+  gdf_size_type h_size_estimate{0};
 
-  CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_type)));
+  CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_t)));
   *d_size_estimate = 0;
 
   CUDA_TRY( cudaGetLastError() );
+
 
   // Continue probing with a subset of the probe table until either:
   // a non-zero output size estimate is found OR
@@ -125,13 +125,12 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     *d_size_estimate = 0;
 
     constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    const size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
+    const gdf_size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
     
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<join_type,
                              multimap_type,
-                             size_type,
                              block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>>(&hash_table,
@@ -166,9 +165,9 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     // number of rows in the build table by the same factor
     if(0 == h_size_estimate)
     {
-      constexpr size_type GROW_RATIO{2};
+      constexpr gdf_size_type GROW_RATIO{2};
       sample_probe_num_rows *= GROW_RATIO;
-      probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_to_build_ratio)/GROW_RATIO));
+      probe_to_build_ratio = static_cast<gdf_size_type>(std::ceil(static_cast<float>(probe_to_build_ratio)/GROW_RATIO));
     }
 
   } while(true);
@@ -180,34 +179,10 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   return GDF_SUCCESS;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Computes the number of entries required in a hash table to satisfy
- * inserting a specified number of keys to achieve the specified hash table
- * occupancy.
- *
- * @param num_keys_to_insert The number of keys that will be inserted
- * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
- * 50% occupancy
- * @return size_t The size of the hash table that will satisfy the desired
- * occupancy for the specified number of insertions
- *---------------------------------------------------------------------------**/
-inline size_t compute_hash_table_size(
-    gdf_size_type num_keys_to_insert,
-    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
-  assert(desired_occupancy != 0);
-  assert(desired_occupancy <= 100);
-  double const grow_factor{100.0 / desired_occupancy};
-
-  // Calculate size of hash map based on the desired occupancy
-  size_t hash_table_size{
-      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
-
-  return hash_table_size;
-}
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Performs a hash-based join between two sets of gdf_tables.
+* @brief  Performs a hash-based join between two sets of device_tables.
 *
 * @param joined_output The output of the join operation
 * @param left_table The left table to join
@@ -217,20 +192,18 @@ inline size_t compute_hash_table_size(
 * @tparam join_type The type of join to be performed
 * @tparam hash_value_type The data type to be used for the Keys in the hash table
 * @tparam output_index_type The data type to be used for the output indices
-* @tparam size_type The data type used for size calculations, e.g. size of hash table
 *
 * @returns  cudaSuccess upon successful completion of the join. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-         typename output_index_type,
-         typename size_type>
+         typename output_index_type>
 gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
-                            gdf_table<size_type> const & left_table,
-                            gdf_table<size_type> const & right_table,
+                            cudf::table const & left_table,
+                            cudf::table const & right_table,
                             bool flip_results = false)
 {
   gdf_error gdf_error_code{GDF_SUCCESS};
@@ -243,7 +216,7 @@ gdf_error compute_hash_join(
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
-                                                      size_type,
+                                                      size_t,
                                                       std::numeric_limits<hash_value_type>::max(),
                                                       std::numeric_limits<output_index_type>::max(),
                                                       default_hash<hash_value_type>,
@@ -252,7 +225,7 @@ gdf_error compute_hash_join(
 #else
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
-                                                      size_type,
+                                                      size_t,
                                                       std::numeric_limits<hash_value_type>::max(),
                                                       std::numeric_limits<output_index_type>::max()>;
 #endif
@@ -260,12 +233,12 @@ gdf_error compute_hash_join(
   constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
 
   // Hash table will be built on the right table
-  gdf_table<size_type> const & build_table{right_table};
-  const size_type build_table_num_rows{build_table.get_column_length()};
+  auto build_table = device_table::create(right_table);
+  const gdf_size_type build_table_num_rows{build_table->num_rows()};
   
   // Probe with the left table
-  gdf_table<size_type> const & probe_table{left_table};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  auto probe_table = device_table::create(left_table);
+  const gdf_size_type probe_table_num_rows{probe_table->num_rows()};
 
   // Hash table size must be at least 1 in order to have a valid allocation.
   // Even if the hash table will be empty, it still must be allocated for the
@@ -293,9 +266,9 @@ gdf_error compute_hash_join(
   // build the hash table
   if(build_table_num_rows > 0)
   {
-    const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
+    const gdf_size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
     build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
-                                                      build_table,
+                                                      *build_table,
                                                       build_table_num_rows,
                                                       d_gdf_error_code);
     
@@ -311,8 +284,9 @@ gdf_error compute_hash_join(
   }
 
 
-  size_type estimated_join_output_size{0};
-  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+  gdf_size_type estimated_join_output_size{0};
+  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(
+      *build_table, *probe_table, *hash_table, &estimated_join_output_size);
 
   if(GDF_SUCCESS != gdf_error_code){
     return gdf_error_code;
@@ -327,14 +301,14 @@ gdf_error compute_hash_join(
   // might be incorrect and we might have underestimated the number of joined elements. 
   // As such we will need to de-allocate memory and re-allocate memory to ensure 
   // that the final output is correct.
-  size_type h_actual_found{0};
+  gdf_size_type h_actual_found{0};
   output_index_type *output_l_ptr{nullptr};
   output_index_type *output_r_ptr{nullptr};
   bool cont = true;
 
   // Allocate device global counter used by threads to determine output write location
-  size_type *d_global_write_index{nullptr};
-  RMM_TRY( RMM_ALLOC((void**)&d_global_write_index, sizeof(size_type), 0) ); // TODO non-default stream?
+  gdf_size_type *d_global_write_index{nullptr};
+  RMM_TRY( RMM_ALLOC((void**)&d_global_write_index, sizeof(gdf_size_type), 0) ); // TODO non-default stream?
  
   // Because we only have an estimate of the output size, we may need to probe the
   // hash table multiple times until we've found an output buffer size that is large enough
@@ -347,22 +321,21 @@ gdf_error compute_hash_join(
     // Allocate temporary device buffer for join output
     RMM_TRY( RMM_ALLOC((void**)&output_l_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
     RMM_TRY( RMM_ALLOC((void**)&output_r_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
-    CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
+    CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(gdf_size_type), 0) );
 
-    const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
+    const gdf_size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
     
     // Do the probe of the hash table with the probe table and generate the output for the join
     probe_hash_table<base_join_type,
                      multimap_type,
                      hash_value_type,
-                     size_type,
                      output_index_type,
                      block_size,
                      DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>> (hash_table.get(),
-                                       build_table,
-                                       probe_table,
-                                       probe_table.get_column_length(),
+                                       *build_table,
+                                       *probe_table,
+                                       probe_table->num_rows(),
                                        output_l_ptr,
                                        output_r_ptr,
                                        d_global_write_index,
@@ -371,7 +344,7 @@ gdf_error compute_hash_join(
 
     CUDA_TRY( cudaGetLastError() );
 
-    CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
+    CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(gdf_size_type), cudaMemcpyDeviceToHost));
 
     // The estimate was too small. Double the estimate and try again
     if(estimated_join_output_size < h_actual_found){

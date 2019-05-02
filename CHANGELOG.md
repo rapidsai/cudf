@@ -1,7 +1,7 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
-
+- PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
@@ -20,9 +20,13 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
+- PR #1532 Parquet Reader: Add support for INT96 timestamps
+- PR #1516 Add Series and DataFrame.ndim
+- PR #1466 Add GPU-accelerated ORC Reader
 
 ## Improvements
 
+- PR #1531 Refactor closures as private functions in gpuarrow
 - PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
@@ -40,6 +44,7 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
@@ -50,10 +55,14 @@
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 - PR #1525 Add cudatoolkit conda dependency
+- PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
+- PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
+- PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 
 ## Bug Fixes
 
@@ -87,9 +96,16 @@
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1491 Use more specific directories & groups in CODEOWNERS
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
+- PR #1510 Added nvstrings `fillna()` function
+- PR #1507 Parquet Reader: Default string data to GDF_STRING
+- PR #1535 Fix doc issue to ensure correct labelling of cudf.series
+- PR #1537 Fix `undefined reference` link error in HashPartitionTest
+- PR #1548 Fix ci/local/build.sh README from using an incorrect image example
+- PR #1551 CSV Reader: Fix integer column name indexing
 
 
 # cuDF 0.6.1 (25 Mar 2019)
@@ -150,6 +166,7 @@
 - PR #1159 Add Python bindings for libcudf dlpack functions
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 - PR #1168 to_frame for series accepts a name argument
+
 
 ## Improvements
 
