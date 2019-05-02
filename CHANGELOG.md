@@ -1,6 +1,22 @@
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
+
 - PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
@@ -23,7 +39,10 @@
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
 - PR #1466 Add GPU-accelerated ORC Reader
-- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1565 Add build script for nightly doc builds
+- PR #1508 Add Series isna, isnull, and notna
+- PR #1588 Add Index `astype` typecasting
+- PR #1301 MultiIndex support
 
 ## Improvements
 
@@ -60,10 +79,15 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1525 Add cudatoolkit conda dependency
 - PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
+- PR #1492 Convert transpose CFFI to Cython
+- PR #1495 Convert binary and unary ops CFFI to Cython
+- PR #1503 Convert sorting and hashing ops CFFI to Cython
+- PR #1533 Remove stale join CFFI, fix memory leaks in join Cython
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
-
+- PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
 
 ## Bug Fixes
 
@@ -107,6 +131,7 @@
 - PR #1537 Fix `undefined reference` link error in HashPartitionTest
 - PR #1548 Fix ci/local/build.sh README from using an incorrect image example
 - PR #1551 CSV Reader: Fix integer column name indexing
+- PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 
 
 # cuDF 0.6.1 (25 Mar 2019)

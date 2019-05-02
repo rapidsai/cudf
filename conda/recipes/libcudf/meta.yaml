@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set cuda_version='.'.join(environ.get('CUDA_VERSION', 'unknown').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '9.2').split('.')[:2]) %}
 package:
   name: libcudf
   version: {{ version }}
@@ -27,6 +27,9 @@ requirements:
   host:
     - librmm 0.7.*
     - libnvstrings 0.7.*
+    - cudatoolkit {{ cuda_version }}.*
+  run:
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   commands:
