@@ -98,7 +98,8 @@ class DataSource {
  * @brief Function that translates Parquet datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
-    parquet::Type physical, parquet::ConvertedType logical) {
+    parquet::Type physical, parquet::ConvertedType logical,
+    bool strings_to_categorical) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -134,9 +135,11 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     case parquet::BYTE_ARRAY:
     case parquet::FIXED_LEN_BYTE_ARRAY:
       // Can be mapped to GDF_CATEGORY (32-bit hash) or GDF_STRING (nvstring)
-      return std::make_pair(GDF_CATEGORY, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      return std::make_pair(strings_to_categorical ? GDF_CATEGORY : GDF_STRING,
+                            gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT96:
-      // deprecated, only used by legacy implementations
+      // Convert Spark INT96 timestamp to GDF_DATE64
+      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
     default:
       break;
   }
@@ -639,7 +642,8 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
   for (const auto &col : selected_cols) {
     auto row_group_0 = md.row_groups[selected_row_groups[0].first];
     auto &col_schema = md.schema[row_group_0.columns[col.first].schema_idx];
-    auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type);
+    auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
+                               args->strings_to_categorical);
 
     columns.emplace_back(static_cast<gdf_size_type>(num_rows),
                          dtype_info.first, dtype_info.second, col.second);
