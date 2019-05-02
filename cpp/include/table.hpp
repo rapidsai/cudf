@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <algorithm>
-#include <bitmask/legacy_bitmask.hpp>
+#include <cudf.h>
 #include <cassert>
-#include <utilities/error_utils.hpp>
-#include "cudf.h"
+#include <types.hpp>
+
+#include <vector>
+#include <cuda_runtime_api.h>
 
 namespace cudf {
 
@@ -35,16 +37,7 @@ struct table {
    * @param cols The array of columns wrapped by the table
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
-  table(gdf_column* cols[], gdf_size_type num_cols)
-      : _columns(cols, cols + num_cols) {
-    CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-    this->_num_rows = cols[0]->size;
-
-    std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {
-      CUDF_EXPECTS(nullptr != col, "Null input column");
-      CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
-    });
-  }
+  table(gdf_column* cols[], gdf_size_type num_cols);
 
   /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.
@@ -64,43 +57,7 @@ struct table {
    *---------------------------------------------------------------------------**/
   table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         bool allocate_bitmasks = false, bool all_valid = false,
-        cudaStream_t stream = 0)
-      : _columns(dtypes.size()), _num_rows{num_rows} {
-    std::transform(
-        _columns.begin(), _columns.end(), dtypes.begin(), _columns.begin(),
-        [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
-                                                         gdf_dtype dtype) {
-          CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
-          CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
-          col = new gdf_column;
-          col->size = num_rows;
-          col->dtype = dtype;
-          col->null_count = 0;
-          col->valid = nullptr;
-
-          // Timestamp currently unsupported as it would require passing in
-          // additional resolution information
-          gdf_dtype_extra_info extra_info;
-          extra_info.time_unit = TIME_UNIT_NONE;
-          col->dtype_info = extra_info;
-
-          RMM_ALLOC(&col->data, gdf_dtype_size(dtype) * num_rows, stream);
-          if (allocate_bitmasks) {
-            int fill_value = (all_valid) ? 0xff : 0;
-
-            RMM_ALLOC(
-                &col->valid,
-                gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
-                stream);
-
-            CUDA_TRY(cudaMemsetAsync(
-                col->valid, fill_value,
-                gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
-                stream));
-          }
-          return col;
-        });
-  }
+        cudaStream_t stream = 0);
 
   table() = default;
 

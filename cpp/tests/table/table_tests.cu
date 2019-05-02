@@ -15,7 +15,7 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <table/table.hpp>
+#include <table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/type_dispatcher.hpp>
 

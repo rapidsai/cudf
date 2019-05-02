@@ -16,7 +16,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <bitmask/bit_mask.cuh>
-#include <table/table.hpp>
+#include <table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_utils.cuh>
 
