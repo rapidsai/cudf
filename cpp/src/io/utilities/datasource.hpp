@@ -27,7 +27,7 @@
 #include <memory>
 
 /**
- * @brief Class for memory mapping a file or buffer source
+ * @brief Class for reading from a file or buffer source
  **/
 class DataSource {
  public:
@@ -56,9 +56,9 @@ class DataSource {
   }
 
   /**
-   * @brief Class for memory mapping a file or buffer source
+   * @brief Constructor for creating a source from an existing Arrow file
    *
-   * @param[in] file Existing Arrow file instance
+   * @param[in] file Arrow file instance
    **/
   explicit DataSource(std::shared_ptr<arrow::io::RandomAccessFile> file)
       : rd_file(file) {}
@@ -69,7 +69,7 @@ class DataSource {
    * @param[in] position Starting offset
    * @param[in] length Number of bytes to read
    *
-   * @return size_t The size of the source data in bytes
+   * @return std::shared_ptr<arrow::Buffer The data buffer
    **/
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t position,
                                                   size_t length) const {
