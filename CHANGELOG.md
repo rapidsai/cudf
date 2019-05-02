@@ -66,7 +66,7 @@
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
-- PR #XXXX Remove CFFI from the build / install process entirely
+- PR #1590 Remove CFFI from the build / install process entirely
 
 ## Bug Fixes
 
