@@ -188,12 +188,10 @@ cdef extern from "cudf.h" nogil:
         gdf_dtype dtype
         bool      is_valid
 
-    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count) except +
-
     cdef gdf_size_type gdf_column_sizeof() except +
 
-    gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
-                              gdf_size_type size, gdf_dtype dtype) except +
+    cdef gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
+                                   gdf_size_type size, gdf_dtype dtype) except +
 
     cdef gdf_error gdf_column_view_augmented(gdf_column *column,
                                              void *data,
@@ -382,3 +380,8 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
 
     cdef gdf_error gdf_nvtx_range_pop() except +
+
+
+cdef extern from "bitmask.hpp" nogil:
+
+    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count) except +
