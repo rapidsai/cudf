@@ -18,7 +18,7 @@
 
 #include <cuda_runtime.h>
 #include <utilities/error_utils.hpp>
-#include <dataframe/device_table.cuh>
+#include <table/device_table.cuh>
 #include <types.hpp>
 #include <cudf.h>
 

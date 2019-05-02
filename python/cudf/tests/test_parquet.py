@@ -11,6 +11,11 @@ import pyarrow as pa
 from string import ascii_letters
 
 
+@pytest.fixture(scope='module')
+def datadir(datadir):
+    return datadir / 'parquet'
+
+
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -164,6 +169,15 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
     for row in range(num_rows):
         assert(gdf['col_int32'][row] == row + skip_rows)
+
+
+def test_parquet_spark_timestamps(datadir):
+    fname = datadir / 'spark_timestamp.snappy.parquet'
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

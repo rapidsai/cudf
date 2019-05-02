@@ -138,7 +138,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(strings_to_categorical ? GDF_CATEGORY : GDF_STRING,
                             gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT96:
-      // deprecated, only used by legacy implementations
+      // Convert Spark INT96 timestamp to GDF_DATE64
+      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
     default:
       break;
   }
