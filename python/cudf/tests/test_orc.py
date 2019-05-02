@@ -33,12 +33,6 @@ def test_orc_reader_basic(datadir, orc_args, engine):
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(path, engine=engine, columns=columns)
 
-    # cuDF's default currently handles some types differently
-    if engine == 'cudf':
-        # cuDF doesn't support bool so convert to int8
-        if 'boolean1' in expect.columns:
-            expect['boolean1'] = expect['boolean1'].astype('int8')
-
     assert_eq(expect, got, check_categorical=False)
 
 
