@@ -601,14 +601,12 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        try:
-            if len(arbitrary) == 0:
+        if hasattr(arbitrary, '__len__'):
+            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
+                # 0-d arrays are a special case:
+                pass
+            elif len(arbitrary) == 0:
                 return RangeIndex(0, 0, name=name)
-        except(TypeError):
-            # except...pass used here v/s checking for __len__ attr
-            # because numpy scalars have a __len__ attribute but
-            # raise TypeError when len() is called on them
-            pass
         return as_index(columnops.as_column(arbitrary), name=name)
 
 
