@@ -24,7 +24,8 @@ import numpy as np
 import collections.abc
 import os
 
-cpdef cpp_read_json(path_or_buf, lines, dtype, compression):
+
+cpdef cpp_read_json(path_or_buf, lines, dtype, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
     See Also
@@ -32,30 +33,35 @@ cpdef cpp_read_json(path_or_buf, lines, dtype, compression):
     cudf.io.json.read_json
     """
 
-    # Setup arguments
-    cdef json_read_arg args = json_read_arg()
-
-    #if not os.path.isfile(path) and not os.path.exists(path):
-    #    raise FileNotFoundError(
-    #        errno.ENOENT, os.strerror(errno.ENOENT), path
-    #    )
     path = str(path_or_buf).encode()
     source_ptr = <char*>path
-    args.source_type = HOST_BUFFER
-    args.source = source_ptr
-    args.buffer_size = len(path)
 
-    args.lines = lines
-    if compression is None:
+    if compression is None or compression == 'infer':
         compression_bytes = <char*>NULL
     else:
         compression = compression.encode()
         compression_bytes = <char*>compression
 
-    # Call read_json
+    # Setup arguments
+    cdef json_read_arg args = json_read_arg()
+    if os.path.exists(path_or_buf):
+        args.source_type = FILE_PATH
+    else:
+        args.source_type = HOST_BUFFER
+        args.buffer_size = len(path_or_buf)
+    args.source = source_ptr
+    args.lines = lines
+    # dtype (num_cols)
+    args.compression = compression_bytes
+    if byte_range is not None:
+        args.byte_range_offset = byte_range[0]
+        args.byte_range_size = byte_range[1]
+    else:
+        args.byte_range_offset = 0
+        args.byte_range_size = 0
+
     with nogil:
         result = read_json(&args)
-
     check_gdf_error(result)
 
     out = args.data

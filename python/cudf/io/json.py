@@ -10,10 +10,10 @@ import warnings
 
 
 @ioutils.doc_read_json()
-def read_json(path_or_buf, lines=False, dtype=None, compression='infer', *args, **kwargs):
+def read_json(path_or_buf, lines=False, dtype=None, compression='infer', byte_range=None, *args, **kwargs):
     """{docstring}"""
     if lines:
-        df = cpp_read_json(path_or_buf, lines, dtype, compression)
+        df = cpp_read_json(path_or_buf, lines, dtype, compression, byte_range)
     else:
         warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                       "be GPU accelerated in the future")

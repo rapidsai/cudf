@@ -136,3 +136,16 @@ def test_json_writer(tmpdir, pdf, gdf):
 def test_json_lines_basic():
     df = cudf.read_json('[1,2,3]', lines=True)
     assert(df.shape == (1,3))
+
+def test_json_lines_file_input(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_jsonreader_file1.json")
+
+    with open(str(fname), 'w') as fp:
+        fp.write('[1,2,3]')
+
+    df = cudf.read_json(str(fname), lines=True)
+    assert(df.shape == (1,3))
+
+def test_json_lines_byte_range():
+    df = cudf.read_json('[1,2,3]\n[4,5,6]\n', lines=True, byte_range=(0, 4))
+    assert(df.shape == (1,3))
