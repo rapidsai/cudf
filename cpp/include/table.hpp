@@ -105,7 +105,7 @@ struct table {
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
   gdf_column const* get_column(gdf_index_type index) const {
-    assert(index < _num_columns);
+    assert(index < _columns.size());
     return _columns[index];
   }
 
