@@ -9,7 +9,7 @@ from libc.stdint cimport uint8_t
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.comm.gpuarrow cimport *
+from cudf.bindings.gpuarrow cimport *
 
 import logging
 import json
