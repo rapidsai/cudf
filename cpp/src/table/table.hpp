@@ -164,18 +164,6 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_size_type num_rows() const { return _num_rows; }
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the table's array of column pointers
-   *
-   *---------------------------------------------------------------------------**/
-  gdf_column const* const* columns() const { return &(*_columns.begin()); }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the table's array of column pointers
-   *
-   *---------------------------------------------------------------------------**/
-  gdf_column** columns() { return &(*_columns.begin()); }
-
  private:
   std::vector<gdf_column*> _columns;  ///< Pointers to the wrapped columns
   gdf_size_type _num_rows{0};         ///< The number of elements in each column

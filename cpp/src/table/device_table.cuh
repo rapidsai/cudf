@@ -91,7 +91,7 @@ class device_table {
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
   static auto create(cudf::table const& t, cudaStream_t stream = 0) {
-    return device_table::create(t.num_columns(), t.columns(), stream);
+    return device_table::create(t.num_columns(), t.begin(), stream);
   }
 
   /**---------------------------------------------------------------------------*
