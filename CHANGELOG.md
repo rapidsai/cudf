@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
 
 ## Improvements
 
@@ -88,7 +89,6 @@
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
-- PR #1569 Add support for Json objects to the JSON Lines reader
 
 ## Bug Fixes
 
