@@ -113,7 +113,7 @@ class Groupby(object):
         return _cpp_apply_basic_agg(self, agg_type, sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
-        if 1 == len(self._by):
+        if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]

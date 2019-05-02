@@ -9,8 +9,7 @@ from copy import copy, deepcopy
 
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe.index import StringIndex
-from . import Index
+from cudf.dataframe.index import Index, StringIndex
 
 
 class MultiIndex(Index):
@@ -29,7 +28,8 @@ class MultiIndex(Index):
         self.names = names
         column_names = []
         if labels:
-            warnings.warn("the 'labels' keyword is deprecated, use 'codes' instead", FutureWarning)  # noqa: E501
+            warnings.warn("the 'labels' keyword is deprecated, use 'codes' "
+                          "instead", FutureWarning)
         if labels and not codes:
             codes = labels
         if isinstance(names, (Sequence,
@@ -126,8 +126,6 @@ class MultiIndex(Index):
                 if k in validity_mask or len(validity_mask) == 0:
                     if code == index_of_code_at_level:
                         matches.append(k)
-            # matches = self.codes.map([j if c[i] == index_of_code_at_level\
-            #       else None for j,c in codes])
             if len(matches) != 0:
                 validity_mask = matches
         return validity_mask
@@ -165,18 +163,6 @@ class MultiIndex(Index):
             if(len(out_index.columns)) > 0:
                 result.reset_index(drop=True)
                 result.index = result.index._popn(len(row_tuple))
-        # Finally, if n-k==1 and only 1 row is returned, convert the
-        # resulting DataFrame into a Series instead.
-        """
-        print('result')
-        print(len(result))
-        print('n-k')
-        print(len(row_tuple)-len(self.levels))
-        if len(result) == 1 and len(self.levels)-len(row_tuple) == 1:
-            from cudf.dataframe import Series
-            result = Series(result.iloc[0])
-            result.name = row_tuple
-        """
         return result
 
     def _get_column_major(self, df, row_tuple):
@@ -249,48 +235,27 @@ class MultiIndex(Index):
             result.append(match.levels[level][match.codes[item][0]])
         return tuple(result)
 
-    """
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            # a new MultiIndex with the sliced codes, same levels and names
-            None
-        elif isinstance(index, int):
-            # a tuple of the labels of the item defined by the set of codes
-            # at the ith positionjA
-            None
-        elif isinstance(index, (list, np.ndarray)):
-            result = MultiIndex(self.levels, self.codes.iloc[index])
-            result.names = self.names
-            return result
-        if isinstance(index, (DeviceNDArray)):
-            return self.take(index)
-        else:
-            raise IndexError('only integers, slices (`:`), ellipsis (`...`),'
-            'numpy.newaxis (`None`) and integer or boolean arrays are valid '
-            'indices')  # noqa: E128
-    """
-
     @property
     def _values(self):
         return list([i for i in self])
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
-        # cheating
+        # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         result = cls.from_pandas(pdi)
         return result
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
-        # cheating
+        # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_frame(dataframe.to_pandas(), names=names)
         result = cls.from_pandas(pdi)
         return result
 
     @classmethod
     def from_product(cls, arrays, names=None):
-        # cheating
+        # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         result = cls.from_pandas(pdi)
         return result
@@ -299,6 +264,10 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
+        # Backwards compatibility:
+        # Construct a dummy MultiIndex and check for the codes attr.
+        # This indicates that it is pandas >= 0.24
+        # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), 'codes'):
             return pd.MultiIndex(levels=self.levels, codes=pandas_codes,
                                  names=self.names)

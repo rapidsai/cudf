@@ -8,8 +8,6 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from libgdf_cffi import libgdf
-
 from cudf.dataframe import columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
@@ -18,24 +16,6 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
-
-
-_binary_impl = {
-    # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-    # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-    # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
-}
 
 
 class StringMethods(object):
