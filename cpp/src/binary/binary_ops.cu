@@ -256,6 +256,7 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
     switch ( lhs->dtype ) {                                                   \
     case GDF_INT8:      return F##_i8(lhs, rhs, output);                      \
+    case GDF_STRING_CATEGORY:                                                 \
     case GDF_INT32:     return F##_i32(lhs, rhs, output);                     \
     case GDF_INT64:     return F##_i64(lhs, rhs, output);                     \
     case GDF_FLOAT32:   return F##_f32(lhs, rhs, output);                     \
