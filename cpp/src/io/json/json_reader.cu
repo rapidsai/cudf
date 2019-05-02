@@ -524,7 +524,7 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
   // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  LimitRangeToBrackets(data, start, stop);
+  limitRangeToBrackets(data, start, stop);
   const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns && start < stop; col++) {
@@ -602,7 +602,7 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
   // has the same semantics as end() in STL containers (one past last element)
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  LimitRangeToBrackets(data, start, stop);
+  limitRangeToBrackets(data, start, stop);
   const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns; col++) {
