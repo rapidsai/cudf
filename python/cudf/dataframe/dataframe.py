@@ -572,6 +572,17 @@ class DataFrame(object):
     def __abs__(self):
         return self._apply_op('__abs__')
 
+    def _apply_support_method(self, method):
+        result = [getattr(self[col], method)() for col in self._cols.keys()]
+        result = Series(result)
+        print(result)
+        print(self._cols.keys())
+        result.set_index(self._cols.keys())
+        return result
+
+    def sum(self):
+        return self._apply_support_method('sum')
+
     def __iter__(self):
         return iter(self.columns)
 
