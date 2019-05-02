@@ -54,3 +54,11 @@ def test_orc_reader_decimal(datadir):
     pdf = pdf.apply(pd.to_numeric)
 
     np.testing.assert_allclose(pdf, gdf)
+
+
+def test_orc_reader_filenotfound(tmpdir):
+    with pytest.raises(FileNotFoundError):
+        cudf.read_orc('TestMissingFile.orc')
+
+    with pytest.raises(FileNotFoundError):
+        cudf.read_orc(tmpdir.mkdir("cudf_orc"))
