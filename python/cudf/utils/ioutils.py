@@ -2,6 +2,39 @@
 
 from cudf.utils.docutils import docfmt_partial
 
+_docstring_read_parquet_metadata = """
+Read a Parquet file's metadata and schema
+
+Parameters
+----------
+path : string or path object
+    Path of file to be read
+
+Returns
+-------
+Total number of rows
+Number of row groups
+List of column names
+
+Examples
+--------
+>>> import cudf
+>>> num_rows, num_row_groups, names = cudf.read_parquet_metadata(filename)
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = cudf.concat(df)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.parquet.read_parquet
+"""
+doc_read_parquet_metadata = docfmt_partial(
+    docstring=_docstring_read_parquet_metadata)
+
 _docstring_read_parquet = """
 Read a Parquet file into DataFrame
 
@@ -9,10 +42,16 @@ Parameters
 ----------
 path : string or path object
     Path of file to be read
-engine : { 'cudf', 'pyarrow' }, default='cudf'
+engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
-columns : list, default=None
+columns : list, default None
     If not None, only these columns will be read.
+row_group : int, default None
+    If not None, only the row group with the specified index will be read.
+skip_rows : int, default None
+    If not None, the nunber of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 
 Returns
 -------
@@ -30,6 +69,7 @@ Examples
 
 See Also
 --------
+cudf.io.parquet.read_parquet_metadata
 cudf.io.parquet.to_parquet
 cudf.io.orc.read_orc
 """
@@ -61,14 +101,20 @@ cudf.io.orc.read_orc
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_read_orc = """
-Load an orc object from the file path, returning a DataFrame.
+Load an ORC object from the file path, returning a DataFrame.
 
 Parameters
 ----------
 path : string
     File path
-columns : list, default=None
+engine : { 'cudf', 'pyarrow' }, default 'pyarrow'
+    Parser engine to use.
+columns : list, default None
     If not None, only these columns will be read from the file.
+skip_rows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 kwargs are passed to the engine
 
 Returns

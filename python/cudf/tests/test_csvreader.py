@@ -16,7 +16,7 @@ import gzip
 import shutil
 import os
 
-from libgdf_cffi import GDFError
+from cudf.bindings.GDFError import GDFError
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -341,7 +341,7 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ['float32']
-    empty_cells = '\n""\n"  "\n " " \n'
+    empty_cells = '\n""\n  \n "" \n'
     default_na_cells = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
                         '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
                         '1.#QNAN\nN/A\nNA\nNULL\n'
@@ -904,6 +904,20 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
+
+
+@pytest.mark.parametrize('names', [['a', 'b', 'c'],
+                                   [416, 905, 647],
+                                   range(3),
+                                   None])
+def test_csv_reader_column_names(names):
+    buffer = '0,1,2\n3,4,5\n6,7,8'
+
+    df = read_csv(StringIO(buffer), names=names)
+    if names is None:
+        assert(list(df) == ['0', '1', '2'])
+    else:
+        assert(list(df) == list(names))
 
 
 def test_csv_reader_bools_false_positives(tmpdir):

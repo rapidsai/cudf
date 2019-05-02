@@ -41,21 +41,6 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  */
 gdf_error gdf_nvtx_range_pop();
 
-/**
- * @brief  Counts the number of valid bits for the specified number of rows
- * in a validity bitmask.
- *
- * If the bitmask is null, returns a count equal to the number of rows.
- *
- * @param[in] masks The validity bitmask buffer in device memory
- * @param[in] num_rows The number of bits to count
- * @param[out] count The number of valid bits in the buffer from [0, num_rows)
- *
- * @returns  GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
-                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
@@ -1077,12 +1062,13 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_context* ctxt);
 
 /**
- * @brief  Calculates exact quantiles
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
  * @param[in] requested quantile in [0,1]
- * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
+ * @param[out] result the result as double. The type can be changed in future
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
@@ -1090,22 +1076,24 @@ gdf_error gdf_group_by_count(int ncols,
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
-                            void* t_erased_res,                            
+                            gdf_scalar*  result,
                             gdf_context* ctxt);
 
 /**
- * @brief  Calculates approximate quantiles
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result; type-erased result of same type as column;
+ * @param[out] result quantile, with the same type as @p col_in
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
-                              void* t_erased_res,
+                              gdf_scalar*  result,
                               gdf_context* ctxt);
 
 /** 

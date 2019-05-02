@@ -5,12 +5,12 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
+from cudf.bindings.unaryops cimport *
+from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
-
-from libc.stdlib cimport free
 
 
 _MATH_OP = {
@@ -31,7 +31,7 @@ _MATH_OP = {
 
 def apply_math_op(incol, outcol, op):
     """
-      Call Unary math ops.
+    Call Unary math ops.
     """
 
     check_gdf_compatibility(incol)
@@ -48,6 +48,56 @@ def apply_math_op(incol, outcol, op):
             <gdf_column*>c_outcol,
             c_op)
     
+    free(c_incol)
+    free(c_outcol)
+
+    check_gdf_error(result)
+
+
+def apply_dt_extract_op(incol, outcol, op):
+    """
+    Call a datetime extraction op
+    """
+
+    check_gdf_compatibility(incol)
+    check_gdf_compatibility(outcol)
+
+    cdef gdf_column* c_incol = column_view_from_column(incol)
+    cdef gdf_column* c_outcol = column_view_from_column(outcol)
+
+    cdef gdf_error result = GDF_CUDA_ERROR
+    with nogil:
+        if op == 'year':
+            result = gdf_extract_datetime_year(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'month':
+            result = gdf_extract_datetime_month(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'day':
+            result = gdf_extract_datetime_day(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'hour':
+            result = gdf_extract_datetime_hour(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'minute':
+            result = gdf_extract_datetime_minute(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'second':
+            result = gdf_extract_datetime_second(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+
     free(c_incol)
     free(c_outcol)
 

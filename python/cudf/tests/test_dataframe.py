@@ -2231,6 +2231,25 @@ def test_get_numeric_data():
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
 @pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    shifted_outcome = gdf.a.shift(period)
+    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+
+    assert_eq(shifted_outcome, expected_outcome)
+    
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
 def test_diff(dtype, period):
     if dtype == np.int8:
         # to keep data in range
@@ -2244,4 +2263,94 @@ def test_diff(dtype, period):
     diffed_outcome = gdf.a.diff(period)
     expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
 
-    assert_eq(diffed_outcome, expected_outcome)
+
+def test_isnull_isna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.isnull(), gs.isnull())
+    assert_eq(ps.isna(), gs.isna())
+
+
+def test_notna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.notna(), gs.notna())
+
+
+def test_ndim():
+    pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
+    gdf = DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim
+    assert pdf.x.ndim == gdf.x.ndim
+
+    s = pd.Series()
+    gs = Series()
+    assert s.ndim == gs.ndim
