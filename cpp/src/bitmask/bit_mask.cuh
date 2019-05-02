@@ -136,6 +136,7 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
   if (fill_value == 0) {
     CUDA_TRY(cudaMemset(*mask, 0, sizeof(bit_mask_t) * num_elements));
   } else if (fill_value == 1) {
+    //
     //  Value outside range of [0, num_rows) is undefined, so we will
     //  initialize in the simplest manner... we'll initialize all
     //  elements to 1.

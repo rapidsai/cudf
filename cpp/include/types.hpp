@@ -26,7 +26,6 @@ namespace bit_mask {
 using bit_mask_t = uint32_t;
 }
 
-
 // Forward declaration
 namespace cudf {
 struct table;
