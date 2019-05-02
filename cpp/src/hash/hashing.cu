@@ -30,45 +30,51 @@
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;
 
-/* --------------------------------------------------------------------------*/
-/** 
+namespace {
+
+/**
  * @brief  This function determines if a number is a power of 2.
- * 
+ *
  * @param number The number to check.
- * 
+ *
  * @returns True if the number is a power of 2.
  */
-/* ----------------------------------------------------------------------------*/
 template <typename T>
-bool is_power_two( T number )
-{
+bool is_power_two(T number) {
   return (0 == (number & (number - 1)));
 }
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  This functor is used to compute the hash value for the rows
- * of a device_table
+/**
+ * @brief  Computes hash value of a row using initial values for each column.
  */
-/* ----------------------------------------------------------------------------*/
 template <template <typename> class hash_function>
-struct row_hasher
-{
-  row_hasher(device_table table_to_hash, hash_value_type *initial_hash_values)
-    : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
-  {}
+struct row_hasher_initial_values {
+  row_hasher_initial_values(device_table const& table_to_hash,
+                            hash_value_type *initial_hash_values)
+      : the_table{table_to_hash}, initial_hash_values(initial_hash_values) {}
 
-  __device__
-  hash_value_type operator()(gdf_size_type row_index) const
-  {
+  __device__ hash_value_type operator()(gdf_size_type row_index) const {
     return hash_row<hash_function>(the_table, row_index, initial_hash_values);
   }
 
   device_table the_table;
-  hash_value_type* initial_hash_values{nullptr};
+  hash_value_type *initial_hash_values{nullptr};
 };
 
+/**
+ * @brief  Computes hash value of a row 
+ */
+template <template <typename> class hash_function>
+struct row_hasher {
+  row_hasher(device_table const& table_to_hash) : the_table{table_to_hash} {}
 
+  __device__ hash_value_type operator()(gdf_size_type row_index) const {
+    return hash_row<hash_function>(the_table, row_index);
+  }
+
+  device_table the_table;
+};
+}  // namespace
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -131,24 +137,35 @@ gdf_error gdf_hash(int num_cols,
 
 
   // Compute the hash value for each row depending on the specified hash function
-  switch(hash)
-  {
-    case GDF_HASH_MURMUR3:
-      {
-        thrust::tabulate(rmm::exec_policy()->on(0),
-                         row_hash_values,
-                         row_hash_values + num_rows, 
-                         row_hasher<MurmurHash3_32>(*input_table, initial_hash_values));
-        break;
+  switch (hash) {
+    case GDF_HASH_MURMUR3: {
+      if (nullptr == initial_hash_values) {
+        thrust::tabulate(rmm::exec_policy()->on(0), row_hash_values,
+                         row_hash_values + num_rows,
+                         row_hasher<MurmurHash3_32>(*input_table));
+
+      } else {
+        thrust::tabulate(rmm::exec_policy()->on(0), row_hash_values,
+                         row_hash_values + num_rows,
+                         row_hasher_initial_values<MurmurHash3_32>(
+                             *input_table, initial_hash_values));
       }
-    case GDF_HASH_IDENTITY:
-      {
-        thrust::tabulate(rmm::exec_policy()->on(0),
-                         row_hash_values, 
-                         row_hash_values + num_rows, 
-                         row_hasher<IdentityHash>(*input_table, initial_hash_values));
-        break;
+      break;
+    }
+    case GDF_HASH_IDENTITY: {
+      if (nullptr == initial_hash_values) {
+        thrust::tabulate(rmm::exec_policy()->on(0), row_hash_values,
+                         row_hash_values + num_rows,
+                         row_hasher<IdentityHash>(*input_table));
+
+      } else {
+        thrust::tabulate(rmm::exec_policy()->on(0), row_hash_values,
+                         row_hash_values + num_rows,
+                         row_hasher_initial_values<IdentityHash>(
+                             *input_table, initial_hash_values));
       }
+      break;
+    }
     default:
       return GDF_INVALID_HASH_FUNCTION;
   }

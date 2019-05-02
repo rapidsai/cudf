@@ -10,6 +10,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils.utils import mask_dtype, mask_bitsize
 from cudf.dataframe import Series
+from libgdf_cffi import ffi, libgdf
 
 
 _logger = logging.getLogger(__name__)
@@ -51,6 +52,29 @@ def _schema_to_dtype(name, bitwidth):
         fmt = "unsupported type {} {}-bits"
         raise NotImplementedError(fmt.format(name, bitwidth))
     return np.dtype(ret)
+
+
+@contextmanager
+def _open_parser(schema_ptr, schema_len):
+    "context to destroy the parser"
+    _logger.debug('open IPCParser')
+    ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
+    yield ipcparser
+    _logger.debug('close IPCParser')
+    libgdf.gdf_ipc_parser_close(ipcparser)
+
+
+def _check_error(ipcparser):
+    if libgdf.gdf_ipc_parser_failed(ipcparser):
+        raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
+        error = ffi.string(raw_error).decode()
+        _logger.error('IPCParser failed: %s', error)
+        raise MetadataParsingError(error)
+
+
+def _load_json(jsonraw):
+    jsontext = ffi.string(jsonraw).decode()
+    return json.loads(jsontext)
 
 
 class GpuArrowNodeReader(object):
@@ -216,47 +240,26 @@ class GpuArrowReader(Sequence):
 
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
-        from libgdf_cffi import ffi, libgdf
-
-        @contextmanager
-        def open_parser(schema_ptr, schema_len):
-            "context to destroy the parser"
-            _logger.debug('open IPCParser')
-            ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
-            yield ipcparser
-            _logger.debug('close IPCParser')
-            libgdf.gdf_ipc_parser_close(ipcparser)
-
-        def check_error(ipcparser):
-            if libgdf.gdf_ipc_parser_failed(ipcparser):
-                raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
-                error = ffi.string(raw_error).decode()
-                _logger.error('IPCParser failed: %s', error)
-                raise MetadataParsingError(error)
-
-        def load_json(jsonraw):
-            jsontext = ffi.string(jsonraw).decode()
-            return json.loads(jsontext)
 
         # get void* from the gpu array
         schema_ptr = ffi.cast("void*", self._schema_data.ctypes.data)
 
         # parse schema
-        with open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
+        with _open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
             # check for failure in parseing the schema
-            check_error(ipcparser)
+            _check_error(ipcparser)
 
             gpu_addr = self._gpu_data.device_ctypes_pointer.value
             gpu_ptr = ffi.cast("void*", gpu_addr)
             libgdf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
                                                      self._gpu_data.size)
             # check for failure in parsing the recordbatches
-            check_error(ipcparser)
+            _check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
-            schemadct = load_json(
+            schemadct = _load_json(
                 libgdf.gdf_ipc_parser_get_schema_json(ipcparser))
-            layoutdct = load_json(
+            layoutdct = _load_json(
                 libgdf.gdf_ipc_parser_get_layout_json(ipcparser))
 
             # get data offset
