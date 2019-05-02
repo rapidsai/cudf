@@ -20,9 +20,6 @@
 
 namespace cudf {
 
-// Forward declaration
-struct column_array;
-
 namespace detail {
 
 /**
@@ -74,11 +71,10 @@ namespace detail {
  * column in a parallel way. It can be null.
  * @param[in] stream_size The size of the 'cudaStream_t' array.
  */
-void slice(gdf_column const*   input_column,
-           gdf_column const*   indexes,
-           cudf::column_array* output_columns,
-           cudaStream_t*       streams,
-           gdf_size_type       streams_size);
+std::vector<gdf_column*> slice(gdf_column const*   input_column,
+           gdf_index_type const*    indices,
+           gdf_size_type            num_indices,
+           std::vector<cudaStream_t> &      streams);
 
 }  // namespace detail
 }  // namespace cudf

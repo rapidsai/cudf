@@ -148,6 +148,34 @@ HelperColumn<ColumnType> makeHelperColumn(
 
 
 template <typename ColumnType>
+HelperColumn<ColumnType> makeHelperColumn(
+    gdf_column* column) {
+  
+  gdf_size_type const num_masks{gdf_valid_allocation_size(column->size)};
+
+  HelperColumn<ColumnType> result;
+  result.bit_set_count = column->null_count;
+
+  if (column->size != 0) {
+    // TODO Is there a nicer way to get a `std::vector` from a device_vector?
+    result.data.resize(column->size);
+    CUDA_RT_CALL(cudaMemcpy(result.data.data(), column->data,
+                            column->size * sizeof(ColumnType),
+                            cudaMemcpyDeviceToHost));
+  }
+
+  if (nullptr != column->valid) {
+    result.bitmask.resize(num_masks);
+    CUDA_RT_CALL(cudaMemcpy(result.bitmask.data(), column->valid,
+                            num_masks * sizeof(gdf_valid_type),
+                            cudaMemcpyDeviceToHost));
+  }
+
+  return result;
+}
+
+
+template <typename ColumnType>
 std::vector<HelperColumn<ColumnType>> makeHelperColumn(
     std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& columns) {
   std::vector<HelperColumn<ColumnType>> result;
@@ -225,35 +253,39 @@ std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
 
 
 template <typename ColumnType>
-std::vector<HelperColumn<ColumnType>> slice_columns(
-      HelperColumn<ColumnType>& input_column,
+auto slice_columns(
+      std::vector<ColumnType>& input_col_data,
+      std::vector<gdf_valid_type>& input_col_bitmask,
       std::vector<gdf_index_type>& indexes) {
-  std::vector<HelperColumn<ColumnType>> output_column_cpu;
+  
+  std::vector<std::vector<ColumnType>> output_cols_data;
+  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+  std::vector<gdf_size_type> output_cols_null_count;
+
   for (std::size_t i = 0; i < indexes.size(); i += 2) {
     gdf_size_type init_index = indexes[i];
     gdf_size_type end_index = indexes[i + 1];
 
     if (init_index == end_index) {
-      HelperColumn<ColumnType> column {.bit_set_count = 0,
-                                       .data = std::vector<ColumnType>(),
-                                       .bitmask = std::vector<gdf_valid_type>() };
-      output_column_cpu.emplace_back(column);
-      continue;
+      output_cols_data.emplace_back(std::vector<ColumnType>());
+      output_cols_bitmask.emplace_back(std::vector<gdf_valid_type>());
+      output_cols_null_count.emplace_back(0);
+    } else {
+
+      output_cols_data.emplace_back(
+          std::vector<ColumnType>(input_col_data.begin() + init_index,
+                                  input_col_data.begin() + end_index));
+
+      gdf_size_type bit_set_counter=0;
+      output_cols_bitmask.emplace_back(
+        slice_cpu_valids<BITSET_SIZE>(bit_set_counter,
+                                        input_col_bitmask,
+                                        init_index,
+                                        end_index));
+      output_cols_null_count.emplace_back(bit_set_counter);      
     }
-
-    HelperColumn<ColumnType> helper_column;
-    helper_column.data =
-        std::vector<ColumnType>(input_column.data.begin() + init_index,
-                                input_column.data.begin() + end_index);
-    helper_column.bitmask =
-        slice_cpu_valids<BITSET_SIZE>(helper_column.bit_set_count,
-                                      input_column.bitmask,
-                                      init_index,
-                                      end_index);
-
-    output_column_cpu.emplace_back(helper_column);
   }
-  return output_column_cpu;
+  return std::make_tuple(output_cols_data, output_cols_bitmask, output_cols_null_count);
 }
 
 
