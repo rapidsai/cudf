@@ -26,6 +26,7 @@
 - PR #1565 Add build script for nightly doc builds
 - PR #1508 Add Series isna, isnull, and notna
 - PR #1588 Add Index `astype` typecasting
+- PR #1301 MultiIndex support
 
 ## Improvements
 
