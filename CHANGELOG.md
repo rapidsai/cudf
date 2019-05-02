@@ -22,7 +22,10 @@
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
-- PR #1301  MultiIndex support
+- PR #1466 Add GPU-accelerated ORC Reader
+- PR #1565 Add build script for nightly doc builds
+- PR #1508 Add Series isna, isnull, and notna
+- PR #1301 MultiIndex support
 
 ## Improvements
 
@@ -60,10 +63,9 @@
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 - PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
-- PR #1492 Convert transpose CFFI to Cython
-- PR #1495 Convert binary and unary ops CFFI to Cython
-- PR #1503 Convert sorting and hashing ops CFFI to Cython
+- PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+
 
 ## Bug Fixes
 
@@ -106,6 +108,7 @@
 - PR #1535 Fix doc issue to ensure correct labelling of cudf.series
 - PR #1537 Fix `undefined reference` link error in HashPartitionTest
 - PR #1548 Fix ci/local/build.sh README from using an incorrect image example
+- PR #1551 CSV Reader: Fix integer column name indexing
 
 
 # cuDF 0.6.1 (25 Mar 2019)
