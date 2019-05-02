@@ -60,10 +60,9 @@
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
 - PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
-- PR #1492 Convert transpose CFFI to Cython
-- PR #1495 Convert binary and unary ops CFFI to Cython
-- PR #1503 Convert sorting and hashing ops CFFI to Cython
+- PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+
 
 ## Bug Fixes
 
