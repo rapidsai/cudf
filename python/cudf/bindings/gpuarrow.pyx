@@ -245,19 +245,15 @@ class GpuArrowReader(Sequence):
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
 
-        cdef char[::1] schema_data
-        cdef char* schema_ptr
+        cdef char[::1] schema_data = self._schema_data
         cdef uint8_t* gpu_ptr
         cdef gdf_ipc_parser_type* ipcparser
-
-        # get pointer from the gpu array
-        schema_data = self._schema_data
-        schema_ptr = &schema_data[0]
 
         # parse schema
         try:
             _logger.debug('open IPCParser')
-            ipcparser = gdf_ipc_parser_open(<uint8_t*>schema_ptr, schema_len)
+            ipcparser = gdf_ipc_parser_open(<uint8_t*>&schema_data[0],
+                                            len(schema_data))
             # check for failure in parseing the schema
             _check_error(ipcparser)
 
