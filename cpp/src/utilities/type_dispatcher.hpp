@@ -115,6 +115,7 @@ struct invoke_or_fail_inner<true, R, F, T, Ts...>
 // a function's C++ type, we can't quite work our way around this issue, and have to
 // result to the following kludge:
 #pragma hd_warning_disable
+#pragma nv_exec_check_disable
     constexpr CUDA_HOST_DEVICE_CALLABLE
     R operator()(F functor, Ts&&... params)
     {
