@@ -1101,60 +1101,6 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
                               gdf_scalar*  result,
                               gdf_context* ctxt);
 
-/**
- * @brief Sorts a set of columns based on specified "key" columns. Returns a column containing
- * the offset to the start of each group.
- *
- * @param[in]  num_data_cols            The number of columns in the dataset.
- * @param[in]  data_cols_in             The input columns in the dataset.
- * @param[in]  num_key_cols             The number of key columns.
- * @param[in]  key_col_indices          The indices of the of the key columns by which data will be grouped.
- * @param[out] data_cols_out            The dataset sorted by the key columns. Must be pre-allocated to same number of columns and rows as data_cols_in.
- * @param[out] group_start_indices      An array containing the starting indices of each key (group). Must be pre-allocated to same number of rows as data_cols_in.
- * @param[out] num_group_start_indices  The number of elements in group_start_indices
- * @param[in]  context                  The context used to control how nulls are treated in a sort and in group by
- *             context->flag_null_sort_behavior
- *                      GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
- *                      GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                      GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
- *             context-> flag_groupby_include_nulls 
- *                      false = Nulls keys are ignored (Pandas style),
- *                      true = Nulls keys are treated as values. NULL keys will compare as equal NULL == NULL (SQL style)
- *
- * @returns gdf_error with error code on failure, otherwise GDF_SUCESS
- */
-gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
-                                            gdf_column ** data_cols_in,
-                                            gdf_size_type num_key_cols,
-                                            gdf_index_type const * key_col_indices,
-                                            gdf_column** data_cols_out,
-                                            gdf_index_type* group_start_indices,
-                                            gdf_size_type* num_group_start_indices, 
-                                            gdf_context* context);           
-
-  
-/**
- * @brief Returns the first index of each unique row. Assumes the data is already sorted 
- *
- * @param[in]  num_data_cols        The number of columns in the dataset (assumed to already be sorted)
- * @param[in]  data_cols_in         The input columns in the dataset
- * @param[out] unique_indices       An array containing the first index of every unique row. (needs to be pre-allocated to have the same number of rows as data_cols_in)
- * @param[out] num_unique_indices   The number of elements in unique_indices
- * @param[in]  context              The options for controlling treatment of nulls
- *             context->flag_null_sort_behavior
- *                    GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
- *                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
- *
- * @returns gdf_error with error code on failure, otherwise GDF_SUCESS
- */
-gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
-                     gdf_column const * const * data_cols_in,
-                     gdf_index_type* unique_indices,
-                     gdf_size_type* num_unique_indices, 
-                     gdf_context* context);
-
-
 /** 
  * @brief Replace elements from `col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col` 

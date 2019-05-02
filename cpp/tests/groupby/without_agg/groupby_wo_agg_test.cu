@@ -26,7 +26,9 @@
 #include "gmock/gmock.h"
 
 #include <cudf.h>
-#include <cudf/functions.h>
+#include <groupby.hpp>
+
+#include <table/table.hpp>
 
 #include "utilities/cudf_utils.h"
 
@@ -213,15 +215,15 @@ struct GroupByWoAggTest : public GdfTest {
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++)
       groupby_col_indices.push_back(i);
 
-    error = gdf_group_by_without_aggregations(num_columns,
-                                        group_by_input_key,
-                                        num_columns,
-                                        groupby_col_indices.data(),
-                                        gdf_data_cols_out,
-                                        this->gdf_raw_out_indices,
-                                        &this->gdf_raw_out_indices_size,
-                                        &context
-                                        );
+    cudf::table input_table(group_by_input_key, num_columns);
+    cudf::table output_table(gdf_data_cols_out, num_columns);
+    EXPECT_NO_THROW(gdf_group_by_without_aggregations(input_table,
+                                                      num_columns,
+                                                      groupby_col_indices.data(),
+                                                      &output_table,
+                                                      this->gdf_raw_out_indices,
+                                                      &this->gdf_raw_out_indices_size,
+                                                      &context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
@@ -468,15 +470,15 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++)
       groupby_col_indices.push_back(i);
 
-    error = gdf_group_by_without_aggregations(num_columns,
-                                        group_by_input_key,
-                                        num_columns,
-                                        groupby_col_indices.data(),
-                                        gdf_data_cols_out,
-                                        this->gdf_raw_out_indices,
-                                        &this->gdf_raw_out_indices_size,
-                                        &this->context
-                                        );
+    cudf::table input_table(group_by_input_key, num_columns);
+    cudf::table output_table(gdf_data_cols_out, num_columns);
+    EXPECT_NO_THROW(gdf_group_by_without_aggregations(input_table,
+                                                      num_columns,
+                                                      groupby_col_indices.data(),
+                                                      &output_table,
+                                                      this->gdf_raw_out_indices,
+                                                      &this->gdf_raw_out_indices_size,
+                                                      &this->context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
