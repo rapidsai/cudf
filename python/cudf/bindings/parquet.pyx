@@ -22,6 +22,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
@@ -39,7 +40,7 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     # Setup arguments
     cdef pq_read_arg pq_reader = pq_read_arg()
 
-    if not os.path.isfile(path) and not os.path.exists(path):
+    if not os.path.isfile(path) or not os.path.exists(path):
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )

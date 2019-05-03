@@ -11,6 +11,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 
+import cudf
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -249,6 +250,38 @@ class Index(object):
 
         return out.copy(deep=True)
 
+    def astype(self, dtype):
+        """Convert to the given ``dtype``.
+
+        Returns
+        -------
+        If the dtype changed, a new ``Index`` is returned by casting each
+        values to the given dtype.
+        If the dtype is not changed, ``self`` is returned.
+        """
+        if dtype == self.dtype:
+            return self
+
+        return as_index(self._values.astype(dtype), name=self.name)
+
+    def to_array(self, fillna=None):
+        """Get a dense numpy array for the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            Defaults to None, which will skip null values.
+            If it equals "pandas", null values are filled with NaNs.
+            Non integral dtype is promoted to np.float64.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
+        """
+        return self._values.to_array(fillna=fillna)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -320,10 +353,10 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        return super(RangeIndex, self).__eq__(other)
+        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, cudf.dataframe.index.RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return (self == other)._values.all()
