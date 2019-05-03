@@ -135,7 +135,7 @@ def test_json_writer(tmpdir, pdf, gdf):
 
 def test_json_lines_basic():
     df = cudf.read_json('[1,2,3]', lines=True)
-    assert(df.shape == (1,3))
+    assert(df.shape == (1, 3))
 
 def test_json_lines_file_input(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_jsonreader_file1.json")
@@ -144,8 +144,26 @@ def test_json_lines_file_input(tmpdir):
         fp.write('[1,2,3]')
 
     df = cudf.read_json(str(fname), lines=True)
-    assert(df.shape == (1,3))
+    assert(df.shape == (1, 3))
 
 def test_json_lines_byte_range():
-    df = cudf.read_json('[1,2,3]\n[4,5,6]\n', lines=True, byte_range=(0, 4))
-    assert(df.shape == (1,3))
+    buffer = '[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n'
+
+    # include the start of the first row
+    df = cudf.read_json(buffer, lines=True, byte_range=(0, 5))
+    assert(df.shape == (1, 3))
+
+    # include half of the second row and half of the third row
+    df = cudf.read_json(buffer, lines=True, byte_range=(10, 10))
+    assert(df.shape == (1, 3))
+
+    # include half of the second row and entire third row
+    df = cudf.read_json(buffer, lines=True, byte_range=(0, 0)) # TODO set non-zero offset tpo repro issue
+    assert(df.shape == (3, 3))
+
+def test_json_lines_dtypes():
+    df = cudf.read_json('[1,2,3]\n', lines=True, dtype=["float", "int", "short"])
+    assert(all(df.dtypes == ['float32', 'int32', 'int16']))
+
+    df = cudf.read_json('[1,2,3]\n', lines=True, dtype={1:"int", 2:"short", 0:"float"})
+    assert(all(df.dtypes == ['float32', 'int32', 'int16']))

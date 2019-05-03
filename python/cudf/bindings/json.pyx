@@ -33,6 +33,21 @@ cpdef cpp_read_json(path_or_buf, lines, dtype, compression, byte_range):
     cudf.io.json.read_json
     """
 
+    arr_dtypes = []
+    if dtype is not None:
+        if isinstance(dtype, collections.abc.Mapping):
+            for col, dt in dtype.items():
+                arr_dtypes.append(str(str(col) + ":" + str(dt)).encode())
+        elif not isinstance(dtype, collections.abc.Iterable):
+            msg = '''dtype must be 'list like' or 'dict' '''
+            raise TypeError(msg)
+        else:
+            for dt in dtype:
+                arr_dtypes.append(dt.encode())
+
+    cdef vector[const char*] vector_dtypes
+    vector_dtypes = arr_dtypes
+
     path = str(path_or_buf).encode()
     source_ptr = <char*>path
 
@@ -44,15 +59,24 @@ cpdef cpp_read_json(path_or_buf, lines, dtype, compression, byte_range):
 
     # Setup arguments
     cdef json_read_arg args = json_read_arg()
+
+    args.source = source_ptr
+    args.lines = lines
+    args.compression = compression_bytes
+
     if os.path.exists(path_or_buf):
         args.source_type = FILE_PATH
     else:
         args.source_type = HOST_BUFFER
         args.buffer_size = len(path_or_buf)
-    args.source = source_ptr
-    args.lines = lines
-    # dtype (num_cols)
-    args.compression = compression_bytes
+
+    if dtype is not None:
+        args.dtype = vector_dtypes.data()
+        args.num_cols = vector_dtypes.size()
+    else:
+        args.dtype = NULL
+        args.num_cols = 0
+
     if byte_range is not None:
         args.byte_range_offset = byte_range[0]
         args.byte_range_size = byte_range[1]

@@ -51,7 +51,7 @@ template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
   return m_hostdata;
 }
 
-void checkStrColumn(gdf_column *col, vector<string> refs){
+void checkStrColumn(gdf_column *col, vector<string> refs) {
   ASSERT_EQ(col->dtype, GDF_STRING);
 
   const auto stringList = reinterpret_cast<NVStrings *>(col->data);
@@ -64,7 +64,7 @@ void checkStrColumn(gdf_column *col, vector<string> refs){
   ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
 
   // Check the actual strings themselves
-  std::vector<char*> strings(count);
+  std::vector<char *> strings(count);
   for (size_t i = 0; i < count; ++i) {
     strings[i] = new char[lengths[i] + 1];
     strings[i][lengths[i]] = 0;
@@ -158,7 +158,7 @@ TEST_F(gdf_json_test, BasicJsonLines) {
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
-  const char *types[] = {"0:int", "1:float64", "2:str"};
+  const char *types[] = {"2:str", "0:int", "1:float64"};
   json_read_arg args{};
   args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
