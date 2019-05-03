@@ -2925,7 +2925,7 @@ def from_pandas(obj):
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.dataframe.multiindex.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, and "
