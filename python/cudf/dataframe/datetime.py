@@ -219,7 +219,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(len(lhs), dtype=out_dtype, masked=masked)
+    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
     out = out.replace(null_count=null_count)
     nvtx_range_pop()

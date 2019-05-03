@@ -53,7 +53,7 @@ def clone_columns_with_size(in_cols, row_size):
     from cudf.dataframe import columnops
     out_cols = []
     for col in in_cols:
-        o_col = columnops.column_empty_like(row_size,
+        o_col = columnops.column_empty(row_size,
                                        dtype = col.dtype,
                                        masked = col.has_null_mask)
         out_cols.append(o_col)

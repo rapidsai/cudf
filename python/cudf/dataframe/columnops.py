@@ -93,7 +93,13 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
 
-def column_empty_like(row_count, dtype, masked):
+def column_empty_like(column, dtype, masked):
+    """Allocate a new column like the given *column*
+    """
+    return column_empty(len(column), dtype, masked)
+
+
+def column_empty(row_count, dtype, masked):
     """Allocate a new column like the given row_count and dtype.
     """
     data = rmm.device_array(shape=row_count, dtype=dtype)

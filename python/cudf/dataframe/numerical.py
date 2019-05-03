@@ -335,7 +335,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(len(lhs), dtype=out_dtype, masked=masked)
+    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
