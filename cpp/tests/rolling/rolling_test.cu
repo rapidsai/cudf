@@ -224,7 +224,7 @@ protected:
       CUDA_TRY(cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
     }
 
-    out_gdf_col = { cudf::rolling_window(in_gdf_col.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
+    out_gdf_col = { cudf::rolling_window(*in_gdf_col.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
 
     create_reference_output(agg, w, m, f, window, min_periods, forward_window);
 

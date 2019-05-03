@@ -60,19 +60,21 @@ namespace cudf {
  * @param[in] forward_window_col The forward window size values,
  *                forward_window_col[i] specifies forward window size for element i.
  *                If forward_window_col = NULL, then forward_window is used as the
- *                static forward window size for all elements
+ *                static forward window size for aill elements
+ * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @returns   gdf_column The output column
  *
  * --------------------------------------------------------------------------*/
-gdf_column* rolling_window(const gdf_column *input_col,
+gdf_column* rolling_window(const gdf_column &input_col,
                            gdf_size_type window,
                            gdf_size_type min_periods,
                            gdf_size_type forward_window,
                            gdf_agg_op agg_type,
                            const gdf_size_type *window_col,
                            const gdf_size_type *min_periods_col,
-                           const gdf_size_type *forward_window_col);
+                           const gdf_size_type *forward_window_col,
+			   cudaStream_t stream = 0);
 }  // namespace cudf
 
 #endif  // ROLLING_HPP
