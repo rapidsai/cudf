@@ -1,5 +1,5 @@
 #include <bitmask/bit_mask.cuh>
-#include <table/table.hpp>
+#include <table.hpp>
 #include "bitmask/legacy_bitmask.hpp"
 #include "cudf.h"
 #include "cudf/functions.h"
@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cub/cub.cuh>
 #include <vector>
+#include <algorithm>
 
 // To account for if gdf_valid_type is not a 4 byte type,
 // compute the RATIO of the number of bytes in gdf_valid_type
