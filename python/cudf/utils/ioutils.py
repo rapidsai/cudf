@@ -107,7 +107,7 @@ Parameters
 ----------
 path : string
     File path
-engine : { 'cudf', 'pyarrow' }, default 'pyarrow'
+engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.

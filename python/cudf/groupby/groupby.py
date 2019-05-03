@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import numpy as np
+
 from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame
@@ -74,7 +76,9 @@ class Groupby(object):
         """
         self.level = None
         self._original_index_name = None
-        self._df = df
+        self._val_columns = []
+        self._df = df.copy(deep=True)
+        self._as_index = as_index
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
@@ -83,18 +87,51 @@ class Groupby(object):
             self._df[self._LEVEL_0_INDEX_NAME] = by
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level == 0:
-            self.level = level
-            self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
-            self._original_index_name = self._df.index.name
-            self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level and level > 0:
-            raise NotImplementedError('MultiIndex not supported yet in cudf')
+        elif level is not None:
+            if level == 0 and not hasattr(self._df.index, 'levels'):
+                self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
+                self._original_index_name = self._df.index.name
+                self._by = [self._LEVEL_0_INDEX_NAME]
+            else:
+                level = [level] if isinstance(
+                        level, (str, Number)) else list(level)
+                self._by = []
+                # guard against missing MI names
+                if self._df.index.names is None or sum(
+                        x is None for x in self._df.index.names) > 1:
+                    self._df_index_names = list(
+                            range(len(self._df_index.levels)))
+                for which_level in level:
+                    # find the index of the level in the MultiIndex
+                    if isinstance(which_level, str):
+                        for idx, name in enumerate(self._df.index.names):
+                            if name == which_level:
+                                which_level = idx
+                                break
+                    try:
+                        level_values = self._df.index.levels[which_level]
+                    except IndexError:
+                        raise IndexError("Too many levels: Index has only "
+                                         "%d levels, not %d" % (
+                                               len(self._df.index.levels),
+                                               which_level+1))
+                    # protected by the above guard
+                    code = self._df.index.codes[
+                            self._df.index.names[which_level]]
+                    # Replace the codes in this column with the levels
+                    # that the codes encode.
+                    result = code.copy()
+                    for idx, value in enumerate(level_values):
+                        level_mask = code == idx
+                        result = result.masked_assign(value, level_mask)
+                    # Add this new "decoded" column to the dataframe and add
+                    # the key to "by"
+                    self._df[self._df.index.names[which_level]] = result
+                    self._by.append(self._df.index.names[which_level])
         else:
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-        self._as_index = as_index
         if (method == "hash"):
             self._method = method
         else:
@@ -110,6 +147,70 @@ class Groupby(object):
         """
         return _cpp_apply_basic_agg(self, agg_type, sort_results=sort_results)
 
+    def apply_multiindex_or_single_index(self, result):
+        if len(result) == 0:
+            raise ValueError('Groupby result is empty!')
+        if len(self._by) == 1:
+            from cudf.dataframe import index
+            idx = index.as_index(result[self._by[0]])
+            idx.name = self._by[0]
+            result = result.drop(idx.name)
+            if idx.name == self._LEVEL_0_INDEX_NAME:
+                idx.name = self._original_index_name
+            result = result.set_index(idx)
+            return result
+        else:
+            levels = []
+            codes = DataFrame()
+            names = []
+            # Note: This is an O(N^2) solution using gpu masking
+            # to compute new codes for the MultiIndex. There may be
+            # a faster solution that could be executed on gpu at the same
+            # time the groupby is calculated.
+            for by in self._by:
+                level = result[by].unique()
+                code = result[by]
+                for idx, value in enumerate(level):
+                    level_mask = code == value
+                    code = code.masked_assign(idx, level_mask)
+                levels.append(level)
+                codes[by] = code
+                names.append(by)
+            from cudf import MultiIndex
+            multi_index = MultiIndex(levels=levels,
+                                     codes=codes,
+                                     names=names)
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            return final_result.set_index(multi_index)
+
+    def apply_multicolumn(self, result, aggs):
+        levels = []
+        codes = []
+        levels.append(self._val_columns)
+        levels.append(aggs)
+        codes.append(list(np.zeros(len(aggs), dtype='int64')))
+        codes.append(list(range(len(aggs))))
+        from cudf import MultiIndex
+        result.columns = MultiIndex(levels, codes)
+        return result
+
+    def apply_multicolumn_mapped(self, result, aggs):
+        if len(set(aggs.keys())) == len(aggs.keys()) and\
+                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+            result.columns = aggs.keys()
+        else:
+            tuples = []
+            for k in aggs.keys():
+                for v in aggs[k]:
+                    tuples.append((k, v))
+            from cudf import MultiIndex
+            multiindex = MultiIndex.from_tuples(tuples)
+            result.columns = multiindex
+        return result
+
     def __getitem__(self, arg):
         if isinstance(arg, (str, Number)):
             if arg not in self._val_columns:
@@ -118,18 +219,22 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self.copy()
+        result = self
         result._val_columns = arg
         return result
 
     def copy(self, deep=True):
         df = self._df.copy(deep) if deep else self._df
-        result = Groupby(df, self._by)
-        result._method = self._method
-        result._val_columns = self._val_columns
-        result.level = self.level
+        result = Groupby(df,
+                         self._by,
+                         method=self._method,
+                         as_index=self._as_index,
+                         level=self.level)
         result._original_index_name = self._original_index_name
         return result
+
+    def deepcopy(self):
+        return self.copy(deep=True)
 
     def __getattr__(self, key):
         if key != '_val_columns' and key in self._val_columns:

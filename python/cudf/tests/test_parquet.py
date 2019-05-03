@@ -181,13 +181,21 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
         assert(gdf['col_int32'][row] == row + skip_rows)
 
 
-def test_parquet_spark_timestamps(datadir):
+def test_parquet_reader_spark_timestamps(datadir):
     fname = datadir / 'spark_timestamp.snappy.parquet'
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_reader_filenotfound(tmpdir):
+    with pytest.raises(FileNotFoundError):
+        cudf.read_parquet('TestMissingFile.parquet')
+
+    with pytest.raises(FileNotFoundError):
+        cudf.read_parquet(tmpdir.mkdir("cudf_parquet"))
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
