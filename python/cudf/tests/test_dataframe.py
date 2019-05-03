@@ -472,6 +472,7 @@ def test_series_loc():
     assert_eq(ps.loc[6], gs.loc[6])
     assert_eq(ps.loc[6:8], gs.loc[6:8])
 
+
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):
 

@@ -730,6 +730,8 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
+# taken from the following repo:
+# https://github.com/numba/numba-examples/
 @cuda.jit
 def gpu_min_max(arr, min_max_array):
     nelements = arr.shape[0]
