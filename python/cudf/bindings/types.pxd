@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "types.hpp" namespace "cudf" nogil:
+cdef extern from "table.hpp" namespace "cudf" nogil:
     
     cdef cppclass table:
 
