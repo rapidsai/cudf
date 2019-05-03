@@ -1250,7 +1250,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
             {
                 uint32_t skippedrows = min(static_cast<uint32_t>(first_row - row_in), nrows);
                 uint32_t skip_count = 0;
-                for (uint32_t i = 0; i < skippedrows; i += 32)
+                for (uint32_t i = t*32; i < skippedrows; i += 32*32)
                 {
                     uint32_t bits = s->vals.u32[i >> 5];
                     if (i + 32 > skippedrows)
@@ -1299,6 +1299,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
             if (t == 0)
             {
                 chunks[chunk_id].null_count = null_count;
+                chunks[chunk_id].skip_count = s->chunk.skip_count;
             }
         }
     }
@@ -1761,7 +1762,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
             DecodeRowPositions(s, first_row, t);
             // Store decoded values to output
-            if (t < s->top.data.max_vals && s->u.rowdec.row[t] != 0)
+            if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
             {
                 size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
                 if (row < max_num_rows)
