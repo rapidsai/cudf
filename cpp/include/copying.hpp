@@ -104,14 +104,14 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * conditions:
  * a, b belongs to Range[0, input column size]
  * a <= b, where the position of a is less or equal to the position of b.
- * There is no relationship between the values of each pair of indices.
- *
+  *
  * Exceptional cases for the indices array are:
  * When the values in the pair are equal, the function returns an empty column.
  * When the values in the pair are 'strictly decreasing', the outcome is
  * undefined.
  * When any of the values in the pair don't belong to the range[0, input column
  * size), the outcome is undefined.
+ * When the indices array is empty, an empty vector of columns is returned.
  *
  * The output columns will be allocated by the function.
  *
@@ -121,7 +121,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
  * @param[in] input_column  The input column whose rows will be sliced.
- * @param[in] indices       An array of indices that are used to take 'slices'
+ * @param[in] indices       An device array of indices that are used to take 'slices'
  * of the input column.
  * @Returns output_columns  A set of gdf_column*. Each column can have
  * a different number of rows that are equal to the difference of two
@@ -158,6 +158,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * undefined.
  * When any of the values in the pair don't belong to the range[0, input column
  * size), the outcome is undefined.
+ * When the indices array is empty, an empty vector of columns is returned.
  *
  * It is required that the output columns will be preallocated. The size of each
  * of the columns can be of different value. The number of columns must be equal
@@ -170,7 +171,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
  * @param[in] input_column  The input column whose rows will be split.
- * @param[in] indices       An array of indices that are used to divide the input
+ * @param[in] indices       An device array of indices that are used to divide the input
  * column into multiple columns.
  * @Returns output_columns  A set of gdf_column*. Each column can have
  * a different number of rows.

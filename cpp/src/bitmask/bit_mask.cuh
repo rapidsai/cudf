@@ -105,30 +105,7 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
    */
-  gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
-    //
-    //  To handle padding, we will round the number_of_records up to the next padding boundary, then identify how many element
-    //  that equates to.  Then we can allocate the appropriate amount of storage.
-    //
-    gdf_size_type num_bytes = (number_of_records + 7) / 8;
-    gdf_size_type num_padding_blocks = (num_bytes + padding_bytes - 1) / padding_bytes;
-    gdf_size_type num_elements = bit_mask::num_elements(num_padding_blocks * 8 * padding_bytes);
-
-    RMM_TRY(RMM_ALLOC(mask, sizeof(bit_mask_t) * num_elements, 0));
-
-    if (fill_value == 0) {
-      CUDA_TRY(cudaMemset(*mask, 0, sizeof(bit_mask_t) * num_elements));
-    } else if (fill_value == 1) {
-      //
-      //  Value outside range of [0, num_rows) is undefined, so we will
-      //  initialize in the simplest manner... we'll initialize all
-      //  elements to 1.
-      //
-      CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * num_elements));
-    }
-
-    return GDF_SUCCESS;
-  }
+  gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64);
 
   /**
    *  @brief check to see if the specified bit is set to one
