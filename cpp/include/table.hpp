@@ -134,7 +134,7 @@ struct table {
  * @param table The table to get the column dtypes from
  * @return std::vector<gdf_dtype>
  *---------------------------------------------------------------------------**/
-std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table);
+std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates if a table contains any null values.
@@ -143,7 +143,7 @@ std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table);
  * @return true If the table contains one or more null values
  * @return false If the table contains zero null values
  *---------------------------------------------------------------------------**/
-bool inline have_nulls(cudf::table const& table);
+bool have_nulls(cudf::table const& table);
 
 }  // namespace cudf
 
