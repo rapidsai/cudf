@@ -79,7 +79,7 @@ inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-inline gdf_error soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
+inline gdf_error soa_col_info(gdf_column const* const* cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
 {
 	std::vector<void*> v_cols(ncols, nullptr);
 	std::vector<gdf_valid_type*> v_valids(ncols, nullptr);

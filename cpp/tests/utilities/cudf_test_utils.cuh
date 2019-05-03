@@ -201,6 +201,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+  the_column->col_name = nullptr;
 
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector

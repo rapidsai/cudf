@@ -27,8 +27,7 @@
 
 #include <cudf.h>
 #include <groupby.hpp>
-
-#include <table/table.hpp>
+#include <table.hpp>
 
 #include "utilities/cudf_utils.h"
 
@@ -90,16 +89,10 @@ struct GroupByWoAggTest : public GdfTest {
   std::vector<gdf_col_pointer> gdf_input_key_columns;
   gdf_col_pointer gdf_input_value_column;
 
-  std::vector<gdf_col_pointer> gdf_cpu_data_cols_out_columns;
-  rmm::device_vector<gdf_size_type> gdf_output_indices_column;
-
   // Containers for the raw pointers to the gdf_columns that will be used as input
   // to the gdf_group_by functions
   std::vector<gdf_column*> gdf_raw_input_key_columns;
   gdf_column* gdf_raw_input_val_column;
-  std::vector<gdf_column*> gdf_raw_gdf_data_cols_out_columns;
-  gdf_size_type* gdf_raw_out_indices;
-  gdf_size_type gdf_raw_out_indices_size;
 
   GroupByWoAggTest()
   {
@@ -159,30 +152,6 @@ struct GroupByWoAggTest : public GdfTest {
     }
   }
 
-  void create_gdf_output_buffers(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
-
-      size_t shuffle_seed = rand();
-      this->cpu_data_cols_out = this->input_key;
-      this->cpu_out_indices = this->input_value;
-
-      gdf_cpu_data_cols_out_columns = initialize_gdf_columns(cpu_data_cols_out);
-      gdf_output_indices_column.resize(cpu_out_indices.size());
-      cudaMemcpy(this->gdf_output_indices_column.data().get(), cpu_out_indices.data(), cpu_out_indices.size() * sizeof(gdf_size_type), cudaMemcpyHostToDevice);
-      for(auto const& c : gdf_cpu_data_cols_out_columns){
-        gdf_raw_gdf_data_cols_out_columns.push_back(c.get());
-      }
-      if(print)
-      {
-        std::cout << "gdf_cpu_data_cols_out_columns. Size: " << gdf_cpu_data_cols_out_columns.size() << "|" << gdf_cpu_data_cols_out_columns[0]->size << std::endl;
-
-        std::cout << "gdf_output_indices_column. Size: " << gdf_output_indices_column.size() << std::endl;
-
-        std::cout << "\n==============================================" << std::endl;
-
-      }
-      this->gdf_raw_out_indices = this->gdf_output_indices_column.data().get();
-  }
-
   map_t
   compute_reference_solution() {
       map_t key_val_map;
@@ -209,26 +178,27 @@ struct GroupByWoAggTest : public GdfTest {
     gdf_error error{GDF_SUCCESS};
 
     gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
-    gdf_column **gdf_data_cols_out = gdf_raw_gdf_data_cols_out_columns.data();
 
     std::vector<int> groupby_col_indices;
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++)
       groupby_col_indices.push_back(i);
 
     cudf::table input_table(group_by_input_key, num_columns);
-    cudf::table output_table(gdf_data_cols_out, num_columns);
-    EXPECT_NO_THROW(gdf_group_by_without_aggregations(input_table,
-                                                      num_columns,
-                                                      groupby_col_indices.data(),
-                                                      &output_table,
-                                                      this->gdf_raw_out_indices,
-                                                      &this->gdf_raw_out_indices_size,
-                                                      &context));
+    
+    cudf::table output_table;
+    gdf_index_type* indices_arr;
+    gdf_size_type indices_arr_size;
+    EXPECT_NO_THROW(std::tie(output_table,
+                            indices_arr,
+                            indices_arr_size) = gdf_group_by_without_aggregations(input_table,
+                                                                                  num_columns,
+                                                                                  groupby_col_indices.data(),
+                                                                                  &context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
     if (GDF_SUCCESS == expected_error) {
-        copy_output_with_array(gdf_data_cols_out, cpu_data_cols_out, this->gdf_raw_out_indices, this->gdf_raw_out_indices_size, this->cpu_out_indices);
+        copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr, indices_arr_size, this->cpu_out_indices);
 
         std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         for (size_t i = 0; i < num_columns; ++i) {
@@ -242,6 +212,14 @@ struct GroupByWoAggTest : public GdfTest {
         for (size_t i = 0; i < cpu_out_indices.size(); ++i) {
           std::cout << "\t index: " << cpu_out_indices[i] << std::endl;
         }
+
+        // Free results
+        RMM_FREE(indices_arr, 0);
+        std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
+          RMM_FREE(col->data, 0);
+          RMM_FREE(col->valid, 0);
+          delete col;
+        });
     }
   }
 
@@ -294,7 +272,6 @@ TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest)
     auto reference_map = this->compute_reference_solution();
     this->print_reference_solution(reference_map);
 
-    this->create_gdf_output_buffers(num_keys, num_values_per_key, max_key, max_val, false);
     this->compute_gdf_result();
     this->compare_gdf_result(reference_map);
 }
@@ -326,9 +303,6 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
 
   //contains grouped by column valid output of the gdf groupby call
   std::vector<host_valid_pointer> cpu_data_cols_out_valid;
-
-  //contains the aggregated output column valid
-  host_valid_pointer cpu_out_indices_valid;
 
   size_t shuffle_seed;
 
@@ -389,26 +363,11 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
   }
 
   void create_gdf_output_buffers_with_nulls(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
-      this->cpu_data_cols_out = this->input_key;
-      this->cpu_out_indices = this->input_value;
-
       // Init Valids
-      auto column_length = this->cpu_out_indices.size();
+      auto column_length = this->input_value.size();
       auto n_tuples = std::tuple_size<multi_column_t>::value;
       for (size_t i = 0; i < n_tuples; i++)
         cpu_data_cols_out_valid.push_back(create_and_init_valid(column_length, 0));
-      cpu_out_indices_valid = create_and_init_valid(column_length, 0);
-
-      this->gdf_cpu_data_cols_out_columns = initialize_gdf_columns(this->cpu_data_cols_out, 
-                                                                   [&](size_t row, size_t col) { return true; });
-
-      this->gdf_output_indices_column.resize(this->cpu_out_indices.size());
-      cudaMemcpy(this->gdf_output_indices_column.data().get(), this->cpu_out_indices.data(), this->cpu_out_indices.size() * sizeof(gdf_size_type), cudaMemcpyHostToDevice);
-
-      for(auto const& c : this->gdf_cpu_data_cols_out_columns){
-        this->gdf_raw_gdf_data_cols_out_columns.push_back(c.get());
-      }
-      this->gdf_raw_out_indices = this->gdf_output_indices_column.data().get();
   }
 
   std::basic_string<bool> get_input_key_valids(std::vector<host_valid_pointer>& valids, int i, bool &all_valid_key) {
@@ -464,27 +423,28 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     gdf_error error{GDF_SUCCESS};
 
     gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
-    gdf_column **gdf_data_cols_out = this->gdf_raw_gdf_data_cols_out_columns.data();
 
     std::vector<int> groupby_col_indices;
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++)
       groupby_col_indices.push_back(i);
 
     cudf::table input_table(group_by_input_key, num_columns);
-    cudf::table output_table(gdf_data_cols_out, num_columns);
-    EXPECT_NO_THROW(gdf_group_by_without_aggregations(input_table,
-                                                      num_columns,
-                                                      groupby_col_indices.data(),
-                                                      &output_table,
-                                                      this->gdf_raw_out_indices,
-                                                      &this->gdf_raw_out_indices_size,
-                                                      &this->context));
+
+    cudf::table output_table;
+    gdf_index_type* indices_arr;
+    gdf_size_type indices_arr_size;
+    EXPECT_NO_THROW(std::tie(output_table,
+                            indices_arr,
+                            indices_arr_size) = gdf_group_by_without_aggregations(input_table,
+                                                                                  num_columns,
+                                                                                  groupby_col_indices.data(),
+                                                                                  &this->context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
     if (GDF_SUCCESS == expected_error) {
         copy_output_with_array_with_nulls(
-                gdf_data_cols_out, this->cpu_data_cols_out, this->cpu_data_cols_out_valid, this->gdf_raw_out_indices, this->gdf_raw_out_indices_size, this->cpu_out_indices);
+                output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr, indices_arr_size, this->cpu_out_indices);
 
         std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         size_t index = 0;
@@ -505,6 +465,14 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
         for (size_t i = 0; i < this->cpu_out_indices.size(); ++i) {
           std::cout << "\t index: " << this->cpu_out_indices[i] << std::endl;
         }
+
+        // Free results
+        RMM_FREE(indices_arr, 0);
+        std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
+          RMM_FREE(col->data, 0);
+          RMM_FREE(col->valid, 0);
+          delete col;
+        });
     }
   }
 
