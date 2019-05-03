@@ -28,11 +28,11 @@ gdf_error read_csv(csv_read_arg *args);
  * formatted file using the formatting parameters provided in the
  * specified structure argument.
  *
- * @param[in] args This structure is defined in io_types.h and provides the columns and formatting parameters needed by this function.
+ * @param[in] args Structure containing input and output args
  *
  * @returns GDF_SUCCESS if the CSV format was created successfully.
  */
-gdf_error write_csv(csv_write_arg* args);
+gdf_error write_csv(csv_write_arg *args);
 
 /*
  * @brief Interface to parse ORC data to GDF columns
@@ -46,9 +46,16 @@ gdf_error write_csv(csv_write_arg* args);
  **/
 gdf_error read_orc(orc_read_arg *args);
 
-/*
+/**
  * @brief Interface to parse Parquet data to GDF columns
- */
+ *
+ * This function accepts an input source for an Apache Parquet dataset and
+ * outputs an array of gdf_columns.
+ *
+ * @param[in,out] args Structure containing input and output args
+ *
+ * @return gdf_error GDF_SUCCESS if successful
+ **/
 gdf_error read_parquet(pq_read_arg *args);
 
 /*

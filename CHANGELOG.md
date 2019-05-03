@@ -132,6 +132,7 @@
 - PR #1548 Fix ci/local/build.sh README from using an incorrect image example
 - PR #1551 CSV Reader: Fix integer column name indexing
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
+- PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 
 
 # cuDF 0.6.1 (25 Mar 2019)
