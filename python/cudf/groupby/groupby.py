@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from collections.abc import Sequence
 from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame
@@ -79,7 +80,8 @@ class Groupby(object):
         self._val_columns = []
         self._df = df.copy(deep=True)
         self._as_index = as_index
-        if isinstance(by, Series):
+        if isinstance(by, (Sequence, Series)):
+            by = list(by)
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
                                           "with indices of arbitrary length")
