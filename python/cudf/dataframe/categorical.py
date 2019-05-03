@@ -222,15 +222,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def _encode(self, value):
-        for i, cat in enumerate(self._categories):
-            if cat == value:
-                return i
-        return -1
+        return self._categories.index(value)
 
     def _decode(self, value):
-        for i, cat in enumerate(self._categories):
-            if i == value:
-                return cat
+        return self._categories[value]
 
     def default_na_value(self):
         return -1
