@@ -120,7 +120,6 @@
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 
 
-
 # cuDF 0.6.1 (25 Mar 2019)
 
 ## Bug Fixes
