@@ -135,7 +135,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * @brief Splits a column (including null values) into a set of columns
  * according to a set of indices.
  *
- * The "split" function divides all the input column into multiple intervals
+ * The "split" function divides the input column into multiple intervals
  * of rows using the indices values and it stores the intervals into the output
  * columns. Regarding the interval of indices, a pair of values are taken from
  * the indices array in a consecutive manner. The pair of indices are left-closed
