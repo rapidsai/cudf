@@ -75,6 +75,7 @@
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 - PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1617 `have_nulls` and `column_dtypes` for `cudf::table`
 
 ## Bug Fixes
 
