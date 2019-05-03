@@ -23,6 +23,7 @@
 
 #include <vector>
 
+// Forward declaration
 typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
