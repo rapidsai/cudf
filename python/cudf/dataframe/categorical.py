@@ -51,6 +51,8 @@ class CategoricalAccessor(object):
     def _set_categories(self, new_categories):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*."""
+        if new_categories is self._categories:
+            return self._parent.copy()
         codemap = {v: i for i, v in enumerate(new_categories)}
         h_recoder = np.zeros(len(self.categories),
                              dtype=self._parent.data.dtype)
