@@ -17,7 +17,6 @@ import pandas as pd
 import pyarrow as pa
 import itertools
 
-from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 

@@ -3,8 +3,6 @@
 """
 This file provide binding to the libgdf library.
 """
-import contextlib
-
 import numpy as np
 import pandas as pd
 
@@ -184,60 +182,6 @@ def cffi_view_to_column_mem(cffi_view):
             )
 
         return data, mask
-
-
-@contextlib.contextmanager
-def apply_join(col_lhs, col_rhs, how, method='hash'):
-    """Returns a tuple of the left and right joined indices as gpu arrays.
-    """
-    if(len(col_lhs) != len(col_rhs)):
-        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
-        raise ValueError(msg)
-
-    joiner = _join_how_api[how]
-    method_api = _join_method_api[method]
-    gdf_context = ffi.new('gdf_context*')
-
-    if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-    elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0)
-    else:
-        msg = "method not supported"
-        raise ValueError(msg)
-
-    col_result_l = columnview(0, None, dtype=np.int32)
-    col_result_r = columnview(0, None, dtype=np.int32)
-
-    if(how in ['left', 'inner']):
-        list_lhs = []
-        list_rhs = []
-        for i in range(len(col_lhs)):
-            list_lhs.append(col_lhs[i].cffi_view)
-            list_rhs.append(col_rhs[i].cffi_view)
-
-        # Call libgdf
-
-        joiner(len(col_lhs), list_lhs, list_rhs, col_result_l,
-               col_result_r, gdf_context)
-    else:
-        joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, col_result_l,
-               col_result_r)
-
-    # Extract result
-
-    left = rmm.device_array_from_ptr(ptr=col_result_l.data,
-                                     nelem=col_result_l.size,
-                                     dtype=np.int32)
-
-    right = rmm.device_array_from_ptr(ptr=col_result_r.data,
-                                      nelem=col_result_r.size,
-                                      dtype=np.int32)
-
-    yield(left, right)
-
-    libgdf.gdf_column_free(col_result_l)
-    libgdf.gdf_column_free(col_result_r)
 
 
 def rmm_initialize():
