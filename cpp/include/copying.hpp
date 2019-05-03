@@ -123,7 +123,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * @param[in] input_column  The input column whose rows will be sliced.
  * @param[in] indices       An device array of indices that are used to take 'slices'
  * of the input column.
- * @Returns output_columns  A set of gdf_column*. Each column can have
+ * @return  A std::vector of gdf_column*, each of which may have a different number of rows.
  * a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
@@ -132,10 +132,10 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
                                gdf_size_type              num_indices);
 
 /**
- * @brief Splits all the column (including null values) into a set of columns
+ * @brief Splits a column (including null values) into a set of columns
  * according to a set of indices.
  *
- * The "split" function divides all the input column into multiple intervals
+ * The "split" function divides the input column into multiple intervals
  * of rows using the indices values and it stores the intervals into the output
  * columns. Regarding the interval of indices, a pair of values are taken from
  * the indices array in a consecutive manner. The pair of indices are left-closed
@@ -173,7 +173,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * @param[in] input_column  The input column whose rows will be split.
  * @param[in] indices       An device array of indices that are used to divide the input
  * column into multiple columns.
- * @Returns output_columns  A set of gdf_column*. Each column can have
+ * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
 std::vector<gdf_column*> split(gdf_column const*          input_column,
