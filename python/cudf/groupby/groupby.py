@@ -94,22 +94,31 @@ class Groupby(object):
                 level = [level] if isinstance(
                         level, (str, Number)) else list(level)
                 self._by = []
-                # This loop is much better executed by the gpu - every
-                # code is iterated over and replaced by a level.
+                # guard against missing MI names
+                if self._df.index.names is None or sum(
+                        x is None for x in self._df.index.names) > 1:
+                    self._df_index_names = list(
+                            range(len(self._df_index.levels)))
                 for which_level in level:
-                    print(which_level)
+                    # find the index of the level in the MultiIndex
                     if isinstance(which_level, str):
                         for idx, name in enumerate(self._df.index.names):
                             if name == which_level:
                                 which_level = idx
                                 break
-                    levels = self._df.index.levels[which_level]
+                    level_values = self._df.index.levels[which_level]
+                    # This can fail if the MultiIndex doesn't have names
+                    # specified
                     code = self._df.index.codes[
                             self._df.index.names[which_level]]
+                    # Replace the codes in this column with the levels
+                    # that the codes encode.
                     result = code.copy()
-                    for idx, value in enumerate(levels):
+                    for idx, value in enumerate(level_values):
                         level_mask = code == idx
                         result = result.masked_assign(value, level_mask)
+                    # Add this new "decoded" column to the dataframe and add
+                    # the key to "by"
                     self._df[self._df.index.names[which_level]] = result
                     self._by.append(self._df.index.names[which_level])
         else:
