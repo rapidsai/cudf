@@ -123,7 +123,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * @param[in] input_column  The input column whose rows will be sliced.
  * @param[in] indices       An array of indices that are used to take 'slices'
  * of the input column.
- * @Returns output_columns  A set of gdf_column*. Each column can have
+ * @return  A std::vector of gdf_column*, each of which may have a different number of rows.
  * a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
