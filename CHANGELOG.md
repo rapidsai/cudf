@@ -20,7 +20,7 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
-- PR #1487 Add cython binding for cudf::gather/scatter 
+- PR #1604 Add cython binding for cudf::gather/scatter 
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
 - PR #1466 Add GPU-accelerated ORC Reader

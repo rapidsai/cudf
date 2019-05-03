@@ -604,9 +604,8 @@ class Column(object):
         if indices.size == 0:
             return self.copy()
 
-        # TODO replace by `apply_gather_array`
-        # this is tested by `test_merge_left_right_index`
-        col = cpp_copying.apply_gather_array(self._data.to_gpu_array(), indices)
+        col = cpp_copying.apply_gather_array(self._data.to_gpu_array(),
+                                             indices)
 
         if self._mask:
             mask = self._get_mask_as_column().take(indices).as_mask()
