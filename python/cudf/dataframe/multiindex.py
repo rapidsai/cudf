@@ -5,7 +5,6 @@ import numpy as np
 import warnings
 
 from collections.abc import Sequence
-from copy import copy, deepcopy
 
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
@@ -79,12 +78,17 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        if(deep):
-            result = deepcopy(self)
-        else:
-            result = copy(self)
-        result.name = self.name
-        return result
+        mi = MultiIndex(self.levels.copy(),
+                        self.codes.copy(deep))
+        if self.names:
+            mi.names = self.names.copy()
+        return mi
+
+    def deepcopy(self):
+        return self.copy(deep=True)
+
+    def __copy__(self):
+        return self.copy(deep=True)
 
     def _popn(self, n):
         """ Returns a copy of this index without the left-most n values.
@@ -192,9 +196,11 @@ class MultiIndex(Index):
         return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
+        if not hasattr(other, 'levels'):
+            return False
         return self.levels == other.levels and\
-                self.codes == other.codes and\
-                self.names == other.names
+            self.codes == other.codes and\
+            self.names == other.names
 
     @property
     def is_contiguous(self):
