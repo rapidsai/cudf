@@ -1783,7 +1783,7 @@ class Loc(object):
         elif isinstance(arg, slice):
             start_index = self._sr.index.as_column().find_first_value(arg.start)
             stop_index = self._sr.index.as_column().find_first_value(arg.stop)
-            return self._sr.iloc[start_index:stop_index]
+            return self._sr.iloc[start_index:stop_index+1]
 
 
 class Iloc(object):
