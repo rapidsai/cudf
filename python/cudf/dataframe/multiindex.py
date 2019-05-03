@@ -263,6 +263,19 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
+    def copy(self, deep=True):
+        mi = MultiIndex(self.levels.copy(),
+                        self.codes.copy(deep))
+        if self.names:
+            mi.names = self.names.copy()
+        return mi
+
+    def deepcopy(self):
+        return self.copy(deep=True)
+
+    def __copy__(self):
+        return self.copy(deep=True)
+
     def to_pandas(self):
         pandas_codes = []
         for code in self.codes.columns:

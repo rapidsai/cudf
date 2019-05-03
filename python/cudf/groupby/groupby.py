@@ -76,7 +76,9 @@ class Groupby(object):
         """
         self.level = None
         self._original_index_name = None
-        self._df = df
+        self._val_columns = []
+        self._df = df.copy(deep=True)
+        self._as_index = as_index
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
@@ -106,9 +108,14 @@ class Groupby(object):
                             if name == which_level:
                                 which_level = idx
                                 break
-                    level_values = self._df.index.levels[which_level]
-                    # This can fail if the MultiIndex doesn't have names
-                    # specified
+                    try:
+                        level_values = self._df.index.levels[which_level]
+                    except IndexError:
+                        raise IndexError("Too many levels: Index has only "
+                                         "%d levels, not %d" % (
+                                               len(self._df.index.levels),
+                                               which_level+1))
+                    # protected by the above guard
                     code = self._df.index.codes[
                             self._df.index.names[which_level]]
                     # Replace the codes in this column with the levels
@@ -125,7 +132,6 @@ class Groupby(object):
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-        self._as_index = as_index
         if (method == "hash"):
             self._method = method
         else:
@@ -142,13 +148,15 @@ class Groupby(object):
         return _cpp_apply_basic_agg(self, agg_type, sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
+        if len(result) == 0:
+            raise ValueError('Groupby result is empty!')
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]
             result = result.drop(idx.name)
             if idx.name == self._LEVEL_0_INDEX_NAME:
-                idx.name = None
+                idx.name = self._original_index_name
             result = result.set_index(idx)
             return result
         else:
@@ -211,18 +219,22 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self.copy()
+        result = self
         result._val_columns = arg
         return result
 
     def copy(self, deep=True):
         df = self._df.copy(deep) if deep else self._df
-        result = Groupby(df, self._by)
-        result._method = self._method
-        result._val_columns = self._val_columns
-        result.level = self.level
+        result = Groupby(df,
+                         self._by,
+                         method=self._method,
+                         as_index=self._as_index,
+                         level=self.level)
         result._original_index_name = self._original_index_name
         return result
+
+    def deepcopy(self):
+        return self.copy(deep=True)
 
     def __getattr__(self, key):
         if key != '_val_columns' and key in self._val_columns:
