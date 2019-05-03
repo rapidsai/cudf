@@ -20,6 +20,7 @@
 #include <cudf.h>
 #include <types.hpp>
 #include <tuple>
+#include <rmm/thrust_rmm_allocator.h>
 
 /**
  * @brief Returns the first index of each unique row. Assumes the data is already sorted 
@@ -31,17 +32,15 @@
  *                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  *                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  *
- * @returns A tuple containing:
- *          - A device array containing the first index of every unique row.
- *          - The number of elements in the array.
+ * @returns A device vector containing the first index of every unique row.
  */
-std::tuple<gdf_index_type*, gdf_size_type>
+rmm::device_vector<gdf_index_type>
 gdf_unique_indices(cudf::table const& input_table,
-                  gdf_context* context);
+                  gdf_context const& context);
 
 /**
  * @brief Sorts a set of columns based on specified "key" columns. Returns a column containing
- * the offset to the start of each group.
+ * the offset to the start of each set of unique keys.
  *
  * @param[in]  input_table           The input columns whose rows will be grouped.
  * @param[in]  num_key_cols             The number of key columns.
@@ -57,10 +56,9 @@ gdf_unique_indices(cudf::table const& input_table,
  *
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key columns.
- *          - A device array containing the starting indices of each key (group).
- *          - The number of elements in the array.
+ *          - A device vector containing the first index of every unique row
  */
-std::tuple<cudf::table, gdf_index_type*, gdf_size_type> 
+std::tuple<cudf::table, rmm::device_vector<gdf_index_type>> 
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const * key_col_indices,

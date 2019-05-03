@@ -186,19 +186,17 @@ struct GroupByWoAggTest : public GdfTest {
     cudf::table input_table(group_by_input_key, num_columns);
     
     cudf::table output_table;
-    gdf_index_type* indices_arr;
-    gdf_size_type indices_arr_size;
+    rmm::device_vector<gdf_index_type> indices_arr;
     EXPECT_NO_THROW(std::tie(output_table,
-                            indices_arr,
-                            indices_arr_size) = gdf_group_by_without_aggregations(input_table,
-                                                                                  num_columns,
-                                                                                  groupby_col_indices.data(),
-                                                                                  &context));
+                            indices_arr) = gdf_group_by_without_aggregations(input_table,
+                                                                            num_columns,
+                                                                            groupby_col_indices.data(),
+                                                                            &context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
     if (GDF_SUCCESS == expected_error) {
-        copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr, indices_arr_size, this->cpu_out_indices);
+        copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
 
         std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         for (size_t i = 0; i < num_columns; ++i) {
@@ -214,7 +212,6 @@ struct GroupByWoAggTest : public GdfTest {
         }
 
         // Free results
-        RMM_FREE(indices_arr, 0);
         std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
           RMM_FREE(col->data, 0);
           RMM_FREE(col->valid, 0);
@@ -431,20 +428,18 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     cudf::table input_table(group_by_input_key, num_columns);
 
     cudf::table output_table;
-    gdf_index_type* indices_arr;
-    gdf_size_type indices_arr_size;
+    rmm::device_vector<gdf_index_type> indices_arr;
     EXPECT_NO_THROW(std::tie(output_table,
-                            indices_arr,
-                            indices_arr_size) = gdf_group_by_without_aggregations(input_table,
-                                                                                  num_columns,
-                                                                                  groupby_col_indices.data(),
-                                                                                  &this->context));
+                            indices_arr) = gdf_group_by_without_aggregations(input_table,
+                                                                            num_columns,
+                                                                            groupby_col_indices.data(),
+                                                                            &this->context));
 
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
     if (GDF_SUCCESS == expected_error) {
         copy_output_with_array_with_nulls(
-                output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr, indices_arr_size, this->cpu_out_indices);
+                output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
 
         std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         size_t index = 0;
@@ -467,7 +462,6 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
         }
 
         // Free results
-        RMM_FREE(indices_arr, 0);
         std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
           RMM_FREE(col->data, 0);
           RMM_FREE(col->valid, 0);

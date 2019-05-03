@@ -227,8 +227,8 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   return gdf_error_code;
 }
 
-std::tuple<gdf_index_type*, gdf_size_type> 
-gdf_unique_indices(cudf::table const& input_table, gdf_context* context)
+rmm::device_vector<gdf_index_type>
+gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 {
   gdf_size_type ncols = input_table.num_columns();
   gdf_size_type nrows = input_table.num_rows();
@@ -238,15 +238,14 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context* context)
   void** d_col_data = d_cols.data().get();
   int* d_col_types = d_types.data().get();
 
-  bool nulls_are_smallest = (context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST);
+  bool nulls_are_smallest = (context.flag_null_sort_behavior == GDF_NULL_AS_SMALLEST);
 
   gdf_index_type* result_end;
   cudaStream_t stream;
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
 
-  gdf_index_type* unique_indices;
-  RMM_TRY( RMM_ALLOC(&unique_indices, sizeof(gdf_index_type) * nrows, stream) );
+  rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
   bool const have_nulls{ std::any_of(input_table.begin(), input_table.end(), [](gdf_column const* col){ return col->null_count > 0;}) };
   if (have_nulls){
@@ -260,7 +259,7 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context* context)
     auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
 
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices,
+                              unique_indices.data().get(),
                               [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
                               return comp.equal_with_nulls(key1, key2);
                             });
@@ -273,21 +272,21 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context* context)
     auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
 
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices,
+                              unique_indices.data().get(),
                               [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
                               return comp.equal(key1, key2);
                             });
   }
 
-  gdf_size_type new_sz = thrust::distance(unique_indices, result_end);
+  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
 
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
 
-  return std::make_tuple(unique_indices, new_sz);
+  return unique_indices;
 }
 
-std::tuple<cudf::table, gdf_index_type*, gdf_size_type> 
+std::tuple<cudf::table, rmm::device_vector<gdf_index_type>> 
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const * key_col_indices,
@@ -297,7 +296,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
 
   if (0 == input_table.num_rows()) {
-    return std::make_tuple(cudf::table(), nullptr, 0);
+    return std::make_tuple(cudf::table(), rmm::device_vector<gdf_index_type>());
   }
 
   gdf_size_type nrows = input_table.num_rows();
@@ -347,19 +346,17 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
     int valid_count;
     CUDF_TRY(gdf_count_nonzero_mask(reinterpret_cast<gdf_valid_type*>(orderby_cols_bitmask.data().get()),
                                     nrows, &valid_count));
-    
-    for (gdf_size_type i = 0; i < input_table.num_columns(); ++i) {
-      destination_table.get_column(i)->size = valid_count;
-    }
+
+    std::for_each(destination_table.begin(), destination_table.end(), 
+                  [valid_count](gdf_column * col){ col->size = valid_count; });
   }
 
   // run gather operation to establish new order
   cudf::gather(&input_table, sorted_indices.data().get(), &destination_table);
 
-  for (gdf_size_type i = 0; i < num_key_cols; i++){
-    key_cols_vect[i] = destination_table.get_column(key_col_indices[i]);
-  }
+  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect.begin(),
+                  [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
   cudf::table key_col_sorted_table(key_cols_vect.data(), key_cols_vect.size());
   
-  return std::tuple_cat(std::make_tuple(destination_table), gdf_unique_indices(key_col_sorted_table, context));
+  return std::make_tuple(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }
