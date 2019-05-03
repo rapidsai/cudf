@@ -91,16 +91,16 @@ include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
-include(ConfigureArrow)
-
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
+
+include(ConfigureArrow)
 
 if (ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-endif()
+endif(ARROW_FOUND)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -223,6 +223,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/column/column.cpp
             src/column/context.cpp
+            src/table/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -242,7 +243,6 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/bitmask/valid_ops.cu
             src/compaction/stream_compaction_ops.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
@@ -260,6 +260,11 @@ add_library(cudf SHARED
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
+            src/io/orc/orc_reader.cu
+            src/io/orc/orc.cpp
+            src/io/orc/timezone.cpp
+            src/io/orc/stripe_data.cu
+            src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader.cu
