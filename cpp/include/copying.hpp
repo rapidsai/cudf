@@ -162,7 +162,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
                                gdf_size_type              num_indices);
 
 /**
- * @brief Splits all the column (including null values) into a set of columns
+ * @brief Splits a column (including null values) into a set of columns
  * according to a set of indices.
  *
  * The "split" function divides all the input column into multiple intervals
