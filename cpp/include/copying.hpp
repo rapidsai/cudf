@@ -202,7 +202,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * @param[in] input_column  The input column whose rows will be split.
  * @param[in] indices       An array of indices that are used to divide the input
  * column into multiple columns.
- * @Returns output_columns  A set of gdf_column*. Each column can have
+ * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
 std::vector<gdf_column*> split(gdf_column const*          input_column,
