@@ -27,6 +27,7 @@
 - PR #1508 Add Series isna, isnull, and notna
 - PR #1588 Add Index `astype` typecasting
 - PR #1301 MultiIndex support
+- PR #1599 Level keyword supported in groupby
 
 ## Improvements
 
