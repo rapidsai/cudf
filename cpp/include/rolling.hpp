@@ -24,7 +24,7 @@ namespace cudf {
  * @brief  Computes the rolling window function of the values in a column.
  *
  * This function aggregates values in a window around each element i of the input
- * column, and invalidates the bit mask if there are not enough observations. The
+ * column, and invalidates the bit mask for element i if there are not enough observations. The
  * window size and the number of observations can be static or dynamic (varying for
  * each element). This matches Pandas' API for DataFrame.rolling with a few notable
  * differences:

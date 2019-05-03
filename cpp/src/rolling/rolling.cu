@@ -70,8 +70,8 @@ namespace
 template <typename ColumnType, template <typename AggType> class agg_op, bool average>
 __global__
 void gpu_rolling(gdf_size_type nrows,
-		 ColumnType *out_col, gdf_valid_type *out_col_valid,
-		 ColumnType *in_col, gdf_valid_type *in_col_valid,
+		 ColumnType * const __restrict__ out_col, gdf_valid_type * const __restrict__ out_col_valid,
+		 ColumnType const * const __restrict__ in_col, gdf_valid_type const* const __restrict__ in_col_valid,
 		 gdf_size_type window,
 		 gdf_size_type min_periods,
 		 gdf_size_type forward_window,
@@ -94,9 +94,9 @@ void gpu_rolling(gdf_size_type nrows,
     volatile gdf_size_type count = 0;	// declare this as volatile to avoid some compiler optimizations that lead to incorrect results on some systems (bug will be filed to investigate)
 
     // dynamic window handling
-    if (window_col != NULL) window = window_col[i];
-    if (min_periods_col != NULL) min_periods = max(min_periods_col[i], 1);	// at least one observation is required
-    if (forward_window_col != NULL) forward_window = forward_window_col[i];
+    if (window_col != nullptr) window = window_col[i];
+    if (min_periods_col != nullptr) min_periods = max(min_periods_col[i], 1);	// at least one observation is required
+    if (forward_window_col != nullptr) forward_window = forward_window_col[i];
 
     // compute bounds
     gdf_size_type start_index = max((gdf_size_type)0, i - window + 1);
@@ -241,7 +241,7 @@ gdf_column* rolling_window(const gdf_column *input_col,
   // Allocate memory for the output column
   CUDF_EXPECTS(output_col.allocate() == GDF_SUCCESS, "Cannot allocate the output column");
 
-  // At least one observation is required to procude a valid output
+  // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
 
   // Launch type dispatcher
