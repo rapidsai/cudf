@@ -525,8 +525,9 @@ class Column(object):
             else:
                 return self._copy_to_dense_buffer()
         else:
-            # always return a copy of the data rather than a reference
-            return self.data.copy()
+            # return a reference for performance reasons, should refactor code
+            # to explicitly use mem in the future
+            return self.data
 
     def _invert(self):
         """Internal convenience function for inverting masked array

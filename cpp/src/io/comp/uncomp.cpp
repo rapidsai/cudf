@@ -291,7 +291,6 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     size_t comp_len = 0;
     size_t uncomp_len = 0;
     cudaStream_t strm = (cudaStream_t)0;
-    rmmError_t rmmErr;
 
     if (!(src && src_size))
     {
@@ -438,4 +437,192 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
 }
 
 
+/* --------------------------------------------------------------------------*/
+/**
+* @Brief ZLIB host decompressor class
+*/
+/* ----------------------------------------------------------------------------*/
 
+class HostDecompressor_ZLIB : public HostDecompressor
+{
+public:
+    HostDecompressor_ZLIB(bool gz_hdr_): gz_hdr(gz_hdr_) {}
+    size_t Decompress(uint8_t *dstBytes, size_t dstLen, const uint8_t *srcBytes, size_t srcLen) override
+    {
+        if (gz_hdr)
+        {
+            gz_archive_s gz;
+            if (!ParseGZArchive(&gz, srcBytes, srcLen))
+            {
+                return 0;
+            }
+            srcBytes = gz.comp_data;
+            srcLen = gz.comp_len;
+        }
+        if (0 == cpu_inflate(dstBytes, &dstLen, srcBytes, srcLen))
+        {
+            return dstLen;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+protected:
+    const bool gz_hdr;
+};
+
+/* --------------------------------------------------------------------------*/
+/**
+* @Brief SNAPPY host decompressor class
+*/
+/* ----------------------------------------------------------------------------*/
+
+class HostDecompressor_SNAPPY : public HostDecompressor
+{
+public:
+    HostDecompressor_SNAPPY() {}
+    size_t Decompress(uint8_t *dstBytes, size_t dstLen, const uint8_t *srcBytes, size_t srcLen) override
+    {
+        uint32_t uncompressed_size, bytes_left, dst_pos;
+        const uint8_t *cur = srcBytes;
+        const uint8_t *end = srcBytes + srcLen;
+        
+        if (!dstBytes || srcLen < 1)
+        {
+            return 0;
+        }
+        // Read uncompressed length (varint)
+        {
+            uint32_t l = 0, c;
+            uncompressed_size = 0;
+            do
+            {
+                uint32_t lo7;
+                c = *cur++;
+                lo7 = c & 0x7f;
+                if (l >= 28 && c > 0xf)
+                {
+                    return 0;
+                }
+                uncompressed_size |= lo7 << l;
+                l += 7;
+            } while (c > 0x7f && cur < end);
+            if (!uncompressed_size || uncompressed_size > dstLen || cur >= end)
+            {
+                // Destination buffer too small or zero size
+                return 0;
+            }
+        }
+        // Decode lz77
+        dst_pos = 0;
+        bytes_left = uncompressed_size;
+        do
+        {
+            uint32_t blen = *cur++;
+
+            if (blen & 3)
+            {
+                // Copy
+                uint32_t offset;
+                if (blen & 2)
+                {
+                    // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+                    if (cur + 2 > end)
+                        break;
+                    offset = *(const uint16_t *)cur;
+                    cur += 2;
+                    if (blen & 1) // 4-byte offset
+                    {
+                        if (cur + 2 > end)
+                            break;
+                        offset |= (*(const uint16_t *)cur) << 16;
+                        cur += 2;
+                    }
+                    blen = (blen >> 2) + 1;
+                }
+                else
+                {
+                    // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+                    if (cur >= end)
+                        break;
+                    offset = ((blen & 0xe0) << 3) | (*cur++);
+                    blen = ((blen >> 2) & 7) + 4;
+                }
+                if (offset - 1u >= dst_pos || blen > bytes_left)
+                    break;
+                bytes_left -= blen;
+                do
+                {
+                    dstBytes[dst_pos] = dstBytes[dst_pos - offset];
+                    dst_pos++;
+                } while (--blen);
+            }
+            else
+            {
+                // xxxxxx00: literal
+                blen >>= 2;
+                if (blen >= 60)
+                {
+                    uint32_t num_bytes = blen - 59;
+                    if (cur + num_bytes >= end)
+                        break;
+                    blen = cur[0];
+                    if (num_bytes > 1)
+                    {
+                        blen |= cur[1] << 8;
+                        if (num_bytes > 2)
+                        {
+                            blen |= cur[2] << 16;
+                            if (num_bytes > 3)
+                            {
+                                blen |= cur[3] << 24;
+                            }
+                        }
+                    }
+                    cur += num_bytes;
+                }
+                blen++;
+                if (cur + blen > end || blen > bytes_left)
+                    break;
+                memcpy(dstBytes + dst_pos, cur, blen);
+                cur += blen;
+                dst_pos += blen;
+                bytes_left -= blen;
+            }
+        } while (bytes_left && cur < end);
+        return (bytes_left) ? 0 : uncompressed_size;
+    }
+};
+
+
+/* --------------------------------------------------------------------------*/
+/**
+* @Brief CPU decompression class
+*
+* @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+*
+* @returns corresponding HostDecompressor class, nullptr if failure
+*/
+/* ----------------------------------------------------------------------------*/
+
+HostDecompressor *HostDecompressor::Create(int stream_type)
+{
+    HostDecompressor *decompressor;
+    switch (stream_type)
+    {
+    case IO_UNCOMP_STREAM_TYPE_GZIP:
+        decompressor = new HostDecompressor_ZLIB(true);
+        break;
+    case IO_UNCOMP_STREAM_TYPE_INFLATE:
+        decompressor = new HostDecompressor_ZLIB(false);
+        break;
+    case IO_UNCOMP_STREAM_TYPE_SNAPPY:
+        decompressor = new HostDecompressor_SNAPPY();
+        break;
+    default:
+        decompressor = nullptr;
+        break;
+    }
+    return decompressor;
+}

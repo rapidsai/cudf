@@ -25,5 +25,6 @@ dependencies:
 - numpydoc
 - ipython
 - recommonmark
+- cudatoolkit=10.0
 - pip:
   - sphinx-markdown-tables
