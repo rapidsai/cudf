@@ -1375,7 +1375,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
 {
     if (t == 0)
     {
-        s->u.rowdec.nz_count = min(s->chunk.skip_count, NTHREADS);
+        s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), NTHREADS);
         s->chunk.skip_count -= s->u.rowdec.nz_count;
     }
     __syncthreads();
@@ -1761,6 +1761,11 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             __syncthreads();
             // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
             DecodeRowPositions(s, first_row, t);
+            if (!s->top.data.nrows && !s->u.rowdec.nz_count)
+            {
+                // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
+                break;
+            }
             // Store decoded values to output
             if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
             {
@@ -1874,11 +1879,6 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             }
         }
         __syncthreads();
-        if (!s->top.data.nrows)
-        {
-            // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
-            break;
-        }
     }
 }
 
