@@ -1,5 +1,5 @@
 #include <bitmask/BitMask.cuh>
-#include "cudf/functions.h"
+#include <gis.hpp>
 #include "bitmask/bitmask_ops.h"
 
 /** 

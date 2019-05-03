@@ -1,4 +1,3 @@
-
 #include "gis_functions.cuh"
 
 gdf_column* gdf_point_in_polygon(gdf_column* polygon_latitudes,

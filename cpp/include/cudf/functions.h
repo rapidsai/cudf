@@ -1249,18 +1249,3 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
-
-/** 
- * @brief Find if coordinates (query points) are completely inside or not in a specific polygon
- *
- * @param[in] poly_lats: Pointer to latitudes of a polygon
- * @param[in] poly_lons: Pointer to longitudes of a polygon
- * @param[in] point_lats: Pointer to latitudes of query points
- * @param[in] point_lons: Pointer to longitudes of query points
- *
- * @returns Pointer to gdf_column indicating if the i-th query point is inside or not with {1, 0}
- */
-gdf_column*  gdf_point_in_polygon(gdf_column* polygon_latitudes, 
-                          gdf_column* polygon_longitudes,
-                          gdf_column* point_latitudes, 
-                          gdf_column* point_longitudes);
