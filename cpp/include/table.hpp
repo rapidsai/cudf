@@ -129,6 +129,12 @@ struct table {
   gdf_size_type _num_rows{0};         ///< The number of elements in each column
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Returns vector of the dtypes of the columns in a table
+ * 
+ * @param table The table to get the column dtypes from
+ * @return std::vector<gdf_dtype> Vector of the dtypes for each column
+*---------------------------------------------------------------------------**/
 std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
   std::vector<gdf_dtype> dtypes(table.num_columns());
 
