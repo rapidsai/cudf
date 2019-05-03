@@ -8,7 +8,8 @@ from math import isnan
 from librmm_cffi import librmm as rmm
 
 from cudf.utils.utils import (check_equals_int, check_equals_float,
-                              mask_bitsize, mask_get, mask_set, make_mask)
+                              mask_bitsize, mask_get, mask_set, make_mask,
+                              dtype_min_max)
 
 
 def optimal_block_count(minblkct):
@@ -729,6 +730,81 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
+@cuda.jit
+def gpu_min_max(arr, min_max_array):
+    nelements = arr.shape[0]
+
+    start = cuda.grid(1)
+    stride = cuda.gridsize(1)
+
+    # Array already seeded with starting values appropriate for x's dtype
+    # Not a problem if this array has already been updated
+    local_min = min_max_array[0]
+    local_max = min_max_array[1]
+
+    for i in range(start, arr.shape[0], stride):
+        element = arr[i]
+        local_min = min(element, local_min)
+        local_max = max(element, local_max)
+
+    # Now combine each thread local min and max
+    cuda.atomic.min(min_max_array, 0, local_min)
+    cuda.atomic.max(min_max_array, 1, local_max)
+
+
+def min_max(arr):
+    dtype_min, dtype_max = dtype_min_max(arr.dtype)
+    min_max_array_gpu = rmm.device_array(shape=(2,), dtype=arr.dtype)
+    min_max_array_gpu[0] = dtype_max
+    min_max_array_gpu[1] = dtype_min
+    gpu_min_max.forall(arr.size)(arr, min_max_array_gpu)
+    min_value = min_max_array_gpu[0]
+    max_value = min_max_array_gpu[1]
+    return min_value, max_value
+
+
+@cuda.jit
+def gpu_mark_found_int(arr, val, out):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_int(arr[i], val):
+            out[i] = i
+
+
+@cuda.jit
+def gpu_mark_found_float(arr, val, out):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_float(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = 0
+
+
+def find_first(arr, val):
+    """
+    Returns the index of the first occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    found[:] = arr.size
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found)
+    min_index = min_max(found)[0]
+    if min_index == arr.size:
+        return - 1
+    else:
+        return min_index
+
+
 def find_segments(arr, segs=None, markers=None):
     """Find beginning indices of runs of equal values.
 
@@ -852,3 +928,5 @@ def boolean_array_to_index_array(bool_array):
     indices = arange(len(bool_array))
     _, selinds = copy_to_dense(indices, mask=boolbits)
     return selinds
+
+

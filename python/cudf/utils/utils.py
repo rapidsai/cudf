@@ -178,3 +178,12 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
             np.empty(0, dtype=new_dtype)
         )
     return (pamask, padata)
+
+
+def dtype_min_max(dtype):
+    '''Get the min and max value for a numeric dtype'''
+    if np.issubdtype(dtype, np.integer):
+        info = np.iinfo(dtype)
+    else:
+        info = np.finfo(dtype)
+    return info.min, info.max
