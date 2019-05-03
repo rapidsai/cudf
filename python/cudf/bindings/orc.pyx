@@ -22,6 +22,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
@@ -45,7 +46,7 @@ cpdef cpp_read_orc(path, columns=None, skip_rows=None, num_rows=None):
     # Setup arguments
     cdef orc_read_arg orc_reader = orc_read_arg()
 
-    if not os.path.isfile(path) and not os.path.exists(path):
+    if not os.path.isfile(path) or not os.path.exists(path):
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )

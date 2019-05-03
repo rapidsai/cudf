@@ -20,6 +20,7 @@
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
+#include "io/utilities/datasource.hpp"
 #include "io/utilities/wrapper_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
@@ -33,12 +34,6 @@
 #include <numeric>
 #include <vector>
 
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
                   !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
               "Unexpected sizeof(CompressedStreamInfo)");
@@ -51,43 +46,6 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
 #else
 #define LOG_PRINTF(...) (void)0
 #endif
-
-/**
- * @brief Helper class for memory mapping a file source
- **/
-class DataSource {
- public:
-  explicit DataSource(const char *filepath) {
-    fd = open(filepath, O_RDONLY);
-    CUDF_EXPECTS(fd > 0, "Cannot open file");
-
-    struct stat st {};
-    CUDF_EXPECTS(fstat(fd, &st) == 0, "Cannot query file size");
-
-    mapped_size = st.st_size;
-    CUDF_EXPECTS(mapped_size > 0, "Unexpected zero-sized file");
-
-    mapped_data = mmap(NULL, mapped_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    CUDF_EXPECTS(mapped_data != MAP_FAILED, "Cannot memory-mapping file");
-  }
-
-  ~DataSource() {
-    if (mapped_data) {
-      munmap(mapped_data, mapped_size);
-    }
-    if (fd) {
-      close(fd);
-    }
-  }
-
-  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
-  size_t size() const { return mapped_size; }
-
- private:
-  void *mapped_data = nullptr;
-  size_t mapped_size = 0;
-  int fd = 0;
-};
 
 /**
  * @brief Function that translates ORC datatype to GDF dtype
@@ -160,27 +118,19 @@ class OrcMetadata {
       std::pair<const orc::StripeInformation *, orc::StripeFooter>;
 
  public:
-  explicit OrcMetadata(const uint8_t *data_, size_t len_)
-      : data(data_), len(len_) {
-    const auto ps_length = data[len - 1];
-    const auto ps_data = &data[len - ps_length - 1];
+  explicit OrcMetadata(const DataSource &input_) : input(&input_) {
+    const auto len = input->size();
+    const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
-    // Read uncompressed postscript section
+    // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
+    auto buffer = input->get_buffer(len - max_ps_size, max_ps_size);
+    const size_t ps_length = buffer->data()[max_ps_size - 1];
+    const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     orc::ProtobufReader pb;
     pb.init(ps_data, ps_length);
     CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
     CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-    LOG_PRINTF("\n[+] PostScript:\n");
-    LOG_PRINTF(" postscriptLength = %d\n", ps_length);
-    LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
-    LOG_PRINTF(" compression = %d\n", ps.compression);
-    LOG_PRINTF(" compressionBlockSize = %d\n", ps.compressionBlockSize);
-    LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(),
-               (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1,
-               (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
-    LOG_PRINTF(" metadataLength = %zd\n", (size_t)ps.metadataLength);
-    LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
+    print_postscript(ps_length);
 
     // If compression is used, all the rest of the metadata is compressed
     // If no compressed is used, the decompressor is simply a pass-through
@@ -188,47 +138,14 @@ class OrcMetadata {
         ps.compression, ps.compressionBlockSize);
 
     // Read compressed filefooter section
+    buffer = input->get_buffer(len - ps_length - 1 - ps.footerLength,
+                               ps.footerLength);
     size_t ff_length = 0;
-    auto ff_data = decompressor->Decompress(ps_data - ps.footerLength,
-                                            ps.footerLength, &ff_length);
+    auto ff_data = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
     CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
-
-    LOG_PRINTF("\n[+] FileFooter:\n");
-    LOG_PRINTF(" headerLength = %zd\n", (size_t)ff.headerLength);
-    LOG_PRINTF(" contentLength = %zd\n", (size_t)ff.contentLength);
-    for (size_t i = 0; i < ff.stripes.size(); i++) {
-      LOG_PRINTF(
-          " stripe #%zd @ %zd: %d rows, index+data+footer: %zd+%zd+%d bytes\n",
-          i, (size_t)ff.stripes[i].offset, ff.stripes[i].numberOfRows,
-          (size_t)ff.stripes[i].indexLength, (size_t)ff.stripes[i].dataLength,
-          ff.stripes[i].footerLength);
-    }
-    for (size_t i = 0; i < ff.types.size(); i++) {
-      LOG_PRINTF(" column %zd: kind=%d, parent=%d\n", i, ff.types[i].kind,
-                 ff.types[i].parent_idx);
-      if (ff.types[i].subtypes.size() > 0) {
-        LOG_PRINTF("   subtypes = ");
-        for (int j = 0; j < (int)ff.types[i].subtypes.size(); j++) {
-          LOG_PRINTF("%c%d", (j) ? ',' : '{', ff.types[i].subtypes[j]);
-        }
-        LOG_PRINTF("}\n");
-      }
-      if (ff.types[i].fieldNames.size() > 0) {
-        LOG_PRINTF("   fieldNames = ");
-        for (int j = 0; j < (int)ff.types[i].fieldNames.size(); j++) {
-          LOG_PRINTF("%c\"%s\"", (j) ? ',' : '{',
-                 ff.types[i].fieldNames[j].c_str());
-        }
-        LOG_PRINTF("}\n");
-      }
-    }
-    for (size_t i = 0; i < ff.metadata.size(); i++) {
-      LOG_PRINTF(" metadata: \"%s\" = \"%s\"\n", ff.metadata[i].name.c_str(),
-             ff.metadata[i].value.c_str());
-    }
-    LOG_PRINTF(" numberOfRows = %zd\n", (size_t)ff.numberOfRows);
-    LOG_PRINTF(" rowIndexStride = %d\n", ff.rowIndexStride);
+    CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
+    print_filefooter();
   }
 
   /**
@@ -279,12 +196,13 @@ class OrcMetadata {
       const auto sf_comp_offset =
           stripe.offset + stripe.indexLength + stripe.dataLength;
       const auto sf_comp_length = stripe.footerLength;
-      CUDF_EXPECTS(sf_comp_offset + sf_comp_length < len,
+      CUDF_EXPECTS(sf_comp_offset + sf_comp_length < input->size(),
                    "Invalid stripe information");
 
+      const auto buffer = input->get_buffer(sf_comp_offset, sf_comp_length);
       size_t sf_length = 0;
-      auto sf_data = decompressor->Decompress(data + sf_comp_offset,
-                                              sf_comp_length, &sf_length);
+      auto sf_data = decompressor->Decompress(buffer->data(), sf_comp_length,
+                                              &sf_length);
       orc::ProtobufReader pb;
       pb.init(sf_data, sf_length);
       CUDF_EXPECTS(pb.read(&selection[i].second, sf_length),
@@ -302,7 +220,7 @@ class OrcMetadata {
    * @param[in] use_cols_len Length of the column name array
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
-   * @return A list of ORC column indexes
+   * @return List of ORC column indexes
    **/
   auto select_columns(const char **use_cols, int use_cols_len,
                       bool &has_timestamp_column) {
@@ -346,14 +264,69 @@ class OrcMetadata {
   inline int get_num_rowgroups() const { return ff.stripes.size(); }
   inline int get_num_columns() const { return ff.types.size(); }
 
+private:
+ void print_postscript(size_t ps_length) const {
+   LOG_PRINTF("\n[+] PostScript:\n");
+   LOG_PRINTF(" postscriptLength = %zd\n", ps_length);
+   LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
+   LOG_PRINTF(" compression = %d\n", ps.compression);
+   LOG_PRINTF(" compressionBlockSize = %d\n", ps.compressionBlockSize);
+   LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(),
+              (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1,
+              (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
+   LOG_PRINTF(" metadataLength = %zd\n", (size_t)ps.metadataLength);
+   LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
+ }
+
+ void print_filefooter() const {
+   LOG_PRINTF("\n[+] FileFooter:\n");
+   LOG_PRINTF(" headerLength = %zd\n", ff.headerLength);
+   LOG_PRINTF(" contentLength = %zd\n", ff.contentLength);
+   LOG_PRINTF(" stripes (%zd entries):\n", ff.stripes.size());
+   for (size_t i = 0; i < ff.stripes.size(); i++) {
+     LOG_PRINTF("  [%zd] @ %zd: %d rows, index+data+footer: %zd+%zd+%d bytes\n",
+                i, ff.stripes[i].offset, ff.stripes[i].numberOfRows,
+                ff.stripes[i].indexLength, ff.stripes[i].dataLength,
+                ff.stripes[i].footerLength);
+   }
+   LOG_PRINTF(" types (%zd entries):\n", ff.types.size());
+   for (size_t i = 0; i < ff.types.size(); i++) {
+     LOG_PRINTF("  column [%zd]: kind = %d, parent = %d\n", i, ff.types[i].kind,
+                ff.types[i].parent_idx);
+     if (ff.types[i].subtypes.size() > 0) {
+       LOG_PRINTF("   subtypes = ");
+       for (size_t j = 0; j < ff.types[i].subtypes.size(); j++) {
+         LOG_PRINTF("%c%d", (j) ? ',' : '{', ff.types[i].subtypes[j]);
+       }
+       LOG_PRINTF("}\n");
+     }
+     if (ff.types[i].fieldNames.size() > 0) {
+       LOG_PRINTF("   fieldNames = ");
+       for (size_t j = 0; j < ff.types[i].fieldNames.size(); j++) {
+         LOG_PRINTF("%c\"%s\"", (j) ? ',' : '{',
+                    ff.types[i].fieldNames[j].c_str());
+       }
+       LOG_PRINTF("}\n");
+     }
+   }
+   if (ff.metadata.size() > 0) {
+     LOG_PRINTF(" metadata (%zd entries):\n", ff.metadata.size());
+     for (size_t i = 0; i < ff.metadata.size(); i++) {
+       LOG_PRINTF("  [%zd] \"%s\" = \"%s\"\n", i, ff.metadata[i].name.c_str(),
+                  ff.metadata[i].value.c_str());
+     }
+   }
+   LOG_PRINTF(" numberOfRows = %zd\n", ff.numberOfRows);
+   LOG_PRINTF(" rowIndexStride = %d\n", ff.rowIndexStride);
+  }
+
  public:
   orc::PostScript ps;
   orc::FileFooter ff;
   std::unique_ptr<orc::OrcDecompressor> decompressor;
 
  private:
-  const uint8_t *const data;
-  const size_t len;
+  const DataSource *const input;
 };
 
 /**
@@ -637,9 +610,7 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
 gdf_error read_orc(orc_read_arg *args) {
 
   DataSource input(args->source);
-
-  OrcMetadata md(input.data(), input.size());
-  CUDF_EXPECTS(md.get_num_columns() > 0, "No columns found");
+  OrcMetadata md(input);
 
   // Select only stripes required (aka row groups)
   int skip_rows = args->skip_rows;
@@ -711,8 +682,10 @@ gdf_error read_orc(orc_read_arg *args) {
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        CUDA_TRY(cudaMemcpyAsync(d_dst, input.data() + offset, len,
+        const auto buffer = input.get_buffer(offset, len);
+        CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len,
                                  cudaMemcpyHostToDevice));
+        CUDA_TRY(cudaStreamSynchronize(0));
       }
 
       // Update chunks to reference streams pointers

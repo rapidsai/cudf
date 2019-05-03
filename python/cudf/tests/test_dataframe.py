@@ -346,6 +346,23 @@ def test_dataframe_astype(nelem):
     np.testing.assert_equal(df['a'].to_array(), df['b'].to_array())
 
 
+@pytest.mark.parametrize('nelem', [0, 100])
+def test_index_astype(nelem):
+    df = DataFrame()
+    data = np.asarray(range(nelem), dtype=np.int32)
+    df['a'] = data
+    assert df.index.dtype is np.dtype(np.int64)
+    df.index = df.index.astype(np.float32)
+    assert df.index.dtype is np.dtype(np.float32)
+    df['a'] = df['a'].astype(np.float32)
+    np.testing.assert_equal(df.index.to_array(), df['a'].to_array())
+    df['b'] = df['a']
+    df = df.set_index('b')
+    df['a'] = df['a'].astype(np.int16)
+    df.index = df.index.astype(np.int16)
+    np.testing.assert_equal(df.index.to_array(), df['a'].to_array())
+
+
 def test_dataframe_slicing():
     df = DataFrame()
     size = 123
