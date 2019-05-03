@@ -16,8 +16,9 @@
 
 #include "utilities/nvtx/nvtx_utils.h"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/bit_util.cuh"
+#include "bitmask/bit_mask.cuh"
 #include "rmm/thrust_rmm_allocator.h"
-#include <bitmask/legacy_bitmask.hpp>
 #include <cudf.h>
 #include <cub/cub.cuh>
 #include <memory>
@@ -65,6 +66,8 @@ namespace
     }
   };
 
+  // we're going to be using bit utils a lot in the kernel below
+  using namespace bit_mask;
 
 /**
  * @brief Computes the rolling window function
@@ -101,8 +104,8 @@ namespace
 template <typename ColumnType, template <typename AggType> class agg_op, bool average>
 __global__
 void gpu_rolling(gdf_size_type nrows,
-		 ColumnType * const __restrict__ out_col, gdf_valid_type * const __restrict__ out_col_valid,
-		 ColumnType const * const __restrict__ in_col, gdf_valid_type const* const __restrict__ in_col_valid,
+		 ColumnType * const __restrict__ out_col, bit_mask_t * const __restrict__ out_col_valid,
+		 ColumnType const * const __restrict__ in_col, bit_mask_t const * const __restrict__ in_col_valid,
 		 gdf_size_type window,
 		 gdf_size_type min_periods,
 		 gdf_size_type forward_window,
@@ -110,9 +113,6 @@ void gpu_rolling(gdf_size_type nrows,
 		 const gdf_size_type *min_periods_col,
 		 const gdf_size_type *forward_window_col)
 {
-  using MaskType = uint32_t;
-  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
-
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
 
@@ -137,8 +137,8 @@ void gpu_rolling(gdf_size_type nrows,
     // TODO: We should explore using shared memory to avoid redundant loads.
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
-    for (size_t j = start_index; j < end_index; j++) {
-      bool const input_is_valid{gdf_is_valid(in_col_valid, j)};
+    for (gdf_index_type j = start_index; j < end_index; j++) {
+      bool const input_is_valid{is_valid(in_col_valid, j)};
       if (input_is_valid) {
         val = op(in_col[j], val);
         count++;
@@ -149,13 +149,12 @@ void gpu_rolling(gdf_size_type nrows,
     bool output_is_valid = (count >= min_periods);
 
     // set the mask
-    MaskType const result_mask{__ballot_sync(active_threads, output_is_valid)};
-    gdf_index_type const out_mask_location = i / BITS_PER_MASK;
-    MaskType* const __restrict__ out_mask32 = reinterpret_cast<MaskType*>(out_col_valid);
+    bit_mask_t const result_mask{__ballot_sync(active_threads, output_is_valid)};
+    gdf_index_type const out_mask_location = gdf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(i);
 
     // only one thread writes the mask
     if (0 == threadIdx.x % warpSize)
-      out_mask32[out_mask_location] = result_mask;
+      out_col_valid[out_mask_location] = result_mask;
 
     // store the output value, one per thread
     if (output_is_valid)
@@ -216,43 +215,46 @@ struct rolling_window_launcher
 		  cudaStream_t stream)
   {
     ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
+    bit_mask_t *typed_out_valid = reinterpret_cast<bit_mask::bit_mask_t*>(out_col_valid_ptr);
     const ColumnType *typed_in_data = static_cast<const ColumnType*>(in_col_data_ptr);
+    const bit_mask_t *typed_in_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(in_col_valid_ptr);
+
     // TODO: We should consolidate our aggregation enums for reductions, scans,
     //       groupby and rolling. @harrism suggested creating
     //       aggregate_dispatcher that works like type_dispatcher.
     switch (agg_type) {
     case GDF_SUM:
       dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, stream,
-							   typed_out_data, out_col_valid_ptr,
-							   typed_in_data, in_col_valid_ptr,
+							   typed_out_data, typed_out_valid,
+							   typed_in_data, typed_in_valid,
 							   window, min_periods, forward_window,
 							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
       dispatch_aggregation_type<ColumnType, min_op, false>(nrows, stream,
-							   typed_out_data, out_col_valid_ptr,
-							   typed_in_data, in_col_valid_ptr,
+							   typed_out_data, typed_out_valid,
+							   typed_in_data, typed_in_valid,
 							   window, min_periods, forward_window,
 							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
       dispatch_aggregation_type<ColumnType, max_op, false>(nrows, stream,
-							   typed_out_data, out_col_valid_ptr,
-							   typed_in_data, in_col_valid_ptr,
+							   typed_out_data, typed_out_valid,
+							   typed_in_data, typed_in_valid,
 							   window, min_periods, forward_window,
 							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
       dispatch_aggregation_type<ColumnType, count_op, false>(nrows, stream,
-							   typed_out_data, out_col_valid_ptr,
-							   typed_in_data, in_col_valid_ptr,
+							   typed_out_data, typed_out_valid,
+							   typed_in_data, typed_in_valid,
 							   window, min_periods, forward_window,
 							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
       dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, stream,
-							   typed_out_data, out_col_valid_ptr,
-							   typed_in_data, in_col_valid_ptr,
+							   typed_out_data, typed_out_valid,
+							   typed_in_data, typed_in_valid,
 							   window, min_periods, forward_window,
 							   window_col, min_periods_col, forward_window_col);
       break;

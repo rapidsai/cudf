@@ -105,7 +105,7 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
    */
-  gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
+  inline gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
     //
     //  To handle padding, we will round the number_of_records up to the next padding boundary, then identify how many element
     //  that equates to.  Then we can allocate the appropriate amount of storage.
