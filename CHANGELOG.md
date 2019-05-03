@@ -29,6 +29,7 @@
 - PR #1301 MultiIndex support
 - PR #1599 Level keyword supported in groupby
 - PR #929 Add support operations to dataframe
+- PR #1609 Groupby accept list of Series
 
 ## Improvements
 
@@ -121,6 +122,7 @@
 - PR #1551 CSV Reader: Fix integer column name indexing
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
+- PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 
 
 # cuDF 0.6.1 (25 Mar 2019)

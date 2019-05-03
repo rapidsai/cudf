@@ -421,3 +421,14 @@ def test_advanced_groupby_levels():
         gdh = gdg.groupby(level=2).sum()
     raises.match("Too many levels")
     assert_eq(pdh, gdh)
+
+
+def test_list_of_series():
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby([pdf.x]).y.sum()
+    gdg = gdf.groupby([gdf.x]).y.sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
+    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
+    assert_eq(pdg, gdg)
