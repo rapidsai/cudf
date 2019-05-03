@@ -775,6 +775,10 @@ class Series(object):
         self._index = _index
 
     @property
+    def loc(self):
+        return Loc(self)
+
+    @property
     def iloc(self):
         """
         For integer-location based selection.
@@ -1762,6 +1766,19 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+
+class Loc(object):
+    """
+    Label-based selection
+    """
+
+    def __init__(self, sr):
+        self._sr = sr
+
+    def __getitem__(self, arg):
+        found_index = self._sr.index.as_column().find_first_value(arg)
+        return self._sr.iloc[found_index]
 
 
 class Iloc(object):
