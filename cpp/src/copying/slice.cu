@@ -1,6 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
+ *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,7 @@
 #include "utilities/error_utils.hpp"
 #include "utilities/cuda_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
+#include <nvstrings/NVCategory.h>
 
 namespace cudf {
 
@@ -111,7 +113,6 @@ void slice_bitmask_kernel(gdf_valid_type*       output_bitmask,
   }
 }
 
-
 class Slice {
 public:
   Slice(gdf_column const*                 input_column,
@@ -128,8 +129,6 @@ public:
   void operator()() {
 
     gdf_size_type columns_quantity = num_indices_/2;
-
-    
     
     // Perform operation
     for (gdf_index_type index = 0; index < columns_quantity; ++index) {
@@ -199,6 +198,12 @@ public:
       CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(gdf_size_type), 
                   cudaMemcpyDeviceToHost, stream));
       output_column->null_count = output_column->size - num_nulls;
+
+      if (output_column->dtype == GDF_STRING_CATEGORY){
+        NVCategory* new_category = static_cast<NVCategory*>(input_column_->dtype_info.category)->gather_and_remap(
+                      static_cast<int*>(output_column->data), (unsigned int)output_column->size);
+        output_column->dtype_info.category = new_category;
+      }
     }
   }
 
@@ -218,9 +223,7 @@ public:
     std::vector<gdf_column*> const  output_columns_;
     std::vector<cudaStream_t>      streams_; 
 };
-
 } // namespace
-
 
 namespace detail {
 
@@ -268,17 +271,14 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
 }
 
 } // namespace detail
-} // namespace cudf
 
-
-namespace cudf {
 
 std::vector<gdf_column*> slice(gdf_column const*          input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices) {
 
   std::vector<cudaStream_t> streams;
-  return cudf::detail::slice(input_column, indices, num_indices, streams);  
+  return cudf::detail::slice(input_column, indices, num_indices, streams);
 }
 
 } // namespace cudf

@@ -137,28 +137,24 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * There is no relationship between the values of each pair of indices.
  *
  * Exceptional cases for the indices array are:
- * When the values in the pair are equal, the function return an empty column.
+ * When the values in the pair are equal, the function returns an empty column.
  * When the values in the pair are 'strictly decreasing', the outcome is
  * undefined.
  * When any of the values in the pair don't belong to the range[0, input column
  * size), the outcome is undefined.
  *
- * It is required that the output columns will be preallocated. The size of each
- * of the columns can be of different value. The number of columns must be equal
- * to the number of indices in the array divided by two. The indices array must
- * have an even size. The datatypes of the input column and the output columns
- * must be the same.
+ * The output columns will be allocated by the function.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * indexes: {1, 3, 5, 9, 2, 4, 8, 8}
+ * indices: {1, 3, 5, 9, 2, 4, 8, 8}
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
- * @param[in] input_column The input column whose rows will be sliced.
- * @param[in] indexes An array of indices that are used to take 'slices'
+ * @param[in] input_column  The input column whose rows will be sliced.
+ * @param[in] indices       An array of indices that are used to take 'slices'
  * of the input column.
- * @param[out] output_columns A preallocated set of columns. Each column
- * has a different number of rows that are equal to the difference of two
+ * @Returns output_columns  A set of gdf_column*. Each column can have
+ * a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
 std::vector<gdf_column*> slice(gdf_column const*          input_column,
@@ -175,13 +171,13 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * the indices array in a consecutive manner. The pair of indices are left-closed
  * and right-open.
  *
- * The indices array ('indexes') is require to be a monotonic non-decreasing set.
+ * The indices array ('indices') is require to be a monotonic non-decreasing set.
  * The indices in the array are required to comply with the following conditions:
  * a, b belongs to Range[0, input column size]
  * a <= b, where the position of a is less or equal to the position of b.
  *
  * The split function will take a pair of indices from the indices array
- * ('indexes') in a consecutive manner. For the first pair, the function will
+ * ('indices') in a consecutive manner. For the first pair, the function will
  * take the value 0 and the first element of the indices array. For the last pair,
  * the function will take the last element of the indices array and the size of
  * the input column.
@@ -200,19 +196,18 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * indexes: {2, 5, 9}
+ * indices: {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
- * @param[in] input_column The input column whose rows will be split.
- * @param[in] indexes An array of indices that are used to divide the input
+ * @param[in] input_column  The input column whose rows will be split.
+ * @param[in] indices       An array of indices that are used to divide the input
  * column into multiple columns.
- * @param[out] output_columns A preallocated set of columns. Each column
- * has a different number of rows that are equal to the difference of two
- * consecutive indices in the indices array.
+ * @Returns output_columns  A set of gdf_column*. Each column can have
+ * a different number of rows.
  */
-// void split(gdf_column const*   input_column,
-//            gdf_column const*   indexes,
-//            cudf::column_array* output_columns);
+std::vector<gdf_column*> split(gdf_column const*          input_column,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
 
 }  // namespace cudf
 

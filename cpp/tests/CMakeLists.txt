@@ -235,7 +235,8 @@ ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 # - nvcategory tests -------------------------------------------------------------------------------
 
 set(NVCATEGORY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
@@ -255,7 +256,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
