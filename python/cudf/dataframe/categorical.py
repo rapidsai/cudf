@@ -236,59 +236,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return -1
 
-    def join(self, other, how='left', return_indexers=False,
-             method='hash'):
-        if not isinstance(other, CategoricalColumn):
-            raise TypeError('*other* is not a categorical column')
-        if self._ordered != other._ordered or self._ordered:
-            raise TypeError('cannot join on ordered column')
-
-        # Determine new categories after join
-        lcats = self._categories
-        rcats = other._categories
-        if how == 'left':
-            cats = lcats
-            other = other.cat()._set_categories(cats).fillna(-1)
-        elif how == 'right':
-            cats = rcats
-            self = self.cat()._set_categories(cats).fillna(-1)
-        elif how in ['inner', 'outer']:
-            # Do the join using the union of categories from both side.
-            # Adjust for inner joins afterwards
-            cats = sorted(set(lcats) | set(rcats))
-            self = self.cat()._set_categories(cats).fillna(-1)
-            other = other.cat()._set_categories(cats).fillna(-1)
-        else:
-            raise ValueError('unknown *how* ({!r})'.format(how))
-
-        # Do join as numeric column
-        join_result = self.as_numerical.join(
-            other.as_numerical, how=how,
-            return_indexers=return_indexers,
-            method=method)
-
-        if return_indexers:
-            joined_index, indexers = join_result
-        else:
-            joined_index = join_result
-
-        # Fix index.  Make it categorical
-        joined_index = joined_index.view(CategoricalColumn,
-                                         dtype=self.dtype,
-                                         categories=tuple(cats),
-                                         ordered=self._ordered)
-
-        if how == 'inner':
-            # Adjust for inner join.
-            # Only retain categories common on both side.
-            cats = sorted(set(lcats) & set(rcats))
-            joined_index = joined_index.cat()._set_categories(cats)
-
-        if return_indexers:
-            return joined_index, indexers
-        else:
-            return joined_index
-
     def find_and_replace(self, to_replace, value):
         """
         Return col with *to_replace* replaced with *value*.

@@ -108,7 +108,7 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   inputData6[3] = 786.34;
   inputData6[4] = 343.01;
 
-  rmm::device_vector<gdf_valid_type> inputValidDev(1,0);
+  rmm::device_vector<gdf_valid_type> inputValidDev(1,0xFF);
 
   rmm::device_vector<int8_t> intputDataDev1(inputData1);
   rmm::device_vector<int16_t> intputDataDev2(inputData2);

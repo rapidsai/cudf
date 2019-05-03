@@ -9,6 +9,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
+import nvstrings
 
 
 def optimal_block_count(minblkct):
@@ -428,7 +429,7 @@ def reverse_array(data, out=None):
 
 
 #
-# Fill NA
+# Null handling
 #
 
 
@@ -448,6 +449,52 @@ def fillna(data, mask, value):
         configured = gpu_fill_masked.forall(data.size)
         configured(value, mask, out)
     return out
+
+
+@cuda.jit
+def gpu_isnull(validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = mask_get(validity, tid)
+        if valid:
+            out[tid] = False
+        else:
+            out[tid] = True
+
+
+def isnull_mask(data, mask):
+    # necessary due to rapidsai/custrings#263
+    if isinstance(data, nvstrings.nvstrings):
+        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
+    else:
+        output_dary = rmm.device_array(data.size, dtype=np.bool_)
+
+    if output_dary.size > 0:
+        gpu_isnull.forall(output_dary.size)(mask, output_dary)
+    return output_dary
+
+
+@cuda.jit
+def gpu_notna(validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = mask_get(validity, tid)
+        if valid:
+            out[tid] = True
+        else:
+            out[tid] = False
+
+
+def notna_mask(data, mask):
+    # necessary due to rapidsai/custrings#263
+    if isinstance(data, nvstrings.nvstrings):
+        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
+    else:
+        output_dary = rmm.device_array(data.size, dtype=np.bool_)
+
+    if output_dary.size > 0:
+        gpu_notna.forall(output_dary.size)(mask, output_dary)
+    return output_dary
 
 
 #

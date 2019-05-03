@@ -129,11 +129,13 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
     case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
     case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    case GDF_BOOL8:     { return f.template operator()< bool8 >(std::forward<Ts>(args)...); }
     case GDF_DATE32:    { return f.template operator()< date32 >(std::forward<Ts>(args)...); }
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
-    case GDF_STRING_CATEGORY:  { return f.template operator()< nvstring_category >(std::forward<Ts>(args)...); }
+    case GDF_STRING_CATEGORY:  
+                        { return f.template operator()< nvstring_category >(std::forward<Ts>(args)...); }
     default: {
 #ifdef __CUDA_ARCH__
       
@@ -206,6 +208,11 @@ inline constexpr gdf_dtype gdf_dtype_of<float>() {
 template <>
 inline constexpr gdf_dtype gdf_dtype_of<double>() {
   return GDF_FLOAT64;
+};
+
+template <>
+inline constexpr gdf_dtype gdf_dtype_of<cudf::bool8>() {
+  return GDF_BOOL8;
 };
 
 template <>

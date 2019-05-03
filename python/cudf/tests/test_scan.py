@@ -190,3 +190,17 @@ def test_cumprod_masked():
         expected = pd.Series([1, 2, -1, 8, 40]).astype('int64')
         gs = Series(data).astype(type_)
         assert_eq(gs.cumprod(), expected)
+
+
+def test_scan_boolean():
+    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
+
+    got = (s > 0).cumsum()
+    expect = pd.Series([False, False, False, True, True,
+                        True, True, True, True])
+
+    assert_eq(expect, got)
+
+    got = (s > 0).astype(np.int32).cumsum()
+    expect = pd.Series([0, 0, 0, 1, 2, 2, 2, 2, 3])
+    assert_eq(expect, got)
