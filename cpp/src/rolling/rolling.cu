@@ -30,6 +30,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 // basic aggregation classes from groupby
+// TODO: once #1478 is merged we need to update to use device_atomics.cuh instead
 #include <groupby/aggregation_operations.hpp>
 
 namespace
@@ -103,6 +104,9 @@ void gpu_rolling(gdf_size_type nrows,
     gdf_size_type end_index = min(nrows, i + forward_window + 1);       // exclusive
 
     // aggregate
+    // TODO: We should explore using shared memory to avoid redundant loads.
+    //       This might require separating the kernel into a special version
+    //       for dynamic and static sizes.
     for (size_t j = start_index; j < end_index; j++) {
       bool const input_is_valid{gdf_is_valid(in_col_valid, j)};
       if (input_is_valid) {
@@ -138,7 +142,7 @@ void gpu_rolling(gdf_size_type nrows,
   }
 }
 
-struct launch_kernel
+struct rolling_window_launcher
 {
   /**
    * @brief Uses SFINAE to instantiate only for arithmetic types
@@ -187,21 +191,43 @@ struct launch_kernel
 		  const gdf_size_type *min_periods_col,
 		  const gdf_size_type *forward_window_col)
   {
+    ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
+    const ColumnType *typed_in_data = static_cast<const ColumnType*>(in_col_data_ptr);
     switch (agg_type) {
     case GDF_SUM:
-      dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, sum_op, false>(nrows,
+							   typed_out_data, out_col_valid_ptr,
+							   typed_in_data, in_col_valid_ptr,
+							   window, min_periods, forward_window,
+							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
-      dispatch_aggregation_type<ColumnType, min_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, min_op, false>(nrows,
+							   typed_out_data, out_col_valid_ptr,
+							   typed_in_data, in_col_valid_ptr,
+							   window, min_periods, forward_window,
+							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
-      dispatch_aggregation_type<ColumnType, max_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, max_op, false>(nrows,
+							   typed_out_data, out_col_valid_ptr,
+							   typed_in_data, in_col_valid_ptr,
+							   window, min_periods, forward_window,
+							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
-      dispatch_aggregation_type<ColumnType, count_op, false>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, count_op, false>(nrows,
+							   typed_out_data, out_col_valid_ptr,
+							   typed_in_data, in_col_valid_ptr,
+							   window, min_periods, forward_window,
+							   window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
-      dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, reinterpret_cast<ColumnType*>(out_col_data_ptr), out_col_valid_ptr, reinterpret_cast<ColumnType*>(in_col_data_ptr), in_col_valid_ptr, window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      dispatch_aggregation_type<ColumnType, sum_op, true>(nrows,
+							   typed_out_data, out_col_valid_ptr,
+							   typed_in_data, in_col_valid_ptr,
+							   window, min_periods, forward_window,
+							   window_col, min_periods_col, forward_window_col);
       break;
     default:
       // TODO: need a nice way to convert enums to strings, same would be useful for groupbys
@@ -228,11 +254,10 @@ gdf_column* rolling_window(const gdf_column *input_col,
   CUDF_EXPECTS(nullptr != input_col, "Input column pointer must not be null");
 
   // Use the column wrapper class from io/utilities to quickly create a column
-  // TODO: should we care about naming the column?
   gdf_column_wrapper output_col(input_col->size,
 				input_col->dtype,
 				gdf_dtype_extra_info{TIME_UNIT_NONE},
-				"rolling output column");
+				"");
 
   // If there are no rows in the input, return successfully
   if (input_col->size == 0)
@@ -246,7 +271,7 @@ gdf_column* rolling_window(const gdf_column *input_col,
 
   // Launch type dispatcher
   cudf::type_dispatcher(input_col->dtype,
-                        launch_kernel{},
+                        rolling_window_launcher{},
                         input_col->size, agg_type,
                         output_col->data, output_col->valid,
 			input_col->data, input_col->valid,
