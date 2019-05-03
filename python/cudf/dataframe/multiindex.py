@@ -79,12 +79,17 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        if(deep):
-            result = deepcopy(self)
-        else:
-            result = copy(self)
-        result.name = self.name
-        return result
+        mi = MultiIndex(self.levels.copy(),
+                        self.codes.copy(deep))
+        if self.names:
+            mi.names = self.names.copy()
+        return mi
+
+    def deepcopy(self):
+        return self.copy(deep=True)
+
+    def __copy__(self):
+        return self.copy(deep=True)
 
     def _popn(self, n):
         """ Returns a copy of this index without the left-most n values.
@@ -262,19 +267,6 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         result = cls.from_pandas(pdi)
         return result
-
-    def copy(self, deep=True):
-        mi = MultiIndex(self.levels.copy(),
-                        self.codes.copy(deep))
-        if self.names:
-            mi.names = self.names.copy()
-        return mi
-
-    def deepcopy(self):
-        return self.copy(deep=True)
-
-    def __copy__(self):
-        return self.copy(deep=True)
 
     def to_pandas(self):
         pandas_codes = []
