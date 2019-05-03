@@ -13,6 +13,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 import cudf.bindings.quantile as cpp_quantile
+import cudf.bindings.copying as cpp_copying
 
 from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
@@ -601,7 +602,7 @@ class Column(object):
 
         # TODO replace by `apply_gather_array`
         # this is tested by `test_merge_left_right_index`
-        data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
+        col = cpp_copying.apply_gather_array(self._data.to_gpu_array(), indices)
 
         if self._mask:
             mask = self._get_mask_as_column().take(indices).as_mask()
@@ -609,7 +610,7 @@ class Column(object):
         else:
             mask = None
 
-        return self.replace(data=Buffer(data), mask=mask)
+        return self.replace(data=col.data, mask=mask)
 
     def as_mask(self):
         """Convert booleans to bitmask

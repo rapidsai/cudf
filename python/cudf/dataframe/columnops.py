@@ -19,6 +19,7 @@ from cudf import _gdf
 from cudf.utils.utils import buffers_from_pyarrow
 
 import warnings
+import cudf.bindings.copying as cpp_copying
 
 
 class TypedColumnBase(Column):
@@ -147,11 +148,9 @@ def column_select_by_position(column, positions):
 
     assert column.null_count == 0
 
-    # TODO replace by `apply_gather_array`
-    # this is tested by `test_series_indexing`
-    selvals = cudautils.gather(column.data.to_gpu_array(),
-                               positions.data.to_gpu_array())
-    selected_values = column.replace(data=Buffer(selvals))
+    selvals = cpp_copying.apply_gather_array(column.data.to_gpu_array(),
+                                             positions.data.to_gpu_array())
+    selected_values = column.replace(data=selvals.data)
     selected_index = Buffer(positions.data.to_gpu_array())
 
     return selected_values, NumericalColumn(data=selected_index,

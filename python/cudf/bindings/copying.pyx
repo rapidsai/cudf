@@ -9,6 +9,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.types cimport table as cudf_table
 from cudf.bindings.types import *
+from cudf.utils.cudautils import astype
 from librmm_cffi import librmm as rmm
 
 import numpy as np
@@ -70,7 +71,7 @@ def apply_gather(in_cols, maps, out_cols=None):
 
      * returns out_cols
     """
-    # TODO check the dtype of `maps` is compatible with gdf_index_type
+    maps = astype(maps, 'int32')
 
     col_count=len(in_cols)
     gather_count = len(maps)

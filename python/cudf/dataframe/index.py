@@ -20,6 +20,8 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
 
+import cudf.bindings.copying as cpp_copying
+
 
 class Index(object):
     """The root interface for all Series indexes.
@@ -70,10 +72,8 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            # TODO replace by `apply_gather_array`
-            # this is tested by `test_query_splitted_combine`
-            index = cudautils.gather(data=self.gpu_values, index=indices)
-            col = self.as_column().replace(data=Buffer(index))
+            col_index = cpp_copying.apply_gather_array(self.gpu_values, indices)
+            col = self.as_column().replace(data=col_index.data)
             return as_index(col)
 
     def argsort(self, ascending=True):
