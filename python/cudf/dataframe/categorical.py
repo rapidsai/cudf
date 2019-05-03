@@ -267,10 +267,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
         fill_is_scalar = np.isscalar(fill_value)
 
         if fill_is_scalar and fill_value == self.default_na_value():
-            out = cudautils.fillna(data=self.data.to_gpu_array(),
-                                   mask=self.mask.to_gpu_array(),
-                                   value=fill_value)
-            result = result.replace(data=Buffer(out))
+            fill_value_col = columnops.as_column(
+                [fill_value], nan_as_null=False, dtype=self.data.dtype)
         else:
             if fill_is_scalar:
                 if fill_value != self.default_na_value():
@@ -286,7 +284,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             fill_value_col = fill_value_col.cat()._set_categories(
                 self.cat().categories)
 
-            cpp_replace.replace_nulls(result, fill_value_col)
+        cpp_replace.replace_nulls(result, fill_value_col)
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
 
