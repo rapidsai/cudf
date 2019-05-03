@@ -5,7 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport uint8_t, uintptr_t
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
@@ -246,8 +246,8 @@ class GpuArrowReader(Sequence):
         "Parse the metadata in the IPC handle"
 
         cdef char[::1] schema_data = self._schema_data
-        cdef uint8_t* gpu_ptr
-        cdef gdf_ipc_parser_type* ipcparser
+        cdef uintptr_t gpu_ptr = 0
+        cdef gdf_ipc_parser_type* ipcparser = <gdf_ipc_parser_type*>NULL
 
         # parse schema
         try:
@@ -258,8 +258,11 @@ class GpuArrowReader(Sequence):
             _check_error(ipcparser)
 
             gpu_ptr = self._gpu_data.device_ctypes_pointer.value
-            gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
-                                              self._gpu_data.size)
+            gdf_ipc_parser_open_recordbatches(
+                ipcparser,
+                <uint8_t*>gpu_ptr,
+                self._gpu_data.size
+            )
             # check for failure in parsing the recordbatches
             _check_error(ipcparser)
             # get schema as json
@@ -272,7 +275,6 @@ class GpuArrowReader(Sequence):
             # get data offset
             _logger.debug('IPCParser data region offset')
             dataoffset = gdf_ipc_parser_get_data_offset(ipcparser)
-            dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
         finally:
             _logger.debug('close IPCParser')
