@@ -183,8 +183,8 @@ void JsonReader::ingestRawInput() {
     // Ignore page padding for parsing purposes
     input_size_ = map_size - page_padding;
   } else if (args_->source_type == gdf_csv_input_form::HOST_BUFFER) {
-    input_data_ = args_->source;
-    input_size_ = args_->buffer_size;
+    input_data_ = args_->source + args_->byte_range_offset;
+    input_size_ = args_->buffer_size - args_->byte_range_offset;
   } else {
     CUDF_FAIL("Invalid input type");
   }
@@ -268,30 +268,32 @@ void JsonReader::setRecordStarts() {
 
 void JsonReader::uploadDataToDevice() {
   size_t start_offset = 0;
-  size_t bytes_to_upload = uncomp_size_;
+  size_t end_offset = uncomp_size_;
 
   // Trim lines that are outside range
-  if (args_->byte_range_size != 0) {
+  if (args_->byte_range_size != 0 || args_->byte_range_offset != 0) {
     std::vector<uint64_t> h_rec_starts(rec_starts_.size());
     CUDA_TRY(
         cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t) * h_rec_starts.size(), cudaMemcpyDefault));
 
-    auto it = h_rec_starts.end() - 1;
-    while (it >= h_rec_starts.begin() && *it > args_->byte_range_size) {
-      --it;
+    if (args_->byte_range_size != 0) {
+      auto it = h_rec_starts.end() - 1;
+      while (it >= h_rec_starts.begin() && *it > args_->byte_range_size) {
+        end_offset = *it;
+        --it;
+      }
+      h_rec_starts.erase(it + 1, h_rec_starts.end());
     }
-    const auto end_offset = *(it + 1);
-    h_rec_starts.erase(it + 1, h_rec_starts.end());
-
-    start_offset = h_rec_starts.front();
-    bytes_to_upload = end_offset - start_offset;
-    CUDF_EXPECTS(bytes_to_upload <= uncomp_size_, "Error finding the record within the specified byte range.\n");
 
     // Resize to exclude rows outside of the range; adjust row start positions to account for the data subcopy
+    start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
     thrust::transform(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + rec_starts_.size(),
                       thrust::make_constant_iterator(start_offset), rec_starts_.data(), thrust::minus<uint64_t>());
   }
+
+  const size_t bytes_to_upload = end_offset - start_offset;
+  CUDF_EXPECTS(bytes_to_upload <= uncomp_size_, "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
   d_data_ = device_buffer<char>(bytes_to_upload);

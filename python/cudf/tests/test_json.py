@@ -5,9 +5,15 @@ from cudf.tests.utils import assert_eq
 
 import pytest
 import os
+import numpy as np
 import pandas as pd
 import itertools
 
+def make_numeric_dataframe(nrows, dtype):
+    df = pd.DataFrame()
+    df['col1'] = np.arange(nrows, dtype=dtype)
+    df['col2'] = np.arange(1, 1 + nrows, dtype=dtype)
+    return df
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
@@ -133,37 +139,58 @@ def test_json_writer(tmpdir, pdf, gdf):
 
         assert_eq(expect_series, got_series)
 
-def test_json_lines_basic():
-    df = cudf.read_json('[1,2,3]', lines=True)
-    assert(df.shape == (1, 3))
-
-def test_json_lines_file_input(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_jsonreader_file1.json")
-
-    with open(str(fname), 'w') as fp:
-        fp.write('[1,2,3]')
-
-    df = cudf.read_json(str(fname), lines=True)
-    assert(df.shape == (1, 3))
-
-def test_json_lines_byte_range():
+@pytest.fixture(params=[False, True])
+def json_input(request, tmp_path_factory):
+    is_file = request.param
     buffer = '[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n'
+    if is_file:
+        return buffer
+    else:
+        fname = tmp_path_factory.mktemp("json") / "test_df.json"
+        with open(str(fname), 'w') as fp:
+            fp.write(buffer)
+        return str(fname)
 
-    # include the start of the first row
-    df = cudf.read_json(buffer, lines=True, byte_range=(0, 5))
-    assert(df.shape == (1, 3))
+def test_json_lines_basic(json_input):
+    df = cudf.read_json(json_input, lines=True)
+    assert(df.shape == (3, 3))
+
+def test_json_lines_byte_range(json_input):
+
+    # include the first row and half of the second row
+    # should parse the first two rows
+    df = cudf.read_json(json_input, lines=True, byte_range=(0, 15))
+    assert(df.shape == (2, 3))
 
     # include half of the second row and half of the third row
-    df = cudf.read_json(buffer, lines=True, byte_range=(10, 10))
+    # should parse only the third row
+    df = cudf.read_json(json_input, lines=True, byte_range=(15, 10))
     assert(df.shape == (1, 3))
 
     # include half of the second row and entire third row
-    df = cudf.read_json(buffer, lines=True, byte_range=(0, 0)) # TODO set non-zero offset tpo repro issue
-    assert(df.shape == (3, 3))
+    # should parse only the third row
+    df = cudf.read_json(json_input, lines=True, byte_range=(15, 0))
+    assert(df.shape == (1, 3))
 
-def test_json_lines_dtypes():
-    df = cudf.read_json('[1,2,3]\n', lines=True, dtype=["float", "int", "short"])
+    # include half of the second row till past the end of the file
+    # should parse only the third row
+    df = cudf.read_json(json_input, lines=True, byte_range=(10, 50))
+    assert(df.shape == (1, 3))
+
+def test_json_lines_dtypes(json_input):
+    df = cudf.read_json(json_input, lines=True, dtype=["float", "int", "short"])
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
-    df = cudf.read_json('[1,2,3]\n', lines=True, dtype={1:"int", 2:"short", 0:"float"})
+    df = cudf.read_json(json_input, lines=True, dtype={1:"int", 2:"short", 0:"float"})
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
+
+def test_json_lines_compression(tmpdir):
+    fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
+
+    nrows = 20
+    df = make_numeric_dataframe(nrows, np.int32)
+    df.to_json(fname, compression='gzip')
+
+    out = cudf.read_json(str(fname), compression='gzip')
+
+    assert(out.shape == (nrows, 2))
