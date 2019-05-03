@@ -93,15 +93,10 @@ protected:
 
   void create_gdf_input_buffers()
   {
-    if (in_col_valid.size() > 0) {
-      auto valid_generator = [&](size_t row, size_t col){
-        return in_col_valid[row];
-      };
-      // note that if gdf_col_pointer contained something it will be freed since it's a unique pointer
-      in_gdf_col = init_gdf_column(in_col, 0, valid_generator);
-    }
+    if (in_col_valid.size() > 0)
+      in_gdf_col = std::make_unique<cudf::test::column_wrapper<T>>(in_col, [&](gdf_index_type row) { return in_col_valid[row]; });
     else
-      in_gdf_col = create_gdf_column(in_col);
+      in_gdf_col = std::make_unique<cudf::test::column_wrapper<T>>(in_col);
   }
 
   template<template <typename AggType> class agg_op, bool average>
@@ -224,7 +219,7 @@ protected:
       CUDA_TRY(cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
     }
 
-    out_gdf_col = { cudf::rolling_window(*in_gdf_col.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
+    out_gdf_col = { cudf::rolling_window(*in_gdf_col->get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
 
     create_reference_output(agg, w, m, f, window, min_periods, forward_window);
 
@@ -253,7 +248,7 @@ protected:
   // input
   std::vector<T> in_col;
   std::vector<bool> in_col_valid;
-  gdf_col_pointer in_gdf_col;
+  std::unique_ptr<cudf::test::column_wrapper<T>> in_gdf_col;
 
   // reference
   std::vector<T> ref_data;
