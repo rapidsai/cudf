@@ -1255,16 +1255,12 @@ gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
  *
  * @param[in] poly_lats: Pointer to latitudes of a polygon
  * @param[in] poly_lons: Pointer to longitudes of a polygon
- * @param[in] point_lats: Pointer to latitudes of many query points
- * @param[in] point_lons: Pointer to longitudes of many query points
- * @param[in] poly_size: Size of polygon (first coordinate = last coordinate) must be closed
- * @param[in] point_size: Total number of query points
- * @param[out] point_is_in_polygon: Pointer indicating if the i-th query point is inside or not with {1, 0}
+ * @param[in] point_lats: Pointer to latitudes of query points
+ * @param[in] point_lons: Pointer to longitudes of query points
  *
- * @returns GDF_SUCCESS upon successful completion
+ * @returns Pointer to gdf_column indicating if the i-th query point is inside or not with {1, 0}
  */
-gdf_error gdf_point_in_polygon(gdf_column* polygon_latitudes, 
+gdf_column*  gdf_point_in_polygon(gdf_column* polygon_latitudes, 
                           gdf_column* polygon_longitudes,
                           gdf_column* point_latitudes, 
-                          gdf_column* point_longitudes,
-                          gdf_column* output);
+                          gdf_column* point_longitudes);

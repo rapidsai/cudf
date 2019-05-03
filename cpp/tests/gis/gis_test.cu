@@ -1,33 +1,15 @@
-#include <bitmask/BitMask.cuh>
 #include "gtest/gtest.h"
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>  // GdfTest
-#include <cudf.h>     // create_gdf_column
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
 #include <vector>
 
 template <typename T>
 struct GISTest : public GdfTest 
 {
-    std::vector<T> polygon_lats;
-    std::vector<T> polygon_lons;
-    std::vector<T> point_lats;
-    std::vector<T> point_lons;
-    std::vector<int8_t> inside_polygon;
-    size_t total_points;
+    std::vector<T> polygon_lats, polygon_lons, point_lats, point_lons;
+    gdf_column *gdf_raw_polygon_lats, *gdf_raw_polygon_lons, *gdf_raw_point_lats, *gdf_raw_point_lons;
 
-    gdf_col_pointer gdf_col_ptr_polygon_lats;
-    gdf_col_pointer gdf_col_ptr_polygon_lons;
-    gdf_col_pointer gdf_col_ptr_point_lats;
-    gdf_col_pointer gdf_col_ptr_point_lons;
-    gdf_col_pointer gdf_col_ptr_inside_points;
-
-    gdf_column* gdf_raw_polygon_lats;
-    gdf_column* gdf_raw_polygon_lons;
-    gdf_column* gdf_raw_point_lats;
-    gdf_column* gdf_raw_point_lons;
-    gdf_column* gdf_raw_inside_polygon;
-
-    // TODO: comment params
     void create_input(const std::initializer_list<T> &column_polygon_lats_list,
         const std::initializer_list<T> &column_polygon_lons_list,
         const std::initializer_list<T> &column_point_lats_list,
@@ -39,33 +21,8 @@ struct GISTest : public GdfTest
         point_lats = column_point_lats_list;
         point_lons = column_point_lons_list;
 
-        if (polygon_lats.size() != polygon_lons.size())
-        {
-            std::cerr << "Polygon size doesn't match." << std::endl;
-            return;
-        }
-        
-        if (point_lats.size() != point_lons.size())
-        {
-            std::cerr << "Points size doesn't match." << std::endl;
-            return;
-        }
-
-        total_points = point_lats.size();
-        inside_polygon.resize(total_points, -1.0);
-
-        gdf_col_ptr_polygon_lats = create_gdf_column(polygon_lats);
-        gdf_col_ptr_polygon_lons = create_gdf_column(polygon_lons);
-        gdf_col_ptr_point_lats = create_gdf_column(point_lats);
-        gdf_col_ptr_point_lons = create_gdf_column(point_lons);
-        gdf_col_ptr_inside_points = create_gdf_column(inside_polygon);
-
-        gdf_raw_polygon_lats = gdf_col_ptr_polygon_lats.get();
-        gdf_raw_polygon_lons = gdf_col_ptr_polygon_lons.get();
-        gdf_raw_point_lats = gdf_col_ptr_point_lats.get();
-        gdf_raw_point_lons = gdf_col_ptr_point_lons.get();
-        gdf_raw_inside_polygon = gdf_col_ptr_inside_points.get();
-
+        EXPECT_EQ( polygon_lats.size(), polygon_lons.size() ) << "TEST: Polygon size doesn't match.";
+        EXPECT_EQ( point_lats.size(), point_lons.size() ) << "TEST: Points size doesn't match." ;
 
         if(print)
         {
@@ -79,13 +36,12 @@ struct GISTest : public GdfTest
 	    return ((p2_y - p1_y) * (p3_x - p2_x) - (p2_x - p1_x) * (p3_y - p2_y));
     }
 
-    // TODO: Implement  pip host
     std::vector<int8_t> compute_reference_pip(bool print = false)
-    {
-        // todo: pip host
+    {   
+        size_t total_points = polygon_lats.size();
         std::vector<int8_t> h_inside_polygon(total_points, -1);
 
-        for (size_t id_point = 0; id_point < point_lats.size(); ++id_point)
+        for (size_t id_point = 0; id_point < total_points; ++id_point)
         {
             T point_lat = point_lats[id_point];
             T point_lon = point_lons[id_point];
@@ -125,12 +81,23 @@ struct GISTest : public GdfTest
 
     std::vector<int8_t> compute_gdf_pip(bool print = false)
     {
-        gdf_point_in_polygon(gdf_raw_polygon_lats, gdf_raw_polygon_lons, gdf_raw_point_lats, gdf_raw_point_lons, gdf_raw_inside_polygon);
+        // column_wrapper for tests
+        cudf::test::column_wrapper<T> polygon_lat_wrapp{polygon_lats};
+        cudf::test::column_wrapper<T> polygon_lon_wrapp{polygon_lons};
+        cudf::test::column_wrapper<T> point_lat_wrapp{point_lats};
+        cudf::test::column_wrapper<T> point_lon_wrapp{point_lons};
+
+        gdf_raw_polygon_lats = polygon_lat_wrapp.get();
+        gdf_raw_polygon_lons = polygon_lon_wrapp.get();
+        gdf_raw_point_lats = point_lat_wrapp.get();
+        gdf_raw_point_lons = point_lon_wrapp.get();
+
+        gdf_column* inside_polygon_column = gdf_point_in_polygon(gdf_raw_polygon_lats, gdf_raw_polygon_lons, gdf_raw_point_lats, gdf_raw_point_lons);
+
+        size_t total_points = polygon_lats.size();
+        std::vector<int8_t> host_inside_polygon(total_points);
       
-        size_t output_size = gdf_raw_point_lats->size;
-        std::vector<int8_t> host_inside_polygon(output_size);
-      
-        EXPECT_EQ(cudaMemcpy(host_inside_polygon.data(), gdf_raw_inside_polygon->data, output_size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
+        EXPECT_EQ(cudaMemcpy(host_inside_polygon.data(), inside_polygon_column->data, total_points * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
 
         if(print)
         {
@@ -162,7 +129,8 @@ TYPED_TEST(GISTest, InsidePolygon)
     // Compare the GDF and reference solutions
     for(size_t i = 0; i < reference_pip_result.size(); ++i) {
         EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
-    }
+        
+    }   
 }
 
 TYPED_TEST(GISTest, OutsidePolygon)
