@@ -32,7 +32,7 @@ from librmm_cffi import librmm as rmm
 import cudf
 from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
-from cudf.dataframe.index import as_index, Index, RangeIndex, StringIndex
+from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
@@ -571,24 +571,6 @@ class DataFrame(object):
 
     def __abs__(self):
         return self._apply_op('__abs__')
-
-    def _apply_support_method(self, method):
-        result = [getattr(self[col], method)() for col in self._cols.keys()]
-        result = Series(result)
-        result = result.set_index(self._cols.keys())
-        return result
-
-    def sum(self):
-        return self._apply_support_method('sum')
-
-    def mean(self):
-        return self._apply_support_method('mean')
-
-    def max(self):
-        return self._apply_support_method('max')
-
-    def min(self):
-        return self._apply_support_method('min')
 
     def __iter__(self):
         return iter(self.columns)
@@ -2620,7 +2602,38 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+    #
+    # Stats
+    #
+    def count(self):
+        return self._apply_support_method('count')
+
+    def min(self):
+        return self._apply_support_method('min')
+
+    def max(self):
+        return self._apply_support_method('max')
+
+    def sum(self):
+        return self._apply_support_method('sum')
+
+    def product(self):
+        return self._apply_support_method('product')
+
+    def cummin(self):
+        return self._apply_support_method('cummin')
+
+    def cummax(self):
+        return self._apply_support_method('cummax')
+
+    def cumsum(self):
+        return self._apply_support_method('cumsum')
+
+    def cumprod(self):
+        return self._apply_support_method('cumprod')
+
+    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
+             **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2647,7 +2660,27 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
+        return self._apply_support_method('mean')
+
+    def std(self, ddof=1):
+        return self._apply_support_method('std', ddof)
+
+    def var(self, ddof=1):
+        return self._apply_support_method('var', ddof)
+
+    def _apply_support_method(self, *args, **kwargs):
+        method = args[0]
+        result = [getattr(self[col], method)(*kwargs)
+                  for col in self._cols.keys()]
+        if isinstance(result[0], Series):
+            support_result = result
+            result = DataFrame()
+            for idx, col in enumerate(self._cols.keys()):
+                result[col] = support_result[idx]
+        else:
+            result = Series(result)
+            result = result.set_index(self._cols.keys())
+        return result
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.

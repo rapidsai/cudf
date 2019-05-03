@@ -1473,21 +1473,27 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize('func', [
-    lambda df: df.mean(),
-    lambda df: df.sum(),
+    lambda df: df.count(),
     lambda df: df.min(),
     lambda df: df.max(),
-    lambda df: df.std(),
-    lambda df: df.count(),
-    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
-])
-@pytest.mark.parametrize('accessor', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail(
-        reason="dataframe reductions not yet supported")),
-    lambda df: df.x,
-])
-def test_reductions(pdf, gdf, accessor, func):
-    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
+    lambda df: df.sum(),
+    lambda df: df.product(),
+    lambda df: df.cummin(),
+    lambda df: df.cummax(),
+    lambda df: df.cumsum(),
+    lambda df: df.cumprod(),
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.max(),
+    lambda df: df.std(ddof=1),
+    lambda df: df.var(ddof=1),
+    ])
+def test_dataframe_reductions(func):
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    print(func(pdf))
+    gdf = DataFrame.from_pandas(pdf)
+    print(func(gdf))
+    assert_eq(func(pdf), func(gdf))
 
 
 @pytest.mark.parametrize('binop', [
