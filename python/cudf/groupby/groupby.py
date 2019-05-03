@@ -2,7 +2,6 @@
 
 import numpy as np
 
-from collections.abc import Sequence
 from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame

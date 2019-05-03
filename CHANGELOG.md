@@ -28,6 +28,7 @@
 - PR #1588 Add Index `astype` typecasting
 - PR #1301 MultiIndex support
 - PR #1599 Level keyword supported in groupby
+- PR #1609 Groupby accept list of Series
 
 ## Improvements
 
