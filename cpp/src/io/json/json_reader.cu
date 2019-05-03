@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -560,8 +561,8 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
   }
 }
 
-void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
-                                      gdf_size_type *num_valid_fields) {
+void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns,
+                                      gdf_valid_type *const *valid_fields, gdf_size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
@@ -716,8 +717,31 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
 void JsonReader::setDataTypes() {
   if (args_->dtype != nullptr) {
     CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.\n");
+    CUDF_EXPECTS(args_->num_cols == (int)column_names_.size(), "Need to specify the type of each column.\n");
+    std::vector<std::string> typestrings(args_->num_cols);
     for (int col = 0; col < args_->num_cols; ++col) {
-      dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
+      typestrings[col] = std::string(args_->dtype[col]);
+    }
+    // Assume that the dtype is in dictionary format only if all elements contain a colon
+    const bool is_dict = std::all_of(typestrings.begin(), typestrings.end(),
+                                     [](std::string &s) { return std::find(s.begin(), s.end(), ':') != s.end(); });
+    if (is_dict) {
+      std::map<std::string, gdf_dtype> col_type_map;
+      for (const auto &ts : typestrings) {
+        const size_t colon_idx = ts.find(":");
+        const std::string col_name(ts.begin(), ts.begin() + colon_idx);
+        const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
+        col_type_map[col_name] = convertStringToDtype(type_str);
+      }
+
+      // Using the map here allows O(n log n) complexity
+      for (int col = 0; col < args_->num_cols; ++col) {
+        dtypes_.push_back(col_type_map[column_names_[col]]);
+      }
+    } else {
+      for (int col = 0; col < args_->num_cols; ++col) {
+        dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
+      }
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");

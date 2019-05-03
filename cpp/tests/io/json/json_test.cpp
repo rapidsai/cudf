@@ -158,7 +158,7 @@ TEST_F(gdf_json_test, BasicJsonLines) {
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
-  const char *types[] = {"int", "float64", "str"};
+  const char *types[] = {"0:int", "1:float64", "2:str"};
   json_read_arg args{};
   args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
