@@ -5,7 +5,6 @@ import numpy as np
 import warnings
 
 from collections.abc import Sequence
-from copy import copy, deepcopy
 
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
