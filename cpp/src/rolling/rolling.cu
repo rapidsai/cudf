@@ -280,6 +280,8 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            const gdf_size_type *forward_window_col,
 			   cudaStream_t stream)
 {
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
+
   // Use the column wrapper class from io/utilities to quickly create a column
   gdf_column_wrapper output_col(input_col.size,
 				input_col.dtype,

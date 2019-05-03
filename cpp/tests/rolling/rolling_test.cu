@@ -500,3 +500,31 @@ TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
 			 forward_window);
 }
 
+using RollingTestInt = RollingTest<int32_t>;
+
+// negative sizes
+TEST_F(RollingTestInt, NegativeSizes)
+{
+  this->in_col 	     = {0, 1, 2, 0, 4};
+  this->in_col_valid = {1, 1, 1, 0, 1};
+  EXPECT_THROW(this->run_test_all_agg(-2, 2, 2,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>()), cudf::logic_error);
+  EXPECT_THROW(this->run_test_all_agg(2, -2, 2,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>()), cudf::logic_error);
+  EXPECT_THROW(this->run_test_all_agg(2, 2, -2,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>()), cudf::logic_error);
+}
+
+/* TODO: test the following failures
+   - window array size < input col size
+   - min periods array size < input col size
+   - sum of non-arithmetic types
+   - average for non-arithmetic types
+ */
+
