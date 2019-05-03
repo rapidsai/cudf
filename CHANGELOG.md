@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
 
 ## Improvements
 
