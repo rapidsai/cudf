@@ -1,6 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
+ *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,121 +73,6 @@ cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) 
   std::generate_n(bitmask.begin(), bitmask_size, std::ref(bitmask_random_generator));
 
   return cudf::test::column_wrapper<ColumnType>(std::move(data), std::move(bitmask));
-}
-
-
-template <typename ColumnType>
-std::vector<gdf_column*> allocate_slice_output_columns(
-      std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& output_columns,
-      std::vector<gdf_index_type>& indexes) {
-  for (std::size_t i = 0; i < indexes.size(); i += 2) {
-    gdf_size_type size = indexes[i + 1] - indexes[i];
-    output_columns.emplace_back(
-        std::make_shared<cudf::test::column_wrapper<ColumnType>>(size, true));
-  }
-
-  std::vector<gdf_column*> source_columns;
-  std::transform(output_columns.begin(),
-                 output_columns.end(),
-                 std::back_inserter(source_columns),
-                 [](std::shared_ptr<cudf::test::column_wrapper<ColumnType>>& column){
-                   return column->get();  
-                 });
-
-  return source_columns;
-}
-
-
-template <typename ColumnType>
-std::vector<gdf_column*> allocate_split_output_columns(
-      std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& output_columns,
-      std::vector<gdf_index_type>& indexes,
-      gdf_size_type input_size) {
-  gdf_size_type init_index{0};
-  for (std::size_t i = 0; i <= indexes.size(); ++i) {
-    gdf_size_type size = input_size - init_index;
-    if (i < indexes.size()) {
-      size = indexes[i] - init_index;
-      init_index = indexes[i];
-    }
-    output_columns.emplace_back(
-        std::make_shared<cudf::test::column_wrapper<ColumnType>>(size, true));
-  }
-
-  std::vector<gdf_column*> source_columns;
-  std::transform(output_columns.begin(),
-                 output_columns.end(),
-                 std::back_inserter(source_columns),
-                 [](std::shared_ptr<cudf::test::column_wrapper<ColumnType>>& column){
-                   return column->get();  
-                 });
-
-  return source_columns;
-}
-
-
-template <typename ColumnType>
-struct HelperColumn {
-  gdf_size_type bit_set_count;
-  std::vector<ColumnType> data;
-  std::vector<gdf_valid_type> bitmask;
-};
-
-
-template <typename ColumnType>
-HelperColumn<ColumnType> makeHelperColumn(
-    cudf::test::column_wrapper<ColumnType>& column) {
-  auto column_host = column.to_host();
-
-  HelperColumn<ColumnType> result;
-  result.bit_set_count = column.get()->null_count;
-  result.data = std::get<0>(column_host);
-  result.bitmask = std::get<1>(column_host);
-
-  return result;
-}
-
-
-template <typename ColumnType>
-HelperColumn<ColumnType> makeHelperColumn(
-    gdf_column* column) {
-  
-  gdf_size_type const num_masks{gdf_valid_allocation_size(column->size)};
-
-  HelperColumn<ColumnType> result;
-  result.bit_set_count = column->null_count;
-
-  if (column->size != 0) {
-    // TODO Is there a nicer way to get a `std::vector` from a device_vector?
-    result.data.resize(column->size);
-    CUDA_RT_CALL(cudaMemcpy(result.data.data(), column->data,
-                            column->size * sizeof(ColumnType),
-                            cudaMemcpyDeviceToHost));
-  }
-
-  if (nullptr != column->valid) {
-    result.bitmask.resize(num_masks);
-    CUDA_RT_CALL(cudaMemcpy(result.bitmask.data(), column->valid,
-                            num_masks * sizeof(gdf_valid_type),
-                            cudaMemcpyDeviceToHost));
-  }
-
-  return result;
-}
-
-
-template <typename ColumnType>
-std::vector<HelperColumn<ColumnType>> makeHelperColumn(
-    std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>>& columns) {
-  std::vector<HelperColumn<ColumnType>> result;
-  for (auto& column_wrapper : columns) {
-    auto column = column_wrapper->to_host();
-    result.emplace_back(
-        HelperColumn<ColumnType>{.bit_set_count = column_wrapper->get()->null_count,
-                                 .data = std::get<0>(column),
-                                 .bitmask = std::get<1>(column)});
-  }
-  return result;
 }
 
 
@@ -290,61 +176,44 @@ auto slice_columns(
 
 
 template <typename ColumnType>
-std::vector<HelperColumn<ColumnType>> split_columns(
-      HelperColumn<ColumnType>& input_column,
-      std::vector<gdf_index_type>& indexes,
-      gdf_size_type const input_size) {
-  std::vector<HelperColumn<ColumnType>> output_column_cpu;
+auto split_columns(
+      std::vector<ColumnType>& input_col_data,
+      std::vector<gdf_valid_type>& input_col_bitmask,
+      std::vector<gdf_index_type>& indexes) {
+
+  std::vector<std::vector<ColumnType>> output_cols_data;
+  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+  std::vector<gdf_size_type> output_cols_null_count;
+
   for (std::size_t i = 0; i <= indexes.size(); ++i) {
     gdf_size_type init_index{0};
     if (i != 0) {
       init_index = indexes[i - 1];
     }
-    gdf_size_type end_index = input_size;
+    gdf_size_type end_index = input_col_data.size();
     if (i < indexes.size()) {
       end_index = indexes[i];
     }
 
     if (init_index == end_index) {
-      HelperColumn<ColumnType> column {.bit_set_count = 0,
-                                       .data = std::vector<ColumnType>(),
-                                       .bitmask = std::vector<gdf_valid_type>() };
-      output_column_cpu.emplace_back(column);
-      continue;
-    }
+      output_cols_data.emplace_back(std::vector<ColumnType>());
+      output_cols_bitmask.emplace_back(std::vector<gdf_valid_type>());
+      output_cols_null_count.emplace_back(0);
+    } else {
+      output_cols_data.emplace_back(
+          std::vector<ColumnType>(input_col_data.begin() + init_index,
+                                  input_col_data.begin() + end_index));
 
-    HelperColumn<ColumnType> helper_column;
-    helper_column.data =
-        std::vector<ColumnType>(input_column.data.begin() + init_index,
-                                input_column.data.begin() + end_index);
-    helper_column.bitmask =
-        slice_cpu_valids<BITSET_SIZE>(helper_column.bit_set_count,
-                                      input_column.bitmask,
-                                      init_index,
-                                      end_index);
-
-    output_column_cpu.emplace_back(helper_column);
+      gdf_size_type bit_set_counter=0;
+      output_cols_bitmask.emplace_back(
+        slice_cpu_valids<BITSET_SIZE>(bit_set_counter,
+                                        input_col_bitmask,
+                                        init_index,
+                                        end_index));
+      output_cols_null_count.emplace_back(bit_set_counter);   
+    }       
   }
-  return output_column_cpu;
-}
-
-
-template <typename Type, template <typename> typename Column = HelperColumn>
-void verify(HelperColumn<Type> const& lhs, HelperColumn<Type> const& rhs) {
-  // Compare null count
-  ASSERT_EQ(lhs.bit_set_count, rhs.bit_set_count);
-
-  // Compare data
-  ASSERT_EQ(lhs.data.size(), rhs.data.size());
-  for (gdf_size_type i = 0; i < (gdf_size_type)lhs.data.size(); ++i) {
-    ASSERT_EQ(lhs.data[i], rhs.data[i]);
-  }
-
-  // Compare bitmask
-  ASSERT_EQ(lhs.bitmask.size(), rhs.bitmask.size());
-  for (gdf_size_type i = 0; i < (gdf_size_type)lhs.bitmask.size(); ++i) {
-    ASSERT_EQ(lhs.bitmask[i], rhs.bitmask[i]);
-  }
+  return std::make_tuple(output_cols_data, output_cols_bitmask, output_cols_null_count);
 }
 
 #endif

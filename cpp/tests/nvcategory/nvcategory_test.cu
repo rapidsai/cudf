@@ -1,3 +1,22 @@
+/*
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 Felipe Aramburu <felipe@blazingdb.com>
+ *     Copyright 2018 Rommel Quintanilla <rommel@blazingdb.com>
+ *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #include "gtest/gtest.h"
 
@@ -17,24 +36,26 @@
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "bitmask/bit_mask.cuh"
+#include "tests/utilities/nvcategory_utils.cuh"
+
 
 // See this header for all of the handling of valids' vectors 
 #include "tests/utilities/valid_vectors.h"
 #include "string/nvcategory_util.hpp"
 
-namespace {
-std::string const default_chars = 
-	"abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-}
+// namespace {
+// std::string const default_chars = 
+// 	"abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+// }
 
-std::string random_string(size_t len = 15, std::string const &allowed_chars = default_chars) {
-	std::mt19937_64 gen { std::random_device()() };
-	std::uniform_int_distribution<size_t> dist { 0, allowed_chars.length()-1 };
+// std::string random_string(size_t len = 15, std::string const &allowed_chars = default_chars) {
+// 	std::mt19937_64 gen { std::random_device()() };
+// 	std::uniform_int_distribution<size_t> dist { 0, allowed_chars.length()-1 };
 
-	std::string ret;
-	std::generate_n(std::back_inserter(ret), len, [&] { return allowed_chars[dist(gen)]; });
-	return ret;
-}
+// 	std::string ret;
+// 	std::generate_n(std::back_inserter(ret), len, [&] { return allowed_chars[dist(gen)]; });
+// 	return ret;
+// }
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 	gdf_column * column = new gdf_column;
@@ -68,81 +89,81 @@ gdf_column * create_column_constant(gdf_size_type num_rows, int value){
 	return column;
 }
 
-gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strings){
+// gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strings){
 
-	const char ** string_host_data = new const char *[num_rows];
-
-
-	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
-		string_host_data[row_index] = new char[(num_rows + 25) / 26]; //allows string to grow depending on numbe of rows
-		std::string temp_string = "";
-		int num_chars = repeat_strings ? 1 : (row_index / 26) + 1;
-		char repeat_char = (26 - (row_index % 26)) + 65; //chars are Z,Y ...C,B,A,ZZ,YY,.....BBB,AAA.....
-		for(int char_index = 0; char_index < num_chars; char_index++){
-			temp_string.push_back(repeat_char);
-		}
-		temp_string.push_back(0);
-		std::memcpy((void *) string_host_data[row_index],temp_string.c_str(),temp_string.size());
-
-	}
-
-	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
-
-	gdf_column * column = new gdf_column;
-	int * data;
-	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
+// 	const char ** string_host_data = new const char *[num_rows];
 
 
-	category->get_values( (int *)data, true );
-	bit_mask::bit_mask_t * valid;
-	bit_mask::create_bit_mask(&valid, num_rows,1);
+// 	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+// 		string_host_data[row_index] = new char[(num_rows + 25) / 26]; //allows string to grow depending on numbe of rows
+// 		std::string temp_string = "";
+// 		int num_chars = repeat_strings ? 1 : (row_index / 26) + 1;
+// 		char repeat_char = (26 - (row_index % 26)) + 65; //chars are Z,Y ...C,B,A,ZZ,YY,.....BBB,AAA.....
+// 		for(int char_index = 0; char_index < num_chars; char_index++){
+// 			temp_string.push_back(repeat_char);
+// 		}
+// 		temp_string.push_back(0);
+// 		std::memcpy((void *) string_host_data[row_index],temp_string.c_str(),temp_string.size());
 
-	gdf_error err = gdf_column_view(column,
-			(void *) data,
-			(gdf_valid_type *)valid,
-			num_rows,
-			GDF_STRING_CATEGORY);
-	column->dtype_info.category = category;
-	return column;
-}
+// 	}
 
-gdf_column * create_nv_category_column_strings(const char ** string_host_data, gdf_size_type num_rows){
-	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
+// 	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
-	gdf_column * column = new gdf_column;
-	int * data;
-	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
+// 	gdf_column * column = new gdf_column;
+// 	int * data;
+// 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 
-	category->get_values( (int *)data, true );
-	bit_mask::bit_mask_t * valid;
-	bit_mask::create_bit_mask(&valid, num_rows,1);
 
-	gdf_error err = gdf_column_view(column,
-			(void *) data,
-			(gdf_valid_type *)valid,
-			num_rows,
-			GDF_STRING_CATEGORY);
-	column->dtype_info.category = category;
-	return column;
-}
+// 	category->get_values( (int *)data, true );
+// 	bit_mask::bit_mask_t * valid;
+// 	bit_mask::create_bit_mask(&valid, num_rows,1);
 
-const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool print=false){
-	const char ** string_host_data = new const char *[num_rows];
+// 	gdf_error err = gdf_column_view(column,
+// 			(void *) data,
+// 			(gdf_valid_type *)valid,
+// 			num_rows,
+// 			GDF_STRING_CATEGORY);
+// 	column->dtype_info.category = category;
+// 	return column;
+// }
 
-	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
-		string_host_data[row_index] = new char[length+1];
+// gdf_column * create_nv_category_column_strings(const char ** string_host_data, gdf_size_type num_rows){
+// 	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
-		std::string rand_string = random_string(length);
-		rand_string.push_back(0);
-		if(print)
-			std::cout<<rand_string<<"\t";
-		std::memcpy((void *) string_host_data[row_index],rand_string.c_str(),rand_string.size());
-	}
-	if(print)
-		std::cout<<std::endl;
+// 	gdf_column * column = new gdf_column;
+// 	int * data;
+// 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 
-	return string_host_data;
-}
+// 	category->get_values( (int *)data, true );
+// 	bit_mask::bit_mask_t * valid;
+// 	bit_mask::create_bit_mask(&valid, num_rows,1);
+
+// 	gdf_error err = gdf_column_view(column,
+// 			(void *) data,
+// 			(gdf_valid_type *)valid,
+// 			num_rows,
+// 			GDF_STRING_CATEGORY);
+// 	column->dtype_info.category = category;
+// 	return column;
+// }
+
+// const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool print=false){
+// 	const char ** string_host_data = new const char *[num_rows];
+
+// 	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+// 		string_host_data[row_index] = new char[length+1];
+
+// 		std::string rand_string = random_string(length);
+// 		rand_string.push_back(0);
+// 		if(print)
+// 			std::cout<<rand_string<<"\t";
+// 		std::memcpy((void *) string_host_data[row_index],rand_string.c_str(),rand_string.size());
+// 	}
+// 	if(print)
+// 		std::cout<<std::endl;
+
+// 	return string_host_data;
+// }
 
 int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=false){
 	int32_t* host_data = new int32_t[num_rows];
@@ -199,9 +220,9 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	const int rows_size = 64;
 	const int length = 2;
 
-	const char ** string_data = generate_string_data(rows_size, length, print);
+	const char ** string_data = cudf::test::generate_string_data(rows_size, length, print);
 	
-	gdf_column * column = create_nv_category_column_strings(string_data, rows_size);
+	gdf_column * column = cudf::test::create_nv_category_column_strings(string_data, rows_size);
 	gdf_column * output_column = create_indices_column(rows_size);
 
 	gdf_column ** input_columns = new gdf_column *[1];
@@ -512,11 +533,11 @@ TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
 	const int rows_size = 64;
 	const agg_op op = agg_op::AVG;
 
-	const char ** string_data = generate_string_data(rows_size, length, print);
+	const char ** string_data = cudf::test::generate_string_data(rows_size, length, print);
 
   input_key = std::vector<std::string>(string_data, string_data + rows_size);
 
-	gdf_column * category_column = create_nv_category_column_strings(string_data, rows_size);
+	gdf_column * category_column = cudf::test::create_nv_category_column_strings(string_data, rows_size);
 
 	gdf_raw_input_key_columns.push_back(category_column);
 
@@ -525,7 +546,7 @@ TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
 
 	gdf_raw_input_val_column = create_column_ints(host_values, rows_size);
 
-	gdf_column * gdf_raw_output_key_column = create_nv_category_column(rows_size, true);
+	gdf_column * gdf_raw_output_key_column = cudf::test::create_nv_category_column(rows_size, true);
 	gdf_raw_output_key_columns.push_back(gdf_raw_output_key_column);
 
 	gdf_raw_output_val_column = create_column_constant(rows_size, 1);
@@ -543,14 +564,14 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	const int rows_size = 64;
 	const size_t length = 1;
 
-	const char ** left_string_data = generate_string_data(rows_size, length, print);
-  const char ** right_string_data = generate_string_data(rows_size, length, print);
+	const char ** left_string_data = cudf::test::generate_string_data(rows_size, length, print);
+  const char ** right_string_data = cudf::test::generate_string_data(rows_size, length, print);
 
   std::vector<std::string> left_host_column (left_string_data, left_string_data + rows_size);
   std::vector<std::string> right_host_column (right_string_data, right_string_data + rows_size);
 
-  gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
-	gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+  gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
+	gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
 	
 	gdf_column * output_column = create_boolean_column(rows_size);
 
@@ -598,7 +619,7 @@ struct NVCategoryConcatTest : public GdfTest
 		for(size_t i=0;i<concat_columns.size();i++)
 			keys_size+=concat_columns[i]->size;
 
-		concat_out = create_nv_category_column(keys_size, true);
+		concat_out = cudf::test::create_nv_category_column(keys_size, true);
 
 		gdf_error err = gdf_column_concat(concat_out, concat_columns.data(), concat_columns.size());
 		EXPECT_EQ(GDF_SUCCESS, err);
@@ -641,12 +662,12 @@ TEST_F(NVCategoryConcatTest, concat_test){
 	const int rows_size = 64;
 
 	const char *** string_data = new const char**[2];
-	string_data[0] = generate_string_data(rows_size, length, print);
-	string_data[1] = generate_string_data(rows_size, length, print);
+	string_data[0] = cudf::test::generate_string_data(rows_size, length, print);
+	string_data[1] = cudf::test::generate_string_data(rows_size, length, print);
 
 	concat_columns.resize(2);
-	concat_columns[0] = create_nv_category_column_strings(string_data[0], rows_size);
-	concat_columns[1] = create_nv_category_column_strings(string_data[1], rows_size);
+	concat_columns[0] = cudf::test::create_nv_category_column_strings(string_data[0], rows_size);
+	concat_columns[1] = cudf::test::create_nv_category_column_strings(string_data[1], rows_size);
 
 	std::vector<std::string> reference_result;
 	reference_result.insert(reference_result.end(), string_data[0], string_data[0] + rows_size);
@@ -995,15 +1016,15 @@ TEST_F(NVCategoryJoinTest, join_test){
 	join_op op = join_op::INNER;
 
 	size_t length = 1;
-	const char ** left_string_data = generate_string_data(rows_size, length, print);
-	const char ** right_string_data = generate_string_data(rows_size, length, print);
+	const char ** left_string_data = cudf::test::generate_string_data(rows_size, length, print);
+	const char ** right_string_data = cudf::test::generate_string_data(rows_size, length, print);
 
 	left_string_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
 	right_string_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
 
-	gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
-  gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
-  gdf_column * result_column = create_nv_category_column_strings(right_string_data, rows_size);
+	gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
+  gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
+  gdf_column * result_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
 	
 	if(print){
 		std::cout<<"Raw string indexes:\n";
@@ -1039,14 +1060,14 @@ TEST_F(NVCategoryJoinTest, join_test_nulls){
   join_op op = join_op::INNER;
 
   size_t length = 1;
-  const char ** left_string_data = generate_string_data(rows_size, length, print);
-  const char ** right_string_data = generate_string_data(rows_size, length, print);
+  const char ** left_string_data = cudf::test::generate_string_data(rows_size, length, print);
+  const char ** right_string_data = cudf::test::generate_string_data(rows_size, length, print);
 
   left_string_column = std::vector<std::string> (left_string_data, left_string_data + rows_size);
   right_string_column = std::vector<std::string> (right_string_data, right_string_data + rows_size);
 
-  gdf_column * left_column = create_nv_category_column_strings(left_string_data, rows_size);
-  gdf_column * right_column = create_nv_category_column_strings(right_string_data, rows_size);
+  gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
+  gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
   left_column->valid = nullptr;
   right_column->valid = nullptr;
   if(print){
@@ -1090,11 +1111,11 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
   left_string_column = std::vector<std::string> (column_left_b, column_left_b + left_size);
   right_string_column = std::vector<std::string> (column_right_b, column_right_b + right_size);
 
-  gdf_column * left_column = create_nv_category_column_strings(column_left_b, left_size);
+  gdf_column * left_column = cudf::test::create_nv_category_column_strings(column_left_b, left_size);
   left_column->valid = nullptr;
   gdf_column * left_non_join_column = create_column_ints(column_left_a, left_size);
   left_non_join_column ->valid = nullptr;
-  gdf_column * right_column = create_nv_category_column_strings(column_right_b, right_size);
+  gdf_column * right_column = cudf::test::create_nv_category_column_strings(column_right_b, right_size);
   right_column->valid = nullptr;
   gdf_column * right_non_join_column = create_column_ints(column_left_c, right_size);
   right_non_join_column->valid = nullptr;
@@ -1115,7 +1136,7 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
 
   gdf_column * result_column_nonjoin_left = create_column_ints(column_left_a, left_size);
   gdf_column * result_column_nonjoin_right = create_column_ints(column_left_a, left_size);
-  gdf_column * result_column_joined = create_nv_category_column_strings(column_left_b, left_size);
+  gdf_column * result_column_joined = cudf::test::create_nv_category_column_strings(column_left_b, left_size);
   
   gdf_raw_result_columns.push_back(result_column_nonjoin_left);
   gdf_raw_result_columns.push_back(result_column_joined);

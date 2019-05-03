@@ -1,6 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
+ *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,6 @@
 #include <limits>
 #include <cstdint>
 #include "cudf/types.h"
-#include "copying/utilities/copying_utils.hpp"
 
 namespace cudf {
 namespace utilities {
@@ -31,6 +31,24 @@ namespace utilities {
  * Parameter for the CUDA kernel.
  */
 constexpr std::size_t NO_DYNAMIC_MEMORY = 0;
+
+/**
+ * @brief Used to process the bitmask array. The type used to store
+ * the processed bitmask into the output bitmask.
+ *
+ * It required to be less than the size of 'double_block_type'.
+ * Used to store the processed bitmask into the output bitmask.
+ */
+using block_type = std::uint32_t;
+
+/**
+ * @brief Used to process the bitmask array. The type used to load
+ * from the input bitmask in order to process it.
+ *
+ * The bitmask type that will be read from the input bitmask.
+ * The read bitmask will be processed using this type.
+ */
+using double_block_type = std::uint64_t;
 
 /**
  * @brief Using limits in order to obtain the max value for the 'block_type' type.
@@ -74,17 +92,6 @@ struct bitmask_partition_params {
 };
 
 /**
- * @brief Bit hack used to calculate the number of ones in 32 bits.
- * The algorithm is optimized only for 32 bits.
- */
-__device__ __forceinline__
-std::uint32_t count_bits_set_32bits(std::uint32_t bitmask) {
-  bitmask = bitmask - ((bitmask >> 1) & 0x55555555);
-  bitmask = (bitmask & 0x33333333) + ((bitmask >> 2) & 0x33333333);
-  return (((bitmask + (bitmask >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
-}
-
-/**
  * @brief A CUDA function used to perform the count of the null values.
  * It counts the bits that are set in the bitmask.
  */
@@ -93,7 +100,7 @@ void perform_bitmask_null_count(bitmask_partition_params const* params,
                                 gdf_size_type*                  counter,
                                 gdf_index_type const            index) {
   std::uint32_t bitmask = (std::uint32_t)params->block_output[index];
-  std::uint32_t null_count_value = count_bits_set_32bits(bitmask);
+  std::uint32_t null_count_value = __popc(bitmask); // Count the number of bits that are set to 1 in a 32 bit integer.
   atomicAdd(counter, null_count_value);
 }
 

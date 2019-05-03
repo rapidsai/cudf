@@ -15,12 +15,12 @@
 //  * limitations under the License.
 //  */
 
-// #include "gtest/gtest.h"
-// #include "copying.hpp"
-// #include "tests/utilities/cudf_test_fixtures.h"
-// #include "tests/copying/copying_test_helper.hpp"
+#include "gtest/gtest.h"
+#include "copying.hpp"
+#include "tests/utilities/cudf_test_fixtures.h"
+#include "tests/copying/copying_test_helper.hpp"
 
-// struct SplitInputTest : GdfTest {};
+struct SplitInputTest : GdfTest {};
 
 // TEST_F(SplitInputTest, IndexesNull) {
 //   const int SIZE = 32;
@@ -29,13 +29,13 @@
 //   // Create input column
 //   auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
@@ -46,18 +46,18 @@
 //   const int SIZE = 32;
 //   using ColumnType = std::int32_t;
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(nullptr, indexes.get(), &column_array));
+//   ASSERT_ANY_THROW(cudf::split(nullptr, indices.get(), &column_array));
 // }
 
 // TEST_F(SplitInputTest, OutputColumnNull) {
@@ -67,12 +67,12 @@
 //   // Create input column
 //   auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes.get(), nullptr));
+//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indices.get(), nullptr));
 // }
 
 // TEST_F(SplitInputTest, IndexesSizeNull) {
@@ -82,9 +82,9 @@
 //   // Create input column
 //   auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indexes
-//   gdf_column indexes;
-//   indexes.size = 0;
+//   // Create indices
+//   gdf_column indices;
+//   indices.size = 0;
 
 //   // Create output
 //   gdf_column column;
@@ -92,7 +92,7 @@
 //   cudf::column_array column_array(source_columns, 1);
 
 //   // Perform test
-//   ASSERT_NO_THROW(cudf::split(input_column.get(), &indexes, &column_array));
+//   ASSERT_NO_THROW(cudf::split(input_column.get(), &indices, &column_array));
 // }
 
 // TEST_F(SplitInputTest, InputColumnSizeNull) {
@@ -103,9 +103,9 @@
 //   gdf_column input_column;
 //   input_column.size = 0;
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
 //   // Create output
 //   gdf_column column;
@@ -113,7 +113,7 @@
 //   cudf::column_array column_array(source_columns, 1);
 
 //   // Perform test
-//   ASSERT_NO_THROW(cudf::split(&input_column, indexes.get(), &column_array));
+//   ASSERT_NO_THROW(cudf::split(&input_column, indices.get(), &column_array));
 // }
 
 // TEST_F(SplitInputTest, IndexesDataNull) {
@@ -123,20 +123,20 @@
 //   // Create input column
 //   auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
-//   gdf_column* indexes_test = indexes.get();
-//   indexes_test->data = nullptr;
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+//   gdf_column* indices_test = indices.get();
+//   indices_test->data = nullptr;
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes_test, &column_array));
+//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indices_test, &column_array));
 // }
 
 // TEST_F(SplitInputTest, InputColumnDataNull) {
@@ -148,18 +148,18 @@
 //   gdf_column* input_column_test = input_column.get();
 //   input_column_test->data = nullptr;
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(input_column_test, indexes.get(), &column_array));
+//   ASSERT_ANY_THROW(cudf::split(input_column_test, indices.get(), &column_array));
 // }
 
 // TEST_F(SplitInputTest, InputColumnBitmaskNull) {
@@ -171,18 +171,18 @@
 //   gdf_column* input_column_test = input_column.get();
 //   input_column_test->valid = nullptr;
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(input_column_test, indexes.get(), &column_array));
+//   ASSERT_ANY_THROW(cudf::split(input_column_test, indices.get(), &column_array));
 // }
 
 // TEST_F(SplitInputTest, OutputColumnsAndIndexesSizeMismatch) {
@@ -192,116 +192,132 @@
 //   // Create input column
 //   auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+//   // Create indices
+//   std::vector<gdf_index_type> indices_host{SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//   // Create indexes for test
-//   std::vector<gdf_index_type> indexes_host_test{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indexes_test(indexes_host_test);
+//   // Create indices for test
+//   std::vector<gdf_index_type> indices_host_test{SIZE / 4, SIZE / 2};
+//   cudf::test::column_wrapper<gdf_index_type> indices_test(indices_host_test);
 
 //   // Create output
 //   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
 //   auto source_columns =
-//       allocate_split_output_columns<ColumnType>(output_columns, indexes_host, SIZE);
+//       allocate_split_output_columns<ColumnType>(output_columns, indices_host, SIZE);
 //   cudf::column_array column_array(source_columns.data(), source_columns.size());
 
 //   // Perform test
-//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indexes_test.get(), &column_array));
+//   ASSERT_ANY_THROW(cudf::split(input_column.get(), indices_test.get(), &column_array));
 // }
 
 
-// template <typename ColumnType>
-// struct SplitTest : GdfTest {};
+template <typename ColumnType>
+struct SplitTest : GdfTest {};
 
-// using test_types =
-//     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-// TYPED_TEST_CASE(SplitTest, test_types);
+using test_types =
+    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+TYPED_TEST_CASE(SplitTest, test_types);
 
-// /**
-//  * It performs a parameterized type test, where the array of indices contains
-//  * multiple values.
-//  *
-//  * It tests:
-//  * when the indices contain limit values (0 and INPUT_SIZE).
-//  * when the indices are the same.
-//  * when is less than 16 or greater than 64.
-//  */
-// TYPED_TEST(SplitTest, MultipleSplits) {
-//   // Create input column
-//   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
+/**
+ * It performs a parameterized type test, where the array of indices contains
+ * multiple values.
+ *
+ * It tests:
+ * when the indices contain limit values (0 and INPUT_SIZE).
+ * when the indices are the same.
+ * when is less than 16 or greater than 64.
+ */
+TYPED_TEST(SplitTest, MultipleSplits) {
+    // Create input column
+    auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
-//   // Create indexes
-//   std::vector<gdf_index_type> indexes_host{0, 13, 31, 31, 32, INPUT_SIZE};
-//   cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
+    // Create indices
+    std::vector<gdf_index_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+    cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<TypeParam>>> output_columns;
-//   auto source_columns =
-//       allocate_split_output_columns<TypeParam>(output_columns, indexes_host, INPUT_SIZE);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
+    // Perform operation
+    std::vector<gdf_column*> output_column_ptrs = cudf::split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
 
-//   // Perform operation
-//   ASSERT_NO_THROW(cudf::split(input_column.get(), indexes.get(), &column_array));
+    // Transfer input column to host
+    std::vector<TypeParam> input_col_data;
+    std::vector<gdf_valid_type> input_col_bitmask;
+    std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
 
-//   // Transfer input column to host
-//   auto input_column_host = makeHelperColumn<TypeParam>(input_column);
+    // Perform split in cpu
+    std::vector<std::vector<TypeParam>> output_cols_data;
+    std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+    std::vector<gdf_size_type> output_cols_null_count;
+    std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
+                                                                                input_col_bitmask, indices_host);
 
-//   // Transfer output columns to host
-//   auto output_column_host = makeHelperColumn<TypeParam>(output_columns);
+    // Create Validation output column_wrappers
+    std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
+    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
+        validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
+        ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
+    }
 
-//   // Perform split in cpu
-//   auto output_column_cpu = split_columns<TypeParam>(input_column_host,
-//                                                     indexes_host,
-//                                                     INPUT_SIZE);
+    // Verify the operation
+    for (std::size_t i = 0; i < validation_columns.size(); ++i) {
+        if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
+        ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
+    }
 
-//   // Verify the operation
-//   for (std::size_t i = 0; i < output_column_host.size(); ++i) {
-//     verify<TypeParam>(output_column_cpu[i], output_column_host[i]);
-//   }
-// }
+    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
+        gdf_column_free(output_column_ptrs[i]);
+        delete output_column_ptrs[i];
+    }
+}
 
-// /**
-//  * It performs a parameterized type and a parameterized value test.
-//  * The indices array contains only one value and that value goes from
-//  * 0 to the size of the input column.
-//  */
-// TYPED_TEST(SplitTest, RangeIndexPosition) {
-//   // Test parameters
-//   constexpr gdf_index_type init_index{0};
-//   constexpr gdf_index_type final_index{INPUT_SIZE};
+/**
+ * It performs a parameterized type and a parameterized value test.
+ * The indices array contains only one value and that value goes from
+ * 0 to the size of the input column.
+ */
+TYPED_TEST(SplitTest, RangeIndexPosition) {
+    // Test parameters
+    constexpr gdf_index_type init_index{0};
+    constexpr gdf_index_type final_index{INPUT_SIZE};
 
-//   // Create input column
-//   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
-  
-//   for (gdf_index_type index = init_index; index < final_index; ++index) {
-//     // Create indexes
-//     std::vector<gdf_index_type> indexes_host{index};
-//     cudf::test::column_wrapper<gdf_index_type> indexes(indexes_host);
-    
-//     // Create output
-//     std::vector<std::shared_ptr<cudf::test::column_wrapper<TypeParam>>> output_columns;
-//     auto source_columns =
-//         allocate_split_output_columns<TypeParam>(output_columns, indexes_host, INPUT_SIZE);
-//     cudf::column_array column_array(source_columns.data(), source_columns.size());
-    
-//     // Perform operation
-//     ASSERT_NO_THROW(cudf::split(input_column.get(), indexes.get(), &column_array));
+    // Create input column
+    auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
-//     // Transfer input column to host
-//     auto input_column_host = makeHelperColumn<TypeParam>(input_column);
+    for (gdf_index_type index = init_index; index < final_index; ++index) {
+        // Create indices
+        std::vector<gdf_index_type> indices_host{index};
+        cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//     // Transfer output columns to host
-//     auto output_column_host = makeHelperColumn<TypeParam>(output_columns);
+        // Perform operation
+        std::vector<gdf_column*> output_column_ptrs = cudf::split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
 
-//     // Perform split in cpu
-//     auto output_column_cpu = split_columns<TypeParam>(input_column_host,
-//                                                       indexes_host,
-//                                                       INPUT_SIZE);
+        // Transfer input column to host
+        std::vector<TypeParam> input_col_data;
+        std::vector<gdf_valid_type> input_col_bitmask;
+        std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
 
-//     // Verify columns
-//     for (std::size_t i = 0; i < output_column_host.size(); ++i) {
-//       verify<TypeParam>(output_column_cpu[i], output_column_host[i]);
-//     }
-//   }
-// }
+        // Perform split in cpu
+        std::vector<std::vector<TypeParam>> output_cols_data;
+        std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+        std::vector<gdf_size_type> output_cols_null_count;
+        std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
+                                                                                    input_col_bitmask, indices_host);
+
+        // Create Validation output column_wrappers
+        std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
+        for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
+            validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
+            ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
+        }
+
+        // Verify the operation
+        for (std::size_t i = 0; i < validation_columns.size(); ++i) {
+            if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
+            ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
+        }
+
+        for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
+            gdf_column_free(output_column_ptrs[i]);
+            delete output_column_ptrs[i];
+        }
+    }
+}

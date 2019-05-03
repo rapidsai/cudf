@@ -1,5 +1,8 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
+ * 
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 William Malpica <william@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
