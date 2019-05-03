@@ -22,7 +22,8 @@
 #include <types.hpp>
 
 #include <vector>
-#include <cuda_runtime_api.h>
+
+typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 
