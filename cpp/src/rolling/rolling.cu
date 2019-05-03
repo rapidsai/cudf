@@ -66,8 +66,6 @@ namespace
     }
   };
 
-  // we're going to be using bit utils a lot in the kernel below
-  using namespace bit_mask;
 
 /**
  * @brief Computes the rolling window function
@@ -104,8 +102,8 @@ namespace
 template <typename ColumnType, template <typename AggType> class agg_op, bool average>
 __global__
 void gpu_rolling(gdf_size_type nrows,
-		 ColumnType * const __restrict__ out_col, bit_mask_t * const __restrict__ out_col_valid,
-		 ColumnType const * const __restrict__ in_col, bit_mask_t const * const __restrict__ in_col_valid,
+		 ColumnType * const __restrict__ out_col, bit_mask::bit_mask_t * const __restrict__ out_col_valid,
+		 ColumnType const * const __restrict__ in_col, bit_mask::bit_mask_t const * const __restrict__ in_col_valid,
 		 gdf_size_type window,
 		 gdf_size_type min_periods,
 		 gdf_size_type forward_window,
@@ -113,6 +111,9 @@ void gpu_rolling(gdf_size_type nrows,
 		 const gdf_size_type *min_periods_col,
 		 const gdf_size_type *forward_window_col)
 {
+  // we're going to be using bit utils a lot in the kernel
+  using namespace bit_mask;
+
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
 
@@ -215,9 +216,9 @@ struct rolling_window_launcher
 		  cudaStream_t stream)
   {
     ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
-    bit_mask_t *typed_out_valid = reinterpret_cast<bit_mask::bit_mask_t*>(out_col_valid_ptr);
+    bit_mask::bit_mask_t *typed_out_valid = reinterpret_cast<bit_mask::bit_mask_t*>(out_col_valid_ptr);
     const ColumnType *typed_in_data = static_cast<const ColumnType*>(in_col_data_ptr);
-    const bit_mask_t *typed_in_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(in_col_valid_ptr);
+    const bit_mask::bit_mask_t *typed_in_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(in_col_valid_ptr);
 
     // TODO: We should consolidate our aggregation enums for reductions, scans,
     //       groupby and rolling. @harrism suggested creating
