@@ -80,8 +80,7 @@ class Groupby(object):
         self._val_columns = []
         self._df = df.copy(deep=True)
         self._as_index = as_index
-        if isinstance(by, (Sequence, Series)):
-            by = list(by)
+        if isinstance(by, Series):
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
                                           "with indices of arbitrary length")
@@ -132,8 +131,21 @@ class Groupby(object):
                     self._by.append(self._df.index.names[which_level])
         else:
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
-        self._val_columns = [idx for idx in self._df.columns
-                             if idx not in self._by]
+        if isinstance(self._by[0], (str, Number)):
+            # by is a list of column names or numerals
+            # The base case!
+            # Everything else in __init__ handles more complicated
+            # configurations of "by"
+            self._val_columns = [idx for idx in self._df.columns
+                                 if idx not in self._by]
+        else:
+            # by is a list of objects - lists, or Series
+            self._val_columns = self._df.columns
+            by = self._by
+            self._by = []
+            for idx, each_by in enumerate(by):
+                self._df[each_by.name] = each_by
+                self._by.append(each_by.name)
         if (method == "hash"):
             self._method = method
         else:

@@ -429,6 +429,6 @@ def test_list_of_series():
     pdg = pdf.groupby([pdf.x]).y.sum()
     gdg = gdf.groupby([gdf.x]).y.sum()
     assert_eq(pdg, gdg)
-    pdg = pdf.groupby([pdf.x], [0, 1, 0]).y.sum()
-    gdg = gdf.groupby([gdf.x], [0, 1, 0]).y.sum()
+    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
+    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
     assert_eq(pdg, gdg)
