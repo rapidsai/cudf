@@ -779,6 +779,10 @@ class Series(object):
         return Loc(self)
 
     @property
+    def loc(self):
+        return Loc(self)
+
+    @property
     def iloc(self):
         """
         For integer-location based selection.
