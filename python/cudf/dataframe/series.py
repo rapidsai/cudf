@@ -1777,8 +1777,13 @@ class Loc(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        found_index = self._sr.index.as_column().find_first_value(arg)
-        return self._sr.iloc[found_index]
+        if isinstance(arg, Number):
+            found_index = self._sr.index.as_column().find_first_value(arg)
+            return self._sr.iloc[found_index]
+        elif isinstance(arg, slice):
+            start_index = self._sr.index.as_column().find_first_value(arg.start)
+            stop_index = self._sr.index.as_column().find_first_value(arg.stop)
+            return self._sr.iloc[start_index:stop_index]
 
 
 class Iloc(object):

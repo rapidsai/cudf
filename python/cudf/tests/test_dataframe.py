@@ -481,6 +481,14 @@ def test_dataframe_loc_outbound():
     np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
 
 
+def test_series_loc():
+    ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc[5], gs.loc[5])
+    assert_eq(ps.loc[6], gs.loc[6])
+    assert_eq(ps.loc[6:8], gs.loc[6:8])
+
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):
 
