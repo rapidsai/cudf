@@ -21,7 +21,6 @@
 #include <cassert>
 #include <types.hpp>
 
-<<<<<<< d4e23685441209242a16cc7262abdf6daa1fea8c
 #include <vector>
 
 // Forward declaration
@@ -149,9 +148,3 @@ bool has_nulls(cudf::table const& table);
 }  // namespace cudf
 
 #endif
-=======
-// Forward declaration
-namespace cudf {
-struct table;
-}
->>>>>>> slice refactored and reworked and working. [WIP]
