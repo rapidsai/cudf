@@ -35,6 +35,36 @@
 
 namespace
 {
+  // return true if ColumnType is arithmetic type or
+  // AggOp is min_op or max_op for wrapper (non-arithmetic) types
+  template <typename ColumnType, template <typename AggType> class AggOp>
+  static constexpr bool is_supported()
+  {
+    return std::is_arithmetic<ColumnType>::value ||
+           std::is_same<AggOp<ColumnType>, min_op<ColumnType>>::value ||
+           std::is_same<AggOp<ColumnType>, max_op<ColumnType>>::value;
+  }
+
+  // store functor
+  template <typename ColumnType, bool average>
+  struct store_output_functor
+  {
+    CUDA_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, gdf_size_type count)
+    {
+      out = val;
+    }
+  };
+
+  // partial specialization for AVG
+  template <typename ColumnType>
+  struct store_output_functor<ColumnType, true>
+  {
+    CUDA_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, gdf_size_type count)
+    {
+      out = val / count;
+    }
+  };
+
 
 /**
  * @brief Computes the rolling window function
@@ -128,13 +158,8 @@ void gpu_rolling(gdf_size_type nrows,
       out_mask32[out_mask_location] = result_mask;
 
     // store the output value, one per thread
-    if (output_is_valid) {
-      if (average)
-        // special case for COUNT aggregator
-        out_col[i] = val / count;
-      else
-        out_col[i] = val;
-    }
+    if (output_is_valid)
+      store_output_functor<ColumnType, average>{}(out_col[i], val, count);
 
     // process next element 
     i += stride;
@@ -145,10 +170,10 @@ void gpu_rolling(gdf_size_type nrows,
 struct rolling_window_launcher
 {
   /**
-   * @brief Uses SFINAE to instantiate only for arithmetic types
+   * @brief Uses SFINAE to instantiate only for supported type combos
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-	   typename std::enable_if_t<std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
+	   typename std::enable_if_t<is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
     PUSH_RANGE("CUDF_ROLLING", GDF_ORANGE);
@@ -166,10 +191,10 @@ struct rolling_window_launcher
    * @brief If we cannot perform aggregation on this type then throw an error
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-	   typename std::enable_if_t<!std::is_arithmetic<ColumnType>::value, std::nullptr_t> = nullptr> 
+	   typename std::enable_if_t<!is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
-    CUDF_FAIL("Unsupported column type. Only arithmetic types are supported in rolling windows");
+    CUDF_FAIL("Unsupported column type/operation combo. Only `min` and `max` are supported for non-arithmetic types for aggregations.");
   }
 
   /**
@@ -192,6 +217,9 @@ struct rolling_window_launcher
   {
     ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
     const ColumnType *typed_in_data = static_cast<const ColumnType*>(in_col_data_ptr);
+    // TODO: We should consolidate our aggregation enums for reductions, scans,
+    //       groupby and rolling. @harrism suggested creating
+    //       aggregate_dispatcher that works like type_dispatcher.
     switch (agg_type) {
     case GDF_SUM:
       dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, stream,
