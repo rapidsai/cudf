@@ -139,6 +139,7 @@ _join_method_api = {
     'hash': libgdf.GDF_HASH
 }
 
+
 def cffi_view_to_column_mem(cffi_view):
     gdf_dtype = cffi_view.dtype
     if gdf_dtype == libgdf.GDF_STRING_CATEGORY:
