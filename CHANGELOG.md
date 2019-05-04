@@ -96,6 +96,7 @@
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 - PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
 
