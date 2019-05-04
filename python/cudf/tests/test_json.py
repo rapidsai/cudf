@@ -154,6 +154,8 @@ def json_input(request, tmp_path_factory):
 def test_json_lines_basic(json_input):
     df = cudf.read_json(json_input, lines=True)
     assert(df.shape == (3, 3))
+    assert(all(df.columns == ['0', '1', '2']))
+    assert(all(df.dtypes == ['int64', 'int64', 'int64']))
 
 def test_json_lines_byte_range(json_input):
 
@@ -188,9 +190,9 @@ def test_json_lines_compression(tmpdir):
     fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
 
     nrows = 20
-    df = make_numeric_dataframe(nrows, np.int32)
-    df.to_json(fname, compression='gzip')
+    pd_df = make_numeric_dataframe(nrows, np.int32)
+    pd_df.to_json(fname, compression='gzip', lines=True, orient='records')
 
-    out = cudf.read_json(str(fname), compression='gzip')
+    cu_df = cudf.read_json(str(fname), compression='gzip', lines=True, dtype=['int', 'int'])
 
-    assert(out.shape == (nrows, 2))
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
