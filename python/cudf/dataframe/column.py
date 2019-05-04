@@ -553,12 +553,11 @@ class Column(object):
         Returns offset of first value that matches
         """
         # FIXME: Inefficient find in CPU code
-        found = cudautils.find_first(
-            self.data.to_gpu_array(),
-            value)
-        if found == -1:
+        arr = self.to_array()
+        indices = np.argwhere(arr == value)
+        if not len(indices):
             raise ValueError('value not found')
-        return found
+        return indices[-1, 0]
 
     def find_last_value(self, value):
         """

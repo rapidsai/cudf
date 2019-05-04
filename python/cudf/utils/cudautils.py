@@ -854,6 +854,27 @@ def find_first(arr, val):
         return min_index
 
 
+def find_last(arr, val):
+    """
+    Returns the index of the last occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    found[:] = -1
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found)
+    max_index = min_max(found)[1]
+    return max_index
+
+
 def find_segments(arr, segs=None, markers=None):
     """Find beginning indices of runs of equal values.
 

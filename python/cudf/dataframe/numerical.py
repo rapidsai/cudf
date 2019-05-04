@@ -331,6 +331,30 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self._mimic_inplace(result, inplace)
 
 
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        found = cudautils.find_first(
+            self.data.to_gpu_array(),
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
+
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        found = cudautils.find_last(
+            self.data.to_gpu_array(),
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
+
+
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output

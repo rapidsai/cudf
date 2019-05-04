@@ -1782,11 +1782,10 @@ class Loc(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, Number):
-            found_index = self._sr.index.as_column().find_first_value(arg)
+            found_index = self._sr.index.find_label_range(arg, None)
             return self._sr.iloc[found_index]
         elif isinstance(arg, slice):
-            start_index = self._sr.index.as_column().find_first_value(arg.start)
-            stop_index = self._sr.index.as_column().find_first_value(arg.stop)
+            start_index, stop_index = self._sr.index.find_label_range(arg.start, arg.stop)
             return self._sr.iloc[start_index:stop_index+1]
 
 
