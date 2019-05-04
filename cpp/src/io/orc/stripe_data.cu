@@ -1371,7 +1371,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
  * @param[in] t thread id
  *
  **/
-static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, int t)
+static __device__ void DecodeRowPositions(volatile orcdec_state_s *s, size_t first_row, int t)
 {
     if (t == 0)
     {
