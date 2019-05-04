@@ -260,6 +260,7 @@ cpdef cpp_read_csv(
     check_gdf_error(result)
 
     # Extract parsed columns
+
     outcols = []
     new_names = []
     for i in range(csv_reader.num_cols_out):
@@ -331,16 +332,12 @@ cpdef cpp_write_csv(
                 raise NameError('column {!r} does not exist in DataFrame'
                                 .format(name))
             check_gdf_compatibility(cols[name])
-            c_col = column_view_from_column(cols[name]._column)
-            name = str(name).encode()
-            c_col.col_name = name
+            c_col = column_view_from_column(cols[name]._column,name)
             list_cols.push_back(c_col)
     else:
         for name, col in cols.items():
             check_gdf_compatibility(col)
-            c_col = column_view_from_column(col._column)
-            name = str(name).encode()
-            c_col.col_name = name
+            c_col = column_view_from_column(col._column,name)
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()

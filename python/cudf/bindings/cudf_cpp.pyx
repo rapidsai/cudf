@@ -157,7 +157,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
 
 # gdf_column functions
 
-cdef gdf_column* column_view_from_column(col):
+cdef gdf_column* column_view_from_column(col, col_name=None):
     """
     Make a column view from a column
 
@@ -210,6 +210,12 @@ cdef gdf_column* column_view_from_column(col):
         category = <void*> category
     )
 
+    if col_name:
+        col_name = str(col_name).encode()
+        c_col.col_name = col_name
+    else:
+        c_col.col_name = NULL
+
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,
                                 <void*> data_ptr,
@@ -218,7 +224,6 @@ cdef gdf_column* column_view_from_column(col):
                                 c_dtype,
                                 c_null_count,
                                 c_extra_dtype_info)
-
 
     return c_col
 
@@ -274,7 +279,7 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
         time_unit = TIME_UNIT_NONE,
         category = <void*> 0
     )
-    
+
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,
                                 <void*> data_ptr,
@@ -350,8 +355,14 @@ _join_method_api = {
 }
 
 _null_sort_behavior_api = {
+<<<<<<< 1508dabc5f11f744072eeb390ba6e7ddc44f8116
     'null_as_largest': GDF_NULL_AS_LARGEST, 
     'null_as_smallest': GDF_NULL_AS_SMALLEST
+=======
+    'null_as_largest': GDF_NULL_AS_LARGEST,
+    'null_as_smallest': GDF_NULL_AS_SMALLEST,
+    'null_as_largest_multisort': GDF_NULL_AS_LARGEST_FOR_MULTISORT
+>>>>>>> Moved setting col_name logic to column_view_from_column
 }
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
@@ -366,7 +377,7 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
     cdef int c_flag_sort_result = flag_sort_result
     cdef int c_flag_sort_inplace = flag_sort_inplace
     cdef gdf_null_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
-    
+
     with nogil:
         gdf_context_view(context,
                          c_flag_sorted,
