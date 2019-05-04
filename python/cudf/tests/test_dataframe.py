@@ -489,6 +489,13 @@ def test_series_loc():
     assert_eq(ps.loc[6], gs.loc[6])
     assert_eq(ps.loc[6:8], gs.loc[6:8])
 
+    ps = pd.Series([1, 2, 3, 4, 5], index=['one', 'two', 'three', 'four', 'five'])
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc['one'], gs.loc['one'])
+    assert_eq(ps.loc['one'], gs.loc['one'])
+    assert_eq(ps.loc['two':'four'], gs.loc['two':'four'])
+
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):

@@ -557,19 +557,26 @@ class StringColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
-    def find_first_value(self, value):
+    def _find_first_and_last(self, value):
         found_indices = rmm.device_array((len(self),), dtype=np.byte)
-        found_indices = self._data.match(f"^{value}$",
-                         devary=found_indices.device_ctypes_pointer.value)
-        found = columnops.as_column(found_indices).find_first_value(1)
-        return found
+        self._data.match(f"^{value}$",
+                         devptr=found_indices.device_ctypes_pointer.value)
+
+        # TODO ugly hack below: need np.int32 because
+        # numba.cuda.atomic.min/max don't support int8
+        found_indices_bits = cudautils.compact_mask_bytes(found_indices)
+        found_indices = cudautils.expand_mask_bits(found_indices.size, found_indices_bits)
+
+        first = columnops.as_column(found_indices).find_first_value(1)
+        last = columnops.as_column(found_indices).find_last_value(1)
+        return first, last
+
+    def find_first_value(self, value):
+        return self._find_first_and_last(value)[0]
 
     def find_last_value(self, value):
-        found_indices = rmm.device_array((len(self),), dtype=np.byte)
-        found_indices = self._data.match(f"^{value}$",
-                         devary=found_indices.device_ctypes_pointer.value)
-        found = columnops.as_column(found_indices).find_last_value(1)
-        return found
+        return self._find_first_and_last(value)[1]
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
