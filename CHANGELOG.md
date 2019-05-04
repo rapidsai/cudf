@@ -25,9 +25,12 @@
 - PR #1466 Add GPU-accelerated ORC Reader
 - PR #1565 Add build script for nightly doc builds
 - PR #1508 Add Series isna, isnull, and notna
+- PR #1456 Add Series.diff() via Numba kernel
 - PR #1588 Add Index `astype` typecasting
 - PR #1301 MultiIndex support
 - PR #1599 Level keyword supported in groupby
+- PR #929 Add support operations to dataframe
+- PR #1609 Groupby accept list of Series
 
 ## Improvements
 
@@ -75,6 +78,8 @@
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
 - PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1590 Remove CFFI from the build / install process entirely
+- PR #1536 Convert gpuarrow CFFI to Cython
 
 ## Bug Fixes
 

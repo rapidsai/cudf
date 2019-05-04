@@ -65,9 +65,6 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 
-logger "Build conda pkg for libcudf_cffi..."
-source ci/cpu/libcudf_cffi/build_libcudf_cffi.sh
-
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
 
