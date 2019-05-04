@@ -120,6 +120,7 @@
 - PR #1551 CSV Reader: Fix integer column name indexing
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
+- PR #1613 Improve CategoricalColumn.fillna(-1) performance
 
 
 # cuDF 0.6.1 (25 Mar 2019)
