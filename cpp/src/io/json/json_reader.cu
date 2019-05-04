@@ -357,6 +357,8 @@ void JsonReader::setColumnNames() {
   // based on the top level opening bracket
   const auto first_square_bracket = std::find(first_row.begin(), first_row.end(), '[');
   const auto first_curly_bracket = std::find(first_row.begin(), first_row.end(), '{');
+  CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
+               "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
@@ -460,12 +462,12 @@ struct ConvertFunctor {
  * @return void
  *---------------------------------------------------------------------------**/
 __device__ void LimitRangeToBrackets(const char *data, long &start, long &stop) {
-  while (data[start] != '[' && data[start] != '{') {
+  while (start < stop && data[start] != '[' && data[start] != '{') {
     start++;
   }
   start++;
 
-  while (data[stop - 1] != ']' && data[stop - 1] != '}') {
+  while (start < stop && data[stop - 1] != ']' && data[stop - 1] != '}') {
     stop--;
   }
   stop--;

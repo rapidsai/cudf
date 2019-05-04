@@ -196,3 +196,7 @@ def test_json_lines_compression(tmpdir):
     cu_df = cudf.read_json(str(fname), compression='gzip', lines=True, dtype=['int', 'int'])
 
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+def test_json_gigo():
+    buffer = '[1]\nasdf\n'
+    df = cudf.read_json(buffer, lines=True)
