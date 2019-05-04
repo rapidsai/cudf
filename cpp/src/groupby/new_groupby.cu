@@ -247,8 +247,7 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 
   rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
-  bool const have_nulls{ std::any_of(input_table.begin(), input_table.end(), [](gdf_column const* col){ return col->null_count > 0;}) };
-  if (have_nulls){
+  if (cudf::has_nulls(input_table)){
     rmm::device_vector<gdf_valid_type*> d_valids(ncols);
     gdf_valid_type** d_valids_data = d_valids.data().get();
 
@@ -302,19 +301,11 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   gdf_size_type nrows = input_table.num_rows();
   
   // Allocate output columns
-  std::vector<gdf_dtype> output_types(input_table.num_columns());
-  for(gdf_size_type i = 0; i < input_table.num_columns(); ++i) {
-    auto input_col = input_table.get_column(i);
-    output_types[i] = input_col->dtype;
-  }  
-  cudf::table destination_table(nrows, output_types, true);
+  cudf::table destination_table(nrows, cudf::column_dtypes(input_table), true);
 
-  bool group_by_keys_contain_nulls = false;
   std::vector<gdf_column*> key_cols_vect(num_key_cols);
-  for (gdf_size_type i = 0; i < num_key_cols; i++){
-    key_cols_vect[i] = const_cast<gdf_column*>(input_table.get_column(i));
-    group_by_keys_contain_nulls = (group_by_keys_contain_nulls || key_cols_vect[i]->null_count > 0);
-  }
+  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect.begin(),
+                  [&input_table] (gdf_index_type const index) { return const_cast<gdf_column*>(input_table.get_column(index)); });
   cudf::table key_col_table(key_cols_vect.data(), key_cols_vect.size());
 
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
@@ -322,7 +313,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
                           nullptr, nrows, GDF_INT32));
 
-  if (context->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
+  if (context->flag_groupby_include_nulls || !cudf::has_nulls(key_col_table)){  // SQL style
     CUDF_TRY(gdf_order_by(key_col_table.begin(),
                           nullptr,
                           key_col_table.num_columns(),
