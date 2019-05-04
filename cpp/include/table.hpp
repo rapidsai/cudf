@@ -143,7 +143,7 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
  * @return true If the table contains one or more null values
  * @return false If the table contains zero null values
  *---------------------------------------------------------------------------**/
-bool have_nulls(cudf::table const& table);
+bool has_nulls(cudf::table const& table);
 
 }  // namespace cudf
 
