@@ -129,6 +129,7 @@
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
+- PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
 
 
 # cuDF 0.6.1 (25 Mar 2019)
