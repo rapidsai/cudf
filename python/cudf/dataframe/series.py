@@ -1554,6 +1554,28 @@ class Series(object):
                                                      periods)
         return Series(output_dary, name=self.name, index=self.index)
 
+    def diff(self, periods=1):
+        """Calculate the difference between values at positions i and i - N in
+        an array and store the output in a new array.
+        Notes
+        -----
+        Diff currently only supports float and integer dtype columns with
+        no null values.
+        """
+        if self.null_count != 0:
+            raise AssertionError("Diff currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Diff currently only supports "
+                                      "numeric dtypes")
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_diff.forall(output_dary.size)(input_dary, output_dary,
+                                                    periods)
+        return Series(output_dary, name=self.name, index=self.index)
+
     def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
