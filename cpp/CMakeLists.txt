@@ -332,16 +332,6 @@ endif(HT_LEGACY_ALLOCATOR)
 
 target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
-###################################################################################################
-# - python cffi bindings --------------------------------------------------------------------------
-
-add_custom_command(OUTPUT PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/../python ${CMAKE_BINARY_DIR}/python
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
-                   VERBATIM)
-
-add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -354,13 +344,6 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
-
-add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
-                   VERBATIM)
-
-add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
