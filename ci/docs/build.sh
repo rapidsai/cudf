@@ -65,10 +65,6 @@ make -j${PARALLEL_LEVEL}
 logger "Install libcudf..."
 make -j${PARALLEL_LEVEL} install
 
-logger "Install libcudf for Python..."
-make python_cffi
-make install_python
-
 logger "Build cuDF..."
 cd $WORKSPACE/python
 python setup.py build_ext --inplace

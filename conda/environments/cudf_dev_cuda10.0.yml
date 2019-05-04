@@ -14,7 +14,6 @@ dependencies:
 - pyarrow=0.12.1
 - notebook>=0.5.0
 - boost
-- cffi>=1.10.0   
 - distributed>=1.23.0
 - cython>=0.29,<0.30
 - pytest
@@ -25,6 +24,7 @@ dependencies:
 - numpydoc
 - ipython
 - recommonmark
+- pandoc=<2.0.0
 - cudatoolkit=10.0
 - pip:
   - sphinx-markdown-tables
