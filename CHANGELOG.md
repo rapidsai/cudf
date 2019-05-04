@@ -22,6 +22,7 @@
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
+- PR #1556 Add libcudf C++ transition guide
 - PR #1466 Add GPU-accelerated ORC Reader
 - PR #1565 Add build script for nightly doc builds
 - PR #1508 Add Series isna, isnull, and notna
