@@ -82,7 +82,7 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
   return dtypes;
 }
 
-bool have_nulls(cudf::table const& table) {
+bool has_nulls(cudf::table const& table) {
   return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
     return (nullptr != col->valid) and (col->null_count > 0);
   });
