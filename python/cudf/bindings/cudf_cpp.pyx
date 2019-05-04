@@ -355,14 +355,8 @@ _join_method_api = {
 }
 
 _null_sort_behavior_api = {
-<<<<<<< 1508dabc5f11f744072eeb390ba6e7ddc44f8116
     'null_as_largest': GDF_NULL_AS_LARGEST, 
     'null_as_smallest': GDF_NULL_AS_SMALLEST
-=======
-    'null_as_largest': GDF_NULL_AS_LARGEST,
-    'null_as_smallest': GDF_NULL_AS_SMALLEST,
-    'null_as_largest_multisort': GDF_NULL_AS_LARGEST_FOR_MULTISORT
->>>>>>> Moved setting col_name logic to column_view_from_column
 }
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,

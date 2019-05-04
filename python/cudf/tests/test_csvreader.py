@@ -9,12 +9,13 @@ import pandas as pd
 from io import StringIO
 from io import BytesIO
 
-from cudf import read_csv
+from cudf import read_csv, to_csv
 import cudf
 from cudf.tests.utils import assert_eq
 import gzip
 import shutil
 import os
+import filecmp
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1038,3 +1039,18 @@ def test_csv_reader_partial_dtype(dtype):
 
     assert(names_df == header_df)
     assert(all(names_df.dtypes == ['int16', 'int32']))
+@pytest.mark.parametrize('dtype', dtypes)
+@pytest.mark.parametrize('nelem', nelem)
+def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
+
+    pdf_df_fname = tmpdir.join("pdf_df_1.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_1.csv")
+
+    df = make_numeric_dataframe(nelem, dtype)
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
+    cudf.to_csv(gdf, path=gdf_df_fname)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+    assert(filecmp.cmp(pdf_df_fname, gdf_df_fname))
