@@ -4,6 +4,7 @@
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
 - PR #1569 Add support for Json objects to the JSON Lines reader
+- PR #1622 Add Series.loc
 
 ## Improvements
 
