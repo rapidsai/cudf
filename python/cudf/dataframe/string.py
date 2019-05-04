@@ -557,6 +557,19 @@ class StringColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
+    def find_first_value(self, value):
+        found_indices = rmm.device_array((len(self),), dtype=np.byte)
+        found_indices = self._data.match(f"^{value}$",
+                         devary=found_indices.device_ctypes_pointer.value)
+        found = columnops.as_column(found_indices).find_first_value(1)
+        return found
+
+    def find_last_value(self, value):
+        found_indices = rmm.device_array((len(self),), dtype=np.byte)
+        found_indices = self._data.match(f"^{value}$",
+                         devary=found_indices.device_ctypes_pointer.value)
+        found = columnops.as_column(found_indices).find_last_value(1)
+        return found
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
