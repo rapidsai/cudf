@@ -1,12 +1,14 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
+
 - PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
+- PR #1356 Rolling windows
 - PR #1381 Add DataFrame._get_numeric_data
 - PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
