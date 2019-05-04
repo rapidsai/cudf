@@ -1,9 +1,10 @@
 #!/bin/bash
+
 # Copyright (c) 2018, NVIDIA CORPORATION.
 #########################################
 # cuDF GPU build and test script for CI #
 #########################################
-set -e
+set -ex
 
 # Logger function for build status output
 function logger() {
@@ -34,8 +35,11 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION}
+conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} -c nvidia -c conda-forge \
+    rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION} sphinx sphinx_rtd_theme numpydoc \
+    sphinxcontrib-websupport nbsphinx ipython pandoc=\<2.0.0 recommonmark doxygen
 
+pip install sphinx-markdown-tables
 logger "Check versions..."
 python --version
 $CC --version
@@ -64,26 +68,24 @@ make -j${PARALLEL_LEVEL} install
 logger "Build cuDF..."
 cd $WORKSPACE/python
 python setup.py build_ext --inplace
+python setup.py install
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libcudf and cuDF
+# BUILD - Build docs
 ################################################################################
 
-logger "Check GPU usage..."
-nvidia-smi
+#libcudf Doxygen build
+logger "Build libcudf docs..."
+cd $WORKSPACE/cpp/doxygen
+doxygen Doxyfile
 
-logger "GoogleTest for libcudf..."
-cd $WORKSPACE/cpp/build
-GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+rm -rf /data/docs/libcudf/html/*
+mv html/* /data/docs/libcudf/html
 
-# Temporarily install cupy for testing
-logger "pip install cupy"
-pip install cupy-cuda92
+#cudf Sphinx Build
+logger "Build cuDF docs..."
+cd $WORKSPACE/docs
+make html
 
-# Temporarily install feather for testing
-logger "conda install feather-format"
-conda install -c conda-forge -y feather-format
-
-logger "Python py.test for cuDF..."
-cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term
+rm -rf /data/docs/cudf/html/*
+mv build/html/* /data/docs/cudf/html
