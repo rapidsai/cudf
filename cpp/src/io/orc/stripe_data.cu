@@ -1760,6 +1760,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             }
             __syncthreads();
             // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
+            int init_skipcnt = s->chunk.skip_count;
+            __syncthreads();
             DecodeRowPositions(s, first_row, t);
             if (!s->top.data.nrows && !s->u.rowdec.nz_count)
             {
@@ -1786,7 +1788,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         break;
                     case DECIMAL:
                         if (first_row == 1)
-                            reinterpret_cast<double *>(data_out)[row] = (double)t;
+                            reinterpret_cast<double *>(data_out)[row] = (double)t + 10000.0 * (double)init_skipcnt;
                         else
                             reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t];
                         break;
