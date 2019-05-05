@@ -1161,6 +1161,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
         // Decode NULLs
         if (t == 0)
         {
+            s->chunk.skip_count = 0;
             s->top.nulls.row = 0;
             bytestream_init(&s->bs, s->chunk.streams[CI_PRESENT], s->chunk.strm_len[CI_PRESENT]);
         }
