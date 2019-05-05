@@ -274,6 +274,14 @@ set(DEVICE_TABLE_TEST_SRC
 ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
+# - rolling tests ---------------------------------------------------------------------------------
+
+set(ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+
+ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+
+###################################################################################################
 # - json tests -------------------------------------------------------------------------------------
 
 set(JSON_TEST_SRC
