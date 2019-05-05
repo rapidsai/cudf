@@ -1371,7 +1371,7 @@ gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry *global_
  * @param[in] t thread id
  *
  **/
-static __device__ void DecodeRowPositions(volatile orcdec_state_s *s, size_t first_row, int t)
+static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, int t)
 {
     if (t == 0)
     {
@@ -1781,8 +1781,14 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         break;
                     case DOUBLE:
                     case LONG:
-                    case DECIMAL:
+                    //case DECIMAL:
                         reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t];
+                        break;
+                    case DECIMAL:
+                        if (first_row == 1)
+                            reinterpret_cast<double *>(data_out)[row] = (double)t;
+                        else
+                            reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t];
                         break;
                     case SHORT:
                         reinterpret_cast<uint16_t *>(data_out)[row] = static_cast<uint16_t>(s->vals.u32[t]);
