@@ -10,11 +10,41 @@ import warnings
 
 
 @ioutils.doc_read_json()
-def read_json(path_or_buf, lines=False, dtype=None, compression='infer',
+def read_json(path_or_buf, dtype=None, lines=False, compression='infer',
               byte_range=None, *args, **kwargs):
-    """{docstring}"""
+
+    """
+    Load and parse a JSON file into a DataFrame
+
+    Parameters
+    ----------
+    path_or_buf : str
+        Path of file to be read or a str containing the file.
+    dtype : list of str or dict of {{col: dtype}}, default None
+        List of data types in the same order of the column names
+        or a dictionary with column_name:dtype (Pandas style).
+    lines : bool, default False
+        Read the file as a json object per line
+    compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
+        For on-the-fly decompression of on-disk data. If ‘infer’, then detect
+        compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
+        decompression). If using ‘zip’, the ZIP file must contain only one
+        data file to be read in, otherwise the first non-zero-sized file will
+        be used. Set to None for no decompression.
+    byte_range : list or tuple, default None
+        Byte range within the input file to be read. The first number is the
+        offset in bytes, the second number is the range size in bytes. Set the
+        size to zero to read all data after the offset location. Reads the row
+        that starts before or at the end of the range, even if it ends after
+        the end of the range.
+
+    Returns
+    -------
+    GPU ``DataFrame`` object.
+    """
+
     if lines:
-        df = cpp_read_json(path_or_buf, lines, dtype, compression, byte_range)
+        df = cpp_read_json(path_or_buf, dtype, lines, compression, byte_range)
     else:
         warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                       "be GPU accelerated in the future")

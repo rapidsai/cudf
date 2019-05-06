@@ -25,7 +25,7 @@ import collections.abc
 import os
 
 
-cpdef cpp_read_json(path_or_buf, lines, dtype, compression, byte_range):
+cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
     See Also

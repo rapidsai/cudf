@@ -156,10 +156,12 @@ def json_input(request, tmp_path_factory):
 
 
 def test_json_lines_basic(json_input):
-    df = cudf.read_json(json_input, lines=True)
-    assert(df.shape == (3, 3))
-    assert(all(df.columns == ['0', '1', '2']))
-    assert(all(df.dtypes == ['int64', 'int64', 'int64']))
+    cu_df = cudf.read_json(json_input, lines=True)
+    pd_df = pd.read_json(json_input, lines=True)
+
+    assert(all(cu_df.dtypes == ['int64', 'int64', 'int64']))
+    for col in range(3):
+        np.testing.assert_array_equal(pd_df[col], cu_df[str(col)])
 
 
 def test_json_lines_byte_range(json_input):
