@@ -23,199 +23,114 @@
 #include "tests/utilities/nvcategory_utils.cuh"
 #include "bitmask/bit_mask.cuh"
 
+void call_slice(gdf_column const*          input_column,
+                gdf_index_type const*      indices,
+                gdf_size_type              num_indices,
+                std::vector<gdf_column*> & output){
+
+  output = cudf::slice(input_column, indices, num_indices); 
+}
+
 struct SliceInputTest : GdfTest {};
 
-// TEST_F(SliceInputTest, IndexesNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
+TEST_F(SliceInputTest, IndexesNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_NO_THROW(call_slice(input_column.get(), nullptr, 0, output));
+  ASSERT_EQ(output.size(), std::size_t(0));
+}
 
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-  
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column.get(), nullptr, 0, source_columns));
-// }
+TEST_F(SliceInputTest, InputColumnNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-// TEST_F(SliceInputTest, InputColumnNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
+  // Create indices
+  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_ANY_THROW(call_slice(nullptr, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+}
 
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-  
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(nullptr, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, source_columns));
-// }
+TEST_F(SliceInputTest, InputColumnSizeNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-// TEST_F(SliceInputTest, OutputColumnNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
+  // Create input column
+  gdf_column input_column;
+  input_column.size = 0;
 
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
+  // Create indices
+  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_NO_THROW(call_slice(&input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_EQ(output.size(), std::size_t(0));
+}
 
-//   std::vector<gdf_column*> source_columns;
+TEST_F(SliceInputTest, InputColumnDataNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, source_columns));
-// }
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+  gdf_column* input_column_test = input_column.get();
+  input_column_test->data = nullptr;
 
-// TEST_F(SliceInputTest, InputColumnSizeNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
+  // Create indices
+  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-//   // Create input column
-//   gdf_column input_column;
-//   input_column.size = 0;
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_ANY_THROW(call_slice(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+}
 
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+TEST_F(SliceInputTest, InputColumnBitmaskNull) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-//   // Create output
-//   gdf_column column;
-//   gdf_column* source_columns[1] = { &column };
-//   cudf::column_array column_array(source_columns, 1);
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
+  gdf_column* input_column_test = input_column.get();
+  input_column_test->valid = nullptr;
 
-//   // Perform test
-//   ASSERT_NO_THROW(cudf::slice(&input_column, indices.get(), &column_array));
-// }
+  // Create indices
+  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
-// TEST_F(SliceInputTest, IndexesDataNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_NO_THROW(call_slice(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+}
 
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
+TEST_F(SliceInputTest, IndexesSizeNotEven) {
+  const int SIZE = 32;
+  using ColumnType = std::int32_t;
 
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-//   gdf_column* indices_test = indices.get();
-//   indices_test->data = nullptr;
+  // Create input column
+  auto input_column = create_random_column<ColumnType>(SIZE);
 
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
+  // Create indices
+  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
 
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column.get(), indices_test, &column_array));
-// }
+  // Create indices for test
+  std::vector<gdf_index_type> indices_host_test{SIZE / 4, SIZE / 3, SIZE / 2};
+  cudf::test::column_wrapper<gdf_index_type> indices_test(indices_host_test);
 
-// TEST_F(SliceInputTest, InputColumnDataNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
-
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
-//   gdf_column* input_column_test = input_column.get();
-//   input_column_test->data = nullptr;
-
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
-
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column_test, indices.get(), &column_array));
-// }
-
-// TEST_F(SliceInputTest, InputColumnBitmaskNull) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
-
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
-//   gdf_column* input_column_test = input_column.get();
-//   input_column_test->valid = nullptr;
-
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
-
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column_test, indices.get(), &column_array));
-// }
-
-// TEST_F(SliceInputTest, IndexesSizeNotEven) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
-
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
-
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-
-//   // Create indices for test
-//   std::vector<gdf_index_type> indices_host_test{SIZE / 4, SIZE / 3, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices_test(indices_host_test);
-
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
-
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column.get(), indices_test.get(), &column_array));
-// }
-
-// TEST_F(SliceInputTest, OutputColumnsAndIndexesSizeMismatch) {
-//   const int SIZE = 32;
-//   using ColumnType = std::int32_t;
-
-//   // Create input column
-//   auto input_column = create_random_column<ColumnType>(SIZE);
-
-//   // Create indices
-//   std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-//   // Create indices for test
-//   std::vector<gdf_index_type> indices_host_test{SIZE / 5, SIZE / 4, SIZE / 3, SIZE / 2};
-//   cudf::test::column_wrapper<gdf_index_type> indices_test(indices_host_test);
-
-//   // Create output
-//   std::vector<std::shared_ptr<cudf::test::column_wrapper<ColumnType>>> output_columns;
-//   auto source_columns =
-//       allocate_slice_output_columns<ColumnType>(output_columns, indices_host);
-//   cudf::column_array column_array(source_columns.data(), source_columns.size());
-
-//   // Perform test
-//   ASSERT_ANY_THROW(cudf::slice(input_column.get(), indices_test.get(), &column_array));
-// }
+  // Perform test
+  std::vector<gdf_column*> output;
+  ASSERT_ANY_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices_test.get()->data), indices_test.get()->size, output));
+}
 
 
 template <typename ColumnType>
@@ -242,7 +157,8 @@ TYPED_TEST(SliceTest, MultipleSlices) {
   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
   // Perform operation
-  std::vector<gdf_column*> output_column_ptrs = cudf::slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
+  std::vector<gdf_column*> output_column_ptrs;
+  ASSERT_NO_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
   // Transfer input column to host
   std::vector<TypeParam> input_col_data;
@@ -295,7 +211,8 @@ TYPED_TEST(SliceTest, RangeIndexPosition) {
     cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
     
     // Perform operation
-    std::vector<gdf_column*> output_column_ptrs = cudf::slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
+    std::vector<gdf_column*> output_column_ptrs;
+    ASSERT_NO_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
     // Transfer input column to host
     std::vector<TypeParam> input_col_data;
@@ -345,7 +262,8 @@ TEST_F(SliceInputTest, NVCategoryMultipleSlices)  {
   cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
   // Perform operation
-  std::vector<gdf_column*> output_column_ptrs = cudf::slice(input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
+  std::vector<gdf_column*> output_column_ptrs;
+  ASSERT_NO_THROW(call_slice(input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
   // Transfer input column to host
   std::vector<std::string> input_col_data;
@@ -388,7 +306,7 @@ TEST_F(SliceInputTest, NVCategoryMultipleSlices)  {
 
   for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
     gdf_column_free(output_column_ptrs[i]);
-    delete output_column_ptrs[i];
+    delete output_column_ptrs[i];    
   }
 }
 

@@ -20,7 +20,7 @@
 #define TESTS_COPYING_COPYINGTESTHELPER_HPP
 
 #include <vector>
-#include <random>
+#include <cstdlib>
 #include <algorithm>
 #include "types.hpp"
 #include "tests/utilities/column_wrapper.cuh"
@@ -28,51 +28,12 @@
 constexpr gdf_size_type INPUT_SIZE{107};
 constexpr gdf_size_type BITSET_SIZE{128};
 
-
-template <typename ColumnType, typename = void>
-struct VectorRandomGenerator;
-
-template <typename ColumnType>
-struct VectorRandomGenerator
-<
-  ColumnType,
-  typename std::enable_if_t<std::is_integral<ColumnType>::value, void>
-> {
-  ColumnType operator()() {
-    return generator(random_device);
-  }
-
-  std::random_device random_device;
-  std::uniform_int_distribution<ColumnType> generator;
-};
-
-template <typename ColumnType>
-struct VectorRandomGenerator
-<
-  ColumnType,
-  typename std::enable_if_t<std::is_floating_point<ColumnType>::value, void>
-> {
-  ColumnType operator()() {
-    return generator(random_device);
-  }
-
-  std::random_device random_device;
-  std::uniform_real_distribution<ColumnType> generator;
-};
-
-
 template <typename ColumnType>
 cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) {
-  std::vector<ColumnType> data(size);
-  VectorRandomGenerator<ColumnType> data_random_generator;
-  std::generate_n(data.begin(), size, std::ref(data_random_generator));
-
-  gdf_size_type bitmask_size = gdf_valid_allocation_size(size);
-  std::vector<gdf_valid_type> bitmask(bitmask_size);
-  VectorRandomGenerator<gdf_valid_type> bitmask_random_generator;
-  std::generate_n(bitmask.begin(), bitmask_size, std::ref(bitmask_random_generator));
-
-  return cudf::test::column_wrapper<ColumnType>(std::move(data), std::move(bitmask));
+  
+  return cudf::test::column_wrapper<ColumnType>(size, 
+            [](gdf_index_type row) { return static_cast <ColumnType>(rand()); }, 
+            [](gdf_index_type row) { return (rand() % 3 == 0) ? false : true; });
 }
 
 

@@ -17,55 +17,26 @@
  */
 
 #include "types.hpp"
-#include "copying/utilities/copying_utils.cuh"
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/error_utils.hpp"
 #include "utilities/cuda_utils.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 #include <nvstrings/NVCategory.h>
+#include <bitmask/bit_mask.cuh> 
 
 namespace cudf {
 
 namespace {
 
-using cudf::utilities::bitmask_partition_params;
-using cudf::utilities::data_partition_params;
-using cudf::utilities::block_type;
-using cudf::utilities::double_block_type;
-using cudf::utilities::BLOCK_MASK_VALUE;
-using cudf::utilities::BITS_PER_BLOCK;
+using bit_mask_t = bit_mask::bit_mask_t; 
 
-__device__ __forceinline__
-void calculate_data_params(data_partition_params* params,
-                           gdf_index_type const*  indices,
-                           gdf_index_type const   indices_position) {
-  gdf_index_type position = indices_position * 2;
-  params->input_offset = indices[position];
-  params->row_size = indices[position + 1] - params->input_offset;
-}
 
-__device__ __forceinline__
-void calculate_bitmask_params(bitmask_partition_params* params,
-                              gdf_valid_type*           output_bitmask,
-                              gdf_valid_type const*     input_bitmask,
-                              gdf_size_type const       input_size,
-                              gdf_index_type const*     indices,
-                              gdf_size_type const       indices_size,
-                              gdf_index_type const      indices_position) {
-  params->block_output = reinterpret_cast<block_type*>(output_bitmask);
-  params->block_input = reinterpret_cast<block_type const*>(input_bitmask);
-  
-  gdf_index_type position = indices_position * 2;
-  gdf_index_type input_index_begin = indices[position];
-  gdf_index_type input_index_end = indices[position + 1];
+/**
+ * @brief Improve the readability of the source code.
+ * Parameter for the CUDA kernel.
+ */
+constexpr std::size_t NO_DYNAMIC_MEMORY = 0;
 
-  params->input_offset = input_index_begin / BITS_PER_BLOCK;
-  params->rotate_input = input_index_begin % BITS_PER_BLOCK;
-  params->mask_last = (double_block_type{1} << ((input_index_end - input_index_begin) % BITS_PER_BLOCK)) - double_block_type{1};
-
-  params->input_block_length = (input_size + (BITS_PER_BLOCK - 1)) / BITS_PER_BLOCK;
-  params->partition_block_length = ((input_index_end - input_index_begin) + (BITS_PER_BLOCK - 1)) / BITS_PER_BLOCK;
-}
 
 template <typename ColumnType>
 __global__
@@ -73,42 +44,77 @@ void slice_data_kernel(ColumnType*           output_data,
                        ColumnType const*     input_data,
                        gdf_index_type const* indices,
                        gdf_index_type const  indices_position) {
-  // Obtain the indices for copying
-  cudf::utilities::data_partition_params data_params;
-  calculate_data_params(&data_params, indices, indices_position);
-
-  // Perform the copy operation
-  cudf::utilities::copy_data<ColumnType>(&data_params, output_data, input_data);
-}
-
-__global__
-void slice_bitmask_kernel(gdf_valid_type*       output_bitmask,
-                          gdf_size_type*        output_null_count,
-                          gdf_valid_type const* input_bitmask,
-                          gdf_size_type const   input_size,
-                          gdf_index_type const* indices,
-                          gdf_size_type const   indices_size,
-                          gdf_index_type const  indices_position) {
-  // Obtain the indices for copying
-  cudf::utilities::bitmask_partition_params bitmask_params;
-  calculate_bitmask_params(&bitmask_params,
-                           output_bitmask,
-                           input_bitmask,
-                           input_size,
-                           indices,
-                           indices_size,
-                           indices_position);
+  
+  gdf_index_type input_offset = indices[indices_position*2];    /**< The start index position of the input data. */
+  gdf_size_type row_size = indices[indices_position*2 + 1] - input_offset; 
 
   // Calculate kernel parameters
   gdf_size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
   gdf_size_type row_step = blockDim.x * gridDim.x;
 
   // Perform the copying operation
-  while (row_index < bitmask_params.partition_block_length) {
-    cudf::utilities::copy_bitmask(&bitmask_params, row_index);
-    cudf::utilities::perform_bitmask_null_count(&bitmask_params,
-                                                output_null_count,
-                                                row_index);
+  while (row_index < row_size) {
+    output_data[row_index] = input_data[input_offset + row_index];
+    row_index += row_step;
+  }
+}
+
+/** @brief This function copies a slice of a bitmask.
+ * 
+ * If the slice is from element 10 to element 40, element 10 corresponds to bit 3 of the second byte, 
+ * that bit needs to become bit 0. So we are reading two adjacent blocks and bitshifting them together,
+ * to then write one block. We also take care that if the last bits of a bit_mask_t block don't 
+ * correspond to this slice, then we to apply a mask to clear those bits.
+*/
+__global__
+void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
+                          gdf_size_type*        output_null_count,
+                          bit_mask_t const*     input_bitmask,
+                          gdf_size_type const   input_size,
+                          gdf_index_type const* indices,
+                          gdf_size_type const   indices_size,
+                          gdf_index_type const  indices_position) {
+  // Obtain the indices for copying
+  gdf_index_type input_index_begin = indices[indices_position * 2];
+  gdf_index_type input_index_end = indices[indices_position * 2 + 1];
+
+  gdf_index_type input_offset = input_index_begin / bit_mask::bits_per_element;
+  bit_mask_t rotate_input = input_index_begin % bit_mask::bits_per_element;
+  bit_mask_t mask_last = (bit_mask_t{1} << ((input_index_end - input_index_begin) % bit_mask::bits_per_element)) - bit_mask_t{1};
+
+  gdf_size_type input_block_length = bit_mask::num_elements(input_size);
+  gdf_size_type partition_block_length = bit_mask::num_elements(input_index_end - input_index_begin);
+
+  // Calculate kernel parameters
+  gdf_size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_size_type row_step = blockDim.x * gridDim.x;
+
+  // Perform the copying operation
+  while (row_index < partition_block_length) {
+    // load data into one or two adjacent bitmask blocks
+    if (rotate_input == 0){
+      output_bitmask[row_index] = input_bitmask[input_offset + row_index];
+    } else {
+      bit_mask_t lower_value = input_bitmask[input_offset + row_index];
+      bit_mask_t upper_value = bit_mask_t{0};
+      if (row_index < (input_block_length - 1)) {
+        upper_value = input_bitmask[input_offset + row_index + 1];      
+      }
+      
+      // Perform rotation 
+      output_bitmask[row_index] = __funnelshift_rc(lower_value, upper_value, rotate_input);
+    }
+
+    // Apply mask for the last value in the bitmask
+    if ((row_index == (partition_block_length - 1)) && mask_last) {
+      output_bitmask[row_index] &= mask_last;
+    }
+
+
+    // Perform null bitmask null count
+    std::uint32_t null_count_value = __popc(output_bitmask[row_index]); // Count the number of bits that are set to 1 in a 32 bit integer.
+    atomicAdd(output_null_count, null_count_value);
+    
     row_index += row_step;
   }
 }
@@ -128,7 +134,7 @@ public:
   template <typename ColumnType>
   void operator()() {
 
-    gdf_size_type columns_quantity = num_indices_/2;
+    gdf_size_type columns_quantity = output_columns_.size();
     
     // Perform operation
     for (gdf_index_type index = 0; index < columns_quantity; ++index) {
@@ -151,10 +157,12 @@ public:
       RMM_TRY( RMM_ALLOC(&(output_column->data), col_width * output_column->size, stream) );
       if(input_column_->valid != nullptr){
         RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
-      } 
+      } else {
+        output_column->valid = nullptr;
+      }
 
       
-      // Calculate kernel occupancy for data
+      // Configure grid for data kernel launch
       auto data_grid_config = cudf::util::cuda::grid_config_1d(output_column->size, 256);
 
       // Make a copy of the data in the gdf_column
@@ -162,7 +170,7 @@ public:
       <<<
         data_grid_config.num_blocks,
         data_grid_config.num_threads_per_block,
-        cudf::utilities::NO_DYNAMIC_MEMORY,
+        NO_DYNAMIC_MEMORY,
         stream
       >>>(
         static_cast<ColumnType*>(output_column->data),
@@ -171,33 +179,37 @@ public:
         index
       );
 
-      // Calculate kernel occupancy for bitmask
-      auto valid_grid_config = cudf::util::cuda::grid_config_1d(gdf_num_bitmask_elements(output_column->size), 256);
-      
-      // Make a copy of the bitmask in the gdf_column
-      slice_bitmask_kernel
-      <<<
-        valid_grid_config.num_blocks,
-        valid_grid_config.num_threads_per_block,
-        cudf::utilities::NO_DYNAMIC_MEMORY,
-        stream
-      >>>(
-        output_column->valid,
-        bit_set_counter.data().get(),
-        input_column_->valid,
-        input_column_->size,
-        indices_,
-        num_indices_,
-        index
-      );
+      if(input_column_->valid != nullptr){
+        // Configure grid for bit mask kernel launch
+        auto valid_grid_config = cudf::util::cuda::grid_config_1d(gdf_num_bitmask_elements(output_column->size), 256);
+        
+        // Make a copy of the bitmask in the gdf_column
+        slice_bitmask_kernel
+        <<<
+          valid_grid_config.num_blocks,
+          valid_grid_config.num_threads_per_block,
+          NO_DYNAMIC_MEMORY,
+          stream
+        >>>(
+          reinterpret_cast<bit_mask_t*>(output_column->valid),
+          bit_set_counter.data().get(),
+          reinterpret_cast<bit_mask_t const*>(input_column_->valid),
+          input_column_->size,
+          indices_,
+          num_indices_,
+          index
+        );
 
-      CHECK_STREAM(stream);
+        CHECK_STREAM(stream);
 
-      // Update the other fields in the output column
-      gdf_size_type num_nulls;
-      CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(gdf_size_type), 
-                  cudaMemcpyDeviceToHost, stream));
-      output_column->null_count = output_column->size - num_nulls;
+        // Update the other fields in the output column
+        gdf_size_type num_nulls;
+        CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(gdf_size_type), 
+                    cudaMemcpyDeviceToHost, stream));
+        output_column->null_count = output_column->size - num_nulls;
+      } else {
+        output_column->null_count = 0;
+      }
 
       if (output_column->dtype == GDF_STRING_CATEGORY){
         NVCategory* new_category = static_cast<NVCategory*>(input_column_->dtype_info.category)->gather_and_remap(
@@ -234,9 +246,8 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
   
   std::vector<gdf_column*> output_columns;
 
-  CUDF_EXPECTS(indices != nullptr, "indices array is null");
   CUDF_EXPECTS(input_column != nullptr, "input column is null");
-  if (num_indices == 0) {
+  if (num_indices == 0 || indices == nullptr) {
     return output_columns;
   }
   if (input_column->size == 0) {
@@ -259,6 +270,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
     output_columns[i]->null_count = 0;
     output_columns[i]->data = nullptr;
     output_columns[i]->valid = nullptr;
+    output_columns[i]->dtype_info.category = nullptr;
   }
 
   // Create slice helper class
