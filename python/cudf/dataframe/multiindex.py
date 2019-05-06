@@ -43,7 +43,7 @@ class MultiIndex(Index):
         else:
             column_names = names
         if len(codes) == 0:
-            raise ValueError('MultiIndex codes can not be empty.')
+            codes = [[]]
         import cudf
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame) and\
                 not isinstance(codes[0], (Sequence,
@@ -52,9 +52,10 @@ class MultiIndex(Index):
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
             self.codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
-                code = np.array(code)
-                self.codes.add_column(column_names[idx],
-                                      columnops.as_column(code))
+                if len(code) != 0:
+                    code = np.array(code)
+                    self.codes.add_column(column_names[idx],
+                                          columnops.as_column(code))
         else:
             self.codes = codes
         self.levels = levels

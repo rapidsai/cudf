@@ -433,8 +433,11 @@ def test_list_of_series():
 
 
 def test_empty_groupby():
-    pdf = pd.DataFrame({'x': [], 'y': []})
+    pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
     gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(['x', 'y', 'z']).sum()
+    gdg = gdf.groupby(['x', 'y', 'z']).sum()
+    assert_eq(pdg, gdg)
     pdg = pdf.groupby(['x', 'y']).sum()
     gdg = gdf.groupby(['x', 'y']).sum()
     assert_eq(pdg, gdg)

@@ -166,7 +166,7 @@ class Groupby(object):
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
-            if len(self._by) == 1 or len(final_result) == 0:
+            if len(self._by) == 1 or len(final_result.columns) == 0:
                 dtype = 'float64' if len(self._by) == 1 else 'object'
                 name = self._by[0] if len(self._by) == 1 else None
                 from cudf.dataframe.index import GenericIndex
