@@ -15,7 +15,6 @@ import nvstrings
 import cudf.bindings.quantile as cpp_quantile
 import cudf.bindings.copying as cpp_copying
 
-from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.cudf_cpp import count_nonzero_mask
@@ -98,23 +97,6 @@ class Column(object):
             col = _column_concat(objs, col)
 
         return col
-
-    @staticmethod
-    def from_cffi_view(cffi_view):
-        """Create a Column object from a cffi struct gdf_column*.
-        """
-        from cudf.dataframe import columnops
-
-        data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
-        dtype = _gdf.gdf_to_np_dtype(cffi_view.dtype)
-        if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data_mem, dtype)
-        else:
-            data_buf = Buffer(data_mem)
-            mask = None
-            if mask_mem is not None:
-                mask = Buffer(mask_mem)
-            return columnops.build_column(data_buf, dtype, mask=mask)
 
     @staticmethod
     def from_mem_views(data_mem, mask_mem=None):
@@ -237,28 +219,6 @@ class Column(object):
         """Validity mask buffer
         """
         return self._mask
-
-    @property
-    def cffi_view(self):
-        """LibGDF CFFI view
-        """
-        if self.dtype == np.dtype('object'):
-            return _gdf.columnview(
-                size=self.indices.size,
-                data=self.indices,
-                mask=self._mask,
-                dtype=self.dtype,
-                null_count=self._null_count,
-                nvcat=self.nvcategory
-            )
-        else:
-            return _gdf.columnview(
-                size=self._data.size,
-                data=self._data,
-                mask=self._mask,
-                dtype=self.dtype,
-                null_count=self._null_count
-            )
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
@@ -526,8 +486,9 @@ class Column(object):
             else:
                 return self._copy_to_dense_buffer()
         else:
-            # always return a copy of the data rather than a reference
-            return self.data.copy()
+            # return a reference for performance reasons, should refactor code
+            # to explicitly use mem in the future
+            return self.data
 
     def _invert(self):
         """Internal convenience function for inverting masked array

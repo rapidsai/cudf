@@ -26,7 +26,8 @@ cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                      flag_sort_result, flag_sort_inplace)
+                                      flag_sort_result, flag_sort_inplace,
+                                      null_sort_behavior)
 
 cpdef check_gdf_error(errcode)
 
@@ -110,6 +111,11 @@ cdef extern from "cudf.h" nogil:
         gdf_dtype_extra_info dtype_info
         char *col_name
 
+    ctypedef enum gdf_null_sort_behavior:
+      GDF_NULL_AS_LARGEST = 0, 
+      GDF_NULL_AS_SMALLEST,
+      GDF_NULL_AS_LARGEST_FOR_MULTISORT,
+
     ctypedef enum gdf_method:
       GDF_SORT = 0,
       GDF_HASH,
@@ -150,13 +156,6 @@ cdef extern from "cudf.h" nogil:
       int flag_distinct
       int flag_sort_result
       int flag_sort_inplace
-
-    ctypedef struct _OpaqueIpcParser:
-        pass
-    ctypedef struct  gdf_ipc_parser_type:
-        pass
-
-    
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -208,28 +207,14 @@ cdef extern from "cudf.h" nogil:
                                     gdf_method flag_method,
                                     int flag_distinct,
                                     int flag_sort_result,
-                                    int flag_sort_inplace) except +
+                                    int flag_sort_inplace,
+                                    gdf_null_sort_behavior flag_null_sort_behavior) except +
 
     cdef const char * gdf_error_get_name(gdf_error errcode) except +
 
     cdef int gdf_cuda_last_error() except +
     cdef const char * gdf_cuda_error_string(int cuda_error) except +
     cdef const char * gdf_cuda_error_name(int cuda_error) except +
-
-    cdef gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) except +
-    cdef void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
-                                           const uint8_t *recordbatches,
-                                           size_t length) except +
-
-    cdef void gdf_ipc_parser_close(gdf_ipc_parser_type *handle) except +
-    cdef int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle) except +
-    cdef const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle) except +
-    cdef const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle) except +
-    cdef const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle) except +
-    cdef int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle) except +
-
-    cdef const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle) except +
-    cdef const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle) except +
 
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
 

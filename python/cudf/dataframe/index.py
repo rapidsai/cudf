@@ -11,6 +11,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 
+import cudf
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -353,10 +354,10 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        return super(RangeIndex, self).__eq__(other)
+        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, cudf.dataframe.index.RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return (self == other)._values.all()

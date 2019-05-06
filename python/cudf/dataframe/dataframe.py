@@ -2602,7 +2602,38 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+    #
+    # Stats
+    #
+    def count(self):
+        return self._apply_support_method('count')
+
+    def min(self):
+        return self._apply_support_method('min')
+
+    def max(self):
+        return self._apply_support_method('max')
+
+    def sum(self):
+        return self._apply_support_method('sum')
+
+    def product(self):
+        return self._apply_support_method('product')
+
+    def cummin(self):
+        return self._apply_support_method('cummin')
+
+    def cummax(self):
+        return self._apply_support_method('cummax')
+
+    def cumsum(self):
+        return self._apply_support_method('cumsum')
+
+    def cumprod(self):
+        return self._apply_support_method('cumprod')
+
+    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
+             **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2629,7 +2660,27 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
+        return self._apply_support_method('mean')
+
+    def std(self, ddof=1):
+        return self._apply_support_method('std', ddof)
+
+    def var(self, ddof=1):
+        return self._apply_support_method('var', ddof)
+
+    def _apply_support_method(self, *args, **kwargs):
+        method = args[0]
+        result = [getattr(self[col], method)(*kwargs)
+                  for col in self._cols.keys()]
+        if isinstance(result[0], Series):
+            support_result = result
+            result = DataFrame()
+            for idx, col in enumerate(self._cols.keys()):
+                result[col] = support_result[idx]
+        else:
+            result = Series(result)
+            result = result.set_index(self._cols.keys())
+        return result
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
@@ -2874,7 +2925,7 @@ def from_pandas(obj):
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.dataframe.multiindex.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, and "

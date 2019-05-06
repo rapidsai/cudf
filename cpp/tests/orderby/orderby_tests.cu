@@ -328,11 +328,17 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
+    gdf_context ctxt;
+    if (nulls_are_smallest)
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_SMALLEST;
+    else
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+
     result_error = gdf_order_by(columns_to_sort,
                                 (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),
                                 num_columns,
                                 sorted_indices_output,
-                                nulls_are_smallest);
+                                &ctxt);
 
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 

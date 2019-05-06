@@ -187,7 +187,7 @@ class OrcMetadata {
         row += ff.stripes[i].numberOfRows;
       }
     }
-    assert(row_count == ff.numberOfRows);
+    assert(row_count <= ff.numberOfRows);
 
     // Read each stripe's stripefooter metadata
     selection.resize(ff.stripes.size());

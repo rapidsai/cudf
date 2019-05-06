@@ -645,6 +645,25 @@ def gpu_shift(in_col, out_col, N):
             out_col[i] = -1
 
 
+@cuda.jit
+def gpu_diff(in_col, out_col, N):
+    """Calculate the difference between values at positions i and i - N in an
+    array and store the output in a new array.
+    """
+    i = cuda.grid(1)
+
+    if N > 0:
+        if i < in_col.size:
+            out_col[i] = in_col[i] - in_col[i - N]
+        if i < N:
+            out_col[i] = -1
+    else:
+        if i <= (in_col.size + N):
+            out_col[i] = in_col[i] - in_col[i - N]
+        if i >= (in_col.size + N) and i < in_col.size:
+            out_col[i] = -1
+
+
 MAX_FAST_UNIQUE_K = 2 * 1024
 
 

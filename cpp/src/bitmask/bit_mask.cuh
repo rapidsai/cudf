@@ -160,7 +160,7 @@ CUDA_HOST_DEVICE_CALLABLE bool is_valid(const bit_mask_t *valid, T record_idx) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  return gdf::util::bit_is_set<bit_mask_t, T>(valid, record_idx);
+  return (valid == nullptr) || gdf::util::bit_is_set<bit_mask_t, T>(valid, record_idx);
 }
 
 /**

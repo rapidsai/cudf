@@ -43,9 +43,11 @@ template <typename T>
 void print_vector_and_valid(std::vector<T>& v, const gdf_valid_type* valid)
 {
   auto functor = [&valid, &v](int index) -> std::string {
-    if (gdf_is_valid(valid, index))
-      return std::to_string((int)v[index]);
-    return std::string("@");
+    std::string ret = (sizeof(v[index]) == 1)
+                      ? std::to_string((int)v[index])
+                      : std::to_string(v[index]);
+
+    return gdf_is_valid(valid, index) ? ret : (ret + "|@");
   };
   std::vector<int> indexes(v.size());
   std::iota(std::begin(indexes), std::end(indexes), 0);
