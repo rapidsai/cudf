@@ -44,6 +44,7 @@ class Column(object):
     def _concat(cls, objs, dtype=None):
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
+        from cudf.dataframe.numerical import NumericalColumn, numeric_normalize_types
 
         if len(objs) == 0:
             if pd.api.types.is_categorical_dtype(dtype):
@@ -73,10 +74,15 @@ class Column(object):
             ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
+        # Handle numeric dtypes
+        if all(isinstance(o, NumericalColumn) for o in objs):
+            objs = numeric_normalize_types(*objs)
+
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
+
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = sum(o.null_count for o in objs)
@@ -530,21 +536,8 @@ class Column(object):
         return indices[-1, 0]
 
     def append(self, other):
-        """Append another column
-        """
-        if self.null_count > 0 or other.null_count > 0:
-            raise NotImplementedError("Appending columns with nulls is not "
-                                      "yet supported")
-        newsize = len(self) + len(other)
-        # allocate memory
-        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
-        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
-        newbuf = Buffer.from_empty(mem)
-        # copy into new memory
-        for buf in [self.data, other.data]:
-            newbuf.extend(buf.to_gpu_array())
-        # return new column
-        return self.replace(data=newbuf)
+        from cudf.dataframe.columnops import as_column
+        return Column._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):

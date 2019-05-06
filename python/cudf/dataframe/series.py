@@ -618,14 +618,12 @@ class Series(object):
         col = Column._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 
-    def append(self, arbitrary):
+    def append(self, other, ignore_index=True):
         """Append values from another ``Series`` or array-like object.
         Returns a new copy with the index resetted.
         """
-        other = Series(arbitrary)
-        other_col = other._column
-        # return new series
-        return Series(self._column.append(other_col))
+        index = not ignore_index
+        return Series._concat([self, Series(other)], index=index)
 
     @property
     def valid_count(self):
@@ -766,6 +764,7 @@ class Series(object):
 
     @property
     def index(self):
+
         """The index object
         """
         return self._index
@@ -1803,13 +1802,28 @@ class Loc(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        if isinstance(arg, str) or isinstance(arg, Number):
-            found_index = self._sr.index.find_label_range(arg, None)[0]
-            return self._sr.iloc[found_index]
-        elif isinstance(arg, slice):
-            start_index, stop_index = self._sr.index.find_label_range(arg.start, arg.stop)
-            return self._sr.iloc[start_index:stop_index]
-
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                            DeviceNDArray)):
+            if len(arg) == 0:
+                arg = Series(np.array([], dtype='int32'))
+            else:
+                arg = Series(arg)
+        if isinstance(arg, Series):
+            # To do this efficiently we need a solution to
+            # https://github.com/rapidsai/cudf/issues/1087
+            out = Series([],
+                         dtype=self._sr.dtype,
+                         index=self._sr.index.__class__([]))
+            for s in arg:
+                out = out.append(self._sr.loc[s:s], ignore_index=False)
+            return out
+        else:
+            if isinstance(arg, str) or isinstance(arg, Number):
+                found_index = self._sr.index.find_label_range(arg, None)[0]
+                return self._sr.iloc[found_index]
+            elif isinstance(arg, slice):
+                start_index, stop_index = self._sr.index.find_label_range(arg.start, arg.stop)
+                return self._sr.iloc[start_index:stop_index]
 
 class Iloc(object):
     """

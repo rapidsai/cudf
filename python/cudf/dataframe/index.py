@@ -435,6 +435,11 @@ class GenericIndex(Index):
         elif isinstance(values, columnops.TypedColumnBase):
             values = values
         else:
+            if isinstance(values, (list, tuple)):
+                if len(values) == 0:
+                    values = np.asarray([], dtype="int64")
+                else:
+                    values = np.asarray(values)
             values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
@@ -678,8 +683,12 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if len(arbitrary) == 0:
-            return RangeIndex(0, 0, name=name)
+        if hasattr(arbitrary, '__len__'):
+            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
+                # 0-d arrays are a special case:
+                pass
+            elif len(arbitrary) == 0:
+                return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 
