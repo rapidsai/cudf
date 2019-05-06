@@ -383,9 +383,7 @@ def test_advanced_groupby_levels():
     gdh = gdg.groupby(level=1).sum()
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(['x', 'y', 'z']).sum()
-    with pytest.raises(ValueError) as raises:
-        gdg = gdf.groupby(['x', 'y', 'z']).sum()
-    raises.match("Groupby result is empty!")
+    gdg = gdf.groupby(['x', 'y', 'z']).sum()
     pdg = pdf.groupby(['z']).sum()
     gdg = gdf.groupby(['z']).sum()
     assert_eq(pdg, gdg)

@@ -162,7 +162,11 @@ class Groupby(object):
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
-            raise ValueError('Groupby result is empty!')
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            return final_result
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
