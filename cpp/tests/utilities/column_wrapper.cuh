@@ -265,6 +265,11 @@ struct column_wrapper {
     print_gdf_column(&the_column);
   }
 
+
+  gdf_size_type size() const{
+      return the_column.size;
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Functor for comparing if two elements between two gdf_columns are
    * equal.
@@ -315,19 +320,32 @@ struct column_wrapper {
    * @return false The two columns are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(column_wrapper<ColumnType> const& rhs) const {
-    if (the_column.size != rhs.the_column.size) return false;
-    if (the_column.dtype != rhs.the_column.dtype) return false;
-    if (the_column.null_count != rhs.the_column.null_count) return false;
-    if (the_column.dtype_info.time_unit != rhs.the_column.dtype_info.time_unit)
+      return *this == *rhs.get();
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Compares if gdf_column is equal to this wrapper.
+   *
+   * Treats NULL == NULL
+   *
+   * @param rhs  The gdf_column to check for equality
+   * @return true The two columns are equal
+   * @return false The two columns are not equal
+   *---------------------------------------------------------------------------**/
+  bool operator==(gdf_column const& rhs) const {
+    if (the_column.size != rhs.size) return false;
+    if (the_column.dtype != rhs.dtype) return false;
+    if (the_column.null_count != rhs.null_count) return false;
+    if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
       return false;
 
-    if (!(the_column.data && rhs.the_column.data))
+    if (!(the_column.data && rhs.data))
       return false;  // if one is null but not both
 
     if (not thrust::all_of(rmm::exec_policy()->on(0),
                            thrust::make_counting_iterator(0),
                            thrust::make_counting_iterator(the_column.size),
-                           elements_equal{the_column, rhs.the_column})) {
+                           elements_equal{the_column, rhs})) {
       return false;
     }
 

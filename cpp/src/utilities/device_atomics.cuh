@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DEVICE_ATOMICS_CUH
+#define DEVICE_ATOMICS_CUH
+
 /** ---------------------------------------------------------------------------*
  * @brief overloads for CUDA atomic operations
  * @file device_atomics.cuh
@@ -942,7 +945,17 @@ T atomicCAS(T* address, T compare, T val)
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-
+/**
+ * @overload cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+ */
+__forceinline__ __device__
+cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
+{
+    // TODO: not sure this is the right way...
+    return cudf::bool8{atomicCAS(reinterpret_cast<int8_t*>(address), 
+                                 cudf::detail::unwrap(compare), 
+                                 cudf::detail::unwrap(val))};
+}
 
 /* Overloads for `atomicAnd` */
 /** -------------------------------------------------------------------------*
@@ -1155,3 +1168,5 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
 
+
+#endif

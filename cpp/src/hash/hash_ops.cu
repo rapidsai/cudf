@@ -12,7 +12,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 #include "cudf/functions.h"
-#include "bitmask/bitmask_ops.h"
+#include <bitmask/bitmask_ops.hpp>
 
 #include <cstring>
 

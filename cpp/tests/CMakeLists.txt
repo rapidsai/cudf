@@ -73,6 +73,12 @@ set(GROUPBY_TEST_SRC
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
+set(GROUPBY_WO_AGG_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+
+ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
+
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 
@@ -95,7 +101,7 @@ ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
@@ -238,10 +244,17 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - device atomics tests -------------------------------------------------------------------------------
+
+set(DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/device_atomics_test.cu")
+
+ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
@@ -258,6 +271,21 @@ set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+###################################################################################################
+# - device table tests -----------------------------------------------------------------------------------
+
+set(DEVICE_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
+
+ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
+
+###################################################################################################
+# - rolling tests ---------------------------------------------------------------------------------
+
+set(ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+
+ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - json tests -------------------------------------------------------------------------------------
@@ -272,11 +300,3 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 ###################################################################################################
 
 enable_testing()
-
-
-
-
-
-
-
-
