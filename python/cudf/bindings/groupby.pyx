@@ -306,7 +306,7 @@ def agg(groupby_class, args):
     result = DataFrame()
     add_col_values = True
 
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
 
     sort_results = True
 
@@ -399,7 +399,7 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
     result = DataFrame()
     add_col_values = True
 
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
 
     val_columns = groupby_class._val_columns
     val_columns_out = groupby_class._val_columns

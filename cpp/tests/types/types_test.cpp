@@ -296,21 +296,24 @@ TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
 
         t0+=t1;
         w0+=w1;
-        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0));
 
         t0-=t1;
         w0-=w1;
-        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0));
 
         t0*=t1;
         w0*=w1;
-        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
+        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0));
 
         if( 0 != t1)
         {
             t0/=t1;
             w0/=w1;
-            EXPECT_EQ(t0, static_cast<UnderlyingType>(w0.value));
+            if (TypeParam::corresponding_column_type == GDF_BOOL8)
+	        EXPECT_EQ(t0, static_cast<UnderlyingType>(w0));
+	    else
+		EXPECT_EQ(t0, w0.value);
         }
     }
 }

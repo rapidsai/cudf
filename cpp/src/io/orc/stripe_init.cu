@@ -59,7 +59,6 @@ gpuParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t num_stream
         const uint8_t *end = cur + s->info.compressed_data_size;
         gpu_inflate_input_s *decctl = s->info.decctl;
         uint8_t *uncompressed = s->info.uncompressed_data;
-        bool setup_decompression = (decctl != NULL);
         size_t max_uncompressed_size = 0;
         uint32_t num_compressed_blocks = 0;
         while (cur + 3 < end)
@@ -79,26 +78,23 @@ gpuParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t num_stream
             // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual uncompressed size and avoid waste due to block size alignment
             // For now, rely on the max compression ratio to limit waste for the most extreme cases (small single-block streams)
             uncompressed_size = (is_uncompressed) ? block_len : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr : block_size;
-            if (setup_decompression)
+            if (is_uncompressed)
             {
-                if (is_uncompressed)
+                // Copy the uncompressed data to output (not very efficient, but should only occur for small blocks and probably faster than decompression)
+                if (uncompressed && max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size)
                 {
-                    // Copy the uncompressed data to output (not very efficient, but should only occur for small blocks and probably faster than decompression)
-                    if (max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size)
+                    for (int i = t; i < uncompressed_size; i += 32)
                     {
-                        for (int i = t; i < uncompressed_size; i += 32)
-                        {
-                            uncompressed[max_uncompressed_size + i] = cur[i];
-                        }
+                        uncompressed[max_uncompressed_size + i] = cur[i];
                     }
                 }
-                else if (!t && num_compressed_blocks < s->info.max_compressed_blocks)
-                {
-                    decctl[num_compressed_blocks].srcDevice = const_cast<uint8_t *>(cur);
-                    decctl[num_compressed_blocks].srcSize = block_len;
-                    decctl[num_compressed_blocks].dstDevice = uncompressed + max_uncompressed_size;
-                    decctl[num_compressed_blocks].dstSize = uncompressed_size;
-                }
+            }
+            else if (decctl && !t && num_compressed_blocks < s->info.max_compressed_blocks)
+            {
+                decctl[num_compressed_blocks].srcDevice = const_cast<uint8_t *>(cur);
+                decctl[num_compressed_blocks].srcSize = block_len;
+                decctl[num_compressed_blocks].dstDevice = uncompressed + max_uncompressed_size;
+                decctl[num_compressed_blocks].dstSize = uncompressed_size;
             }
             cur += block_len;
             max_uncompressed_size += uncompressed_size;

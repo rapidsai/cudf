@@ -37,7 +37,12 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
     check_gdf_compatibility(out_indices)
     cdef gdf_column* output_indices = column_view_from_column(out_indices)
 
-    cdef int flag_nulls_are_smallest = na_position
+    if na_position == 1:
+        null_sort_behavior_api = 'null_as_smallest'
+    else :
+        null_sort_behavior_api = 'null_as_largest'
+
+    cdef gdf_context* context = create_context_view(0, 'sort', 0, 0, 0, null_sort_behavior_api)
 
     cdef gdf_error result 
     
@@ -46,9 +51,10 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
                               <int8_t*> asc_desc,
                               <size_t> num_inputs,
                               <gdf_column*> output_indices,
-                              <int> flag_nulls_are_smallest)
+                              <gdf_context*> context)
     
     check_gdf_error(result)
+    free(context)
 
 
 cpdef digitize(column, bins, right=False):
