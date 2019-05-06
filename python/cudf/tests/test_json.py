@@ -9,11 +9,13 @@ import numpy as np
 import pandas as pd
 import itertools
 
+
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
     df['col1'] = np.arange(nrows, dtype=dtype)
     df['col2'] = np.arange(1, 1 + nrows, dtype=dtype)
     return df
+
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
@@ -139,6 +141,7 @@ def test_json_writer(tmpdir, pdf, gdf):
 
         assert_eq(expect_series, got_series)
 
+
 @pytest.fixture(params=[False, True])
 def json_input(request, tmp_path_factory):
     is_file = request.param
@@ -151,11 +154,13 @@ def json_input(request, tmp_path_factory):
             fp.write(buffer)
         return str(fname)
 
+
 def test_json_lines_basic(json_input):
     df = cudf.read_json(json_input, lines=True)
     assert(df.shape == (3, 3))
     assert(all(df.columns == ['0', '1', '2']))
     assert(all(df.dtypes == ['int64', 'int64', 'int64']))
+
 
 def test_json_lines_byte_range(json_input):
 
@@ -179,12 +184,16 @@ def test_json_lines_byte_range(json_input):
     df = cudf.read_json(json_input, lines=True, byte_range=(10, 50))
     assert(df.shape == (1, 3))
 
+
 def test_json_lines_dtypes(json_input):
-    df = cudf.read_json(json_input, lines=True, dtype=["float", "int", "short"])
+    df = cudf.read_json(json_input, lines=True,
+                        dtype=["float", "int", "short"])
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
-    df = cudf.read_json(json_input, lines=True, dtype={1:"int", 2:"short", 0:"float"})
+    df = cudf.read_json(json_input, lines=True,
+                        dtype={1: "int", 2: "short", 0: "float"})
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
+
 
 def test_json_lines_compression(tmpdir):
     fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
@@ -193,6 +202,7 @@ def test_json_lines_compression(tmpdir):
     pd_df = make_numeric_dataframe(nrows, np.int32)
     pd_df.to_json(fname, compression='gzip', lines=True, orient='records')
 
-    cu_df = cudf.read_json(str(fname), compression='gzip', lines=True, dtype=['int', 'int'])
+    cu_df = cudf.read_json(str(fname), compression='gzip', lines=True,
+                           dtype=['int', 'int'])
 
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
