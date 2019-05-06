@@ -74,7 +74,7 @@ private:
 
 TEST(gdf_csv_test, DetectColumns)
 {
-    const char* fname	= "/tmp/DetectColumnsTest.csv";
+    const char* fname	= "./DetectColumnsTest.csv";
     const char* names[]	= { "A", "B", "C" };
     const char* use_cols[]	= { "A", "C" };
 
@@ -116,7 +116,7 @@ TEST(gdf_csv_test, DetectColumns)
 
 TEST(gdf_csv_test, UseColumns)
 {
-    const char* fname	= "/tmp/UseColumnsTest.csv";
+    const char* fname	= "./UseColumnsTest.csv";
     const char* names[]	= { "A", "B", "C" };
     const char* types[]	= { "int", "float64", "int" };
     const char* use_cols[]	= { "A", "C" };
@@ -157,7 +157,7 @@ TEST(gdf_csv_test, UseColumns)
 
 TEST(gdf_csv_test, Numbers)
 {
-    const char* fname	= "/tmp/CsvNumbersTest.csv";
+    const char* fname	= "./CsvNumbersTest.csv";
     const char* names[]	= { "A", "B", "C", "D", "E" };
     const char* types[]	= { "short", "int", "long", "float64", "float32" };
 
@@ -288,7 +288,7 @@ TEST(gdf_csv_test, MortPerf)
         args.dtype = dtype;
 
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
+        args.filepath_or_buffer = (char *)("./Performance_2000Q1.txt");
 
     if (  checkFile(args.filepath_or_buffer))
     {
@@ -320,7 +320,7 @@ TEST(gdf_csv_test, MortPerf)
 
 TEST(gdf_csv_test, Strings)
 {
-    const char* fname	= "/tmp/CsvStringsTest.csv";
+    const char* fname	= "./CsvStringsTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -379,7 +379,7 @@ TEST(gdf_csv_test, Strings)
 
 TEST(gdf_csv_test, QuotedStrings)
 {
-    const char* fname	= "/tmp/CsvQuotedStringsTest.csv";
+    const char* fname	= "./CsvQuotedStringsTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -440,7 +440,7 @@ TEST(gdf_csv_test, QuotedStrings)
 
 TEST(gdf_csv_test, IgnoreQuotes)
 {
-    const char* fname	= "/tmp/CsvIgnoreQuotesTest.csv";
+    const char* fname	= "./CsvIgnoreQuotesTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -501,7 +501,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
 
 TEST(gdf_csv_test, SpecifiedBoolValues)
 {
-    const char* fname			= "/tmp/CsvSpecifiedBoolValuesTest.csv";
+    const char* fname			= "./CsvSpecifiedBoolValuesTest.csv";
     const char* names[]			= { "A", "B", "C" };
     const char* types[]			= { "int32", "int32", "short" };
     const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
@@ -544,7 +544,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 
 TEST(gdf_csv_test, Dates)
 {
-    const char* fname			= "/tmp/CsvDatesTest.csv";
+    const char* fname			= "./CsvDatesTest.csv";
     const char* names[]			= { "A" };
     const char* types[]			= { "date" };
 
@@ -583,7 +583,7 @@ TEST(gdf_csv_test, Dates)
 
 TEST(gdf_csv_test, FloatingPoint)
 {
-    const char* fname			= "/tmp/CsvFloatingPoint.csv";
+    const char* fname			= "./CsvFloatingPoint.csv";
     const char* names[]			= { "A" };
     const char* types[]			= { "float32" };
 
@@ -619,7 +619,7 @@ TEST(gdf_csv_test, FloatingPoint)
 
 TEST(gdf_csv_test, Category)
 {
-    const char* fname = "/tmp/CsvCategory.csv";
+    const char* fname = "./CsvCategory.csv";
     const char* names[] = { "UserID" };
     const char* types[] = { "category" };
 
@@ -652,7 +652,7 @@ TEST(gdf_csv_test, Category)
 
 TEST(gdf_csv_test, SkiprowsNrows)
 {
-    const char* fname = "/tmp/CsvSkiprowsNrows.csv";
+    const char* fname = "./CsvSkiprowsNrows.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -686,7 +686,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
 
 TEST(gdf_csv_test, ByteRange)
 {
-    const char* fname = "/tmp/CsvByteRange.csv";
+    const char* fname = "./CsvByteRange.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -721,7 +721,7 @@ TEST(gdf_csv_test, ByteRange)
 
 TEST(gdf_csv_test, BlanksAndComments)
 {
-    const char* fname = "/tmp/CsvSkiprowsNrows.csv";
+    const char* fname = "./BlanksAndComments.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -755,7 +755,7 @@ TEST(gdf_csv_test, BlanksAndComments)
 
 TEST(gdf_csv_test, Writer)
 {
-    const char* fname	= "/tmp/CsvWriteTest.csv";
+    const char* fname	= "./CsvWriteTest.csv";
     const char* names[] = { "integer", "float", "string" };
     const char* types[] = { "int32", "float32", "str" };
 
@@ -781,7 +781,7 @@ TEST(gdf_csv_test, Writer)
     rargs.nrows = -1;
     EXPECT_EQ( read_csv(&rargs), GDF_SUCCESS );
 
-    const char* ofname = "/tmp/CsvWriteTestOut.csv";
+    const char* ofname = "./CsvWriteTestOut.csv";
     csv_write_arg wargs{};
     wargs.columns = rargs.data;  // columns from reader above
     wargs.filepath = ofname;

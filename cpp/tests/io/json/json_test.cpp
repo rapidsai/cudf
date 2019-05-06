@@ -223,7 +223,7 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
 }
 
 TEST_F(gdf_json_test, JsonLinesFileInput) {
-  const char *fname = "/tmp/JsonLinesFileTest.json";
+  const char *fname = "./JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
@@ -256,7 +256,7 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
-  const char *fname = "/tmp/JsonLinesByteRangeTest.json";
+  const char *fname = "./JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -286,7 +286,7 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
-  const char *fname = "/tmp/JsonLinesObjectsTest.json";
+  const char *fname = "./JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
