@@ -79,7 +79,7 @@ inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-inline gdf_error soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
+inline gdf_error soa_col_info(gdf_column const* const* cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
 {
 	std::vector<void*> v_cols(ncols, nullptr);
 	std::vector<gdf_valid_type*> v_valids(ncols, nullptr);
@@ -95,11 +95,14 @@ inline gdf_error soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gd
 	gdf_valid_type** h_valids = v_valids.data();
 	int* h_types = v_types.data();
 	CUDA_TRY(cudaMemcpy(d_cols, h_cols, ncols*sizeof(void*), cudaMemcpyHostToDevice));//TODO: add streams
-	CUDA_TRY(cudaMemcpy(d_valids, h_valids, ncols*sizeof(gdf_valid_type*), cudaMemcpyHostToDevice));//TODO: add streams
+	if (d_valids) {
+		CUDA_TRY(cudaMemcpy(d_valids, h_valids, ncols*sizeof(gdf_valid_type*), cudaMemcpyHostToDevice));//TODO: add streams
+	}
 	CUDA_TRY(cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice));//TODO: add streams
 
 	return GDF_SUCCESS;
 }
+
 
 inline bool isPtrManaged(cudaPointerAttributes attr) {
 #if CUDART_VERSION >= 10000
