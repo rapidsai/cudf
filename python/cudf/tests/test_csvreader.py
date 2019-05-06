@@ -783,7 +783,7 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
                          [(1, 0, True), ('infer', 2, True), (1, 4, True),
                           (3, 0, False), ('infer', 5, False)])
 @pytest.mark.parametrize('line_terminator', ['\n', '\r\n'])
-def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks, 
+def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks,
                                         line_terminator):
 
     lines = ['# first comment line',
@@ -992,6 +992,7 @@ def test_csv_reader_scientific_type_detection():
         assert(dt == 'float64')
     for col in df:
         assert(np.isclose(df[col][0], expected[int(col)]))
+
 
 @pytest.mark.parametrize('line_terminator', ['\n', '\r\n'])
 def test_csv_blank_first_row(line_terminator):
