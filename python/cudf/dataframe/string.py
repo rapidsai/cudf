@@ -530,6 +530,11 @@ class StringColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
 
+    def normalize_binop_value(self, other):
+        col = utils.scalar_broadcast_to(other, shape=len(self),
+                                        dtype="object")
+        return self.replace(data=col.data)
+
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
