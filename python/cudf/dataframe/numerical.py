@@ -336,7 +336,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns offset of first value that matches
         """
         found = cudautils.find_first(
-            self.data.to_gpu_array(),
+            self.data.mem,
             value)
         if found == -1:
             raise ValueError('value not found')
@@ -348,7 +348,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns offset of last value that matches
         """
         found = cudautils.find_last(
-            self.data.to_gpu_array(),
+            self.data.mem,
             value)
         if found == -1:
             raise ValueError('value not found')
