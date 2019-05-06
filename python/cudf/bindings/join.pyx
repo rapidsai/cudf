@@ -28,7 +28,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
       Call gdf join for full outer, inner and left joins.
     """
 
-    cdef gdf_context* context = create_context_view(0, method, 0, 0, 0)
+    cdef gdf_context* context = create_context_view(0, method, 0, 0, 0, 'null_as_largest')
 
     if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left, inner or outer"
