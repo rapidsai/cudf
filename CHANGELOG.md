@@ -131,6 +131,7 @@
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
+- PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
 
 
