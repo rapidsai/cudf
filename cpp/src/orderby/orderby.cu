@@ -32,7 +32,8 @@ namespace{ //annonymus
                                int8_t* asc_desc,
                                size_t ncols,
                                gdf_column* output_indices,
-                               bool flag_nulls_are_smallest)
+                               bool flag_nulls_are_smallest, 
+                               bool null_as_largest_for_multisort = false)
   {
     GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
@@ -54,36 +55,35 @@ namespace{ //annonymus
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
 
+    // if using null_as_largest_for_multisort = true, then you cant set ascending descending order (asc_desc)
+    GDF_REQUIRE(((null_as_largest_for_multisort && (nullptr == asc_desc)) || !null_as_largest_for_multisort), GDF_INVALID_API_CALL);
+
 		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
+				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, null_as_largest_for_multisort);
 
     return GDF_SUCCESS;
   }
 
 } //end unknown namespace
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Sorts an array of gdf_column.
- * 
- * @param[in] cols Array of gdf_columns
- * @param[in] asc_desc Device array of sort order types for each column
- * (0 is ascending order and 1 is descending). If NULL is provided defaults
- * to ascending order for evey column.
- * @param[in] ncols # columns
- * @param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- * smaller than non-nulls or viceversa
- * @param[out] output_indices Pre-allocated gdf_column to be filled
- * with sorted indices
- * 
- * @returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by(gdf_column** cols,
+
+
+gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t* asc_desc,
-                       size_t ncols,
+                       size_t num_inputs,
                        gdf_column* output_indices,
-                       int flag_nulls_are_smallest)
+                       gdf_context * context)                       
 {
-  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest);
+
+  bool flag_nulls_are_smallest = false;
+  bool null_as_largest_for_multisort = false;
+  if (context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST)
+  /* When sorting NULLS will be treated as the smallest number */
+    flag_nulls_are_smallest = true;
+  else if (context->flag_null_sort_behavior == GDF_NULL_AS_LARGEST_FOR_MULTISORT) 
+  /* When sorting a multi column data set, if there is a NULL in any of the
+       columns for a row, then that row will be will be treated as the largest number */
+    null_as_largest_for_multisort = true;
+
+  return multi_col_order_by(input_columns, asc_desc, num_inputs, output_indices, flag_nulls_are_smallest, null_as_largest_for_multisort);
 }

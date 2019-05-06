@@ -15,8 +15,8 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
-#include <table/table.hpp>
 #include <utilities/type_dispatcher.hpp>
 
 #include <gmock/gmock.h>
@@ -111,7 +111,6 @@ TYPED_TEST(TableTest, ConstructColumns) {
       RMM_FREE(col->valid, 0);
       delete col;
     });
-    delete[] t.begin();
   }
 }
 
@@ -150,7 +149,6 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
       RMM_FREE(col->valid, 0);
       delete col;
     });
-    delete[] t.begin();
   }
 }
 
@@ -189,6 +187,5 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
       RMM_FREE(col->valid, 0);
       delete col;
     });
-    delete[] t.begin();
   }
 }
