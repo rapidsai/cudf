@@ -558,9 +558,7 @@ class StringColumn(columnops.TypedColumnBase):
         return self._mimic_inplace(result, inplace)
 
     def _find_first_and_last(self, value):
-        found_indices = rmm.device_array((len(self),), dtype=np.byte)
-        self._data.match(f"^{value}$",
-                         devptr=found_indices.device_ctypes_pointer.value)
+        found_indices = self.str().contains(f"^{value}$").data.mem
 
         # TODO ugly hack below: need np.int32 because
         # numba.cuda.atomic.min/max don't support int8
