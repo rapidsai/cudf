@@ -15,9 +15,10 @@
  */
 
 #include <cudf.h>
+#include <types.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <stream_compaction.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/bit_mask.cuh>
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
@@ -26,25 +27,19 @@
 #include <utilities/cuda_utils.hpp>
 #include <cub/cub.cuh>
 
+using bit_mask::bit_mask_t;
+
 namespace {
 
 static constexpr int warp_size = 32;
 
-// 32-bit version of gdf_is_valid. This is much faster than the 8-bit version
-// due to memory coalescing
-__device__ __forceinline__
-bool is_valid(uint32_t const * __restrict__ bitmask, gdf_index_type i)
-{
-  return (bitmask[i / warp_size] >> (i %warp_size)) & 1;
-}
-
 // Returns true if the mask is true and valid (non-null) for index i
 __device__ inline 
-bool valid_and_true(cudf::bool8 const* __restrict__ data,
-                    uint32_t    const* __restrict__ bitmask,
+bool valid_and_true(cudf::bool8 const * __restrict__ data,
+                    bit_mask_t const * __restrict__ bitmask,
                     gdf_index_type i)
 {
-  bool valid = is_valid(bitmask, i);
+  bool valid = bit_mask::is_valid(bitmask, i);
   return (cudf::true_v == data[i]) && valid;
 }
 
@@ -56,7 +51,7 @@ namespace cudf {
 template <int block_size, int per_thread>
 __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
                                      cudf::bool8 const* __restrict__ mask_data,
-                                     uint32_t const* __restrict__ mask_valid,
+                                     bit_mask_t const* __restrict__ mask_valid,
                                      gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -93,13 +88,13 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
 template <typename T, int block_size, int per_thread>
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void scatter_no_valid(T* __restrict__ output_data,
-                                 gdf_valid_type * __restrict__, // output_valid,
+                                 bit_mask_t * __restrict__, // output_valid,
                                  gdf_size_type * output_null_count,
                                  T const * __restrict__ input_data,
-                                 gdf_valid_type const *, //input_valid,
+                                 bit_mask_t const * __restrict__, //input_valid,
                                  gdf_size_type  * __restrict__ block_offsets,
                                  cudf::bool8 const * __restrict__ mask_data,
-                                 uint32_t const * __restrict__ mask_valid,
+                                 bit_mask_t const * __restrict__ mask_valid,
                                  gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -130,21 +125,21 @@ __global__ void scatter_no_valid(T* __restrict__ output_data,
 template <typename T, int block_size, int per_thread>
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void scatter_with_valid(T* __restrict__ output_data,
-                                   gdf_valid_type * __restrict__ output_valid,
+                                   bit_mask_t * __restrict__ output_valid,
                                    gdf_size_type * output_null_count,
                                    T const * __restrict__ input_data,
-                                   gdf_valid_type const * input_valid,
+                                   bit_mask_t const * __restrict__ input_valid,
                                    gdf_size_type  * __restrict__ block_offsets,
                                    cudf::bool8 const * __restrict__ mask_data,
-                                   uint32_t const * __restrict__ mask_valid,
+                                   bit_mask_t const * __restrict__ mask_valid,
                                    gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
   
   // one extra warp worth in case the block is not aligned
-  __shared__ int32_t temp_valids[block_size+warp_size];
-  __shared__ T       temp_data[block_size];
+  __shared__ bool temp_valids[block_size+warp_size];
+  __shared__ T    temp_data[block_size];
   
   for (int i = 0; i < per_thread; i++) {
 
@@ -166,22 +161,20 @@ __global__ void scatter_with_valid(T* __restrict__ output_data,
     // contiguous manner.
 
     // zero the shared memory 
-    temp_valids[threadIdx.x] = 0;
-    if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = 0;
+    temp_valids[threadIdx.x] = false;
+    if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = false;
     __syncthreads();
 
     if (mask_true) {
       temp_data[local_index] = input_data[tid]; // scatter data to shared
 
       // scatter validity mask to shared memory
-      uint32_t const * __restrict__ valid_ptr =
-        reinterpret_cast<uint32_t const*>(input_valid);
-
-      bool valid = is_valid(valid_ptr, tid);
-      temp_valids[local_index + aligned_offset] = valid;
+      if (bit_mask::is_valid(input_valid, tid)) {
+        temp_valids[local_index + aligned_offset] = true;
+      }
     }
 
-    // each warp shares its total valid count to shared memory to make 
+    // each warp shares its total valid count to shared memory to ease
     // computing the total number of valid / non-null elements written out
     // note maximum block size is limited to 1024 by this, but that's OK
     __shared__ uint32_t warp_valid_counts[warp_size];
@@ -204,33 +197,28 @@ __global__ void scatter_with_valid(T* __restrict__ output_data,
     const int wid = threadIdx.x / warp_size;
     const int lane = threadIdx.x % warp_size;
 
-
     if (block_sum > 0 && wid <= last_warp) {
       int valid_index = (block_offset / warp_size) + wid;
 
-      // Cast the validity type to a type where atomicOr is natively supported
-      uint32_t* const __restrict__ valid_ptr =
-        reinterpret_cast<uint32_t*>(output_valid);
-
       // compute the valid mask for this warp
-      int32_t valid_warp =
-        __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+      int32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
 
       if (lane == 0 && valid_warp != 0) {
         warp_valid_counts[wid] = __popc(valid_warp);
         if (wid > 0 && wid < last_warp)
-          valid_ptr[valid_index] = valid_warp;
-        else 
-          atomicOr(&valid_ptr[valid_index], valid_warp);
+          output_valid[valid_index] = valid_warp;
+        else {
+          atomicOr(&output_valid[valid_index], valid_warp);
+        }
       }
 
       // if the block is full and not aligned then we have one more warp to cover
-      if (wid == 0) {
+      if ((wid == 0) && (last_warp == num_warps)) {
         int32_t valid_warp =
           __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
         if (lane == 0 && valid_warp != 0) {
           warp_valid_counts[wid] += __popc(valid_warp);
-          atomicOr(&valid_ptr[valid_index + num_warps], valid_warp);
+          atomicOr(&output_valid[valid_index + num_warps], valid_warp);
         }
       }
     }
@@ -266,7 +254,7 @@ struct scatter_functor
                   gdf_column const * input_column,
                   gdf_size_type  *block_offsets,
                   cudf::bool8 const * __restrict__ mask_data,
-                  uint32_t const * __restrict__ mask_valid,
+                  bit_mask_t const * __restrict__ mask_valid,
                   gdf_size_type mask_size,
                   bool has_valid) {
     cudf::util::cuda::grid_config_1d grid{mask_size, block_size, per_thread};
@@ -281,11 +269,16 @@ struct scatter_functor
       CUDA_TRY(cudaMemset(null_count, 0, sizeof(gdf_size_type)));
     }
 
+    bit_mask_t * __restrict__ output_valid =
+      reinterpret_cast<bit_mask_t*>(output_column->valid);
+    bit_mask_t const * __restrict__ input_valid =
+      reinterpret_cast<bit_mask_t*>(input_column->valid);
+
     scatter<<<grid.num_blocks, block_size>>>(static_cast<T*>(output_column->data),
-                                             output_column->valid,
+                                             output_valid,
                                              null_count,
                                              static_cast<T const*>(input_column->data),
-                                             input_column->valid,
+                                             input_valid,
                                              block_offsets,
                                              mask_data,
                                              mask_valid,
@@ -343,8 +336,8 @@ gdf_column apply_boolean_mask(gdf_column const *input,
   gdf_size_type *block_offsets = block_counts + grid.num_blocks;
 
   // Convert the validity mask to a 32-bit type for higher efficiency
-  uint32_t const* __restrict__ mask_valid =
-    reinterpret_cast<uint32_t const *>(boolean_mask->valid);
+  bit_mask_t const* __restrict__ mask_valid =
+    reinterpret_cast<bit_mask_t const *>(boolean_mask->valid);
   cudf::bool8 const* __restrict__ mask_data =
     reinterpret_cast<cudf::bool8 const *>(boolean_mask->data);
   
@@ -396,7 +389,7 @@ gdf_column apply_boolean_mask(gdf_column const *input,
     if (input->valid != nullptr) {
       gdf_size_type bytes = gdf_valid_allocation_size(output_size);
       RMM_ALLOC(&valid, bytes, 0);
-      //CUDA_TRY(cudaMemset(valid, 0, bytes));
+      CUDA_TRY(cudaMemset(valid, 0, bytes));
     }
 
     CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, data, valid,
