@@ -28,6 +28,8 @@ class Buffer(object):
         if size is None:
             if categorical:
                 size = len(mem)
+            elif hasattr(mem, '__len__') and len(mem) == 0:
+                size = 0
             else:
                 size = mem.size
         if capacity is None:
