@@ -26,7 +26,6 @@ requirements:
     - pandas >=0.23.4
     - numba >=0.41
     - pyarrow 0.12.1.*
-    - libcudf_cffi {{ version }}
     - rmm 0.7.*
     - nvstrings 0.7.*
 

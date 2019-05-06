@@ -74,4 +74,18 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
       });
 }
 
+std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
+  std::vector<gdf_dtype> dtypes(table.num_columns());
+
+  std::transform(table.begin(), table.end(), dtypes.begin(),
+                 [](gdf_column const* col) { return col->dtype; });
+  return dtypes;
+}
+
+bool has_nulls(cudf::table const& table) {
+  return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
+    return (nullptr != col->valid) and (col->null_count > 0);
+  });
+}
+
 }  // namespace cudf

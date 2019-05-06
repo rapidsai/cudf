@@ -62,3 +62,28 @@ def test_orc_reader_filenotfound(tmpdir):
 
     with pytest.raises(FileNotFoundError):
         cudf.read_orc(tmpdir.mkdir("cudf_orc"))
+
+
+@pytest.mark.parametrize('num_rows', [1, 100, 3000])
+@pytest.mark.parametrize('skip_rows', [0, 1, 3000])
+def test_orc_read_rows(datadir, skip_rows, num_rows):
+    path = datadir / 'TestOrcFile.decimal.orc'
+    orcfile = pa.orc.ORCFile(path)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(
+        path,
+        engine='cudf',
+        skip_rows=skip_rows,
+        num_rows=num_rows
+    ).to_pandas()
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    pdf = pdf.apply(pd.to_numeric)
+
+    # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
+    # have an API to read a subsection of rows from the file
+    pdf = pdf[skip_rows:skip_rows + num_rows]
+
+    np.testing.assert_allclose(pdf, gdf)

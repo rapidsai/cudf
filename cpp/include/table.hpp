@@ -129,26 +129,23 @@ struct table {
   gdf_size_type _num_rows{0};         ///< The number of elements in each column
 };
 
-std::vector<gdf_dtype> inline column_dtypes(cudf::table const& table) {
-  std::vector<gdf_dtype> dtypes(table.num_columns());
-
-  std::transform(table.begin(), table.end(), dtypes.begin(),
-                 [](gdf_column const* col) { return col->dtype; });
-  return dtypes;
-}
+/**---------------------------------------------------------------------------*
+ * @brief Returns vector of the dtypes of the columns in a table
+ *
+ * @param table The table to get the column dtypes from
+ * @return std::vector<gdf_dtype>
+ *---------------------------------------------------------------------------**/
+std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates if a table contains any null values.
- * 
+ *
  * @param table The table to check for null values
  * @return true If the table contains one or more null values
  * @return false If the table contains zero null values
-*---------------------------------------------------------------------------**/
-bool inline have_nulls(cudf::table const& table) {
-  return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
-    return (nullptr != col->valid) and (col->null_count > 0);
-  });
-}
+ *---------------------------------------------------------------------------**/
+bool has_nulls(cudf::table const& table);
+
 
 }  // namespace cudf
 
