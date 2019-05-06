@@ -15,12 +15,12 @@
  */
 
 #include <cudf.h>
+#include <bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
-#include <bitmask_ops.hpp>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
+#include <table.hpp>
 #include <table/device_table.cuh>
-#include <table/table.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
@@ -29,6 +29,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
+#include <algorithm>
 #include <type_traits>
 #include <vector>
 
@@ -306,9 +307,11 @@ struct update_target_element<
                                  static_cast<TargetType>(source_element),
                                  FunctorType{});
 
-    if (not gdf_is_valid(target.valid, target_index)) {
-      bit_mask::set_bit_safe(
-          reinterpret_cast<bit_mask::bit_mask_t*>(target.valid), target_index);
+    bit_mask::bit_mask_t* const __restrict__ target_mask{
+        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
+
+    if (not bit_mask::is_valid(target_mask, target_index)) {
+      bit_mask::set_bit_safe(target_mask, target_index);
     }
   }
 };
@@ -408,18 +411,22 @@ __device__ inline void aggregate_row(device_table const& target,
                                      device_table const& source,
                                      gdf_size_type source_index,
                                      distributive_operators* ops) {
+  using namespace bit_mask;
   thrust::for_each(
       thrust::seq, thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(target.num_columns()),
       [target, target_index, source, source_index, ops](gdf_size_type i) {
-        if (gdf_is_valid(source.get_column(i)->valid, source_index)) {
+        bit_mask_t* const __restrict__ source_mask{
+            reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
+
+        if (is_valid(source_mask, source_index)) {
           cudf::type_dispatcher(source.get_column(i)->dtype,
                                 elementwise_aggregator{}, *target.get_column(i),
                                 target_index, *source.get_column(i),
                                 source_index, ops[i]);
         }
       });
-}
+}  // namespace
 
 template <typename Map>
 __global__ void compute_hash_groupby(
@@ -488,7 +495,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   if (options.ignore_null_keys) {
     using namespace bit_mask;
 
-    if (cudf::have_nulls(keys)) {
+    if (cudf::has_nulls(keys)) {
       rmm::device_vector<bit_mask_t> const row_bitmask{
           cudf::row_bitmask(keys, stream)};
 

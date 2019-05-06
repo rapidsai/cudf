@@ -16,11 +16,12 @@
 
 #include <groupby.hpp>
 #include <string/nvcategory_util.hpp>
-#include <table/table.hpp>
+#include <table.hpp>
 #include <utilities/error_utils.hpp>
 #include "new_hash_groupby.hpp"
 
 #include <vector>
+#include <algorithm>
 
 namespace cudf {
 namespace groupby {
