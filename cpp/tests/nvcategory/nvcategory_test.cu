@@ -214,10 +214,13 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	int8_t *asc_desc;
 	EXPECT_EQ(RMM_ALLOC(&asc_desc, 1, 0), RMM_SUCCESS);
 	int8_t minus_one = -1; //desc
-	cudaMemset(asc_desc, minus_one, 1);
+  cudaMemset(asc_desc, minus_one, 1);
+  
+  gdf_context context;
+  context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
 
 	//doesnt output nvcategory type columns so works as is
-	gdf_error err = gdf_order_by(input_columns, asc_desc, 1, output_column, false);
+	gdf_error err = gdf_order_by(input_columns, asc_desc, 1, output_column, &context);
 	EXPECT_EQ(GDF_SUCCESS, err);
 
 	if(print){

@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "io/comp/gpuinflate.h"
+#include "io/utilities/datasource.hpp"
 #include "io/utilities/wrapper_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
@@ -33,66 +34,11 @@
 #include <numeric>
 #include <vector>
 
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <memory>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/file.h>
-#include <arrow/buffer.h>
-#include <arrow/io/memory.h>
-
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
 #endif
-
-/**
- * @brief Helper class for memory mapping a file source
- **/
-class DataSource {
- public:
-  explicit DataSource(){
-    this->file_handler = nullptr;
-  }
-  explicit DataSource(const char *filepath) {
-    std::shared_ptr<arrow::io::ReadableFile> file;
-    CUDF_EXPECTS(arrow::io::ReadableFile::Open(std::string(filepath), &file).ok() == true, "Error opening parquet file");
-    this->file_handler = file;
-  }
-
-  explicit DataSource(const char *filepath, size_t buffer_length) {
-      this->file_handler = std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(filepath), buffer_length);
-    }
-
-  explicit DataSource(std::shared_ptr<arrow::io::RandomAccessFile> file_handler) {
-    this->file_handler = file_handler;
-  }
-
-  ~DataSource() {
-
-  }
-
-  const std::shared_ptr<arrow::Buffer> get_buffer(int64_t position, int64_t nbytes) const {
-    std::shared_ptr< arrow::Buffer > out;
-    this->file_handler->ReadAt ( position,  nbytes, &out);
-    return out;
-  }
-//  const uint8_t *data() const { return static_cast<uint8_t *>(mapped_data); }
-  size_t size() const {
-    int64_t size;
-    this->file_handler->GetSize(&size);
-    return size;
-  }
-
- private:
-  std::shared_ptr<arrow::io::RandomAccessFile> file_handler;
-
-};
 
 /**
  * @brief Function that translates Parquet datatype to GDF dtype
@@ -160,45 +106,28 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(const DataSource data) {
-    size_t len = data.size();
+  explicit ParquetMetadata(const DataSource& input) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
-    {
-      const auto header_buffer = data.get_buffer(0, header_len);
-      const auto header = (const parquet::file_header_s *)header_buffer->data();
-      const auto ender_buffer = data.get_buffer(len - ender_len, ender_len);
-      const auto ender = (const parquet::file_ender_s *)ender_buffer->data();
-      CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-      CUDF_EXPECTS(
-          header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
-          "Corrupted header or footer");
-      CUDF_EXPECTS(ender->footer_len != 0 &&
-                       ender->footer_len <= (len - header_len - ender_len),
-                   "Incorrect footer length");
 
-      const auto buffer = data.get_buffer(len - ender->footer_len - ender_len,
-                                          ender->footer_len);
-      parquet::CompactProtocolReader cp(buffer->data(), ender->footer_len);
-      CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-      CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
-    }
+    const auto len = input.size();
+    const auto header_buffer = input.get_buffer(0, header_len);
+    const auto header = (const parquet::file_header_s *)header_buffer->data();
+    const auto ender_buffer = input.get_buffer(len - ender_len, ender_len);
+    const auto ender = (const parquet::file_ender_s *)ender_buffer->data();
+    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+    CUDF_EXPECTS(
+        header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+        "Corrupted header or footer");
+    CUDF_EXPECTS(ender->footer_len != 0 &&
+                     ender->footer_len <= (len - header_len - ender_len),
+                 "Incorrect footer length");
 
-    LOG_PRINTF("\n[+] Metadata:\n");
-    LOG_PRINTF(" version = %d\n", version);
-    LOG_PRINTF(" created_by = \"%s\"\n", created_by.c_str());
-    LOG_PRINTF(" schema (%zd entries):\n", schema.size());
-    for (size_t i = 0; i < schema.size(); i++) {
-      LOG_PRINTF(
-          "  [%zd] type=%d, name=\"%s\", num_children=%d, rep_type=%d, "
-          "max_def_lvl=%d, max_rep_lvl=%d\n",
-          i, schema[i].type, schema[i].name.c_str(), schema[i].num_children,
-          schema[i].repetition_type, schema[i].max_definition_level,
-          schema[i].max_repetition_level);
-    }
-    LOG_PRINTF(" num rows = %zd\n", (size_t)num_rows);
-    LOG_PRINTF(" num row groups = %zd\n", row_groups.size());
-    LOG_PRINTF(" num columns = %zd\n", row_groups[0].columns.size());
+    const auto buffer = input.get_buffer(len - ender->footer_len - ender_len, ender->footer_len);
+    parquet::CompactProtocolReader cp(buffer->data(), ender->footer_len);
+    CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+    print_metadata();
   }
 
   inline int get_total_rows() const { return num_rows; }
@@ -227,6 +156,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
    * PANDAS adds its own metadata to the key_value section when writing out the
    * dataframe to a file to aid in exact reconstruction. The JSON-formatted
    * metadata contains the index column(s) and PANDA-specific datatypes.
+   *
+   * @return std::string Name of the index column
    **/
   std::string get_index_column_name() {
     auto it =
@@ -325,6 +256,24 @@ struct ParquetMetadata : public parquet::FileMetaData {
     CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
+  }
+
+  void print_metadata() const {
+    LOG_PRINTF("\n[+] Metadata:\n");
+    LOG_PRINTF(" version = %d\n", version);
+    LOG_PRINTF(" created_by = \"%s\"\n", created_by.c_str());
+    LOG_PRINTF(" schema (%zd entries):\n", schema.size());
+    for (size_t i = 0; i < schema.size(); i++) {
+      LOG_PRINTF(
+          "  [%zd] type=%d, name=\"%s\", num_children=%d, rep_type=%d, "
+          "max_def_lvl=%d, max_rep_lvl=%d\n",
+          i, schema[i].type, schema[i].name.c_str(), schema[i].num_children,
+          schema[i].repetition_type, schema[i].max_definition_level,
+          schema[i].max_repetition_level);
+    }
+    LOG_PRINTF(" num rows = %zd\n", (size_t)num_rows);
+    LOG_PRINTF(" num row groups = %zd\n", row_groups.size());
+    LOG_PRINTF(" num columns = %zd\n", row_groups[0].columns.size());
   }
 };
 
@@ -600,26 +549,23 @@ void decode_page_data(
   }
 }
 
-/**
- * @brief Reads Apache Parquet data and returns an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
- **/
-gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> file_handle) {
+//
+// Implementation for reading Apache ORC data and outputting to cuDF columns.
+//
+gdf_error read_parquet_arrow(
+    pq_read_arg *args,
+    std::shared_ptr<arrow::io::RandomAccessFile> rd_file) {
 
-  int index_col = -1;
-  DataSource input;
-  if(args->source_type == FILE_PATH){
-    input = DataSource(args->source);
-  }else if(args->source_type == ARROW_RANDOM_ACCESS_FILE){
-    CUDF_EXPECTS(file_handle != nullptr,"read_parquet_arrow was used but no file handle set");
-    input = DataSource(file_handle);
-  }else{
-    input = DataSource(args->source, args->buffer_size);
-  }
-
+  DataSource input = [&] {
+    if (args->source_type == FILE_PATH) {
+      return DataSource(args->source);
+    } else if (args->source_type == ARROW_RANDOM_ACCESS_FILE) {
+      CUDF_EXPECTS(rd_file, "Invalid Arrow file handle");
+      return DataSource(rd_file);
+    } else {
+      return DataSource(args->source, args->buffer_size);
+    }
+  }();
   ParquetMetadata md(input);
 
   // Select only row groups required
@@ -638,6 +584,7 @@ gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::Rando
   LOG_PRINTF("[+] Selected row groups: %d\n", (int)selected_row_groups.size());
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   LOG_PRINTF("[+] Selected skip_rows: %d num_rows: %d\n", skip_rows, num_rows);
+  int index_col = -1;
   std::vector<gdf_column_wrapper> columns;
   for (const auto &col : selected_cols) {
     auto row_group_0 = md.row_groups[selected_row_groups[0].first];

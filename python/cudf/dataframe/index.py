@@ -9,7 +9,9 @@ from copy import deepcopy, copy
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
+import cudf
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -205,7 +207,14 @@ class Index(object):
     def equals(self, other):
         if len(self) != len(other):
             return False
-        return (self == other)._values.all()
+        elif len(self) == 1:
+            return self[0] == other[0]
+        else:
+            result = (self == other)
+            if isinstance(result, bool):
+                return result
+            else:
+                return result._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
@@ -240,6 +249,38 @@ class Index(object):
         out.name = name
 
         return out.copy(deep=True)
+
+    def astype(self, dtype):
+        """Convert to the given ``dtype``.
+
+        Returns
+        -------
+        If the dtype changed, a new ``Index`` is returned by casting each
+        values to the given dtype.
+        If the dtype is not changed, ``self`` is returned.
+        """
+        if dtype == self.dtype:
+            return self
+
+        return as_index(self._values.astype(dtype), name=self.name)
+
+    def to_array(self, fillna=None):
+        """Get a dense numpy array for the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            Defaults to None, which will skip null values.
+            If it equals "pandas", null values are filled with NaNs.
+            Non integral dtype is promoted to np.float64.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
+        """
+        return self._values.to_array(fillna=fillna)
 
 
 class RangeIndex(Index):
@@ -312,10 +353,10 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        return super(RangeIndex, self).__eq__(other)
+        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, cudf.dataframe.index.RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return (self == other)._values.all()
@@ -564,6 +605,44 @@ class CategoricalIndex(GenericIndex):
         return self._values.categories
 
 
+class StringIndex(GenericIndex):
+    """String defined indices into another Column
+
+    Attributes
+    ---
+    _values: A StringColumn object or NDArray of strings
+    name: A string
+    """
+
+    def __init__(self, values, name=None):
+        if isinstance(values, StringColumn):
+            self._values = values.copy()
+        elif isinstance(values, StringIndex):
+            if name is None:
+                name = values.name
+            self._values = values.values.copy()
+        else:
+            self._values = columnops.build_column(nvstrings.to_device(values),
+                                                  dtype='object')
+        self.name = name
+
+    @property
+    def codes(self):
+        return self._values.codes
+
+    @property
+    def categories(self):
+        return self._values.categories
+
+    def to_pandas(self):
+        result = pd.Index(self.values, name=self.name)
+        return result
+
+    def __repr__(self):
+        return "{}({}, dtype='object', name={})".format(
+                self.__class__.__name__, self._values.to_array(), self.name)
+
+
 def as_index(arbitrary, name=None):
     """Create an Index from an arbitrary object
 
@@ -590,14 +669,12 @@ def as_index(arbitrary, name=None):
         return arbitrary
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, StringColumn):
+        return StringIndex(arbitrary, name=name)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
-    elif isinstance(arbitrary, StringColumn):
-        raise NotImplementedError(
-            "Strings are not yet supported in the index"
-        )
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name

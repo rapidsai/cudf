@@ -84,7 +84,6 @@ class Series(object):
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
-
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
@@ -296,7 +295,11 @@ class Series(object):
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        indices = Buffer(indices).to_gpu_array()
+        from cudf import Series
+        if isinstance(indices, Series):
+            indices = indices.to_gpu_array()
+        else:
+            indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return self._copy_construct(data=self.data[:0],
@@ -704,6 +707,31 @@ class Series(object):
         """
         return self._column.to_array(fillna=fillna)
 
+    def isnull(self):
+        """Identify missing values in a Series.
+        """
+        if not self.has_null_mask:
+            return Series(cudautils.zeros(len(self), np.bool_), name=self.name,
+                          index=self.index)
+
+        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        return Series(mask, name=self.name, index=self.index)
+
+    def isna(self):
+        """Identify missing values in a Series. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in a Series.
+        """
+        if not self.has_null_mask:
+            return Series(cudautils.ones(len(self), np.bool_), name=self.name,
+                          index=self.index)
+
+        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        return Series(mask, name=self.name, index=self.index)
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -741,6 +769,10 @@ class Series(object):
         """The index object
         """
         return self._index
+
+    @index.setter
+    def index(self, _index):
+        self._index = _index
 
     @property
     def iloc(self):
@@ -1512,6 +1544,28 @@ class Series(object):
         output_dary = rmm.device_array_like(input_dary)
         cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
                                                      periods)
+        return Series(output_dary, name=self.name, index=self.index)
+
+    def diff(self, periods=1):
+        """Calculate the difference between values at positions i and i - N in
+        an array and store the output in a new array.
+        Notes
+        -----
+        Diff currently only supports float and integer dtype columns with
+        no null values.
+        """
+        if self.null_count != 0:
+            raise AssertionError("Diff currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Diff currently only supports "
+                                      "numeric dtypes")
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_diff.forall(output_dary.size)(input_dary, output_dary,
+                                                    periods)
         return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(self, group_series=None, level=None, sort=False):

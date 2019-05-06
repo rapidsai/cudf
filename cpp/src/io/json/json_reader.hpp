@@ -146,7 +146,7 @@ private:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void convertJsonToColumns(gdf_dtype *const dtypes, void **gdf_columns, gdf_valid_type **valid_fields,
+  void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
                             gdf_size_type *num_valid_fields);
 
 public:
