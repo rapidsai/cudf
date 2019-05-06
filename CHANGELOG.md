@@ -1,3 +1,19 @@
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
