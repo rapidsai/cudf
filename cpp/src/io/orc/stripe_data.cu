@@ -1584,7 +1584,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
     __syncthreads();
     if (t == 0)
     {
-        s->top.data.cur_row = min(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
+        s->top.data.cur_row = max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
         s->top.data.end_row = s->chunk.start_row + s->chunk.num_rows;
         s->top.data.buffered_count = 0;
         if (s->top.data.end_row > first_row + max_num_rows)
