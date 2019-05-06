@@ -31,3 +31,4 @@ cdef extern from "cudf.h" nogil:
         size_t          byte_range_size;
 
     cdef gdf_error read_json(json_read_arg *args) except +
+    
