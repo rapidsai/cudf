@@ -29,7 +29,7 @@ cdef extern from "cudf.h" nogil:
         int8_t* asc_desc,
         size_t num_inputs,
         gdf_column* output_indices,
-        int flag_nulls_are_smallest
+        gdf_context* ctxt
     ) except +
 
     cdef gdf_radixsort_plan_type* gdf_radixsort_plan(
@@ -80,4 +80,3 @@ cdef extern from "cudf.h" nogil:
         unsigned *d_begin_offsets,
         unsigned *d_end_offsets
     ) except +
-    

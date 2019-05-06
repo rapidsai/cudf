@@ -1,6 +1,8 @@
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
+
+- PR #982 Implement gdf_group_by_without_aggregations and gdf_unique_indices functions
 - PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
@@ -8,6 +10,7 @@
 - PR #1310 Implemented the slice/split functionality.
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
+- PR #1356 Rolling windows
 - PR #1381 Add DataFrame._get_numeric_data
 - PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
@@ -23,9 +26,20 @@
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
+- PR #1556 Add libcudf C++ transition guide
+- PR #1466 Add GPU-accelerated ORC Reader
+- PR #1565 Add build script for nightly doc builds
+- PR #1508 Add Series isna, isnull, and notna
+- PR #1456 Add Series.diff() via Numba kernel
+- PR #1588 Add Index `astype` typecasting
+- PR #1301 MultiIndex support
+- PR #1599 Level keyword supported in groupby
+- PR #929 Add support operations to dataframe
+- PR #1609 Groupby accept list of Series
 
 ## Improvements
 
+- PR #1531 Refactor closures as private functions in gpuarrow
 - PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
@@ -58,11 +72,20 @@
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1525 Add cudatoolkit conda dependency
 - PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
 - PR #1492 Convert transpose CFFI to Cython
 - PR #1495 Convert binary and unary ops CFFI to Cython
 - PR #1503 Convert sorting and hashing ops CFFI to Cython
+- PR #1522 Use latest release version in update-version CI script
+- PR #1533 Remove stale join CFFI, fix memory leaks in join Cython
+- PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
 - PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+- PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
+- PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
+- PR #1590 Remove CFFI from the build / install process entirely
+- PR #1536 Convert gpuarrow CFFI to Cython
 
 ## Bug Fixes
 
@@ -105,6 +128,14 @@
 - PR #1535 Fix doc issue to ensure correct labelling of cudf.series
 - PR #1537 Fix `undefined reference` link error in HashPartitionTest
 - PR #1548 Fix ci/local/build.sh README from using an incorrect image example
+- PR #1551 CSV Reader: Fix integer column name indexing
+- PR #1586 Fix broken `scalar_wrapper::operator==`
+- PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
+- PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
+- PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
+- PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
+- PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n) 
 
 
 # cuDF 0.6.1 (25 Mar 2019)
