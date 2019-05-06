@@ -61,10 +61,6 @@ make -j${PARALLEL_LEVEL}
 logger "Install libcudf..."
 make -j${PARALLEL_LEVEL} install
 
-logger "Install libcudf for Python..."
-make python_cffi
-make install_python
-
 logger "Build cuDF..."
 cd $WORKSPACE/python
 python setup.py build_ext --inplace
@@ -80,10 +76,6 @@ logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
 GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 
-logger "Python py.test for libcudf..."
-cd $WORKSPACE/cpp/build/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
-
 # Temporarily install cupy for testing
 logger "pip install cupy"
 pip install cupy-cuda92
@@ -92,10 +84,6 @@ pip install cupy-cuda92
 logger "conda install feather-format"
 conda install -c conda-forge -y feather-format
 
-# Temporarily install tzdata otherwise pyarrow core dumps
-logger "apt-get update && apt-get install -y tzdata"
-apt-get update && apt-get install -y tzdata
-
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v
+py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term

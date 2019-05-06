@@ -75,16 +75,16 @@ def test_groupby_getitem_styles():
 @pytest.mark.parametrize('nelem', get_nelem())
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_mean(nelem, method):
-    # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ['x', 'y'], method=method).mean()
-    got = np.sort(got_df['val'].to_array())
-    # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(['x', 'y']).mean()
-    expect = np.sort(expect_df['val'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect, got)
+    if method == "cudf":
+        got = np.sort(got_df['val'].to_array())
+        expect = np.sort(expect_df['val'].values)
+        np.testing.assert_array_almost_equal(expect, got)
+    else:
+        assert_eq(got_df, expect_df)
 
 
 @pytest.mark.parametrize('nelem', get_nelem())
@@ -92,38 +92,35 @@ def test_groupby_mean(nelem, method):
 def test_groupby_mean_3level(nelem, method):
     lvls = 'z'
     bys = list('xyz')
-    # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
                         extra_levels=lvls).groupby(bys, method=method).mean()
-    got = np.sort(got_df['val'].to_array())
-    # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
-    expect = np.sort(expect_df['val'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect, got)
+    if method == "cudf":
+        got = np.sort(got_df['val'].to_array())
+        expect = np.sort(expect_df['val'].values)
+        np.testing.assert_array_almost_equal(expect, got)
+    else:
+        assert_eq(got_df, expect_df)
 
 
 @pytest.mark.parametrize('nelem', get_nelem())
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_agg_mean_min(nelem, method):
-    # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ['x', 'y'], method=method).agg(['mean', 'min'])
+    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(
+        ['x', 'y']).agg(['mean', 'min'])
     if method == "cudf":
         got_mean = np.sort(got_df['val_mean'].to_array())
         got_min = np.sort(got_df['val_min'].to_array())
+        expect_mean = np.sort(expect_df['val', 'mean'].values)
+        expect_min = np.sort(expect_df['val', 'min'].values)
+        # verify
+        np.testing.assert_array_almost_equal(expect_mean, got_mean)
+        np.testing.assert_array_almost_equal(expect_min, got_min)
     else:
-        got_mean = np.sort(got_df['mean_val'].to_array())
-        got_min = np.sort(got_df['min_val'].to_array())
-    # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(
-        ['x', 'y']).agg(['mean', 'min'])
-    expect_mean = np.sort(expect_df['val', 'mean'].values)
-    expect_min = np.sort(expect_df['val', 'min'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect_mean, got_mean)
-    np.testing.assert_array_almost_equal(expect_min, got_min)
+        assert_eq(expect_df, got_df)
 
 
 @pytest.mark.parametrize('nelem', get_nelem())
@@ -132,20 +129,18 @@ def test_groupby_agg_min_max_dictargs(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ['x', 'y'], method=method).agg({'a': 'min', 'b': 'max'})
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ['x', 'y']).agg({'a': 'min', 'b': 'max'})
     if method == "cudf":
         got_min = np.sort(got_df['a'].to_array())
         got_max = np.sort(got_df['b'].to_array())
+        expect_min = np.sort(expect_df['a'].values)
+        expect_max = np.sort(expect_df['b'].values)
+        # verify
+        np.testing.assert_array_almost_equal(expect_min, got_min)
+        np.testing.assert_array_almost_equal(expect_max, got_max)
     else:
-        got_min = np.sort(got_df['min_a'].to_array())
-        got_max = np.sort(got_df['max_b'].to_array())
-    # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ['x', 'y']).agg({'a': 'min', 'b': 'max'})
-    expect_min = np.sort(expect_df['a'].values)
-    expect_max = np.sort(expect_df['b'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect_min, got_min)
-    np.testing.assert_array_almost_equal(expect_max, got_max)
+        assert_eq(expect_df, got_df)
 
 
 @pytest.mark.parametrize('method', get_methods())
@@ -274,8 +269,6 @@ def test_groupby_apply_grouped():
                                   'max', 'count', 'sum'])
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_cudf_2keys_agg(nelem, func, method):
-    # gdf (Note: lack of multindex)
-
     # skip unimplemented aggs:
     if func in ['var', 'std']:
         if method in ['hash', 'sort']:
@@ -288,10 +281,12 @@ def test_groupby_cudf_2keys_agg(nelem, func, method):
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(['x', 'y']).agg(func)
-
-    expect_agg = np.sort(expect_df['val'].values)
-    # verify
-    np.testing.assert_array_almost_equal(expect_agg, got_agg)
+    if method == 'cudf':
+        expect_agg = np.sort(expect_df['val'].values)
+        # verify
+        np.testing.assert_array_almost_equal(expect_agg, got_agg)
+    else:
+        assert_eq(got_df, expect_df)
 
 
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
@@ -376,3 +371,64 @@ def test_groupby_external_series_incorrect_length(series):
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_eq(pxx, gxx)
+
+
+def test_advanced_groupby_levels():
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1], 'z': [1, 1, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(['x', 'y']).sum()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    assert_eq(pdg, gdg)
+    pdh = pdg.groupby(level=1).sum()
+    gdh = gdg.groupby(level=1).sum()
+    assert_eq(pdh, gdh)
+    pdg = pdf.groupby(['x', 'y', 'z']).sum()
+    with pytest.raises(ValueError) as raises:
+        gdg = gdf.groupby(['x', 'y', 'z']).sum()
+    raises.match("Groupby result is empty!")
+    pdg = pdf.groupby(['z']).sum()
+    gdg = gdf.groupby(['z']).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(['y', 'z']).sum()
+    gdg = gdf.groupby(['y', 'z']).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(['x', 'z']).sum()
+    gdg = gdf.groupby(['x', 'z']).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(['y']).sum()
+    gdg = gdf.groupby(['y']).sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby(['x']).sum()
+    gdg = gdf.groupby(['x']).sum()
+    assert_eq(pdg, gdg)
+    pdh = pdg.groupby(level=0).sum()
+    gdh = gdg.groupby(level=0).sum()
+    assert_eq(pdh, gdh)
+    pdg = pdf.groupby(['x', 'y']).sum()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    pdh = pdg.groupby(level=[0, 1]).sum()
+    gdh = gdg.groupby(level=[0, 1]).sum()
+    assert_eq(pdh, gdh)
+    pdh = pdg.groupby(level=[1, 0]).sum()
+    gdh = gdg.groupby(level=[1, 0]).sum()
+    assert_eq(pdh, gdh)
+    pdg = pdf.groupby(['x', 'y']).sum()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    with pytest.raises(IndexError) as raises:
+        pdh = pdg.groupby(level=2).sum()
+    raises.match("Too many levels")
+    with pytest.raises(IndexError) as raises:
+        gdh = gdg.groupby(level=2).sum()
+    raises.match("Too many levels")
+    assert_eq(pdh, gdh)
+
+
+def test_list_of_series():
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby([pdf.x]).y.sum()
+    gdg = gdf.groupby([gdf.x]).y.sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
+    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
+    assert_eq(pdg, gdg)

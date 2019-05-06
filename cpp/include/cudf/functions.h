@@ -41,21 +41,6 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  */
 gdf_error gdf_nvtx_range_pop();
 
-/**
- * @brief  Counts the number of valid bits for the specified number of rows
- * in a validity bitmask.
- *
- * If the bitmask is null, returns a count equal to the number of rows.
- *
- * @param[in] masks The validity bitmask buffer in device memory
- * @param[in] num_rows The number of bits to count
- * @param[out] count The number of valid bits in the buffer from [0, num_rows)
- *
- * @returns  GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
-                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
@@ -168,15 +153,21 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
 /**
  * @brief  Constructor for the gdf_context struct
  *
- * @param[out] gdf_context being constructed
- * @param[in] Indicates if the input data is sorted. 0 = No, 1 = yes
- * @param[in] the method to be used for the operation (e.g., sort vs hash)
- * @param[in] for COUNT: DISTINCT = 1, else = 0
+ * @param[out] context gdf_context being constructed
+ * @param[in] flag_sorted Indicates if the input data is sorted. 0 = No, 1 = yes
+ * @param[in] flag_method The method to be used for the operation (e.g., sort vs hash)
+ * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
+ * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+ * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
+ *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
+ *                                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace);
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           gdf_null_sort_behavior flag_null_sort_behavior);
 
 
 /* error handling */
@@ -930,7 +921,6 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 gdf_size_type gdf_dtype_size(gdf_dtype dtype);
 
 /**
- * @brief  returns the size in bytes of the data type of the gdf_column
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
@@ -1077,12 +1067,13 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_context* ctxt);
 
 /**
- * @brief  Calculates exact quantiles
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
  * @param[in] requested quantile in [0,1]
- * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
+ * @param[out] result the result as double. The type can be changed in future
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
@@ -1090,22 +1081,24 @@ gdf_error gdf_group_by_count(int ncols,
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
-                            void* t_erased_res,                            
+                            gdf_scalar*  result,
                             gdf_context* ctxt);
 
 /**
- * @brief  Calculates approximate quantiles
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result; type-erased result of same type as column;
+ * @param[out] result quantile, with the same type as @p col_in
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
-                              void* t_erased_res,
+                              gdf_scalar*  result,
                               gdf_context* ctxt);
 
 /** 
@@ -1127,15 +1120,17 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 /** 
  * @brief Sorts an array of gdf_column.
  * 
- * @param[in] input_columns Array of gdf_columns
- * @param[in] asc_desc Device array of sort order types for each column
+ * @param[in]  input_columns Array of gdf_columns
+ * @param[in]  asc_desc Device array of sort order types for each column
  *                     (0 is ascending order and 1 is descending). If NULL
  *                     is provided defaults to ascending order for evey column.
- * @param[in] num_inputs # columns
- * @param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- *                                    smaller than non-nulls or viceversa
- * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted
- *                            indices
+ * @param[in]  num_inputs # columns
+ * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted indices
+ * @param[in]  context  The options for controlling treatment of nulls
+ *             context->flag_null_sort_behavior
+ *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
+ *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
+ *                        GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
@@ -1143,7 +1138,8 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
-                       int          flag_nulls_are_smallest);
+                       gdf_context * context);
+
 
 /**
  * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
