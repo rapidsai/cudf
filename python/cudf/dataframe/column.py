@@ -604,16 +604,8 @@ class Column(object):
         if indices.size == 0:
             return self.copy()
 
-        col = cpp_copying.apply_gather_array(self._data.to_gpu_array(),
-                                             indices)
-
-        if self._mask:
-            mask = self._get_mask_as_column().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
-
-        return self.replace(data=col.data, mask=mask)
+        # Returns a new column
+        return cpp_copying.apply_gather_column(self, indices)
 
     def as_mask(self):
         """Convert booleans to bitmask

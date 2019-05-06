@@ -152,12 +152,9 @@ def column_select_by_position(column, positions):
     """
     from cudf.dataframe.numerical import NumericalColumn
 
-    assert column.null_count == 0
-
-    selvals = cpp_copying.apply_gather_array(column.data.to_gpu_array(),
-                                             positions.data.to_gpu_array())
-    selected_values = column.replace(data=selvals.data)
-    selected_index = Buffer(positions.data.to_gpu_array())
+    pos_ary = positions.data.to_gpu_array()
+    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_index = Buffer(pos_ary)
 
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
