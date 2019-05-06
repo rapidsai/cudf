@@ -34,7 +34,7 @@ def test_orc_reader_basic(datadir, orc_args, engine):
             pytest.skip('.orc file is not found')
         else:
             print(type(excpr).__name__)
-    
+
     columns = orc_args[1]
 
     expect = orcfile.read(columns=columns).to_pandas()
@@ -57,10 +57,10 @@ def test_orc_reader_decimal(datadir):
         if type(excpr).__name__ == 'ArrowIOError':
             pytest.skip('.orc file is not found')
         else:
-            print(type(excpr).__name__)      
+            print(type(excpr).__name__)
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine='cudf').to_pandas()
-    
+
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
     pdf = pdf.apply(pd.to_numeric)
