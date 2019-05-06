@@ -73,6 +73,12 @@ set(GROUPBY_TEST_SRC
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
+set(GROUPBY_WO_AGG_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+
+ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
+
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 
@@ -294,11 +300,3 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 ###################################################################################################
 
 enable_testing()
-
-
-
-
-
-
-
-

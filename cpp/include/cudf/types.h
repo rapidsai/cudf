@@ -248,6 +248,17 @@ typedef enum {
 } gdf_unary_math_op;
 
 
+/**
+ * @brief Options for how nulls are treated in group_by/order_by operations.
+ */
+typedef enum {
+  GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
+  GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
+  GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< In multicolumn sorting, a row with NULL in any column is
+                                          treated as the largest number in comparisons */
+} gdf_null_sort_behavior;
+
+
 /** 
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
@@ -258,7 +269,13 @@ typedef struct gdf_context_{
   int flag_distinct;            ///< for COUNT: DISTINCT = 1, else = 0
   int flag_sort_result;         ///< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
   int flag_sort_inplace;        ///< 0 = No sort in place allowed, 1 = else
+  bool flag_groupby_include_nulls; 
+                                /**< false = Nulls are ignored in group by keys (Pandas style), 
+                                true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
+  gdf_null_sort_behavior flag_null_sort_behavior;
+                                ///< Indicates how nulls are treated in group_by/order_by operations
 } gdf_context;
+
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
