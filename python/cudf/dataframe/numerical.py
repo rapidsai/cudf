@@ -339,7 +339,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             self.data.mem,
             value)
         if found == -1:
-            raise ValueError('value not found')
+            raise KeyError('value not found')
         return found
 
 
@@ -351,7 +351,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             self.data.mem,
             value)
         if found == -1:
-            raise ValueError('value not found')
+            raise KeyError('value not found')
         return found
 
 

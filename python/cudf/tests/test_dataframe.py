@@ -488,14 +488,26 @@ def test_series_loc():
     assert_eq(ps.loc[5], gs.loc[5])
     assert_eq(ps.loc[6], gs.loc[6])
     assert_eq(ps.loc[6:8], gs.loc[6:8])
+    assert_eq(ps.loc[:8], gs.loc[:8])
 
-    ps = pd.Series([1, 2, 3, 4, 5], index=['one', 'two', 'three', 'four', 'five'])
+    ps = pd.Series([1, 2, 3, 4, 5],
+                   index=['one', 'two', 'three', 'four', 'five'])
     gs = Series.from_pandas(ps)
 
     assert_eq(ps.loc['one'], gs.loc['one'])
     assert_eq(ps.loc['one'], gs.loc['one'])
     assert_eq(ps.loc['two':'four'], gs.loc['two':'four'])
+    assert_eq(ps.loc['two':], gs.loc['two':])
 
+    ps = pd.Series([1, 2, 3, 4, 5],
+                   index=pd.date_range('20010101', '20010105'))
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc['20010101'], gs.loc['20010101'])
+    assert_eq(ps.loc['2001-01-01'], gs.loc['2001-01-01'])
+    assert_eq(ps.loc['2001-01-02':'2001-01-05'], gs.loc['2001-01-02':'2001-01-05'])
+    assert_eq(ps.loc['2001-01-02':], gs.loc['2001-01-02':])
+    assert_eq(ps.loc[:'2001-01-04'], gs.loc[:'2001-01-04'])
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):
