@@ -61,6 +61,12 @@ def test_groupby_default(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
+def test_group_keys_true(pdf, gdf):
+    gdf = gdf.groupby('y', group_keys=True).sum()
+    pdf = pdf.groupby('y', group_keys=True).sum()
+    assert_eq(pdf, gdf)
+
+
 def test_groupby_getitem_styles():
     pdf = pd.DataFrame({'x': [1, 3, 1], 'y': [1, 2, 3]})
     gdf = cudf.from_pandas(pdf)
