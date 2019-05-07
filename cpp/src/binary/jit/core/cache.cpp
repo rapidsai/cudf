@@ -79,7 +79,7 @@ std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantia
     std::string kern_inst_name = kern_name;
     for ( auto&& arg : arguments ) kern_inst_name += '_' + arg;
 
-    return getCached(kern_name, kernel_inst_map, 
+    return getCached(kern_inst_name, kernel_inst_map, 
         [&](){return program.kernel(kern_name)
                             .instantiate(arguments);
         }
