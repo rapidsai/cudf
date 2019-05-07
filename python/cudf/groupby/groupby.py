@@ -242,7 +242,7 @@ class Groupby(object):
         for by in self._by:
             result._df[by] = self._df[by]
         result._val_columns = arg
-        if isinstance(arg, str):
+        if isinstance(arg, (str, Number)):
             result._df[arg] = self._df[arg]
         else:
             for a in arg:
