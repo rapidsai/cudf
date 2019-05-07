@@ -29,6 +29,8 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace,
                                       null_sort_behavior)
 
+cpdef uintptr_t column_view_handle(col)
+
 cpdef check_gdf_error(errcode)
 
 # Import cudf.h header to import all functions

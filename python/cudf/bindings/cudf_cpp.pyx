@@ -182,9 +182,6 @@ cdef gdf_column* column_view_from_column(col):
     return c_col
 
 
-cpdef uintptr_t ctypes_column_view_from_column(col):
-    return <uintptr_t> column_view_from_column(col)
-
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                                            null_count):
     """
@@ -249,6 +246,13 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                                 c_extra_dtype_info)
 
     return c_col
+
+
+cpdef uintptr_t column_view_handle(col):
+    """
+    Return handle to a view of the underlying <gdf_column*>
+    """
+    return <uintptr_t> column_view_from_column(col)
 
 
 cdef gdf_column_to_column_mem(gdf_column* input_col):
