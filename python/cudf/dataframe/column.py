@@ -75,8 +75,8 @@ class Column(object):
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         # Handle numeric dtypes
-        if all(isinstance(o, NumericalColumn) for o in objs):
-            objs = numeric_normalize_types(*objs)
+        #if all(isinstance(o, NumericalColumn) for o in objs):
+        #    objs = numeric_normalize_types(*objs)
 
         head = objs[0]
         for o in objs:

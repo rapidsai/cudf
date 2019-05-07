@@ -164,6 +164,22 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
+    def append(self, other, ignore_index=True):
+        """Append values from another ``Series`` or array-like object.
+        Returns a new copy with the index resetted.
+        """
+        this = self
+        index = not ignore_index
+        other = Series(other)
+
+        from cudf.dataframe import numerical
+        if isinstance(this._column, numerical.NumericalColumn):
+            if self.dtype != other.dtype:
+                this, other = numerical.numeric_normalize_types(this, other)
+
+        return Series._concat([this, other], index=index)
+
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -617,13 +633,6 @@ class Series(object):
             name = None
         col = Column._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
-
-    def append(self, other, ignore_index=True):
-        """Append values from another ``Series`` or array-like object.
-        Returns a new copy with the index resetted.
-        """
-        index = not ignore_index
-        return Series._concat([self, Series(other)], index=index)
 
     @property
     def valid_count(self):

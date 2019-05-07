@@ -43,6 +43,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
 
+    def append(self, other):
+        self, other = numeric_normalize_types(self, as_column(other))
+        return super(NumericalColumn, self).apend(other)
+
     def replace(self, **kwargs):
         if 'data' in kwargs and 'dtype' not in kwargs:
             kwargs['dtype'] = kwargs['data'].dtype
@@ -335,7 +339,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             self.data.mem,
             value)
         if found == -1:
-            raise KeyError('value not found')
+            raise ValueError('value not found')
         return found
 
     def find_last_value(self, value):
