@@ -248,9 +248,9 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     return c_col
 
 
-cpdef uintptr_t column_view_handle(col):
+cpdef uintptr_t column_view_pointer(col):
     """
-    Return handle to a view of the underlying <gdf_column*>
+    Return pointer to a view of the underlying <gdf_column*>
     """
     return <uintptr_t> column_view_from_column(col)
 
