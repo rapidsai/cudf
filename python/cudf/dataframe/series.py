@@ -689,6 +689,39 @@ class Series(object):
         if not inplace:
             return self._copy_construct(data=data)
 
+    def where(self, cond, other=None, axis=None):
+        """
+        Replace values with other where the condition is False.
+
+        :param cond: boolean
+            Where cond is True, keep the original value. Where False,
+            replace with corresponding value from other.
+        :param other: scalar
+            Entries where cond is False are replaced with
+            corresponding value from other.
+        :param axis:
+        :return: Series
+
+        """
+        idx_bool = cond.to_array()
+        to_replace = self.to_array()[idx_bool]
+        if is_scalar(other):
+            other = utils.scalar_broadcast_to(
+                other, (len(to_replace),), np.dtype(type(other))
+            )
+        else:
+            if len(to_replace) != len(other):
+                raise ValueError(
+                    "Replacement lists must be"
+                    "of same length."
+                    "Expected {}, got {}.".format(len(to_replace), len(other))
+                )
+
+        result = self._column.find_and_replace(to_replace, other)
+
+        # TODO: replace nulls
+        return self._copy_construct(data=result)
+
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
