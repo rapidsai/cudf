@@ -88,7 +88,6 @@
 - PR #1657 Added install instructions for cudf version 0.6.
 
 
-
 ## Bug Fixes
 
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
