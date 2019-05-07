@@ -162,7 +162,30 @@ class Groupby(object):
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
-            raise ValueError('Groupby result is empty!')
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            if len(self._by) == 1 or len(final_result.columns) == 0:
+                dtype = 'float64' if len(self._by) == 1 else 'object'
+                name = self._by[0] if len(self._by) == 1 else None
+                from cudf.dataframe.index import GenericIndex
+                index = GenericIndex(Series([], dtype=dtype))
+                index.name = name
+                final_result.index = index
+            else:
+                levels = []
+                codes = []
+                names = []
+                for by in self._by:
+                    levels.append([])
+                    codes.append([])
+                    names.append(by)
+                from cudf import MultiIndex
+                mi = MultiIndex(levels, codes)
+                mi.names = names
+                final_result.index = mi
+            return final_result
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
