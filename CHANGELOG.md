@@ -85,6 +85,9 @@
 - PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
+- PR #1657 Added install instructions for cudf version 0.6.
+
+
 
 ## Bug Fixes
 
