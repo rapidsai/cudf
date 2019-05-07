@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 Christian Cordova Estrada <christianc@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,16 +24,16 @@ namespace cudf {
 namespace gis {
 
 /** 
- * @brief Find if coordinates (query points) are completely inside or not in a specific polygon
+ * @brief Find if coordinates (query points) are completely inside or not in a static polygon
  *
- * @param[in] poly_lats: Pointer to latitudes of a polygon
- * @param[in] poly_lons: Pointer to longitudes of a polygon
- * @param[in] point_lats: Pointer to latitudes of query points
- * @param[in] point_lons: Pointer to longitudes of query points
+ * @param[in] poly_lats: column with latitudes of a polygon
+ * @param[in] poly_lons: column with longitudes of a polygon
+ * @param[in] point_lats: column with latitudes of query points
+ * @param[in] point_lons: column with longitudes of query points
  *
  * @returns Pointer to gdf_column indicating if the i-th query point is inside or not with {1, 0}
  */
-gdf_column* gdf_point_in_polygon(const gdf_column* polygon_latitudes, 
+gdf_column* point_in_polygon(const gdf_column* polygon_latitudes, 
                           const gdf_column* polygon_longitudes,
                           const gdf_column* point_latitudes, 
                           const gdf_column* point_longitudes);

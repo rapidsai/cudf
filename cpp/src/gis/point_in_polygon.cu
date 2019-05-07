@@ -1,3 +1,20 @@
+/*
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 Christian Cordova Estrada <christianc@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "gis.hpp"
 #include "point_in_polygon.hpp"
 
@@ -28,7 +45,7 @@ __device__ T orientation(const T p1_x, const T p1_y, const T p2_x, const T p2_y,
 }
 
 /** 
- * @brief Find if coordinates (query points) are completely inside or not in a specific polygon
+ * @brief Find if coordinates (query points) are completely inside or not in a static polygon
  *
  * @param[in] poly_lats: Pointer to latitudes of a polygon
  * @param[in] poly_lons: Pointer to longitudes of a polygon
@@ -104,10 +121,10 @@ struct point_in_polygon_functor {
 
     template <typename col_type, typename std::enable_if< !is_supported<col_type>() >::type* = nullptr>
     void operator()(const gdf_column* d_poly_lats,
-        const gdf_column* d_poly_lons,
-        const gdf_column* d_point_lats,
-        const gdf_column* d_point_lons,
-        gdf_column* d_point_is_in_polygon)
+                    const gdf_column* d_poly_lons,
+                    const gdf_column* d_point_lats,
+                    const gdf_column* d_point_lons,
+                    gdf_column* d_point_is_in_polygon)
     {
         CUDF_FAIL("Non-arithmetic operation is not supported");
     }
@@ -118,7 +135,7 @@ struct point_in_polygon_functor {
 namespace cudf {
 namespace gis {
 
-gdf_column* gdf_point_in_polygon(const gdf_column* polygon_lats, const gdf_column* polygon_lons, const gdf_column* point_lats, const gdf_column* point_lons)
+gdf_column* point_in_polygon(const gdf_column* polygon_lats, const gdf_column* polygon_lons, const gdf_column* point_lats, const gdf_column* point_lons)
 {
     cudaStream_t stream;
     CUDA_TRY( cudaStreamCreate(&stream) );
@@ -161,9 +178,9 @@ gdf_column* gdf_point_in_polygon(const gdf_column* polygon_lats, const gdf_colum
 }
 }   // namespace gis
 
-gdf_column* gdf_point_in_polygon(const gdf_column* polygon_lats, const gdf_column* polygon_lons, const gdf_column* point_lats, const gdf_column* point_lons)
+gdf_column* point_in_polygon(const gdf_column* polygon_lats, const gdf_column* polygon_lons, const gdf_column* point_lats, const gdf_column* point_lons)
 {
-    return gis::gdf_point_in_polygon(polygon_lats, polygon_lons, point_lats, point_lons);;
+    return gis::point_in_polygon(polygon_lats, polygon_lons, point_lats, point_lons);;
 }
 
 }   // namespace cudf

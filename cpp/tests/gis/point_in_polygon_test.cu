@@ -1,3 +1,20 @@
+/*
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 Christian Cordova Estrada <christianc@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "gis.hpp"
 #include "gtest/gtest.h"
 #include <tests/utilities/cudf_test_utils.cuh>
@@ -9,7 +26,6 @@ template <typename T>
 struct PIPTest : public GdfTest 
 {
     std::vector<T> polygon_lats, polygon_lons, point_lats, point_lons;
-    gdf_column *gdf_column_poly_lats, *gdf_column_poly_lons, *gdf_column_point_lats, *gdf_column_point_lons;
 
     void create_input(const std::initializer_list<T> &polygon_lats_list,
         const std::initializer_list<T> &polygon_lons_list,
@@ -89,16 +105,12 @@ struct PIPTest : public GdfTest
         cudf::test::column_wrapper<T> point_lat_wrapp{point_lats};
         cudf::test::column_wrapper<T> point_lon_wrapp{point_lons};
 
-        gdf_column_poly_lats = polygon_lat_wrapp.get();
-        gdf_column_poly_lons = polygon_lon_wrapp.get();
-        gdf_column_point_lats = point_lat_wrapp.get();
-        gdf_column_point_lons = point_lon_wrapp.get();
+        gdf_column* inside_poly_col = cudf::point_in_polygon(polygon_lat_wrapp.get(), polygon_lon_wrapp.get(), 
+                                                        point_lat_wrapp.get(), point_lon_wrapp.get());
 
-        gdf_column* inside_polygon_column = cudf::gdf_point_in_polygon(gdf_column_poly_lats, gdf_column_poly_lons, gdf_column_point_lats, gdf_column_point_lons);
+        std::vector<int8_t> host_inside_poly(point_lats.size());
 
-        std::vector<int8_t> host_inside_polygon(point_lats.size());
-
-        EXPECT_EQ(cudaMemcpy(host_inside_polygon.data(), inside_polygon_column->data, inside_polygon_column->size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
+        EXPECT_EQ(cudaMemcpy(host_inside_poly.data(), inside_poly_col->data, inside_polygon_column->size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
     
         return host_inside_polygon;
     }
