@@ -1,3 +1,19 @@
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+...
+
+
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
@@ -135,6 +151,8 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n) 
+- PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 
 
 # cuDF 0.6.1 (25 Mar 2019)
