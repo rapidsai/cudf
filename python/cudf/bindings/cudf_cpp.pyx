@@ -182,6 +182,9 @@ cdef gdf_column* column_view_from_column(col):
     return c_col
 
 
+cpdef uintptr_t ctypes_column_view_from_column(col):
+    return <uintptr_t> column_view_from_column(col)
+
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                                            null_count):
     """
