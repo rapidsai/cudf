@@ -80,65 +80,34 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
   return offset;
 }
 
-// This kernel scatters for columns with no validity mask.
+// This kernel scatters data and validity mask of a column based on the 
+// scan of the boolean mask. The block offsets for the scan are already computed.
 // Just compute the scan of the mask in each block and add it to the block's
-// output offset. This is the output index of each element.
-// Note the valid params are still here so we can dispatch either this 
-// kernel or the following one.
-template <typename T, int block_size, int per_thread>
+// output offset. This is the output index of each element. Scattering
+// the valid mask is not as easy, because each thread is only responsible for
+// one bit. Warp-level processing (ballot) makes this simpler.
+// To make scattering efficient, we "coalesce" the block's scattered data and 
+// valids in shared memory, and then write from shared memory to global memory
+// in a contiguous manner.
+// The has_validity template parameter allows us to specialize this kernel for
+// the non-nullable case for performance without writing another kernel.
+template <typename T, int block_size, int per_thread, bool has_validity>
 __launch_bounds__(block_size, 2048/block_size)
-__global__ void scatter_no_valid(T* __restrict__ output_data,
-                                 bit_mask_t * __restrict__, // output_valid,
-                                 gdf_size_type * output_null_count,
-                                 T const * __restrict__ input_data,
-                                 bit_mask_t const * __restrict__, //input_valid,
-                                 gdf_size_type  * __restrict__ block_offsets,
-                                 cudf::bool8 const * __restrict__ mask_data,
-                                 bit_mask_t const * __restrict__ mask_valid,
-                                 gdf_size_type mask_size)
-{
-  int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
-  gdf_size_type block_offset = block_offsets[blockIdx.x];
-  
-  #pragma unroll 2
-  for (int i = 0; i < per_thread; i++) {
-
-    bool mask_true = (tid < mask_size) && 
-                     valid_and_true(mask_data, mask_valid, tid);
-
-    // get output location using a scan of the mask result
-    gdf_index_type block_sum = 0;
-    const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
-                                                                   block_sum);
-    if (mask_true) // scatter input to output
-      output_data[local_index + block_offset] = input_data[tid];
-
-    block_offset += block_sum;
-    tid += block_size;
-  }
-}
-
-// This kernel scatters for columns with validity mask. It computes the 
-// output index in the same way as the previous kernel, but scattering 
-// the valid mask is not as easy, because each thread is only responsible for 
-// one bit. See comments inline for more detail.
-template <typename T, int block_size, int per_thread>
-__launch_bounds__(block_size, 2048/block_size)
-__global__ void scatter_with_valid(T* __restrict__ output_data,
-                                   bit_mask_t * __restrict__ output_valid,
-                                   gdf_size_type * output_null_count,
-                                   T const * __restrict__ input_data,
-                                   bit_mask_t const * __restrict__ input_valid,
-                                   gdf_size_type  * __restrict__ block_offsets,
-                                   cudf::bool8 const * __restrict__ mask_data,
-                                   bit_mask_t const * __restrict__ mask_valid,
-                                   gdf_size_type mask_size)
+__global__ void scatter_kernel(T* __restrict__ output_data,
+                               bit_mask_t * __restrict__ output_valid,
+                               gdf_size_type * output_null_count,
+                               T const * __restrict__ input_data,
+                               bit_mask_t const * __restrict__ input_valid,
+                               gdf_size_type  * __restrict__ block_offsets,
+                               cudf::bool8 const * __restrict__ mask_data,
+                               bit_mask_t const * __restrict__ mask_valid,
+                               gdf_size_type mask_size)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
   
   // one extra warp worth in case the block is not aligned
-  __shared__ bool temp_valids[block_size+warp_size];
+  __shared__ bool temp_valids[has_validity ? block_size+warp_size : 1];
   __shared__ T    temp_data[block_size];
   
   for (int i = 0; i < per_thread; i++) {
@@ -151,92 +120,86 @@ __global__ void scatter_with_valid(T* __restrict__ output_data,
     const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
 
-    // determine if this warp's output offset is aligned to a warp size
-    const gdf_size_type block_offset_aligned =
-      warp_size * (block_offset / warp_size);
-    const gdf_size_type aligned_offset = block_offset - block_offset_aligned;
-
-    // To make this efficient, "coalesce" the block's scattered values
-    // in shared memory, and then write from shared memory to global memory in a 
-    // contiguous manner.
-
-    // zero the shared memory 
-    temp_valids[threadIdx.x] = false;
+    temp_valids[threadIdx.x] = false; // init shared memory
     if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = false;
-    __syncthreads();
+    __syncthreads(); // wait for init
 
     if (mask_true) {
       temp_data[local_index] = input_data[tid]; // scatter data to shared
 
       // scatter validity mask to shared memory
-      if (bit_mask::is_valid(input_valid, tid)) {
+      if (has_validity && bit_mask::is_valid(input_valid, tid)) {
+        // determine aligned offset for this warp's output
+        const gdf_size_type aligned_offset = block_offset -
+          warp_size * (block_offset / warp_size);
         temp_valids[local_index + aligned_offset] = true;
       }
     }
 
     // each warp shares its total valid count to shared memory to ease
-    // computing the total number of valid / non-null elements written out
+    // computing the total number of valid / non-null elements written out.
     // note maximum block size is limited to 1024 by this, but that's OK
-    __shared__ uint32_t warp_valid_counts[warp_size];
+    __shared__ uint32_t warp_valid_counts[has_validity ? warp_size : 1];
     if (threadIdx.x < warp_size) warp_valid_counts[threadIdx.x] = 0;
 
     __syncthreads(); // wait for shared data and validity mask to be complete
 
-    // Just write the output data coalesced from shared to global
+    // Copy output data coalesced from shared to global
     if (threadIdx.x < block_sum)
       output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
 
-    // Since the valid bools are contiguous in shared memory now, we can use
-    // __popc to combine them into a single mask element.
-    // Then, most mask elements can be directly copied from shared to global
-    // memory. Only the first and last 32-bit mask elements of each block must
-    // use an atomicOr, because these are where other blocks may overlap.
+    if (has_validity) {
+      // Since the valid bools are contiguous in shared memory now, we can use
+      // __popc to combine them into a single mask element.
+      // Then, most mask elements can be directly copied from shared to global
+      // memory. Only the first and last 32-bit mask elements of each block must
+      // use an atomicOr, because these are where other blocks may overlap.
 
-    constexpr int num_warps = block_size / warp_size;
-    const int last_warp = block_sum / warp_size;
-    const int wid = threadIdx.x / warp_size;
-    const int lane = threadIdx.x % warp_size;
+      constexpr int num_warps = block_size / warp_size;
+      const int last_warp = block_sum / warp_size;
+      const int wid = threadIdx.x / warp_size;
+      const int lane = threadIdx.x % warp_size;
 
-    if (block_sum > 0 && wid <= last_warp) {
-      int valid_index = (block_offset / warp_size) + wid;
+      if (block_sum > 0 && wid <= last_warp) {
+        int valid_index = (block_offset / warp_size) + wid;
 
-      // compute the valid mask for this warp
-      int32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+        // compute the valid mask for this warp
+        int32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
 
-      if (lane == 0 && valid_warp != 0) {
-        warp_valid_counts[wid] = __popc(valid_warp);
-        if (wid > 0 && wid < last_warp)
-          output_valid[valid_index] = valid_warp;
-        else {
-          atomicOr(&output_valid[valid_index], valid_warp);
-        }
-      }
-
-      // if the block is full and not aligned then we have one more warp to cover
-      if ((wid == 0) && (last_warp == num_warps)) {
-        int32_t valid_warp =
-          __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
         if (lane == 0 && valid_warp != 0) {
-          warp_valid_counts[wid] += __popc(valid_warp);
-          atomicOr(&output_valid[valid_index + num_warps], valid_warp);
+          warp_valid_counts[wid] = __popc(valid_warp);
+          if (wid > 0 && wid < last_warp)
+            output_valid[valid_index] = valid_warp;
+          else {
+            atomicOr(&output_valid[valid_index], valid_warp);
+          }
+        }
+
+        // if the block is full and not aligned then we have one more warp to cover
+        if ((wid == 0) && (last_warp == num_warps)) {
+          int32_t valid_warp =
+            __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
+          if (lane == 0 && valid_warp != 0) {
+            warp_valid_counts[wid] += __popc(valid_warp);
+            atomicOr(&output_valid[valid_index + num_warps], valid_warp);
+          }
         }
       }
-    }
 
-    __syncthreads();
+      __syncthreads(); // wait for warp_valid_counts to be ready
 
-    // finally we just need to compute the total number of null elements for 
-    // this block and add it to the null
-    if (threadIdx.x < warp_size) {
-      uint32_t my_valid_count = warp_valid_counts[threadIdx.x];
+      // Compute total null_count for this block and add it to global count
+      if (threadIdx.x < warp_size) {
+        uint32_t my_valid_count = warp_valid_counts[threadIdx.x];
 
-      __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-      
-      uint32_t block_valid_count =
-        cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
-      
-      if (lane == 0) { // one thread computes and adds to null count
-        atomicAdd(output_null_count, block_sum - block_valid_count);
+        __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
+        
+        uint32_t block_valid_count =
+          cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
+        
+        if (lane == 0) { // one thread computes and adds to null count
+          atomicAdd(output_null_count, block_sum - block_valid_count);
+        }
       }
     }
 
@@ -260,8 +223,8 @@ struct scatter_functor
     cudf::util::cuda::grid_config_1d grid{mask_size, block_size, per_thread};
     
     auto scatter = (has_valid) ?
-      scatter_with_valid<T, block_size, per_thread> :
-      scatter_no_valid<T, block_size, per_thread>;
+      scatter_kernel<T, block_size, per_thread, true> :
+      scatter_kernel<T, block_size, per_thread, false>;
 
     gdf_size_type *null_count = nullptr;
     if (has_valid) {
@@ -311,11 +274,14 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
 /*
  * Filters a column using a column of boolean values as a mask.
  *
- * 
  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask 
  * that scatters input[i] if boolean_mask[i] is non-null and "true". This is 
  * simply an exclusive scan of the mask. Second, use the `scatter_map` to
  * scatter elements from the `input` column into the `output` column.
+ * 
+ * Slightly more complicated for performance reasons: we first compute the 
+ * per-block count of passed elements, then scan that, and perform the
+ * intra-block scan inside the kernel that scatters the output
  */
 gdf_column apply_boolean_mask(gdf_column const *input,
                               gdf_column const *boolean_mask) {
