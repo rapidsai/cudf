@@ -432,3 +432,14 @@ def test_list_of_series():
     pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
     gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
     assert_eq(pdg, gdg)
+
+
+def test_groupby_unsupported_columns():
+    pdf = pd.DataFrame({'x': [1, 2, 3],
+                        'y': ['a', 'b', 'c'],
+                        'z': ['d', 'e', 'f'],
+                        'a': [3, 4, 5]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby('x').sum()
+    gdg = gdf.groupby('x').sum()
+    assert_eq(pdg, gdg)

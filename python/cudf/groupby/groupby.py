@@ -168,8 +168,6 @@ class Groupby(object):
                                     sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
-        if len(result) == 0:
-            raise ValueError('Groupby result is empty!')
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
