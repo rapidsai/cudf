@@ -22,7 +22,8 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.hpp"
 
-#include "dataframe/device_table.cuh"
+#include "table/device_table.cuh"
+#include "table/table_rowwise_operators.cuh"
 
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -113,15 +114,22 @@ gdf_error gdf_order_by(gdf_column** cols,
   gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
   gdf_size_type nrows = cols[0]->size;
 
-  auto table = device_table::create(ncols, cols, stream);
+  auto table = device_table::create(num_inputs, cols, stream);
 
-  inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc, null_as_largest_for_multisort);
- 
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
 
-  thrust::sort(rmm::exec_policy(stream)->on(stream),
-				         d_indx, d_indx+nrows,
-                 ineq_op);				        
+  if (table->has_nulls())
+  if (null_as_largest_for_multisort) {    
+    less_with_nulls_always_false_comparator ineq_op(*table); 
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  ineq_op);				     
+  } else {  
+    inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  ineq_op);				        
+  }
 
   return GDF_SUCCESS;
 }

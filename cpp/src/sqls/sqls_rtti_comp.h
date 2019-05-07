@@ -279,31 +279,31 @@ struct LesserRTTI
   // }
 
 
-    __device__
-  bool less_with_nulls_always_false(IndexT row1, IndexT row2) const
-  {
-    for(size_t col_index = 0; col_index < sz_; ++col_index)
-    {
-      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+  //   __device__
+  // bool less_with_nulls_always_false(IndexT row1, IndexT row2) const
+  // {
+  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
+  //   {
+  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      State state = cudf::type_dispatcher(col_type, OpLess_with_nulls_always_false{},
-                                          row1,
-                                          row2,
-                                          col_index,
-                                          columns_,
-                                          valids_);
-      switch( state )
-      {
-      case State::False:
-        return false;
-      case State::True:
-        return true;
-      case State::Undecided:
-        break;
-      }
-    }
-    return false;
-  }
+  //     State state = cudf::type_dispatcher(col_type, OpLess_with_nulls_always_false{},
+  //                                         row1,
+  //                                         row2,
+  //                                         col_index,
+  //                                         columns_,
+  //                                         valids_);
+  //     switch( state )
+  //     {
+  //     case State::False:
+  //       return false;
+  //     case State::True:
+  //       return true;
+  //     case State::Undecided:
+  //       break;
+  //     }
+  //   }
+  //   return false;
+  // }
 
 
   template<typename ColType>
