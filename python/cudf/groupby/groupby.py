@@ -158,7 +158,14 @@ class Groupby(object):
         agg_type : str
             The aggregation function to run.
         """
-        return _cpp_apply_basic_agg(self, agg_type, sort_results=sort_results)
+        agg_groupby = self.copy()
+        agg_groupby._df = agg_groupby._df._get_numeric_data()
+        agg_groupby._val_columns = []
+        for val in self._val_columns:
+            if val in agg_groupby._df.columns:
+                agg_groupby._val_columns.append(val)
+        return _cpp_apply_basic_agg(agg_groupby, agg_type,
+                                    sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
@@ -232,8 +239,16 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self
+        result = self.copy()
+        result._df = DataFrame()
+        for by in self._by:
+            result._df[by] = self._df[by]
         result._val_columns = arg
+        if isinstance(arg, str):
+            result._df[arg] = self._df[arg]
+        else:
+            for a in arg:
+                result._df[a] = self._df[a]
         return result
 
     def copy(self, deep=True):
@@ -292,4 +307,10 @@ class Groupby(object):
         Since multi-indexes aren't supported aggregation results are returned
         in columns using the naming scheme of `aggregation_columnname`.
         """
-        return cpp_agg(self, args)
+        agg_groupby = self.copy()
+        agg_groupby._df = agg_groupby._df._get_numeric_data()
+        agg_groupby._val_columns = []
+        for val in self._val_columns:
+            if val in agg_groupby._df.columns:
+                agg_groupby._val_columns.append(val)
+        return cpp_agg(agg_groupby, args)
