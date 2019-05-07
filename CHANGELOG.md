@@ -85,6 +85,7 @@
 - PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
+- PR #1655 Add `Column._handle` as a way to access underlying `gdf_column*` of a `Column`
 
 ## Bug Fixes
 
