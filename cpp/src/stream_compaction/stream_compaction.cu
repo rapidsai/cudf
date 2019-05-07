@@ -34,31 +34,65 @@ namespace {
 static constexpr int warp_size = 32;
 
 // Returns true if the mask is true and valid (non-null) for index i
-__device__ inline 
-bool valid_and_true(cudf::bool8 const * __restrict__ data,
-                    bit_mask_t const * __restrict__ bitmask,
-                    gdf_index_type i)
+// This is the filter functor for apply_boolean_mask
+struct valid_and_true
 {
-  bool valid = bit_mask::is_valid(bitmask, i);
-  return (cudf::true_v == data[i]) && valid;
-}
+  valid_and_true(gdf_column const * boolean_mask) :
+    size{boolean_mask->size},
+    data{reinterpret_cast<cudf::bool8 *>(boolean_mask->data)},
+    bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask->valid)}
+    {}
+
+  __device__ inline 
+  bool operator()(gdf_index_type i)
+  {
+    if (i < size) {
+      bool valid = bit_mask::is_valid(bitmask, i);
+      return (cudf::true_v == data[i]) && valid;
+    }
+    return false;
+  }
+
+  gdf_size_type size;
+  cudf::bool8 const * __restrict__ data;
+  bit_mask_t const  * __restrict__ bitmask;
+};
+
+struct valid_element
+{
+  valid_element(gdf_column const * column) :
+    size{column->size},
+    bitmask{reinterpret_cast<bit_mask_t *>(column->valid)}
+    {}
+
+  __device__ inline 
+  bool operator()(gdf_index_type i)
+  {
+    if (i < size) {
+      bool valid = bit_mask::is_valid(bitmask, i);
+      return valid;
+    }
+    return false;
+  }
+
+  gdf_size_type size;
+  bit_mask_t const  * __restrict__ bitmask;
+};
 
 }  // namespace
 
 namespace cudf {
 
 // Compute the count of elements that pass the mask within each block
-template <int block_size, int per_thread>
+template <typename Filter, int block_size, int per_thread>
 __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
-                                     cudf::bool8 const* __restrict__ mask_data,
-                                     bit_mask_t const* __restrict__ mask_valid,
-                                     gdf_size_type mask_size)
+                                     Filter filter)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
 
   for (int i = 0; i < per_thread; i++) {
-    bool pass = (tid < mask_size) && valid_and_true(mask_data, mask_valid, tid);
+    bool pass = filter(tid);
     count += __syncthreads_count(pass);
     tid += block_size;
   }
@@ -91,7 +125,8 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
 // in a contiguous manner.
 // The has_validity template parameter allows us to specialize this kernel for
 // the non-nullable case for performance without writing another kernel.
-template <typename T, int block_size, int per_thread, bool has_validity>
+template <typename T, typename Filter, 
+          int block_size, int per_thread, bool has_validity>
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void scatter_kernel(T* __restrict__ output_data,
                                bit_mask_t * __restrict__ output_valid,
@@ -99,9 +134,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
                                T const * __restrict__ input_data,
                                bit_mask_t const * __restrict__ input_valid,
                                gdf_size_type  * __restrict__ block_offsets,
-                               cudf::bool8 const * __restrict__ mask_data,
-                               bit_mask_t const * __restrict__ mask_valid,
-                               gdf_size_type mask_size)
+                               Filter filter)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
@@ -111,9 +144,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
   __shared__ T    temp_data[block_size];
   
   for (int i = 0; i < per_thread; i++) {
-
-    bool mask_true = (tid < mask_size) && 
-                     valid_and_true(mask_data, mask_valid, tid);
+    bool mask_true = filter(tid);
 
     // get output location using a scan of the mask result
     gdf_index_type block_sum = 0;
@@ -209,22 +240,21 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
 }
 
 // Dispatch functor which performs the scatter
-template <int block_size, int per_thread>
+template <typename Filter, int block_size, int per_thread>
 struct scatter_functor 
 {
   template <typename T>
   void operator()(gdf_column *output_column,
                   gdf_column const * input_column,
                   gdf_size_type  *block_offsets,
-                  cudf::bool8 const * __restrict__ mask_data,
-                  bit_mask_t const * __restrict__ mask_valid,
-                  gdf_size_type mask_size,
+                  Filter filter,
                   bool has_valid) {
-    cudf::util::cuda::grid_config_1d grid{mask_size, block_size, per_thread};
+    cudf::util::cuda::grid_config_1d grid{input_column->size, 
+                                          block_size, per_thread};
     
     auto scatter = (has_valid) ?
-      scatter_kernel<T, block_size, per_thread, true> :
-      scatter_kernel<T, block_size, per_thread, false>;
+      scatter_kernel<T, Filter, block_size, per_thread, true> :
+      scatter_kernel<T, Filter, block_size, per_thread, false>;
 
     gdf_size_type *null_count = nullptr;
     if (has_valid) {
@@ -243,9 +273,7 @@ struct scatter_functor
                                              static_cast<T const*>(input_column->data),
                                              input_valid,
                                              block_offsets,
-                                             mask_data,
-                                             mask_valid,
-                                             mask_size);
+                                             filter);
 
     if (has_valid) {
       CUDA_TRY(cudaMemcpy(&output_column->null_count, null_count, 
@@ -272,7 +300,7 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
 }
 
 /*
- * Filters a column using a column of boolean values as a mask.
+ * Filters a column using a Filter functor that returns true or false for each element.
  *
  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask 
  * that scatters input[i] if boolean_mask[i] is non-null and "true". This is 
@@ -283,33 +311,22 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
  * per-block count of passed elements, then scan that, and perform the
  * intra-block scan inside the kernel that scatters the output
  */
-gdf_column apply_boolean_mask(gdf_column const *input,
-                              gdf_column const *boolean_mask) {
+template <typename Filter>
+gdf_column apply_filter(gdf_column const *input, Filter filter) {
   CUDF_EXPECTS(nullptr != input, "Null input");
-  CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
-  CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
-  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL8, "Mask must be Boolean type");
-  CUDF_EXPECTS(boolean_mask->data != nullptr, "Null boolean_mask data");
-  CUDF_EXPECTS(boolean_mask->valid != nullptr, "Null boolean_mask bitmask");
-
+  
   constexpr int block_size = 256;
   constexpr int per_thread = 32;
-  cudf::util::cuda::grid_config_1d grid{boolean_mask->size, block_size, per_thread};
+  cudf::util::cuda::grid_config_1d grid{input->size, block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
   gdf_size_type *block_counts = nullptr;
   RMM_ALLOC(&block_counts, 2 * grid.num_blocks * sizeof(gdf_size_type), 0);
   gdf_size_type *block_offsets = block_counts + grid.num_blocks;
 
-  // Convert the validity mask to a 32-bit type for higher efficiency
-  bit_mask_t const* __restrict__ mask_valid =
-    reinterpret_cast<bit_mask_t const *>(boolean_mask->valid);
-  cudf::bool8 const* __restrict__ mask_data =
-    reinterpret_cast<cudf::bool8 const *>(boolean_mask->data);
-  
   // 1. Find the count of elements in each block that "pass" the mask
-  compute_block_counts<block_size, per_thread><<<grid.num_blocks, block_size>>>
-    (block_counts, mask_data, mask_valid, boolean_mask->size);
+  compute_block_counts<Filter, block_size, per_thread>
+    <<<grid.num_blocks, block_size>>>(block_counts, filter);
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
@@ -364,18 +381,48 @@ gdf_column apply_boolean_mask(gdf_column const *input,
 
     // 4. Scatter the output data and valid mask
     cudf::type_dispatcher(output.dtype, 
-                          scatter_functor<block_size, per_thread>{},
+                          scatter_functor<Filter, block_size, per_thread>{},
                           &output, 
                           input, 
                           block_offsets,
-                          mask_data,
-                          mask_valid,
-                          boolean_mask->size,
+                          filter,
                           input->valid != nullptr);
 
     CHECK_STREAM(0);
   }
   return output;
+}
+
+/*
+ * Filters a column using a column of boolean values as a mask.
+ *
+ * calls apply_filter() with the `valid_and_true` functor.
+ */
+gdf_column apply_boolean_mask(gdf_column const *input,
+                              gdf_column const *boolean_mask) {
+  CUDF_EXPECTS(nullptr != input, "Null input");
+  CUDF_EXPECTS(nullptr != boolean_mask, "Null boolean_mask");
+  CUDF_EXPECTS(input->size == boolean_mask->size, "Column size mismatch");
+  CUDF_EXPECTS(boolean_mask->dtype == GDF_BOOL8, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask->data != nullptr, "Null boolean_mask data");
+  CUDF_EXPECTS(boolean_mask->valid != nullptr, "Null boolean_mask bitmask");
+
+  return apply_filter(input, valid_and_true{boolean_mask});
+}
+
+/*
+ * Filters a column to remove null elements.
+ *
+ */
+gdf_column drop_nulls(gdf_column const *input) {
+  CUDF_EXPECTS(nullptr != input, "Null input");
+
+  // no null mask, just copy the data
+  if (input->valid == nullptr) {
+
+  }
+  else
+    return apply_filter(input, valid_element{input});
 }
 
 }  // namespace cudf
