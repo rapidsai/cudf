@@ -12,7 +12,7 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
-
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 
 # cuDF 0.7.0 (Date TBD)
 
@@ -150,7 +150,7 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n) 
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 
 
