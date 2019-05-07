@@ -45,6 +45,18 @@ bool checkFile(std::string fname) {
   return (stat(fname.c_str(), &st) ? 0 : 1);
 }
 
+char* getTempFile(const char *fname)
+{
+    char username[80];
+    getlogin_r(username, 80);
+    char* tmpdir = new char[200];
+    strcpy(tmpdir, "/tmp/gtest-of-");
+    strcat(tmpdir, username);
+    mkdir(tmpdir, ACCESSPERMS);
+    strcat(strcat(tmpdir, "/"), fname);
+    return tmpdir;
+}
+
 template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
   auto m_hostdata = std::vector<T>(col->size);
   cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
@@ -223,7 +235,7 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
 }
 
 TEST_F(gdf_json_test, JsonLinesFileInput) {
-  const char *fname = "./JsonLinesFileTest.json";
+  const char *fname = getTempFile("JsonLinesFileTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
@@ -256,7 +268,7 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
-  const char *fname = "./JsonLinesByteRangeTest.json";
+  const char *fname = getTempFile("JsonLinesByteRangeTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -286,7 +298,7 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
-  const char *fname = "./JsonLinesObjectsTest.json";
+  const char *fname = getTempFile("JsonLinesObjectsTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();

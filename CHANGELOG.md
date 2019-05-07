@@ -104,6 +104,7 @@
 
 ## Bug Fixes
 
+- PR #1642 Fix fix CSV_TEST gdf_csv_test.SkiprowsNrows failure
 - PR #1233 Fix dtypes issue while adding the column to `str` dataframe.
 - PR #1254 CSV Reader: fix data type detection for floating-point numbers in scientific notation
 - PR #1289 Fix looping over each value instead of each category in concatenation
