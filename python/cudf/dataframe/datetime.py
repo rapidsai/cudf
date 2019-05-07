@@ -179,9 +179,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def fillna(self, fill_value, inplace=False):
         result = self.copy()
 
-        if (np.isscalar(fill_value) or
-            pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value)
-           ):
+        if np.isscalar(fill_value):
+            fill_value = np.datetime64(fill_value, 'ms')
+        elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
             fill_value = pd.to_datetime(fill_value)
         fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
 
