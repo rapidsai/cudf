@@ -275,7 +275,7 @@ add_library(cudf SHARED
             src/copying/gather.cu
             src/copying/scatter.cu
             src/bitmask/legacy_bitmask.cpp
-            src/gis/gis_dispatcher.cu
+            src/gis/point_in_polygon.cu
             )
 
 #Override RPATH for cudf
