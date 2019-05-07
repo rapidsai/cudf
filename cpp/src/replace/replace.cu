@@ -53,16 +53,27 @@ namespace{ //anonymous
                       gdf_size_type                      nrows,
                       thrust::device_ptr<const T> old_values_begin,
                       thrust::device_ptr<const T> old_values_end,
-                      const T*                    d_new_values)
+                      const T*                    d_new_values,
+                      gdf_valid_type*             col_valid,
+                      gdf_valid_type*             new_valid)
   {
     gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
     while(i < nrows)
     {
-      auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
+      if ( gdf_is_valid(col_valid, i)){
+          auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
 
-      if (found_ptr != old_values_end) {
-          auto d = thrust::distance(old_values_begin, found_ptr);
-          d_col_data[i] = d_new_values[d];
+          if (found_ptr != old_values_end) {
+              auto d = thrust::distance(old_values_begin, found_ptr);
+              if (gdf_is_valid(new_valid, d)){
+                d_col_data[i] = d_new_values[d];
+              }
+              else{
+                //unset the i-th bit in col_valid
+                gdf_unset_bit(col_valid, i)
+              }
+
+          }
       }
 
       i += blockDim.x * gridDim.x;
@@ -81,7 +92,9 @@ namespace{ //anonymous
                     gdf_size_type      nrows,
                     const void* d_old_values,
                     const void* d_new_values,
-                    gdf_size_type      nvalues)
+                    gdf_size_type     nvalues,
+                    gdf_valid_type* col_valid,
+                    gdf_valid_type* new_valid)
     {
       thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
 
@@ -90,7 +103,9 @@ namespace{ //anonymous
                                              nrows,
                                              old_values_begin,
                                              old_values_begin + nvalues,
-                                             static_cast<const col_type*>(d_new_values));
+                                             static_cast<const col_type*>(d_new_values),
+                                             (col_valid),
+                                             (new_valid));
     }
   };
 
@@ -101,9 +116,9 @@ namespace{ //anonymous
     GDF_REQUIRE(col != nullptr && old_values != nullptr && new_values != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(old_values->size == new_values->size, GDF_COLUMN_SIZE_MISMATCH);
     GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
-    GDF_REQUIRE(col->valid == nullptr || col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    //GDF_REQUIRE(col->valid == nullptr || col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
-    GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    //GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
     
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
@@ -111,7 +126,9 @@ namespace{ //anonymous
                           col->size,
                           old_values->data,
                           new_values->data,
-                          new_values->size); 
+                          new_values->size,
+                          col->valid,
+                          new_values->valid);
 
     return GDF_SUCCESS;
   }
