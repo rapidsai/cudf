@@ -22,19 +22,12 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
-def is_file_like(obj):
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
-        return False
-    if not hasattr(obj, "__iter__"):
-        return False
-    return True
-
-
 cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
-                       num_rows=None):
+                       num_rows=None, strings_to_categorical=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -47,7 +40,7 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     # Setup arguments
     cdef pq_read_arg pq_reader = pq_read_arg()
 
-    if not os.path.isfile(path) and not os.path.exists(path):
+    if not os.path.isfile(path) or not os.path.exists(path):
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )
@@ -78,12 +71,14 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     else:
         pq_reader.num_rows = -1
 
+    pq_reader.strings_to_categorical = strings_to_categorical
+
     # Call read_parquet
     with nogil:
         result = read_parquet(&pq_reader)
 
     check_gdf_error(result)
-    
+
     out = pq_reader.data
     if out is NULL:
         raise ValueError("Failed to parse Parquet")

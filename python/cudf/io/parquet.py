@@ -24,7 +24,8 @@ def read_parquet_metadata(path):
 
 @ioutils.doc_read_parquet()
 def read_parquet(path, engine='cudf', columns=None, row_group=None,
-                 skip_rows=None, num_rows=None, *args, **kwargs):
+                 skip_rows=None, num_rows=None, strings_to_categorical=False,
+                 *args, **kwargs):
     """{docstring}"""
 
     if engine == 'cudf':
@@ -33,7 +34,8 @@ def read_parquet(path, engine='cudf', columns=None, row_group=None,
             columns,
             row_group,
             skip_rows,
-            num_rows
+            num_rows,
+            strings_to_categorical
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")

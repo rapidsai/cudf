@@ -91,16 +91,16 @@ include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
-include(ConfigureArrow)
-
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
+
+include(ConfigureArrow)
 
 if (ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-endif()
+endif(ARROW_FOUND)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -221,8 +221,9 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 add_library(cudf SHARED
             src/comms/ipc/ipc.cu
-            src/dataframe/column.cpp
-            src/dataframe/context.cpp
+            src/column/column.cpp
+            src/column/context.cpp
+            src/table/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -232,6 +233,7 @@ add_library(cudf SHARED
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/rolling/rolling.cu
             src/binary/binary_ops.cu
             src/binary/jit/code/kernel.cpp
             src/binary/jit/code/operation.cpp
@@ -241,7 +243,6 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/bitmask/valid_ops.cu
             src/compaction/stream_compaction_ops.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
@@ -259,6 +260,11 @@ add_library(cudf SHARED
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
+            src/io/orc/orc_reader.cu
+            src/io/orc/orc.cpp
+            src/io/orc/timezone.cpp
+            src/io/orc/stripe_data.cu
+            src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader.cu
@@ -327,16 +333,6 @@ endif(HT_LEGACY_ALLOCATOR)
 
 target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
-###################################################################################################
-# - python cffi bindings --------------------------------------------------------------------------
-
-add_custom_command(OUTPUT PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/../python ${CMAKE_BINARY_DIR}/python
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
-                   VERBATIM)
-
-add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -349,13 +345,6 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
-
-add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
-                   VERBATIM)
-
-add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

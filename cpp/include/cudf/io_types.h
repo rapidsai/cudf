@@ -159,6 +159,33 @@ typedef struct
 } csv_write_arg;
 
 /**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_orc interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
+  int           use_cols_len;               ///< In: Number of columns
+
+  int           skip_rows;                  ///< In: Number of rows to skip from the start
+  int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
+
+} orc_read_arg;
+
+/**---------------------------------------------------------------------------*
  * @brief Input and output arguments to the read_parquet interface.
  *---------------------------------------------------------------------------**/
 typedef struct {
@@ -184,5 +211,7 @@ typedef struct {
 
   const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
+
+  bool          strings_to_categorical;     ///< In: If TRUE, returns string data as GDF_CATEGORY, otherwise GDF_STRING
 
 } pq_read_arg;

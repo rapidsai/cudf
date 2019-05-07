@@ -20,7 +20,7 @@
 
 #include <hash/managed.cuh>
 #include "hash_groupby_kernels.cuh"
-#include "dataframe/device_table.cuh"
+#include <table/device_table.cuh>
 #include <copying/gather.hpp>
 #include "rmm/thrust_rmm_allocator.h"
 #include "types.hpp"
@@ -32,6 +32,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
+#include <algorithm>
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
@@ -218,8 +219,10 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
       if (status != GDF_SUCCESS)
         return status;
 
+      gdf_context ctxt;
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
       status = gdf_order_by(output_keys.begin(), nullptr,
-                            output_keys.num_columns(), &sorted_indices_col, 0);
+                            output_keys.num_columns(), &sorted_indices_col, &ctxt);
 
       if (status != GDF_SUCCESS)
         return status;

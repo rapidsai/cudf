@@ -764,12 +764,71 @@ inline __device__ void gpuStoreOutput(uint2 *dst, const uint8_t *src8, uint32_t 
 
 
 /**
-* @brief Output a small fixed-length value
-*
-* @param[in,out] s Page state input/output
-* @param[in] src_pos Source position
-* @param[in] dst Pointer to row output data
-**/
+ * @brief Convert an INT96 Spark timestamp to 64-bit timestamp
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ **/
+inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src_pos, int64_t *dst)
+{
+    const uint8_t *src8;
+    uint32_t dict_pos, dict_size = s->dict_size, ofs;
+    int64_t ts;
+
+    if (s->dict_base)
+    {
+        // Dictionary
+        dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] : 0;
+        src8 = s->dict_base;
+    }
+    else
+    {
+        // Plain
+        dict_pos = src_pos;
+        src8 = s->data_start;
+    }
+    dict_pos *= (uint32_t)s->dtype_len_in;
+    ofs = 3 & reinterpret_cast<size_t>(src8);
+    src8 -= ofs;    // align to 32-bit boundary
+    ofs <<= 3;      // bytes -> bits
+    if (dict_pos + 4 < dict_size)
+    {
+        uint3 v;
+        int64_t nanos, day;
+        v.x = *(const uint32_t *)(src8 + dict_pos + 0);
+        v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+        v.z = *(const uint32_t *)(src8 + dict_pos + 8);
+        if (ofs)
+        {
+            uint32_t next = *(const uint32_t *)(src8 + dict_pos + 12);
+            v.x = __funnelshift_r(v.x, v.y, ofs);
+            v.y = __funnelshift_r(v.y, v.z, ofs);
+            v.z = __funnelshift_r(v.z, next, ofs);
+        }
+        nanos = v.y;
+        nanos <<= 32;
+        nanos |= v.x;
+        day = v.z;
+        // Convert from Julian day at noon to UTC seconds
+        day = (day - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
+        ts = (day * kINT96ClkRate) + (nanos + (499999999 / kINT96ClkRate)) / (1000000000 / kINT96ClkRate);
+    }
+    else
+    {
+        ts = 0;
+    }
+    *dst = ts;
+}
+
+
+/**
+ * @brief Output a small fixed-length value
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ **/
 template <typename T>
 inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *dst)
 {
@@ -953,6 +1012,10 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             {
                 s->dtype_len = 4; // HASH32 output
             }
+            else if ((s->col.data_type & 7) == INT96)
+            {
+                s->dtype_len = 8; // Convert to 64-bit timestamp
+            }
             // Setup local valid map and compute first & num rows relative to the current page
             s->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base);
             s->valid_map = s->col.valid_map_base;
@@ -1112,6 +1175,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     gpuOutputString(s, out_pos, dst);
                 else if (dtype == BOOLEAN)
                     gpuOutputBoolean(s, out_pos, dst);
+                else if (dtype == INT96)
+                    gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
                     gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
                 else if (dtype_len == 4)
