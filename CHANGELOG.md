@@ -7,7 +7,7 @@
 
 ## Improvements
 
-...
+- PR #1666 CSV Reader: Improve performance for files with large number of columns
 
 ## Bug Fixes
 
