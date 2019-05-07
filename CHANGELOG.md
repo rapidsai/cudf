@@ -1,3 +1,20 @@
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+- PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1651 Fix `query` function on empty dataframe
+
+
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
