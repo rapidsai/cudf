@@ -53,17 +53,20 @@ struct GdfTest : public ::testing::Test
 
 struct TempDirTestEnvironment : public ::testing::Environment
 {
-    std::string tmpdir;
+    char* tmpdir;
     public:
 
     void SetUp() {
-        std::string username(getlogin());
-        tmpdir = "/tmp/gtest-of-" + username + "/";
-        mkdir(tmpdir.c_str(), ACCESSPERMS);
+        tmpdir=new char[30];
+        strcpy(tmpdir, "/tmp/gtest.XXXXXX");
+        tmpdir=mkdtemp(tmpdir);
+        strcat(tmpdir, "/");
     }
 
     void TearDown() {
-        nftw(tmpdir.c_str(), rmFiles ,10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+        nftw(tmpdir, rmFiles ,10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+        delete[] tmpdir;
+        tmpdir=NULL;
     }
     static int rmFiles(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
     {
@@ -72,8 +75,9 @@ struct TempDirTestEnvironment : public ::testing::Environment
 
     char* get_temp_filename(const char *fname)
     {
-        char* name = new char[tmpdir.length()+strlen(fname)+1];
-        strcpy(name, (tmpdir + fname).c_str());
-        return name;
+        char* tmpfname = new char[strlen(tmpdir)+strlen(fname)+1];
+        strcpy(tmpfname, tmpdir);
+        strcat(tmpfname, fname);
+        return tmpfname;
     }
 };
