@@ -88,8 +88,7 @@ __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
   int count = 0;
 
   for (int i = 0; i < per_thread; i++) {
-    bool pass = filter(tid);
-    count += __syncthreads_count(pass);
+    count += __syncthreads_count(filter(tid));
     tid += block_size;
   }
 
@@ -147,9 +146,11 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
     const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
 
-    temp_valids[threadIdx.x] = false; // init shared memory
-    if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = false;
-    __syncthreads(); // wait for init
+    if (has_validity) {
+      temp_valids[threadIdx.x] = false; // init shared memory
+      if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = false;
+      __syncthreads(); // wait for init
+    }
 
     if (mask_true) {
       temp_data[local_index] = input_data[tid]; // scatter data to shared
@@ -167,7 +168,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
     // computing the total number of valid / non-null elements written out.
     // note maximum block size is limited to 1024 by this, but that's OK
     __shared__ uint32_t warp_valid_counts[has_validity ? warp_size : 1];
-    if (threadIdx.x < warp_size) warp_valid_counts[threadIdx.x] = 0;
+    if (has_validity && threadIdx.x < warp_size) warp_valid_counts[threadIdx.x] = 0;
 
     __syncthreads(); // wait for shared data and validity mask to be complete
 
