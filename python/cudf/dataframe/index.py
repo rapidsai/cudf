@@ -532,6 +532,8 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
             values = DatetimeColumn.from_numpy(values.values)
+        elif isinstance(values, (list, tuple)):
+            values = DatetimeColumn.from_numpy(np.array(values, dtype='<M8[ms]'))
 
         self._values = values
         self.name = name
