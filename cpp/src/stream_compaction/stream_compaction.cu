@@ -79,10 +79,6 @@ struct valid_element
   bit_mask_t const  * __restrict__ bitmask;
 };
 
-}  // namespace
-
-namespace cudf {
-
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size, int per_thread>
 __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
@@ -392,6 +388,10 @@ gdf_column apply_filter(gdf_column const *input, Filter filter) {
   }
   return output;
 }
+
+}  // namespace
+
+namespace cudf {
 
 /*
  * Filters a column using a column of boolean values as a mask.
