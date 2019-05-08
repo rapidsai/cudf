@@ -310,7 +310,8 @@ struct update_target_element<
     bit_mask::bit_mask_t* const __restrict__ target_mask{
         reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
 
-    if (not bit_mask::is_valid(target_mask, target_index)) {
+    if (nullptr != target_mask and
+        not bit_mask::is_valid(target_mask, target_index)) {
       bit_mask::set_bit_safe(target_mask, target_index);
     }
   }
@@ -419,7 +420,7 @@ __device__ inline void aggregate_row(device_table const& target,
         bit_mask_t* const __restrict__ source_mask{
             reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
 
-        if (is_valid(source_mask, source_index)) {
+        if (nullptr != source_mask and is_valid(source_mask, source_index)) {
           cudf::type_dispatcher(source.get_column(i)->dtype,
                                 elementwise_aggregator{}, *target.get_column(i),
                                 target_index, *source.get_column(i),
@@ -436,19 +437,13 @@ __global__ void compute_hash_groupby(
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  using result_t = thrust::pair<typename Map::iterator, bool>;
-
   while (i < input_keys.num_rows()) {
     // Skip rows that contain null keys
     if (bit_mask::is_valid(row_bitmask, i)) {
-      result_t result = map->groupby_insert(i, input_keys);
+      // result_t result = map->groupby_insert(i, input_keys);
 
-      aggregate_row(output_values, result.first->second, input_values, i, ops);
-
-      // Only copy to the output if a new, unique key row was inserted
-      if (true == result.second) {
-        copy_row(output_keys, result.first->second, input_keys, i);
-      }
+      // aggregate_row(output_values, result.first->second, input_values, i,
+      // ops);
     }
     i += blockDim.x * gridDim.x;
   }
