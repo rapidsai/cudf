@@ -310,13 +310,19 @@ class Series(object):
         if self.dtype == np.dtype("object"):
             return self[indices]
 
-        col = cpp_copying.apply_gather_column(self._column, indices)
+        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
 
+        if self._column.mask:
+            mask = self._get_mask_as_series().take(indices).as_mask()
+            mask = Buffer(mask)
+        else:
+            mask = None
         if ignore_index:
             index = RangeIndex(indices.size)
         else:
             index = self.index.take(indices)
 
+        col = self._column.replace(data=col.data, mask=mask)
         return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):

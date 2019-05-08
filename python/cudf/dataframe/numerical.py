@@ -159,7 +159,16 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        out_col = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        mask = None
+        if self.mask:
+            mask = self._get_mask_as_column()\
+                .take(sort_inds.data.to_gpu_array()).as_mask()
+            mask = Buffer(mask)
+        col_keys = self.replace(data=out_col.data,
+                                mask=mask,
+                                null_count=self.null_count,
+                                dtype=self.dtype)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
@@ -208,7 +217,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         segs, sortedvals = self._unique_segments()
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
-        return out_col
+        return self.replace(data=out_col.data, mask=None)
 
     def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
@@ -225,8 +234,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         out2 = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=out_col.data, mask=None)
         out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
