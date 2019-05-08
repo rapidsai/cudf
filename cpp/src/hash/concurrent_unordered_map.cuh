@@ -116,10 +116,6 @@ public:
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values+capacity );
     }
-    __host__ __device__ size_type size() const
-    {
-        return capacity;
-    }
     __host__ __device__ value_type* data() const
     {
       return m_hashtbl_values;
