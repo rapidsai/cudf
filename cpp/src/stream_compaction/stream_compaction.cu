@@ -158,8 +158,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
       // scatter validity mask to shared memory
       if (has_validity && bit_mask::is_valid(input_valid, tid)) {
         // determine aligned offset for this warp's output
-        const gdf_size_type aligned_offset = block_offset -
-          warp_size * (block_offset / warp_size);
+        const gdf_size_type aligned_offset = block_offset % warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
