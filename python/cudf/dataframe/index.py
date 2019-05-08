@@ -208,7 +208,11 @@ class Index(object):
         if len(self) != len(other):
             return False
         elif len(self) == 1:
-            return self[0] == other[0]
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
         else:
             result = (self == other)
             if isinstance(result, bool):
@@ -678,8 +682,12 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if len(arbitrary) == 0:
-            return RangeIndex(0, 0, name=name)
+        if hasattr(arbitrary, '__len__'):
+            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
+                # 0-d arrays are a special case:
+                pass
+            elif len(arbitrary) == 0:
+                return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 
