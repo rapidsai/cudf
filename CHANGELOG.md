@@ -12,6 +12,7 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1683 ORC reader: fix timestamp conversion to UTC
 
 
 # cuDF 0.7.0 (Date TBD)
