@@ -82,6 +82,7 @@ struct benchmark
                   bool shmoo=false)
   {
     auto columns = init(T{0}, fraction);
+    bench(columns.first, columns.second); // warm up
     cudaProfilerStart();
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iters; ++i) {
