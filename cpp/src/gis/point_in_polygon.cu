@@ -19,7 +19,7 @@
 #include "point_in_polygon.hpp"
 
 #include <bitmask/BitMask.cuh>
-#include "bitmask/bitmask_ops.h"
+#include "bitmask/bitmask_ops.hpp"
 #include "utilities/type_dispatcher.hpp"
 
 #include <type_traits>

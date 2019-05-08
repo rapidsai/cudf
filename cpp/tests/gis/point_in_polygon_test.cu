@@ -110,9 +110,9 @@ struct PIPTest : public GdfTest
 
         std::vector<int8_t> host_inside_poly(point_lats.size());
 
-        EXPECT_EQ(cudaMemcpy(host_inside_poly.data(), inside_poly_col->data, inside_polygon_column->size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
+        EXPECT_EQ(cudaMemcpy(host_inside_poly.data(), inside_poly_col->data, inside_poly_col->size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
     
-        return host_inside_polygon;
+        return host_inside_poly;
     }
 };
 
