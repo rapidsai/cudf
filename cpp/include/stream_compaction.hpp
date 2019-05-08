@@ -40,8 +40,8 @@ namespace cudf {
   * @return gdf_column Column containing copy of all elements of @p input passing
  * the filter defined by @p boolean_mask.
  */
-gdf_column apply_boolean_mask(gdf_column const *input,
-                              gdf_column const *boolean_mask);
+gdf_column apply_boolean_mask(gdf_column const &input,
+                              gdf_column const &boolean_mask);
 }  // namespace cudf
 
 #endif

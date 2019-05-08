@@ -169,7 +169,7 @@ int main(int argc, char **argv)
   rmmOptions_t options{PoolAllocation, 0, false};
   rmmInitialize(&options); 
 
-  auto bench = [](gdf_column const* source, gdf_column const* mask) {
+  auto bench = [](gdf_column const& source, gdf_column const& mask) {
     gdf_column result = cudf::apply_boolean_mask(source, mask);
     gdf_column_free(&result);
   };

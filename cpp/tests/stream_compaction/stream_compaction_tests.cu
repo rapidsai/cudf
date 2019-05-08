@@ -29,14 +29,18 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
 {
   constexpr gdf_size_type column_size{1000};
 
+  gdf_column bad_input, bad_mask;
+  gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
+  gdf_column_view(&bad_mask,  0, 0, 0, GDF_BOOL8);
+
   cudf::test::column_wrapper<int32_t> source{column_size};
   cudf::test::column_wrapper<cudf::bool8> mask{column_size};
              
-  CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(nullptr, mask), 
-                            "Null input");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(bad_input, mask),
+                            "Null input data");
 
-  CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, nullptr),
-                            "Null boolean_mask");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, bad_mask),
+                            "Null boolean_mask data");
 }
 
 TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)

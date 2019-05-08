@@ -89,6 +89,9 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   operator gdf_column*() { return &the_column; };
 
+  operator gdf_column&() { return the_column; };
+  operator const gdf_column&() const { return the_column; };
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
    * initialized data and optionally allocated bitmask.
