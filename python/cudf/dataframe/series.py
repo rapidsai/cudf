@@ -1819,6 +1819,8 @@ class Loc(object):
             else:
                 arg = Series(arg)
         if isinstance(arg, Series):
+            if arg.dtype in [np.bool, np.bool_]:
+                return self._sr.iloc[arg]
             # To do this efficiently we need a solution to
             # https://github.com/rapidsai/cudf/issues/1087
             out = Series([], dtype=self._sr.dtype, index=self._sr.index.__class__([]))
@@ -1837,7 +1839,7 @@ class Loc(object):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
             )
-            return self._sr.iloc[start_index:stop_index]
+            return self._sr.iloc[start_index:stop_index:arg.step]
         else:
             raise NotImplementedError(
                 ".loc not implemented for label type {}".format(
