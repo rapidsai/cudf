@@ -2955,4 +2955,3 @@ merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
                         merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
-                                                                             
