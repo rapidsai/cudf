@@ -172,11 +172,12 @@ class Groupby(object):
             The aggregation function to run.
         """
         agg_groupby = self.copy()
-        agg_groupby._df = agg_groupby._df._get_numeric_data()
-        agg_groupby._val_columns = []
-        for val in self._val_columns:
-            if val in agg_groupby._df.columns:
-                agg_groupby._val_columns.append(val)
+        if agg_type in ['mean', 'sum']:
+            agg_groupby._df = agg_groupby._df._get_numeric_data()
+            agg_groupby._val_columns = []
+            for val in self._val_columns:
+                if val in agg_groupby._df.columns:
+                    agg_groupby._val_columns.append(val)
         return _cpp_apply_basic_agg(agg_groupby, agg_type,
                                     sort_results=sort_results)
 
@@ -204,11 +205,7 @@ class Groupby(object):
                 mi = MultiIndex(levels, codes)
                 mi.names = names
                 final_result.index = mi
-            print(final_result.columns)
-            print(hasattr(self, '_gotattr'))
-            print(self)
-            if len(final_result.columns) == 1 and hasattr(self,
-                                                          "_gotattr"):
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series([], name=final_result.columns[0])
                 final_series.index = final_result.index
                 return final_series
@@ -246,6 +243,11 @@ class Groupby(object):
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
+                final_series = Series(final_result[final_result.columns[0]])
+                final_series.name = final_result.columns[0]
+                final_series.index = multi_index
+                return final_series
             return final_result.set_index(multi_index)
 
     def apply_multicolumn(self, result, aggs):
@@ -299,8 +301,6 @@ class Groupby(object):
         result = self.copy()
         result._df = DataFrame()
         setattr(result, "_gotattr", True)
-        print('getitem')
-        print(arg)
         if isinstance(self._by, (str, Number)):
             result._df[self._by] = self._df[self._by]
         else:
@@ -388,9 +388,4 @@ class Groupby(object):
         in columns using the naming scheme of `aggregation_columnname`.
         """
         agg_groupby = self.copy()
-        agg_groupby._df = agg_groupby._df._get_numeric_data()
-        agg_groupby._val_columns = []
-        for val in self._val_columns:
-            if val in agg_groupby._df.columns:
-                agg_groupby._val_columns.append(val)
         return cpp_agg(agg_groupby, args)
