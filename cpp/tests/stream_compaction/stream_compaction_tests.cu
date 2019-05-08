@@ -40,7 +40,7 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
                             "Null input data");
 
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, bad_mask),
-                            "Null boolean_mask data");
+                            "Null boolean_mask");
 }
 
 TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)
@@ -92,14 +92,14 @@ void BooleanMaskTest(cudf::test::column_wrapper<T> source,
 
   EXPECT_TRUE(expected == result);
 
-  if (!(expected == result)) {
+  /*if (!(expected == result)) {
     std::cout << "expected\n";
     expected.print();
     std::cout << expected.get()->null_count << "\n";
     std::cout << "result\n";
     print_gdf_column(&result);
     std::cout << result.null_count << "\n";
-  }
+  }*/
 
   gdf_column_free(&result);
 }

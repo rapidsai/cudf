@@ -34,6 +34,10 @@ namespace cudf {
  * that are both non-null and `true`. Note that the output column memory is 
  * allocated by this function but must be freed by the caller when finished.
  * 
+ * Note that the @p boolean_mask may have just boolean data (no valid bitmask), 
+ * or just a valid bitmask (no boolean data), or it may have both. The filter
+ * adapts to these three situations.
+ * 
  * @param[in] input The input column to filter
  * @param[in] boolean_mask A column of type GDF_BOOL8 used as a mask to filter
  * the input column corresponding index passes the filter.

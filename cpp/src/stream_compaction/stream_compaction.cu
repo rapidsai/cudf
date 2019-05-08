@@ -35,9 +35,10 @@ static constexpr int warp_size = 32;
 
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
-struct valid_and_true
+template <bool has_data, bool has_nulls>
+struct boolean_mask_filter
 {
-  valid_and_true(gdf_column const & boolean_mask) :
+  boolean_mask_filter(gdf_column const & boolean_mask) :
     size{boolean_mask.size},
     data{reinterpret_cast<cudf::bool8 *>(boolean_mask.data)},
     bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)}
@@ -47,8 +48,9 @@ struct valid_and_true
   bool operator()(gdf_index_type i)
   {
     if (i < size) {
-      bool valid = bit_mask::is_valid(bitmask, i);
-      return (cudf::true_v == data[i]) && valid;
+      bool valid = !has_nulls || bit_mask::is_valid(bitmask, i);
+      bool is_true = !has_data || (cudf::true_v == data[i]);
+      return is_true && valid;
     }
     return false;
   }
@@ -58,12 +60,12 @@ struct valid_and_true
   bit_mask_t const  * __restrict__ bitmask;
 };
 
-struct valid_element
+struct valid_filter
 {
-  valid_element(gdf_column const & column) :
+  valid_filter(gdf_column const & column) :
     size{column.size},
     bitmask{reinterpret_cast<bit_mask_t *>(column.valid)}
-    {}
+    { CUDF_EXPECTS(nullptr != column.valid, "Null valid bitmask");}
 
   __device__ inline 
   bool operator()(gdf_index_type i)
@@ -398,28 +400,32 @@ namespace cudf {
 /*
  * Filters a column using a column of boolean values as a mask.
  *
- * calls apply_filter() with the `valid_and_true` functor.
+ * calls apply_filter() with the `boolean_mask_filter` functor.
  */
 gdf_column apply_boolean_mask(gdf_column const &input,
                               gdf_column const &boolean_mask) {
   CUDF_EXPECTS(input.data != nullptr, "Null input data");
   CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
-  CUDF_EXPECTS(boolean_mask.data != nullptr, "Null boolean_mask data");
+  CUDF_EXPECTS(boolean_mask.data != nullptr ||
+               boolean_mask.valid != nullptr, "Null boolean_mask");
   CUDF_EXPECTS(input.size == boolean_mask.size, "Column size mismatch");
-  CUDF_EXPECTS(boolean_mask.valid != nullptr, "Null boolean_mask bitmask");
 
-  return apply_filter(input, valid_and_true{boolean_mask});
+  if (boolean_mask.data == nullptr)
+    return apply_filter(input, boolean_mask_filter<false, true>{boolean_mask});
+  else if (boolean_mask.valid == nullptr || boolean_mask.null_count == 0)
+    return apply_filter(input, boolean_mask_filter<true, false>{boolean_mask});
+  else
+    return apply_filter(input, boolean_mask_filter<true, true>{boolean_mask});
 }
 
 /*
  * Filters a column to remove null elements.
- *
  */
 gdf_column drop_nulls(gdf_column const &input) {
-  CUDF_EXPECTS(nullptr != input.data, "Null input data");
+  CUDF_EXPECTS(input.data != nullptr,  "Null input data");
 
-  if (input.valid != nullptr)
-    return apply_filter(input, valid_element{input});
+  if (input.valid != nullptr || 0 == input.null_count)
+    return apply_filter(input, valid_filter{input});
   else {
     // no null mask, just copy the data
     gdf_column output;
