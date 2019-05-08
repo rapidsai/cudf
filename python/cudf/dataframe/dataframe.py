@@ -722,7 +722,7 @@ class DataFrame(object):
     @index.setter
     def index(self, _index):
         if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
-            if len(_index) != len(self):
+            if len(_index) != len(self[self.columns[0]]):
                 msg = f"Length mismatch: Expected axis has "\
                        "%d elements, new values "\
                        "have %d elements"\
@@ -956,6 +956,8 @@ class DataFrame(object):
         """
         if axis == 0:
             raise NotImplementedError("Can only drop columns, not rows")
+        if errors != 'raise':
+            raise NotImplementedError("The errors= keyword is not yet implemented")
 
         columns = [labels] if isinstance(
                 labels, (str, numbers.Number)) else list(labels)
@@ -1774,7 +1776,7 @@ class DataFrame(object):
         return df
 
     def groupby(self, by=None, sort=False, as_index=True, method="hash",
-                level=None, group_keys=True):
+                level=None):
         """Groupby
 
         Parameters
@@ -1809,10 +1811,6 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
 
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
@@ -2836,6 +2834,8 @@ class Loc(object):
             else:
                 raise TypeError(type(arg_1))
             col_slice = arg_2
+            if isinstance(arg_2, str):
+                col_slice = [arg_2]
 
         elif isinstance(arg, slice):
             row_slice = arg
@@ -2952,3 +2952,4 @@ merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
                         merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
+                                                                             
