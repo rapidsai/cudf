@@ -917,14 +917,17 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels, axis=None):
+    def drop(self, labels, axis=None, errors='raise'):
         """Drop column(s)
 
         Parameters
         ----------
         labels : str or sequence of strings
             Name of column(s) to be dropped.
-
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Only axis=1 is currently supported.
+        errors : {'ignore', 'raise'}, default 'raise'
+            This parameter is currently ignored.
         Returns
         -------
         A dataframe without dropped column(s)
