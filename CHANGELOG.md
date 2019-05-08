@@ -1,12 +1,31 @@
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
+
+## Improvements
+
+...
+
+## Bug Fixes
+
+- PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+
+
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
 
+- PR #982 Implement gdf_group_by_without_aggregations and gdf_unique_indices functions
+- PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
+- PR #1356 Rolling windows
 - PR #1381 Add DataFrame._get_numeric_data
 - PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
@@ -20,9 +39,23 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
+- PR #1532 Parquet Reader: Add support for INT96 timestamps
+- PR #1516 Add Series and DataFrame.ndim
+- PR #1556 Add libcudf C++ transition guide
+- PR #1466 Add GPU-accelerated ORC Reader
+- PR #1565 Add build script for nightly doc builds
+- PR #1508 Add Series isna, isnull, and notna
+- PR #1456 Add Series.diff() via Numba kernel
+- PR #1588 Add Index `astype` typecasting
+- PR #1301 MultiIndex support
+- PR #1599 Level keyword supported in groupby
+- PR #929 Add support operations to dataframe
+- PR #1609 Groupby accept list of Series
+- PR #1658 Support `group_keys=True` keyword in groupby method
 
 ## Improvements
 
+- PR #1531 Refactor closures as private functions in gpuarrow
 - PR #1404 Parquet reader page data decoding speedup
 - PR #1076 Use `type_dispatcher` in join, quantiles, filter, segmented sort, radix sort and hash_groupby
 - PR #1202 Simplify README.md
@@ -40,6 +73,7 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
+- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
@@ -50,9 +84,25 @@
 - PR #1479 Convert Parquet Reader CFFI to Cython
 - PR #1397 Add a utility function for producing an overflow-safe kernel launch grid configuration
 - PR #1382 Add GPU parsing of nested brackets to cuIO parsing utilities
+- PR #1481 Add cudf::table constructor to allocate a set of `gdf_column`s
 - PR #1484 Convert GroupBy CFFI to Cython
 - PR #1463 Allow and default melt keyword argument var_name to be None
 - PR #1486 Parquet Reader: Use device_buffer rather than device_ptr
+- PR #1525 Add cudatoolkit conda dependency
+- PR #1520 Renamed `src/dataframe` to `src/table` and moved `table.hpp`. Made `types.hpp` to be type declarations only.
+- PR #1492 Convert transpose CFFI to Cython
+- PR #1495 Convert binary and unary ops CFFI to Cython
+- PR #1503 Convert sorting and hashing ops CFFI to Cython
+- PR #1522 Use latest release version in update-version CI script
+- PR #1533 Remove stale join CFFI, fix memory leaks in join Cython
+- PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
+- PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+- PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
+- PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
+- PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
+- PR #1590 Remove CFFI from the build / install process entirely
+- PR #1536 Convert gpuarrow CFFI to Cython
+- PR #1655 Add `Column._pointer` as a way to access underlying `gdf_column*` of a `Column`
 
 ## Bug Fixes
 
@@ -86,9 +136,27 @@
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
+- PR #1491 Use more specific directories & groups in CODEOWNERS
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
 - PR #1498 Add missing include guard to device_atomics.cuh and separated DEVICE_ATOMICS_TEST
 - PR #1506 Fix csv-write call to updated NVStrings method
+- PR #1510 Added nvstrings `fillna()` function
+- PR #1507 Parquet Reader: Default string data to GDF_STRING
+- PR #1535 Fix doc issue to ensure correct labelling of cudf.series
+- PR #1537 Fix `undefined reference` link error in HashPartitionTest
+- PR #1548 Fix ci/local/build.sh README from using an incorrect image example
+- PR #1551 CSV Reader: Fix integer column name indexing
+- PR #1586 Fix broken `scalar_wrapper::operator==`
+- PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
+- PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
+- PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
+- PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
+- PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
+- PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
+- PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
+
 
 
 # cuDF 0.6.1 (25 Mar 2019)
@@ -149,6 +217,7 @@
 - PR #1159 Add Python bindings for libcudf dlpack functions
 - PR #1155 Add __array_ufunc__ for DataFrame and Series for sqrt
 - PR #1168 to_frame for series accepts a name argument
+
 
 ## Improvements
 

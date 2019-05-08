@@ -61,6 +61,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
 
+#include "io/cuio_common.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/wrapper_utils.hpp"
 
@@ -126,7 +127,6 @@ gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes,
 	const string& compression, 
 	vector<char>& h_uncomp_data);
 gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
-gdf_dtype convertStringToDtype(std::string &dtype);
 
 #define checkError(error, txt)  if ( error != GDF_SUCCESS) { std::cerr << "ERROR:  " << error <<  "  in "  << txt << std::endl;  return error; }
 
@@ -150,26 +150,6 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
                                   gdf_size_type num_records, int num_columns,
                                   bool *parseCol, uint64_t *recStart,
                                   column_data_t *d_columnData);
-
-//
-//---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
-//
-__device__ long whichBitmap(long record) { return (record/8);  }
-__device__ int whichBit(long record) { return (record % 8);  }
-
-__inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
-{
-	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((size_t)address & 3));
-	int32_t int_val = (int32_t)val << (((size_t) address & 3) * 8);
-
-	atomicOr(base_address, int_val);
-}
-
-__device__ void setBit(gdf_valid_type* address, int bit) {
-	gdf_valid_type bitMask[8] 		= {1, 2, 4, 8, 16, 32, 64, 128};
-	validAtomicOR(address, bitMask[bit]);
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number 
@@ -249,6 +229,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 		}
 		// Check if end of a column/row
 		else if (pos == first_row.size() - 1 ||
+				 (!quotation && first_row[pos] == raw_csv->opts.terminator) ||
 				 (!quotation && first_row[pos] == raw_csv->opts.delimiter)) {
 			// This is the header, add the column name
 			if (raw_csv->header_row >= 0) {
@@ -268,6 +249,13 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 
 				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
+
+				// Stop parsing when we hit the line terminator; relevant when there is a blank line following the header.
+				// In this case, first_row includes multiple line terminators at the end, as the new recStart belongs
+				// to a line that comes after the blank line(s)
+				if (!quotation && first_row[pos] == raw_csv->opts.terminator){
+					break;
+				}
 			}
 			else {
 				// This is the first data row, add the automatically generated name
@@ -849,33 +837,6 @@ gdf_error read_csv(csv_read_arg *args)
   return error;
 }
 
-
-
-/*
- * What is passed in is the data type as a string, need to convert that into gdf_dtype enum
- */
-gdf_dtype convertStringToDtype(std::string &dtype) {
-
-	if (dtype.compare( "str") == 0) 		return GDF_STRING;
-	if (dtype.compare( "date") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "date32") == 0) 		return GDF_DATE32;
-	if (dtype.compare( "date64") == 0) 		return GDF_DATE64;
-	if (dtype.compare( "timestamp") == 0)	return GDF_TIMESTAMP;
-	if (dtype.compare( "category") == 0) 	return GDF_CATEGORY;
-	if (dtype.compare( "float") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float32") == 0)		return GDF_FLOAT32;
-	if (dtype.compare( "float64") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "double") == 0)		return GDF_FLOAT64;
-	if (dtype.compare( "short") == 0)		return GDF_INT16;
-	if (dtype.compare( "int") == 0)			return GDF_INT32;
-	if (dtype.compare( "int32") == 0)		return GDF_INT32;
-	if (dtype.compare( "int64") == 0)		return GDF_INT64;
-	if (dtype.compare( "long") == 0)		return GDF_INT64;
-
-	return GDF_invalid;
-}
-
-
 /**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and 
  * the input file name
@@ -917,34 +878,6 @@ gdf_error inferCompressionType(const char* compression_arg, const char* filepath
 	
 	return GDF_SUCCESS;
 }
-
-
-/**---------------------------------------------------------------------------*
- * @brief Uncompresses the input data and stores the allocated result into 
- * a vector.
- * 
- * @param[in] h_data Pointer to the csv data in host memory
- * @param[in] num_bytes Size of the input data, in bytes
- * @param[in] compression String describing the compression type
- * @param[out] h_uncomp_data Vector containing the output uncompressed data
- * 
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
- *---------------------------------------------------------------------------**/
-gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const string& compression, vector<char>& h_uncomp_data) 
-{	
-	int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-	if (compression == "gzip")
-		comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
-	else if (compression == "zip")
-		comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
-	else if (compression == "bz2")
-		comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
-	else if (compression == "xz")
-		comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
-
-	return io_uncompress_single_h2d(h_data, num_bytes, comp_type, h_uncomp_data);
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Uploads the relevant segment of the input csv data onto the GPU.
@@ -989,15 +922,19 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
   // If only handling one of them, ensure it doesn't match against \0 as we do
   // not want certain scenarios to be filtered out (end-of-file)
   if (raw_csv->opts.skipblanklines || raw_csv->opts.comment != '\0') {
-    const auto match1 = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
-                                                     : raw_csv->opts.comment;
-    const auto match2 = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
-                                                      : match1;
+    const auto match_newline = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
+                                                            : raw_csv->opts.comment;
+    const auto match_comment = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
+                                                             : match_newline;
+    const auto match_return = (raw_csv->opts.skipblanklines &&
+                              raw_csv->opts.terminator == '\n') ? '\r'
+                                                                : match_comment;
     h_rec_starts.erase(
         std::remove_if(h_rec_starts.begin(), h_rec_starts.end(),
                        [&](uint64_t i) {
-                         return (h_uncomp_data[i] == match1 ||
-                                 h_uncomp_data[i] == match2);
+                         return (h_uncomp_data[i] == match_newline ||
+                                 h_uncomp_data[i] == match_return ||
+                                 h_uncomp_data[i] == match_comment);
                        }),
         h_rec_starts.end());
   }
@@ -1141,53 +1078,6 @@ struct ConvertFunctor {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief CUDA kernel iterates over the data until the end of the current field
- * 
- * Also iterates over (one or more) delimiter characters after the field.
- *
- * @param[in] raw_csv The entire CSV data to read
- * @param[in] opts A set of parsing options
- * @param[in] pos Offset to start the seeking from 
- * @param[in] stop Offset of the end of the row
- *
- * @return long position of the last character in the field, including the 
- *  delimiter(s) folloing the field data
- *---------------------------------------------------------------------------**/
-__device__ 
-long seekFieldEnd(const char *raw_csv, const ParseOptions opts, long pos, long stop) {
-	bool quotation	= false;
-	while(true){
-		// Use simple logic to ignore control chars between any quote seq
-		// Handles nominal cases including doublequotes within quotes, but
-		// may not output exact failures as PANDAS for malformed fields
-		if(raw_csv[pos] == opts.quotechar){
-			quotation = !quotation;
-		}
-		else if(quotation==false){
-			if(raw_csv[pos] == opts.delimiter){
-				while (opts.multi_delimiter &&
-					   pos < stop &&
-					   raw_csv[pos + 1] == opts.delimiter) {
-					++pos;
-				}
-				break;
-			}
-			else if(raw_csv[pos] == opts.terminator){
-				break;
-			}
-			else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
-				stop--;
-				break;
-			}
-		}
-		if(pos>=stop)
-			break;
-		pos++;
-	}
-	return pos;
-}
-
-/**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  * 
  * Data is processed one record at a time
@@ -1265,10 +1155,7 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
 				}
 
 				// set the valid bitmap - all bits were set to 0 to start
-				long bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
-				long bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
-				setBit(valid[actual_col]+bitmapIdx, bitIdx);		// This is done with atomics
-
+				setBitmapBit(valid[actual_col], rec_id);
 				atomicAdd(&num_valid[actual_col], 1);
 			}
 			else if(dtype[actual_col]==gdf_dtype::GDF_STRING){
@@ -1310,45 +1197,6 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
 
   CUDA_TRY(cudaGetLastError());
   return GDF_SUCCESS;
-}
-
-/**
-* @brief Returns true is the input character is a valid digit.
-* Supports both decimal and hexadecimal digits (uppercase and lowercase).
-*/
-__device__ __forceinline__
-bool isDigit(char c, bool is_hex){
-	if (c >= '0' && c <= '9') return true;
-	if (is_hex) {
-		if (c >= 'A' && c <= 'F') return true;
-		if (c >= 'a' && c <= 'f') return true;
-	}
-	return false;
-}
-
-/**
-* @brief Returns true if the counters indicate a potentially valid float.
-* False positives are possible because positions are not taken into account.
-* For example, field "e.123-" would match the pattern.
-*/
-__device__ __forceinline__
-bool isLikeFloat(long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
-	// Can't have more than one exponent and one decimal point
-	if (decimal_cnt > 1) return false;
-	if (exponent_cnt > 1) return false;
-	// Without the exponent or a decimal point, this is an integer, not a float
-	if (decimal_cnt == 0 && exponent_cnt == 0) return false;
-
-	// Can only have one '-' per component
-	if (dash_cnt > 1 + exponent_cnt) return false;
-
-	// If anything other than these characters is present, it's not a float
-	if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len) return false;
-
-	// Needs at least 1 digit, 2 if exponent is present
-	if (digit_cnt < 1 + exponent_cnt) return false;
-
-	return true;
 }
 
 /**---------------------------------------------------------------------------*

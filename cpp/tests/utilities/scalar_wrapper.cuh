@@ -50,7 +50,7 @@ struct scalar_wrapper {
    *
    * @return gdf_scalar* Pointer to the underlying gdf_scalar
    *---------------------------------------------------------------------------**/
-  operator gdf_scalar*(){return &the_scalar;};
+  operator gdf_scalar*() { return &the_scalar; };
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
@@ -74,8 +74,7 @@ struct scalar_wrapper {
    *
    * @param scalar The scalar value to hold
    *---------------------------------------------------------------------------**/
-  scalar_wrapper(const gdf_scalar& scalar) : the_scalar(scalar) {
-  }
+  scalar_wrapper(const gdf_scalar& scalar) : the_scalar(scalar) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_scalar.
@@ -85,19 +84,19 @@ struct scalar_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief returns the value of the scalar
-   * 
-   * @return ScalarType 
+   *
+   * @return ScalarType
    *---------------------------------------------------------------------------**/
-  ScalarType value() {
-    return *reinterpret_cast<ScalarType*>(&(the_scalar.data));
+  ScalarType value() const {
+    return *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
   }
 
   /**---------------------------------------------------------------------------*
    * @brief returns the validity of the scalar
-   * 
-   * @return bool 
+   *
+   * @return bool
    *---------------------------------------------------------------------------**/
-  bool is_valid() { return the_scalar.is_valid; }
+  bool is_valid() const { return the_scalar.is_valid; }
 
   /**---------------------------------------------------------------------------*
    * @brief Prints the value of the underlying gdf_scalar.
@@ -118,9 +117,9 @@ struct scalar_wrapper {
    * @return false The two scalars are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(scalar_wrapper<ScalarType> const& rhs) const {
-    return (the_scalar.data == rhs.data &&
-            the_scalar.dtype == rhs.dtype &&
-            the_scalar.is_valid == rhs.is_valid);
+    return (the_scalar.dtype == rhs.the_scalar.dtype and
+            this->is_valid() == rhs.is_valid() and
+            this->value() == rhs.value());
   }
 
  private:
