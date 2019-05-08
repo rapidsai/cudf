@@ -118,17 +118,23 @@ gdf_error gdf_order_by(gdf_column** cols,
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
 
-  if (table->has_nulls())
-  if (null_as_largest_for_multisort) {    
-    less_with_nulls_always_false_comparator ineq_op(*table); 
+  if (table->has_nulls()){
+    if (null_as_largest_for_multisort) {    
+      less_with_nulls_always_false_comparator ineq_op(*table); 
+      thrust::sort(rmm::exec_policy(stream)->on(stream),
+                    d_indx, d_indx+nrows,
+                    ineq_op);				     
+    } else {  
+      inequality_with_nulls_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
+      thrust::sort(rmm::exec_policy(stream)->on(stream),
+                    d_indx, d_indx+nrows,
+                    ineq_op);				        
+    } 
+  } else {
+    inequality_comparator ineq_op(*table, asc_desc); 
     thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  ineq_op);				     
-  } else {  
-    inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  ineq_op);				        
+                    d_indx, d_indx+nrows,
+                    ineq_op);		
   }
 
   return GDF_SUCCESS;

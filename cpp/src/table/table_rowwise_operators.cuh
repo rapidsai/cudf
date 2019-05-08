@@ -28,8 +28,7 @@ struct typed_inequality_comparator {
   template<typename ColType>
     __device__
     State operator() (gdf_index_type lhs_row, gdf_index_type rhs_row,
-                    gdf_column const* lhs_column, gdf_column const* rhs_column,
-                    bool nulls_are_smallest)
+                    gdf_column const* lhs_column, gdf_column const* rhs_column)
     {
         const ColType lhs_data = static_cast<const ColType*>(lhs_column->data)[lhs_row];
         const ColType rhs_data = static_cast<const ColType*>(rhs_column->data)[rhs_row];
@@ -76,76 +75,93 @@ template<typename ColType>
 };
 } // namespace
 
-
 struct inequality_comparator {
 
-  inequality_comparator(device_table const& lhs, bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
-                            _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags) {
-    _has_nulls = _lhs.has_nulls();
+  inequality_comparator(device_table const& lhs, int8_t *const asc_desc_flags = nullptr) :
+                            _lhs(lhs), _rhs(lhs), _asc_desc_flags(asc_desc_flags) {
   }
   inequality_comparator(device_table const& lhs, device_table const& rhs, 
-                                                  bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
-                            _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags) {
-    _has_nulls = _lhs.has_nulls() || _rhs.has_nulls();
+                                                  int8_t *const asc_desc_flags = nullptr) :
+                            _lhs(lhs), _rhs(rhs), _asc_desc_flags(asc_desc_flags) {
   }
 
   __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index) {
 
     State state = State::Undecided;
-    if (_has_nulls) { 
-      for(gdf_size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {
+    for(gdf_size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {
         gdf_dtype col_type = _lhs.get_column(col_index)->dtype;
 
         bool asc = _asc_desc_flags != nullptr && _asc_desc_flags[col_index] == GDF_ORDER_ASC;
         
         if (asc){
-          state = cudf::type_dispatcher(col_type, typed_inequality_with_nulls_comparator{},
-                                          lhs_index, rhs_index,
-                                          _lhs.get_column(col_index), _rhs.get_column(col_index),
-                                          _nulls_are_smallest);
+            state = cudf::type_dispatcher(col_type, typed_inequality_comparator{},
+                                            lhs_index, rhs_index,
+                                            _lhs.get_column(col_index), _rhs.get_column(col_index));
         } else {
-          state = cudf::type_dispatcher(col_type, typed_inequality_with_nulls_comparator{},
-                                          rhs_index, lhs_index,
-                                          _rhs.get_column(col_index), _lhs.get_column(col_index),
-                                          _nulls_are_smallest);
+            state = cudf::type_dispatcher(col_type, typed_inequality_comparator{},
+                                            rhs_index, lhs_index,
+                                            _rhs.get_column(col_index), _lhs.get_column(col_index));
         }
         
         switch( state ) {
-          case State::False:
+            case State::False:
             return false;
-          case State::True:
+            case State::True:
             return true;
-          case State::Undecided:
+            case State::Undecided:
             break;
         }
-      }
-    } else {
-      for(gdf_size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {
+    }
+    return false;
+  }
+
+  
+  private:
+
+    device_table const _lhs;
+    device_table const _rhs;
+    int8_t *const _asc_desc_flags;
+};
+
+
+struct inequality_with_nulls_comparator {
+
+  inequality_with_nulls_comparator(device_table const& lhs, bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
+                            _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags) {
+  }
+  inequality_with_nulls_comparator(device_table const& lhs, device_table const& rhs, 
+                                                  bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
+                            _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags) {
+  }
+
+  __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index) {
+
+    State state = State::Undecided;
+    for(gdf_size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {
         gdf_dtype col_type = _lhs.get_column(col_index)->dtype;
 
         bool asc = _asc_desc_flags != nullptr && _asc_desc_flags[col_index] == GDF_ORDER_ASC;
         
         if (asc){
-          state = cudf::type_dispatcher(col_type, typed_inequality_comparator{},
-                                          lhs_index, rhs_index,
-                                          _lhs.get_column(col_index),_rhs.get_column(col_index),
-                                          asc);
+            state = cudf::type_dispatcher(col_type, typed_inequality_with_nulls_comparator{},
+                                            lhs_index, rhs_index,
+                                            _lhs.get_column(col_index), _rhs.get_column(col_index),
+                                            _nulls_are_smallest);
         } else {
-          state = cudf::type_dispatcher(col_type, typed_inequality_comparator{},
-                                          rhs_index, lhs_index,
-                                          _rhs.get_column(col_index),_lhs.get_column(col_index),
-                                          asc);
+            state = cudf::type_dispatcher(col_type, typed_inequality_with_nulls_comparator{},
+                                            rhs_index, lhs_index,
+                                            _rhs.get_column(col_index), _lhs.get_column(col_index),
+                                            _nulls_are_smallest);
         }
         
         switch( state ) {
-          case State::False:
+            case State::False:
             return false;
-          case State::True:
+            case State::True:
             return true;
-          case State::Undecided:
+            case State::Undecided:
             break;
         }
-      }
     }
     return false;
   }
@@ -157,8 +173,6 @@ struct inequality_comparator {
     device_table const _rhs;
     bool _nulls_are_smallest;
     int8_t *const _asc_desc_flags;
-    bool _has_nulls;   
-
 };
 
 namespace {
