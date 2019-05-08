@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
+from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
@@ -1820,19 +1821,30 @@ class Loc(object):
         if isinstance(arg, Series):
             # To do this efficiently we need a solution to
             # https://github.com/rapidsai/cudf/issues/1087
-            out = Series([],
-                         dtype=self._sr.dtype,
-                         index=self._sr.index.__class__([]))
+            out = Series([], dtype=self._sr.dtype, index=self._sr.index.__class__([]))
             for s in arg:
                 out = out.append(self._sr.loc[s:s], ignore_index=False)
             return out
+        elif (
+            isinstance(arg, str)
+            or isinstance(arg, Number)
+            or is_datetime_or_timedelta_dtype(arg)
+            or isinstance(arg, pd.Timestamp)
+        ):
+            found_index = self._sr.index.find_label_range(arg, None)[0]
+            return self._sr.iloc[found_index]
+        elif isinstance(arg, slice):
+            start_index, stop_index = self._sr.index.find_label_range(
+                arg.start, arg.stop
+            )
+            return self._sr.iloc[start_index:stop_index]
         else:
-            if isinstance(arg, str) or isinstance(arg, Number):
-                found_index = self._sr.index.find_label_range(arg, None)[0]
-                return self._sr.iloc[found_index]
-            elif isinstance(arg, slice):
-                start_index, stop_index = self._sr.index.find_label_range(arg.start, arg.stop)
-                return self._sr.iloc[start_index:stop_index]
+            raise NotImplementedError(
+                ".loc not implemented for label type {}".format(
+                    type(arg).__name__
+                )
+            )
+
 
 class Iloc(object):
     """
