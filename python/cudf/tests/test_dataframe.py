@@ -1749,6 +1749,7 @@ def test_iteritems(gdf):
 
 @pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
 def test_quantile(pdf, gdf):
+    assert_eq(pdf['x'].quantile(), gdf['x'].quantile())
     assert_eq(pdf.quantile(), gdf.quantile())
 
 

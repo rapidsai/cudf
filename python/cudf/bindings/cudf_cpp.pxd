@@ -26,7 +26,10 @@ cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                      flag_sort_result, flag_sort_inplace)
+                                      flag_sort_result, flag_sort_inplace,
+                                      null_sort_behavior)
+
+cpdef uintptr_t column_view_pointer(col)
 
 cpdef check_gdf_error(errcode)
 
@@ -109,6 +112,11 @@ cdef extern from "cudf.h" nogil:
         gdf_size_type null_count
         gdf_dtype_extra_info dtype_info
         char *col_name
+
+    ctypedef enum gdf_null_sort_behavior:
+      GDF_NULL_AS_LARGEST = 0, 
+      GDF_NULL_AS_SMALLEST,
+      GDF_NULL_AS_LARGEST_FOR_MULTISORT,
 
     ctypedef enum gdf_method:
       GDF_SORT = 0,
@@ -201,7 +209,8 @@ cdef extern from "cudf.h" nogil:
                                     gdf_method flag_method,
                                     int flag_distinct,
                                     int flag_sort_result,
-                                    int flag_sort_inplace) except +
+                                    int flag_sort_inplace,
+                                    gdf_null_sort_behavior flag_null_sort_behavior) except +
 
     cdef const char * gdf_error_get_name(gdf_error errcode) except +
 

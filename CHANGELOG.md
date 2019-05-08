@@ -12,19 +12,21 @@
 
 ## Bug Fixes
 
-...
+- PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
 
 
 # cuDF 0.7.0 (Date TBD)
 
 ## New Features
 
+- PR #982 Implement gdf_group_by_without_aggregations and gdf_unique_indices functions
 - PR #1142 Add `GDF_BOOL` column type
 - PR #1194 Implement overloads for CUDA atomic operations
 - PR #1292 Implemented Bitwise binary ops AND, OR, XOR (&, |, ^)
 - PR #1235 Add GPU-accelerated Parquet Reader
 - PR #1335 Added local_dict arg in `DataFrame.query()`.
 - PR #1282 Add Series and DataFrame.describe()
+- PR #1356 Rolling windows
 - PR #1381 Add DataFrame._get_numeric_data
 - PR #1388 Add CODEOWNERS file to auto-request reviews based on where changes are made
 - PR #1396 Add DataFrame.drop method
@@ -50,6 +52,7 @@
 - PR #1599 Level keyword supported in groupby
 - PR #929 Add support operations to dataframe
 - PR #1609 Groupby accept list of Series
+- PR #1658 Support `group_keys=True` keyword in groupby method
 
 ## Improvements
 
@@ -100,6 +103,7 @@
 - PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
+- PR #1655 Add `Column._pointer` as a way to access underlying `gdf_column*` of a `Column`
 
 ## Bug Fixes
 
@@ -147,6 +151,13 @@
 - PR #1591 ORC/Parquet Reader: Fix missing import for FileNotFoundError exception
 - PR #1573 Parquet Reader: Fix crash due to clash with ORC reader datasource
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
+- PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
+- PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
+- PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
+- PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
+
 
 
 # cuDF 0.6.1 (25 Mar 2019)
