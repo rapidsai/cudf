@@ -26,14 +26,14 @@ namespace cudf {
  *
  * Given an input column and a mask column, an element `i` from the input column
  * is copied to the output if the corresponding element `i` in the mask is
- * non-null and `true`.
+ * non-null and `true`. This operation is stable: the input order is preserved.
  *
  * The input and mask columns must be of equal size.
  *
  * The output column has size equal to the number of elements in boolean_mask 
  * that are both non-null and `true`. Note that the output column memory is 
  * allocated by this function but must be freed by the caller when finished.
- *
+ * 
  * @param[in] input The input column to filter
  * @param[in] boolean_mask A column of type GDF_BOOL8 used as a mask to filter
  * the input column corresponding index passes the filter.
