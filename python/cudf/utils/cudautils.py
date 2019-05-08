@@ -57,7 +57,7 @@ def gpu_arange_reversed(size, out):
         out[i] = size - i - 1
 
 
-def arange_reversed(size, dtype=np.int64):
+def arange_reversed(size, dtype=np.int32):
     out = rmm.device_array(size, dtype=dtype)
     if size > 0:
         gpu_arange_reversed.forall(size)(size, out)

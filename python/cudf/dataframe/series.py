@@ -994,9 +994,9 @@ class Series(object):
     def reverse(self):
         """Reverse the Series
         """
-        data = cudautils.reverse_array(self.to_gpu_array())
-        index = as_index(cudautils.reverse_array(self.index.gpu_values))
-        col = self._column.replace(data=Buffer(data))
+        rinds = cudautils.arange_reversed(self._column.data.size, dtype=np.int32)
+        col = cpp_copying.apply_gather_column(self._column, rinds)
+        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds) 
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype='float64'):
