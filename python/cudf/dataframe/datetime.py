@@ -194,16 +194,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        out_col = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=out_col.data,
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
