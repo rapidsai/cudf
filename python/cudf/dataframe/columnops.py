@@ -387,6 +387,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
+        arbitrary = arbitrary.ceil('ms')
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
