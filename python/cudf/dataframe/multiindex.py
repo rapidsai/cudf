@@ -39,7 +39,7 @@ class MultiIndex(Index):
             else:
                 column_names = names
         elif names is None:
-            column_names = list(range(len(codes)))
+            column_names = list(range(len(levels)))
         else:
             column_names = names
         if len(codes) == 0:
@@ -52,13 +52,15 @@ class MultiIndex(Index):
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
             self.codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
-                if len(code) != 0:
-                    code = np.array(code)
-                    self.codes.add_column(column_names[idx],
-                                          columnops.as_column(code))
+                code = np.array(code)
+                self.codes.add_column(column_names[idx],
+                                      columnops.as_column(code))
         else:
             self.codes = codes
-        self.levels = levels
+
+        # converting levels to numpy array will produce a Float64Index
+        # (on empty levels)for levels mimicking the behavior of Pandas
+        self.levels = np.array(levels)
         self._validate_levels_and_codes(self.levels, self.codes)
         self.name = None
         self.names = names
