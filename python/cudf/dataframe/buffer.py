@@ -29,7 +29,13 @@ class Buffer(object):
             if categorical:
                 size = len(mem)
             else:
-                size = mem.size
+                if isinstance(mem, slice):
+                    if mem.stop is not 0:
+                        size = (mem.start-mem.stop)/mem.step
+                    else:
+                        size = 0
+                else:
+                    size = mem.size
         if capacity is None:
             capacity = size
         self.mem = cudautils.to_device(mem)
