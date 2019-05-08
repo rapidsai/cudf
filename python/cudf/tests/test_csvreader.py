@@ -1007,3 +1007,25 @@ def test_csv_blank_first_row(line_terminator):
 
     assert(cu_df.shape == (2, 2))
     assert(all(cu_df.columns == ['colA', 'colB']))
+
+
+def test_csv_empty_input(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file20.csv")
+    # create an empty file
+    open(fname, 'a').close()
+
+    col_names = ['col1', 'col2', 'col3', 'col4']
+    in_dtypes = ['int', 'str', 'float', 'short']
+    out_dtypes = ['int32','object', 'float32', 'int16']
+
+    df = read_csv(str(fname))
+    assert(len(df.columns) == 0)
+    df = read_csv(str(fname), dtype=in_dtypes, names=col_names)
+    assert(all(df.columns == col_names))
+    assert((list(df.dtypes) == out_dtypes))
+
+    df = read_csv(StringIO(''))
+    assert(len(df.columns) == 0)
+    df = read_csv(StringIO(''), dtype=in_dtypes, names=col_names)
+    assert(all(df.columns == col_names))
+    assert((list(df.dtypes) == out_dtypes))
