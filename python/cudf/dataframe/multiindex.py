@@ -11,6 +11,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.index import Index, StringIndex
 from cudf.utils import utils
 
+
 class MultiIndex(Index):
     """A multi-level or hierarchical index.
 
@@ -39,7 +40,7 @@ class MultiIndex(Index):
             else:
                 column_names = names
         elif names is None:
-            column_names = list(range(len(levels)))
+            column_names = list(range(len(codes)))
         else:
             column_names = names
 
@@ -203,7 +204,10 @@ class MultiIndex(Index):
     def __eq__(self, other):
         if not hasattr(other, 'levels'):
             return False
-        return self.levels == other.levels and\
+        equal_levels = self.levels == other.levels
+        if isinstance(equal_levels, np.ndarray):
+            equal_levels = equal_levels.all()
+        return equal_levels and\
             self.codes == other.codes and\
             self.names == other.names
 
