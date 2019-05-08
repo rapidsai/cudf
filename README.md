@@ -59,7 +59,6 @@ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
 ```
 
 For `cudf version == 0.6` :
-eg:
 ```bash
 
 # CUDA 9.2
@@ -70,7 +69,6 @@ conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c co
 ```
 
 For `cudf version == 0.5` :
-eg:
 ```bash
 
 # CUDA 9.2
