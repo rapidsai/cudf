@@ -5,6 +5,7 @@ import pytest
 import cudf
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
@@ -53,6 +54,22 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     gdf = gdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
     pdf = pdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize('as_index', [True, False])
+def test_groupby_as_index_multiindex(pdf, gdf, as_index):
+    pdf = pd.DataFrame({'a': [1, 2, 1], 'b': [3, 3, 3], 'c': [2, 2, 3], 'd': [3, 1, 2]})
+    gdf = cudf.from_pandas(pdf)
+
+    gdf = gdf.groupby(['a', 'b'], as_index=as_index).agg({'c': 'mean'})
+    pdf = pdf.groupby(['a', 'b'], as_index=as_index).agg({'c': 'mean'})
+
+    if as_index:
+        assert_eq(pdf, gdf)
+    else:
+        # column names don't match - check just the values
+        for gcol, pcol in zip(gdf, pdf):
+            assert_array_equal(gdf[gcol].to_array(), pdf[pcol].values)
 
 
 def test_groupby_default(pdf, gdf):
