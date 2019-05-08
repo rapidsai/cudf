@@ -928,6 +928,7 @@ class DataFrame(object):
             Only axis=1 is currently supported.
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
+
         Returns
         -------
         A dataframe without dropped column(s)
