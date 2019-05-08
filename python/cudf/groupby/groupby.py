@@ -178,6 +178,12 @@ class Groupby(object):
             for val in self._val_columns:
                 if val in agg_groupby._df.columns:
                     agg_groupby._val_columns.append(val)
+            # _get_numeric_data might have removed the by column
+            if isinstance(self._by, (str, Number)):
+                agg_groupby._df[self._by] = self._df[self._by]
+            else:
+                for by in self._by:
+                    agg_groupby._df[by] = self._df[by]
         return _cpp_apply_basic_agg(agg_groupby, agg_type,
                                     sort_results=sort_results)
 
