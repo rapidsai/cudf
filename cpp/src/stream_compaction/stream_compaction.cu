@@ -131,6 +131,8 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
                                gdf_size_type  * __restrict__ block_offsets,
                                Filter filter)
 {
+  static_assert(block_size < 1024, "Maximum thread block size exceeded");
+
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
   
@@ -191,7 +193,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
         int valid_index = (block_offset / warp_size) + wid;
 
         // compute the valid mask for this warp
-        int32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+        uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
 
         if (lane == 0 && valid_warp != 0) {
           warp_valid_counts[wid] = __popc(valid_warp);
@@ -204,7 +206,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
 
         // if the block is full and not aligned then we have one more warp to cover
         if ((wid == 0) && (last_warp == num_warps)) {
-          int32_t valid_warp =
+          uint32_t valid_warp =
             __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
             warp_valid_counts[wid] += __popc(valid_warp);
