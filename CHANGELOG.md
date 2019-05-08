@@ -138,6 +138,7 @@
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
 - PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
+- PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 
 
 # cuDF 0.6.1 (25 Mar 2019)
