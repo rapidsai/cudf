@@ -373,60 +373,6 @@ def make_empty_mask(size):
         gpu_fill_value.forall(bits.size)(bits, 0)
     return bits
 
-#
-# Gather
-#
-
-
-@cuda.jit
-def gpu_gather(data, index, out):
-    i = cuda.grid(1)
-    if i < index.size:
-        idx = index[i]
-        # Only do it if the index is in range
-        if 0 <= idx < data.size:
-            out[i] = data[idx]
-
-
-def gather(data, index, out=None):
-    """Perform ``out = data[index]`` on the GPU
-    """
-    if out is None:
-        out = rmm.device_array(shape=index.size, dtype=data.dtype)
-    if out.size > 0:
-        gpu_gather.forall(index.size)(data, index, out)
-    return out
-
-
-@cuda.jit
-def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
-    gid = cuda.grid(1)
-    if gid < lidx.size:
-        # Try getting from the left side first
-        pos = lidx[gid]
-        if pos != -1:
-            # Get from left
-            out[gid] = lkeys[pos]
-        else:
-            # Get from right
-            pos = ridx[gid]
-            out[gid] = rkeys[pos]
-
-
-def gather_joined_index(lkeys, rkeys, lidx, ridx):
-    assert lidx.size == ridx.size
-    out = rmm.device_array(lidx.size, dtype=lkeys.dtype)
-    if out.size > 0:
-        gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx,
-                                                  out)
-    return out
-
-
-def reverse_array(data, out=None):
-    rinds = arange_reversed(data.size)
-    out = gather(data=data, index=rinds, out=out)
-    return out
-
 
 #
 # Null handling
