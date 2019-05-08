@@ -74,7 +74,8 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            col = cpp_copying.apply_gather_column(self.as_column(), indices)
+            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
+            col = self.as_column().replace(data=index.data)
             return as_index(col)
 
     def argsort(self, ascending=True):
