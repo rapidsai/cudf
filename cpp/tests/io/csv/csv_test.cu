@@ -29,6 +29,9 @@
 
 #include <cstdlib>
 
+#include "tests/utilities/cudf_test_fixtures.h"
+
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {
@@ -40,18 +43,6 @@ bool checkFile(const char *fname)
 {
     struct stat st;
     return (stat(fname, &st) ? 0 : 1);
-}
-
-char* getTempFile(const char *fname)
-{
-    char username[80];
-    getlogin_r(username, 80);
-    char* tmpdir = new char[200];
-    strcpy(tmpdir, "/tmp/gtest-of-");
-    strcat(tmpdir, username);
-    mkdir(tmpdir, ACCESSPERMS);
-    strcat(strcat(tmpdir, "/"), fname);
-    return tmpdir;
 }
 
 // DESCRIPTION: Simple test internal helper class to transfer cudf column data
@@ -86,7 +77,7 @@ private:
 
 TEST(gdf_csv_test, DetectColumns)
 {
-    const char* fname	= getTempFile("DetectColumnsTest.csv");
+    const char* fname	= temp_env->get_temp_filename("DetectColumnsTest.csv");
     const char* names[]	= { "A", "B", "C" };
     const char* use_cols[]	= { "A", "C" };
 
@@ -128,7 +119,7 @@ TEST(gdf_csv_test, DetectColumns)
 
 TEST(gdf_csv_test, UseColumns)
 {
-    const char* fname	= getTempFile("UseColumnsTest.csv");
+    const char* fname	= temp_env->get_temp_filename("UseColumnsTest.csv");
     const char* names[]	= { "A", "B", "C" };
     const char* types[]	= { "int", "float64", "int" };
     const char* use_cols[]	= { "A", "C" };
@@ -169,7 +160,7 @@ TEST(gdf_csv_test, UseColumns)
 
 TEST(gdf_csv_test, Numbers)
 {
-    const char* fname	= getTempFile("CsvNumbersTest.csv");
+    const char* fname	= temp_env->get_temp_filename("CsvNumbersTest.csv");
     const char* names[]	= { "A", "B", "C", "D", "E" };
     const char* types[]	= { "short", "int", "long", "float64", "float32" };
 
@@ -332,7 +323,7 @@ TEST(gdf_csv_test, MortPerf)
 
 TEST(gdf_csv_test, Strings)
 {
-    const char* fname	= getTempFile("CsvStringsTest.csv");
+    const char* fname	= temp_env->get_temp_filename("CsvStringsTest.csv");
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -391,7 +382,7 @@ TEST(gdf_csv_test, Strings)
 
 TEST(gdf_csv_test, QuotedStrings)
 {
-    const char* fname	= getTempFile("CsvQuotedStringsTest.csv");
+    const char* fname	= temp_env->get_temp_filename("CsvQuotedStringsTest.csv");
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -452,7 +443,7 @@ TEST(gdf_csv_test, QuotedStrings)
 
 TEST(gdf_csv_test, IgnoreQuotes)
 {
-    const char* fname	= getTempFile("CsvIgnoreQuotesTest.csv");
+    const char* fname	= temp_env->get_temp_filename("CsvIgnoreQuotesTest.csv");
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -513,7 +504,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
 
 TEST(gdf_csv_test, SpecifiedBoolValues)
 {
-    const char* fname			= getTempFile("CsvSpecifiedBoolValuesTest.csv");
+    const char* fname			= temp_env->get_temp_filename("CsvSpecifiedBoolValuesTest.csv");
     const char* names[]			= { "A", "B", "C" };
     const char* types[]			= { "int32", "int32", "short" };
     const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
@@ -556,7 +547,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 
 TEST(gdf_csv_test, Dates)
 {
-    const char* fname			= getTempFile("CsvDatesTest.csv");
+    const char* fname			= temp_env->get_temp_filename("CsvDatesTest.csv");
     const char* names[]			= { "A" };
     const char* types[]			= { "date" };
 
@@ -595,7 +586,7 @@ TEST(gdf_csv_test, Dates)
 
 TEST(gdf_csv_test, FloatingPoint)
 {
-    const char* fname			= getTempFile("CsvFloatingPoint.csv");
+    const char* fname			= temp_env->get_temp_filename("CsvFloatingPoint.csv");
     const char* names[]			= { "A" };
     const char* types[]			= { "float32" };
 
@@ -631,7 +622,7 @@ TEST(gdf_csv_test, FloatingPoint)
 
 TEST(gdf_csv_test, Category)
 {
-    const char* fname = getTempFile("CsvCategory.csv");
+    const char* fname = temp_env->get_temp_filename("CsvCategory.csv");
     const char* names[] = { "UserID" };
     const char* types[] = { "category" };
 
@@ -664,7 +655,7 @@ TEST(gdf_csv_test, Category)
 
 TEST(gdf_csv_test, SkiprowsNrows)
 {
-    const char* fname = getTempFile("CsvSkiprowsNrows.csv");
+    const char* fname = temp_env->get_temp_filename("CsvSkiprowsNrows.csv");
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -698,7 +689,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
 
 TEST(gdf_csv_test, ByteRange)
 {
-    const char* fname = getTempFile("CsvByteRange.csv");
+    const char* fname = temp_env->get_temp_filename("CsvByteRange.csv");
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -733,7 +724,7 @@ TEST(gdf_csv_test, ByteRange)
 
 TEST(gdf_csv_test, BlanksAndComments)
 {
-    const char* fname = getTempFile("BlanksAndComments.csv");
+    const char* fname = temp_env->get_temp_filename("BlanksAndComments.csv");
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -767,7 +758,7 @@ TEST(gdf_csv_test, BlanksAndComments)
 
 TEST(gdf_csv_test, Writer)
 {
-    const char* fname	= getTempFile("CsvWriteTest.csv");
+    const char* fname	= temp_env->get_temp_filename("CsvWriteTest.csv");
     const char* names[] = { "integer", "float", "string" };
     const char* types[] = { "int32", "float32", "str" };
 
@@ -793,7 +784,7 @@ TEST(gdf_csv_test, Writer)
     rargs.nrows = -1;
     EXPECT_EQ( read_csv(&rargs), GDF_SUCCESS );
 
-    const char* ofname = getTempFile("CsvWriteTestOut.csv");
+    const char* ofname = temp_env->get_temp_filename("CsvWriteTestOut.csv");
     csv_write_arg wargs{};
     wargs.columns = rargs.data;  // columns from reader above
     wargs.filepath = ofname;

@@ -19,6 +19,8 @@
 #include <cudf.h>
 #include <gtest/gtest.h>
 
+#include <ftw.h>
+
 #include <rmm/rmm.h>
 
 #define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
@@ -46,5 +48,32 @@ struct GdfTest : public ::testing::Test
 
     static void TearDownTestCase() {
         ASSERT_RMM_SUCCEEDED( rmmFinalize() );
+    }
+};
+
+struct TempDirTestEnvironment : public ::testing::Environment
+{
+    std::string tmpdir;
+    public:
+
+    void SetUp() {
+        std::string username(getlogin());
+        tmpdir = "/tmp/gtest-of-" + username + "/";
+        mkdir(tmpdir.c_str(), ACCESSPERMS);
+    }
+
+    void TearDown() {
+        nftw(tmpdir.c_str(), rmFiles ,10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+    }
+    static int rmFiles(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+    {
+        return remove(pathname);
+    }
+
+    char* get_temp_filename(const char *fname)
+    {
+        char* name = new char[tmpdir.length()+strlen(fname)+1];
+        strcpy(name, (tmpdir + fname).c_str());
+        return name;
     }
 };

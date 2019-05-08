@@ -38,23 +38,12 @@
 using std::string;
 using std::vector;
 
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct gdf_json_test : GdfTest {};
 
 bool checkFile(std::string fname) {
   struct stat st;
   return (stat(fname.c_str(), &st) ? 0 : 1);
-}
-
-char* getTempFile(const char *fname)
-{
-    char username[80];
-    getlogin_r(username, 80);
-    char* tmpdir = new char[200];
-    strcpy(tmpdir, "/tmp/gtest-of-");
-    strcat(tmpdir, username);
-    mkdir(tmpdir, ACCESSPERMS);
-    strcat(strcat(tmpdir, "/"), fname);
-    return tmpdir;
 }
 
 template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
@@ -235,7 +224,7 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
 }
 
 TEST_F(gdf_json_test, JsonLinesFileInput) {
-  const char *fname = getTempFile("JsonLinesFileTest.json");
+  const char *fname = temp_env->get_temp_filename("JsonLinesFileTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
@@ -268,7 +257,7 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
-  const char *fname = getTempFile("JsonLinesByteRangeTest.json");
+  const char *fname = temp_env->get_temp_filename("JsonLinesByteRangeTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -298,7 +287,7 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
-  const char *fname = getTempFile("JsonLinesObjectsTest.json");
+  const char *fname = temp_env->get_temp_filename("JsonLinesObjectsTest.json");
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
