@@ -43,10 +43,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
 
-    def append(self, other):
-        self, other = numeric_normalize_types(self, as_column(other))
-        return super(NumericalColumn, self).apend(other)
-
     def replace(self, **kwargs):
         if 'data' in kwargs and 'dtype' not in kwargs:
             kwargs['dtype'] = kwargs['data'].dtype

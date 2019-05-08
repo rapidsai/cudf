@@ -170,7 +170,6 @@ class Series(object):
         Returns a new copy with the index resetted.
         """
         this = self
-        index = not ignore_index
         other = Series(other)
 
         from cudf.dataframe import numerical
@@ -178,8 +177,12 @@ class Series(object):
             if self.dtype != other.dtype:
                 this, other = numerical.numeric_normalize_types(this, other)
 
-        return Series._concat([this, other], index=index)
+        if ignore_index:
+            index = None
+        else:
+            index = True
 
+        return Series._concat([this, other], index=index)
 
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
