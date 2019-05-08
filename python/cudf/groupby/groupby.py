@@ -6,6 +6,8 @@ from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
+from cudf import MultiIndex
+
 from cudf.bindings.groupby import (
     agg as cpp_agg,
     _apply_basic_agg as _cpp_apply_basic_agg
@@ -162,7 +164,29 @@ class Groupby(object):
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
-            raise ValueError('Groupby result is empty!')
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            if len(self._by) == 1 or len(final_result.columns) == 0:
+                dtype = 'float64' if len(self._by) == 1 else 'object'
+                name = self._by[0] if len(self._by) == 1 else None
+                from cudf.dataframe.index import GenericIndex
+                index = GenericIndex(Series([], dtype=dtype))
+                index.name = name
+                final_result.index = index
+            else:
+                levels = []
+                codes = []
+                names = []
+                for by in self._by:
+                    levels.append([])
+                    codes.append([])
+                    names.append(by)
+                mi = MultiIndex(levels, codes)
+                mi.names = names
+                final_result.index = mi
+            return final_result
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
@@ -189,7 +213,6 @@ class Groupby(object):
                 levels.append(level)
                 codes[by] = code
                 names.append(by)
-            from cudf import MultiIndex
             multi_index = MultiIndex(levels=levels,
                                      codes=codes,
                                      names=names)
@@ -204,10 +227,26 @@ class Groupby(object):
         codes = []
         levels.append(self._val_columns)
         levels.append(aggs)
-        codes.append(list(np.zeros(len(aggs), dtype='int64')))
-        codes.append(list(range(len(aggs))))
-        from cudf import MultiIndex
-        result.columns = MultiIndex(levels, codes)
+
+        # if the values columns have length == 1, codes is a nested list of
+        # zeros equal to the size of aggs (sum, min, mean, etc.)
+        # if the values columns are length>1, codes will monotonically
+        # increase by 1 for every n values where n is the number of aggs
+        # [['x,', 'z'], ['sum', 'min']]
+        # codes == [[0, 1], [0, 1]]
+        code_size = max(len(aggs), len(self._val_columns))
+        codes.append(list(np.zeros(code_size, dtype='int64')))
+        codes.append(list(range(code_size)))
+
+        if len(aggs) == 1:
+            # unprefix columns
+            new_cols = []
+            for c in result.columns:
+                new_col = c.split('_')[1]  # sum_z-> (sum, z)
+                new_cols.append(new_col)
+            result.columns = new_cols
+        else:
+            result.columns = MultiIndex(levels, codes)
         return result
 
     def apply_multicolumn_mapped(self, result, aggs):
@@ -219,7 +258,6 @@ class Groupby(object):
             for k in aggs.keys():
                 for v in aggs[k]:
                     tuples.append((k, v))
-            from cudf import MultiIndex
             multiindex = MultiIndex.from_tuples(tuples)
             result.columns = multiindex
         return result
