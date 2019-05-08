@@ -236,7 +236,6 @@ public:
                                bool precomputed_hash = false,
                                hash_value_type precomputed_hash_value = 0)
     {
-        const size_type hashtbl_size    = capacity;
         value_type* hashtbl_values      = m_hashtbl_values;
 
         hash_value_type hash_value{0};
@@ -253,7 +252,7 @@ public:
           hash_value = m_hf(x.first);
         }
 
-        size_type current_index         = hash_value % hashtbl_size;
+        size_type current_index         = hash_value % capacity;
         value_type *current_hash_bucket = &(hashtbl_values[current_index]);
 
         const key_type insert_key = x.first;
@@ -284,18 +283,18 @@ public:
             insert_success = true;
           }
 
-          current_index = (current_index+1)%hashtbl_size;
+          current_index = (current_index+1)%capacity;
           current_hash_bucket = &(hashtbl_values[current_index]);
         }
         
-        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
+        return iterator( m_hashtbl_values,m_hashtbl_values+capacity, current_hash_bucket);
     }
 
-    __device__ thrust::pair<iterator, bool> insert(value_type const& x) {
-      const size_type hashtbl_size = capacity;
+    __device__ 
+    thrust::pair<iterator, bool> insert(value_type const& x) {
       value_type* hashtbl_values = m_hashtbl_values;
       const size_type key_hash = m_hf(x.first);
-      size_type hash_tbl_idx = key_hash % hashtbl_size;
+      size_type hash_tbl_idx = key_hash % capacity;
 
       value_type* it = 0;
 
@@ -326,10 +325,10 @@ public:
             atomicAdd(&m_collisions, 1);
           }
         }
-        hash_tbl_idx = (hash_tbl_idx + 1) % hashtbl_size;
+        hash_tbl_idx = (hash_tbl_idx + 1) % capacity;
       }
 
-      return iterator(m_hashtbl_values, m_hashtbl_values + hashtbl_size, it);
+      return iterator(m_hashtbl_values, m_hashtbl_values + capacity, it);
     }
 
     __forceinline__
