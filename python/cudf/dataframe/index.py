@@ -645,6 +645,9 @@ class StringIndex(GenericIndex):
         result = pd.Index(self.values, name=self.name)
         return result
 
+    def take(self, indices):
+        return columnops.as_column(self._values).element_indexing(indices)
+
     def __repr__(self):
         return "{}({}, dtype='object', name={})".format(
                 self.__class__.__name__, self._values.to_array(), self.name)
