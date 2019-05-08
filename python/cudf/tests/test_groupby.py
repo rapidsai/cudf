@@ -462,10 +462,19 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(['a', 'b', 1], 3),
+            dtype='category'
+            )
+        )
+
     pdf = pd.DataFrame({'x': [1, 2, 3],
                         'y': ['a', 'b', 'c'],
                         'z': ['d', 'e', 'f'],
                         'a': [3, 4, 5]})
+    pdf['b'] = pd_cat
     gdf = cudf.from_pandas(pdf)
     pdg = pdf.groupby('x').sum()
     gdg = gdf.groupby('x').sum()
