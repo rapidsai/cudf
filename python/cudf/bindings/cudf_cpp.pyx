@@ -248,6 +248,13 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     return c_col
 
 
+cpdef uintptr_t column_view_pointer(col):
+    """
+    Return pointer to a view of the underlying <gdf_column*>
+    """
+    return <uintptr_t> column_view_from_column(col)
+
+
 cdef gdf_column_to_column_mem(gdf_column* input_col):
     gdf_dtype = input_col.dtype
     data_ptr = int(<uintptr_t>input_col.data)
