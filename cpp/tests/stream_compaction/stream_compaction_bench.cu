@@ -91,7 +91,7 @@ struct benchmark
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = end-start;
     cudaProfilerStop();
-    std::cout << diff.count() / iters << (shmoo ? "," : " s\n") << std::flush;
+    std::cout << diff.count() / iters << (shmoo ? "," : " s") << std::flush;
   }
 };
 
