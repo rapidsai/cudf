@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.index import Index, StringIndex
-
+from cudf.utils import utils
 
 class MultiIndex(Index):
     """A multi-level or hierarchical index.
@@ -44,6 +44,8 @@ class MultiIndex(Index):
             column_names = names
         # if len(codes) == 0:
         #    raise ValueError('MultiIndex codes can not be empty.')
+        if len(levels) == 0:
+            raise ValueError('Must pass non-zero number of levels/codes')
         import cudf
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame) and\
                 not isinstance(codes[0], (Sequence,
@@ -52,10 +54,9 @@ class MultiIndex(Index):
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
             self.codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
-                if len(code) != 0:
-                    code = np.array(code)
-                    self.codes.add_column(column_names[idx],
-                                          columnops.as_column(code))
+                code = np.array(code)
+                self.codes.add_column(column_names[idx],
+                                      columnops.as_column(code))
         else:
             self.codes = codes
         self.levels = levels
@@ -220,7 +221,6 @@ class MultiIndex(Index):
         elif isinstance(indices, Series):
             indices = indices.to_gpu_array()
         elif isinstance(indices, slice):
-            from cudf.utils import utils
             start, stop, step, sln = utils.standard_python_slice(len(self),
                                                                  indices)
             indices = np.arange(start, stop, step)
@@ -243,11 +243,12 @@ class MultiIndex(Index):
 
     def __getitem__(self, index):
         match = self.take(index)
-        return match
-        # result = []
-        # for level, item in enumerate(match.codes):
-        #    result.append(match.levels[level][match.codes[item][0]])
-        # return tuple(result)
+        if isinstance(index, slice):
+            return match
+        result = []
+        for level, item in enumerate(match.codes):
+            result.append(match.levels[level][match.codes[item][0]])
+        return tuple(result)
 
     @property
     def _values(self):
