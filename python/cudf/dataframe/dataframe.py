@@ -228,7 +228,7 @@ class DataFrame(object):
         if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
+        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, numbers.Integral) or \
            isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
@@ -317,9 +317,8 @@ class DataFrame(object):
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
-        columns = [c for c, dt in self.dtypes.items()
-                   if dt != object and
-                   not pd.api.types.is_categorical_dtype(dt)]
+        columns = [c for c, dt in self.dtypes.items() if dt != object]  # and
+                   # not pd.api.types.is_categorical_dtype(dt)]
         return self[columns]
 
     def assign(self, **kwargs):
@@ -1806,7 +1805,6 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
                             'specified.')
