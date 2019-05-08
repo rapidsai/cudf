@@ -12,6 +12,7 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1687 CSV reader: return an empty dataframe for zero size input
 
 

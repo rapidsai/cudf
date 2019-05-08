@@ -28,7 +28,7 @@
 
 #define TZIF_MAGIC      (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
 
-#define ORC_UTC_OFFSET  1420099200  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
+#define ORC_UTC_OFFSET  1420070400  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
 
 #pragma pack(push, 1)
  /**
@@ -299,9 +299,81 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
 
 
 /**
+ * @brief Returns the gmt offset for a given date
+ *
+ * @param[in] table timezone conversion table
+ * @param[in] ts ORC timestamp
+ *
+ * @return gmt offset
+ **/
+static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
+{
+    uint32_t num_entries = (uint32_t)(table.size() >> 1);
+    uint32_t dst_cycle = 0;
+    int64_t first_transition, last_transition;
+    uint32_t first, last;
+    if (num_entries > 800) // 2 entries/year for 400 years
+    {
+        num_entries -= 800;
+        dst_cycle = 800;
+    }
+    first_transition = table[1];
+    last_transition = table[(num_entries - 1) * 2 + 1];
+    if (ts <= first_transition)
+    {
+        return table[0 * 2 + 2];
+    }
+    else if (ts <= last_transition)
+    {
+        first = 0;
+        last = num_entries - 1;
+    }
+    else if (!dst_cycle)
+    {
+        return table[(num_entries - 1) * 2 + 2];
+    }
+    else
+    {
+        // Apply 400-year cycle rule
+        const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
+        ts %= k400Years;
+        if (ts < 0)
+        {
+            ts += k400Years;
+        }
+        first = num_entries;
+        last = num_entries + dst_cycle - 1;
+        if (ts < table[num_entries * 2 + 1])
+        {
+            return table[last * 2 + 2];
+        }
+    }
+    // Binary search the table from first to last for ts
+    do
+    {
+        uint32_t mid = first + ((last - first + 1) >> 1);
+        int64_t tmid = table[mid * 2 + 1];
+        if (tmid <= ts)
+        {
+            first = mid;
+        }
+        else
+        {
+            if (mid == last)
+            {
+                break;
+            }
+            last = mid;
+        }
+    } while (first < last);
+    return table[first * 2 + 2];
+}
+
+
+/**
  * @brief Creates a transition table to convert ORC timestanps to UTC
  *
- * @param[out] table output table (2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
+ * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
  *
  * @return true if successful, false if failed to find/parse the timezone information
@@ -435,7 +507,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
         }
         fin.close();
         // Allocate transition table, add one entry for ancient rule, and 801 entries for future rules (2 transitions/year)
-        table.resize((1 + (size_t)tzh.timecnt + 400 * 2 + 1) * 2);
+        table.resize((1 + (size_t)tzh.timecnt + 400 * 2 + 1) * 2 + 1);
         earliest_std_idx = 0;
         for (size_t t = 0; t < tzh.timecnt; t++)
         {
@@ -448,8 +520,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
                 return false;
             }
             utcoff = ttype[idx].utcoff;
-            table[(1 + t) * 2 + 0] = ttime;
-            table[(1 + t) * 2 + 1] = utcoff;
+            table[(1 + t) * 2 + 1] = ttime;
+            table[(1 + t) * 2 + 2] = utcoff;
             if (!earliest_std_idx && !ttype[idx].isdst)
             {
                 earliest_std_idx = 1 + t;
@@ -459,10 +531,10 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
         {
             earliest_std_idx = 1;
         }
-        table[0] = table[earliest_std_idx * 2 + 0];
         table[1] = table[earliest_std_idx * 2 + 1];
+        table[2] = table[earliest_std_idx * 2 + 2];
         // Generate entries for times after the last transition
-        future_stdoff = table[(tzh.timecnt * 2) + 1];
+        future_stdoff = table[(tzh.timecnt * 2) + 2];
         future_dstoff = future_stdoff;
         if (posix_tz_string.size() > 0)
         {
@@ -501,20 +573,22 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
             int64_t dst_end_time = GetTransitionTime(&dst_end, year);
             if (dst_start_time < dst_end_time)
             {
-                table[(1 + tzh.timecnt + t) * 2 + 0] = future_time + dst_start_time - future_stdoff;
-                table[(1 + tzh.timecnt + t) * 2 + 1] = future_dstoff;
-                table[(1 + tzh.timecnt + t) * 2 + 2] = future_time + dst_end_time - future_dstoff;
-                table[(1 + tzh.timecnt + t) * 2 + 3] = future_stdoff;
+                table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
+                table[(1 + tzh.timecnt + t) * 2 + 2] = future_dstoff;
+                table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_end_time - future_dstoff;
+                table[(1 + tzh.timecnt + t) * 2 + 4] = future_stdoff;
             }
             else
             {
-                table[(1 + tzh.timecnt + t) * 2 + 0] = future_time + dst_end_time - future_dstoff;
-                table[(1 + tzh.timecnt + t) * 2 + 1] = future_stdoff;
-                table[(1 + tzh.timecnt + t) * 2 + 2] = future_time + dst_start_time - future_stdoff;
-                table[(1 + tzh.timecnt + t) * 2 + 3] = future_dstoff;
+                table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_end_time - future_dstoff;
+                table[(1 + tzh.timecnt + t) * 2 + 2] = future_stdoff;
+                table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_start_time - future_stdoff;
+                table[(1 + tzh.timecnt + t) * 2 + 4] = future_dstoff;
             }
             future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
         }
+        // Add gmt offset
+        table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
     }
     else
     {
