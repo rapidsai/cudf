@@ -791,10 +791,6 @@ class Series(object):
         return Loc(self)
 
     @property
-    def loc(self):
-        return Loc(self)
-
-    @property
     def iloc(self):
         """
         For integer-location based selection.
@@ -1832,7 +1828,9 @@ class Loc(object):
                 return self._sr.iloc[arg]
             # To do this efficiently we need a solution to
             # https://github.com/rapidsai/cudf/issues/1087
-            out = Series([], dtype=self._sr.dtype, index=self._sr.index.__class__([]))
+            out = Series(
+                [], dtype=self._sr.dtype, index=self._sr.index.__class__([])
+            )
             for s in arg:
                 out = out.append(self._sr.loc[s:s], ignore_index=False)
             return out

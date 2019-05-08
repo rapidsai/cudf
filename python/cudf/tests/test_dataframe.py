@@ -495,6 +495,7 @@ def test_series_loc_numerical():
     assert_eq(ps.loc[[True, False, True, False, True]],
               gs.loc[[True, False, True, False, True]])
 
+
 def test_series_loc_string():
     ps = pd.Series([1, 2, 3, 4, 5],
                    index=['one', 'two', 'three', 'four', 'five'])
@@ -510,6 +511,7 @@ def test_series_loc_string():
     assert_eq(ps.loc[[True, False, True, False, True]],
               gs.loc[[True, False, True, False, True]])
 
+
 def test_series_loc_datetime():
     ps = pd.Series([1, 2, 3, 4, 5],
                    index=pd.date_range('20010101', '20010105'))
@@ -523,12 +525,14 @@ def test_series_loc_datetime():
     assert_eq(ps.loc[np.datetime64('2001-01-01')],
               gs.loc[np.datetime64('2001-01-01')])
 
-    assert_eq(ps.loc['2001-01-02':'2001-01-05'], gs.loc['2001-01-02':'2001-01-05'])
+    assert_eq(ps.loc['2001-01-02':'2001-01-05'],
+              gs.loc['2001-01-02':'2001-01-05'])
     assert_eq(ps.loc['2001-01-02':], gs.loc['2001-01-02':])
     assert_eq(ps.loc[:'2001-01-04'], gs.loc[:'2001-01-04'])
     assert_eq(ps.loc[::2], gs.loc[::2])
-    #assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
-    #          gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
+    #
+    # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
+    #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
     # looks like a bug in Pandas doesn't let us check for the above,
     # so instead:
     assert_eq(

@@ -800,8 +800,6 @@ def gpu_mark_seg_segments(begins, markers):
 # https://github.com/numba/numba-examples/
 @cuda.jit
 def gpu_min_max(arr, min_max_array):
-    nelements = arr.shape[0]
-
     start = cuda.grid(1)
     stride = cuda.gridsize(1)
 
@@ -1017,5 +1015,3 @@ def boolean_array_to_index_array(bool_array):
     indices = arange(len(bool_array))
     _, selinds = copy_to_dense(indices, mask=boolbits)
     return selinds
-
-

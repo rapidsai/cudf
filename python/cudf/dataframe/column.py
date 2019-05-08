@@ -44,7 +44,6 @@ class Column(object):
     def _concat(cls, objs, dtype=None):
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
-        from cudf.dataframe.numerical import NumericalColumn, numeric_normalize_types
 
         if len(objs) == 0:
             if pd.api.types.is_categorical_dtype(dtype):
@@ -73,10 +72,6 @@ class Column(object):
                 [val for o in objs for val in o.cat().categories]
             ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
-
-        # Handle numeric dtypes
-        #if all(isinstance(o, NumericalColumn) for o in objs):
-        #    objs = numeric_normalize_types(*objs)
 
         head = objs[0]
         for o in objs:

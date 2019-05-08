@@ -568,8 +568,9 @@ class StringColumn(columnops.TypedColumnBase):
         # TODO ugly hack below: need np.int32 because
         # numba.cuda.atomic.min/max don't support int8
         found_indices_bits = cudautils.compact_mask_bytes(found_indices)
-        found_indices = cudautils.expand_mask_bits(found_indices.size, found_indices_bits)
-
+        found_indices = cudautils.expand_mask_bits(
+            found_indices.size, found_indices_bits
+        )
         first = columnops.as_column(found_indices).find_first_value(1)
         last = columnops.as_column(found_indices).find_last_value(1)
         return first, last
