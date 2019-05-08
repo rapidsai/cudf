@@ -481,7 +481,7 @@ def test_dataframe_loc_outbound():
     np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
 
 
-def test_series_loc():
+def test_series_loc_numerical():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
     gs = Series.from_pandas(ps)
 
@@ -489,8 +489,13 @@ def test_series_loc():
     assert_eq(ps.loc[6], gs.loc[6])
     assert_eq(ps.loc[6:8], gs.loc[6:8])
     assert_eq(ps.loc[:8], gs.loc[:8])
+    assert_eq(ps.loc[6:], gs.loc[6:])
+    assert_eq(ps.loc[::2], gs.loc[::2])
     assert_eq(ps.loc[[5, 8, 9]], gs.loc[[5, 8, 9]])
+    assert_eq(ps.loc[[True, False, True, False, True]],
+              gs.loc[[True, False, True, False, True]])
 
+def test_series_loc_string():
     ps = pd.Series([1, 2, 3, 4, 5],
                    index=['one', 'two', 'three', 'four', 'five'])
     gs = Series.from_pandas(ps)
@@ -498,23 +503,52 @@ def test_series_loc():
     assert_eq(ps.loc['one'], gs.loc['one'])
     assert_eq(ps.loc['one'], gs.loc['one'])
     assert_eq(ps.loc['two':'four'], gs.loc['two':'four'])
+    assert_eq(ps.loc[:'four'], gs.loc[:'four'])
     assert_eq(ps.loc['two':], gs.loc['two':])
+    assert_eq(ps.loc[::2], gs.loc[::2])
     assert_eq(ps.loc[['one', 'four', 'five']], gs.loc[['one', 'four', 'five']])
+    assert_eq(ps.loc[[True, False, True, False, True]],
+              gs.loc[[True, False, True, False, True]])
 
+def test_series_loc_datetime():
     ps = pd.Series([1, 2, 3, 4, 5],
                    index=pd.date_range('20010101', '20010105'))
     gs = Series.from_pandas(ps)
 
+    # a few different ways of specifying a datetime label:
     assert_eq(ps.loc['20010101'], gs.loc['20010101'])
     assert_eq(ps.loc['2001-01-01'], gs.loc['2001-01-01'])
-    #assert_eq(ps.loc[pd.to_datetime('2001-01-01')],
-    #          gs.loc[pd.to_datetime('2001-01-01')]
+    assert_eq(ps.loc[pd.to_datetime('2001-01-01')],
+              gs.loc[pd.to_datetime('2001-01-01')])
+    assert_eq(ps.loc[np.datetime64('2001-01-01')],
+              gs.loc[np.datetime64('2001-01-01')])
+
     assert_eq(ps.loc['2001-01-02':'2001-01-05'], gs.loc['2001-01-02':'2001-01-05'])
     assert_eq(ps.loc['2001-01-02':], gs.loc['2001-01-02':])
     assert_eq(ps.loc[:'2001-01-04'], gs.loc[:'2001-01-04'])
-    # looks like a bug in Pandas doesn't let us check for this:
+    assert_eq(ps.loc[::2], gs.loc[::2])
     #assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
     #          gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
+    # looks like a bug in Pandas doesn't let us check for the above,
+    # so instead:
+    assert_eq(
+        ps.loc[
+            [
+                pd.to_datetime("2001-01-01"),
+                pd.to_datetime("2001-01-04"),
+                pd.to_datetime("2001-01-05"),
+            ]
+        ],
+        gs.loc[
+            [
+                pd.to_datetime("2001-01-01"),
+                pd.to_datetime("2001-01-04"),
+                pd.to_datetime("2001-01-05"),
+            ]
+        ],
+    )
+    assert_eq(ps.loc[[True, False, True, False, True]],
+              gs.loc[[True, False, True, False, True]])
 
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
