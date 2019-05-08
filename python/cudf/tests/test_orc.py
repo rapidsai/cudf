@@ -104,3 +104,21 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
     pdf = pdf[skip_rows:skip_rows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)
+
+
+@pytest.mark.parametrize('inputfile', ['TestOrcFile.testDate1900.orc',
+                                       'TestOrcFile.testDate2038.orc'])
+def test_orc_reader_datetimestamp(datadir, inputfile):
+    path = datadir / inputfile
+    orcfile = pa.orc.ORCFile(path)
+
+    pdf = orcfile.read().to_pandas(date_as_object=False)
+    gdf = cudf.read_orc(path, engine='cudf')
+
+    # cuDF DatetimeColumn currenly only supports millisecond units
+    # Convert to lesser precision for comparison
+    timedelta = np.timedelta64(1, 'ms').astype('timedelta64[ns]')
+    pdf['time'] = pdf['time'].astype(np.int64) // timedelta.astype(np.int64)
+    gdf['time'] = gdf['time'].astype(np.int64)
+
+    assert_eq(pdf, gdf, check_categorical=False)
