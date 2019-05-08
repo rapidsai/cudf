@@ -1771,7 +1771,7 @@ class DataFrame(object):
         return df
 
     def groupby(self, by=None, sort=False, as_index=True, method="hash",
-                level=None):
+                level=None, group_keys=True):
         """Groupby
 
         Parameters
@@ -1806,6 +1806,10 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
 
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
