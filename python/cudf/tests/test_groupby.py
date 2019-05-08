@@ -58,7 +58,8 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
 
 @pytest.mark.parametrize('as_index', [True, False])
 def test_groupby_as_index_multiindex(pdf, gdf, as_index):
-    pdf = pd.DataFrame({'a': [1, 2, 1], 'b': [3, 3, 3], 'c': [2, 2, 3], 'd': [3, 1, 2]})
+    pdf = pd.DataFrame({'a': [1, 2, 1], 'b': [3, 3, 3],
+                        'c': [2, 2, 3], 'd': [3, 1, 2]})
     gdf = cudf.from_pandas(pdf)
 
     gdf = gdf.groupby(['a', 'b'], as_index=as_index).agg({'c': 'mean'})
