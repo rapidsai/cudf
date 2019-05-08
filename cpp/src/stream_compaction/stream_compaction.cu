@@ -415,14 +415,16 @@ gdf_column apply_boolean_mask(gdf_column const *input,
  *
  */
 gdf_column drop_nulls(gdf_column const *input) {
-  CUDF_EXPECTS(nullptr != input, "Null input");
+  CUDF_EXPECTS(nullptr != input && nullptr != input->data, "Null input");
 
-  // no null mask, just copy the data
-  if (input->valid == nullptr) {
-
-  }
-  else
+  if (input->valid != nullptr)
     return apply_filter(input, valid_element{input});
+  else {
+    // no null mask, just copy the data
+    gdf_column output;
+    gdf_column_view(&output, 0, 0, 0, input->dtype);
+    return output;
+  }
 }
 
 }  // namespace cudf
