@@ -139,6 +139,8 @@
 - PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
+- PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
+
 
 
 # cuDF 0.6.1 (25 Mar 2019)
