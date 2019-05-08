@@ -17,7 +17,7 @@ import cudf.bindings.copying as cpp_copying
 
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
-from cudf.bindings.cudf_cpp import count_nonzero_mask
+from cudf.bindings.cudf_cpp import count_nonzero_mask, column_view_pointer
 from cudf.bindings.concat import _column_concat
 
 
@@ -590,3 +590,10 @@ class Column(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @property
+    def _pointer(self):
+        """
+        Return pointer to a view of the underlying data structure
+        """
+        return column_view_pointer(self)
