@@ -248,7 +248,8 @@ struct scatter_functor
                   gdf_column const & input_column,
                   gdf_size_type  *block_offsets,
                   Filter filter,
-                  bool has_valid) {
+                  bool has_valid,
+                  cudaStream_t stream = 0) {
     cudf::util::cuda::grid_config_1d grid{input_column.size,
                                           block_size, per_thread};
     
@@ -258,8 +259,8 @@ struct scatter_functor
 
     gdf_size_type *null_count = nullptr;
     if (has_valid) {
-      RMM_ALLOC(&null_count, sizeof(gdf_size_type), 0);
-      CUDA_TRY(cudaMemset(null_count, 0, sizeof(gdf_size_type)));
+      RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
+      CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(gdf_size_type), stream));
     }
 
     bit_mask_t * __restrict__ output_valid =
@@ -267,18 +268,15 @@ struct scatter_functor
     bit_mask_t const * __restrict__ input_valid =
       reinterpret_cast<bit_mask_t*>(input_column.valid);
 
-    scatter<<<grid.num_blocks, block_size>>>(static_cast<T*>(output_column.data),
-                                             output_valid,
-                                             null_count,
-                                             static_cast<T const*>(input_column.data),
-                                             input_valid,
-                                             block_offsets,
-                                             filter);
+    scatter<<<grid.num_blocks, block_size, 0, stream>>>
+      (static_cast<T*>(output_column.data), output_valid, null_count,
+       static_cast<T const*>(input_column.data), input_valid,
+       block_offsets, filter);
 
     if (has_valid) {
-      CUDA_TRY(cudaMemcpy(&output_column.null_count, null_count,
-                          sizeof(gdf_size_type), cudaMemcpyDefault));
-      RMM_FREE(null_count, 0);
+      CUDA_TRY(cudaMemcpyAsync(&output_column.null_count, null_count,
+                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+      RMM_FREE(null_count, stream);
     }
   }
 };
@@ -287,15 +285,17 @@ struct scatter_functor
 // last block's offset and the last block's pass count
 gdf_size_type get_output_size(gdf_size_type *block_counts,
                               gdf_size_type *block_offsets,
-                              gdf_size_type num_blocks)
+                              gdf_size_type num_blocks,
+                              cudaStream_t stream = 0)
 {
   gdf_size_type last_block_count = 0;
-  cudaMemcpy(&last_block_count, &block_counts[num_blocks - 1],
-             sizeof(gdf_size_type), cudaMemcpyDefault);
+  cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
+                  sizeof(gdf_size_type), cudaMemcpyDefault, stream);
   gdf_size_type last_block_offset = 0;
   if (num_blocks > 1)
-    cudaMemcpy(&last_block_offset, &block_offsets[num_blocks - 1],
-               sizeof(gdf_size_type), cudaMemcpyDefault);
+    cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
+                    sizeof(gdf_size_type), cudaMemcpyDefault, stream);
+  cudaStreamSynchronize(stream);
   return last_block_count + last_block_offset;
 }
 
@@ -312,7 +312,8 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
  * intra-block scan inside the kernel that scatters the output
  */
 template <typename Filter>
-gdf_column apply_filter(gdf_column const &input, Filter filter) {
+gdf_column apply_filter(gdf_column const &input, Filter filter, 
+                        cudaStream_t stream = 0) {
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
   
   constexpr int block_size = 256;
@@ -320,46 +321,44 @@ gdf_column apply_filter(gdf_column const &input, Filter filter) {
   cudf::util::cuda::grid_config_1d grid{input.size, block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
-  gdf_size_type *block_counts = nullptr;
-  RMM_ALLOC(&block_counts, 2 * grid.num_blocks * sizeof(gdf_size_type), 0);
+  rmm::device_vector<gdf_size_type> temp_counts(2 * grid.num_blocks);
+  gdf_size_type *block_counts = thrust::raw_pointer_cast(temp_counts.data());
   gdf_size_type *block_offsets = block_counts + grid.num_blocks;
 
   // 1. Find the count of elements in each block that "pass" the mask
   compute_block_counts<Filter, block_size, per_thread>
-    <<<grid.num_blocks, block_size>>>(block_counts, filter);
+    <<<grid.num_blocks, block_size, 0, stream>>>(block_counts, filter);
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
     // Determine and allocate temporary device storage
-    void *d_temp_storage = NULL;
+    void *d_temp_storage = nullptr;
     size_t temp_storage_bytes = 0;
-    cub::DeviceScan::ExclusiveSum(d_temp_storage,
-                                  temp_storage_bytes,
-                                  block_counts,
-                                  block_offsets,
-                                  grid.num_blocks);
-    RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0);
+    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+                                  block_counts, block_offsets,
+                                  grid.num_blocks, stream);
+    RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream);
 
     // Run exclusive prefix sum
-    cub::DeviceScan::ExclusiveSum(d_temp_storage,
-                                  temp_storage_bytes,
-                                  block_counts,
-                                  block_offsets,
-                                  grid.num_blocks);
+    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+                                  block_counts, block_offsets,
+                                  grid.num_blocks, stream);
+    RMM_FREE(d_temp_storage, stream);
   }
   else {
-    cudaMemset(block_offsets, 0, grid.num_blocks * sizeof(gdf_size_type));
+    cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(gdf_size_type),
+                    stream);
   }
 
-  CHECK_STREAM(0);
-
-  // 3. compute the output size from the last block's offset + count
-  gdf_size_type output_size = 
-    get_output_size(block_counts, block_offsets, grid.num_blocks);
+  CHECK_STREAM(stream);
 
   gdf_column output;
   gdf_column_view(&output, 0, 0, 0, input.dtype);
   output.dtype_info = input.dtype_info;
+
+  // 3. compute the output size from the last block's offset + count
+  gdf_size_type output_size = 
+    get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
 
   if (output_size > 0) {    
     // Allocate/initialize output column
@@ -367,12 +366,12 @@ gdf_column apply_filter(gdf_column const &input, Filter filter) {
 
     void *data = nullptr;
     gdf_valid_type *valid = nullptr;
-    RMM_ALLOC(&data, output_size * column_byte_width, 0);
+    RMM_ALLOC(&data, output_size * column_byte_width, stream);
 
     if (input.valid != nullptr) {
       gdf_size_type bytes = gdf_valid_allocation_size(output_size);
-      RMM_ALLOC(&valid, bytes, 0);
-      CUDA_TRY(cudaMemset(valid, 0, bytes));
+      RMM_ALLOC(&valid, bytes, stream);
+      CUDA_TRY(cudaMemsetAsync(valid, 0, bytes, stream));
     }
 
     CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, data, valid,
@@ -382,13 +381,10 @@ gdf_column apply_filter(gdf_column const &input, Filter filter) {
     // 4. Scatter the output data and valid mask
     cudf::type_dispatcher(output.dtype,
                           scatter_functor<Filter, block_size, per_thread>{},
-                          output,
-                          input,
-                          block_offsets,
-                          filter,
-                          input.valid != nullptr);
+                          output, input, block_offsets, filter,
+                          input.valid != nullptr, stream);
 
-    CHECK_STREAM(0);
+    CHECK_STREAM(stream);
   }
   return output;
 }
