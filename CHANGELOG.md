@@ -134,9 +134,9 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1639 Fix bug caused by empty groupbys throwing an exception
 - PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n) 
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
+- PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
 
 
 # cuDF 0.6.1 (25 Mar 2019)
