@@ -407,9 +407,7 @@ def test_advanced_groupby_levels():
     gdh = gdg.groupby(level=1).sum()
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(['x', 'y', 'z']).sum()
-    with pytest.raises(ValueError) as raises:
-        gdg = gdf.groupby(['x', 'y', 'z']).sum()
-    raises.match("Groupby result is empty!")
+    gdg = gdf.groupby(['x', 'y', 'z']).sum()
     pdg = pdf.groupby(['z']).sum()
     gdg = gdf.groupby(['z']).sum()
     assert_eq(pdg, gdg)
@@ -456,3 +454,19 @@ def test_list_of_series():
     pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
     gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
     assert_eq(pdg, gdg)
+
+
+@pytest.mark.parametrize('func', [
+    lambda df: df.groupby(['x', 'y', 'z']).sum(),
+    lambda df: df.groupby(['x', 'y']).sum(),
+    lambda df: df.groupby(['x', 'y']).agg('sum'),
+    lambda df: df.groupby(['y']).sum(),
+    lambda df: df.groupby(['y']).agg('sum'),
+    lambda df: df.groupby(['x']).sum(),
+    lambda df: df.groupby(['x']).agg('sum'),
+    lambda df: df.groupby(['x', 'y']).z.sum(),
+])
+def test_empty_groupby(func):
+    pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(func(pdf), func(gdf))
