@@ -32,9 +32,10 @@
 #include <cassert>
 #include <iostream>
 #include <thrust/pair.h>
+#include <limits>
 
 /**
- * Does support concurrent insert, but not concurrent insert and probping.
+ * Supports concurrent insert, but not concurrent insert and find.
  *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
@@ -42,10 +43,9 @@
  */
 template <typename Key,
           typename Element,
-          Key unused_key,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-          typename Allocator = managed_allocator<thrust::pair<Key, Element> >>
+          typename Allocator = legacy_allocator<thrust::pair<Key, Element> >>
 class concurrent_unordered_map : public managed
 {
 
@@ -55,8 +55,8 @@ public:
     using key_equal = Equality;
     using allocator_type = Allocator;
     using key_type = Key;
-    using value_type = thrust::pair<Key, Element>;
     using mapped_type = Element;
+    using value_type = thrust::pair<Key, Element>;
     using iterator = cycle_iterator_adapter<value_type*>;
     using const_iterator = const cycle_iterator_adapter<value_type*>;
 
@@ -70,11 +70,12 @@ private:
 public:
 
     explicit concurrent_unordered_map(size_type n,
-                                      const mapped_type unused_element,
+                                      const mapped_type unused_element = std::numeric_limits<key_type>::max(),
+                                      const key_type unused_key = std::numeric_limits<key_type>::max(),
                                       const Hasher& hf = hasher(),
                                       const Equality& eql = key_equal(),
                                       const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a), capacity(n), m_unused_element(unused_element)
+        : m_hf(hf), m_equal(eql), m_allocator(a), capacity(n), m_unused_element(unused_element), m_unused_key(unused_key)
     {
         m_hashtbl_values = m_allocator.allocate( capacity );
         constexpr int block_size = 128;
@@ -89,7 +90,7 @@ public:
             }
         }
         
-        init_hashtbl<<<((capacity-1)/block_size)+1,block_size>>>( m_hashtbl_values, capacity, unused_key, m_unused_element );
+        init_hashtbl<<<((capacity-1)/block_size)+1,block_size>>>( m_hashtbl_values, capacity, m_unused_key, m_unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
     }
@@ -98,33 +99,26 @@ public:
     {
         m_allocator.deallocate( m_hashtbl_values, capacity );
     }
-    
-     __device__ iterator begin()
-    {
-        return iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values );
+
+    __device__ iterator begin() {
+      return iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                      m_hashtbl_values);
     }
-     __device__ const_iterator begin() const
-    {
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values );
+    __device__ const_iterator begin() const {
+      return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                            m_hashtbl_values);
     }
-     __device__ iterator end()
-    {
-        return iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values+capacity );
+    __device__ iterator end() {
+      return iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                      m_hashtbl_values + capacity);
     }
-     __device__ const_iterator end() const
-    {
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values+capacity );
+    __device__ const_iterator end() const {
+      return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                            m_hashtbl_values + capacity);
     }
-     __device__ value_type* data() const
-    {
-      return m_hashtbl_values;
-    }
-    
-    __forceinline__
-    static constexpr __host__ __device__ key_type get_unused_key()
-    {
-        return unused_key;
-    }
+    __device__ value_type* data() const { return m_hashtbl_values; }
+
+    __host__ __device__ key_type get_unused_key() const { return m_unused_key; }
 
     // Generic update of a hash table value for any aggregator
     template <typename aggregation_type>
@@ -264,9 +258,9 @@ public:
           mapped_type& existing_value = current_hash_bucket->second;
 
           // Try and set the existing_key for the current hash bucket to insert_key
-          const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
+          const key_type old_key = atomicCAS( &existing_key, m_unused_key, insert_key);
 
-          // If old_key == unused_key, the current hash bucket was empty
+          // If old_key == m_unused_key, the current hash bucket was empty
           // and existing_key was updated to insert_key by the atomicCAS. 
           // If old_key == insert_key, this key has already been inserted. 
           // In either case, perform the atomic aggregation of existing_value and insert_value
@@ -275,7 +269,7 @@ public:
           // has its initial value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          if ( keys_equal( unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
+          if ( keys_equal( m_unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
 
             update_existing_value(existing_value, x, op);
 
@@ -318,10 +312,10 @@ public:
       // single CAS
       while (true) {
         const key_type old_key =
-            atomicCAS(&(current_bucket->first), unused_key, insert_pair.first);
+            atomicCAS(&(current_bucket->first), m_unused_key, insert_pair.first);
 
         // Hash bucket empty
-        if (m_equal(unused_key, old_key)) {
+        if (m_equal(m_unused_key, old_key)) {
           current_bucket->second = insert_pair.second;
           new_insert = true;
           break;
@@ -346,9 +340,12 @@ public:
 
     /**---------------------------------------------------------------------------*
      * @brief Searches the map for the specified key.
-     * 
+     *
+     * @note `find` is not threadsafe with `insert`. I.e., it is not safe to do
+     * concurrent `insert` and `find` operations.
+     *
      * @param k The key to search for
-     * @return An iterator to the key if it exists, else map.end() 
+     * @return An iterator to the key if it exists, else map.end()
      *---------------------------------------------------------------------------**/
     __device__ const_iterator find(key_type const& k) const {
       size_type const key_hash = m_hf(k);
@@ -363,7 +360,7 @@ public:
           return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
                                 current_bucket);
         }
-        if (m_equal(unused_key, existing_key)) {
+        if (m_equal(m_unused_key, existing_key)) {
           return this->end();
         }
         index = (index + 1) % capacity;
@@ -389,7 +386,7 @@ public:
     void clear_async( cudaStream_t stream = 0 ) 
     {
         constexpr int block_size = 128;
-        init_hashtbl<<<((capacity-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, capacity, unused_key, m_unused_element );
+        init_hashtbl<<<((capacity-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, capacity, m_unused_key, m_unused_element );
     }
     
     void print()
@@ -412,18 +409,18 @@ public:
 
         return GDF_SUCCESS;
     }
-    
-private:
-    const hasher            m_hf;
-    const key_equal         m_equal;
 
-    const mapped_type       m_unused_element;
-    
-    allocator_type              m_allocator;
-    
-    size_type   capacity;
+   private:
+    hasher const m_hf;
+    key_equal const m_equal;
+
+    mapped_type const m_unused_element;
+    key_type const m_unused_key;
+
+    allocator_type m_allocator;
+
+    size_type capacity;
     value_type* m_hashtbl_values;
-    
 };
 
 #endif //CONCURRENT_UNORDERED_MAP_CUH
