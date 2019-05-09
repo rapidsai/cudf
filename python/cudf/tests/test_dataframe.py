@@ -565,7 +565,12 @@ def test_series_loc_categorical():
     assert_eq(ps.loc[:'d'], gs.loc[:'d'])
     assert_eq(ps.loc['b':], gs.loc['b':])
     assert_eq(ps.loc[::2], gs.loc[::2])
-    assert_eq(ps.loc[['a', 'd', 'e']], gs.loc[['a', 'd', 'e']])
+
+    # order of categories changes, so we can only
+    # compare values:
+    assert_eq(ps.loc[['a', 'd', 'e']].values,
+              gs.loc[['a', 'd', 'e']].to_array())
+
     assert_eq(ps.loc[[True, False, True, False, True]],
               gs.loc[[True, False, True, False, True]])
 
