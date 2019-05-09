@@ -1376,7 +1376,7 @@ class Series(object):
         mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
         return Series(mod_vals)
 
-    def quantile(self, q, interpolation='linear', exact=True,
+    def quantile(self, q=0.5, interpolation='linear', exact=True,
                  quant_index=True):
         """
         Return values at the given quantile.
@@ -1568,7 +1568,13 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, group_series=None, level=None, sort=False):
+    def groupby(self, group_series=None, level=None, sort=False,
+                group_keys=True):
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
+
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
 

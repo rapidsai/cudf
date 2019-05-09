@@ -5,6 +5,7 @@ import pytest
 import cudf
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
@@ -55,9 +56,32 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize('as_index', [True, False])
+def test_groupby_as_index_multiindex(pdf, gdf, as_index):
+    pdf = pd.DataFrame({'a': [1, 2, 1], 'b': [3, 3, 3],
+                        'c': [2, 2, 3], 'd': [3, 1, 2]})
+    gdf = cudf.from_pandas(pdf)
+
+    gdf = gdf.groupby(['a', 'b'], as_index=as_index).agg({'c': 'mean'})
+    pdf = pdf.groupby(['a', 'b'], as_index=as_index).agg({'c': 'mean'})
+
+    if as_index:
+        assert_eq(pdf, gdf)
+    else:
+        # column names don't match - check just the values
+        for gcol, pcol in zip(gdf, pdf):
+            assert_array_equal(gdf[gcol].to_array(), pdf[pcol].values)
+
+
 def test_groupby_default(pdf, gdf):
     gdf = gdf.groupby('y').agg({'x': 'mean'})
     pdf = pdf.groupby('y').agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_group_keys_true(pdf, gdf):
+    gdf = gdf.groupby('y', group_keys=True).sum()
+    pdf = pdf.groupby('y', group_keys=True).sum()
     assert_eq(pdf, gdf)
 
 
@@ -383,9 +407,7 @@ def test_advanced_groupby_levels():
     gdh = gdg.groupby(level=1).sum()
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(['x', 'y', 'z']).sum()
-    with pytest.raises(ValueError) as raises:
-        gdg = gdf.groupby(['x', 'y', 'z']).sum()
-    raises.match("Groupby result is empty!")
+    gdg = gdf.groupby(['x', 'y', 'z']).sum()
     pdg = pdf.groupby(['z']).sum()
     gdg = gdf.groupby(['z']).sum()
     assert_eq(pdg, gdg)
@@ -423,6 +445,42 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
 
 
+@pytest.mark.parametrize('func', [
+    lambda df: df.groupby(['x', 'y', 'z']).sum(),
+    lambda df: df.groupby(['x', 'y']).sum(),
+    lambda df: df.groupby(['x', 'y']).agg('sum'),
+    lambda df: df.groupby(['y']).sum(),
+    lambda df: df.groupby(['y']).agg('sum'),
+    lambda df: df.groupby(['x']).sum(),
+    lambda df: df.groupby(['x']).agg('sum'),
+    lambda df: df.groupby(['x', 'y']).z.sum(),
+])
+def test_empty_groupby(func):
+    pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(func(pdf), func(gdf))
+
+
+def test_groupby_unsupported_columns():
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(['a', 'b', 1], 3),
+            dtype='category'
+            )
+        )
+
+    pdf = pd.DataFrame({'x': [1, 2, 3],
+                        'y': ['a', 'b', 'c'],
+                        'z': ['d', 'e', 'f'],
+                        'a': [3, 4, 5]})
+    pdf['b'] = pd_cat
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby('x').sum()
+    gdg = gdf.groupby('x').sum()
+    assert_eq(pdg, gdg)
+
+
 def test_list_of_series():
     pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1]})
     gdf = cudf.from_pandas(pdf)
@@ -431,4 +489,5 @@ def test_list_of_series():
     assert_eq(pdg, gdg)
     pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
     gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
+    pytest.skip()
     assert_eq(pdg, gdg)

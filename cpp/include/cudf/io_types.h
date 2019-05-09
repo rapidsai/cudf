@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,3 +215,34 @@ typedef struct {
   bool          strings_to_categorical;     ///< In: If TRUE, returns string data as GDF_CATEGORY, otherwise GDF_STRING
 
 } pq_read_arg;
+
+/**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_json interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_column*
+  int           *index_col;                 ///< Out: If available, column index to use as row labels
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  int           num_cols;                   ///< Number of columns in the dtype array
+  const char    **dtype;                    ///< Ordered List of data types
+
+  char          *compression;               ///< Compression type ("none", "infer", "gzip", "zip"); set to nullptr for uncompressed input
+
+  bool          lines;                      ///< Read the file as a json object per line
+
+  size_t        byte_range_offset;          ///< offset of the byte range to read.
+  size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
+                                            Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
+} json_read_arg;

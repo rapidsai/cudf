@@ -13,18 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
-#include <stdint.h>
-#include <vector>
 
+#include <string>
 
- /**
-  * @brief Creates a transition table to convert ORC timestanps to UTC
-  *
-  * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
-  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
-  *
-  * @return true if successful, false if failed to find/parse the timezone information
-  **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
+#include "cudf.h"
 
+/*
+ * @brief Convert dtype strings into gdf_dtype enum;
+ *
+ * Returns GDF_invalid if the input string is not a valid dtype string
+ */
+gdf_dtype convertStringToDtype(const std::string &dtype);
