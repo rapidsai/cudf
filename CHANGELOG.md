@@ -12,6 +12,9 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
+- PR #1683 ORC reader: fix timestamp conversion to UTC
+- PR #1613 Improve CategoricalColumn.fillna(-1) performance
 
 
 # cuDF 0.7.0 (Date TBD)
@@ -156,8 +159,9 @@
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
-- PR #1613 Improve CategoricalColumn.fillna(-1) performance
-
+- PR #1656 Correct Groupby failure in dask when un-aggregable columns are left in dataframe.
+- PR #1689 Fix groupby performance regression
+- PR #1694 Add Cython as a runtime dependency since it's required in `setup.py`
 
 
 # cuDF 0.6.1 (25 Mar 2019)
