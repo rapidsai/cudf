@@ -206,6 +206,39 @@ struct elements_are_equal {
 }  // namespace
 
 
+struct equality_comparator {
+
+  equality_comparator(device_table const& lhs, bool nulls_are_equal = false) :
+                            _lhs(lhs), _rhs(lhs), _nulls_are_equal(nulls_are_equal) {
+  }
+  equality_comparator(device_table const& lhs, device_table const& rhs, 
+                                                  bool nulls_are_equal = false) :
+                            _lhs(lhs), _rhs(rhs), _nulls_are_equal(nulls_are_equal) {
+  }
+
+  __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index) {
+
+    bool nulls_are_equal = this->_nulls_are_equal;
+    auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
+                            gdf_column const& l, gdf_column const& r) {
+    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index, r,
+                                 rhs_index, nulls_are_equal);
+    };
+
+    return thrust::equal(thrust::seq, _lhs.begin(), _lhs.end(), _rhs.begin(),
+                        equal_elements);
+  }
+
+  private:
+
+    device_table const _lhs;
+    device_table const _rhs;
+    bool _nulls_are_equal;    
+    
+};
+
+
+
 /**
  * @brief  Checks for equality between two rows between two tables.
  *

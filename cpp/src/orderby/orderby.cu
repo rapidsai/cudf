@@ -98,18 +98,11 @@ gdf_error gdf_order_by(gdf_column** cols,
   GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
     
   bool nulls_are_smallest = false;
-  bool null_as_largest_for_multisort = false;
   if (context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST) {
   /* When sorting NULLS will be treated as the smallest number */
     nulls_are_smallest = true;
-  } else if (context->flag_null_sort_behavior == GDF_NULL_AS_LARGEST_FOR_MULTISORT) {
-  /* When sorting a multi column data set, if there is a NULL in any of the
-       columns for a row, then that row will be will be treated as the largest number */
-    null_as_largest_for_multisort = true;
-  }
-  // if using null_as_largest_for_multisort = true, then you cant set ascending descending order (asc_desc)
-  GDF_REQUIRE(((null_as_largest_for_multisort && (nullptr == asc_desc)) || !null_as_largest_for_multisort), GDF_INVALID_API_CALL);
-
+  } 
+  
   cudaStream_t stream = NULL;
   gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
   gdf_size_type nrows = cols[0]->size;
@@ -118,24 +111,10 @@ gdf_error gdf_order_by(gdf_column** cols,
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
 
-  if (table->has_nulls()){
-    if (null_as_largest_for_multisort) {    
-      less_with_nulls_always_false_comparator ineq_op(*table); 
-      thrust::sort(rmm::exec_policy(stream)->on(stream),
-                    d_indx, d_indx+nrows,
-                    ineq_op);				     
-    } else {  
-      inequality_with_nulls_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
-      thrust::sort(rmm::exec_policy(stream)->on(stream),
-                    d_indx, d_indx+nrows,
-                    ineq_op);				        
-    } 
-  } else {
-    inequality_comparator ineq_op(*table, asc_desc); 
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                    d_indx, d_indx+nrows,
-                    ineq_op);		
-  }
-
+  inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
+  thrust::sort(rmm::exec_policy(stream)->on(stream),
+                d_indx, d_indx+nrows,
+                ineq_op);				        
+  
   return GDF_SUCCESS;
 }

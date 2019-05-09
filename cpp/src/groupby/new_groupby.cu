@@ -12,7 +12,8 @@
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 #include "string/nvcategory_util.hpp"
-#include "sqls/sqls_rtti_comp.h"
+#include "table/device_table.cuh"
+
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -238,8 +239,6 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   void** d_col_data = d_cols.data().get();
   int* d_col_types = d_types.data().get();
 
-  bool nulls_are_smallest = (context.flag_null_sort_behavior == GDF_NULL_AS_SMALLEST);
-
   gdf_index_type* result_end;
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -247,35 +246,14 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 
   rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
-  if (cudf::has_nulls(input_table)){
-    rmm::device_vector<gdf_valid_type*> d_valids(ncols);
-    gdf_valid_type** d_valids_data = d_valids.data().get();
+  auto device_input_table = device_table::create(input_table);
+  auto comp = equality_comparator(*device_input_table, true);
 
-    soa_col_info(input_table.begin(), ncols, d_col_data, d_valids_data, d_col_types);
+  auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
 
-    LesserRTTI<gdf_size_type> comp(d_col_data, d_valids_data, d_col_types, nullptr, ncols, nulls_are_smallest);
-
-    auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
-
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
-                              [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
-                              return comp.equal_with_nulls(key1, key2);
-                            });
-
-  } else {
-    soa_col_info(input_table.begin(), ncols, d_col_data, nullptr, d_col_types);
-
-    LesserRTTI<gdf_size_type> comp(d_col_data, nullptr, d_col_types, nullptr, ncols, nulls_are_smallest);
-
-    auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
-
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
-                              [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
-                              return comp.equal(key1, key2);
-                            });
-  }
+  result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
+                            unique_indices.data().get(),
+                            comp);
 
   unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
 
@@ -320,22 +298,39 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
                           &sorted_indices_col,
                           context));
   } else {  // Pandas style
-    gdf_context temp_ctx;
-    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT;
 
-    CUDF_TRY(gdf_order_by(key_col_table.begin(),
+    // Pandas style ignores groups that have nulls in their keys, so we want to filter them out.
+    // We will create a bitmask (key_cols_bitmask) that represents if there is any null in any of they key columns.
+    // We create a modified set of key columns (modified_key_col_table), where the first key column will take this bitmask (key_cols_bitmask)
+    // Then if we set flag_null_sort_behavior = GDF_NULL_AS_LARGEST, then when we sort by the key columns, 
+    // then all the rows where any of the key columns contained a null, these will be at the end of the sorted set.
+    // Then we can figure out how many of those rows contained any nulls and adjust the size of our sorted data set 
+    // to ignore the rows where there were any nulls in the key columns
+    
+    auto key_cols_bitmask = row_bitmask(key_col_table);
+
+    gdf_column modified_fist_key_col; 
+    modified_fist_key_col.data = key_cols_vect[0]->data;
+    modified_fist_key_col.size = key_cols_vect[0]->size;
+    modified_fist_key_col.dtype = key_cols_vect[0]->dtype;
+    modified_fist_key_col.null_count = key_cols_vect[0]->null_count;
+    modified_fist_key_col.valid = reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get());
+
+    std::vector<gdf_column*> modified_key_cols_vect = key_cols_vect;
+    modified_key_cols_vect[0] = &modified_fist_key_col;
+    cudf::table modified_key_col_table(modified_key_cols_vect.data(), modified_key_cols_vect.size());
+
+    gdf_context temp_ctx;
+    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+
+    CUDF_TRY(gdf_order_by(modified_key_col_table.begin(),
                           nullptr,
-                          key_col_table.num_columns(),
+                          modified_key_col_table.num_columns(),
                           &sorted_indices_col,
                           &temp_ctx));
-
-    // lets filter out all the nulls in the group by key column by:
-    // we will take the data which has been sorted such that the nulls in the group by keys are all last
-    // then using row_bitmask we can count how many rows have a null in the group by keys and use that 
-    // to resize the data
-    auto orderby_cols_bitmask = row_bitmask(key_col_table);
+    
     int valid_count;
-    CUDF_TRY(gdf_count_nonzero_mask(reinterpret_cast<gdf_valid_type*>(orderby_cols_bitmask.data().get()),
+    CUDF_TRY(gdf_count_nonzero_mask(reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get()),
                                     nrows, &valid_count));
 
     std::for_each(destination_table.begin(), destination_table.end(), 
@@ -345,9 +340,10 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   // run gather operation to establish new order
   cudf::gather(&input_table, sorted_indices.data().get(), &destination_table);
 
-  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect.begin(),
+  std::vector<gdf_column*> key_cols_vect_out(num_key_cols);
+  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect_out.begin(),
                   [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
-  cudf::table key_col_sorted_table(key_cols_vect.data(), key_cols_vect.size());
+  cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
   
   return std::make_tuple(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }
