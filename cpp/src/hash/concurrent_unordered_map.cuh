@@ -307,7 +307,7 @@ public:
      * inserted pair, or the existing pair that prevented the insert. Boolean
      * indicates insert success.
      *---------------------------------------------------------------------------**/
-    __device__ thrust::pair<iterator, bool> insert(value_type&& insert_pair) {
+    __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair) {
       const size_type key_hash = m_hf(insert_pair.first);
       size_type index = key_hash % capacity;
 
