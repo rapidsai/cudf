@@ -62,12 +62,12 @@ public:
     using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
-    union pair2longlong
-    {
-        unsigned long long int  longlong;
-        value_type              pair;
-    };
-    
+ union pair_packer {
+   uint64_t packed;
+   value_type pair;
+   pair_packer(value_type&& _pair) : pair{_pair} {}
+ };
+
 public:
 
     explicit concurrent_unordered_map(size_type n,
@@ -290,45 +290,41 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+capacity, current_hash_bucket);
     }
 
-    __device__ 
-    thrust::pair<iterator, bool> insert(value_type const& x) {
-      value_type* hashtbl_values = m_hashtbl_values;
-      const size_type key_hash = m_hf(x.first);
-      size_type hash_tbl_idx = key_hash % capacity;
+    __device__ thrust::pair<iterator, bool> insert(value_type&& insert_pair) {
+      const size_type key_hash = m_hf(insert_pair.first);
+      size_type index = key_hash % capacity;
 
-      value_type* it = 0;
+      value_type* current_bucket = &m_hashtbl_values[index];
+      bool new_insert{false};
 
-      while (0 == it) {
-        value_type* tmp_it = hashtbl_values + hash_tbl_idx;
-        if (std::numeric_limits<key_type>::is_integer &&
-            std::numeric_limits<mapped_type>::is_integer &&
-            sizeof(unsigned long long int) == sizeof(value_type)) {
-          pair2longlong converter = {0ull};
-          converter.pair = thrust::make_pair(unused_key, m_unused_element);
-          const unsigned long long int unused = converter.longlong;
-          converter.pair = x;
-          const unsigned long long int value = converter.longlong;
-          const unsigned long long int old_val = atomicCAS(
-              reinterpret_cast<unsigned long long int*>(tmp_it), unused, value);
-          if (old_val == unused) {
-            it = tmp_it;
-          } else if (count_collisions) {
-            atomicAdd(&m_collisions, 1);
-          }
-        } else {
-          const key_type old_key =
-              atomicCAS(&(tmp_it->first), unused_key, x.first);
-          if (m_equal(unused_key, old_key)) {
-            (m_hashtbl_values + hash_tbl_idx)->second = x.second;
-            it = tmp_it;
-          } else if (count_collisions) {
-            atomicAdd(&m_collisions, 1);
-          }
+      // TODO Use SFINAE to specialize for when we can update the pair with a
+      // single CAS
+      while (true) {
+        const key_type old_key =
+            atomicCAS(&(current_bucket->first), unused_key, insert_pair.first);
+
+        // Hash bucket empty
+        if (m_equal(unused_key, old_key)) {
+          current_bucket->second = insert_pair.second;
+          new_insert = true;
+          break;
         }
-        hash_tbl_idx = (hash_tbl_idx + 1) % capacity;
+
+        // Key already exists
+        else if (m_equal(old_key, insert_pair.first)) {
+          new_insert = false;
+          break;
+        }
+
+        // Continue until an empty bucket or equivalent key is found
+        index = (index + 1) % capacity;
+        current_bucket = &m_hashtbl_values[index];
       }
 
-      return iterator(m_hashtbl_values, m_hashtbl_values + capacity, it);
+      return thrust::make_pair(
+          iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                   current_bucket),
+          new_insert);
     }
 
     __forceinline__
