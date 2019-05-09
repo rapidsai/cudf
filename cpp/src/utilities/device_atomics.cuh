@@ -30,92 +30,13 @@
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
 
-#include "cudf.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/wrapper_types.hpp"
-#include "utilities/error_utils.hpp"
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/wrapper_types.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/device_operators.cuh>
 
 namespace cudf {
-
-// ------------------------------------------------------------------------
-// Binary operators
-/* @brief binary `sum` operator */
-struct DeviceSum {
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-/* @brief binary `min` operator */
-struct DeviceMin{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs <= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::max(); }
-};
-
-/* @brief binary `max` operator */
-struct DeviceMax{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs >= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-};
-
-/* @brief binary `product` operator */
-struct DeviceProduct {
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs * rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{1}; }
-};
-
-
-/* @brief binary `and` operator */
-struct DeviceAnd{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs & rhs );
-    }
-};
-
-/* @brief binary `or` operator */
-struct DeviceOr{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs | rhs );
-    }
-};
-
-/* @brief binary `xor` operator */
-struct DeviceXor{
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return (lhs ^ rhs );
-    }
-};
-
-
 namespace detail {
 
     template <typename T_output, typename T_input>
