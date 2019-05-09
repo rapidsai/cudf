@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-19, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,18 @@
  * limitations under the License.
  */
 
+#include <cudf.h>
 #include <tests/utilities/cudf_test_fixtures.h>
-
 #include <hash/concurrent_unordered_map.cuh>
 #include <groupby/aggregation_operations.hpp>
 
-#include <cudf.h>
-
-#include <thrust/device_vector.h>
-
 #include <rmm/thrust_rmm_allocator.h>
-
 #include <gtest/gtest.h>
-
-
 #include <iostream>
 #include <vector>
 #include <unordered_map>
 #include <random>
-
+#include <thrust/device_vector.h>
 #include <cstdlib>
 
 
@@ -306,8 +299,19 @@ TYPED_TEST(MapTest, AggregationTestDeviceBlockSame)
   this->check_answer();
 }
 
+template <typename K, typename V>
+struct key_value_types{
+    using key_type = K;
+    using value_type = V;
+};
 
-int main(int argc, char * argv[]){
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+template <typename T>
+struct InsertTest : public GdfTest {};
+
+using TestTypes = ::testing::Types< key_value_types<int32_t, int32_t> >;
+
+TYPED_TEST_CASE(InsertTest, TestTypes);
+
+TYPED_TEST(InsertTest, First){
+
 }
