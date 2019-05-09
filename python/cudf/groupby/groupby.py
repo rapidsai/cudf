@@ -90,7 +90,7 @@ class Groupby(object):
         self.level = None
         self._original_index_name = None
         self._val_columns = []
-        self._df = df.copy(deep=True)
+        self._df = df.copy(deep=False)
         self._as_index = as_index
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
@@ -171,7 +171,7 @@ class Groupby(object):
         agg_type : str
             The aggregation function to run.
         """
-        agg_groupby = self.copy()
+        agg_groupby = self.copy(deep=False)
         if agg_type in ['mean', 'sum']:
             agg_groupby._df = agg_groupby._df._get_numeric_data()
             agg_groupby._val_columns = []
@@ -304,7 +304,7 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self.copy()
+        result = self.copy(deep=False)
         result._df = DataFrame()
         setattr(result, "_gotattr", True)
         if isinstance(self._by, (str, Number)):
@@ -393,5 +393,5 @@ class Groupby(object):
         Since multi-indexes aren't supported aggregation results are returned
         in columns using the naming scheme of `aggregation_columnname`.
         """
-        agg_groupby = self.copy()
+        agg_groupby = self.copy(deep=False)
         return cpp_agg(agg_groupby, args)
