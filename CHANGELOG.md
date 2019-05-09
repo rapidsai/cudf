@@ -7,7 +7,7 @@
 
 ## Improvements
 
-...
+- PR #1701 Added `unique` method for stringColumns
 
 ## Bug Fixes
 
