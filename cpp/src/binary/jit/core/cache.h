@@ -97,26 +97,17 @@ private:
             bool successful_read = false;
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
-                std::string file_name = getTempDir() + name;
+                std::string file_name = 
+                    getTempDir() + name + CUDF_STRINGIFY(CUDF_VERSION);
                 cacheFile file{file_name};
-                std::stringstream buffer;
-                buffer << file.read();
-                if (file.is_read_successful()) {
-                    std::string magic_header;
-                    std::getline(buffer, magic_header);
-                    if (magic_header == CUDF_STRINGIFY(CUDF_VERSION)) {
-                        serialized = buffer.str().substr(magic_header.size()+1);
-                        successful_read = true;
-                    }
-                }
+                serialized = file.read();
+                successful_read = file.is_read_successful();
             #endif
             if (not successful_read) {
                 // JIT compile and write to file if possible
                 serialized = func().serialize();
                 #if defined(JITIFY_USE_CACHE)
-                    file.write(
-                        std::string(CUDF_STRINGIFY(CUDF_VERSION))
-                        + '\n' + serialized);
+                    file.write(serialized);
                 #endif
             }
             // Add deserialized T to cache and return
