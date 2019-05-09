@@ -15,6 +15,10 @@
  */
 
 #include "cache.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 
 namespace cudf {
 namespace jit {
@@ -106,6 +110,91 @@ jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
     return getKernelInstantiation(kern_name, program);
 }
 */
+
+cudfJitCache::cacheFile::cacheFile(std::string file_name)
+ : _file_name{file_name}
+{ }
+
+cudfJitCache::cacheFile::~cacheFile() { }
+
+std::string cudfJitCache::cacheFile::read()
+{
+    // Open file (duh)
+    int fd = open ( _file_name.c_str(), O_RDWR );
+    if ( fd == -1 ) {
+        successful_read = false;
+        return std::string();
+    }
+
+    // Lock the file descriptor. we the only ones now
+    if ( lockf(fd, F_LOCK, 0) == -1 ) {
+        successful_read = false;
+        return std::string();
+    }
+
+    // Get file descriptor from file pointer
+    FILE *fp = fdopen( fd, "rb" );
+
+    // Get file length
+    fseek( fp , 0L , SEEK_END);
+    size_t file_size = ftell( fp );
+    rewind( fp );
+
+    // Allocate memory of file length size
+    char *buffer = (char*) malloc( file_size+1 );
+    if ( !buffer ) {
+        successful_read = false;
+        fclose(fp);
+        return std::string();
+    }
+
+    // Copy file into buffer
+    if( fread(buffer, file_size, 1, fp) != 1 ) {
+        successful_read = false;
+        fclose(fp);
+        free(buffer);
+        return std::string();
+    }
+    fclose(fp);
+
+    // Copy buffer into string
+    std::string content{buffer, file_size};
+    successful_read = true;
+
+    free(buffer);
+
+    return content;
+}
+
+void cudfJitCache::cacheFile::write(std::string content)
+{
+    // Open file and create if it doesn't exist, with access 0600
+    int fd = open ( _file_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
+    if ( fd == -1 ) {
+        successful_write = false;
+        return;
+    }
+
+    // Lock the file descriptor. we the only ones now
+    if ( lockf(fd, F_LOCK, 0) == -1 ) {
+        successful_write = false;
+        return;
+    }
+
+    // Get file descriptor from file pointer
+    FILE *fp = fdopen( fd, "wb" );
+
+    // Copy string into file
+    if( fwrite(content.c_str(), content.length(), 1, fp) != 1 ) {
+        successful_write = false;
+        fclose(fp);
+        return;
+    }
+    fclose(fp);
+
+    successful_write = false;
+    return;
+}
 
 } // namespace jit
 } // namespace cudf

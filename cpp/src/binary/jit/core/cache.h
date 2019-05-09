@@ -65,6 +65,23 @@ private:
     std::mutex _program_cache_mutex;
 
 private:
+    class cacheFile
+    {
+    private:
+        std::string _file_name;
+        bool successful_read = false;
+        bool successful_write = false;
+    public:
+        cacheFile(std::string file_name);
+        ~cacheFile();
+
+        std::string read();
+        void write(std::string);
+        bool is_read_successful() { return successful_read; }
+        bool is_write_successful() { return successful_write; }
+    };
+
+private:
     template <typename T, typename FallbackFunc>
     std::shared_ptr<T> getCached(
         std::string name,
@@ -81,10 +98,10 @@ private:
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
                 std::string file_name = getTempDir() + name;
-                std::ifstream file (file_name, std::ios::binary);
-                if (file) {
-                    std::stringstream buffer;
-                    buffer << file.rdbuf();
+                cacheFile file{file_name};
+                std::stringstream buffer;
+                buffer << file.read();
+                if (file.is_read_successful()) {
                     std::string magic_header;
                     std::getline(buffer, magic_header);
                     if (magic_header == CUDF_STRINGIFY(CUDF_VERSION)) {
@@ -97,8 +114,9 @@ private:
                 // JIT compile and write to file if possible
                 serialized = func().serialize();
                 #if defined(JITIFY_USE_CACHE)
-                    std::ofstream file(file_name, std::ios::binary);
-                    file << CUDF_STRINGIFY(CUDF_VERSION) << std::endl << serialized;
+                    file.write(
+                        std::string(CUDF_STRINGIFY(CUDF_VERSION))
+                        + '\n' + serialized);
                 #endif
             }
             // Add deserialized T to cache and return
