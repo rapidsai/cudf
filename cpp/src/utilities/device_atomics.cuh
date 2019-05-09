@@ -23,9 +23,11 @@
  *
  * Provides the overloads for all of possible cudf's data types,
  * where cudf's data types are, int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category, cudf::bool8,
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
- * `atomicCAS`, `atomicAnd`, `atomicOr`, `atomicXor`.
+ * `atomicCAS`.
+ * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
  * Also provides `cudf::genericAtomicOperation` which performs atomic operation 
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
@@ -455,7 +457,8 @@ namespace detail {
  *
  * The supported cudf types for `genericAtomicOperation` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category, cudf::bool8
  *
  * @param[in] address The address of old value in global or shared memory
  * @param[in] val The value to be added
@@ -485,9 +488,9 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
  *
  * The supported cudf types for `atomicAdd` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
- * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double,
- * cudf::nvstring_category
+ * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
+ * cudf::nvstring_category, cudf::bool8
+ * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double.
  * (`double` is supported after Pascal).
  * Other types are implemented by `atomicCAS`.
  *
@@ -496,92 +499,11 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T>
 __forceinline__ __device__
-int8_t atomicAdd(int8_t* address, int8_t val)
+T atomicAdd(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-
-/**
- * @overload int16_t atomicAdd(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicAdd(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-
-/**
- * @overload int64_t atomicAdd(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicAdd(int64_t* address, int64_t val)
-{
-    // `atomicAdd` supports uint64_t, but not int64_t
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-
-#if defined(__CUDA_ARCH__) && ( __CUDA_ARCH__ < 600 )
-/**
- * @overload double atomicAdd(double* address, double val)
- */
-__forceinline__ __device__
-double atomicAdd(double* address, double val)
-{
-    // `atomicAdd` for `double` is supported from Pascal
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-#endif
-
-/**
- * @overload cudf::date32 atomicAdd(cudf::date32* address, cudf::date32 val)
- */
-inline  __device__
-cudf::date32 atomicAdd(cudf::date32* address, cudf::date32 val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicAdd(a, v);});
-}
-
-/**
- * @overload cudf::category atomicAdd(cudf::category* address, cudf::category val)
- */
-__forceinline__ __device__
-cudf::category atomicAdd(cudf::category* address, cudf::category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicAdd(a, v);});
-}
-
-/**
- * @overload cudf::date64 atomicAdd(cudf::date64* address, cudf::date64 val)
- */
-__forceinline__ __device__
-cudf::date64 atomicAdd(cudf::date64* address, cudf::date64 val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-
-/**
- * @overload cudf::timestamp atomicAdd(cudf::timestamp* address, cudf::timestamp val)
- */
-__forceinline__ __device__
-cudf::timestamp atomicAdd(cudf::timestamp* address, cudf::timestamp val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
-}
-
-/**
- * @overload cudf::nvstring_category atomicAdd(cudf::nvstring_category* address, cudf::nvstring_category val)
- */
-__forceinline__ __device__
-cudf::nvstring_category atomicAdd(cudf::nvstring_category* address, cudf::nvstring_category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicAdd(a, v);});
 }
 
 /* Overloads for `atomicMin` */
@@ -838,16 +760,6 @@ cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstri
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
-
-/**
- * @overload T atomicCAS(T* address, T compare, T val)
- * T belongs to 
- * { 
- * int32_t, int64_t, float, double,
- * cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
- * cudf::nvstring_category
- * }
- */
 template <typename T>
 __forceinline__ __device__
 T atomicCAS(T* address, T compare, T val)
