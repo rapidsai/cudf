@@ -20,6 +20,7 @@
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
 
+#include <stdio.h>
 /**---------------------------------------------------------------------------*
  * @brief Returns true if the specified bit in a validity bit mask is set.
  *
@@ -44,8 +45,8 @@ void gdf_unset_bit(gdf_valid_type *valid, gdf_index_type pos) {
             valid[pos / GDF_VALID_BITSIZE] & ~(1<<(pos % GDF_VALID_BITSIZE));
     }
     else{
+        printf("not valid");
         // TODO: handle allocate the memory for valid
-        valid[pos / GDF_VALID_BITSIZE] & ~(1<<(pos % GDF_VALID_BITSIZE));
     }
 }
 
