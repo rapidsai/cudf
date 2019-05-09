@@ -20,7 +20,6 @@
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
 
-#include <stdio.h>
 /**---------------------------------------------------------------------------*
  * @brief Returns true if the specified bit in a validity bit mask is set.
  *
@@ -40,14 +39,8 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 
 CUDA_HOST_DEVICE_CALLABLE
 void gdf_unset_bit(gdf_valid_type *valid, gdf_index_type pos) {
-    if (valid){
         valid[pos / GDF_VALID_BITSIZE] =
             valid[pos / GDF_VALID_BITSIZE] & ~(1<<(pos % GDF_VALID_BITSIZE));
-    }
-    else{
-        printf("not valid");
-        // TODO: handle allocate the memory for valid
-    }
 }
 
 #endif
