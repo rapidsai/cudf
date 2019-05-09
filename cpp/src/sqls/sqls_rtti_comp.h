@@ -51,108 +51,8 @@ struct LesserRTTI
   {
   }
 
-  LesserRTTI(void *const *cols,
-             gdf_valid_type *const *valids,
-             int *const types,
-             int8_t *const asc_desc_flags,
-             size_t sz,
-             bool nulls_are_smallest) : columns_(cols),
-                                        valids_(valids),
-                                        rtti_(types),
-                                        sz_(sz),
-                                        asc_desc_flags_(asc_desc_flags),
-                                        nulls_are_smallest_(nulls_are_smallest)
-  {
-  }
-
-  // /**
-  //  * Should be used when you want to sort multiple columns using asc/desc flags for each column
-  //  */
-  // __device__
-  // bool asc_desc_comparison(IndexT row1, IndexT row2) const
-  // {
-  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
-  //   {
-  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-      
-  //     bool asc = true;
-  //     if(asc_desc_flags_ != nullptr){
-  //       asc = (asc_desc_flags_[col_index] == GDF_ORDER_ASC);
-  //     }
-
-  //     State state;
-  //     if(asc){
-  //       state = cudf::type_dispatcher(col_type, OpLess{},
-  //                                     row1,
-  //                                     row2,
-  //                                     col_index,
-  //                                     columns_);
-  //     }else{
-  //       state = cudf::type_dispatcher(col_type, OpGreater{},
-  //                                     row1,
-  //                                     row2,
-  //                                     col_index,
-  //                                     columns_);
-  //     }
-
-  //     switch( state )
-  //     {
-  //     case State::False:
-  //       return false;
-  //     case State::True:
-  //       return true;
-  //     case State::Undecided: // When doing a multi-column comparison, when you have an equals, your state is undecided and you need to check the next column.
-  //       break;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-  // __device__
-  // bool asc_desc_comparison_with_nulls(IndexT row1, IndexT row2) const
-  // {
-  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
-  //   {
-  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-
-  //     bool asc = true;
-  //     if(asc_desc_flags_ != nullptr){
-  //       asc = (asc_desc_flags_[col_index] == GDF_ORDER_ASC);
-  //     }
-
-  //     State state;
-  //     if(asc){
-  //       state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
-  //                                     row1,
-  //                                     row2,
-  //                                     col_index,
-  //                                     columns_,
-  //                                     valids_,
-  //                                     nulls_are_smallest_);
-  //     }else{
-  //       state = cudf::type_dispatcher(col_type, OpGreater_with_nulls{},
-  //                                     row1,
-  //                                     row2,
-  //                                     col_index,
-  //                                     columns_,
-  //                                     valids_,
-  //                                     nulls_are_smallest_);
-  //     }
-
-  //     switch( state )
-  //     {
-  //     case State::False:
-  //       return false;
-  //     case State::True:
-  //       return true;
-  //     case State::Undecided: // When doing a multi-column comparison, when you have an equals, your state is undecided and you need to check the next column.
-  //       break;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-  __device__
+ 
+   __device__
   bool equal(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -164,32 +64,6 @@ struct LesserRTTI
                                           row2,
                                           col_index,
                                           columns_);
-      switch( state )
-      {
-      case State::False:
-        return false;
-
-      case State::True:
-      case State::Undecided:
-        break;
-      }
-    }
-    return true;
-  }
-
-    __host__ __device__
-  bool equal_with_nulls(IndexT row1, IndexT row2) const
-  {
-    for(size_t col_index = 0; col_index < sz_; ++col_index)
-    {
-      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-
-      State state = cudf::type_dispatcher(col_type, OpEqual_with_nulls{},
-                                          row1,
-                                          row2,
-                                          col_index,
-                                          columns_,
-                                          valids_);
       switch( state )
       {
       case State::False:
@@ -228,86 +102,6 @@ struct LesserRTTI
     return true;
   }
 
-  // __device__
-  // bool less(IndexT row1, IndexT row2) const
-  // {
-  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
-  //   {
-  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-
-  //     State state = cudf::type_dispatcher(col_type, OpLess{},
-  //                                         row1,
-  //                                         row2,
-  //                                         col_index,
-  //                                         columns_);
-  //     switch( state )
-  //     {
-  //     case State::False:
-  //       return false;
-  //     case State::True:
-  //       return true;
-  //     case State::Undecided:
-  //       break;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-  //   __device__
-  // bool less_with_nulls(IndexT row1, IndexT row2) const
-  // {
-  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
-  //   {
-  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-
-  //     State state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
-  //                                         row1,
-  //                                         row2,
-  //                                         col_index,
-  //                                         columns_,
-  //                                         valids_,
-  //                                         nulls_are_smallest_);
-  //     switch( state )
-  //     {
-  //     case State::False:
-  //       return false;
-  //     case State::True:
-  //       return true;
-  //     case State::Undecided:
-  //       break;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-
-  //   __device__
-  // bool less_with_nulls_always_false(IndexT row1, IndexT row2) const
-  // {
-  //   for(size_t col_index = 0; col_index < sz_; ++col_index)
-  //   {
-  //     gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-
-  //     State state = cudf::type_dispatcher(col_type, OpLess_with_nulls_always_false{},
-  //                                         row1,
-  //                                         row2,
-  //                                         col_index,
-  //                                         columns_,
-  //                                         valids_);
-  //     switch( state )
-  //     {
-  //     case State::False:
-  //       return false;
-  //     case State::True:
-  //       return true;
-  //     case State::Undecided:
-  //       break;
-  //     }
-  //   }
-  //   return false;
-  // }
-
-
   template<typename ColType>
   __device__
   static ColType at(int col_index,
@@ -317,14 +111,6 @@ struct LesserRTTI
     return (static_cast<const ColType*>(columns[col_index]))[row];
   }
   
-  __device__
-  static bool is_valid(int col_index,
-                       IndexT row,
-                       const gdf_valid_type* const * valids)
-  {
-    return gdf_is_valid(valids[col_index], row);
-  }
-
 private:
   enum class State {False = 0, True = 1, Undecided = 2};
 
@@ -346,29 +132,6 @@ private:
     }
   };
 
-  struct OpEqual_with_nulls
-  {
-    template<typename ColType>
-    __device__
-    State operator() (IndexT row1, IndexT row2,
-                       int col_index,
-                      const void* const * columns,
-                      const gdf_valid_type* const * valids)
-    {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-      bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
-      
-      if (!isValid2 && !isValid1)
-			  return State::Undecided;
-		  else if( isValid1 && isValid2 && res1 == res2)
-        return State::True;
-      else
-        return State::False;      
-    }
-  };
-  
   struct OpEqualV
   {
     template<typename ColType>
@@ -389,12 +152,9 @@ private:
   };
 
   const void* const * columns_{nullptr};
-  const gdf_valid_type* const * valids_{nullptr};
   const int* const rtti_{nullptr};
   size_t sz_;
-  const void* const * vals_{nullptr}; //for filtering
-  const int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
-  bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
+  const void* const * vals_{nullptr}; //for filtering  
 };
 
 //###########################################################################
