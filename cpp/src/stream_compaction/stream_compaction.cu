@@ -16,6 +16,7 @@
 
 #include <cudf.h>
 #include <types.hpp>
+#include <copying.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <stream_compaction.hpp>
 #include <bitmask/bit_mask.cuh>
@@ -314,13 +315,10 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
 template <typename Filter>
 gdf_column apply_filter(gdf_column const &input, Filter filter, 
                         cudaStream_t stream = 0) {
-  if (0 == input.size) { // no error for empty input, just return empty output
-    gdf_column output;
-    gdf_column_view(&output, 0, 0, 0, input.dtype);
-    return output;
-  }
+  // no error for empty input, just return empty output
+  if (0 == input.size) return cudf::empty_like(input);
   CUDF_EXPECTS(nullptr != input.data, "Null input data"); // nonzero size
-  
+
   constexpr int block_size = 256;
   constexpr int per_thread = 32;
   cudf::util::cuda::grid_config_1d grid{input.size, block_size, per_thread};
@@ -357,10 +355,8 @@ gdf_column apply_filter(gdf_column const &input, Filter filter,
 
   CHECK_STREAM(stream);
 
-  gdf_column output;
-  gdf_column_view(&output, 0, 0, 0, input.dtype);
-  output.dtype_info = input.dtype_info;
-
+  gdf_column output = cudf::empty_like(input);
+  
   // 3. compute the output size from the last block's offset + count
   gdf_size_type output_size = 
     get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
@@ -427,9 +423,7 @@ gdf_column drop_nulls(gdf_column const &input) {
   if (input.valid != nullptr && input.null_count != 0)
     return apply_filter(input, valid_filter{input});
   else { // no null bitmask, so just copy
-    gdf_column output;
-    gdf_column_view(&output, 0, 0, 0, input.dtype);
-    return output;
+    return cudf::copy(input);
   }
 }
 
