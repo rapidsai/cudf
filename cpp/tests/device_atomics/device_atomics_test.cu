@@ -95,20 +95,20 @@ void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
 template <typename T>
 struct AtomicsTest : public GdfTest
 {
-    void atomic_test(std::vector<int> const & v, bool is_cas_test,
+    void atomic_test(std::vector<int> const & v_input, bool is_cas_test,
         int block_size=0, int grid_size=1)
     {
-        int exact[3];
-        exact[0] = std::accumulate(v.begin(), v.end(), 0);
+        size_t vec_size = v_input.size();
+
+        // use transform from std::vector<int> instead.
+        std::vector<T> v(vec_size);
+        std::transform(v_input.begin(), v_input.end(), v.begin(),
+            [](int x) { T t(x) ; return t; } );
+
+        T exact[3];
+        exact[0] = std::accumulate(v.begin(), v.end(), T{0});
         exact[1] = *( std::min_element(v.begin(), v.end()) );
         exact[2] = *( std::max_element(v.begin(), v.end()) );
-        size_t vec_size = v.size();
-
-        // std::vector<T> v_type({6, -14, 13, 64, -13, -20, 45}));
-        // use transform from std::vector<int> instead.
-        std::vector<T> v_type(vec_size);
-        std::transform(v.begin(), v.end(), v_type.begin(),
-            [](int x) { T t(x) ; return t; } );
 
         std::vector<T> result_init(4);
         result_init[0] = T{0};
@@ -116,8 +116,8 @@ struct AtomicsTest : public GdfTest
         result_init[2] = std::numeric_limits<T>::min();
         result_init[3] = T{0};
 
+        thrust::device_vector<T> dev_data(v);
         thrust::device_vector<T> dev_result(result_init);
-        thrust::device_vector<T> dev_data(v_type);
 
         if( block_size == 0) block_size = vec_size;
 
@@ -133,17 +133,17 @@ struct AtomicsTest : public GdfTest
         cudaDeviceSynchronize();
         CUDA_CHECK_LAST();
 
-        EXPECT_EQ(host_result[0], T(exact[0])) << "atomicAdd test failed";
-        EXPECT_EQ(host_result[1], T(exact[1])) << "atomicMin test failed";
-        EXPECT_EQ(host_result[2], T(exact[2])) << "atomicMax test failed";
-        EXPECT_EQ(host_result[3], T(exact[0])) << "atomicAdd test(2) failed";
+        EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
+        EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
+        EXPECT_EQ(host_result[2], exact[2]) << "atomicMax test failed";
+        EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
     }
 };
 
 using TestingTypes = ::testing::Types<
     int8_t, int16_t, int32_t, int64_t, float, double,
     cudf::date32, cudf::date64, cudf::timestamp, cudf::category,
-    cudf::nvstring_category>;
+    cudf::nvstring_category, cudf::bool8>;
 
 TYPED_TEST_CASE(AtomicsTest, TestingTypes);
 

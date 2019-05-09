@@ -469,11 +469,23 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
+    // unwrap the input type to expect
+    // that the native atomic API is used for the underlying type
     auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
          &cudf::detail::unwrap(*address),
          cudf::detail::unwrap(update_value),
          op);
     return T(ret);
+}
+
+template <typename BinaryOp>
+__forceinline__  __device__
+cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & update_value, BinaryOp op)
+{
+    // don't use underlying type to apply operation for cudf::bool8
+    auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
+         address, update_value, op);
+    return cudf::bool8(ret);
 }
 
 } // namespace cudf
@@ -525,103 +537,11 @@ T atomicAdd(T* address, T val)
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T>
 __forceinline__ __device__
-int8_t atomicMin(int8_t* address, int8_t val)
+T atomicMin(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
-}
-
-/**
- * @overload int16_t atomicMin(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicMin(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
-}
-
-/**
- * @overload int64_t atomicMin(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicMin(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
-}
-
-/**
- * @overload float atomicMin(float* address, float val)
- */
-__forceinline__ __device__
-float atomicMin(float* address, float val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
-}
-
-/**
- * @overload double atomicMin(double* address, double val)
- */
-__forceinline__ __device__
-double atomicMin(double* address, double val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
-}
-
-/**
- * @overload cudf::date32 atomicMin(cudf::date32* address, cudf::date32 val)
- */
-inline  __device__
-cudf::date32 atomicMin(cudf::date32* address, cudf::date32 val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
-}
-
-/**
- * @overload cudf::category atomicMin(cudf::category* address, cudf::category val)
- */
-__forceinline__ __device__
-cudf::category atomicMin(cudf::category* address, cudf::category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
-}
-
-/**
- * @overload cudf::date64 atomicMin(cudf::date64* address, cudf::date64 val)
- */
-__forceinline__ __device__
-cudf::date64 atomicMin(cudf::date64* address, cudf::date64 val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
-}
-
-/**
- * @overload cudf::timestamp atomicMin(cudf::timestamp* address, cudf::timestamp val)
- */
-__forceinline__ __device__
-cudf::timestamp atomicMin(cudf::timestamp* address, cudf::timestamp val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
-}
-
-/**
- * @overload cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstring_category val)
- */
-__forceinline__ __device__
-cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstring_category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMin(a, v);});
 }
 
 /* Overloads for `atomicMax` */
@@ -643,102 +563,11 @@ cudf::nvstring_category atomicMin(cudf::nvstring_category* address, cudf::nvstri
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T>
 __forceinline__ __device__
-int8_t atomicMax(int8_t* address, int8_t val)
+T atomicMax(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
-}
-
-/**
- * @overload int16_t atomicMax(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicMax(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
-}
-
-/**
- * @overload int64_t atomicMax(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicMax(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
-}
-
-/**
- * @overload float atomicMax(float* address, float val)
- */
-__forceinline__ __device__
-float atomicMax(float* address, float val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
-}
-
-/**
- * @overload double atomicMax(double* address, double val)
- */
-__forceinline__ __device__
-double atomicMax(double* address, double val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
-}
-
-/**
- * @overload cudf::date32 atomicMax(cudf::date32* address, cudf::date32 val)
- */inline  __device__
-cudf::date32 atomicMax(cudf::date32* address, cudf::date32 val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
-}
-
-/**
- * @overload cudf::category atomicMax(cudf::category* address, cudf::category val)
- */
-__forceinline__ __device__
-cudf::category atomicMax(cudf::category* address, cudf::category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
-}
-
-/**
- * @overload cudf::date64 atomicMax(cudf::date64* address, cudf::date64 val)
- */
-__forceinline__ __device__
-cudf::date64 atomicMax(cudf::date64* address, cudf::date64 val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
-}
-
-/**
- * @overload cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
- */
-__forceinline__ __device__
-cudf::timestamp atomicMax(cudf::timestamp* address, cudf::timestamp val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
-}
-
-/**
- * @overload cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstring_category val)
- */
-__forceinline__ __device__
-cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstring_category val)
-{
-    using T = int;
-    return cudf::detail::typesAtomicOperation32
-        (address, val, [](T* a, T v){return atomicMax(a, v);});
 }
 
 /* Overloads for `atomicCAS` */
