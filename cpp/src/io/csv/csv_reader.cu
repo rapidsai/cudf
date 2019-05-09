@@ -517,13 +517,13 @@ gdf_error read_csv(csv_read_arg *args)
 		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
 	
 		const auto file_size = st.st_size;
+		if (args->byte_range_offset > (size_t)file_size) {
+			close(fd);
+			CUDF_FAIL("The byte_range offset is larger than the file size");
+		}
+
 		// Can't map an empty file, will return an empty dataframe further down
 		if (file_size != 0) {
-			if (args->byte_range_offset >= (size_t)file_size) {
-				close(fd);
-				CUDF_FAIL("The byte_range offset is larger than the file size");
-			}
-
 			// Have to align map offset to page size
 			const auto page_size = sysconf(_SC_PAGESIZE);
 			map_offset = (args->byte_range_offset/page_size)*page_size;
@@ -554,29 +554,29 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
+	// Return an empty dataframe if the input is empty and user did not specify the column names and types
+	if (raw_csv.num_bytes == 0 && (args->names == nullptr || args->dtype == nullptr)){
+		return GDF_SUCCESS;
+	}
+
 	const char* h_uncomp_data = nullptr;
 	size_t h_uncomp_size = 0;
 	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
 	vector<char> h_uncomp_data_owner;
-	if (compression_type == "none") {
-		// Do not use the owner vector here to avoid copying the whole file to the heap
-		h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
-		h_uncomp_size = raw_csv.num_bytes;
-	}
-	else {
-		error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
-		checkError(error, "call to getUncompressedHostData");
-		h_uncomp_data = h_uncomp_data_owner.data();
-		h_uncomp_size = h_uncomp_data_owner.size();
-	}
-	
-	// Return an empty dataframe if the input is empty and user did not specify the column names and types
-	if (h_uncomp_size == 0 && (args->names == nullptr || args->dtype == nullptr)){
-		return GDF_SUCCESS;
-	}
-
 	// Skip if the input is empty and proceed to set the column names and types based on user's input
-	if(h_uncomp_size != 0) {
+	if(raw_csv.num_bytes != 0) {
+		if (compression_type == "none") {
+			// Do not use the owner vector here to avoid copying the whole file to the heap
+			h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
+			h_uncomp_size = raw_csv.num_bytes;
+		}
+		else {
+			error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
+			checkError(error, "call to getUncompressedHostData");
+			h_uncomp_data = h_uncomp_data_owner.data();
+			h_uncomp_size = h_uncomp_data_owner.size();
+		}
+	
 		error = countRecordsAndQuotes(h_uncomp_data, h_uncomp_size, &raw_csv);
 		checkError(error, "call to count the number of rows");
 
