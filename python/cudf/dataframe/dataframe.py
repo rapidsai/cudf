@@ -228,8 +228,7 @@ class DataFrame(object):
         if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
-           isinstance(arg, tuple):
+        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -1810,7 +1809,6 @@ class DataFrame(object):
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
                             'specified.')
@@ -2833,6 +2831,8 @@ class Loc(object):
             else:
                 raise TypeError(type(arg_1))
             col_slice = arg_2
+            if isinstance(arg_2, str):
+                col_slice = [arg_2]
 
         elif isinstance(arg, slice):
             row_slice = arg
