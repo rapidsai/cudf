@@ -134,7 +134,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
                                gdf_size_type  * __restrict__ block_offsets,
                                Filter filter)
 {
-  static_assert(block_size < 1024, "Maximum thread block size exceeded");
+  static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   gdf_size_type block_offset = block_offsets[blockIdx.x];
