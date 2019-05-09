@@ -30,8 +30,6 @@ enum class State
   Undecided = 2
 };
 
-namespace
-{
 struct elements_are_equal
 {
   template <typename ColumnType>
@@ -123,10 +121,9 @@ __device__ inline bool rows_equal(device_table const &lhs,
                        equal_elements);
 }
 
-//     const void *const * _vals;
 
-// };
-
+namespace
+{
 struct typed_inequality_comparator
 {
   template <typename ColType>
@@ -277,3 +274,7 @@ private:
   bool _nulls_are_smallest;
   int8_t *const _asc_desc_flags;
   bool _has_nulls;
+
+};
+
+#endif
