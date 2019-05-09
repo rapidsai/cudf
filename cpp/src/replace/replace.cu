@@ -120,7 +120,7 @@ namespace{ //anonymous
 
     if (col->valid == nullptr && (new_values->valid != nullptr || new_values->null_count !=0)){
         // allocating the memory for valid mask
-        RMM_TRY(RMM_ALLOC(&(col->valid), gdf_valid_allocation_size(col->size), 1));
+        RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(col->size), 0));
         CUDA_TRY(cudaMemset(col->valid, 1, gdf_valid_allocation_size(col->size)));
     }
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
