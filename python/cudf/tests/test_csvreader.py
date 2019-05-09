@@ -1016,7 +1016,7 @@ def test_csv_empty_input(tmpdir):
 
     col_names = ['col1', 'col2', 'col3', 'col4']
     in_dtypes = ['int', 'str', 'float', 'short']
-    out_dtypes = ['int32','object', 'float32', 'int16']
+    out_dtypes = ['int32', 'object', 'float32', 'int16']
 
     df = read_csv(str(fname))
     assert(len(df.columns) == 0)
