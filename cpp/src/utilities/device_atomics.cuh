@@ -25,7 +25,7 @@
  * where cudf's data types are, int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category.
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
- * `atomicCAS`.
+ * `atomicCAS`, `atomicAnd`, `atomicOr`, `atomicXor`.
  * Also provides `cudf::genericAtomicOperation` which performs atomic operation 
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
@@ -336,6 +336,71 @@ namespace detail {
     struct typesAtomicCASImpl;
 
     template<typename T>
+    struct typesAtomicCASImpl<T, 1> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & compare, T const & update_value)
+        {
+            using T_int = unsigned int;
+
+            T_int shift = ((reinterpret_cast<size_t>(addr) & 3) * 8);
+            T_int * address_uint32 = reinterpret_cast<T_int *>
+                (addr - (reinterpret_cast<size_t>(addr) & 3));
+
+            // the 'target_value' in `old` can be different from `compare`
+            // because other thread may update the value
+            // before fetching a value from `address_uint32` in this function
+            T_int old = *address_uint32;
+            T_int assumed;
+            T target_value;
+            uint8_t u_val = type_reinterpret<uint8_t, T>(update_value);
+
+            do {
+               assumed = old;
+               target_value = T((old >> shift) & 0xff);
+               // have to compare `target_value` and `compare` before calling atomicCAS
+               // the `target_value` in `old` can be different with `compare`
+               if( target_value != compare ) break;
+
+               T_int new_value = (old & ~(0x000000ff << shift))
+                   | (T_int(u_val) << shift);
+               old = atomicCAS(address_uint32, assumed, new_value);
+            } while (assumed != old);
+
+            return target_value;
+        }
+    };
+
+    template<typename T>
+    struct typesAtomicCASImpl<T, 2> {
+        __forceinline__  __device__
+        T operator()(T* addr, T const & compare, T const & update_value)
+        {
+            using T_int = unsigned int;
+
+            bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? false : true;
+            T_int * address_uint32 = reinterpret_cast<T_int *>
+                (reinterpret_cast<size_t>(addr) - (is_32_align ? 0 : 2));
+
+            T_int old = *address_uint32;
+            T_int assumed;
+            T target_value;
+            uint16_t u_val = type_reinterpret<uint16_t, T>(update_value);
+
+            do {
+                assumed = old;
+                target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+                if( target_value != compare ) break;
+
+                T_int new_value = (is_32_align) ? (old & 0xffff0000) | u_val
+                    : (old & 0xffff) | (T_int(u_val) << 16);
+                old = atomicCAS(address_uint32, assumed, new_value);
+            } while (assumed != old);
+
+            return target_value;
+        }
+    };
+
+    template<typename T>
     struct typesAtomicCASImpl<T, 4> {
         __forceinline__  __device__
         T operator()(T* addr, T const & compare, T const & update_value)
@@ -367,69 +432,6 @@ namespace detail {
             return type_reinterpret<T, T_int>(ret);
         }
     };
-
-    // atomicCAS implementation for int8_t
-    __forceinline__  __device__
-    int8_t atomicCASImpl(int8_t* address, int8_t compare, int8_t val)
-    {
-        using T = int8_t;
-        using T_int = unsigned int;
-
-        T_int shift = ((reinterpret_cast<size_t>(address) & 3) * 8);
-        T_int * address_uint32 = reinterpret_cast<T_int *>
-            (address - (reinterpret_cast<size_t>(address) & 3));
-
-        // the 'target_value' in `old` can be different from `compare`
-        // because other thread may update the value
-        // before fetching a value from `address_uint32` in this function
-        T_int old = *address_uint32;
-        T_int assumed;
-        T target_value;
-        uint8_t u_val = type_reinterpret<uint8_t, T>(val);
-
-        do {
-           assumed = old;
-           target_value = T((old >> shift) & 0xff);
-           // have to compare `target_value` and `compare` before calling atomicCAS
-           // the `target_value` in `old` can be different with `compare`
-           if( target_value != compare ) break;
-
-           T_int new_value = (old & ~(0x000000ff << shift))
-               | (T_int(u_val) << shift);
-           old = atomicCAS(address_uint32, assumed, new_value);
-        } while (assumed != old);
-
-        return target_value;
-    }
-
-    // atomicCAS implementation for int16_t
-    __forceinline__  __device__
-    int16_t atomicCASImpl(int16_t* address, int16_t compare, int16_t val)
-    {
-        using T = int16_t;
-        using T_int = unsigned int;
-
-        bool is_32_align = (reinterpret_cast<size_t>(address) & 2) ? false : true;
-        T_int * address_uint32 = reinterpret_cast<T_int *>
-            (reinterpret_cast<size_t>(address) - (is_32_align ? 0 : 2));
-
-        T_int old = *address_uint32;
-        T_int assumed;
-        T target_value;
-        uint16_t u_val = type_reinterpret<uint16_t, T>(val);
-
-        do {
-            assumed = old;
-            target_value = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
-            if( target_value != compare ) break;
-
-            T_int new_value = (is_32_align) ? (old & 0xffff0000) | u_val
-                    : (old & 0xffff) | (T_int(u_val) << 16);
-            old = atomicCAS(address_uint32, assumed, new_value);
-        } while (assumed != old);
-
-        return target_value;
-    }
 
     // -----------------------------------------------------------------------
     // intermediate function resolve underlying data type
@@ -827,6 +829,7 @@ cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstri
  * The supported cudf types for `atomicCAS` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::date32, cudf::date64, cudf::timestamp, cudf::category, cudf::nvstring_category
+ * cudf::bool8
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -835,20 +838,6 @@ cudf::nvstring_category atomicMax(cudf::nvstring_category* address, cudf::nvstri
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
-__forceinline__ __device__
-int8_t atomicCAS(int8_t* address, int8_t compare, int8_t val)
-{
-    return cudf::detail::atomicCASImpl(address, compare, val);
-}
-
-/**
- * @overload int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
-{
-    return cudf::detail::atomicCASImpl(address, compare, val);
-}
 
 /**
  * @overload T atomicCAS(T* address, T compare, T val)
@@ -866,17 +855,6 @@ T atomicCAS(T* address, T compare, T val)
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-/**
- * @overload cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
- */
-__forceinline__ __device__
-cudf::bool8 atomicCAS(cudf::bool8* address, cudf::bool8 compare, cudf::bool8 val)
-{
-    // TODO: not sure this is the right way...
-    return cudf::bool8{atomicCAS(reinterpret_cast<int8_t*>(address), 
-                                 cudf::detail::unwrap(compare), 
-                                 cudf::detail::unwrap(val))};
-}
 
 /* Overloads for `atomicAnd` */
 /** -------------------------------------------------------------------------*
