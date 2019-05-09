@@ -206,12 +206,9 @@ class Groupby(object):
             # time the groupby is calculated.
             for by in self._by:
                 level = result[by].unique()
-                code = result[by]
-                for idx, value in enumerate(level):
-                    level_mask = code == value
-                    code = code.masked_assign(idx, level_mask)
+                replaced = result[by].replace(level, range(len(level)))
                 levels.append(level)
-                codes[by] = code
+                codes[by] = Series(replaced, dtype="int32")
                 names.append(by)
             multi_index = MultiIndex(levels=levels,
                                      codes=codes,
