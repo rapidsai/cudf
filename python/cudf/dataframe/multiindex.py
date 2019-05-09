@@ -45,6 +45,13 @@ class MultiIndex(Index):
         else:
             column_names = names
 
+        # early termination enables lazy evaluation of codes
+        if codes is None and levels is None:
+            self._df = None
+            self._codes = None
+            self._levels = None
+            return
+
         if len(levels) == 0:
             raise ValueError('Must pass non-zero number of levels/codes')
 
@@ -54,23 +61,22 @@ class MultiIndex(Index):
                                pd.core.indexes.frozen.FrozenNDArray)):
             raise TypeError('Codes is not a Sequence of sequences')
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
-            self.codes = cudf.dataframe.dataframe.DataFrame()
+            self._codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
                 code = np.array(code)
-                self.codes.add_column(column_names[idx],
-                                      columnops.as_column(code))
+                self._codes.add_column(column_names[idx],
+                                       columnops.as_column(code))
         else:
-            self.codes = codes
+            self._codes = codes
 
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
-        self.levels = np.array([Series(level).to_array() for level in levels])
+        self._levels = np.array([Series(level).to_array() for level in levels])
         self._validate_levels_and_codes(self.levels, self.codes)
         self.name = None
         self.names = names
 
     def _validate_levels_and_codes(self, levels, codes):
-        levels = np.array(levels)
         if len(levels) != len(codes.columns):
             raise ValueError('MultiIndex has unequal number of levels and '
                              'codes and is inconsistent!')
@@ -85,7 +91,7 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        mi = MultiIndex(self.levels.copy(),
+        mi = MultiIndex(self.levels,
                         self.codes.copy(deep))
         if self.names:
             mi.names = self.names.copy()
@@ -116,10 +122,46 @@ class MultiIndex(Index):
                ",\ncodes=" + str(self.codes) + ")"
 
     @property
+    def codes(self):
+        if self._codes is not None:
+            return self._codes
+        else:
+            self._compute_levels_and_codes()
+            return self._codes
+
+    @property
+    def levels(self):
+        if self._levels is not None:
+            return self._levels
+        else:
+            self._compute_levels_and_codes()
+            return self._levels
+
+    @property
     def labels(self):
         warnings.warn("This feature is deprecated in pandas and will be"
                       "dropped from cudf as well.", FutureWarning)
         return self.codes
+
+    def _compute_levels_and_codes(self):
+        levels = []
+        from cudf import DataFrame
+        codes = DataFrame()
+        names = []
+        # Note: This is an O(N^2) solution using gpu masking
+        # to compute new codes for the MultiIndex. There may be
+        # a faster solution that could be executed on gpu at the same
+        # time the groupby is calculated.
+        for by in self._gb._by:
+            level = self._gb._df[by].unique()
+            replaced = self._gb._df[by].replace(
+                    level, Series(range(len(level))))
+            levels.append(level)
+            codes[by] = Series(replaced, dtype="int32")
+            names.append(by)
+        self._levels = levels
+        self._codes = codes
+        self.names = names
 
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
@@ -143,6 +185,8 @@ class MultiIndex(Index):
         return validity_mask
 
     def _get_row_major(self, df, row_tuple):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import Series
         result = df.take(Series(valid_indices))
@@ -178,6 +222,8 @@ class MultiIndex(Index):
         return result
 
     def _get_column_major(self, df, row_tuple):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import DataFrame
         result = DataFrame()
@@ -200,9 +246,16 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
+        if self._codes is None:
+            if self._df is not None:
+                self._compute_levels_and_codes()
+            else:
+                return 0
         return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         if not hasattr(other, 'levels'):
             return False
         equal_levels = self.levels == other.levels
@@ -218,6 +271,8 @@ class MultiIndex(Index):
 
     @property
     def size(self):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         return len(self.codes[0])
 
     def take(self, indices):
@@ -242,6 +297,8 @@ class MultiIndex(Index):
         return self
 
     def __next__(self):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         if self.n < len(self.codes):
             result = self[self.n]
             self.n += 1
@@ -250,6 +307,8 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         match = self.take(index)
         if isinstance(index, slice):
             return match
@@ -284,6 +343,8 @@ class MultiIndex(Index):
         return result
 
     def to_pandas(self):
+        if self._codes is None:
+            self._compute_levels_and_codes()
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())

@@ -183,7 +183,7 @@ class Groupby(object):
                 agg_groupby._df[self._by] = self._df[self._by]
             else:
                 for by in self._by:
-                    agg_groupby._df[by] = self._df[by]
+                    agg_groupby._df._cols[by] = self._df._cols[by]
         return _cpp_apply_basic_agg(agg_groupby, agg_type,
                                     sort_results=sort_results)
 
@@ -226,22 +226,10 @@ class Groupby(object):
             result = result.set_index(idx)
             return result
         else:
-            levels = []
-            codes = DataFrame()
-            names = []
-            # Note: This is an O(N^2) solution using gpu masking
-            # to compute new codes for the MultiIndex. There may be
-            # a faster solution that could be executed on gpu at the same
-            # time the groupby is calculated.
-            for by in self._by:
-                level = result[by].unique()
-                replaced = result[by].replace(level, range(len(level)))
-                levels.append(level)
-                codes[by] = Series(replaced, dtype="int32")
-                names.append(by)
-            multi_index = MultiIndex(levels=levels,
-                                     codes=codes,
-                                     names=names)
+            multi_index = MultiIndex(levels=None,
+                                     codes=None,
+                                     names=[])
+            multi_index._gb = self
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:

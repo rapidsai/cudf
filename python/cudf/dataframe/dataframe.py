@@ -721,6 +721,7 @@ class DataFrame(object):
     @index.setter
     def index(self, _index):
         if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
+            _index._df = self
             if len(_index) != len(self):
                 msg = f"Length mismatch: Expected axis has "\
                        "%d elements, new values "\
@@ -766,6 +767,7 @@ class DataFrame(object):
         # Otherwise
         else:
             index = index if isinstance(index, Index) else as_index(index)
+            index._df = self
             df = DataFrame()
             df._index = index
             for k in self.columns:
