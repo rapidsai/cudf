@@ -42,6 +42,8 @@ void gpu_atomic_test(T *result, T *data, size_t size)
         atomicMin(&result[1], data[id]);
         atomicMax(&result[2], data[id]);
         cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
+        cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
+        cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
     }
 }
 
@@ -74,6 +76,8 @@ void gpu_atomicCAS_test(T *result, T *data, size_t size)
         atomic_op(&result[1], data[id], cudf::DeviceMin{});
         atomic_op(&result[2], data[id], cudf::DeviceMax{});
         atomic_op(&result[3], data[id], cudf::DeviceSum{});
+        atomic_op(&result[4], data[id], cudf::DeviceMin{});
+        atomic_op(&result[5], data[id], cudf::DeviceMax{});
     }
 }
 
@@ -89,6 +93,8 @@ void gpu_atomic_bitwiseOp_test(T *result, T *data, size_t size)
         atomicOr(&result[1], data[id]);
         atomicXor(&result[2], data[id]);
         cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceAnd{});
+        cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceOr{});
+        cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceXor{});
     }
 }
 
@@ -110,11 +116,13 @@ struct AtomicsTest : public GdfTest
         exact[1] = *( std::min_element(v.begin(), v.end()) );
         exact[2] = *( std::max_element(v.begin(), v.end()) );
 
-        std::vector<T> result_init(4);
+        std::vector<T> result_init(6);
         result_init[0] = T{0};
         result_init[1] = std::numeric_limits<T>::max();
         result_init[2] = std::numeric_limits<T>::min();
-        result_init[3] = T{0};
+        result_init[3] = result_init[0];
+        result_init[4] = result_init[1];
+        result_init[5] = result_init[2];
 
         thrust::device_vector<T> dev_data(v);
         thrust::device_vector<T> dev_result(result_init);
@@ -137,6 +145,8 @@ struct AtomicsTest : public GdfTest
         EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
         EXPECT_EQ(host_result[2], exact[2]) << "atomicMax test failed";
         EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
+        EXPECT_EQ(host_result[4], exact[1]) << "atomicMin test(2) failed";
+        EXPECT_EQ(host_result[5], exact[2]) << "atomicMax test(2) failed";
     }
 };
 
@@ -235,30 +245,25 @@ TYPED_TEST(AtomicsTest, atomicCASRandom)
 template <typename T>
 struct AtomicsBitwiseOpTest : public GdfTest
 {
-    void atomic_test(std::vector<uint64_t> const & v,
+    void atomic_test(std::vector<uint64_t> const & v_input,
         int block_size=0, int grid_size=1)
     {
-        std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull)};
-        T exact[4];
+        size_t vec_size = v_input.size();
+        std::vector<T> v(vec_size);
+        std::transform(v_input.begin(), v_input.end(), v.begin(),
+            [](int x) { T t(x) ; return t; } );
+
+        std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull), T(0), T(0)};
+        T exact[3];
         exact[0] = std::accumulate(v.begin(), v.end(), identity[0],
             [](T acc, uint64_t i) { return acc & T(i); });
         exact[1] = std::accumulate(v.begin(), v.end(), identity[1],
             [](T acc, uint64_t i) { return acc | T(i); });
         exact[2] = std::accumulate(v.begin(), v.end(), identity[2],
             [](T acc, uint64_t i) { return acc ^ T(i); });
-        exact[3] = exact[0];
 
-        size_t vec_size = v.size();
-
-        std::vector<T> v_type(vec_size);
-        std::transform(v.begin(), v.end(), v_type.begin(),
-            [](uint64_t x) { T t(x) ; return t; } );
-
-        std::vector<T> result_init(identity);
-
-
-        thrust::device_vector<T> dev_result(result_init);
-        thrust::device_vector<T> dev_data(v_type);
+        thrust::device_vector<T> dev_result(identity);
+        thrust::device_vector<T> dev_data(v);
 
         if( block_size == 0) block_size = vec_size;
 
@@ -276,9 +281,11 @@ struct AtomicsBitwiseOpTest : public GdfTest
 
 
         EXPECT_EQ(host_result[0], exact[0]) << "atomicAnd test failed";
-        EXPECT_EQ(host_result[1], exact[1]) << "atomicOr test failed";
+        EXPECT_EQ(host_result[1], exact[1]) << "atomicOr  test failed";
         EXPECT_EQ(host_result[2], exact[2]) << "atomicXor test failed";
         EXPECT_EQ(host_result[3], exact[0]) << "atomicAnd test(2) failed";
+        EXPECT_EQ(host_result[4], exact[1]) << "atomicOr  test(2) failed";
+        EXPECT_EQ(host_result[5], exact[2]) << "atomicXor test(2) failed";
     }
 
     void print_exact(const T *v, const char* msg){
