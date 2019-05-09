@@ -12,6 +12,7 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 
 
