@@ -27,6 +27,7 @@
 #include <random>
 #include <thrust/device_vector.h>
 #include <cstdlib>
+#include <limits>
 
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
@@ -38,6 +39,24 @@ struct KeyValueTypes
   using op_type = Aggregation_Operator<value_type>;
 };
 
+template <typename Map>
+struct key_finder{
+
+  using key_type = typename Map::key_type;
+  using value_type = typename Map::mapped_type;
+  key_finder(Map* _map) : map{_map} {}
+
+  __device__ bool operator()(thrust::pair<key_type, value_type> const& p) {
+    auto found = map->find(p.first);
+
+    if (found == map->end()) {
+      return false;
+    }
+    return found->second == p.second;
+  }
+  Map* map;
+};
+
 // A new instance of this class will be created for each *TEST(MapTest, ...)
 // Put all repeated stuff for each test here
 template <class T>
@@ -46,13 +65,15 @@ struct MapTest : public GdfTest
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
   using op_type = typename T::op_type;
-  using map_type = concurrent_unordered_map<key_type, value_type, std::numeric_limits<key_type>::max()>;
+  using map_type = concurrent_unordered_map < key_type, value_type,
+        default_hash<key_type>, equal_to<key_type>,
+        managed_allocator<thrust::pair<key_type, value_type>>>;
   using pair_type = thrust::pair<key_type, value_type>;
 
   std::unique_ptr<map_type> the_map;
 
-  const key_type unused_key = std::numeric_limits<key_type>::max();
-  const value_type unused_value = op_type::IDENTITY;
+  const key_type unused_key{std::numeric_limits<key_type>::max()};
+  const value_type unused_value{op_type::IDENTITY};
 
   const int size;
 
@@ -65,7 +86,7 @@ struct MapTest : public GdfTest
   std::unordered_map<key_type, value_type> expected_values;
 
   MapTest(const int hash_table_size = 10000)
-    : size(hash_table_size), the_map(new map_type(hash_table_size, op_type::IDENTITY))
+    : size(hash_table_size), the_map(new map_type(hash_table_size, MapTest::unused_value, MapTest::unused_key))
   {
   }
 
@@ -74,7 +95,7 @@ struct MapTest : public GdfTest
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
-    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS, unused_value));
+    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS, unused_value, unused_key));
 
     pairs.reserve(TOTAL_PAIRS);
 
@@ -133,21 +154,14 @@ struct MapTest : public GdfTest
   }
 
   void check_answer(){
+    std::vector<std::pair<key_type, value_type>> host_pairs(
+        expected_values.begin(), expected_values.end());
 
-    for(auto const &k : this->expected_values)
-    {
-      key_type test_key = k.first;
+    thrust::device_vector<thrust::pair<key_type, value_type>> expected_pairs(
+        host_pairs);
 
-      value_type expected_value = k.second;
-
-      auto found = this->the_map->find(test_key);
-
-      ASSERT_NE(this->the_map->end(), found);
-
-      value_type test_value = found->second;
-
-      EXPECT_EQ(expected_value, test_value) << "Key is: " << test_key;
-    }
+    EXPECT_TRUE(thrust::all_of(expected_pairs.begin(), expected_pairs.end(),
+                               key_finder<map_type>(this->the_map.get())));
   }
 
   ~MapTest(){
@@ -183,27 +197,6 @@ typedef ::testing::Types< KeyValueTypes<int, int, max_op>,
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
-
-TYPED_TEST(MapTest, InitialState)
-{
-  using key_type = typename TypeParam::key_type;
-  using value_type = typename TypeParam::value_type;
-
-  auto begin = this->the_map->begin();
-  auto end = this->the_map->end();
-  EXPECT_NE(begin,end);
-
-}
-
-TYPED_TEST(MapTest, CheckUnusedValues){
-
-  EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
-
-  auto begin = this->the_map->begin();
-  EXPECT_EQ(begin->first, this->unused_key);
-  EXPECT_EQ(begin->second, this->unused_value);
-}
-
 
 template<typename map_type, typename Aggregation_Operator>
 __global__ void build_table(map_type * const the_map,
@@ -241,7 +234,6 @@ TYPED_TEST(MapTest, AggregationTestDeviceAllSame)
   cudaDeviceSynchronize(); 
 
   this->check_answer();
-
 }
 
 TYPED_TEST(MapTest, AggregationTestDeviceAllUnique)
@@ -303,10 +295,17 @@ template <typename K, typename V>
 struct key_value_types{
     using key_type = K;
     using value_type = V;
+    using pair_type = thrust::pair<K,V>;
 };
 
 template <typename T>
-struct InsertTest : public GdfTest {};
+struct InsertTest : public GdfTest {
+  using key_type = typename T::key_type;
+  using value_type = typename T::value_type;
+  using pair_type = typename T::pair_type;
+
+  using map_type = concurrent_unordered_map<key_type, value_type>;
+};
 
 using TestTypes = ::testing::Types< key_value_types<int32_t, int32_t> >;
 
