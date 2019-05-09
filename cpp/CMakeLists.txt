@@ -281,6 +281,7 @@ add_library(cudf SHARED
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
             src/bitmask/legacy_bitmask.cpp)
