@@ -142,6 +142,7 @@
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
 - PR #1656 Correct Groupby failure in dask when un-aggregable columns are left in dataframe.
 - PR #1689 Fix groupby performance regression
+- PR #1694 Add Cython as a runtime dependency since it's required in `setup.py`
 
 
 # cuDF 0.6.1 (25 Mar 2019)
