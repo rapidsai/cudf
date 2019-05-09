@@ -289,6 +289,24 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+capacity, current_hash_bucket);
     }
 
+    /**---------------------------------------------------------------------------*
+     * @brief Attempts to insert a key, value pair into the map.
+     *
+     * Returns an iterator, boolean pair.
+     *
+     * If the new key already present in the map, the iterator points to
+     * the location of the existing key and the boolean is `false` indicating
+     * that the insert did not succeed.
+     *
+     * If the new key was not present, the iterator points to the location where
+     * the insert occured and the boolean is `true` indicating that the insert
+     * succeeded.
+     *
+     * @param insert_pair The key and value pair to insert
+     * @return Iterator, Boolean pair. Iterator is to the location of the newly
+     * inserted pair, or the existing pair that prevented the insert. Boolean
+     * indicates insert success.
+     *---------------------------------------------------------------------------**/
     __device__ thrust::pair<iterator, bool> insert(value_type&& insert_pair) {
       const size_type key_hash = m_hf(insert_pair.first);
       size_type index = key_hash % capacity;
@@ -326,6 +344,12 @@ public:
           new_insert);
     }
 
+    /**---------------------------------------------------------------------------*
+     * @brief Searches the map for the specified key.
+     * 
+     * @param k The key to search for
+     * @return An iterator to the key if it exists, else map.end() 
+     *---------------------------------------------------------------------------**/
     __device__ const_iterator find(key_type const& k) const {
       size_type const key_hash = m_hf(k);
       size_type index = key_hash % capacity;
@@ -336,17 +360,15 @@ public:
         key_type const existing_key = current_bucket->first;
 
         if (m_equal(k, existing_key)) {
-          break;
+          return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                                current_bucket);
         }
         if (m_equal(unused_key, existing_key)) {
-          break;
+          return this->end();
         }
         index = (index + 1) % capacity;
         current_bucket = &m_hashtbl_values[index];
       }
-
-      return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
-                            current_bucket);
     }
 
     gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
