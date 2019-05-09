@@ -61,8 +61,16 @@ private:
     umap_str_shptr<jitify_v2::KernelInstantiation>  kernel_inst_map;
     umap_str_shptr<jitify_v2::Program>              program_map;
 
-    std::mutex _kernel_cache_mutex;
-    std::mutex _program_cache_mutex;
+    /*
+    Even though this class can be used as a non-singleton, the file cache
+    access should remain limited to one thread per process. The lockf locks can
+    prevent multiple processes from accessing the file but are ineffective in
+    preventing multiple threads from doing so as the lock is shared by the
+    entire process.
+    Therefore the mutexes are static.
+    */
+    static std::mutex _kernel_cache_mutex;
+    static std::mutex _program_cache_mutex;
 
 private:
     class cacheFile

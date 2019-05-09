@@ -52,6 +52,9 @@ cudfJitCache::cudfJitCache() { }
 
 cudfJitCache::~cudfJitCache() { }
 
+std::mutex cudfJitCache::_kernel_cache_mutex;
+std::mutex cudfJitCache::_program_cache_mutex;
+
 std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
     std::string prog_name, 
     std::string const& cuda_source = "",
@@ -192,7 +195,7 @@ void cudfJitCache::cacheFile::write(std::string content)
     }
     fclose(fp);
 
-    successful_write = false;
+    successful_write = true;
     return;
 }
 
