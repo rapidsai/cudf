@@ -34,9 +34,12 @@ namespace cudf {
  * that are both non-null and `true`. Note that the output column memory is 
  * allocated by this function but must be freed by the caller when finished.
  * 
- * Note that the @p boolean_mask may have just boolean data (no valid bitmask), 
+ * @note that the @p boolean_mask may have just boolean data (no valid bitmask), 
  * or just a valid bitmask (no boolean data), or it may have both. The filter
  * adapts to these three situations.
+ * 
+ * @note if @p input.size is zero, there is no error, and an empty column is 
+ * returned.
  * 
  * @param[in] input The input column to filter
  * @param[in] boolean_mask A column of type GDF_BOOL8 used as a mask to filter
@@ -46,6 +49,28 @@ namespace cudf {
  */
 gdf_column apply_boolean_mask(gdf_column const &input,
                               gdf_column const &boolean_mask);
+
+/**
+ * @brief Filters a column to remove null elements.
+ *
+ * Given an input column an element `i` from the input column is copied to the
+ * output if the corresponding element `i` in the input's valid bitmask is
+ * non-null.
+ *
+ * The output column has size equal to the number of elements in boolean_mask 
+ * that are both non-null and `true`. Note that the output column memory is 
+ * allocated by this function but must be freed by the caller when finished.
+ * 
+ * If the input column is not nullable, this function just copies the input
+ * to the output.
+ * 
+ * * @note if @p input.size is zero, there is no error, and an empty column is 
+ * returned.
+ * 
+ * @param[in] input The input column to filter
+ * @return gdf_column Column containing copy of all non-null elements of @p input.
+ */
+gdf_column drop_nulls(gdf_column const &input);
 }  // namespace cudf
 
 #endif

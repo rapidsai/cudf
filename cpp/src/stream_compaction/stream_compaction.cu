@@ -314,7 +314,12 @@ gdf_size_type get_output_size(gdf_size_type *block_counts,
 template <typename Filter>
 gdf_column apply_filter(gdf_column const &input, Filter filter, 
                         cudaStream_t stream = 0) {
-  CUDF_EXPECTS(nullptr != input.data, "Null input data");
+  if (0 == input.size) { // no error for empty input, just return empty output
+    gdf_column output;
+    gdf_column_view(&output, 0, 0, 0, input.dtype);
+    return output;
+  }
+  CUDF_EXPECTS(nullptr != input.data, "Null input data"); // nonzero size
   
   constexpr int block_size = 256;
   constexpr int per_thread = 32;
@@ -400,11 +405,12 @@ namespace cudf {
  */
 gdf_column apply_boolean_mask(gdf_column const &input,
                               gdf_column const &boolean_mask) {
-  CUDF_EXPECTS(input.data != nullptr, "Null input data");
   CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
   CUDF_EXPECTS(boolean_mask.data != nullptr ||
                boolean_mask.valid != nullptr, "Null boolean_mask");
-  CUDF_EXPECTS(input.size == boolean_mask.size, "Column size mismatch");
+  // zero-size inputs are OK, but otherwise input size must match mask size
+  CUDF_EXPECTS(input.size == 0 || input.size == boolean_mask.size, 
+               "Column size mismatch");
 
   if (boolean_mask.data == nullptr)
     return apply_filter(input, boolean_mask_filter<false, true>{boolean_mask});
@@ -418,12 +424,9 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  * Filters a column to remove null elements.
  */
 gdf_column drop_nulls(gdf_column const &input) {
-  CUDF_EXPECTS(input.data != nullptr,  "Null input data");
-
-  if (input.valid != nullptr || 0 == input.null_count)
+  if (input.valid != nullptr && input.null_count != 0)
     return apply_filter(input, valid_filter{input});
-  else {
-    // no null mask, just copy the data
+  else { // no null bitmask, so just copy
     gdf_column output;
     gdf_column_view(&output, 0, 0, 0, input.dtype);
     return output;

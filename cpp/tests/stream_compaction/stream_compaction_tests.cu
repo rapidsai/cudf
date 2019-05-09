@@ -35,7 +35,13 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
 
   cudf::test::column_wrapper<int32_t> source{column_size};
   cudf::test::column_wrapper<cudf::bool8> mask{column_size};
-             
+
+  CUDF_EXPECT_NO_THROW(cudf::apply_boolean_mask(bad_input, mask));
+
+  bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
+  bad_input.null_count = 2;
+  bad_input.size = column_size; 
+  // nonzero, with non-null valid mask, so non-null input expected
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(bad_input, mask),
                             "Null input data");
 
@@ -206,4 +212,26 @@ TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return row % 2 == 1; }},
     cudf::test::column_wrapper<TypeParam> {expected});
+}
+
+struct DropNullsErrorTest : GdfTest {};
+
+TEST_F(DropNullsErrorTest, EmptyInput)
+{
+  gdf_column bad_input;
+  gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
+
+  // zero size, so expect no error, just empty output column
+  gdf_column output;
+  CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls(bad_input));
+  EXPECT_EQ(output.size, 0);
+  EXPECT_EQ(output.null_count, 0);
+  EXPECT_EQ(output.data, nullptr);
+  EXPECT_EQ(output.valid, nullptr);
+
+  bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
+  bad_input.null_count = 1;
+  bad_input.size = 2; 
+  // nonzero, with non-null valid mask, so non-null input expected
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls(bad_input), "Null input data");
 }
