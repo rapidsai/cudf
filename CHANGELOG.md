@@ -6,7 +6,7 @@
 - PR #1569 Add support for Json objects to the JSON Lines reader
 
 ## Improvements
-
+- PR #1538 Replacing LesserRTTI with inequality_comparator
 ...
 
 ## Bug Fixes
