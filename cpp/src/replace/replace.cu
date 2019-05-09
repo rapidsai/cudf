@@ -70,7 +70,7 @@ namespace{ //anonymous
               }
               else{
                 //unset the i-th bit in col_valid
-                gdf_unset_bit(col_valid, i)
+                gdf_unset_bit(col_valid, i);
               }
 
           }
@@ -116,9 +116,7 @@ namespace{ //anonymous
     GDF_REQUIRE(col != nullptr && old_values != nullptr && new_values != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(old_values->size == new_values->size, GDF_COLUMN_SIZE_MISMATCH);
     GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
-    //GDF_REQUIRE(col->valid == nullptr || col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
-    //GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
     
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
