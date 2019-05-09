@@ -612,59 +612,11 @@ T atomicCAS(T* address, T compare, T val)
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__
-int8_t atomicAnd(int8_t* address, int8_t val)
+T atomicAnd(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @overload uint8_t atomicAnd(uint8_t* address, uint8_t val)
- */
-__forceinline__ __device__
-uint8_t atomicAnd(uint8_t* address, uint8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @overload int16_t atomicAnd(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicAnd(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @overload uint16_t atomicAnd(uint16_t* address, uint16_t val)
- */
-__forceinline__ __device__
-uint16_t atomicAnd(uint16_t* address, uint16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
-}
-
-/**
- * @overload int64_t atomicAnd(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicAnd(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicAnd(a, v);});
-}
-
-/**
- * @overload uint64_t atomicAnd(uint64_t* address, uint64_t val)
- */
-__forceinline__ __device__
-uint64_t atomicAnd(uint64_t* address, uint64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicAnd(a, v);});
 }
 
 /* Overloads for `atomicOr` */
@@ -682,61 +634,12 @@ uint64_t atomicAnd(uint64_t* address, uint64_t val)
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__
-int8_t atomicOr(int8_t* address, int8_t val)
+T atomicOr(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
 }
-
-/**
- * @overload uint8_t atomicOr(uint8_t* address, uint8_t val)
- */
-__forceinline__ __device__
-uint8_t atomicOr(uint8_t* address, uint8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload int16_t atomicOr(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicOr(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload uint16_t atomicOr(uint16_t* address, uint16_t val)
- */
-__forceinline__ __device__
-uint16_t atomicOr(uint16_t* address, uint16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
-}
-
-/**
- * @overload int64_t atomicOr(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicOr(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicOr(a, v);});
-}
-
-/**
- * @overload uint64_t atomicOr(uint64_t* address, uint64_t val)
- */
-__forceinline__ __device__
-uint64_t atomicOr(uint64_t* address, uint64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicOr(a, v);});
-}
-
 
 /* Overloads for `atomicXor` */
 /** -------------------------------------------------------------------------*
@@ -753,60 +656,11 @@ uint64_t atomicOr(uint64_t* address, uint64_t val)
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__
-int8_t atomicXor(int8_t* address, int8_t val)
+T atomicXor(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
 }
-
-/**
- * @overload uint8_t atomicXor(uint8_t* address, uint8_t val)
- */
-__forceinline__ __device__
-uint8_t atomicXor(uint8_t* address, uint8_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
-}
-
-/**
- * @overload int16_t atomicXor(int16_t* address, int16_t val)
- */
-__forceinline__ __device__
-int16_t atomicXor(int16_t* address, int16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
-}
-
-/**
- * @overload uint16_t atomicXor(uint16_t* address, uint16_t val)
- */
-__forceinline__ __device__
-uint16_t atomicXor(uint16_t* address, uint16_t val)
-{
-    return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
-}
-
-/**
- * @overload int64_t atomicXor(int64_t* address, int64_t val)
- */
-__forceinline__ __device__
-int64_t atomicXor(int64_t* address, int64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicXor(a, v);});
-}
-
-/**
- * @overload uint64_t atomicXor(uint64_t* address, uint64_t val)
- */
-__forceinline__ __device__
-uint64_t atomicXor(uint64_t* address, uint64_t val)
-{
-    using T = long long int;
-    return cudf::detail::typesAtomicOperation64
-        (address, val, [](T* a, T v){return atomicXor(a, v);});
-}
-
 
 #endif
