@@ -45,8 +45,7 @@ template <typename Key,
           Key unused_key,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-          typename Allocator = managed_allocator<thrust::pair<Key, Element> >,
-          bool count_collisions = false>
+          typename Allocator = managed_allocator<thrust::pair<Key, Element> >>
 class concurrent_unordered_map : public managed
 {
 
@@ -75,7 +74,7 @@ public:
                                       const Hasher& hf = hasher(),
                                       const Equality& eql = key_equal(),
                                       const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a), capacity(n), m_collisions(0), m_unused_element(unused_element)
+        : m_hf(hf), m_equal(eql), m_allocator(a), capacity(n), m_unused_element(unused_element)
     {
         m_hashtbl_values = m_allocator.allocate( capacity );
         constexpr int block_size = 128;
@@ -100,23 +99,23 @@ public:
         m_allocator.deallocate( m_hashtbl_values, capacity );
     }
     
-    __host__ __device__ iterator begin()
+     __device__ iterator begin()
     {
         return iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values );
     }
-    __host__ __device__ const_iterator begin() const
+     __device__ const_iterator begin() const
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values );
     }
-    __host__ __device__ iterator end()
+     __device__ iterator end()
     {
         return iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values+capacity );
     }
-    __host__ __device__ const_iterator end() const
+     __device__ const_iterator end() const
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,m_hashtbl_values+capacity );
     }
-    __host__ __device__ value_type* data() const
+     __device__ value_type* data() const
     {
       return m_hashtbl_values;
     }
@@ -155,25 +154,25 @@ public:
     // TODO Overload atomicAdd for 1 byte and 2 byte types, until then, overload specifically for the types
     // where atomicAdd already has an overload. Otherwise the generic update_existing_value will be used.
     // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
+    __forceinline__  __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
+    __forceinline__  __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
+    __forceinline__  __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__ __host__ __device__
+    __forceinline__ __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
@@ -327,36 +326,31 @@ public:
           new_insert);
     }
 
-    __forceinline__
-    __host__ __device__ const_iterator find(const key_type& k ) const
-    {
-        size_type key_hash = m_hf( k );
-        size_type hash_tbl_idx = key_hash%capacity;
-        
-        value_type* begin_ptr = 0;
-        
-        size_type counter = 0;
-        while ( 0 == begin_ptr ) {
-            value_type* tmp_ptr = m_hashtbl_values + hash_tbl_idx;
-            const key_type tmp_val = tmp_ptr->first;
-            if ( m_equal( k, tmp_val ) ) {
-                begin_ptr = tmp_ptr;
-                break;
-            }
-            if ( m_equal( unused_key , tmp_val ) || counter > capacity ) {
-                begin_ptr = m_hashtbl_values + capacity;
-                break;
-            }
-            hash_tbl_idx = (hash_tbl_idx+1)%capacity;
-            ++counter;
+    __device__ const_iterator find(key_type const& k) const {
+      size_type const key_hash = m_hf(k);
+      size_type index = key_hash % capacity;
+
+      value_type* current_bucket = &m_hashtbl_values[index];
+
+      while (true) {
+        key_type const existing_key = current_bucket->first;
+
+        if (m_equal(k, existing_key)) {
+          break;
         }
-        
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+capacity,begin_ptr);
+        if (m_equal(unused_key, existing_key)) {
+          break;
+        }
+        index = (index + 1) % capacity;
+        current_bucket = &m_hashtbl_values[index];
+      }
+
+      return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                            current_bucket);
     }
-    
+
     gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
     {
-        m_collisions = other.m_collisions;
         if ( other.capacity <= capacity ) {
             capacity = other.capacity;
         } else {
@@ -374,13 +368,6 @@ public:
     {
         constexpr int block_size = 128;
         init_hashtbl<<<((capacity-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, capacity, unused_key, m_unused_element );
-        if ( count_collisions )
-            m_collisions = 0;
-    }
-    
-    unsigned long long get_num_collisions() const
-    {
-        return m_collisions;
     }
     
     void print()
@@ -415,7 +402,6 @@ private:
     size_type   capacity;
     value_type* m_hashtbl_values;
     
-    unsigned long long m_collisions;
 };
 
 #endif //CONCURRENT_UNORDERED_MAP_CUH
