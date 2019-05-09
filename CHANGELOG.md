@@ -15,6 +15,7 @@
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
+- PR #1704 CSV Reader: Add support for the plus sign in number fields
 
 
 # cuDF 0.7.0 (Date TBD)
