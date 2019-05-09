@@ -1131,7 +1131,7 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        return self._column.find_first_value(value)
+        return self._column._first_value(value)
 
     def find_last_value(self, value):
         """
@@ -1839,6 +1839,7 @@ class Loc(object):
             or isinstance(arg, Number)
             or is_datetime_or_timedelta_dtype(arg)
             or isinstance(arg, pd.Timestamp)
+            or isinstance(arg, pd.Categorical)
         ):
             found_index = self._sr.index.find_label_range(arg, None)[0]
             return self._sr.iloc[found_index]

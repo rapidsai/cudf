@@ -502,7 +502,7 @@ def test_series_loc_string():
     gs = Series.from_pandas(ps)
 
     assert_eq(ps.loc['one'], gs.loc['one'])
-    assert_eq(ps.loc['one'], gs.loc['one'])
+    assert_eq(ps.loc['five'], gs.loc['five'])
     assert_eq(ps.loc['two':'four'], gs.loc['two':'four'])
     assert_eq(ps.loc[:'four'], gs.loc[:'four'])
     assert_eq(ps.loc['two':], gs.loc['two':])
@@ -551,6 +551,21 @@ def test_series_loc_datetime():
             ]
         ],
     )
+    assert_eq(ps.loc[[True, False, True, False, True]],
+              gs.loc[[True, False, True, False, True]])
+
+
+def test_series_loc_categorical():
+    ps = pd.Series([1, 2, 3, 4, 5], index=pd.Categorical(['a', 'b', 'c', 'd', 'e']))
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc['a'], gs.loc['a'])
+    assert_eq(ps.loc['e'], gs.loc['e'])
+    assert_eq(ps.loc['b':'d'], gs.loc['b':'d'])
+    assert_eq(ps.loc[:'d'], gs.loc[:'d'])
+    assert_eq(ps.loc['b':], gs.loc['b':])
+    assert_eq(ps.loc[::2], gs.loc[::2])
+    assert_eq(ps.loc[['a', 'd', 'e']], gs.loc[['a', 'd', 'e']])
     assert_eq(ps.loc[[True, False, True, False, True]],
               gs.loc[[True, False, True, False, True]])
 

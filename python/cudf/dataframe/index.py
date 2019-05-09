@@ -603,6 +603,10 @@ class CategoricalIndex(GenericIndex):
                 categories=values.categories.tolist(),
                 ordered=values.ordered
             )
+        elif isinstance(values, (list, tuple)):
+            values = columnops.as_column(
+                pd.Categorical(values, categories=values)
+            )
 
         self._values = values
         self.name = name
