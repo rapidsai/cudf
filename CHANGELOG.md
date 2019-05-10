@@ -4,6 +4,7 @@
 
 - PR #1708 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 
+
 # cuDF 0.7.0 (10 May 2019)
 
 ## New Features
