@@ -47,7 +47,6 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if codes is None and levels is None:
-            self._df = None
             self._codes = None
             self._levels = None
             return
