@@ -28,6 +28,7 @@ requirements:
     - pyarrow 0.12.1.*
     - rmm 0.7.*
     - nvstrings 0.7.*
+    - cython >=0.29,<0.30
 
 test:
   commands:

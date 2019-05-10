@@ -7,6 +7,7 @@ import warnings
 from collections.abc import Sequence
 
 from cudf.dataframe import columnops
+from cudf.dataframe.series import Series
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.index import Index, StringIndex
 from cudf.utils import utils
@@ -63,7 +64,7 @@ class MultiIndex(Index):
 
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
-        self.levels = np.array(levels)
+        self.levels = np.array([Series(level).to_array() for level in levels])
         self._validate_levels_and_codes(self.levels, self.codes)
         self.name = None
         self.names = names

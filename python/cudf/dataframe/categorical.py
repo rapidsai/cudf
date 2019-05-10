@@ -258,26 +258,35 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
+
         result = self.copy()
 
-        if np.isscalar(fill_value):
-            if fill_value != self.default_na_value():
-                if (fill_value not in self.cat().categories):
-                    raise ValueError("fill value must be in categories")
-            fill_value = pd.Categorical(fill_value,
-                                        categories=self.cat().categories)
+        if not self.has_null_mask:
+            return result
 
-        fill_value_col = columnops.as_column(
-            fill_value, nan_as_null=False)
+        fill_is_scalar = np.isscalar(fill_value)
 
-        # TODO: only required if fill_value has a subset of the categories:
-        fill_value_col = fill_value_col.cat()._set_categories(
-            self.cat().categories)
+        if fill_is_scalar and fill_value == self.default_na_value():
+            fill_value_col = columnops.as_column(
+                [fill_value], nan_as_null=False, dtype=self.data.dtype)
+        else:
+            if fill_is_scalar:
+                if fill_value != self.default_na_value():
+                    if (fill_value not in self.cat().categories):
+                        raise ValueError("fill value must be in categories")
+                fill_value = pd.Categorical(fill_value,
+                                            categories=self.cat().categories)
+
+            fill_value_col = columnops.as_column(
+                fill_value, nan_as_null=False)
+
+            # TODO: only required if fill_value has a subset of the categories:
+            fill_value_col = fill_value_col.cat()._set_categories(
+                self.cat().categories)
 
         cpp_replace.replace_nulls(result, fill_value_col)
 
-        result = result.replace(mask=None)
-        return self._mimic_inplace(result, inplace)
+        return self._mimic_inplace(result.replace(mask=None), inplace)
 
 
 def pandas_categorical_as_column(categorical, codes=None):
