@@ -67,6 +67,7 @@ struct TempDirTestEnvironment : public ::testing::Environment
         delete[] tmpdir;
         tmpdir=NULL;
     }
+
     static int rmFiles(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
     {
         return remove(pathname);
