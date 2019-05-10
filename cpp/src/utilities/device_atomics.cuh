@@ -170,6 +170,7 @@ namespace detail {
     // specialized functions for operators
     // `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
     // `atomicMin`, `atomicMax` support int32_t, int64_t
+    // `atomicAnd`, `atomicOr`, `atomicXor` support int32_t, int64_t
     template<>
     struct genericAtomicOperationImpl<float, DeviceSum, 4> {
         using T = float;
@@ -181,6 +182,7 @@ namespace detail {
     };
 
 #if defined(__CUDA_ARCH__) && ( __CUDA_ARCH__ >= 600 )
+    // `atomicAdd(double)` is supported after cuda architecture 6.0
     template<>
     struct genericAtomicOperationImpl<double, DeviceSum, 8> {
         using T = double;
@@ -417,7 +419,8 @@ namespace detail {
 } // namespace detail
 
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief compute atomic binary operation
+ * reads the `old` located at the `address` in global or shared memory,
  * computes 'BinaryOp'('old', 'update_value'),
  * and stores the result back to memory at the same address.
  * These three operations are performed in one atomic transaction.
@@ -428,7 +431,8 @@ namespace detail {
  * cudf::nvstring_category, cudf::bool8
  *
  * @param[in] address The address of old value in global or shared memory
- * @param[in] val The value to be added
+ * @param[in] val The value to be computed
+ * @param[in] op  The binary operator used for compute
  *
  * @returns The old value at `address`
  * -------------------------------------------------------------------------**/
@@ -441,17 +445,17 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     return T(ret);
 }
 
-
+// specialization for cudf::detail::wrapper types
 template <typename T, gdf_dtype dtype, typename BinaryOp, typename W = cudf::detail::wrapper<T, dtype> >
 W genericAtomicOperator( W* address, W const& update_value, BinaryOp op){
     // unwrap the input type to expect
-    // that the native atomic API is used for the underlying type
+    // that the native atomic API is used for the underlying type if possible
     auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>{}
             (static_cast<T*>(address), cudf::detail::unwrap(update_value), op);
     return W(ret);
 }
 
-
+// specialization for cudf::bool8 types
 template <typename BinaryOp>
 __forceinline__  __device__
 cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & update_value, BinaryOp op)
@@ -467,10 +471,9 @@ cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & upd
 } // namespace cudf
 
 
-
-/* Overloads for `atomicAdd` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicAdd`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes (old + val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -494,9 +497,9 @@ T atomicAdd(T* address, T val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
 
-/* Overloads for `atomicMin` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicMin`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes the minimum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
@@ -520,9 +523,9 @@ T atomicMin(T* address, T val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
 }
 
-/* Overloads for `atomicMax` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicMax`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes the maximum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
@@ -546,9 +549,9 @@ T atomicMax(T* address, T val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
 }
 
-/* Overloads for `atomicCAS` */
 /** --------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicCAS`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes (`old` == `compare` ? `val` : `old`),
  * and stores the result back to memory at the same address.
  * These three operations are performed in one atomic transaction.
@@ -561,6 +564,7 @@ T atomicMax(T* address, T val)
  * Other types are implemented by `atomicCAS`.
  *
  * @param[in] address The address of old value in global or shared memory
+ * @param[in] compare The value to be compared
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
@@ -572,10 +576,9 @@ T atomicCAS(T* address, T compare, T val)
     return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
 }
 
-
-/* Overloads for `atomicAnd` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicAnd`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes (old & val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -595,9 +598,9 @@ T atomicAnd(T* address, T val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
 }
 
-/* Overloads for `atomicOr` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicOr`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes (old | val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
@@ -617,9 +620,9 @@ T atomicOr(T* address, T val)
     return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
 }
 
-/* Overloads for `atomicXor` */
 /** -------------------------------------------------------------------------*
- * @brief reads the `old` located at the `address` in global or shared memory,
+ * @brief Overloads for `atomicXor`
+ * reads the `old` located at the `address` in global or shared memory,
  * computes (old ^ val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
