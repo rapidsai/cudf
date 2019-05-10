@@ -31,7 +31,8 @@
 
 #include "tests/utilities/cudf_test_fixtures.h"
 
-TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {

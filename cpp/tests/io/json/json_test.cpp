@@ -38,7 +38,8 @@
 using std::string;
 using std::vector;
 
-TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct gdf_json_test : GdfTest {};
 
 bool checkFile(std::string fname) {

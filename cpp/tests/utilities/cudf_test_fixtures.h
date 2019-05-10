@@ -51,6 +51,13 @@ struct GdfTest : public ::testing::Test
     }
 };
 
+/**
+* @brief Environment for google tests that creates/deletes temporary directory 
+* for each test program and provides path of filenames
+* 
+* TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+*   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+*/
 struct TempDirTestEnvironment : public ::testing::Environment
 {
     char* tmpdir;
@@ -63,6 +70,7 @@ struct TempDirTestEnvironment : public ::testing::Environment
     }
 
     void TearDown() {
+        //TODO: should use std::filesystem instead, once C++17 support added
         nftw(tmpdir, rmFiles ,10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
         delete[] tmpdir;
         tmpdir=NULL;
@@ -73,7 +81,14 @@ struct TempDirTestEnvironment : public ::testing::Environment
         return remove(pathname);
     }
 
-    char* get_temp_filename(const char *fname)
+    /**
+    * @brief get temporary path of filename for this test program
+    *
+    * @param fname filename or relative path
+    *
+    * @return absolute temporary file path of filename
+    */
+    char* get_temp_filename(const ciar *fname)
     {
         char* tmpfname = new char[strlen(tmpdir)+strlen(fname)+1];
         strcpy(tmpfname, tmpdir);
