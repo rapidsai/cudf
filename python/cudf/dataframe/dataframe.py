@@ -574,6 +574,12 @@ class DataFrame(object):
     def __iter__(self):
         return iter(self.columns)
 
+    def equals(self, other):
+        for col in self.columns:
+            if not self[col].equals(other[col]):
+                return False
+        return True
+
     def sin(self):
         return self._apply_op('sin')
 

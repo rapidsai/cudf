@@ -276,7 +276,7 @@ class MultiIndex(Index):
             if isinstance(equal_levels, np.ndarray):
                 equal_levels = equal_levels.all()
             return equal_levels and\
-                self.codes == other.codes and\
+                self.codes.equals(other.codes) and\
                 self.names == other.names
 
     @property
@@ -285,7 +285,10 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        return len(self._source_data)
+        if hasattr(self, '_source_data'):
+            return len(self._source_data)
+        else:
+            return len(self.codes[0])
 
     def take(self, indices):
         from collections.abc import Sequence
