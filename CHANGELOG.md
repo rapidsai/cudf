@@ -16,9 +16,10 @@
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
+- PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 
 
-# cuDF 0.7.0 (Date TBD)
+# cuDF 0.7.0 (10 May 2019)
 
 ## New Features
 
