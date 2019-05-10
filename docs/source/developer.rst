@@ -26,8 +26,6 @@ Here's a quick map to decide which file contains which feature:
     - ``applyutils.py``
 - ``.query()`` and similar functions:
     - ``queryutils.py``
-- libgdf helpers:
-    - ``_gdf.py``
 - GPU helper functions:
     - ``cudautils.py``
 - Docstring helpers:

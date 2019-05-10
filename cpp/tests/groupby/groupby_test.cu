@@ -19,6 +19,7 @@
 #include "groupby_test_helpers.cuh"
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/tuple_vectors.h>
 
 #include <utilities/cudf_utils.h>
 
@@ -183,7 +184,7 @@ struct GroupTest : public GdfTest {
     if(print)
     {
       std::cout << "Key column(s) created. Size: " << std::get<0>(input_key).size() << std::endl;
-      print_tuple_vector(input_key);
+      print_tuple(input_key);
 
       std::cout << "Value column(s) created. Size: " << input_value.size() << std::endl;
       print_vector(input_value);
@@ -472,4 +473,3 @@ TYPED_TEST(GroupValidTest, ReportValidMaskError)
     this->create_gdf_output_buffers(num_keys, num_values_per_key);
     this->compute_gdf_result(GDF_VALIDITY_UNSUPPORTED);
 }
-

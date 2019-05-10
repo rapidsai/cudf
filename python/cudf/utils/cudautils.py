@@ -9,6 +9,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf.utils.utils import (check_equals_int, check_equals_float,
                               mask_bitsize, mask_get, mask_set, make_mask)
+import nvstrings
 
 
 def optimal_block_count(minblkct):
@@ -279,7 +280,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
-    from cudf import _gdf
+
+    import cudf.bindings.reduce as cpp_reduce
+    from cudf.dataframe.numerical import NumericalColumn
+    from cudf.dataframe.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,
@@ -288,10 +292,11 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    _gdf.apply_prefixsum(_gdf.columnview_from_devary(vals),
-                         _gdf.columnview_from_devary(slots[1:]),
-                         inclusive=True)
-
+    in_col = NumericalColumn(data=Buffer(vals), mask=None,
+                             null_count=0, dtype=vals.dtype)
+    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None,
+                              null_count=0, dtype=vals.dtype)
+    cpp_reduce.apply_scan(in_col, out_col, 'sum', inclusive=True)
     return slots
 
 
@@ -424,7 +429,7 @@ def reverse_array(data, out=None):
 
 
 #
-# Fill NA
+# Null handling
 #
 
 
@@ -444,6 +449,52 @@ def fillna(data, mask, value):
         configured = gpu_fill_masked.forall(data.size)
         configured(value, mask, out)
     return out
+
+
+@cuda.jit
+def gpu_isnull(validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = mask_get(validity, tid)
+        if valid:
+            out[tid] = False
+        else:
+            out[tid] = True
+
+
+def isnull_mask(data, mask):
+    # necessary due to rapidsai/custrings#263
+    if isinstance(data, nvstrings.nvstrings):
+        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
+    else:
+        output_dary = rmm.device_array(data.size, dtype=np.bool_)
+
+    if output_dary.size > 0:
+        gpu_isnull.forall(output_dary.size)(mask, output_dary)
+    return output_dary
+
+
+@cuda.jit
+def gpu_notna(validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = mask_get(validity, tid)
+        if valid:
+            out[tid] = True
+        else:
+            out[tid] = False
+
+
+def notna_mask(data, mask):
+    # necessary due to rapidsai/custrings#263
+    if isinstance(data, nvstrings.nvstrings):
+        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
+    else:
+        output_dary = rmm.device_array(data.size, dtype=np.bool_)
+
+    if output_dary.size > 0:
+        gpu_notna.forall(output_dary.size)(mask, output_dary)
+    return output_dary
 
 
 #
@@ -574,6 +625,43 @@ def gpu_unique_set_insert(vset, sz, val):
 
     # out of space
     return -1
+
+
+@cuda.jit
+def gpu_shift(in_col, out_col, N):
+    """Shift value at index i of an input array forward by N positions and
+    store the output in a new array.
+    """
+    i = cuda.grid(1)
+    if N > 0:
+        if i < in_col.size:
+            out_col[i] = in_col[i-N]
+        if i < N:
+            out_col[i] = -1
+    else:
+        if i <= (in_col.size + N):
+            out_col[i] = in_col[i-N]
+        if i >= (in_col.size + N) and i < in_col.size:
+            out_col[i] = -1
+
+
+@cuda.jit
+def gpu_diff(in_col, out_col, N):
+    """Calculate the difference between values at positions i and i - N in an
+    array and store the output in a new array.
+    """
+    i = cuda.grid(1)
+
+    if N > 0:
+        if i < in_col.size:
+            out_col[i] = in_col[i] - in_col[i - N]
+        if i < N:
+            out_col[i] = -1
+    else:
+        if i <= (in_col.size + N):
+            out_col[i] = in_col[i] - in_col[i - N]
+        if i >= (in_col.size + N) and i < in_col.size:
+            out_col[i] = -1
 
 
 MAX_FAST_UNIQUE_K = 2 * 1024

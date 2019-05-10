@@ -15,22 +15,21 @@
  */
 
 
+
+#include <types.hpp>
+#include <cudf.h>
+#include <rmm/rmm.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/nvtx/nvtx_utils.h>
+#include <string/nvcategory_util.hpp>
+#include <nvstrings/NVCategory.h>
+#include <copying/gather.hpp>
+#include "joining.h"
+
 #include <limits>
 #include <set>
 #include <vector>
-
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "utilities/error_utils.hpp"
-#include "dataframe/cudf_table.cuh"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "string/nvcategory_util.hpp"
-#include <nvstrings/NVCategory.h>
-#include "copying/gather.hpp"
-#include "types.hpp"
-#include "joining.h"
-
-using namespace mgpu;
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
@@ -47,128 +46,20 @@ constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>
  * @param[out] l_result The join computed indices of the left table
  * @param[out] r_result The join computed indices of the right table
  * @tparam join_type The type of join to be performed
- * @tparam size_type The data type used for size calculations
  * 
  * @returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
 /* ----------------------------------------------------------------------------*/
-template <JoinType join_type, 
-          typename size_type>
-gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
+template <JoinType join_type>
+gdf_error hash_join(gdf_size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
                     gdf_column *l_result, gdf_column *r_result)
 {
-  // Wrap the set of gdf_columns in a gdf_table class
-  std::unique_ptr< gdf_table<size_type> > left_table(new gdf_table<size_type>(num_cols, leftcol));
-  std::unique_ptr< gdf_table<size_type> > right_table(new gdf_table<size_type>(num_cols, rightcol));
+  cudf::table left_table{leftcol, num_cols};
+  cudf::table right_table{rightcol, num_cols};
 
-  return join_hash<join_type, output_index_type>(*left_table, 
-                                                        *right_table, 
-                                                        l_result, 
-                                                        r_result);
+  return join_hash<join_type, output_index_type>(left_table, right_table,
+                                                 l_result, r_result);
 }
-
-template <JoinType join_type>
-struct SortJoin {
-template<typename launch_arg_t = mgpu::empty_t,
-  typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return std::pair<gdf_column, gdf_column>();
-    }
-};
-
-template <>
-struct SortJoin<JoinType::INNER_JOIN> {
-template<typename launch_arg_t = mgpu::empty_t,
-  typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return inner_join(a, a_count, b, b_count, comp, context);
-    }
-};
-
-template <>
-struct SortJoin<JoinType::LEFT_JOIN> {
-  template<typename launch_arg_t = mgpu::empty_t,
-    typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return left_join(a, a_count, b, b_count, comp, context);
-      }
-};
-
-template <JoinType join_type, typename T>
-gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
-                          gdf_column *left_result, gdf_column *right_result,
-                          gdf_context *ctxt) 
-{
-  using namespace mgpu;
-  gdf_error err = GDF_SUCCESS;
-  GDF_REQUIRE(!leftcol->valid  || !leftcol->null_count , GDF_VALIDITY_UNSUPPORTED);
-  GDF_REQUIRE(!rightcol->valid || !rightcol->null_count, GDF_VALIDITY_UNSUPPORTED);
-
-  rmm_mgpu_context_t context(false);
-  SortJoin<join_type> sort_based_join;
-  auto output = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
-                                       static_cast<T*>(rightcol->data), rightcol->size,
-                                       less_t<T>(), context);
-  *left_result = output.first;
-  *right_result = output.second;
-  CUDA_CHECK_LAST();
-
-  return err;
-}
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Computes the join operation between a single left and single right column
- * using the sort based implementation.
- * 
- * @param[in] leftcol The left column to join
- * @param[in] rightcol The right column to join
- * @param[out] left_result The join computed indices of the left table
- * @param[out] right_result The join computed indices of the right table
- * @param[in] ctxt Structure that determines various run parameters, such as if the inputs
- *             are already sorted.
- * @tparama join_type The type of join to perform
- * 
- * @returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
- *          appropriate error code.
- */
-/* ----------------------------------------------------------------------------*/
-template <JoinType join_type>
-gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
-                    gdf_column *l_result, gdf_column *r_result,
-                    gdf_context *ctxt)
-{
-
-  if(GDF_SORT != ctxt->flag_method) return GDF_INVALID_API_CALL;
-
-  switch ( leftcol->dtype ){
-    case GDF_INT8:      return sort_join_typed<join_type, int8_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT16:     return sort_join_typed<join_type,int16_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT32:     return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT64:     return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT32:   return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT64:   return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE32:    return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE64:    return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_TIMESTAMP: return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
-}
-
-template
-gdf_error sort_join<JoinType::INNER_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
-                                          gdf_column *l_result, gdf_column *r_result,
-                                          gdf_context *ctxt);
-template
-gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
-                                         gdf_column *l_result, gdf_column *r_result,
-                                         gdf_context *ctxt);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -178,15 +69,13 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
  * @param[in] buffer_length Amount of memory to be allocated
  * @param[in] value The value to be filled into the buffer
  * @tparam data_type The data type to be used for the buffer
- * @tparam size_type The data type used for size calculations
  * 
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
-template <typename data_type,
-          typename size_type>
+template <typename data_type>
 gdf_error allocValueBuffer(data_type ** buffer,
-                           const size_type buffer_length,
+                           const gdf_size_type buffer_length,
                            const data_type value) 
 {
     RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
@@ -201,15 +90,13 @@ gdf_error allocValueBuffer(data_type ** buffer,
  * @param[in,out] buffer Address of the buffer to be allocated
  * @param[in] buffer_length Amount of memory to be allocated
  * @tparam data_type The data type to be used for the buffer
- * @tparam size_type The data type used for size calculations
  * 
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
-template <typename data_type,
-          typename size_type>
+template <typename data_type>
 gdf_error allocSequenceBuffer(data_type ** buffer,
-                         const size_type buffer_length) 
+                              const gdf_size_type buffer_length) 
 {
     RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
     thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
@@ -226,15 +113,13 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
  * @param[in] rightcol The right set of columns to join
  * @param[out] left_result The join computed indices of the left table
  * @param[out] right_result The join computed indices of the right table
- * @tparam size_type The data type used for size calculations
  * 
  * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-template<typename size_type>
 gdf_error trivial_full_join(
-        const size_type left_size,
-        const size_type right_size,
+        const gdf_size_type left_size,
+        const gdf_size_type right_size,
         gdf_column *left_result,
         gdf_column *right_result) {
     // Deduce the type of the output gdf_columns
@@ -249,7 +134,7 @@ gdf_error trivial_full_join(
 
     output_index_type *l_ptr{nullptr};
     output_index_type *r_ptr{nullptr};
-    size_type result_size{0};
+    gdf_size_type result_size{0};
     if ((left_size == 0) && (right_size == 0)) {
         return GDF_DATASET_EMPTY;
     }
@@ -291,10 +176,6 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                      gdf_column *left_result, gdf_column *right_result,
                      gdf_context *join_context)
 {
-
-
-  using size_type = int64_t;
-
   GDF_REQUIRE( 0 != num_cols, GDF_DATASET_EMPTY);
   GDF_REQUIRE( nullptr != leftcol, GDF_DATASET_EMPTY);
   GDF_REQUIRE( nullptr != rightcol, GDF_DATASET_EMPTY);
@@ -326,7 +207,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   // If Full Join and either table is empty, compute trivial full join
   if( (JoinType::FULL_JOIN == join_type) && 
       ((0 == left_col_size) || (0 == right_col_size)) ){
-    return trivial_full_join<size_type>(left_col_size, right_col_size, left_result, right_result);
+    return trivial_full_join(left_col_size, right_col_size, left_result, right_result);
   }
 
   // check that the columns data are not null, have matching types, 
@@ -360,7 +241,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   {
     case GDF_HASH:
       {
-        gdf_error_code =  hash_join<join_type, size_type>(num_cols, leftcol, rightcol, left_result, right_result);
+        gdf_error_code =  hash_join<join_type>(num_cols, leftcol, rightcol, left_result, right_result);
         break;
       }
     case GDF_SORT:
@@ -368,7 +249,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
         // Sort based joins only support single column joins
         if(1 == num_cols)
         {
-          gdf_error_code =  sort_join<join_type>(leftcol[0], rightcol[0], left_result, right_result, join_context);
+          gdf_error_code =  sort_join<join_type, output_index_type>(leftcol[0], rightcol[0], left_result, right_result);
         }
         else
         {
@@ -388,7 +269,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
 
 
-template <JoinType join_type, typename size_type, typename index_type>
+template <JoinType join_type, typename index_type>
 gdf_error construct_join_output_df(
         std::vector<gdf_column*>& ljoincol,
         std::vector<gdf_column*>& rjoincol,
@@ -426,7 +307,7 @@ gdf_error construct_join_output_df(
     }
     //TODO : Invalid api
 
-    size_type join_size = left_indices->size;
+    gdf_size_type join_size = left_indices->size;
     int left_table_end = num_left_cols - num_cols_to_join;
     int right_table_begin = num_left_cols;
 
@@ -524,7 +405,7 @@ gdf_error construct_join_output_df(
     return GDF_SUCCESS;
 }
 
-template <JoinType join_type, typename size_type, typename index_type>
+template <JoinType join_type, typename index_type>
 gdf_error join_call_compute_df(
                          gdf_column **left_cols, 
                          int num_left_cols,
@@ -702,7 +583,7 @@ gdf_error join_call_compute_df(
     }
 
     gdf_error df_err =
-        construct_join_output_df<join_type, size_type, index_type>(
+        construct_join_output_df<join_type, index_type>(
             ljoincol, rjoincol,
             left_cols, num_left_cols, left_join_cols,
             right_cols, num_right_cols, right_join_cols,
@@ -742,7 +623,7 @@ gdf_error gdf_left_join(
                          gdf_column * left_indices,
                          gdf_column * right_indices,
                          gdf_context *join_context) {
-    return join_call_compute_df<JoinType::LEFT_JOIN, int64_t, output_index_type>(
+    return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
                      left_cols, 
                      num_left_cols,
                      left_join_cols,
@@ -770,7 +651,7 @@ gdf_error gdf_inner_join(
                          gdf_column * left_indices,
                          gdf_column * right_indices,
                          gdf_context *join_context) {
-    return join_call_compute_df<JoinType::INNER_JOIN, int64_t, output_index_type>(
+    return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
                      left_cols, 
                      num_left_cols,
                      left_join_cols,
@@ -798,7 +679,7 @@ gdf_error gdf_full_join(
                          gdf_column * left_indices,
                          gdf_column * right_indices,
                          gdf_context *join_context) {
-    return join_call_compute_df<JoinType::FULL_JOIN, int64_t, output_index_type>(
+    return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(
                      left_cols, 
                      num_left_cols,
                      left_join_cols,

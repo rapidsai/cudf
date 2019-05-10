@@ -16,7 +16,7 @@ import gzip
 import shutil
 import os
 
-from libgdf_cffi import GDFError
+from cudf.bindings.GDFError import GDFError
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -131,6 +131,22 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     assert len(gdf1.columns) == len(pdf.columns)
     assert len(gdf2.columns) == len(pdf.columns)
     assert_eq(gdf1, gdf2)
+
+
+def test_csv_reader_dict_dtypes_no_names(tmpdir):
+
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
+    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
+
+    # need to save the file along with the column header
+    # in order to infer from dict_dtypes
+    df.to_csv(fname, sep=',', index=False, header=True)
+
+    out = read_csv(str(fname), delimiter=',', dtype=gdf_dict)
+    df_out = pd.read_csv(fname, delimiter=',', dtype=pd_dict, dayfirst=True)
+
+    assert len(out.columns) == len(df_out.columns)
+    assert_eq(df_out, out)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
@@ -325,7 +341,7 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ['float32']
-    empty_cells = '\n""\n"  "\n " " \n'
+    empty_cells = '\n""\n  \n "" \n'
     default_na_cells = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
                         '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
                         '1.#QNAN\nN/A\nNA\nNULL\n'
@@ -766,19 +782,21 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 @pytest.mark.parametrize('header_row, skip_rows, skip_blanks',
                          [(1, 0, True), ('infer', 2, True), (1, 4, True),
                           (3, 0, False), ('infer', 5, False)])
-def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
+@pytest.mark.parametrize('line_terminator', ['\n', '\r\n'])
+def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks,
+                                        line_terminator):
 
     lines = ['# first comment line',
-             '\n',
+             line_terminator,
              '# third comment line',
              '1,2,3',
              '4,5,6',
              '7,8,9',
-             '\n',
-             '# last comment line'
-             '\n',
+             line_terminator,
+             '# last comment line',
+             line_terminator,
              '1,1,1']
-    buffer = '\n'.join(lines)
+    buffer = line_terminator.join(lines)
 
     cu_df = read_csv(StringIO(buffer), comment='#', header=header_row,
                      skiprows=skip_rows, skip_blank_lines=skip_blanks)
@@ -890,6 +908,20 @@ def test_csv_reader_index_col():
         assert(str(cu_idx) == str(pd_idx))
 
 
+@pytest.mark.parametrize('names', [['a', 'b', 'c'],
+                                   [416, 905, 647],
+                                   range(3),
+                                   None])
+def test_csv_reader_column_names(names):
+    buffer = '0,1,2\n3,4,5\n6,7,8'
+
+    df = read_csv(StringIO(buffer), names=names)
+    if names is None:
+        assert(list(df) == ['0', '1', '2'])
+    else:
+        assert(list(df) == list(names))
+
+
 def test_csv_reader_bools_false_positives(tmpdir):
     # values that are equal to ["True", "TRUE", "False", "FALSE"]
     # when using ints to detect bool values
@@ -947,3 +979,31 @@ def test_csv_reader_pd_consistent_quotes(quoting):
                         names=names, quoting=quoting)
 
     assert_eq(pd_df, gd_df)
+
+
+def test_csv_reader_scientific_type_detection():
+    buffer = '1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1'
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+
+    df = read_csv(StringIO(buffer),
+                  header=None)
+
+    for dt in df.dtypes:
+        assert(dt == 'float64')
+    for col in df:
+        assert(np.isclose(df[col][0], expected[int(col)]))
+
+
+@pytest.mark.parametrize('line_terminator', ['\n', '\r\n'])
+def test_csv_blank_first_row(line_terminator):
+
+    lines = ['colA,colB',
+             '',
+             '1, 1.1',
+             '2, 2.2']
+    buffer = line_terminator.join(lines)
+
+    cu_df = read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == (2, 2))
+    assert(all(cu_df.columns == ['colA', 'colB']))

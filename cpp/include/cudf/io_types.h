@@ -14,26 +14,29 @@
  * limitations under the License.
  */
 
-/*
- * API
- *
- * gdf_error read_csv(csv_read_arg *args);
- *
- */
 #pragma once
 
-  /*
-   * Enumerator for the supported forms of the input CSV file
-   */
-typedef enum 
-{
-  FILE_PATH,								///< Indicates that the input is specified with a file path
-  HOST_BUFFER								///< Indicates that the input is passed as a buffer in host memory
-} gdf_csv_input_form;
 
-  /*
-   * Enumerator describing the qoutation behavior for file readers/writers
-   */
+/*
+ * @brief Enumeration of supported input types for cudf reader interfaces
+ */
+typedef enum {
+  FILE_PATH,                 ///< Source is specified as a file path
+  HOST_BUFFER,               ///< Source is specified as a buffer in host memory,
+  ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
+} gdf_input_type;
+
+/*
+ * @brief Enumeration of supported input types for CSV reader
+ *
+ * TODO: Remove and use gdf_input_type directly. This typedef is to reduce the
+ * initial changes for Parquet review by not changing/including any CSV code.
+ */
+typedef gdf_input_type gdf_csv_input_form;
+
+/*
+ * @brief Enumeration of quoting behavior for CSV readers/writers
+ */
 typedef enum 
 {
   QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
@@ -49,6 +52,14 @@ typedef enum
  * Input parameters are all stored in host memory. The output dataframe is in 
  * the device memory.
  *
+ * Parameters in PANDAS that are unavailable in cudf:
+ *   squeeze          - data is always returned as a gdf_column array
+ *   engine           - this is the only engine
+ *   verbose
+ *   keep_date_col    - will not maintain raw data
+ *   date_parser      - there is only this parser
+ *   float_precision  - there is only one converter that will cover all specified values
+ *   dialect          - not used
  *---------------------------------------------------------------------------**/
 typedef struct {
 
@@ -127,19 +138,80 @@ typedef struct {
   size_t        byte_range_offset;          ///< offset of the byte range to read. 
   size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
                                             Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
-
 } csv_read_arg;
 
+/**---------------------------------------------------------------------------*
+ * @brief These are the arguments to the CSV writer function.
+ *---------------------------------------------------------------------------**/
+typedef struct
+{
+    gdf_column** columns;         // columns to output
+    int num_cols;                 // number of columns
 
-/*
- * NOT USED
- *
- * squeeze          - data is always returned as a gdf_column array
- * engine           - this is the only engine
- * verbose
- * keep_date_col    - will not maintain raw data
- * date_parser      - there is only this parser
- * float_precision  - there is only one converter that will cover all specified values
- * dialect          - not used
- *
- */
+    const char* filepath;         // full path to file to create
+    const char* line_terminator;  // character to use for separating lines (default "\n")
+    char delimiter;               // character to use between each column entry (default ',')
+
+    const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
+    const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
+    const char* na_rep;           // string to use for null entries
+
+} csv_write_arg;
+
+/**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_orc interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
+  int           use_cols_len;               ///< In: Number of columns
+
+  int           skip_rows;                  ///< In: Number of rows to skip from the start
+  int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
+
+} orc_read_arg;
+
+/**---------------------------------------------------------------------------*
+ * @brief Input and output arguments to the read_parquet interface.
+ *---------------------------------------------------------------------------**/
+typedef struct {
+
+  /*
+   * Output arguments
+   */
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+  int           *index_col;                 ///< Out: If available, column index to use as row labels
+
+  /*
+   * Input arguments
+   */
+  gdf_input_type source_type;               ///< In: Type of data source
+  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+
+  int           row_group;                  ///< In: Row group index of interest; only data in this row group will be returned.
+  int           skip_rows;                  ///< In: Rows to skip from the start of the dataset
+  int           num_rows;                   ///< In: Number of rows to read and return
+
+  const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
+  int           use_cols_len;               ///< In: Number of columns
+
+  bool          strings_to_categorical;     ///< In: If TRUE, returns string data as GDF_CATEGORY, otherwise GDF_STRING
+
+} pq_read_arg;

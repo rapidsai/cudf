@@ -41,6 +41,18 @@ constexpr const char null_representative = '@';
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
+/**---------------------------------------------------------------------------*
+ * @brief test macro to be expected as no exception.
+ * The testing is same with EXPECT_NO_THROW() in gtest.
+ * It also outputs captured error message, useful for debugging.
+ *
+ * @param statement The statement to be tested
+ *---------------------------------------------------------------------------**/
+#define CUDF_EXPECT_NO_THROW(statement)                 \
+try{ statement; } catch (std::exception& e)             \
+    { FAIL() << "statement:" << #statement << std::endl \
+             << "reason: " << e.what() << std::endl; }
+
 /**
  * @brief  Counts the number of valid bits for the specified number of rows
  * in the host vector of gdf_valid_type masks
@@ -189,6 +201,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+  the_column->col_name = nullptr;
 
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector

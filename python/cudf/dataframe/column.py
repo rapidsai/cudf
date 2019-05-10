@@ -12,10 +12,12 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 import nvstrings
+import cudf.bindings.quantile as cpp_quantile
 
-from cudf import _gdf
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
+from cudf.bindings.cudf_cpp import count_nonzero_mask, column_view_pointer
+from cudf.bindings.concat import _column_concat
 
 
 class Column(object):
@@ -66,7 +68,9 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set([val for o in objs for val in o]))
+            new_cats = tuple(set(
+                [val for o in objs for val in o.cat().categories]
+            ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
@@ -89,26 +93,24 @@ class Column(object):
 
         # Performance the actual concatenation
         if newsize > 0:
-            col = _gdf._column_concat(objs, col)
+            col = _column_concat(objs, col)
 
         return col
 
     @staticmethod
-    def from_cffi_view(cffi_view):
-        """Create a Column object from a cffi struct gdf_column*.
+    def from_mem_views(data_mem, mask_mem=None):
+        """Create a Column object from a data device array (or nvstrings
+           object), and an optional mask device array
         """
         from cudf.dataframe import columnops
-
-        data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
-        dtype = _gdf.gdf_to_np_dtype(cffi_view.dtype)
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data_mem, dtype)
+            return columnops.build_column(data_mem, np.dtype("object"))
         else:
             data_buf = Buffer(data_mem)
             mask = None
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
-            return columnops.build_column(data_buf, dtype, mask=mask)
+            return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """
@@ -141,8 +143,10 @@ class Column(object):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = _gdf.count_nonzero_mask(self._mask.mem,
-                                              size=len(self))
+                nnz = count_nonzero_mask(
+                    self._mask.mem,
+                    size=len(self)
+                )
                 null_count = len(self) - nnz
                 if null_count == 0:
                     self._mask = None
@@ -215,28 +219,6 @@ class Column(object):
         """
         return self._mask
 
-    @property
-    def cffi_view(self):
-        """LibGDF CFFI view
-        """
-        if self.dtype == np.dtype('object'):
-            return _gdf.columnview(
-                size=self.indices.size,
-                data=self.indices,
-                mask=self._mask,
-                dtype=self.dtype,
-                null_count=self._null_count,
-                nvcat=self.nvcategory
-            )
-        else:
-            return _gdf.columnview(
-                size=self._data.size,
-                data=self._data,
-                mask=self._mask,
-                dtype=self.dtype,
-                null_count=self._null_count
-            )
-
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
 
@@ -279,7 +261,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
@@ -295,7 +277,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             Defaults to None, which will skip null values.
             If it equals "pandas", null values are filled with NaNs.
             Non integral dtype is promoted to np.float64.
@@ -480,7 +462,7 @@ class Column(object):
 
         Parameters
         ----------
-        fillna : str or None
+        fillna : scalar, 'pandas', or None
             See *fillna* in ``.to_array``.
 
         Notes
@@ -489,7 +471,10 @@ class Column(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        if fillna not in {None, 'pandas'}:
+        if isinstance(fillna, Number):
+            if self.null_count > 0:
+                return self.fillna(fillna)
+        elif fillna not in {None, 'pandas'}:
             raise ValueError('invalid for fillna')
 
         if self.null_count > 0:
@@ -500,8 +485,9 @@ class Column(object):
             else:
                 return self._copy_to_dense_buffer()
         else:
-            # always return a copy of the data rather than a reference
-            return self.data.copy()
+            # return a reference for performance reasons, should refactor code
+            # to explicitly use mem in the future
+            return self.data
 
     def _invert(self):
         """Internal convenience function for inverting masked array
@@ -568,7 +554,7 @@ class Column(object):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return _gdf.quantile(self, quant, interpolation, exact)
+        return cpp_quantile.apply_quantile(self, quant, interpolation, exact)
 
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
@@ -602,3 +588,10 @@ class Column(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @property
+    def _pointer(self):
+        """
+        Return pointer to a view of the underlying data structure
+        """
+        return column_view_pointer(self)

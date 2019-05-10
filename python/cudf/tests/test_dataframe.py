@@ -18,7 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, gen_rand
 
 
 def test_buffer_basic():
@@ -269,6 +269,7 @@ def test_dataframe_drop_method():
 
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop('a').columns) == ('b', 'c')
+    assert tuple(df.drop('a', axis=1).columns) == ('b', 'c')
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop(['a', 'b']).columns) == ('c',)
     assert tuple(df.columns) == ('a', 'b', 'c')
@@ -296,6 +297,44 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ('b', 'c', 'a')
 
 
+def test_dataframe_pop():
+    pdf = pd.DataFrame(
+        {'a': [1, 2, 3], 'b': ['x', 'y', 'z'], 'c': [7., 8., 9.]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    # Test non-existing column error
+    with pytest.raises(KeyError) as raises:
+        gdf.pop('fake_colname')
+    raises.match("fake_colname")
+
+    # check pop numeric column
+    pdf_pop = pdf.pop('a')
+    gdf_pop = gdf.pop('a')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check string column
+    pdf_pop = pdf.pop('b')
+    gdf_pop = gdf.pop('b')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check float column and empty dataframe
+    pdf_pop = pdf.pop('c')
+    gdf_pop = gdf.pop('c')
+    assert_eq(pdf_pop, gdf_pop)
+    assert_eq(pdf, gdf)
+
+    # check empty dataframe edge case
+    empty_pdf = pd.DataFrame(columns=['a', 'b'])
+    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    pb = empty_pdf.pop('b')
+    gb = empty_gdf.pop('b')
+    assert len(pb) == len(gb)
+    assert empty_pdf.empty and empty_gdf.empty
+
+
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
 def test_dataframe_astype(nelem):
     df = DataFrame()
@@ -305,6 +344,23 @@ def test_dataframe_astype(nelem):
     df['b'] = df['a'].astype(np.float32)
     assert df['b'].dtype is np.dtype(np.float32)
     np.testing.assert_equal(df['a'].to_array(), df['b'].to_array())
+
+
+@pytest.mark.parametrize('nelem', [0, 100])
+def test_index_astype(nelem):
+    df = DataFrame()
+    data = np.asarray(range(nelem), dtype=np.int32)
+    df['a'] = data
+    assert df.index.dtype is np.dtype(np.int64)
+    df.index = df.index.astype(np.float32)
+    assert df.index.dtype is np.dtype(np.float32)
+    df['a'] = df['a'].astype(np.float32)
+    np.testing.assert_equal(df.index.to_array(), df['a'].to_array())
+    df['b'] = df['a']
+    df = df.set_index('b')
+    df['a'] = df['a'].astype(np.int16)
+    df.index = df.index.astype(np.int16)
+    np.testing.assert_equal(df.index.to_array(), df['a'].to_array())
 
 
 def test_dataframe_slicing():
@@ -693,6 +749,25 @@ def test_dataframe_dtypes():
     df = DataFrame([(k, np.ones(10, dtype=v))
                     for k, v in dtypes.iteritems()])
     assert df.dtypes.equals(dtypes)
+
+
+def test_dataframe_add_col_to_object_dataframe():
+    # Test for adding column to an empty object dataframe
+    cols = ['a', 'b', 'c']
+    df = pd.DataFrame(columns=cols, dtype='str')
+
+    data = {k: v for (k, v) in zip(cols, [['a'] for _ in cols])}
+
+    gdf = DataFrame(data)
+    gdf = gdf[:0]
+
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['a'] = [1]
+    df['a'] = [10]
+    assert gdf.dtypes.equals(df.dtypes)
+    gdf['b'] = [1.0]
+    df['b'] = [10.0]
+    assert gdf.dtypes.equals(df.dtypes)
 
 
 def test_dataframe_dir_and_getattr():
@@ -1254,11 +1329,6 @@ def test_from_arrow_missing_categorical():
     )
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="PyArrow does not yet support validity masks in creating "
-           "DictionaryArray objects"
-)
 def test_to_arrow_missing_categorical():
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
     pa_cat = pa.array(pd_cat, from_pandas=True)
@@ -1420,21 +1490,27 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize('func', [
-    lambda df: df.mean(),
-    lambda df: df.sum(),
+    lambda df: df.count(),
     lambda df: df.min(),
     lambda df: df.max(),
-    lambda df: df.std(),
-    lambda df: df.count(),
-    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
-])
-@pytest.mark.parametrize('accessor', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail(
-        reason="dataframe reductions not yet supported")),
-    lambda df: df.x,
-])
-def test_reductions(pdf, gdf, accessor, func):
-    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
+    lambda df: df.sum(),
+    lambda df: df.product(),
+    lambda df: df.cummin(),
+    lambda df: df.cummax(),
+    lambda df: df.cumsum(),
+    lambda df: df.cumprod(),
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.max(),
+    lambda df: df.std(ddof=1),
+    lambda df: df.var(ddof=1),
+    ])
+def test_dataframe_reductions(func):
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    print(func(pdf))
+    gdf = DataFrame.from_pandas(pdf)
+    print(func(gdf))
+    assert_eq(func(pdf), func(gdf))
 
 
 @pytest.mark.parametrize('binop', [
@@ -1442,8 +1518,8 @@ def test_reductions(pdf, gdf, accessor, func):
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1460,12 +1536,23 @@ def test_binops_df(pdf, gdf, binop):
 
 
 @pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_df(pdf, gdf, binop):
+    d = binop(pdf, pdf + 1)
+    g = binop(gdf, gdf + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
     operator.floordiv,
     operator.truediv,
-    pytest.param(operator.mod, marks=pytest.mark.xfail()),
-    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.mod,
+    operator.pow,
     operator.eq,
     operator.lt,
     operator.le,
@@ -1478,6 +1565,28 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.and_,
+    operator.or_,
+    operator.xor,
+])
+def test_bitwise_binops_series(pdf, gdf, binop):
+    d = binop(pdf.x, pdf.y + 1)
+    g = binop(gdf.x, gdf.y + 1)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('unaryop', [
+    operator.neg,
+    operator.inv,
+    operator.abs,
+])
+def test_unaryops_df(pdf, gdf, unaryop):
+    d = unaryop(pdf - 5)
+    g = unaryop(gdf - 5)
     assert_eq(d, g)
 
 
@@ -1970,13 +2079,18 @@ def test_select_dtype():
     assert_eq(gdf[['c']], gdf.select_dtypes(include=['float64']))
 
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=['int64', 'float64']))
+    assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=np.number))
     assert_eq(gdf[['b', 'c']], gdf.select_dtypes(include=[np.int64,
                                                           np.float64]))
 
     assert_eq(gdf[['a']], gdf.select_dtypes(include=['category']))
+    assert_eq(gdf[['a']], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[['a']], gdf.select_dtypes(include=['Foo']))
+
+    with pytest.raises(ValueError):
+        gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
 def test_array_ufunc():
@@ -1985,3 +2099,282 @@ def test_array_ufunc():
 
     assert_eq(np.sqrt(gdf), np.sqrt(pdf))
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
+
+
+@pytest.mark.parametrize('nan_value', [-5, -5.0, 0, 5, 5.0, None, 'pandas'])
+def test_series_to_gpu_array(nan_value):
+
+    s = Series([0, 1, None, 3])
+    np.testing.assert_array_equal(s.to_array(nan_value),
+                                  s.to_gpu_array(nan_value).copy_to_host())
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Our describe result is a DataFrame, not a Series. "
+           "Our quantile values do not perfectly match Pandas.")
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_series_describe_numeric(dtype):
+    pdf = pd.Series([0, 1, 2, 3])
+    gdf = Series.from_pandas(pdf).astype(dtype)
+    gdf_results = gdf.describe().to_pandas()
+    pdf_results = gdf.to_pandas().describe()
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_datetime():
+    pdf = pd.Series([0, 1, 2, 3]).astype('datetime64[ms]')
+    gdf = Series.from_pandas(pdf)
+    gdf_results = gdf.describe()
+    pdf_results = pdf.describe()
+
+    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+                                         pdf_results.values,
+                                         decimal=4)
+
+
+def test_dataframe_describe_exclude():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(exclude=['float']).to_pandas()
+    pdf_results = pdf.describe(exclude=['float'])
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+def test_dataframe_describe_include():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include=['int']).to_pandas()
+    pdf_results = pdf.describe(include=['int'])
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Quantile interpolation does not currently tightly match pandas.")
+def test_dataframe_describe_default():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe().to_pandas()
+    pdf_results = pdf.describe()
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Describing non-numeric columns is not yet supported.")
+def test_series_describe_include_all():
+    np.random.seed(12)
+    data_length = 10000
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['x'] = df.x.astype('int64')
+    df['y'] = np.random.normal(10, 1, data_length)
+    df['animal'] = np.random.choice(['dog', 'cat', 'bird'], data_length)
+
+    pdf = df.to_pandas()
+    gdf_results = df.describe(include='all').to_pandas()
+    pdf_results = pdf.describe(include='all')
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Quantile interpolation does not currently tightly match pandas.")
+def test_dataframe_describe_percentiles():
+    np.random.seed(12)
+    data_length = 10000
+    sample_percentiles = [0.0, 0.1, 0.33, 0.84, 0.4, 0.99]
+
+    df = DataFrame()
+    df['x'] = np.random.normal(10, 1, data_length)
+    df['y'] = np.random.normal(10, 1, data_length)
+    pdf = df.to_pandas()
+    gdf_results = df.describe(percentiles=sample_percentiles).to_pandas()
+    pdf_results = pdf.describe(percentiles=sample_percentiles)
+
+    np.testing.assert_array_almost_equal(
+        gdf_results.drop(['stats'], axis=1).values,
+        pdf_results.values,
+        decimal=4)
+
+
+def test_get_numeric_data():
+    pdf = pd.DataFrame({
+        'x': [1, 2, 3],
+        'y': [1., 2., 3.],
+        'z': ['a', 'b', 'c']
+    })
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    shifted_outcome = gdf.a.shift(period)
+    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+
+    assert_eq(shifted_outcome, expected_outcome)
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_diff(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    diffed_outcome = gdf.a.diff(period)
+    expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
+    assert_eq(diffed_outcome, expected_outcome)
+
+
+def test_isnull_isna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.isnull(), gs.a.isnull())
+    assert_eq(ps.a.isna(), gs.a.isna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.isnull(), gs.isnull())
+    assert_eq(ps.isna(), gs.isna())
+
+
+def test_notna():
+    # float some missing
+    ps = pd.DataFrame({'a': [0, 1, 2, np.nan, 4, None, 6]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # integer none missing
+    ps = pd.DataFrame({'a': [0, 1, 2, 3, 4]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # all missing
+    ps = pd.DataFrame({'a': [None, None, np.nan, None]})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # empty
+    ps = pd.DataFrame({'a': []})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', None, 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # strings none missing
+    ps = pd.DataFrame({'a': ['a', 'b', 'c', 'd', 'e']})
+    gs = DataFrame.from_pandas(ps)
+    assert_eq(ps.a.notna(), gs.a.notna())
+
+    # unnamed series
+    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
+    gs = Series.from_pandas(ps)
+    assert_eq(ps.notna(), gs.notna())
+
+
+def test_ndim():
+    pdf = pd.DataFrame({'x': range(5), 'y': range(5, 10)})
+    gdf = DataFrame.from_pandas(pdf)
+    assert pdf.ndim == gdf.ndim
+    assert pdf.x.ndim == gdf.x.ndim
+
+    s = pd.Series()
+    gs = Series()
+    assert s.ndim == gs.ndim

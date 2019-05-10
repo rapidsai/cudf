@@ -10,12 +10,13 @@
 #include <random>
 
 #include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 
 #include "rmm/rmm.h"
 #include <cstring>
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
-#include "bitmask/bit_mask.h"
+#include "bitmask/bit_mask.cuh"
 
 // See this header for all of the handling of valids' vectors 
 #include "tests/utilities/valid_vectors.h"
@@ -213,10 +214,13 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	int8_t *asc_desc;
 	EXPECT_EQ(RMM_ALLOC(&asc_desc, 1, 0), RMM_SUCCESS);
 	int8_t minus_one = -1; //desc
-	cudaMemset(asc_desc, minus_one, 1);
+  cudaMemset(asc_desc, minus_one, 1);
+  
+  gdf_context context;
+  context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
 
 	//doesnt output nvcategory type columns so works as is
-	gdf_error err = gdf_order_by(input_columns, asc_desc, 1, output_column, false);
+	gdf_error err = gdf_order_by(input_columns, asc_desc, 1, output_column, &context);
 	EXPECT_EQ(GDF_SUCCESS, err);
 
 	if(print){
@@ -573,7 +577,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	gdf_error err = gdf_comparison(left_column, right_column, output_column, gdf_comparison_operator::GDF_EQUALS);
+	gdf_error err = gdf_binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL);
 	EXPECT_EQ(GDF_SUCCESS, err);
 
 	int8_t * data = new int8_t[rows_size];
