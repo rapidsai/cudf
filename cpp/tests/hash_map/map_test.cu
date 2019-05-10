@@ -307,7 +307,11 @@ struct InsertTest : public GdfTest {
   using map_type = typename T::map_type;
 
   InsertTest(){
-      pairs.resize(size);
+
+      // prevent overflow of small types
+      const size_t input_size = std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
+
+      pairs.resize(input_size);
       map.reset(new map_type(compute_hash_table_size(size)));
     }
 
@@ -316,7 +320,11 @@ struct InsertTest : public GdfTest {
   std::unique_ptr<map_type> map;
 };
 
-using TestTypes = ::testing::Types< key_value_types<int32_t, int32_t> >;
+using TestTypes = ::testing::Types<
+    key_value_types<int32_t, int32_t>, key_value_types<int64_t, int64_t>,
+    key_value_types<int8_t, int8_t>, key_value_types<int16_t, int16_t>,
+    key_value_types<int8_t, float>, key_value_types<int16_t, double>,
+    key_value_types<int32_t, float>, key_value_types<int64_t, double>>;
 
 TYPED_TEST_CASE(InsertTest, TestTypes);
 
@@ -355,7 +363,7 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct unique_pair_generator{
   __device__ pair_type operator()(gdf_size_type i) {
-    return thrust::make_pair(key_type{i}, value_type{i});
+    return thrust::make_pair(key_type(i), value_type(i));
   }
 };
 
@@ -379,7 +387,7 @@ struct identical_key_generator {
   identical_key_generator(key_type k = 42)
       : key{k}{}
   __device__ pair_type operator()(gdf_size_type i) {
-    return thrust::make_pair(key, value_type{i});
+    return thrust::make_pair(key, value_type(i));
   }
   key_type key;
 };
