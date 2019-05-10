@@ -580,8 +580,8 @@ class DataFrame(object):
                 return False
             if not self[col].equals(other[col]):
                 return False
-            if not self.index.equals(other.index):
-                return False
+        if not self.index.equals(other.index):
+            return False
         return True
 
     def sin(self):
