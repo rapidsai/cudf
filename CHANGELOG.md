@@ -1,8 +1,23 @@
-# cuDF 0.7.1 (TBD)
+# cuDF 0.8.0 (Date TBD)
+
+## New Features
+
+- PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
+- PR #1569 Add support for Json objects to the JSON Lines reader
+
+## Improvements
+
+...
 
 ## Bug Fixes
 
-- PR #1708 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
+- PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1616 Fix CategoricalColumn to access categories by index instead of iteration
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
+- PR #1683 ORC reader: fix timestamp conversion to UTC
+- PR #1613 Improve CategoricalColumn.fillna(-1) performance
+- PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
+
 
 # cuDF 0.7.0 (10 May 2019)
 

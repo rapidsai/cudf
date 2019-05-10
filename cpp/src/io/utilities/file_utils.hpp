@@ -13,18 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
-#include <stdint.h>
-#include <vector>
+
+#include <stdlib.h>
 
 
- /**
-  * @brief Creates a transition table to convert ORC timestanps to UTC
-  *
-  * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
-  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
-  *
-  * @return true if successful, false if failed to find/parse the timezone information
-  **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
+// TODO merge with DataSource
+/**
+ * @brief Helper class for memory mapping a file source
+ **/
+class MappedFile {
+  int fd_ = -1;
+  size_t size_ = 0;
+  void *map_data_ = nullptr;
+  size_t map_size_ = 0;
+  size_t map_offset_ = 0;
 
+public:
+  MappedFile(const char *path, int oflag);
+  MappedFile() noexcept = default;
+  ~MappedFile();
+
+  auto size() { return size_; }
+  auto data() { return map_data_; }
+
+  void map(size_t size, off_t offset);
+};

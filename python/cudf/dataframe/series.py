@@ -1376,7 +1376,7 @@ class Series(object):
         mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
         return Series(mod_vals)
 
-    def quantile(self, q, interpolation='linear', exact=True,
+    def quantile(self, q=0.5, interpolation='linear', exact=True,
                  quant_index=True):
         """
         Return values at the given quantile.

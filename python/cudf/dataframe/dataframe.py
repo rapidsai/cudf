@@ -2822,6 +2822,8 @@ class Loc(object):
             else:
                 raise TypeError(type(arg_1))
             col_slice = arg_2
+            if isinstance(arg_2, str):
+                col_slice = [arg_2]
 
         elif isinstance(arg, slice):
             row_slice = arg
