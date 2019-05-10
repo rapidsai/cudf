@@ -766,8 +766,8 @@ class DataFrame(object):
         # Otherwise
         else:
             index = index if isinstance(index, Index) else as_index(index)
-            index._df = self
             df = DataFrame()
+            df._index = index
             for k in self.columns:
                 df[k] = self[k].set_index(index)
             return df
