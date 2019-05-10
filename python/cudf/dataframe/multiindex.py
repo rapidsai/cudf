@@ -243,12 +243,10 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
-        if self._codes is None:
-            if self._df is not None:
-                self._compute_levels_and_codes()
-            else:
-                return 0
-        return len(self.codes[self.codes.columns[0]])
+        if hasattr(self, '_gb_result_df'):
+            return len(self._gb_result_df)
+        else:
+            return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
         if not hasattr(other, 'levels'):
@@ -266,10 +264,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        # TODO: Don't need to compute codesd
-        if self._codes is None:
-            self._compute_levels_and_codes()
-        return len(self.codes[0])
+        return len(self._gb_result_df)
 
     def take(self, indices):
         from collections.abc import Sequence
