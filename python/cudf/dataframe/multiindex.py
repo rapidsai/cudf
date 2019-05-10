@@ -25,8 +25,8 @@ class MultiIndex(Index):
     names: Name for each level
     """
 
-    def __init__(self, levels=None,
-                 codes=None, labels=None, names=None, **kwargs):
+    def __init__(self, levels=None, codes=None, labels=None, names=None,
+                 **kwargs):
         self.names = names
         column_names = []
         if labels:
@@ -36,10 +36,10 @@ class MultiIndex(Index):
             codes = labels
 
         # early termination enables lazy evaluation of codes
-        if kwargs.get('source_data'):
+        if kwargs.get('source_data') is not None:
             self._source_data = kwargs['source_data']
-            self._codes = None
-            self._levels = None
+            self._codes = codes
+            self._levels = levels
             return
 
         # name setup
@@ -101,7 +101,7 @@ class MultiIndex(Index):
             if self._codes is not None:
                 mi._codes = self._codes.copy(deep)
         else:
-            mi = MultiIndex(self.levels, self.codes)
+            mi = MultiIndex(self.levels.copy(), self.codes.copy(deep))
         if self.names:
             mi.names = self.names.copy()
         return mi

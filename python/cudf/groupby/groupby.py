@@ -113,7 +113,7 @@ class Groupby(object):
                 if self._df.index.names is None or sum(
                         x is None for x in self._df.index.names) > 1:
                     self._df_index_names = list(
-                            range(len(self._df.index.levels)))
+                            range(len(self._df.index._source_data.columns)))
                 for which_level in level:
                     # find the index of the level in the MultiIndex
                     if isinstance(which_level, str):
@@ -124,10 +124,7 @@ class Groupby(object):
                     try:
                         level_values = self._df.index.levels[which_level]
                     except IndexError:
-                        raise IndexError("Too many levels: Index has only "
-                                         "%d levels, not %d" % (
-                                               len(self._df.index.levels),
-                                               which_level+1))
+                        raise IndexError("Too many levels: Index has only %d levels, not %d" % (len(self._df.index._source_data.columns), which_level+1))  # noqa: E501
                     # protected by the above guard
                     code = self._df.index.codes[
                             self._df.index.names[which_level]]
@@ -201,15 +198,8 @@ class Groupby(object):
                 index.name = name
                 final_result.index = index
             else:
-                levels = []
-                codes = []
-                names = []
-                for by in self._by:
-                    levels.append([])
-                    codes.append([])
-                    names.append(by)
-                mi = MultiIndex(levels, codes, source_data=result[self._by])
-                mi.names = names
+                mi = MultiIndex(source_data=result[self._by])
+                mi.names = self._by
                 final_result.index = mi
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series([], name=final_result.columns[0])

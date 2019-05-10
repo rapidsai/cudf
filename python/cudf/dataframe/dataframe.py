@@ -576,7 +576,11 @@ class DataFrame(object):
 
     def equals(self, other):
         for col in self.columns:
+            if col not in other.columns:
+                return False
             if not self[col].equals(other[col]):
+                return False
+            if not self.index.equals(other.index):
                 return False
         return True
 
