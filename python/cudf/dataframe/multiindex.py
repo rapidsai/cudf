@@ -36,7 +36,7 @@ class MultiIndex(Index):
             codes = labels
 
         # early termination enables lazy evaluation of codes
-        if kwargs.get('source_data') is not None:
+        if 'source_data' in kwargs:
             self._source_data = kwargs['source_data']
             self._codes = codes
             self._levels = levels
@@ -75,7 +75,7 @@ class MultiIndex(Index):
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
         self._levels = np.array([Series(level).to_array() for level in levels])
-        self._validate_levels_and_codes(self.levels, self.codes)
+        self._validate_levels_and_codes(self._levels, self._codes)
         self.name = None
         self.names = names
 
@@ -162,9 +162,13 @@ class MultiIndex(Index):
         # a faster solution that could be executed on gpu at the same
         # time the groupby is calculated.
         for by in self._source_data.columns:
-            level = self._source_data[by].unique()
-            replaced = self._source_data[by].replace(
-                    level, Series(range(len(level))))
+            if len(self._source_data[by]) > 0:
+                level = self._source_data[by].unique()
+                replaced = self._source_data[by].replace(
+                        level, Series(range(len(level))))
+            else:
+                level = np.array([])
+                replaced = np.array([])
             levels.append(level)
             codes[by] = Series(replaced, dtype="int32")
             names.append(by)
