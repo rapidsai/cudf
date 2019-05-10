@@ -62,6 +62,7 @@ struct PIPTest : public GdfTest
 	    return ((p2_y - p1_y) * (p3_x - p2_x) - (p2_x - p1_x) * (p3_y - p2_y));
     }
 
+    // pip host function
     std::vector<int8_t> compute_reference_pip()
     {   
         size_t total_points = point_lats.size();
@@ -105,12 +106,12 @@ struct PIPTest : public GdfTest
         cudf::test::column_wrapper<T> point_lat_wrapp{point_lats};
         cudf::test::column_wrapper<T> point_lon_wrapp{point_lons};
 
-        gdf_column* inside_poly_col = cudf::point_in_polygon(polygon_lat_wrapp.get(), polygon_lon_wrapp.get(), 
-                                                        point_lat_wrapp.get(), point_lon_wrapp.get());
+        gdf_column inside_poly_col = cudf::point_in_polygon( *(polygon_lat_wrapp.get()), *(polygon_lon_wrapp.get()), 
+                                                             *(point_lat_wrapp.get()), *(point_lon_wrapp.get()) );
 
         std::vector<int8_t> host_inside_poly(point_lats.size());
 
-        EXPECT_EQ(cudaMemcpy(host_inside_poly.data(), inside_poly_col->data, inside_poly_col->size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
+        EXPECT_EQ(cudaMemcpy(host_inside_poly.data(), inside_poly_col.data, inside_poly_col.size * sizeof(int8_t), cudaMemcpyDeviceToHost), cudaSuccess);
     
         return host_inside_poly;
     }

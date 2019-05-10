@@ -24,19 +24,19 @@ namespace cudf {
 namespace gis {
 
 /** 
- * @brief Find if coordinates (query points) are completely inside or not in a static polygon
+ * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
  *
- * @param[in] poly_lats: column with latitudes of a polygon
- * @param[in] poly_lons: column with longitudes of a polygon
- * @param[in] point_lats: column with latitudes of query points
- * @param[in] point_lons: column with longitudes of query points
+ * @param[in] polygon_latitudes: column with latitudes of a polygon
+ * @param[in] polygon_longitudes: column with longitudes of a polygon
+ * @param[in] point_latitudes: column with latitudes of query points
+ * @param[in] point_longitudes: column with longitudes of query points
  *
- * @returns Pointer to gdf_column indicating if the i-th query point is inside or not with {1, 0}
+ * @returns gdf_column of type GDF_BOOL8 indicating whether the i-th query point is inside (true) or not (false)
  */
-gdf_column* point_in_polygon(const gdf_column* polygon_latitudes, 
-                          const gdf_column* polygon_longitudes,
-                          const gdf_column* point_latitudes, 
-                          const gdf_column* point_longitudes);
+gdf_column point_in_polygon(gdf_column const & polygon_latitudes,
+                            gdf_column const & polygon_longitudes,
+	                        gdf_column const & point_latitudes,
+                            gdf_column const & point_longitudes);
 }  // namespace gis
 }  // namespace cudf
 
