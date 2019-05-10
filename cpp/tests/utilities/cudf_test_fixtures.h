@@ -54,7 +54,6 @@ struct GdfTest : public ::testing::Test
 struct TempDirTestEnvironment : public ::testing::Environment
 {
     char* tmpdir;
-    public:
 
     void SetUp() {
         tmpdir=new char[30];
