@@ -249,14 +249,26 @@ class MultiIndex(Index):
             return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
-        if not hasattr(other, 'levels'):
+        if not hasattr(other, '_levels'):
             return False
-        equal_levels = self.levels == other.levels
-        if isinstance(equal_levels, np.ndarray):
-            equal_levels = equal_levels.all()
-        return equal_levels and\
-            self.codes == other.codes and\
-            self.names == other.names
+        # Lazy comparison
+        if hasattr(other, '_source_data'):
+            for col in self._source_data.columns:
+                if col not in other._source_data.columns:
+                    return False
+                if not self._source_data[col].equals(other._source_data[col]):
+                    return False
+            return True
+        else:
+            # Lazy comparison isn't possible - MI was created manually.
+            # Actually compare the MI, not its source data (it doesn't have
+            # any).
+            equal_levels = self.levels == other.levels
+            if isinstance(equal_levels, np.ndarray):
+                equal_levels = equal_levels.all()
+            return equal_levels and\
+                self.codes == other.codes and\
+                self.names == other.names
 
     @property
     def is_contiguous(self):
