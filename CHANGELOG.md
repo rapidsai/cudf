@@ -12,6 +12,9 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
+- PR #1683 ORC reader: fix timestamp conversion to UTC
+- PR #1613 Improve CategoricalColumn.fillna(-1) performance
 - PR #1642 Fix failure of CSV_TEST gdf_csv_test.SkiprowsNrows on multiuser systems
 
 
@@ -52,6 +55,7 @@
 - PR #1599 Level keyword supported in groupby
 - PR #929 Add support operations to dataframe
 - PR #1609 Groupby accept list of Series
+- PR #1658 Support `group_keys=True` keyword in groupby method
 
 ## Improvements
 
@@ -102,6 +106,7 @@
 - PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
+- PR #1655 Add `Column._pointer` as a way to access underlying `gdf_column*` of a `Column`
 
 ## Bug Fixes
 
@@ -151,8 +156,13 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n) 
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
+- PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
+- PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
+- PR #1656 Correct Groupby failure in dask when un-aggregable columns are left in dataframe.
+- PR #1689 Fix groupby performance regression
+- PR #1694 Add Cython as a runtime dependency since it's required in `setup.py`
 
 
 # cuDF 0.6.1 (25 Mar 2019)
