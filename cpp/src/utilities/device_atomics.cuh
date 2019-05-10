@@ -332,6 +332,7 @@ namespace detail {
                 (addr, update_value, [](T_int* a, T_int v){return atomicXor(a, v);});
         }
     };
+
     // -----------------------------------------------------------------------
     // the implementation of `typesAtomicCASImpl`
     template <typename T, size_t n>
@@ -435,18 +436,6 @@ namespace detail {
         }
     };
 
-    // -----------------------------------------------------------------------
-    // intermediate function resolve underlying data type
-    template <typename T, typename BinaryOp>
-    __forceinline__  __device__
-    T genericAtomicOperationUnderlyingType(
-        T* address, T const & update_value, BinaryOp op)
-    {
-        T ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
-            (address, update_value, op);
-        return ret;
-    }
-
 } // namespace detail
 
 /** -------------------------------------------------------------------------*
@@ -469,23 +458,32 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
-    // unwrap the input type to expect
-    // that the native atomic API is used for the underlying type
-    auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
-         &cudf::detail::unwrap(*address),
-         cudf::detail::unwrap(update_value),
-         op);
+    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>{}
+            (address, update_value, op);
     return T(ret);
 }
+
+
+template <typename T, gdf_dtype dtype, typename BinaryOp, typename W = cudf::detail::wrapper<T, dtype> >
+W genericAtomicOperator( W* address, W const& update_value, BinaryOp op){
+    // unwrap the input type to expect
+    // that the native atomic API is used for the underlying type
+    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>{}
+            (static_cast<T*>(address), cudf::detail::unwrap(update_value), op);
+    return W(ret);
+}
+
 
 template <typename BinaryOp>
 __forceinline__  __device__
 cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & update_value, BinaryOp op)
 {
+    using T = cudf::bool8;
     // don't use underlying type to apply operation for cudf::bool8
-    auto ret = cudf::detail::genericAtomicOperationUnderlyingType(
-         address, update_value, op);
-    return cudf::bool8(ret);
+    auto ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
+            (address, update_value, op);
+
+    return T(ret);
 }
 
 } // namespace cudf
