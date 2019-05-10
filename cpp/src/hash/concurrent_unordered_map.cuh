@@ -60,10 +60,24 @@ public:
     using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
+
+ /**---------------------------------------------------------------------------*
+  * @brief Allows viewing a pair as a packed 8B uint64_t value
+  *
+  * Used as an optimization for inserting when sizeof(value_type) ==
+  * sizeof(uint64_t)
+  *
+  *---------------------------------------------------------------------------**/
  union pair_packer {
-   uint64_t packed;
-   value_type pair;
-   pair_packer(value_type&& _pair) : pair{_pair} {}
+   using packed_t = uint64_t;
+   packed_t const packed;
+   value_type const pair;
+
+   __device__
+   pair_packer(value_type _pair) : pair{_pair} {}
+
+   __device__
+   pair_packer(uint64_t _packed) : packed{_packed} {}
  };
 
 public:
@@ -307,23 +321,48 @@ public:
       value_type* current_bucket = &m_hashtbl_values[index];
       bool new_insert{false};
 
-      // TODO Use SFINAE to specialize for when we can update the pair with a
-      // single CAS
       while (true) {
-        const key_type old_key =
-            atomicCAS(&(current_bucket->first), m_unused_key, insert_pair.first);
 
-        // Hash bucket empty
-        if (m_equal(m_unused_key, old_key)) {
-          current_bucket->second = insert_pair.second;
-          new_insert = true;
-          break;
-        }
+        // Optimization for when the inserted pair can be written with a single
+        // CAS
+        if (std::is_integral<key_type>::value &&
+            std::is_integral<mapped_type>::value &&
+            sizeof(pair_packer::packed_t) == sizeof(value_type)) {
 
-        // Key already exists
-        else if (m_equal(old_key, insert_pair.first)) {
-          new_insert = false;
-          break;
+          pair_packer const unused{thrust::make_pair(m_unused_key, m_unused_element)};
+          pair_packer const new_pair{insert_pair};
+          pair_packer const old{atomicCAS(
+              reinterpret_cast<typename pair_packer::packed_t*>(current_bucket),
+              unused.packed, new_pair.packed)};
+
+          if (old.packed == unused.packed) {
+            new_insert = true;
+            break;
+          }
+
+          if (m_equal(old.pair.first, insert_pair.first)) {
+            new_insert = false;
+            break;
+          }
+        } 
+        
+        // Default case that writes the key and value independently
+        else {
+          const key_type old_key = atomicCAS(&(current_bucket->first),
+                                             m_unused_key, insert_pair.first);
+
+          // Hash bucket empty
+          if (m_equal(m_unused_key, old_key)) {
+            current_bucket->second = insert_pair.second;
+            new_insert = true;
+            break;
+          }
+
+          // Key already exists
+          if (m_equal(old_key, insert_pair.first)) {
+            new_insert = false;
+            break;
+          }
         }
 
         // Continue until an empty bucket or equivalent key is found
@@ -335,36 +374,36 @@ public:
           iterator(m_hashtbl_values, m_hashtbl_values + capacity,
                    current_bucket),
           new_insert);
-    }
-
-    /**---------------------------------------------------------------------------*
-     * @brief Searches the map for the specified key.
-     *
-     * @note `find` is not threadsafe with `insert`. I.e., it is not safe to do
-     * concurrent `insert` and `find` operations.
-     *
-     * @param k The key to search for
-     * @return An iterator to the key if it exists, else map.end()
-     *---------------------------------------------------------------------------**/
-    __device__ const_iterator find(key_type const& k) const {
-      size_type const key_hash = m_hf(k);
-      size_type index = key_hash % capacity;
-
-      value_type* current_bucket = &m_hashtbl_values[index];
-
-      while (true) {
-        key_type const existing_key = current_bucket->first;
-
-        if (m_equal(k, existing_key)) {
-          return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
-                                current_bucket);
-        }
-        if (m_equal(m_unused_key, existing_key)) {
-          return this->end();
-        }
-        index = (index + 1) % capacity;
-        current_bucket = &m_hashtbl_values[index];
       }
+
+      /**---------------------------------------------------------------------------*
+       * @brief Searches the map for the specified key.
+       *
+       * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
+       *do concurrent `insert` and `find` operations.
+       *
+       * @param k The key to search for
+       * @return An iterator to the key if it exists, else map.end()
+       *---------------------------------------------------------------------------**/
+      __device__ const_iterator find(key_type const& k) const {
+        size_type const key_hash = m_hf(k);
+        size_type index = key_hash % capacity;
+
+        value_type* current_bucket = &m_hashtbl_values[index];
+
+        while (true) {
+          key_type const existing_key = current_bucket->first;
+
+          if (m_equal(k, existing_key)) {
+            return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                                  current_bucket);
+          }
+          if (m_equal(m_unused_key, existing_key)) {
+            return this->end();
+          }
+          index = (index + 1) % capacity;
+          current_bucket = &m_hashtbl_values[index];
+        }
     }
 
     gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
