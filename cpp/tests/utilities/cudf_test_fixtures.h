@@ -71,7 +71,7 @@ struct TempDirTestEnvironment : public ::testing::Environment
 
     void TearDown() {
         //TODO: should use std::filesystem instead, once C++17 support added
-        nftw(tmpdir, rmFiles ,10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+        nftw(tmpdir, rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
         delete[] tmpdir;
         tmpdir=NULL;
     }
@@ -88,7 +88,7 @@ struct TempDirTestEnvironment : public ::testing::Environment
     *
     * @return absolute temporary file path of filename
     */
-    char* get_temp_filename(const ciar *fname)
+    char* get_temp_filename(const char *fname)
     {
         char* tmpfname = new char[strlen(tmpdir)+strlen(fname)+1];
         strcpy(tmpfname, tmpdir);
