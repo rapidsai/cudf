@@ -19,10 +19,10 @@
 
 #include <cudf.h>
 #include <groupby/aggregation_operations.hpp>
-#include <managed_allocator.cuh>
-#include <managed.cuh>
-#include <hash_functions.cuh>
-#include <helper_functions.cuh>
+#include "managed_allocator.cuh"
+#include "managed.cuh"
+#include "hash_functions.cuh"
+#include "helper_functions.cuh"
 #include <utilities/device_atomics.cuh>
 #include <table/device_table.cuh>
 
