@@ -2690,8 +2690,6 @@ class DataFrame(object):
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
 
-        from utils import cudf_dtype_from_pydata_dtype
-
         if not isinstance(include, (list, tuple)):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
@@ -2704,7 +2702,7 @@ class DataFrame(object):
         selection = tuple(map(frozenset, (include, exclude)))
         include, exclude = map(
             lambda x: frozenset(
-                map(cudf_dtype_from_pydata_dtype, x)),
+                map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 
@@ -2737,7 +2735,7 @@ class DataFrame(object):
                 if issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
-        include_all = set([cudf_dtype_from_pydata_dtype(d)
+        include_all = set([utils.cudf_dtype_from_pydata_dtype(d)
                            for d in self.dtypes])
 
         # remove all exclude types
@@ -2748,7 +2746,7 @@ class DataFrame(object):
             inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            infered_type = cudf_dtype_from_pydata_dtype(x.dtype)
+            infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 
