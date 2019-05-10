@@ -152,9 +152,9 @@ class MultiIndex(Index):
         # to compute new codes for the MultiIndex. There may be
         # a faster solution that could be executed on gpu at the same
         # time the groupby is calculated.
-        for by in self._gb._by:
-            level = self._gb_result_df[by].unique()
-            replaced = self._gb_result_df[by].replace(
+        for by in self._source_data.columns:
+            level = self._source_data[by].unique()
+            replaced = self._source_data[by].replace(
                     level, Series(range(len(level))))
             levels.append(level)
             codes[by] = Series(replaced, dtype="int32")
@@ -243,8 +243,8 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
-        if hasattr(self, '_gb_result_df'):
-            return len(self._gb_result_df)
+        if hasattr(self, '_source_data'):
+            return len(self._source_data)
         else:
             return len(self.codes[self.codes.columns[0]])
 
@@ -264,7 +264,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        return len(self._gb_result_df)
+        return len(self._source_data)
 
     def take(self, indices):
         from collections.abc import Sequence

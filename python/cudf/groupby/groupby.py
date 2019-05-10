@@ -210,8 +210,7 @@ class Groupby(object):
                     names.append(by)
                 mi = MultiIndex(levels, codes)
                 mi.names = names
-                mi._gb = self
-                mi._gb_result_df = final_result
+                mi._source_data = result[self._by]
                 final_result.index = mi
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series([], name=final_result.columns[0])
@@ -236,13 +235,13 @@ class Groupby(object):
                 if col not in self._by:
                     final_result[col] = result[col]
             multi_index._gb = self
-            multi_index._gb_result_df = result
+            multi_index._source_data = result[self._by]
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series(final_result[final_result.columns[0]])
                 final_series.name = final_result.columns[0]
                 final_series.index = multi_index
                 multi_index._gb = self
-                multi_index._gb_result_df = final_series
+                multi_index._source_data = result[self._by]
                 return final_series
             return final_result.set_index(multi_index)
 
