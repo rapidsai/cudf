@@ -224,7 +224,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceAllSame)
   using pair_type = typename MapTest<TypeParam>::pair_type;
   using op_type = typename MapTest<TypeParam>::op_type;
 
-  pair_type * d_pairs = this->create_input(1, 1<<20);
+  pair_type * d_pairs = this->create_input(1, 10000);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
@@ -243,7 +243,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceAllUnique)
   using op_type = typename MapTest<TypeParam>::op_type;
   
 
-  pair_type * d_pairs = this->create_input(1<<18, 1);
+  pair_type * d_pairs = this->create_input(10000, 1);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
@@ -261,7 +261,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceWarpSame)
   using pair_type = typename MapTest<TypeParam>::pair_type;
   using op_type = typename MapTest<TypeParam>::op_type;
 
-  pair_type * d_pairs = this->create_input(1<<15, 32);
+  pair_type * d_pairs = this->create_input(5000, 32);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
@@ -279,7 +279,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceBlockSame)
   using pair_type = typename MapTest<TypeParam>::pair_type;
   using op_type = typename MapTest<TypeParam>::op_type;
 
-  pair_type * d_pairs = this->create_input(1<<12, this->THREAD_BLOCK_SIZE);
+  pair_type * d_pairs = this->create_input(1000, this->THREAD_BLOCK_SIZE);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
@@ -293,9 +293,10 @@ TYPED_TEST(MapTest, AggregationTestDeviceBlockSame)
 
 template <typename K, typename V>
 struct key_value_types{
-    using key_type = K;
-    using value_type = V;
-    using pair_type = thrust::pair<K,V>;
+  using key_type = K;
+  using value_type = V;
+  using pair_type = thrust::pair<K, V>;
+  using map_type = concurrent_unordered_map<key_type, value_type>;
 };
 
 template <typename T>
@@ -303,14 +304,66 @@ struct InsertTest : public GdfTest {
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
   using pair_type = typename T::pair_type;
+  using map_type = typename T::map_type;
 
-  using map_type = concurrent_unordered_map<key_type, value_type>;
+  InsertTest(){
+      pairs.resize(size);
+      map.reset(new map_type(compute_hash_table_size(size)));
+    }
+
+  const gdf_size_type size{10000};
+  rmm::device_vector<pair_type> pairs;
+  std::unique_ptr<map_type> map;
 };
 
 using TestTypes = ::testing::Types< key_value_types<int32_t, int32_t> >;
 
 TYPED_TEST_CASE(InsertTest, TestTypes);
 
-TYPED_TEST(InsertTest, First){
+template <typename map_type, typename pair_type>
+struct insert_pair {
+  insert_pair(map_type* _map) : map{_map} {}
 
+  __device__ bool operator()(pair_type const& pair) {
+    auto result = map->insert(pair);
+    if (result.first == map->end()) {
+      return false;
+    }
+    return result.second;
+  }
+
+  map_type* map;
+};
+
+template <typename map_type, typename pair_type>
+struct find_pair {
+  find_pair(map_type* _map) : map{_map} {}
+
+  __device__ bool operator()(pair_type const& pair) {
+    auto result = map->find(pair.first);
+    if (result == map->end()) {
+      return false;
+    }
+    return *result == pair;
+  }
+  map_type* map;
+};
+
+template <typename pair_type>
+struct pair_generator{
+  __device__ pair_type operator()(gdf_size_type i) {
+    return thrust::make_pair(i, i);
+  }
+};
+
+TYPED_TEST(InsertTest, UniqueInserts) {
+  using map_type = typename TypeParam::map_type;
+  using pair_type = typename TypeParam::pair_type;
+  thrust::tabulate(this->pairs.begin(), this->pairs.end(),
+                   pair_generator<pair_type>{});
+  EXPECT_TRUE(
+      thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                             find_pair<map_type, pair_type>{this->map.get()}));
 }
