@@ -409,58 +409,38 @@ def test_dataframe_slicing():
 @pytest.mark.parametrize('step', [1, 2, 5])
 @pytest.mark.parametrize('scalar', [0, 20, 100])
 def test_dataframe_loc(scalar, step):
-    df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
-        .astype(np.int32)
-    df['b'] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
-        .astype(np.int64)
-    df['d'] = hd = np.random.random(size).astype(np.float64)
+    pdf = pd.DataFrame({
+        'a': np.random.randint(low=0, high=100, size=size),
+        'b': np.random.random(size).astype(np.float32),
+        'c': np.random.random(size).astype(np.float64),
+        'd': np.random.random(size).astype(np.float64)
+    })
 
-    pdf = pd.DataFrame()
-    pdf['a'] = ha
-    pdf['b'] = hb
-    pdf['c'] = hc
-    pdf['d'] = hd
+    df = DataFrame.from_pandas(pdf)
 
     # Scalar label
-    np.testing.assert_equal(df.loc[scalar].to_array(), pdf.loc[scalar])
+    assert_eq(df.loc[scalar], pdf.loc[scalar])
 
     # Full slice
-    full = df.loc[:, ['c']]
-    assert tuple(full.columns) == ('c',)
-    np.testing.assert_equal(full['c'].to_array(), hc)
+    assert_eq(df.loc[:, 'c'], pdf.loc[:, 'c'])
 
     begin = 110
     end = 122
 
-    fewer = df.loc[begin:end:step, ['c', 'd', 'a']]
-    assert len(fewer) == (end - begin)//step + 1
-    assert tuple(fewer.columns) == ('c', 'd', 'a')
-    np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1:step])
-    np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1:step])
-    np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1:step])
-    del fewer
+    assert_eq(df.loc[begin:end:step, ['c', 'd', 'a']],
+              pdf.loc[begin:end:step, ['c', 'd', 'a']])
 
-    fewer = df.loc[begin:end, ['c', 'd']]
-    assert len(fewer) == end - begin + 1
-    assert tuple(fewer.columns) == ('c', 'd')
-    np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
-    np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
-    del fewer
+    assert_eq(df.loc[begin:end, ['c', 'd']],
+              pdf.loc[begin:end, ['c', 'd']])
 
     # Make int64 index
     offset = 50
     df2 = df[offset:]
     begin = 117
     end = 122
-    fewer = df2.loc[begin:end, ['c', 'd', 'a']]
-    assert len(fewer) == end - begin + 1
-    assert tuple(fewer.columns) == ('c', 'd', 'a')
-    np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
-    np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
-    np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
+    assert_eq(df2.loc[begin:end, ['c', 'd', 'a']],
+              df2.loc[begin:end, ['c', 'd', 'a']])
 
 
 @pytest.mark.xfail(
@@ -556,7 +536,8 @@ def test_series_loc_datetime():
 
 
 def test_series_loc_categorical():
-    ps = pd.Series([1, 2, 3, 4, 5], index=pd.Categorical(['a', 'b', 'c', 'd', 'e']))
+    ps = pd.Series([1, 2, 3, 4, 5],
+                   index=pd.Categorical(['a', 'b', 'c', 'd', 'e']))
     gs = Series.from_pandas(ps)
 
     assert_eq(ps.loc['a'], gs.loc['a'])

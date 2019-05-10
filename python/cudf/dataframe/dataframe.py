@@ -2808,63 +2808,85 @@ class Loc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        row_slice = None
-        row_label = None
 
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)\
-                and isinstance(arg, tuple):  # noqa: E501
+        if type(arg) is not tuple:
+            arg = (arg, self._df.columns)
+
+        if self._is_multiindex_selection(arg):
+            return self._get_multiindex_selection(arg)
+
+        if self._is_scalar_access(arg):
+            return self._df[arg[1]].loc[arg[0]]
+
+        columns = self._get_column_selection(arg[1])
+        df = DataFrame()
+        for col in columns:
+            df.add_column(name=col, data=self._df[col].loc[arg[0]])
+
+        if df.shape[0] == 1:
+            dtypes = df.dtypes.values.tolist()
+
+            if all([pd.api.types.is_numeric_dtype(t) for t in dtypes]):
+                dtype = np.result_type(*dtypes)
+                for name, col in df.iteritems():
+                    df[name] = col.astype(dtype)
+
+            sr = df.T
+            sr._rename_columns([arg[0]])
+            sr = sr.set_index(df.columns)
+            return sr[arg[0]]
+
+        if df.shape[1] == 1:
+            return df[arg[1]]
+
+        return df
+
+    def _is_multiindex_selection(self, arg):
+        return (
+            isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
+            and isinstance(arg, tuple)
+        )
+
+    def _get_multiindex_selection(self, arg):
+        if self._is_multiindex_selection(arg):
             # Explicitly ONLY support tuple indexes into MultiIndex.
             # Pandas allows non tuple indices and warns "results may be
             # undefined."
             return self._df._index._get_row_major(self._df, arg)
 
-        if isinstance(arg, int):
-            if arg < 0 or arg >= len(self._df):
-                raise IndexError("label scalar %s is out of bound" % arg)
-            row_label = arg
-            col_slice = self._df.columns
-
-        elif isinstance(arg, tuple):
-            arg_1, arg_2 = arg
-            if isinstance(arg_1, int):
-                row_label = arg_1
-            elif isinstance(arg_1, slice):
-                row_slice = arg_1
-            else:
-                raise TypeError(type(arg_1))
-            col_slice = arg_2
-
+    def _get_column_selection(self, arg):
+        if self._is_single_value(arg):
+            return [arg]
         elif isinstance(arg, slice):
-            row_slice = arg
-            col_slice = self._df.columns
+            start, stop, step = arg.indices(self._df.shape[1])
+            cols = []
+            for i in range(start, stop, step):
+                cols.append(self._df.columns[i])
+            return cols
         else:
-            raise TypeError(type(arg))
+            return arg
 
-        if row_label is not None:
-            ret_list = []
-            col_list = pd.Categorical(list(col_slice))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                        self._df[col][row_label].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in loc"
-                    )
-                ret_list.append(self._df[col][row_label])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
+    def _is_single_value(self, val):
+        from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
+        if (
+                isinstance(val, str)
+                or isinstance(val, numbers.Number)
+                or is_datetime_or_timedelta_dtype(val)
+                or isinstance(val, pd.Timestamp)
+                or isinstance(val, pd.Categorical)
+        ):
+            return True
+        return False
 
-        df = DataFrame()
-        begin, end = self._df.index.find_label_range(row_slice.start,
-                                                     row_slice.stop)
-        row_step = row_slice.step if row_slice.step is not None else 1
-        for col in col_slice:
-            sr = self._df[col]
-            df.add_column(col, sr[begin:end:row_step], forceindex=True)
-
-        return df
+    def _is_scalar_access(self, arg):
+        if isinstance(arg, str):
+            return False
+        if not hasattr(arg, '__len__'):
+            return False
+        for obj in arg:
+            if not self._is_single_value(obj):
+                return False
+        return True
 
 
 class Iloc(object):
