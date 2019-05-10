@@ -48,31 +48,6 @@ namespace detail {
         return *( reinterpret_cast<T_output*>(&value) );
     }
 
-    // call atomic function with type cast between same underlying type
-    template <typename T, typename Functor>
-    __forceinline__  __device__
-    T typesAtomicOperation32(T* addr, T val, Functor atomicFunc)
-    {
-        using T_int = int;
-        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-            cudf::detail::type_reinterpret<T_int, T>(val));
-
-        return cudf::detail::type_reinterpret<T, T_int>(ret);
-    }
-
-    // call atomic function with type cast between same underlying type
-    template <typename T, typename Functor>
-    __forceinline__  __device__
-    T typesAtomicOperation64(T* addr, T val, Functor atomicFunc)
-    {
-        using T_int = long long int;
-        T_int ret = atomicFunc(reinterpret_cast<T_int*>(addr),
-            cudf::detail::type_reinterpret<T_int, T>(val));
-
-        return cudf::detail::type_reinterpret<T, T_int>(ret);
-    }
-
-
     // -----------------------------------------------------------------------
     // the implementation of `genericAtomicOperation`
     template <typename T, typename Op, size_t n>
@@ -253,9 +228,9 @@ namespace detail {
         __forceinline__  __device__
         T operator()(T* addr, T const & update_value, DeviceMin op)
         {
-            using T_out = long long int;
-            T ret = atomicMin(reinterpret_cast<T_out*>(addr),
-                type_reinterpret<T_out, T>(update_value) );
+            using T_int = long long int;
+            T ret = atomicMin(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
             return ret;
         }
     };
@@ -266,9 +241,9 @@ namespace detail {
         __forceinline__  __device__
         T operator()(T* addr, T const & update_value, DeviceMax op)
         {
-            using T_out = long long int;
-            T ret = atomicMax(reinterpret_cast<T_out*>(addr),
-                type_reinterpret<T_out, T>(update_value) );
+            using T_int = long long int;
+            T ret = atomicMax(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
             return ret;
         }
     };
@@ -288,8 +263,9 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceAnd op)
         {
             using T_int = long long int;
-            return cudf::detail::typesAtomicOperation64
-                (addr, update_value, [](T_int* a, T_int v){return atomicAnd(a, v);});
+            T ret = atomicAnd(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
+            return ret;
         }
     };
 
@@ -308,8 +284,9 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceOr op)
         {
             using T_int = long long int;
-            return cudf::detail::typesAtomicOperation64
-                (addr, update_value, [](T_int* a, T_int v){return atomicOr(a, v);});
+            T ret = atomicOr(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
+            return ret;
         }
     };
 
@@ -328,11 +305,12 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceXor op)
         {
             using T_int = long long int;
-            return cudf::detail::typesAtomicOperation64
-                (addr, update_value, [](T_int* a, T_int v){return atomicXor(a, v);});
+            T ret = atomicXor(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
+            return ret;
+
         }
     };
-
     // -----------------------------------------------------------------------
     // the implementation of `typesAtomicCASImpl`
     template <typename T, size_t n>
