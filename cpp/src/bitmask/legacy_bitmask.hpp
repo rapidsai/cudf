@@ -36,11 +36,4 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
   else
     return true;
 }
-
-CUDA_HOST_DEVICE_CALLABLE
-void gdf_unset_bit(gdf_valid_type *valid, gdf_index_type pos) {
-        valid[pos / GDF_VALID_BITSIZE] =
-            valid[pos / GDF_VALID_BITSIZE] & ~(1<<(pos % GDF_VALID_BITSIZE));
-}
-
 #endif

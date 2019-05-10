@@ -54,23 +54,27 @@ namespace{ //anonymous
                       thrust::device_ptr<const T> old_values_begin,
                       thrust::device_ptr<const T> old_values_end,
                       const T*                    d_new_values,
-                      gdf_valid_type*             col_valid,
-                      gdf_valid_type*             new_valid)
+                      bit_mask::bit_mask_t*             col_valid,
+                      const bit_mask::bit_mask_t*       new_valid)
   {
+    using namespace bit_mask;
+    const bool is_nullable_col = (col_valid != nullptr);
+    const bool is_nullable_new = (new_valid != nullptr);
+
     gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
     while(i < nrows)
     {
-      if ( gdf_is_valid(col_valid, i)){
+      if ( !is_nullable_col || is_valid(col_valid, i)){
           auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
 
           if (found_ptr != old_values_end) {
               auto d = thrust::distance(old_values_begin, found_ptr);
-              if (gdf_is_valid(new_valid, d)){
+              if (!is_nullable_new || is_valid(new_valid, d)){
                 d_col_data[i] = d_new_values[d];
               }
               else{
                 //unset the i-th bit in col_valid
-                gdf_unset_bit(col_valid, i);
+                clear_bit_unsafe(col_valid, i);
               }
 
           }
@@ -104,8 +108,8 @@ namespace{ //anonymous
                                              old_values_begin,
                                              old_values_begin + nvalues,
                                              static_cast<const col_type*>(d_new_values),
-                                             (col_valid),
-                                             (new_valid));
+                                             static_cast<bit_mask::bit_mask_t*>(col_valid),
+                                             static_cast<const bit_mask::bit_mask_t*>(new_valid));
     }
   };
 
@@ -119,9 +123,8 @@ namespace{ //anonymous
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
     if (col->valid == nullptr && (new_values->valid != nullptr || new_values->null_count !=0)){
-        // allocating the memory for valid mask
-        RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(col->size), 0));
-        CUDA_TRY(cudaMemset(col->valid, 1, gdf_valid_allocation_size(col->size)));
+        /* allocating the memory for valid mask */
+        bit_mask::create_bit_mask(&col->valid, col->size, 1);
     }
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,
