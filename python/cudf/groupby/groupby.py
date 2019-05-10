@@ -229,15 +229,17 @@ class Groupby(object):
             multi_index = MultiIndex(levels=None,
                                      codes=None,
                                      names=[])
-            multi_index._gb = self
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
+            multi_index._gb = self
+            multi_index._gb_result_df = result
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series(final_result[final_result.columns[0]])
                 final_series.name = final_result.columns[0]
                 final_series.index = multi_index
+                multi_index._sr = final_result
                 return final_series
             return final_result.set_index(multi_index)
 

@@ -153,12 +153,13 @@ class MultiIndex(Index):
         # a faster solution that could be executed on gpu at the same
         # time the groupby is calculated.
         for by in self._gb._by:
-            level = self._gb._df[by].unique()
-            replaced = self._gb._df[by].replace(
+            level = self._gb_result_df[by].unique()
+            replaced = self._gb_result_df[by].replace(
                     level, Series(range(len(level))))
             levels.append(level)
             codes[by] = Series(replaced, dtype="int32")
             names.append(by)
+
         self._levels = levels
         self._codes = codes
         self.names = names
@@ -185,8 +186,6 @@ class MultiIndex(Index):
         return validity_mask
 
     def _get_row_major(self, df, row_tuple):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import Series
         result = df.take(Series(valid_indices))
@@ -222,8 +221,6 @@ class MultiIndex(Index):
         return result
 
     def _get_column_major(self, df, row_tuple):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import DataFrame
         result = DataFrame()
@@ -254,8 +251,6 @@ class MultiIndex(Index):
         return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         if not hasattr(other, 'levels'):
             return False
         equal_levels = self.levels == other.levels
@@ -271,6 +266,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
+        # TODO: Don't need to compute codesd
         if self._codes is None:
             self._compute_levels_and_codes()
         return len(self.codes[0])
@@ -297,8 +293,6 @@ class MultiIndex(Index):
         return self
 
     def __next__(self):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         if self.n < len(self.codes):
             result = self[self.n]
             self.n += 1
@@ -307,8 +301,6 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         match = self.take(index)
         if isinstance(index, slice):
             return match
@@ -343,8 +335,6 @@ class MultiIndex(Index):
         return result
 
     def to_pandas(self):
-        if self._codes is None:
-            self._compute_levels_and_codes()
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
