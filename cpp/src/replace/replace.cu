@@ -25,6 +25,7 @@
 #include "utilities//type_dispatcher.hpp"
 #include "utilities/cudf_utils.h"
 #include "bitmask/legacy_bitmask.hpp"
+#include "bitmask/bit_mask.cuh"
 
 namespace{ //anonymous
 
@@ -54,8 +55,8 @@ namespace{ //anonymous
                       thrust::device_ptr<const T> old_values_begin,
                       thrust::device_ptr<const T> old_values_end,
                       const T*                    d_new_values,
-                      bit_mask::bit_mask_t*             col_valid,
-                      const bit_mask::bit_mask_t*       new_valid)
+                      bit_mask::bit_mask_t * const __restrict__ col_valid,
+                      bit_mask::bit_mask_t const * const __restrict__ new_valid)
   {
     using namespace bit_mask;
     const bool is_nullable_col = (col_valid != nullptr);
@@ -100,6 +101,14 @@ namespace{ //anonymous
                     gdf_valid_type* col_valid,
                     gdf_valid_type* new_valid)
     {
+      const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(new_valid);
+      bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(col_valid);
+
+      if (typed_col_valid == nullptr && typed_new_valid != nullptr){
+         /* allocating the memory for valid mask */
+         bit_mask::create_bit_mask(&typed_col_valid, nrows, 1);
+      }
+
       thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
 
       const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
@@ -108,8 +117,8 @@ namespace{ //anonymous
                                              old_values_begin,
                                              old_values_begin + nvalues,
                                              static_cast<const col_type*>(d_new_values),
-                                             static_cast<bit_mask::bit_mask_t*>(col_valid),
-                                             static_cast<const bit_mask::bit_mask_t*>(new_valid));
+                                             typed_col_valid,
+                                             typed_new_valid);
     }
   };
 
@@ -122,10 +131,6 @@ namespace{ //anonymous
     GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
-    if (col->valid == nullptr && (new_values->valid != nullptr || new_values->null_count !=0)){
-        /* allocating the memory for valid mask */
-        bit_mask::create_bit_mask(&col->valid, col->size, 1);
-    }
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,
                           col->size,
