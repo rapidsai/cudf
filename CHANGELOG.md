@@ -5,7 +5,7 @@
 - PR #1702 Lazy load MultiIndex to return groupby performance to near optimal.
 
 
-# cuDF 0.7.0 (May 10 2019)
+# cuDF 0.7.0 (10 May 2019)
 
 ## New Features
 
