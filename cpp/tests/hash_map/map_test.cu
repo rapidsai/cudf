@@ -325,6 +325,7 @@ struct insert_pair {
   insert_pair(map_type* _map) : map{_map} {}
 
   __device__ bool operator()(pair_type const& pair) {
+
     auto result = map->insert(pair);
     if (result.first == map->end()) {
       return false;
@@ -349,21 +350,94 @@ struct find_pair {
   map_type* map;
 };
 
-template <typename pair_type>
-struct pair_generator{
+template <typename pair_type,
+          typename key_type = typename pair_type::first_type,
+          typename value_type = typename pair_type::second_type>
+struct unique_pair_generator{
   __device__ pair_type operator()(gdf_size_type i) {
-    return thrust::make_pair(i, i);
+    return thrust::make_pair(key_type{i}, value_type{i});
   }
 };
 
-TYPED_TEST(InsertTest, UniqueInserts) {
+template <typename pair_type,
+          typename key_type = typename pair_type::first_type,
+          typename value_type = typename pair_type::second_type>
+struct identical_pair_generator {
+  identical_pair_generator(key_type k = 42, value_type v = 42)
+      : key{k}, value{v} {}
+  __device__ pair_type operator()(gdf_size_type i) {
+    return thrust::make_pair(key, value);
+  }
+  key_type key;
+  value_type value;
+};
+
+template <typename pair_type,
+          typename key_type = typename pair_type::first_type,
+          typename value_type = typename pair_type::second_type>
+struct identical_key_generator {
+  identical_key_generator(key_type k = 42)
+      : key{k}{}
+  __device__ pair_type operator()(gdf_size_type i) {
+    return thrust::make_pair(key, value_type{i});
+  }
+  key_type key;
+};
+
+TYPED_TEST(InsertTest, UniqueKeysUniqueValues) {
   using map_type = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
   thrust::tabulate(this->pairs.begin(), this->pairs.end(),
-                   pair_generator<pair_type>{});
+                   unique_pair_generator<pair_type>{});
+  // All pairs should be new inserts
   EXPECT_TRUE(
       thrust::all_of(this->pairs.begin(), this->pairs.end(),
                      insert_pair<map_type, pair_type>{this->map.get()}));
+
+  // All pairs should be present in the map
   EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
                              find_pair<map_type, pair_type>{this->map.get()}));
+}
+
+TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues) {
+  using map_type = typename TypeParam::map_type;
+  using pair_type = typename TypeParam::pair_type;
+  thrust::tabulate(this->pairs.begin(), this->pairs.end(),
+                   identical_pair_generator<pair_type>{});
+  // Insert a single pair
+  EXPECT_TRUE(
+      thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
+                     insert_pair<map_type, pair_type>{this->map.get()}));
+  // Identical inserts should all return false (no new insert)
+  EXPECT_FALSE(
+      thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                     insert_pair<map_type, pair_type>{this->map.get()}));
+
+  // All pairs should be present in the map
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                             find_pair<map_type, pair_type>{this->map.get()}));
+}
+
+TYPED_TEST(InsertTest, IdenticalKeysUniqueValues) {
+  using map_type = typename TypeParam::map_type;
+  using pair_type = typename TypeParam::pair_type;
+  thrust::tabulate(this->pairs.begin(), this->pairs.end(),
+                   identical_key_generator<pair_type>{});
+
+  // Insert a single pair
+  EXPECT_TRUE(
+      thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
+                     insert_pair<map_type, pair_type>{this->map.get()}));
+
+  // Identical key inserts should all return false (no new insert)
+  EXPECT_FALSE(
+      thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
+                     insert_pair<map_type, pair_type>{this->map.get()}));
+
+  // Only first pair is present in map
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
+                             find_pair<map_type, pair_type>{this->map.get()}));
+
+  EXPECT_FALSE(thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
+                              find_pair<map_type, pair_type>{this->map.get()}));
 }
