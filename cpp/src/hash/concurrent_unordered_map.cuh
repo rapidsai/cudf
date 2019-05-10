@@ -17,14 +17,13 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
-
-#include "cudf.h"
-#include "groupby/aggregation_operations.hpp"
-#include "managed_allocator.cuh"
-#include "managed.cuh"
-#include "hash_functions.cuh"
-#include "helper_functions.cuh"
-#include "utilities/device_atomics.cuh"
+#include <cudf.h>
+#include <groupby/aggregation_operations.hpp>
+#include <managed_allocator.cuh>
+#include <managed.cuh>
+#include <hash_functions.cuh>
+#include <helper_functions.cuh>
+#include <utilities/device_atomics.cuh>
 #include <table/device_table.cuh>
 
 #include <iterator>
