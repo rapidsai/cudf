@@ -13,7 +13,10 @@
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
 - PR #1651 Fix `query` function on empty dataframe
+- PR #1616 Fix CategoricalColumn to access categories by index instead of iteration
+- PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
+- PR #1613 Improve CategoricalColumn.fillna(-1) performance
 
 
 # cuDF 0.7.0 (Date TBD)
