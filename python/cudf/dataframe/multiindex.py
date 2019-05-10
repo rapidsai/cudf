@@ -25,7 +25,8 @@ class MultiIndex(Index):
     names: Name for each level
     """
 
-    def __init__(self, levels, codes=None, labels=None, names=None):
+    def __init__(self, levels=None,
+                 codes=None, labels=None, names=None, **kwargs):
         self.names = names
         column_names = []
         if labels:
@@ -33,6 +34,15 @@ class MultiIndex(Index):
                           "instead", FutureWarning)
         if labels and not codes:
             codes = labels
+
+        # early termination enables lazy evaluation of codes
+        if kwargs.get('source_data'):
+            self._source_data = kwargs['source_data']
+            self._codes = None
+            self._levels = None
+            return
+
+        # name setup
         if isinstance(names, (Sequence,
                               pd.core.indexes.frozen.FrozenNDArray,
                               pd.core.indexes.frozen.FrozenList)):
@@ -44,12 +54,6 @@ class MultiIndex(Index):
             column_names = list(range(len(codes)))
         else:
             column_names = names
-
-        # early termination enables lazy evaluation of codes
-        if codes is None and levels is None:
-            self._codes = None
-            self._levels = None
-            return
 
         if len(levels) == 0:
             raise ValueError('Must pass non-zero number of levels/codes')
@@ -90,8 +94,14 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        mi = MultiIndex(self.levels,
-                        self.codes.copy(deep))
+        if hasattr(self, '_source_data'):
+            mi = MultiIndex(source_data=self._source_data)
+            if self._levels is not None:
+                mi._levels = self._levels.copy()
+            if self._codes is not None:
+                mi._codes = self._codes.copy(deep)
+        else:
+            mi = MultiIndex(self.levels, self.codes)
         if self.names:
             mi.names = self.names.copy()
         return mi

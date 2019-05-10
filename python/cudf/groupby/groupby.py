@@ -113,7 +113,7 @@ class Groupby(object):
                 if self._df.index.names is None or sum(
                         x is None for x in self._df.index.names) > 1:
                     self._df_index_names = list(
-                            range(len(self._df_index.levels)))
+                            range(len(self._df.index.levels)))
                 for which_level in level:
                     # find the index of the level in the MultiIndex
                     if isinstance(which_level, str):
@@ -208,9 +208,8 @@ class Groupby(object):
                     levels.append([])
                     codes.append([])
                     names.append(by)
-                mi = MultiIndex(levels, codes)
+                mi = MultiIndex(levels, codes, source_data=result[self._by])
                 mi.names = names
-                mi._source_data = result[self._by]
                 final_result.index = mi
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series([], name=final_result.columns[0])
@@ -227,19 +226,15 @@ class Groupby(object):
             result = result.set_index(idx)
             return result
         else:
-            multi_index = MultiIndex(levels=None,
-                                     codes=None,
-                                     names=[])
+            multi_index = MultiIndex(source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
-            multi_index._source_data = result[self._by]
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series(final_result[final_result.columns[0]])
                 final_series.name = final_result.columns[0]
                 final_series.index = multi_index
-                multi_index._source_data = result[self._by]
                 return final_series
             return final_result.set_index(multi_index)
 
