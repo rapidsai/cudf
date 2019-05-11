@@ -18,15 +18,16 @@ def datadir(datadir):
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize(
-    'orc_args',
+    'inputfile, columns',
     [
-        ['TestOrcFile.emptyFile.orc', ['boolean1']],
-        ['TestOrcFile.test1.orc', ['boolean1', 'byte1', 'short1',
-                                   'int1', 'long1', 'float1', 'double1']]
+        ('TestOrcFile.emptyFile.orc', ['boolean1']),
+        ('TestOrcFile.test1.orc', ['boolean1', 'byte1', 'short1',
+                                   'int1', 'long1', 'float1', 'double1']),
+        ('TestOrcFile.testSnappy.orc', None)
     ]
 )
-def test_orc_reader_basic(datadir, orc_args, engine):
-    path = datadir / orc_args[0]
+def test_orc_reader_basic(datadir, inputfile, columns, engine):
+    path = datadir / inputfile
     try:
         orcfile = pa.orc.ORCFile(path)
     except Exception as excpr:
@@ -34,8 +35,6 @@ def test_orc_reader_basic(datadir, orc_args, engine):
             pytest.skip('.orc file is not found')
         else:
             print(type(excpr).__name__)
-
-    columns = orc_args[1]
 
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(path, engine=engine, columns=columns)
@@ -58,6 +57,7 @@ def test_orc_reader_decimal(datadir):
             pytest.skip('.orc file is not found')
         else:
             print(type(excpr).__name__)
+
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine='cudf').to_pandas()
 
@@ -87,6 +87,7 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
             pytest.skip('.orc file is not found')
         else:
             print(type(excpr).__name__)
+
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
         path,
@@ -110,7 +111,13 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
                                        'TestOrcFile.testDate2038.orc'])
 def test_orc_reader_datetimestamp(datadir, inputfile):
     path = datadir / inputfile
-    orcfile = pa.orc.ORCFile(path)
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, engine='cudf')
