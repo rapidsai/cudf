@@ -1,4 +1,4 @@
-# cudf 0.7.1 (Date TBD)
+# cudf 0.7.1 (11 May 2019)
 
 ## New Features
 
