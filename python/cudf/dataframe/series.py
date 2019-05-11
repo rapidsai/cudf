@@ -557,6 +557,9 @@ class Series(object):
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
 
+    def equals(self, other):
+        return self._unordered_compare(other, 'eq').min()
+
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
 
