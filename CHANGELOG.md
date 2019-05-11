@@ -1,4 +1,8 @@
-# cuDF 0.7.1 (TBD)
+# cudf 0.7.1 (Date TBD)
+
+## New Features
+
+- PR #1702 Lazy load MultiIndex to return groupby performance to near optimal.
 
 ## Bug Fixes
 
