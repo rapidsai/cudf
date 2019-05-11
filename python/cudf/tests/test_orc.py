@@ -129,3 +129,19 @@ def test_orc_reader_datetimestamp(datadir, inputfile):
     gdf['time'] = gdf['time'].astype(np.int64)
 
     assert_eq(pdf, gdf, check_categorical=False)
+
+
+def test_orc_reader_strings(datadir):
+    path = datadir / 'TestOrcFile.testStringAndBinaryStatistics.orc'
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read(columns=['string1'])
+    got = cudf.read_orc(path, engine='cudf', columns=['string1'])
+
+    assert_eq(expect, got, check_categorical=False)

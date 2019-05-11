@@ -723,12 +723,24 @@ gdf_error read_orc(orc_read_arg *args) {
 
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (column->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            column->data, 0,
+            column->size * sizeof(std::pair<const char *, size_t>)));
+      }
     }
     decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (column->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            column->data, 0,
+            column->size * sizeof(std::pair<const char *, size_t>)));
+      }
     }
   }
 
