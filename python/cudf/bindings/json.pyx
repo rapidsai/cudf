@@ -5,8 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.json cimport *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector

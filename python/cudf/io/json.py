@@ -10,8 +10,8 @@ import warnings
 
 
 @ioutils.doc_read_json()
-def read_json(path_or_buf, dtype=None, lines=False, compression='infer',
-              byte_range=None, *args, **kwargs):
+def read_json(path_or_buf, engine='cudf', dtype=None, lines=False,
+              compression='infer', byte_range=None, *args, **kwargs):
 
     """
     Load and parse a JSON file into a DataFrame
@@ -20,6 +20,8 @@ def read_json(path_or_buf, dtype=None, lines=False, compression='infer',
     ----------
     path_or_buf : str
         Path of file to be read or a str containing the file.
+    engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
+        Parser engine to use.
     dtype : list of str or dict of {{col: dtype}}, default None
         List of data types in the same order of the column names
         or a dictionary with column_name:dtype (Pandas style).
@@ -43,7 +45,7 @@ def read_json(path_or_buf, dtype=None, lines=False, compression='infer',
     GPU ``DataFrame`` object.
     """
 
-    if lines:
+    if lines and engine == 'cudf':
         df = cpp_read_json(path_or_buf, dtype, lines, compression, byte_range)
     else:
         warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
