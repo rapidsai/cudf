@@ -14,6 +14,7 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1680 Add errors= keyword to drop() to fix cudf-dask bug
 - PR #1651 Fix `query` function on empty dataframe
 - PR #1616 Fix CategoricalColumn to access categories by index instead of iteration
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
