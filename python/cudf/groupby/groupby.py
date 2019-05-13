@@ -214,6 +214,12 @@ class Groupby(object):
             if idx.name == self._LEVEL_0_INDEX_NAME:
                 idx.name = self._original_index_name
             result = result.set_index(idx)
+            for col in result.columns:
+                if isinstance(col, str):
+                    colnames = col.split('_')
+                    if colnames[0] == 'cudfvalcol':
+                        result[colnames[1]] = result[col]
+                        result = result.drop(col)
             return result
         else:
             multi_index = MultiIndex(source_data=result[self._by])
