@@ -11,7 +11,7 @@
 
 ## Bug Fixes
 
-...
+- PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
 
 
 # cuDF 0.7.0 (Date TBD)
@@ -133,7 +133,6 @@
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions
-- PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
 - PR #1490 Require Dask 1.1.0+ for `is_dataframe_like` test or skip otherwise.
 - PR #1491 Use more specific directories & groups in CODEOWNERS
 - PR #1497 Fix Thrust issue on CentOS caused by missing default constructor of host_vector elements
@@ -151,6 +150,7 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
+
 
 # cuDF 0.6.1 (25 Mar 2019)
 
