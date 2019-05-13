@@ -157,8 +157,12 @@ public:
 
   T* data() const noexcept {return d_data_;}
   size_t size() const noexcept {return count_;}
+  bool empty() const noexcept {return count_ == 0;}
 
   void resize(size_t cnt) {
+    if (cnt == count_) {
+      return;
+    }
     // new size is zero, free the buffer if not null
     if(cnt == 0 && d_data_ != nullptr) {
       RMM_FREE(d_data_, stream_);

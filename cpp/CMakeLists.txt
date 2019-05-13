@@ -243,7 +243,7 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/compaction/stream_compaction_ops.cu
+            src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
             src/hash/hash_ops.cu
@@ -255,11 +255,14 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
+            src/io/cuio_common.cpp
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
+            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
+            src/io/json/json_reader.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
@@ -278,6 +281,7 @@ add_library(cudf SHARED
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
             src/bitmask/legacy_bitmask.cpp)

@@ -14,27 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_TEST_FIXTURES_H
-#define CUDF_TEST_FIXTURES_H
+#pragma once
 
-#include <cudf.h>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <rmm/rmm.h>
+#include <stdlib.h>
 
-#include "cudf_test_utils.cuh"
 
-// Base class fixture for GDF google tests that initializes / finalizes the
-// RAPIDS memory manager
-struct GdfTest : public ::testing::Test
-{
-    static void SetUpTestCase() {
-        ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
-    }
+// TODO merge with DataSource
+/**
+ * @brief Helper class for memory mapping a file source
+ **/
+class MappedFile {
+  int fd_ = -1;
+  size_t size_ = 0;
+  void *map_data_ = nullptr;
+  size_t map_size_ = 0;
+  size_t map_offset_ = 0;
 
-    static void TearDownTestCase() {
-        ASSERT_RMM_SUCCEEDED( rmmFinalize() );
-    }
+public:
+  MappedFile(const char *path, int oflag);
+  MappedFile() noexcept = default;
+  ~MappedFile();
+
+  auto size() { return size_; }
+  auto data() { return map_data_; }
+
+  void map(size_t size, off_t offset);
 };
-
-#endif // CUDF_TEST_FIXTURES_H

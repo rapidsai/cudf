@@ -14,27 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_TEST_FIXTURES_H
-#define CUDF_TEST_FIXTURES_H
+#pragma once
 
-#include <cudf.h>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <rmm/rmm.h>
+#include <string>
 
-#include "cudf_test_utils.cuh"
+#include "cudf.h"
 
-// Base class fixture for GDF google tests that initializes / finalizes the
-// RAPIDS memory manager
-struct GdfTest : public ::testing::Test
-{
-    static void SetUpTestCase() {
-        ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
-    }
-
-    static void TearDownTestCase() {
-        ASSERT_RMM_SUCCEEDED( rmmFinalize() );
-    }
-};
-
-#endif // CUDF_TEST_FIXTURES_H
+/*
+ * @brief Convert dtype strings into gdf_dtype enum;
+ *
+ * Returns GDF_invalid if the input string is not a valid dtype string
+ */
+gdf_dtype convertStringToDtype(const std::string &dtype);
