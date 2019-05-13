@@ -329,7 +329,6 @@ __inline__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_c
   return cudf::nvstring_category{0};
 }
 
-
 template <>
 __inline__ __device__ cudf::bool8 convertStrToValue<cudf::bool8>(
     const char* data, long start, long end, const ParseOptions& opts) {

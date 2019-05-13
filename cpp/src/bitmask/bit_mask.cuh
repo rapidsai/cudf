@@ -150,17 +150,22 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
 /**
  *  @brief check to see if the specified bit is set to one
  *
+ *  Note that for performance reasons (this is often called in inner loops
+ *  in CUDA device code) this function does not verify that @p valid is non-null.
+ *  That should be checked in a wider scope, since it usually doesn't vary per
+ *  thread.
+ *
  *  @param[in]  valid         The bit mask to update
  *  @param[in]  record_idx    The record index
  *
  *  @return which bit within the bit mask
  */
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE bool is_valid(const bit_mask_t *valid, T record_idx) {
+CUDA_HOST_DEVICE_CALLABLE bool is_valid(bit_mask_t const * __restrict__ valid, T record_idx) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  return (valid == nullptr) || gdf::util::bit_is_set<bit_mask_t, T>(valid, record_idx);
+  return gdf::util::bit_is_set<bit_mask_t, T>(valid, record_idx);
 }
 
 /**
