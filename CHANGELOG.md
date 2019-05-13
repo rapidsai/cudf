@@ -8,7 +8,8 @@
 
 ## Improvements
 
-...
+- PR #1713 Add documentation for Dask-XGBoost
+
 
 ## Bug Fixes
 
