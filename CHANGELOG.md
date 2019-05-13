@@ -9,6 +9,7 @@
 
 ## Improvements
 
+- PR #1701 Added `unique` method for stringColumns
 - PR #1713 Add documentation for Dask-XGBoost
 
 ## Bug Fixes
