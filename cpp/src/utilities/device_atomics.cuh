@@ -28,7 +28,7 @@
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
  * `atomicCAS`.
  * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
- * Also provides `cudf::genericAtomicOperation` which performs atomic operation 
+ * Also provides `cudf::genericAtomicOperation` which performs atomic operation
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
 
@@ -40,6 +40,9 @@
 
 namespace cudf {
 namespace detail {
+    // TODO: remove this if C++17 is supported.
+    // `static_assert` requires a string literal at C++14.
+#define errmsg_cast "`long long int` has different size to `int64_t`"
 
     template <typename T_output, typename T_input>
     __forceinline__  __device__
@@ -146,6 +149,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, Op op)
         {
             using T_int = unsigned long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
 
             T old_value = *addr;
             T assumed {old_value};
@@ -231,6 +235,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceMin op)
         {
             using T_int = long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
             T ret = atomicMin(reinterpret_cast<T_int*>(addr),
                 type_reinterpret<T_int, T>(update_value) );
             return ret;
@@ -244,6 +249,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceMax op)
         {
             using T_int = long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
             T ret = atomicMax(reinterpret_cast<T_int*>(addr),
                 type_reinterpret<T_int, T>(update_value) );
             return ret;
@@ -265,6 +271,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceAnd op)
         {
             using T_int = long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
             T ret = atomicAnd(reinterpret_cast<T_int*>(addr),
                 type_reinterpret<T_int, T>(update_value) );
             return ret;
@@ -286,6 +293,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceOr op)
         {
             using T_int = long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
             T ret = atomicOr(reinterpret_cast<T_int*>(addr),
                 type_reinterpret<T_int, T>(update_value) );
             return ret;
@@ -307,6 +315,7 @@ namespace detail {
         T operator()(T* addr, T const & update_value, DeviceXor op)
         {
             using T_int = long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
             T ret = atomicXor(reinterpret_cast<T_int*>(addr),
                 type_reinterpret<T_int, T>(update_value) );
             return ret;
@@ -406,6 +415,7 @@ namespace detail {
         T operator()(T* addr, T const & compare, T const & update_value)
         {
             using T_int = unsigned long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
 
             T_int ret = atomicCAS(
                 reinterpret_cast<T_int*>(addr),
