@@ -447,6 +447,7 @@ T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 
 // specialization for cudf::detail::wrapper types
 template <typename T, gdf_dtype dtype, typename BinaryOp, typename W = cudf::detail::wrapper<T, dtype> >
+__forceinline__  __device__
 W genericAtomicOperator( W* address, W const& update_value, BinaryOp op){
     // unwrap the input type to expect
     // that the native atomic API is used for the underlying type if possible
