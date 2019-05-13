@@ -324,7 +324,7 @@ namespace detail {
     };
     // -----------------------------------------------------------------------
     // the implementation of `typesAtomicCASImpl`
-    template <typename T, size_t n>
+    template <typename T, size_t N= sizeof(T)>
     struct typesAtomicCASImpl;
 
     template<typename T>
@@ -584,7 +584,7 @@ template <typename T>
 __forceinline__ __device__
 T atomicCAS(T* address, T compare, T val)
 {
-    return cudf::detail::typesAtomicCASImpl<T, sizeof(T)>()(address, compare, val);
+    return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
 }
 
 /** -------------------------------------------------------------------------*
