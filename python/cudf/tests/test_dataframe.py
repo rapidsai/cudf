@@ -434,10 +434,16 @@ def test_dataframe_loc(scalar, step):
     assert_eq(df.loc[begin:end, ['c', 'd']],
               pdf.loc[begin:end, ['c', 'd']])
 
-
     # Slicing on columns:
     assert_eq(df.loc[begin:end:step, 'a':'c'],
               pdf.loc[begin:end:step, 'a':'c'])
+
+    # Slicing of size 1:
+    assert_eq(df.loc[begin:begin, 'a'],
+              pdf.loc[begin:begin, 'a'])
+
+    assert_eq(df.loc[begin, 'a':'a'],
+              pdf.loc[begin, 'a':'a'])
 
     # Make int64 index
     offset = 50
@@ -446,7 +452,7 @@ def test_dataframe_loc(scalar, step):
     begin = 117
     end = 122
     assert_eq(df2.loc[begin:end, ['c', 'd', 'a']],
-              df2.loc[begin:end, ['c', 'd', 'a']])
+              pdf2.loc[begin:end, ['c', 'd', 'a']])
 
 
 @pytest.mark.xfail(
@@ -605,29 +611,20 @@ def test_dataframe_iloc(nelem):
     pdf['a'] = ha
     pdf['b'] = hb
 
-    # Positive tests for slicing using iloc
-    def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'])
-        np.testing.assert_equal(g['b'].to_array(), p['b'])
+    assert_eq(gdf.iloc[-1:1], pdf.iloc[-1:1])
+    assert_eq(gdf.iloc[nelem-1:-1], pdf.iloc[nelem-1:-1])
+    assert_eq(gdf.iloc[0:nelem-1], pdf.iloc[0:nelem-1])
+    assert_eq(gdf.iloc[0:nelem], pdf.iloc[0:nelem])
+    assert_eq(gdf.iloc[1:1], pdf.iloc[1:1])
+    assert_eq(gdf.iloc[1:2], pdf.iloc[1:2])
+    assert_eq(gdf.iloc[nelem-1:nelem+1], pdf.iloc[nelem-1:nelem+1])
+    assert_eq(gdf.iloc[nelem:nelem*2], pdf.iloc[nelem:nelem*2])
 
-    assert_col(gdf.iloc[-1:1], pdf.iloc[-1:1])
-    assert_col(gdf.iloc[nelem-1:-1], pdf.iloc[nelem-1:-1])
-    assert_col(gdf.iloc[0:nelem-1], pdf.iloc[0:nelem-1])
-    assert_col(gdf.iloc[0:nelem], pdf.iloc[0:nelem])
-    assert_col(gdf.iloc[1:1], pdf.iloc[1:1])
-    assert_col(gdf.iloc[1:2], pdf.iloc[1:2])
-    assert_col(gdf.iloc[nelem-1:nelem+1], pdf.iloc[nelem-1:nelem+1])
-    assert_col(gdf.iloc[nelem:nelem*2], pdf.iloc[nelem:nelem*2])
-
-    # Positive tests for int indexing
-    def assert_series(g, p):
-        np.testing.assert_equal(g.to_array(), p)
-
-    assert_series(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
-    assert_series(gdf.iloc[-1], pdf.iloc[-1])
-    assert_series(gdf.iloc[0], pdf.iloc[0])
-    assert_series(gdf.iloc[1], pdf.iloc[1])
-    assert_series(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
+    assert_eq(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
+    assert_eq(gdf.iloc[-1], pdf.iloc[-1])
+    assert_eq(gdf.iloc[0], pdf.iloc[0])
+    assert_eq(gdf.iloc[1], pdf.iloc[1])
+    assert_eq(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
 
 
 @pytest.mark.xfail(

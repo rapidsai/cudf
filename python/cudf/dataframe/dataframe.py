@@ -32,7 +32,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
-from cudf.indexing import Loc, Iloc
+from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
@@ -642,7 +642,7 @@ class DataFrame(object):
         5   5    5
         8   8    8
         """
-        return Loc(self)
+        return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
@@ -671,7 +671,7 @@ class DataFrame(object):
         7    7    7    7
         9    9    9    9
         """
-        return Iloc(self)
+        return _DataFrameIlocIndexer(self)
 
     @property
     def columns(self):

@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-
 import warnings
 from collections import OrderedDict
 from numbers import Number
@@ -8,7 +7,6 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
-from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
@@ -21,6 +19,7 @@ from cudf.settings import NOTSET, settings
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
+from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
@@ -789,7 +788,7 @@ class Series(object):
 
     @property
     def loc(self):
-        return Loc(self)
+        return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
@@ -826,7 +825,7 @@ class Series(object):
         -------
         Series containing the elements corresponding to the indices
         """
-        return Iloc(self)
+        return _SeriesIlocIndexer(self)
 
     @property
     def nullmask(self):
@@ -1808,70 +1807,3 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
-
-
-class Loc(object):
-    """
-    Label-based selection
-    """
-
-    def __init__(self, sr):
-        self._sr = sr
-
-    def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
-                            DeviceNDArray)):
-            if len(arg) == 0:
-                arg = Series(np.array([], dtype='int32'))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
-            if arg.dtype in [np.bool, np.bool_]:
-                return self._sr.iloc[arg]
-            # To do this efficiently we need a solution to
-            # https://github.com/rapidsai/cudf/issues/1087
-            out = Series(
-                [], dtype=self._sr.dtype, index=self._sr.index.__class__([])
-            )
-            for s in arg:
-                out = out.append(self._sr.loc[s:s], ignore_index=False)
-            return out
-        elif (
-            isinstance(arg, str)
-            or isinstance(arg, Number)
-            or is_datetime_or_timedelta_dtype(arg)
-            or isinstance(arg, pd.Timestamp)
-            or isinstance(arg, pd.Categorical)
-        ):
-            found_index = self._sr.index.find_label_range(arg, None)[0]
-            return self._sr.iloc[found_index]
-        elif isinstance(arg, slice):
-            start_index, stop_index = self._sr.index.find_label_range(
-                arg.start, arg.stop
-            )
-            return self._sr.iloc[start_index:stop_index:arg.step]
-        else:
-            raise NotImplementedError(
-                ".loc not implemented for label type {}".format(
-                    type(arg).__name__
-                )
-            )
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, sr):
-        self._sr = sr
-
-    def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        return self._sr[arg]
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)
