@@ -51,6 +51,8 @@ class CategoricalAccessor(object):
     def _set_categories(self, new_categories):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*."""
+        if new_categories is self._categories:
+            return self._parent.copy()
         codemap = {v: i for i, v in enumerate(new_categories)}
         h_recoder = np.zeros(len(self.categories),
                              dtype=self._parent.data.dtype)
@@ -222,15 +224,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def _encode(self, value):
-        for i, cat in enumerate(self._categories):
-            if cat == value:
-                return i
-        return -1
+        return self._categories.index(value)
 
     def _decode(self, value):
-        for i, cat in enumerate(self._categories):
-            if i == value:
-                return cat
+        return self._categories[value]
 
     def default_na_value(self):
         return -1

@@ -12,13 +12,15 @@
 ## Bug Fixes
 
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
+- PR #1616 Fix CategoricalColumn to access categories by index instead of iteration
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
 - PR #1642 Fix failure of CSV_TEST gdf_csv_test.SkiprowsNrows on multiuser systems
+- PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 
 
-# cuDF 0.7.0 (Date TBD)
+# cuDF 0.7.0 (10 May 2019)
 
 ## New Features
 
