@@ -286,6 +286,9 @@ class Index(object):
         """
         return self._values.to_array(fillna=fillna)
 
+    def to_series(self):
+        from cudf.dataframe.series import Series
+        return Series(self._values)
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.

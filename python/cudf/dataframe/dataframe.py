@@ -1318,7 +1318,7 @@ class DataFrame(object):
         """
         from cudf.bindings.transpose import transpose as cpp_tranpose
         result = cpp_tranpose(self)
-        result._rename_columns(self.index)
+        result = result.rename(dict(zip(result.columns, self.index)))
         result = result.set_index(self.columns)
         return result
 

@@ -1506,23 +1506,8 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
-    # Temporarily reset index since we don't use index for col names
-    if len(expect.columns) > 0:
-        expect = expect.reset_index(drop=True)
-        expect.columns = [str(x) for x in range(expect.shape[1])]
-
-    # Pandas creates an empty index of `object` dtype by default while cuDF
-    # creates a RangeIndex by default, type is different but same value
-    pd.testing.assert_frame_equal(
-        expect,
-        got_function.to_pandas(),
-        check_index_type=False
-    )
-    pd.testing.assert_frame_equal(
-        expect,
-        got_property.to_pandas(),
-        check_index_type=False
-    )
+    assert_eq(expect, got_function)
+    assert_eq(expect, got_property)
 
 
 @pytest.mark.parametrize('num_cols', [0, 1, 2, 10])

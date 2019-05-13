@@ -7,14 +7,11 @@ import pandas as pd
 import cudf
 from cudf.dataframe.series import Series
 
-class Loc(object):
-    """
-    For selection by label.
-    """
 
-    def __init__(self, df):
-        self._df = df
-
+class Indexer(object):
+    """
+    Base class providing utilities for Loc/ILoc indexers
+    """
     def __getitem__(self, arg):
 
         if type(arg) is not tuple:
@@ -28,26 +25,9 @@ class Loc(object):
         df = self._getitem_tuple_arg(arg)
 
         if self._can_downcast_to_series(df):
-            return self._downcast_to_series(df, arg)
+            return self._downcast_to_series(df)
 
         return df
-
-    def _getitem_tuple_arg(self, arg):
-        from cudf.dataframe.dataframe import DataFrame
-        columns = self._get_column_selection(arg[1])
-        df = DataFrame()
-        for col in columns:
-            df.add_column(name=col, data=self._df[col].loc[arg[0]])
-        return df
-
-    def _getitem_scalar(self, arg):
-        return self._df[arg[1]].loc[arg[0]]
-
-    def _getitem_multiindex_arg(self, arg):
-        # Explicitly ONLY support tuple indexes into MultiIndex.
-        # Pandas allows non tuple indices and warns "results may be
-        # undefined."
-        return self._df._index._get_row_major(self._df, arg)
 
     def _normalize_dtypes(self, df):
         dtypes = df.dtypes.values.tolist()
@@ -62,18 +42,6 @@ class Loc(object):
             and isinstance(arg, tuple)
         )
 
-    def _get_column_selection(self, arg):
-        if self._is_single_value(arg):
-            return [arg]
-        elif isinstance(arg, slice):
-            start, stop, step = arg.indices(self._df.shape[1])
-            cols = []
-            for i in range(start, stop, step):
-                cols.append(self._df.columns[i])
-            return cols
-        else:
-            return arg
-
     def _is_single_value(self, val):
         from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
         if (
@@ -85,6 +53,48 @@ class Loc(object):
         ):
             return True
         return False
+
+
+
+class Loc(Indexer):
+    """
+    For selection by label.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    def _getitem_tuple_arg(self, arg):
+        from cudf.dataframe.dataframe import DataFrame
+        from cudf.dataframe.index import as_index
+        columns = self._get_column_selection(arg[1])
+        df = DataFrame()
+        for col in columns:
+            df.add_column(name=col, data=self._df[col].loc[arg[0]])
+        if df.shape[0] == 1: # we have a single row without an index
+            df.index = as_index(arg[0])
+        return df
+
+    def _getitem_scalar(self, arg):
+        return self._df[arg[1]].loc[arg[0]]
+
+    def _getitem_multiindex_arg(self, arg):
+        # Explicitly ONLY support tuple indexes into MultiIndex.
+        # Pandas allows non tuple indices and warns "results may be
+        # undefined."
+        return self._df._index._get_row_major(self._df, arg)
+
+    def _get_column_selection(self, arg):
+        if self._is_single_value(arg):
+            return [arg]
+        elif isinstance(arg, slice):
+            start, stop, step = arg.indices(self._df.shape[1])
+            cols = []
+            for i in range(start, stop, step):
+                cols.append(self._df.columns[i])
+            return cols
+        else:
+            return arg
 
     def _is_scalar_access(self, arg):
         if isinstance(arg, str):
@@ -108,17 +118,15 @@ class Loc(object):
             return True
         return False
 
-    def _downcast_to_series(self, df, args):
+    def _downcast_to_series(self, df):
         if df.shape[0] == 1:
             indices = df.columns
             df = self._normalize_dtypes(df)
             sr = df.T
-            sr._rename_columns([args[0]])
-            sr = sr.set_index(df.columns)
-            return sr[args[0]]
+            return sr[sr.columns[0]]
 
         if df.shape[1] == 1:
-            return df[args[1]]
+            return df[df.columns[0]]
 
 
 class Iloc(object):
@@ -150,8 +158,6 @@ class Iloc(object):
             df = DataFrame()
             for col in self._df.columns:
                 df[col] = self._df[col][arg]
-            df.index = self._df.index[arg]
-
             return df
 
     def __setitem__(self, key, value):
