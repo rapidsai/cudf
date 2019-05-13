@@ -1265,6 +1265,7 @@ void dataTypeDetection(char *raw_csv,
 			long countDecimal=0;
 			long countSlash=0;
 			long countDash=0;
+			long countPlus=0;
 			long countColon=0;
 			long countString=0;
 			long countExponent=0;
@@ -1289,6 +1290,8 @@ void dataTypeDetection(char *raw_csv,
 						countDecimal++;break;
 					case '-':
 						countDash++; break;
+					case '+':
+						countPlus++; break;
 					case '/':
 						countSlash++;break;
 					case ':':
@@ -1302,11 +1305,12 @@ void dataTypeDetection(char *raw_csv,
 						break;	
 				}
 			}
+			const int countSign = countDash + countPlus;
 
 			// Integers have to have the length of the string
 			long int_req_number_cnt = strLen;
 			// Off by one if they start with a minus sign
-			if(raw_csv[start]=='-' && strLen > 1){
+			if((raw_csv[start]=='-' || raw_csv[start]=='+') && strLen > 1){
 				--int_req_number_cnt;
 			}
 			// Off by one if they are a hexadecimal number
@@ -1339,7 +1343,7 @@ void dataTypeDetection(char *raw_csv,
 					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
 				}
 			}
-			else if(isLikeFloat(strLen, countNumber, countDecimal, countDash, countExponent)){
+			else if(isLikeFloat(strLen, countNumber, countDecimal, countSign, countExponent)){
 					atomicAdd(& d_columnData[actual_col].countFloat, 1L);
 			}
 			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 
@@ -1350,17 +1354,17 @@ void dataTypeDetection(char *raw_csv,
 			else {
 				// A date field can have either one or two '-' or '\'. A legal combination will only have one of them.
 				// To simplify the process of auto column detection, we are not covering all the date-time formation permutations.
-				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && 	countSlash<=2) ){
+				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && countSlash<=2) ){
 					if((countColon<=2)){
 						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1L);
 					}
 					else{
-						atomicAdd(& d_columnData[actual_col].countString, 1L);					
+						atomicAdd(& d_columnData[actual_col].countString, 1L);
 					}
 				}
 				// Default field is string type.
 				else{
-					atomicAdd(& d_columnData[actual_col].countString, 1L);					
+					atomicAdd(& d_columnData[actual_col].countString, 1L);
 				}
 			}
 			actual_col++;

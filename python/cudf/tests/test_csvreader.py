@@ -863,7 +863,7 @@ def test_csv_reader_unnamed_cols():
 
 
 def test_csv_reader_header_quotation():
-    buffer = '"1,,1","2,\n,2",3\n4,5,6'
+    buffer = '"1,,1","2,\n,2",3\n+4,+5,+6'
 
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
@@ -982,8 +982,10 @@ def test_csv_reader_pd_consistent_quotes(quoting):
 
 
 def test_csv_reader_scientific_type_detection():
-    buffer = '1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1'
-    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+    buffer = """1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1
+                +1.1,1E+1,1e+1,+1e1,+1e-1,1e-1,+1.1e1,1.1e+1,+1.1e+1,+1.1e1"""
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11,
+                1.1, 10., 10., 10, 0.1, 0.1, 11, 11, 11, 11]
 
     df = read_csv(StringIO(buffer),
                   header=None)
