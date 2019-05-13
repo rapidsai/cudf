@@ -290,6 +290,7 @@ class Index(object):
         from cudf.dataframe.series import Series
         return Series(self._values)
 
+
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
     Can be sliced and indexed arbitrarily without allocating memory for the

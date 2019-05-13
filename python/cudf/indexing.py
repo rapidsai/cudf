@@ -64,7 +64,7 @@ class Loc(Indexer):
         df = DataFrame()
         for col in columns:
             df.add_column(name=col, data=self._df[col].loc[arg[0]])
-        if df.shape[0] == 1: # we have a single row without an index
+        if df.shape[0] == 1:  # we have a single row without an index
             df.index = as_index(arg[0])
         return df
 
@@ -109,7 +109,9 @@ class Loc(Indexer):
         nrows, ncols = df.shape
         if nrows == 1:
             dtypes = df.dtypes.values.tolist()
-            all_numeric = all([pd.api.types.is_numeric_dtype(t) for t in dtypes])
+            all_numeric = all(
+                [pd.api.types.is_numeric_dtype(t) for t in dtypes]
+            )
             all_identical = dtypes.count(dtypes[0]) == len(dtypes)
             if all_numeric or all_identical:
                 return True
@@ -119,7 +121,6 @@ class Loc(Indexer):
 
     def _downcast_to_series(self, df):
         if df.shape[0] == 1:
-            indices = df.columns
             df = self._normalize_dtypes(df)
             sr = df.T
             return sr[sr.columns[0]]
