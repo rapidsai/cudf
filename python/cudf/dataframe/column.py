@@ -13,6 +13,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 import cudf.bindings.quantile as cpp_quantile
+import cudf.bindings.copying as cpp_copying
 
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -564,15 +565,8 @@ class Column(object):
         if indices.size == 0:
             return self.copy()
 
-        data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
-
-        if self._mask:
-            mask = self._get_mask_as_column().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
-
-        return self.replace(data=Buffer(data), mask=mask)
+        # Returns a new column
+        return cpp_copying.apply_gather_column(self, indices)
 
     def as_mask(self):
         """Convert booleans to bitmask
