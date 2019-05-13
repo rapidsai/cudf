@@ -33,8 +33,12 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     cudf.io.json.read_json
     """
 
+    if dtype is False:
+        raise ValueError("cudf engine does not support dtype==False. "
+                         "Pass True to enable data type inference, or "
+                         "pass a list/dict of types to specify them manually.")
     arr_dtypes = []
-    if dtype is not None:
+    if dtype is not True:
         if isinstance(dtype, collections.abc.Mapping):
             for col, dt in dtype.items():
                 arr_dtypes.append(str(str(col) + ":" + str(dt)).encode())
