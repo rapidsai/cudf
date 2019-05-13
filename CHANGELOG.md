@@ -98,6 +98,8 @@
 - PR #1590 Remove CFFI from the build / install process entirely
 - PR #1536 Convert gpuarrow CFFI to Cython
 - PR #1655 Add `Column._pointer` as a way to access underlying `gdf_column*` of a `Column`
+- PR #1655 Update readme conda install instructions for cudf version 0.6 and 0.7
+
 
 ## Bug Fixes
 
