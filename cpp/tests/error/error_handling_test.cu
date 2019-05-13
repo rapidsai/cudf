@@ -18,7 +18,7 @@
 
 #include <rmm/rmm.h>
 
-#include <gtest/gtest.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <cstring>
 
@@ -40,30 +40,19 @@ TEST(ExpectsTest, TrueCondition) {
 }
 
 TEST(ExpectsTest, TryCatch) {
-  try {
-    CUDF_EXPECTS(false, "test reason");
-  } catch (cudf::logic_error const& e) {
-    EXPECT_NE(nullptr, e.what());
-    std::string what(e.what());
-    EXPECT_NE(std::string::npos, what.find("cuDF failure at:"));
-    EXPECT_NE(std::string::npos, what.find("test reason"));
-  }
+  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), 
+                            "test reason");
 }
 
 TEST(CudaTryTest, Error) {
-  EXPECT_THROW(CUDA_TRY(cudaErrorLaunchFailure), cudf::cuda_error);
+  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorLaunchFailure),
+                            "cudaErrorLaunchFailure unspecified launch failure");
 }
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDA_TRY(cudaSuccess)); }
 
 TEST(CudaTryTest, TryCatch) {
-  try {
-    CUDA_TRY(cudaErrorMemoryAllocation);
-  } catch (cudf::cuda_error const& e) {
-    ASSERT_NE(nullptr, e.what());
-    std::string what(e.what());
-    EXPECT_NE(std::string::npos, what.find("CUDA error encountered at"));
-    EXPECT_NE(std::string::npos, what.find("cudaErrorMemoryAllocation"));
-  }
+  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorMemoryAllocation),
+                            "cudaErrorMemoryAllocation out of memory");
 }
 
 TEST(StreamCheck, success) {
@@ -92,17 +81,9 @@ TEST(StreamCheck, CatchFailedKernel) {
   cudaStreamCreate(&stream);
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  try {
-    cudf::detail::check_stream(0, __FILE__, __LINE__);
-  } catch (cudf::cuda_error const& e) {
-    ASSERT_NE(nullptr, e.what());
-    std::string what(e.what());
-    EXPECT_NE(std::string::npos, what.find("CUDA error encountered at"));
-    EXPECT_NE(
-        std::string::npos,
-        what.find(
-            "cudaErrorInvalidConfiguration invalid configuration argument"));
-  }
+  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_stream(0, __FILE__, __LINE__),
+                            "cudaErrorInvalidConfiguration "
+                            "invalid configuration argument");
   cudaStreamDestroy(stream);
 }
 

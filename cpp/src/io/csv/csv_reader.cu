@@ -229,6 +229,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 		}
 		// Check if end of a column/row
 		else if (pos == first_row.size() - 1 ||
+				 (!quotation && first_row[pos] == raw_csv->opts.terminator) ||
 				 (!quotation && first_row[pos] == raw_csv->opts.delimiter)) {
 			// This is the header, add the column name
 			if (raw_csv->header_row >= 0) {
@@ -248,6 +249,13 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 
 				const string new_col_name(first_row.data() + prev, col_name_len);
 				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
+
+				// Stop parsing when we hit the line terminator; relevant when there is a blank line following the header.
+				// In this case, first_row includes multiple line terminators at the end, as the new recStart belongs
+				// to a line that comes after the blank line(s)
+				if (!quotation && first_row[pos] == raw_csv->opts.terminator){
+					break;
+				}
 			}
 			else {
 				// This is the first data row, add the automatically generated name
@@ -914,15 +922,19 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
   // If only handling one of them, ensure it doesn't match against \0 as we do
   // not want certain scenarios to be filtered out (end-of-file)
   if (raw_csv->opts.skipblanklines || raw_csv->opts.comment != '\0') {
-    const auto match1 = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
-                                                     : raw_csv->opts.comment;
-    const auto match2 = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
-                                                      : match1;
+    const auto match_newline = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
+                                                            : raw_csv->opts.comment;
+    const auto match_comment = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
+                                                             : match_newline;
+    const auto match_return = (raw_csv->opts.skipblanklines &&
+                              raw_csv->opts.terminator == '\n') ? '\r'
+                                                                : match_comment;
     h_rec_starts.erase(
         std::remove_if(h_rec_starts.begin(), h_rec_starts.end(),
                        [&](uint64_t i) {
-                         return (h_uncomp_data[i] == match1 ||
-                                 h_uncomp_data[i] == match2);
+                         return (h_uncomp_data[i] == match_newline ||
+                                 h_uncomp_data[i] == match_return ||
+                                 h_uncomp_data[i] == match_comment);
                        }),
         h_rec_starts.end());
   }
