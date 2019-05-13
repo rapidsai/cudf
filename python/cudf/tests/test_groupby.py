@@ -469,7 +469,6 @@ def test_groupby_unsupported_columns():
             dtype='category'
             )
         )
-
     pdf = pd.DataFrame({'x': [1, 2, 3],
                         'y': ['a', 'b', 'c'],
                         'z': ['d', 'e', 'f'],

@@ -5,11 +5,11 @@
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
 - PR #1569 Add support for Json objects to the JSON Lines reader
 - PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
+- PR #1487 cython gather/scatter
 
 ## Improvements
 
 - PR #1713 Add documentation for Dask-XGBoost
-
 
 ## Bug Fixes
 
@@ -19,6 +19,17 @@
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
+
+
+# cuDF 0.7.1 (11 May 2019)
+
+## New Features
+
+- PR #1702 Lazy load MultiIndex to return groupby performance to near optimal.
+
+## Bug Fixes
+
+- PR #1708 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 
 
 # cuDF 0.7.0 (10 May 2019)
@@ -46,7 +57,6 @@
 - PR #1441 Add Series level cumulative ops (cumsum, cummin, cummax, cumprod)
 - PR #1461 Add Python coverage test to gpu build
 - PR #1445 Parquet Reader: Add selective reading of rows and row group
-- PR #1487 cython gather/scatter
 - PR #1532 Parquet Reader: Add support for INT96 timestamps
 - PR #1516 Add Series and DataFrame.ndim
 - PR #1556 Add libcudf C++ transition guide
