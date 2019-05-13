@@ -89,6 +89,9 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   operator gdf_column*() { return &the_column; };
 
+  operator gdf_column&() { return the_column; };
+  operator const gdf_column&() const { return the_column; };
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
    * initialized data and optionally allocated bitmask.
@@ -311,20 +314,7 @@ struct column_wrapper {
   };
 
   /**---------------------------------------------------------------------------*
-   * @brief Compares if another column_wrapper is equal to this wrapper.
-   *
-   * Treats NULL == NULL
-   *
-   * @param rhs  The other column_wrapper to check for equality
-   * @return true The two columns are equal
-   * @return false The two columns are not equal
-   *---------------------------------------------------------------------------**/
-  bool operator==(column_wrapper<ColumnType> const& rhs) const {
-      return *this == *rhs.get();
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Compares if gdf_column is equal to this wrapper.
+   * @brief Compares this wrapper to a gdf_column for equality.
    *
    * Treats NULL == NULL
    *
@@ -339,8 +329,11 @@ struct column_wrapper {
     if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
       return false;
 
-    if (!(the_column.data && rhs.data))
-      return false;  // if one is null but not both
+    if ((the_column.data == nullptr) != (rhs.data == nullptr))
+      return false; // if one is null but not both
+    else if (rhs.data == nullptr)
+      return true; // logically, both are null
+    // both are non-null...
 
     if (not thrust::all_of(rmm::exec_policy()->on(0),
                            thrust::make_counting_iterator(0),
@@ -352,6 +345,19 @@ struct column_wrapper {
     CUDA_RT_CALL(cudaPeekAtLastError());
 
     return true;
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Compares this wrapper to another column_wrapper for equality.
+   *
+   * Treats NULL == NULL
+   *
+   * @param rhs  The other column_wrapper to check for equality
+   * @return true The two columns are equal
+   * @return false The two columns are not equal
+   *---------------------------------------------------------------------------**/
+  bool operator==(column_wrapper<ColumnType> const& rhs) const {
+    return *this == *rhs.get();
   }
 
  private:
