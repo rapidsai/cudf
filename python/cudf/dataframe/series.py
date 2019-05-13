@@ -282,14 +282,11 @@ class Series(object):
                 arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                if self.dtype == np.dtype('object'):
-                    idx = arg.to_gpu_array()
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_position(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                maps = columnops.as_column(arg).data.mem
+                index = cpp_copying.apply_gather_column(
+                    self.index.as_column(),
+                    maps)
+                selvals = cpp_copying.apply_gather_column(self._column, maps)
             elif arg.dtype in [np.bool, np.bool_]:
                 if self.dtype == np.dtype('object'):
                     idx = cudautils.boolean_array_to_index_array(
@@ -303,7 +300,6 @@ class Series(object):
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
-
         elif isinstance(arg, slice):
             index = self.index[arg]         # slice index
             col = self._column[arg]         # slice column
