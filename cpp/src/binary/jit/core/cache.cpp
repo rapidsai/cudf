@@ -56,11 +56,11 @@ std::mutex cudfJitCache::_kernel_cache_mutex;
 std::mutex cudfJitCache::_program_cache_mutex;
 
 std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
-    std::string prog_name, 
-    std::string const& cuda_source = "",
-    std::vector<std::string> const& given_headers = {},
-    std::vector<std::string> const& given_options = {},
-    jitify_v2::file_callback_type file_callback = nullptr)
+    std::string const& prog_name, 
+    std::string const& cuda_source,
+    std::vector<std::string> const& given_headers,
+    std::vector<std::string> const& given_options,
+    jitify_v2::file_callback_type file_callback)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_program_cache_mutex);

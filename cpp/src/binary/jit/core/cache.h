@@ -48,11 +48,11 @@ public:
         std::vector<std::string> const& arguments);
 
     std::shared_ptr<jitify_v2::Program> getProgram(
-        std::string prog_file_name, 
+        std::string const& prog_file_name, 
         std::string const& cuda_source,
-        std::vector<std::string> const& given_headers,
-        std::vector<std::string> const& given_options,
-        jitify_v2::file_callback_type file_callback);
+        std::vector<std::string> const& given_headers = {},
+        std::vector<std::string> const& given_options = {},
+        jitify_v2::file_callback_type file_callback = nullptr);
 
 private:
     template <typename Tv>
@@ -92,7 +92,7 @@ private:
 private:
     template <typename T, typename FallbackFunc>
     std::shared_ptr<T> getCached(
-        std::string name,
+        std::string const& name,
         umap_str_shptr<T>& map,
         FallbackFunc func) {
 
