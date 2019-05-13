@@ -36,12 +36,6 @@ class Indexer(object):
             df[name] = col.astype(normalized_dtype)
         return df
 
-    def _is_multiindex_arg(self, arg):
-        return (
-            isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
-            and isinstance(arg, tuple)
-        )
-
     def _is_single_value(self, val):
         from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
         if (
@@ -53,7 +47,6 @@ class Indexer(object):
         ):
             return True
         return False
-
 
 
 class Loc(Indexer):
@@ -105,6 +98,12 @@ class Loc(Indexer):
             if not self._is_single_value(obj):
                 return False
         return True
+
+    def _is_multiindex_arg(self, arg):
+        return (
+            isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
+            and isinstance(arg, tuple)
+        )
 
     def _can_downcast_to_series(self, df):
         nrows, ncols = df.shape
