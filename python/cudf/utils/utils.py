@@ -181,15 +181,6 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
     return (pamask, padata)
 
 
-def dtype_min_max(dtype):
-    '''Get the min and max value for a numeric dtype'''
-    if np.issubdtype(dtype, np.integer):
-        info = np.iinfo(dtype)
-    else:
-        info = np.finfo(dtype)
-    return info.min, info.max
-
-
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.

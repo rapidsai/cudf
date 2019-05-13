@@ -8,8 +8,7 @@ from math import isnan
 from librmm_cffi import librmm as rmm
 
 from cudf.utils.utils import (check_equals_int, check_equals_float,
-                              mask_bitsize, mask_get, mask_set, make_mask,
-                              dtype_min_max)
+                              mask_bitsize, mask_get, mask_set, make_mask)
 import nvstrings
 
 
@@ -742,39 +741,6 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
-# taken from the following repo:
-# https://github.com/numba/numba-examples/
-@cuda.jit
-def gpu_min_max(arr, min_max_array):
-    start = cuda.grid(1)
-    stride = cuda.gridsize(1)
-
-    # Array already seeded with starting values appropriate for x's dtype
-    # Not a problem if this array has already been updated
-    local_min = min_max_array[0]
-    local_max = min_max_array[1]
-
-    for i in range(start, arr.shape[0], stride):
-        element = arr[i]
-        local_min = min(element, local_min)
-        local_max = max(element, local_max)
-
-    # Now combine each thread local min and max
-    cuda.atomic.min(min_max_array, 0, local_min)
-    cuda.atomic.max(min_max_array, 1, local_max)
-
-
-def min_max(arr):
-    dtype_min, dtype_max = dtype_min_max(arr.dtype)
-    min_max_array_gpu = rmm.device_array(shape=(2,), dtype=arr.dtype)
-    min_max_array_gpu[0] = dtype_max
-    min_max_array_gpu[1] = dtype_min
-    gpu_min_max.forall(arr.size)(arr, min_max_array_gpu)
-    min_value = min_max_array_gpu[0]
-    max_value = min_max_array_gpu[1]
-    return min_value, max_value
-
-
 @cuda.jit
 def gpu_mark_found_int(arr, val, out):
     i = cuda.grid(1)
@@ -810,7 +776,9 @@ def find_first(arr, val):
             gpu_mark_found_float.forall(found.size)(arr, val, found)
         else:
             gpu_mark_found_int.forall(found.size)(arr, val, found)
-    min_index = min_max(found)[0]
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    min_index = found_col.min()
     if min_index == arr.size:
         return - 1
     else:
@@ -834,7 +802,9 @@ def find_last(arr, val):
             gpu_mark_found_float.forall(found.size)(arr, val, found)
         else:
             gpu_mark_found_int.forall(found.size)(arr, val, found)
-    max_index = min_max(found)[1]
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    max_index = found_col.max()
     return max_index
 
 
