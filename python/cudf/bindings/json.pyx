@@ -31,6 +31,7 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     See Also
     --------
     cudf.io.json.read_json
+    cudf.io.json.to_json
     """
 
     if dtype is False:
