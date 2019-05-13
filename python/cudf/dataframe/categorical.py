@@ -10,6 +10,7 @@ from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.copying as cpp_copying
 
 
 class CategoricalAccessor(object):
@@ -51,6 +52,8 @@ class CategoricalAccessor(object):
     def _set_categories(self, new_categories):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*."""
+        if new_categories is self._categories:
+            return self._parent.copy()
         codemap = {v: i for i, v in enumerate(new_categories)}
         h_recoder = np.zeros(len(self.categories),
                              dtype=self._parent.data.dtype)
@@ -214,23 +217,18 @@ class CategoricalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out1 = cudautils.gather(data=sortedvals, index=segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=Buffer(out1), mask=None)
-        out_counts = numerical.NumericalColumn(data=Buffer(out2),
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=out_col.data, mask=None)
+        out_counts = numerical.NumericalColumn(data=Buffer(out),
                                                dtype=np.intp)
         return out_vals, out_counts
 
     def _encode(self, value):
-        for i, cat in enumerate(self._categories):
-            if cat == value:
-                return i
-        return -1
+        return self._categories.index(value)
 
     def _decode(self, value):
-        for i, cat in enumerate(self._categories):
-            if i == value:
-                return cat
+        return self._categories[value]
 
     def default_na_value(self):
         return -1
@@ -258,26 +256,35 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
+
         result = self.copy()
 
-        if np.isscalar(fill_value):
-            if fill_value != self.default_na_value():
-                if (fill_value not in self.cat().categories):
-                    raise ValueError("fill value must be in categories")
-            fill_value = pd.Categorical(fill_value,
-                                        categories=self.cat().categories)
+        if not self.has_null_mask:
+            return result
 
-        fill_value_col = columnops.as_column(
-            fill_value, nan_as_null=False)
+        fill_is_scalar = np.isscalar(fill_value)
 
-        # TODO: only required if fill_value has a subset of the categories:
-        fill_value_col = fill_value_col.cat()._set_categories(
-            self.cat().categories)
+        if fill_is_scalar and fill_value == self.default_na_value():
+            fill_value_col = columnops.as_column(
+                [fill_value], nan_as_null=False, dtype=self.data.dtype)
+        else:
+            if fill_is_scalar:
+                if fill_value != self.default_na_value():
+                    if (fill_value not in self.cat().categories):
+                        raise ValueError("fill value must be in categories")
+                fill_value = pd.Categorical(fill_value,
+                                            categories=self.cat().categories)
+
+            fill_value_col = columnops.as_column(
+                fill_value, nan_as_null=False)
+
+            # TODO: only required if fill_value has a subset of the categories:
+            fill_value_col = fill_value_col.cat()._set_categories(
+                self.cat().categories)
 
         cpp_replace.replace_nulls(result, fill_value_col)
 
-        result = result.replace(mask=None)
-        return self._mimic_inplace(result, inplace)
+        return self._mimic_inplace(result.replace(mask=None), inplace)
 
     def find_first_value(self, value):
         """

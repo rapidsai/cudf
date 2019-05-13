@@ -24,6 +24,8 @@ from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
+import cudf.bindings.copying as cpp_copying
+
 
 class Series(object):
     """
@@ -328,7 +330,7 @@ class Series(object):
         if self.dtype == np.dtype("object"):
             return self[indices]
 
-        data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
+        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
 
         if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
@@ -340,7 +342,7 @@ class Series(object):
         else:
             index = self.index.take(indices)
 
-        col = self._column.replace(data=Buffer(data), mask=mask)
+        col = self._column.replace(data=col.data, mask=mask)
         return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):
@@ -576,6 +578,9 @@ class Series(object):
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
+
+    def equals(self, other):
+        return self._unordered_compare(other, 'eq').min()
 
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
@@ -1008,9 +1013,10 @@ class Series(object):
     def reverse(self):
         """Reverse the Series
         """
-        data = cudautils.reverse_array(self.to_gpu_array())
-        index = as_index(cudautils.reverse_array(self.index.gpu_values))
-        col = self._column.replace(data=Buffer(data))
+        rinds = cudautils.arange_reversed(self._column.data.size,
+                                          dtype=np.int32)
+        col = cpp_copying.apply_gather_column(self._column, rinds)
+        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds)
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype='float64'):

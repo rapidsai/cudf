@@ -2154,6 +2154,24 @@ def test_select_dtype():
         gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
+def test_select_dtype_datetime():
+    gdf = gd.datasets.timeseries(
+        start='2000-01-01',
+        end='2000-01-02',
+        freq='3600s',
+        dtypes={'x': int}
+    )
+    gdf = gdf.reset_index()
+
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(np.dtype('datetime64')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64[ms]'))
+    assert_eq(gdf[['timestamp']],
+              gdf.select_dtypes(np.dtype('datetime64[ms]')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64[ms]'))
+
+
 def test_array_ufunc():
     gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
     pdf = gdf.to_pandas()

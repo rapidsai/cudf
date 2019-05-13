@@ -19,6 +19,7 @@ from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
 
 import warnings
+import cudf.bindings.copying as cpp_copying
 
 
 class TypedColumnBase(Column):
@@ -95,10 +96,17 @@ class TypedColumnBase(Column):
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
     """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
+    return column_empty(len(column), dtype, masked)
+
+
+def column_empty(row_count, dtype, masked):
+    """Allocate a new column like the given row_count and dtype.
+    """
+    data = rmm.device_array(shape=row_count, dtype=dtype)
     params = dict(data=Buffer(data))
     if masked:
-        mask = utils.make_mask(data.size)
+        mask = utils.make_mask(row_count)
+        cudautils.fill_value(mask, 0)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
 
@@ -143,13 +151,10 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
-    assert column.null_count == 0
 
-    selvals = cudautils.gather(column.data.to_gpu_array(),
-                               positions.data.to_gpu_array())
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(positions.data.to_gpu_array())
+    pos_ary = positions.data.to_gpu_array()
+    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_index = Buffer(pos_ary)
 
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
@@ -228,8 +233,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        if (data.dtype in [np.float16, np.float32, np.float64]
-                and arbitrary.size > 0):
+        if (data.dtype in
+           [np.float16, np.float32, np.float64] and arbitrary.size > 0):
             if nan_as_null:
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)

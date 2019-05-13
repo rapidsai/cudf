@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from math import isnan, isinf, ceil
 
@@ -187,3 +188,24 @@ def dtype_min_max(dtype):
     else:
         info = np.finfo(dtype)
     return info.min, info.max
+
+
+def cudf_dtype_from_pydata_dtype(dtype):
+    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
+        Python dtype.
+    """
+    try:
+        # pd 0.24.X
+        from pandas.core.dtypes.common import \
+            infer_dtype_from_object
+    except ImportError:
+        # pd 0.23.X
+        from pandas.core.dtypes.common import \
+            _get_dtype_from_object as infer_dtype_from_object
+
+    if pd.api.types.is_categorical_dtype(dtype):
+        pass
+    elif np.issubdtype(dtype, np.datetime64):
+        dtype = np.datetime64
+
+    return infer_dtype_from_object(dtype)
