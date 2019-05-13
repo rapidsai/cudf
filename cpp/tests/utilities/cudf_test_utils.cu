@@ -43,7 +43,7 @@ int promote_for_streaming(const signed char& x)   { return x; }
 
 struct column_printer {
     template<typename Element>
-    void operator()(gdf_column const* the_column, unsigned min_printing_width)
+    void operator()(gdf_column const* the_column, unsigned min_printing_width, std::ostream& stream)
     {
         gdf_size_type num_rows { the_column->size };
 
@@ -59,19 +59,19 @@ struct column_printer {
         }
 
         for (gdf_size_type i = 0; i < num_rows; ++i) {
-            std::cout << std::setw(min_printing_width);
+            stream << std::setw(min_printing_width);
             if (gdf_is_valid(h_mask.data(), i)) {
-                std::cout << detail::promote_for_streaming(host_side_data[i]);
+                stream << detail::promote_for_streaming(host_side_data[i]);
             }
             else {
-                std::cout << null_representative;
+                stream << null_representative;
             }
-            std::cout << ' ';
+            stream << ' ';
         }
-        std::cout << std::endl;
+        stream << std::endl;
 
         if(the_column->dtype == GDF_STRING_CATEGORY){
-            std::cout<<"Data on category:\n";
+            stream<<"Data on category:\n";
             size_t length = 1;
 
             if(the_column->dtype_info.category != nullptr){
@@ -89,9 +89,9 @@ struct column_printer {
                     }
 
                     for(size_t i=0; i<keys_size; i++){
-                        std::cout<<"("<<data[i]<<"|"<<i<<")\t";
+                        stream<<"("<<data[i]<<"|"<<i<<")\t";
                     }
-                    std::cout<<std::endl;
+                    stream<<std::endl;
                 }
             }
         }
@@ -99,9 +99,9 @@ struct column_printer {
 };
 } // namespace
 
-void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width)
+void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width, std::ostream& stream)
 {
-    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width);
+    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width, stream);
 }
 
 void print_valid_data(const gdf_valid_type *validity_mask,
