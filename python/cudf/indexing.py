@@ -80,12 +80,22 @@ class Loc(Indexer):
     def _get_column_selection(self, arg):
         if self._is_single_value(arg):
             return [arg]
+
         elif isinstance(arg, slice):
-            start, stop, step = arg.indices(self._df.shape[1])
+            start = arg.start
+            stop = arg.stop
+
             cols = []
-            for i in range(start, stop, step):
-                cols.append(self._df.columns[i])
+            within_slice = False
+            for c in self._df.columns:
+                if c == start:
+                    within_slice = True
+                if within_slice:
+                    cols.append(c)
+                if c == stop:
+                    break
             return cols
+
         else:
             return arg
 

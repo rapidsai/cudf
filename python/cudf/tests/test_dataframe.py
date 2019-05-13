@@ -434,9 +434,15 @@ def test_dataframe_loc(scalar, step):
     assert_eq(df.loc[begin:end, ['c', 'd']],
               pdf.loc[begin:end, ['c', 'd']])
 
+
+    # Slicing on columns:
+    assert_eq(df.loc[begin:end:step, 'a':'c'],
+              pdf.loc[begin:end:step, 'a':'c'])
+
     # Make int64 index
     offset = 50
     df2 = df[offset:]
+    pdf2 = pdf[offset:]
     begin = 117
     end = 122
     assert_eq(df2.loc[begin:end, ['c', 'd', 'a']],
