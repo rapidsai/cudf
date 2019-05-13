@@ -20,7 +20,37 @@
 #include "cudf.h"
 #include "types.hpp"
 
+// Forward declaration
+typedef struct CUstream_st* cudaStream_t;
+
 namespace cudf {
+
+/*
+ * Initializes and returns gdf_column of the same type as the input.
+ * 
+ * @param input The input column to emulate
+ * @return gdf_column An unallocated column of same type as input
+ */
+gdf_column empty_like(gdf_column const& input);
+
+/**
+ * @brief Allocates a new column of the same size and type as the input.
+ *
+ * @param input The input column to emulate
+ * @param stream Optional stream in which to perform copies
+ * @return gdf_column An allocated column of same size and type of input
+ */
+gdf_column allocate_like(gdf_column const& input, cudaStream_t stream = 0);
+
+/**
+ * @brief Creates a new column that is a copy of input
+ * 
+ * @param input The input column to copy
+ * @param stream Optional stream in which to perform copies
+ * @return gdf_column A copy of input
+ */
+gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
+
 /**
  * @brief Scatters the rows (including null values) of a set of source columns
  * into a set of destination columns.

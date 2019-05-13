@@ -243,7 +243,7 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/compaction/stream_compaction_ops.cu
+            src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
             src/hash/hash_ops.cu
@@ -281,6 +281,7 @@ add_library(cudf SHARED
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
             src/bitmask/legacy_bitmask.cpp)
