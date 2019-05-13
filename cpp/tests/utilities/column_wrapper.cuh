@@ -185,11 +185,7 @@ struct column_wrapper {
    *
    * The valid bitmask is initialized using the specified bit_initializer unary
    * lambda that returns a bool. Bit `i` in the bitmask will be equal to
-   * `bit_intiializer(i)`.
    *
-   * @tparam BitInitializerType The type of the bit initializer unary lambda
-   * @param host_data The vector of data to use for the column
-   * @param bit_initializer The unary lambda to intialize each bit of the
    * bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
