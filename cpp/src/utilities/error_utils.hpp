@@ -81,19 +81,26 @@ struct cuda_error : public std::runtime_error {
  * Example usage:
  * 
  * @code
- * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+ * CUDF_EXPECTS(lhs->dtype == rhs->dtype, std::invalid_argument, "Column type mismatch");
+ * CUDF_LOGIC_EXPECTS(foo or bar, "It must be the case that either foo or bar holds");
  * @endcode
  *
- * @param[in] cond Expression that evaluates to true or false
- * @param[in] reason String literal description of the reason that cond is
- * expected to be true
- * @throw cudf::logic_error if the condition evaluates to false.
+ * @param[in] _condition Expression that evaluates to true or false
+ * @param[in] _expection_type The exception type to throw; must inherit
+ *     `std::exception`. If not specified (i.e. if only two macro
+ *     arguments are provided), defaults to `cudf::logic_error`
+ * @param[in] _what  String literal description of why the exception was
+ *     thrown, i.e. why @p _condition was expected to be true.
+ * @throw @p _exception_type if the condition evaluates to 0 (false).
  *---------------------------------------------------------------------------**/
-#define CUDF_EXPECTS(cond, reason)                           \
-  (!!(cond))                                                 \
-      ? static_cast<void>(0)                                 \
-      : throw cudf::logic_error("cuDF failure at: " __FILE__ \
-                                ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_EXPECTS(...) GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2)(__VA_ARGS__)
+#define GET_CUDF_EXPECTS_MACRO(_1,_2,_3,NAME,...) NAME
+#define CUDF_EXPECTS_3(_condition, _exception_type, _what) \
+  (!!(_condition))                                         \
+      ? static_cast<void>(0)                               \
+      : throw _exception_type("At " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what)
+#define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, cudf::logic_error, _reason)
+#define CUDF_LOGIC_EXPECTS(_condition, _reason) CUDF_EXPECTS_2(_condition, _reason)
 
 /**---------------------------------------------------------------------------*
  * @brief Try evaluation an expression with a gdf_error type,
@@ -114,15 +121,23 @@ struct cuda_error : public std::runtime_error {
  * Example usage:
  * 
  * @code
- * CUDF_FAIL("Non-arithmetic operation is not supported");
+ * CUDF_FAIL(std::out_of_range, "The foo is out of range");
+ * CUDF_LOGIC_FAIL("Should not be able to get here");
  * @endcode
  *
- * @param[in] reason String literal description of the reason
- * @throw cudf::logic_error if the condition evaluates to false.
+ * @param[in] _expection_type The exception type to throw; must inherit
+ *     `std::exception`. If not specified (i.e. if only two macro
+ *     arguments are provided), defaults to `cudf::logic_error`
+ * @param[in] _what  String literal description of why the exception was
+ *     thrown, i.e. why @p _condition was expected to be true.
+ * @throw @p _exception_type if the condition evaluates to 0 (false).
  *---------------------------------------------------------------------------**/
-#define CUDF_FAIL(reason)      				     \
-    throw cudf::logic_error("cuDF failure at: " __FILE__     \
-                            ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_FAIL(...) GET_CUDF_FAIL_MACRO(__VA_ARGS__, CUDF_FAIL_2, CUDF_FAIL_1)(__VA_ARGS__)
+#define GET_CUDF_FAIL_MACRO(_1,_2,NAME,...) NAME
+#define CUDF_FAIL_2(_exception_type, _what) \
+    throw _exception_type("At: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what)
+#define CUDF_FAIL_1(_what) CUDF_FAIL_2(cudf::logic_error, _what)
+#define CUDF_LOGIC_FAIL(_what) CUDF_FAIL_1(_what)
 
 namespace cudf {
 namespace detail {

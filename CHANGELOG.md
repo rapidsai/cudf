@@ -10,6 +10,7 @@
 ## Improvements
 
 - PR #1713 Add documentation for Dask-XGBoost
+- PR #1719 `CUDF_EXPECT()` and `CUDF_FAIL()` can now be used with exceptions other than `cudf::logic_error`
 
 ## Bug Fixes
 
