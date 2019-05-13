@@ -157,7 +157,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
-std::vector<gdf_column*> slice(gdf_column const*          input_column,
+std::vector<gdf_column*> slice(gdf_column const &          input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices);
 
@@ -206,7 +206,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
  * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
-std::vector<gdf_column*> split(gdf_column const*          input_column,
+std::vector<gdf_column*> split(gdf_column const &          input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices);
 

@@ -157,25 +157,24 @@ struct column_wrapper {
    *
    * @param column The gdf_column* that contains the originating data
    *---------------------------------------------------------------------------**/
-  column_wrapper(const gdf_column * column) {
-    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column->dtype, "data types do not match");
+  column_wrapper(const gdf_column & column) : data(static_cast<ColumnType*>(column.data), static_cast<ColumnType*>(column.data) + column.size)  {
+    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype, "data types do not match");
 
-    data.assign(static_cast<ColumnType*>(column->data), static_cast<ColumnType*>(column->data) + column->size);
-    if (column->valid != nullptr){
-      bitmask.assign(column->valid, column->valid + gdf_valid_allocation_size(column->size));
+    if (column.valid != nullptr){
+      bitmask.assign(column.valid, column.valid + gdf_valid_allocation_size(column.size));
     }
     the_column.data = data.data().get();
     the_column.size = data.size();
-    the_column.dtype = column->dtype;
+    the_column.dtype = column.dtype;
     gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = column->dtype_info.time_unit;
+    extra_info.time_unit = column.dtype_info.time_unit;
     the_column.dtype_info = extra_info;
     if (bitmask.size() > 0){
       the_column.valid = bitmask.data().get();
     } else {
       the_column.valid = nullptr;
     }
-    the_column.null_count = column->null_count;
+    the_column.null_count = column.null_count;
   }
 
   /**---------------------------------------------------------------------------*

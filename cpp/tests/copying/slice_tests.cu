@@ -28,7 +28,7 @@ void call_slice(gdf_column const*          input_column,
                 gdf_size_type              num_indices,
                 std::vector<gdf_column*> & output){
 
-  output = cudf::slice(input_column, indices, num_indices); 
+  output = cudf::slice(*input_column, indices, num_indices); 
 }
 
 struct SliceInputTest : GdfTest {};
@@ -44,19 +44,6 @@ TEST_F(SliceInputTest, IndexesNull) {
   std::vector<gdf_column*> output;
   ASSERT_NO_THROW(call_slice(input_column.get(), nullptr, 0, output));
   ASSERT_EQ(output.size(), std::size_t(0));
-}
-
-TEST_F(SliceInputTest, InputColumnNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
-
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_slice(nullptr, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
 }
 
 TEST_F(SliceInputTest, InputColumnSizeNull) {

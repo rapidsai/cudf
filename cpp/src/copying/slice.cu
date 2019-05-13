@@ -23,6 +23,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include <nvstrings/NVCategory.h>
 #include <bitmask/bit_mask.cuh> 
+#include "copying/slice.hpp"
 
 namespace cudf {
 
@@ -121,11 +122,11 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
 
 class Slice {
 public:
-  Slice(gdf_column const*                 input_column,
+  Slice(gdf_column const &                input_column,
         gdf_index_type const*             indices,
         gdf_size_type                     num_indices,
         std::vector<gdf_column*> const &  output_columns,
-        std::vector<cudaStream_t> &      streams)
+        std::vector<cudaStream_t> const & streams)
   : input_column_(input_column), indices_(indices), num_indices_(num_indices),
     output_columns_(output_columns), streams_(streams)  { }
 
@@ -155,7 +156,7 @@ public:
       int col_width;
       get_column_byte_width(output_column, &col_width);
       RMM_TRY( RMM_ALLOC(&(output_column->data), col_width * output_column->size, stream) );
-      if(input_column_->valid != nullptr){
+      if(input_column_.valid != nullptr){
         RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
       } else {
         output_column->valid = nullptr;
@@ -174,12 +175,12 @@ public:
         stream
       >>>(
         static_cast<ColumnType*>(output_column->data),
-        static_cast<ColumnType const*>(input_column_->data),
+        static_cast<ColumnType const*>(input_column_.data),
         indices_,
         index
       );
 
-      if(input_column_->valid != nullptr){
+      if(input_column_.valid != nullptr){
         // Configure grid for bit mask kernel launch
         auto valid_grid_config = cudf::util::cuda::grid_config_1d(gdf_num_bitmask_elements(output_column->size), 256);
         
@@ -193,8 +194,8 @@ public:
         >>>(
           reinterpret_cast<bit_mask_t*>(output_column->valid),
           bit_set_counter.data().get(),
-          reinterpret_cast<bit_mask_t const*>(input_column_->valid),
-          input_column_->size,
+          reinterpret_cast<bit_mask_t const*>(input_column_.valid),
+          input_column_.size,
           indices_,
           num_indices_,
           index
@@ -212,7 +213,7 @@ public:
       }
 
       if (output_column->dtype == GDF_STRING_CATEGORY){
-        NVCategory* new_category = static_cast<NVCategory*>(input_column_->dtype_info.category)->gather_and_remap(
+        NVCategory* new_category = static_cast<NVCategory*>(input_column_.dtype_info.category)->gather_and_remap(
                       static_cast<int*>(output_column->data), (unsigned int)output_column->size);
         output_column->dtype_info.category = new_category;
       }
@@ -229,7 +230,7 @@ public:
     }
 
 
-    gdf_column const*               input_column_;
+    gdf_column const                input_column_;
     gdf_index_type const*           indices_;
     gdf_size_type                   num_indices_;
     std::vector<gdf_column*> const  output_columns_;
@@ -239,21 +240,20 @@ public:
 
 namespace detail {
 
-std::vector<gdf_column*> slice(gdf_column const*          input_column,
+std::vector<gdf_column*> slice(gdf_column const &         input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices,
-                               std::vector<cudaStream_t> & streams) {
+                               std::vector<cudaStream_t> const & streams) {
   
   std::vector<gdf_column*> output_columns;
 
-  CUDF_EXPECTS(input_column != nullptr, "input column is null");
   if (num_indices == 0 || indices == nullptr) {
     return output_columns;
   }
-  if (input_column->size == 0) {
+  if (input_column.size == 0) {
     return output_columns;
   }
-  CUDF_EXPECTS(input_column->data != nullptr, "input column data is null");
+  CUDF_EXPECTS(input_column.data != nullptr, "input column data is null");
   CUDF_EXPECTS((num_indices % 2) == 0, "indices size must be even");
   
   // Get indexes on host side
@@ -265,8 +265,8 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
   for (gdf_size_type i = 0; i < num_indices/2; i++){
     output_columns[i] = new gdf_column;
     output_columns[i]->size = host_indices[2*i + 1] - host_indices[2*i];
-    output_columns[i]->dtype = input_column->dtype;
-    output_columns[i]->dtype_info.time_unit = input_column->dtype_info.time_unit;
+    output_columns[i]->dtype = input_column.dtype;
+    output_columns[i]->dtype_info.time_unit = input_column.dtype_info.time_unit;
     output_columns[i]->null_count = 0;
     output_columns[i]->data = nullptr;
     output_columns[i]->valid = nullptr;
@@ -277,7 +277,7 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
   Slice slice(input_column, indices, num_indices, output_columns, streams);
 
   // Perform cudf operation
-  cudf::type_dispatcher(input_column->dtype, slice);
+  cudf::type_dispatcher(input_column.dtype, slice);
 
   return output_columns;
 }
@@ -285,12 +285,11 @@ std::vector<gdf_column*> slice(gdf_column const*          input_column,
 } // namespace detail
 
 
-std::vector<gdf_column*> slice(gdf_column const*          input_column,
+std::vector<gdf_column*> slice(gdf_column const &         input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices) {
 
-  std::vector<cudaStream_t> streams;
-  return cudf::detail::slice(input_column, indices, num_indices, streams);
+  return cudf::detail::slice(input_column, indices, num_indices);
 }
 
 } // namespace cudf

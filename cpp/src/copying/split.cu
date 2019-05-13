@@ -24,12 +24,10 @@
 
 namespace cudf {
 
-std::vector<gdf_column*> split(gdf_column const*          input_column,
+std::vector<gdf_column*> split(gdf_column const &         input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices) {
 
-    CUDF_EXPECTS(input_column != nullptr, "input column is null");
-    
     if (num_indices == 0 || indices == nullptr){
       return std::vector<gdf_column*>();
     } else {
@@ -44,12 +42,11 @@ std::vector<gdf_column*> split(gdf_column const*          input_column,
         host_slice_indices[2*i + 1] = host_indices[i];
         host_slice_indices[2*i + 2] = host_indices[i];
       }
-      host_slice_indices[host_slice_indices.size()-1] = input_column->size;
+      host_slice_indices[host_slice_indices.size()-1] = input_column.size;
       rmm::device_vector<gdf_index_type> slice_indices = host_slice_indices; // copy to device happens automatically
       gdf_size_type slice_num_indices = slice_indices.size();
 
-      std::vector<cudaStream_t> streams;
-      return cudf::detail::slice(input_column, slice_indices.data().get(), slice_num_indices, streams);
+      return cudf::detail::slice(input_column, slice_indices.data().get(), slice_num_indices);
     }
 }
 

@@ -28,7 +28,7 @@ void call_split(gdf_column const*          input_column,
                 gdf_size_type              num_indices,
                 std::vector<gdf_column*> & output){
 
-  output = cudf::split(input_column, indices, num_indices); 
+  output = cudf::split(*input_column, indices, num_indices); 
 }
 
 struct SplitInputTest : GdfTest {};
@@ -44,19 +44,6 @@ TEST_F(SplitInputTest, IndexesNull) {
   std::vector<gdf_column*> output;
   ASSERT_NO_THROW(call_split(input_column.get(), nullptr, 0, output));
   ASSERT_EQ(output.size(), std::size_t(0));
-}
-
-TEST_F(SplitInputTest, InputColumnNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
-
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_split(nullptr, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
 }
 
 TEST_F(SplitInputTest, InputColumnSizeNull) {
@@ -138,7 +125,8 @@ TYPED_TEST(SplitTest, MultipleSplits) {
     cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
     // Perform operation
-    std::vector<gdf_column*> output_column_ptrs = cudf::split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
+    std::vector<gdf_column*> output_column_ptrs;
+    ASSERT_NO_THROW(call_split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
     // Transfer input column to host
     std::vector<TypeParam> input_col_data;
@@ -190,7 +178,8 @@ TYPED_TEST(SplitTest, RangeIndexPosition) {
         cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
 
         // Perform operation
-        std::vector<gdf_column*> output_column_ptrs = cudf::split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size);
+        std::vector<gdf_column*> output_column_ptrs;
+        ASSERT_NO_THROW(call_split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
         // Transfer input column to host
         std::vector<TypeParam> input_col_data;

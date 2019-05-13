@@ -68,10 +68,10 @@ namespace detail {
  * a different number of rows that are equal to the difference of two
  * consecutive indices in the indices array.
  */
-std::vector<gdf_column*> slice(gdf_column const*          input_column,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices,
-                               std::vector<cudaStream_t> & streams);
+std::vector<gdf_column*> slice(gdf_column const &                input_column,
+                               gdf_index_type const*             indices,
+                               gdf_size_type                     num_indices,
+                               std::vector<cudaStream_t> const & streams = std::vector<cudaStream_t>{});
 
 }  // namespace detail
 }  // namespace cudf
