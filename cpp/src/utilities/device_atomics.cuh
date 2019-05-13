@@ -53,7 +53,7 @@ namespace detail {
 
     // -----------------------------------------------------------------------
     // the implementation of `genericAtomicOperation`
-    template <typename T, typename Op, size_t n>
+    template <typename T, typename Op, size_t N = sizeof(T)>
     struct genericAtomicOperationImpl;
 
     // single byte atomic operation
@@ -450,7 +450,7 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
-    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>{}
+    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{}
             (address, update_value, op);
     return T(ret);
 }
@@ -461,7 +461,7 @@ __forceinline__  __device__
 W genericAtomicOperator( W* address, W const& update_value, BinaryOp op){
     // unwrap the input type to expect
     // that the native atomic API is used for the underlying type if possible
-    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>{}
+    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{}
             (static_cast<T*>(address), cudf::detail::unwrap(update_value), op);
     return W(ret);
 }
@@ -473,7 +473,7 @@ cudf::bool8 genericAtomicOperation(cudf::bool8* address, cudf::bool8 const & upd
 {
     using T = cudf::bool8;
     // don't use underlying type to apply operation for cudf::bool8
-    auto ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp, sizeof(T)>()
+    auto ret = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>()
             (address, update_value, op);
 
     return T(ret);
