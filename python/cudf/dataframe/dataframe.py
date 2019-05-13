@@ -958,7 +958,7 @@ class DataFrame(object):
         if axis == 0:
             raise NotImplementedError("Can only drop columns, not rows")
         if errors != 'raise':
-            raise NotImplementedError("The errors= keyword is not yet implemented")
+            raise NotImplementedError("errors= keyword not implemented")
 
         columns = [labels] if isinstance(
                 labels, (str, numbers.Number)) else list(labels)
