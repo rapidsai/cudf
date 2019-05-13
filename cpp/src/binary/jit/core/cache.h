@@ -27,6 +27,9 @@
 namespace cudf {
 namespace jit {
 
+template <typename Tv>
+using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
+
 std::string getTempDir();
 
 class cudfJitCache
@@ -42,12 +45,12 @@ public:
     cudfJitCache();
     ~cudfJitCache();
 
-    std::shared_ptr<jitify_v2::KernelInstantiation> getKernelInstantiation(
+    named_prog<jitify_v2::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
-        jitify_v2::Program const& program,
+        named_prog<jitify_v2::Program> const& program,
         std::vector<std::string> const& arguments);
 
-    std::shared_ptr<jitify_v2::Program> getProgram(
+    named_prog<jitify_v2::Program> getProgram(
         std::string const& prog_file_name, 
         std::string const& cuda_source,
         std::vector<std::string> const& given_headers = {},
@@ -91,7 +94,7 @@ private:
 
 private:
     template <typename T, typename FallbackFunc>
-    std::shared_ptr<T> getCached(
+    named_prog<T> getCached(
         std::string const& name,
         umap_str_shptr<T>& map,
         FallbackFunc func) {
@@ -99,7 +102,7 @@ private:
         // Find memory cached T object
         auto it = map.find(name);
         if ( it != map.end()) {
-            return it->second;
+            return std::make_pair(name, it->second);
         }
         else { // Find file cached T object
             bool successful_read = false;
@@ -121,7 +124,7 @@ private:
             // Add deserialized T to cache and return
             auto program = std::make_shared<T>(T::deserialize(serialized));
             map[name] = program;
-            return program;
+            return std::make_pair(name, program);
         }
     }
 };

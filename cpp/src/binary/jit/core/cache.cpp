@@ -55,7 +55,7 @@ cudfJitCache::~cudfJitCache() { }
 std::mutex cudfJitCache::_kernel_cache_mutex;
 std::mutex cudfJitCache::_program_cache_mutex;
 
-std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
+named_prog<jitify_v2::Program> cudfJitCache::getProgram(
     std::string const& prog_name, 
     std::string const& cuda_source,
     std::vector<std::string> const& given_headers,
@@ -74,16 +74,19 @@ std::shared_ptr<jitify_v2::Program> cudfJitCache::getProgram(
     );
 }
 
-std::shared_ptr<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
+named_prog<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
-    jitify_v2::Program const& program,
+    named_prog<jitify_v2::Program> const& named_program,
     std::vector<std::string> const& arguments)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_kernel_cache_mutex);
 
-    // Make instance name e.g. "kernel_v_v_int_int_long int_Add"
-    std::string kern_inst_name = kern_name;
+    std::string prog_name = std::get<0>(named_program);
+    jitify_v2::Program& program = *std::get<1>(named_program);
+
+    // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
+    std::string kern_inst_name = prog_name + '.' + kern_name;
     for ( auto&& arg : arguments ) kern_inst_name += '_' + arg;
 
     return getCached(kern_inst_name, kernel_inst_map, 

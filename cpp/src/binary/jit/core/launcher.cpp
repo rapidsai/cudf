@@ -69,7 +69,7 @@ namespace jit {
     Launcher::Launcher()
      : cacheInstance{cudf::jit::cudfJitCache::Instance()}
     { 
-        this->setProgram("prog_binop.jit");
+        this->setProgram("prog_binop");
     }
 
     Launcher::Launcher(Launcher&& launcher)
@@ -80,7 +80,7 @@ namespace jit {
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
 
-        (*kernel_inst).configure_1d_max_occupancy()
+        getKernel().configure_1d_max_occupancy()
                       .launch(out->size,
                               out->data, lhs->data, rhs->data);
 
@@ -89,7 +89,7 @@ namespace jit {
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
 
-        (*kernel_inst).configure_1d_max_occupancy()
+        getKernel().configure_1d_max_occupancy()
                       .launch(out->size,
                               out->data, lhs->data, rhs->data);
 
