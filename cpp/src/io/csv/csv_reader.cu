@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -597,11 +598,11 @@ gdf_error read_csv(csv_read_arg *args)
 		if (error != GDF_SUCCESS) {
 			return error;
 		}
-		const int h_num_cols = raw_csv.col_names.size();
+		raw_csv.num_actual_cols = raw_csv.num_active_cols = raw_csv.col_names.size();
 
 		// Initialize a boolean array that states if a column needs to read or filtered.
-		raw_csv.h_parseCol = thrust::host_vector<bool>(h_num_cols, true);
-		
+		raw_csv.h_parseCol = thrust::host_vector<bool>(raw_csv.num_actual_cols, true);
+
 		// Rename empty column names to "Unnamed: col_index"
 		for (size_t col_idx = 0; col_idx < raw_csv.col_names.size(); ++col_idx) {
 			if (raw_csv.col_names[col_idx].empty()) {
@@ -609,40 +610,27 @@ gdf_error read_csv(csv_read_arg *args)
 			}
 		}
 
-		int h_dup_cols_removed = 0;
 		// Looking for duplicates
-		for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-			bool found_dupe = false;
-			for (auto it2 = (it+1); it2 != raw_csv.col_names.end(); it2++){
-				if (*it==*it2){
-					found_dupe=true;
-					break;
+		std::unordered_map<string, int> col_names_histogram;
+		for (auto& col_name: raw_csv.col_names){
+			// Operator [] inserts a default-initialized value if the given key is not present
+			if (++col_names_histogram[col_name] > 1){
+				if (args->mangle_dupe_cols) {
+					// Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
+					col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
 				}
-			}
-			if(found_dupe){
-				int count=1;
-				for (auto it2 = (it+1); it2 != raw_csv.col_names.end(); it2++){
-					if (*it==*it2){
-						if(args->mangle_dupe_cols){
-							// Replace all the duplicates of column X with X.1,X.2,... First appearance stays as X.
-							std::string newColName  = *it2;
-							newColName += "." + std::to_string(count); 
-							count++;
-							*it2 = newColName;							
-						} else{
-							// All duplicate fields will be ignored.
-							int pos=std::distance(raw_csv.col_names.begin(), it2);
-							raw_csv.h_parseCol[pos]=false;
-							h_dup_cols_removed++;
-						}
-					}
+				else {
+					// All duplicate columns will be ignored; First appearance is parsed
+					const auto idx = &col_name - raw_csv.col_names.data();
+					raw_csv.h_parseCol[idx] = false;
 				}
 			}
 		}
 
-		raw_csv.num_actual_cols = h_num_cols;							// Actual number of columns in the CSV file
-		raw_csv.num_active_cols = h_num_cols-h_dup_cols_removed;		// Number of fields that need to be processed based on duplicatation fields
-
+		// Update the number of columns to be processed, if some might have been removed
+		if (!args->mangle_dupe_cols) {
+			raw_csv.num_active_cols = col_names_histogram.size();
+		}
 	}
 	else {
 		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_cols, true);

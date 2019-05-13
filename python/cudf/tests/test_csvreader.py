@@ -285,28 +285,19 @@ def test_csv_reader_usecols_int_char(tmpdir):
                                        check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols_header(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
-              index=False, header=False)
+def test_csv_reader_mangle_dupe_cols(tmpdir):
+    buffer = 'abc,ABC,abc,abcd,abc\n1,2,3,4,5\n'
 
-    # Default: header=0 when names not passed, mangle_dupe_cols = True
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
-    out = read_csv(str(fname), dayfirst=True)
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
-    # Compare mangled column names for duplicate names in header row
-    assert list(df_out.columns.values) == list(out.columns.values)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    # Default: mangle_dupe_cols=True
+    pd_df = pd.read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer))
+    pd.util.testing.assert_frame_equal(cu_df.to_pandas(), pd_df)
 
-    # header = 3
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True, header=2)
-    out = read_csv(str(fname), dayfirst=True, header=2)
-    assert len(out.columns) == len(df_out.columns)
-    # assert len(out) == len(df_out)
-    # Compare column names
-    assert list(df_out.columns.values) == list(out.columns.values)
+    # Pandas does not support mangle_dupe_cols=False
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
+    # check that the dupe columns were removed
+    assert(len(cu_df.columns) == 3)
+    np.testing.assert_array_equal(cu_df['abc'], [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
