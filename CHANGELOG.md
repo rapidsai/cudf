@@ -16,6 +16,7 @@
 
 ## Bug Fixes
 
+- PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
 - PR #1680 Add errors= keyword to drop() to fix cudf-dask bug
 - PR #1651 Fix `query` function on empty dataframe
