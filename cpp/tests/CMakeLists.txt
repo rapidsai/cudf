@@ -182,6 +182,16 @@ set(BINARY_TEST_SRC
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
 ###################################################################################################
+# - jit cache tests -------------------------------------------------------------------------------
+
+set(JITCACHE_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binary/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/jit-cache-test.cu")
+
+add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
+
+###################################################################################################
 # - io tests -------------------------------------------------------------------------------------
 
 set(DECOMPRESSION_TEST_SRC
