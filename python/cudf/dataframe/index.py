@@ -22,6 +22,8 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
 
+import cudf.bindings.copying as cpp_copying
+
 
 class Index(object):
     """The root interface for all Series indexes.
@@ -72,8 +74,8 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            index = cudautils.gather(data=self.gpu_values, index=indices)
-            col = self.as_column().replace(data=Buffer(index))
+            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
+            col = self.as_column().replace(data=index.data)
             return as_index(col)
 
     def argsort(self, ascending=True):
@@ -208,7 +210,11 @@ class Index(object):
         if len(self) != len(other):
             return False
         elif len(self) == 1:
-            return self[0] == other[0]
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
         else:
             result = (self == other)
             if isinstance(result, bool):
