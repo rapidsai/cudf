@@ -500,6 +500,8 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.opts.naValuesTrie = raw_csv.d_naTrie.data().get();
 	}
 	args->data = nullptr;
+	args->num_cols_out = 0;
+	args->num_rows_out = 0;
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -516,35 +518,35 @@ gdf_error read_csv(csv_read_arg *args)
 		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
 	
 		const auto file_size = st.st_size;
-		const auto page_size = sysconf(_SC_PAGESIZE);
-
-		if (args->byte_range_offset >= (size_t)file_size) { 
-			close(fd); 
-			checkError(GDF_INVALID_API_CALL, "The byte_range offset is larger than the file size");
+		if (args->byte_range_offset > (size_t)file_size) {
+			close(fd);
+			CUDF_FAIL("The byte_range offset is larger than the file size");
 		}
 
-		// Have to align map offset to page size
-		map_offset = (args->byte_range_offset/page_size)*page_size;
+		// Can't map an empty file, will return an empty dataframe further down
+		if (file_size != 0) {
+			// Have to align map offset to page size
+			const auto page_size = sysconf(_SC_PAGESIZE);
+			map_offset = (args->byte_range_offset/page_size)*page_size;
 
-		// Set to rest-of-the-file size, will reduce based on the byte range size
-		raw_csv.num_bytes = map_size = file_size - map_offset;
+			// Set to rest-of-the-file size, will reduce based on the byte range size
+			raw_csv.num_bytes = map_size = file_size - map_offset;
 
-		// Include the page padding in the mapped size
-		const size_t page_padding = args->byte_range_offset - map_offset;
-		const size_t padded_byte_range_size = raw_csv.byte_range_size + page_padding;
+			// Include the page padding in the mapped size
+			const size_t page_padding = args->byte_range_offset - map_offset;
+			const size_t padded_byte_range_size = raw_csv.byte_range_size + page_padding;
 
-		if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
-			// Need to make sure that w/ padding we don't overshoot the end of file
-			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
+			if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
+				// Need to make sure that w/ padding we don't overshoot the end of file
+				map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
+			}
 
+			// Ignore page padding for parsing purposes
+			raw_csv.num_bytes = map_size - page_padding;
+
+			map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
+			if (map_data == MAP_FAILED || map_size==0) { close(fd); CUDF_FAIL("Error mapping file"); }
 		}
-
-		// Ignore page padding for parsing purposes
-		raw_csv.num_bytes = map_size - page_padding;
-
-		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
-	
-		if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 	}
 	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
 	{
@@ -553,39 +555,47 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-	const char* h_uncomp_data;
+	// Return an empty dataframe if the input is empty and user did not specify the column names and types
+	if (raw_csv.num_bytes == 0 && (args->names == nullptr || args->dtype == nullptr)){
+		return GDF_SUCCESS;
+	}
+
+	const char* h_uncomp_data = nullptr;
 	size_t h_uncomp_size = 0;
 	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
 	vector<char> h_uncomp_data_owner;
-	if (compression_type == "none") {
-		// Do not use the owner vector here to avoid copying the whole file to the heap
-		h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
-		h_uncomp_size = raw_csv.num_bytes;
+	// Skip if the input is empty and proceed to set the column names and types based on user's input
+	if(raw_csv.num_bytes != 0) {
+		if (compression_type == "none") {
+			// Do not use the owner vector here to avoid copying the whole file to the heap
+			h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
+			h_uncomp_size = raw_csv.num_bytes;
+		}
+		else {
+			error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
+			checkError(error, "call to getUncompressedHostData");
+			h_uncomp_data = h_uncomp_data_owner.data();
+			h_uncomp_size = h_uncomp_data_owner.size();
+		}
+	
+		error = countRecordsAndQuotes(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to count the number of rows");
+
+		error = setRecordStarts(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to store the row offsets");
+
+		error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to upload the CSV data to the device");
 	}
-	else {
-		error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
-		checkError(error, "call to getUncompressedHostData");
-		h_uncomp_data = h_uncomp_data_owner.data();
-		h_uncomp_size = h_uncomp_data_owner.size();
-	}
-	assert(h_uncomp_data != nullptr);
-	assert(h_uncomp_size != 0);
-
-	error = countRecordsAndQuotes(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to count the number of rows");
-
-	error = setRecordStarts(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to store the row offsets");
-
-	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to upload the CSV data to the device");
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		close(fd);
-		munmap(map_data, map_size);
+		if (map_data != nullptr) {
+			munmap(map_data, map_size);
+		}
 	}
 
 	//-----------------------------------------------------------------------------
@@ -670,15 +680,6 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 	raw_csv.d_parseCol = raw_csv.h_parseCol;
-
-	//-----------------------------------------------------------------------------
-	//---  done with host data
-	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
-	{
-		close(fd);
-		munmap(map_data, map_size);
-	}
-
 
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
