@@ -34,11 +34,19 @@ class SeriesGroupBy(object):
     def __getattr__(self, attr):
         df = DataFrame()
         df[self.source_name] = self.source_series
+        by = []
         if self.level is not None:
-            df[self.group_name] = self.source_series.index
+            if isinstance(self.source_series.index, MultiIndex):
+                # Add index columns specified by multiindex into _df
+                # Record the index column names for the groupby
+                for col in self.source_series.index.codes:
+                    df[self.group_name + col] = self.source_series.index.codes[
+                            col]
+                    by.append(self.group_name + col)
         else:
             df[self.group_name] = self.group_series
-        groupby = df.groupby(self.group_name,
+            by = self.group_name
+        groupby = df.groupby(by,
                              level=self.level,
                              sort=self.sort)
         result_df = getattr(groupby, attr)()
