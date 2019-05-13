@@ -296,6 +296,58 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+capacity, current_hash_bucket);
     }
 
+   private:
+//    template <typename K, V>
+//    using deduced_type =
+//        std::enable_if_t<std::is_integral<K>::value and
+//                             std::is_integral<V>::value and
+//                             (sizeof(pair_packer::packed_t) == sizeof(V)),
+//                         thrust::pair<bool, bool>>;
+//
+//    template <typename K = typename value_type::first_type,
+//              typename V = typename value_type::second_type>
+//    deduced_type<K, V> attempt_insert(value_type* insert_location,
+//                                      value_type const& insert_pair) {
+//
+//          pair_packer const unused{thrust::make_pair(m_unused_key, m_unused_element)};
+//          pair_packer const new_pair{insert_pair};
+//          pair_packer const old{atomicCAS(
+//              reinterpret_cast<typename pair_packer::packed_t*>(current_bucket),
+//              unused.packed, new_pair.packed)};
+//
+//          if (old.packed == unused.packed) {
+//            new_insert = true;
+//            break;
+//          }
+//
+//          if (m_equal(old.pair.first, insert_pair.first)) {
+//            new_insert = false;
+//            break;
+//          }
+//}
+
+    enum class insert_result { CONTINUE, SUCCESS, FAILURE };
+
+    __device__ insert_result attempt_insert(value_type* const __restrict__ insert_location,
+                                            value_type const& insert_pair) {
+      key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key,
+                                       insert_pair.first)};
+
+      // Hash bucket empty
+      if (m_equal(m_unused_key, old_key)) {
+        insert_location->second = insert_pair.second;
+        return insert_result::SUCCESS;
+      }
+
+      // Key already exists
+      if (m_equal(old_key, insert_pair.first)) {
+        return insert_result::FAILURE;
+      }
+
+      return insert_result::CONTINUE;
+    }
+
+   public:
     /**---------------------------------------------------------------------------*
      * @brief Attempts to insert a key, value pair into the map.
      *
@@ -314,96 +366,58 @@ public:
      * inserted pair, or the existing pair that prevented the insert. Boolean
      * indicates insert success.
      *---------------------------------------------------------------------------**/
-    __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair) {
-      const size_type key_hash = m_hf(insert_pair.first);
-      size_type index = key_hash % capacity;
+    __device__ thrust::pair<iterator, bool> insert(
+        value_type const& insert_pair) {
+      const size_type key_hash{m_hf(insert_pair.first)};
+      size_type index{key_hash % capacity};
 
-      value_type* current_bucket = &m_hashtbl_values[index];
-      bool new_insert{false};
+      insert_result status{insert_result::CONTINUE};
 
-      while (true) {
+      value_type* current_bucket{nullptr};
 
-        // Optimization for when the inserted pair can be written with a single
-        // CAS
-        if (std::is_integral<key_type>::value &&
-            std::is_integral<mapped_type>::value &&
-            sizeof(pair_packer::packed_t) == sizeof(value_type)) {
-
-          pair_packer const unused{thrust::make_pair(m_unused_key, m_unused_element)};
-          pair_packer const new_pair{insert_pair};
-          pair_packer const old{atomicCAS(
-              reinterpret_cast<typename pair_packer::packed_t*>(current_bucket),
-              unused.packed, new_pair.packed)};
-
-          if (old.packed == unused.packed) {
-            new_insert = true;
-            break;
-          }
-
-          if (m_equal(old.pair.first, insert_pair.first)) {
-            new_insert = false;
-            break;
-          }
-        } 
-        
-        // Default case that writes the key and value independently
-        else {
-          const key_type old_key = atomicCAS(&(current_bucket->first),
-                                             m_unused_key, insert_pair.first);
-
-          // Hash bucket empty
-          if (m_equal(m_unused_key, old_key)) {
-            current_bucket->second = insert_pair.second;
-            new_insert = true;
-            break;
-          }
-
-          // Key already exists
-          if (m_equal(old_key, insert_pair.first)) {
-            new_insert = false;
-            break;
-          }
-        }
-
-        // Continue until an empty bucket or equivalent key is found
-        index = (index + 1) % capacity;
+      while (status == insert_result::CONTINUE) {
         current_bucket = &m_hashtbl_values[index];
+        status = attempt_insert(current_bucket, insert_pair);
+        index = (index + 1) % capacity;
       }
+
+      bool const insert_success =
+          (status == insert_result::SUCCESS) ? true : false;
 
       return thrust::make_pair(
           iterator(m_hashtbl_values, m_hashtbl_values + capacity,
                    current_bucket),
-          new_insert);
-      }
+          insert_success);
+    }
 
-      /**---------------------------------------------------------------------------*
-       * @brief Searches the map for the specified key.
-       *
-       * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
-       *do concurrent `insert` and `find` operations.
-       *
-       * @param k The key to search for
-       * @return An iterator to the key if it exists, else map.end()
-       *---------------------------------------------------------------------------**/
-      __device__ const_iterator find(key_type const& k) const {
-        size_type const key_hash = m_hf(k);
-        size_type index = key_hash % capacity;
+    /**---------------------------------------------------------------------------*
+     * @brief Searches the map for the specified key.
+     *
+     * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
+     *do concurrent `insert` and `find` operations.
+     *
+     * @param k The key to search for
+     * @return An iterator to the key if it exists, else map.end()
+     *---------------------------------------------------------------------------**/
+    __device__ const_iterator find(key_type const& k) const {
+      size_type const key_hash = m_hf(k);
+      size_type index = key_hash % capacity;
 
-        value_type* current_bucket = &m_hashtbl_values[index];
+      value_type* current_bucket = &m_hashtbl_values[index];
 
-        while (true) {
-          key_type const existing_key = current_bucket->first;
+      while (true) {
+        key_type const existing_key = current_bucket->first;
 
-          if (m_equal(k, existing_key)) {
-            return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
-                                  current_bucket);
-          }
-          if (m_equal(m_unused_key, existing_key)) {
-            return this->end();
-          }
-          index = (index + 1) % capacity;
-          current_bucket = &m_hashtbl_values[index];
+        if (m_equal(k, existing_key)) {
+          return const_iterator(m_hashtbl_values, m_hashtbl_values + capacity,
+                                current_bucket);
         }
+        if (m_equal(m_unused_key, existing_key)) {
+          return this->end();
+        }
+        index = (index + 1) % capacity;
+        current_bucket = &m_hashtbl_values[index];
+      }
     }
 
     gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
