@@ -1317,7 +1317,10 @@ class DataFrame(object):
         Not supporting *copy* because default and only behaviour is copy=True
         """
         from cudf.bindings.transpose import transpose as cpp_tranpose
-        return cpp_tranpose(self)
+        result = cpp_tranpose(self)
+        result._rename_columns(self.index)
+        result = result.set_index(self.columns)
+        return result
 
     @property
     def T(self):
