@@ -48,8 +48,5 @@ function sed_runner() {
 # cpp update
 sed_runner 's/'"CUDA_DATAFRAME VERSION .* LANGUAGES"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
 
-# libcudf
-sed_runner 's/version=.*/version=\"'"${NEXT_FULL_TAG}"'\",/g' cpp/python/setup.py
-
 # RTD update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/source/conf.py
