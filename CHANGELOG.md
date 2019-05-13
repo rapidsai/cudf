@@ -1,3 +1,10 @@
+# cudf 0.7.2 (Date TBD)
+
+## Bug Fixes
+
+- PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
+
+
 # cudf 0.7.1 (11 May 2019)
 
 ## New Features
@@ -7,7 +14,6 @@
 ## Bug Fixes
 
 - PR #1708 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
-- PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
 
 
 # cuDF 0.7.0 (10 May 2019)
