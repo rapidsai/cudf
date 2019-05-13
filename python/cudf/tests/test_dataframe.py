@@ -1594,6 +1594,7 @@ def test_unaryops_df(pdf, gdf, unaryop):
     lambda df: df.empty,
     lambda df: df.x.empty,
     lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+    lambda df: df.drop('x', axis=1, errors='raise'),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
@@ -1679,6 +1680,7 @@ def test_iteritems(gdf):
 
 @pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
 def test_quantile(pdf, gdf):
+    assert_eq(pdf['x'].quantile(), gdf['x'].quantile())
     assert_eq(pdf.quantile(), gdf.quantile())
 
 
@@ -2091,6 +2093,24 @@ def test_select_dtype():
 
     with pytest.raises(ValueError):
         gdf.select_dtypes(exclude=np.number, include=np.number)
+
+
+def test_select_dtype_datetime():
+    gdf = gd.datasets.timeseries(
+        start='2000-01-01',
+        end='2000-01-02',
+        freq='3600s',
+        dtypes={'x': int}
+    )
+    gdf = gdf.reset_index()
+
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(np.dtype('datetime64')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64[ms]'))
+    assert_eq(gdf[['timestamp']],
+              gdf.select_dtypes(np.dtype('datetime64[ms]')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64[ms]'))
 
 
 def test_array_ufunc():

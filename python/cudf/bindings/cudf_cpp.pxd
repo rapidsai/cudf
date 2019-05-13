@@ -29,6 +29,8 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace,
                                       null_sort_behavior)
 
+cpdef uintptr_t column_view_pointer(col)
+
 cpdef check_gdf_error(errcode)
 
 # Import cudf.h header to import all functions
@@ -219,8 +221,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    
-    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output) except +
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
 

@@ -64,6 +64,15 @@ def assert_eq(a, b, **kwargs):
     return True
 
 
+def assert_neq(a, b, **kwargs):
+    try:
+        assert_eq(a, b, **kwargs)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError
+
+
 def gen_rand(dtype, size, **kwargs):
     dtype = np.dtype(dtype)
     if dtype.kind == 'f':

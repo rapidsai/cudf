@@ -99,20 +99,24 @@ namespace
  *                static forward window size for all elements
 
  */
-template <typename ColumnType, template <typename AggType> class agg_op, bool average>
+template <typename ColumnType, template <typename AggType> class agg_op,
+          bool average>
 __global__
 void gpu_rolling(gdf_size_type nrows,
-		 ColumnType * const __restrict__ out_col, bit_mask::bit_mask_t * const __restrict__ out_col_valid,
-		 ColumnType const * const __restrict__ in_col, bit_mask::bit_mask_t const * const __restrict__ in_col_valid,
-		 gdf_size_type window,
-		 gdf_size_type min_periods,
-		 gdf_size_type forward_window,
-		 const gdf_size_type *window_col,
-		 const gdf_size_type *min_periods_col,
-		 const gdf_size_type *forward_window_col)
+                 ColumnType * const __restrict__ out_col, 
+                 bit_mask::bit_mask_t * const __restrict__ out_col_valid,
+                 ColumnType const * const __restrict__ in_col, 
+                 bit_mask::bit_mask_t const * const __restrict__ in_col_valid,
+                 gdf_size_type window,
+                 gdf_size_type min_periods,
+                 gdf_size_type forward_window,
+                 const gdf_size_type *window_col,
+                 const gdf_size_type *min_periods_col,
+                 const gdf_size_type *forward_window_col)
 {
   // we're going to be using bit utils a lot in the kernel
   using namespace bit_mask;
+  const bool is_nullable = (in_col_valid != nullptr);
 
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
@@ -139,8 +143,7 @@ void gpu_rolling(gdf_size_type nrows,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
     for (gdf_index_type j = start_index; j < end_index; j++) {
-      bool const input_is_valid{is_valid(in_col_valid, j)};
-      if (input_is_valid) {
+      if (!is_nullable || is_valid(in_col_valid, j)) {
         val = op(in_col[j], val);
         count++;
       }
@@ -173,7 +176,7 @@ struct rolling_window_launcher
    * @brief Uses SFINAE to instantiate only for supported type combos
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-	   typename std::enable_if_t<is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
+     typename std::enable_if_t<is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
     PUSH_RANGE("CUDF_ROLLING", GDF_ORANGE);
@@ -191,7 +194,7 @@ struct rolling_window_launcher
    * @brief If we cannot perform aggregation on this type then throw an error
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-	   typename std::enable_if_t<!is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
+     typename std::enable_if_t<!is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
     CUDF_FAIL("Unsupported column type/operation combo. Only `min` and `max` are supported for non-arithmetic types for aggregations.");
@@ -204,16 +207,16 @@ struct rolling_window_launcher
    */
   template <typename ColumnType>
   void operator()(gdf_size_type nrows,
-		  gdf_agg_op agg_type,
-		  void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
-		  void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
-		  gdf_size_type window,
-		  gdf_size_type min_periods,
-		  gdf_size_type forward_window,
-		  const gdf_size_type *window_col,
-		  const gdf_size_type *min_periods_col,
-		  const gdf_size_type *forward_window_col,
-		  cudaStream_t stream)
+      gdf_agg_op agg_type,
+      void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
+      void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
+      gdf_size_type window,
+      gdf_size_type min_periods,
+      gdf_size_type forward_window,
+      const gdf_size_type *window_col,
+      const gdf_size_type *min_periods_col,
+      const gdf_size_type *forward_window_col,
+      cudaStream_t stream)
   {
     ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
     bit_mask::bit_mask_t *typed_out_valid = reinterpret_cast<bit_mask::bit_mask_t*>(out_col_valid_ptr);
@@ -226,38 +229,38 @@ struct rolling_window_launcher
     switch (agg_type) {
     case GDF_SUM:
       dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, stream,
-							   typed_out_data, typed_out_valid,
-							   typed_in_data, typed_in_valid,
-							   window, min_periods, forward_window,
-							   window_col, min_periods_col, forward_window_col);
+                typed_out_data, typed_out_valid,
+                typed_in_data, typed_in_valid,
+                window, min_periods, forward_window,
+                window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
       dispatch_aggregation_type<ColumnType, min_op, false>(nrows, stream,
-							   typed_out_data, typed_out_valid,
-							   typed_in_data, typed_in_valid,
-							   window, min_periods, forward_window,
-							   window_col, min_periods_col, forward_window_col);
+                 typed_out_data, typed_out_valid,
+                 typed_in_data, typed_in_valid,
+                 window, min_periods, forward_window,
+                 window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
       dispatch_aggregation_type<ColumnType, max_op, false>(nrows, stream,
-							   typed_out_data, typed_out_valid,
-							   typed_in_data, typed_in_valid,
-							   window, min_periods, forward_window,
-							   window_col, min_periods_col, forward_window_col);
+                 typed_out_data, typed_out_valid,
+                 typed_in_data, typed_in_valid,
+                 window, min_periods, forward_window,
+                 window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
       dispatch_aggregation_type<ColumnType, count_op, false>(nrows, stream,
-							   typed_out_data, typed_out_valid,
-							   typed_in_data, typed_in_valid,
-							   window, min_periods, forward_window,
-							   window_col, min_periods_col, forward_window_col);
+                 typed_out_data, typed_out_valid,
+                 typed_in_data, typed_in_valid,
+                 window, min_periods, forward_window,
+                 window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
       dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, stream,
-							   typed_out_data, typed_out_valid,
-							   typed_in_data, typed_in_valid,
-							   window, min_periods, forward_window,
-							   window_col, min_periods_col, forward_window_col);
+                 typed_out_data, typed_out_valid,
+                 typed_in_data, typed_in_valid,
+                 window, min_periods, forward_window,
+                 window_col, min_periods_col, forward_window_col);
       break;
     default:
       // TODO: need a nice way to convert enums to strings, same would be useful for groupbys
@@ -279,15 +282,15 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            const gdf_size_type *window_col,
                            const gdf_size_type *min_periods_col,
                            const gdf_size_type *forward_window_col,
-			   cudaStream_t stream)
+                           cudaStream_t stream)
 {
   CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
 
   // Use the column wrapper class from io/utilities to quickly create a column
   gdf_column_wrapper output_col(input_col.size,
-				input_col.dtype,
-				gdf_dtype_extra_info{TIME_UNIT_NONE},
-				"");
+                                input_col.dtype,
+                                gdf_dtype_extra_info{TIME_UNIT_NONE},
+                                "");
 
   // If there are no rows in the input, return successfully
   if (input_col.size == 0)
@@ -304,10 +307,10 @@ gdf_column* rolling_window(const gdf_column &input_col,
                         rolling_window_launcher{},
                         input_col.size, agg_type,
                         output_col->data, output_col->valid,
-			input_col.data, input_col.valid,
+                        input_col.data, input_col.valid,
                         window, min_periods, forward_window,
-			window_col, min_periods_col, forward_window_col,
-			stream);
+                        window_col, min_periods_col, forward_window_col,
+                        stream);
 
   // Release the gdf pointer from the wrapper class
   return output_col.release();

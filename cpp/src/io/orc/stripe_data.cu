@@ -47,7 +47,7 @@
 
 namespace orc { namespace gpu {
 
-static __device__ __constant__ int64_t kORCTimeToUTC = 1420099200; // Seconds from January 1st, 1970 to January 1st, 2015
+static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
 
 struct orc_bytestream_s
 {
@@ -125,6 +125,7 @@ struct orc_datadec_state_s
     uint32_t tz_dst_cycle;              // number of entries in timezone daylight savings cycle
     int64_t first_tz_transition;        // first transition in timezone table
     int64_t last_tz_transition;         // last transition in timezone table
+    int64_t utc_epoch;                  // kORCTimeToUTC - gmtOffset
 };
 
 
@@ -1376,8 +1377,16 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
 {
     if (t == 0)
     {
-        s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), NTHREADS);
-        s->chunk.skip_count -= s->u.rowdec.nz_count;
+        if (s->chunk.skip_count != 0)
+        {
+            s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), NTHREADS);
+            s->chunk.skip_count -= s->u.rowdec.nz_count;
+            s->top.data.nrows = s->u.rowdec.nz_count;
+        }
+        else
+        {
+            s->u.rowdec.nz_count = 0;
+        }
     }
     __syncthreads();
     if (t < s->u.rowdec.nz_count)
@@ -1488,7 +1497,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s, const int64
 
     if (ts <= first_transition)
     {
-        return ts + table[0 * 2 + 1];
+        return ts + table[0 * 2 + 2];
     }
     else if (ts <= last_transition)
     {
@@ -1498,7 +1507,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s, const int64
     }
     else if (!dst_cycle)
     {
-        return ts + table[(num_entries - 1) * 2 + 1];
+        return ts + table[(num_entries - 1) * 2 + 2];
     }
     else
     {
@@ -1512,16 +1521,16 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s, const int64
         }
         first = num_entries;
         last = num_entries + dst_cycle - 1;
-        if (ts < table[num_entries * 2])
+        if (ts < table[num_entries * 2 + 1])
         {
-            return tsbase + table[last * 2 + 1];
+            return tsbase + table[last * 2 + 2];
         }
     }
     // Binary search the table from first to last for ts
     do
     {
         uint32_t mid = first + ((last - first + 1) >> 1);
-        int64_t tmid = table[mid * 2];
+        int64_t tmid = table[mid * 2 + 1];
         if (tmid <= ts)
         {
             first = mid;
@@ -1535,7 +1544,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s, const int64
             last = mid;
         }
     } while (first < last);
-    return tsbase + table[first * 2 + 1];
+    return tsbase + table[first * 2 + 2];
 }
 
 
@@ -1566,17 +1575,17 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
     __shared__ __align__(16) orcdec_state_s state_g;
 
     orcdec_state_s * const s = &state_g;
-    uint32_t chunk_id = blockIdx.x;
     int t = threadIdx.x;
 
     if (t < sizeof(ColumnDesc) / sizeof(uint32_t))
     {
+        uint32_t chunk_id = blockIdx.x;
         ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
     }
     __syncthreads();
     if (t == 0)
     {
-        s->top.data.cur_row = s->chunk.start_row;
+        s->top.data.cur_row = max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
         s->top.data.end_row = s->chunk.start_row + s->chunk.num_rows;
         s->top.data.buffered_count = 0;
         if (s->top.data.end_row > first_row + max_num_rows)
@@ -1599,11 +1608,16 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 s->top.data.tz_num_entries = tz_len;
                 s->top.data.tz_dst_cycle = 0;
             }
+            s->top.data.utc_epoch = kORCTimeToUTC - tz_table[0];
             if (tz_len > 0)
             {
-                s->top.data.first_tz_transition = tz_table[0];
-                s->top.data.last_tz_transition = tz_table[(s->top.data.tz_num_entries - 1) * 2];
+                s->top.data.first_tz_transition = tz_table[1];
+                s->top.data.last_tz_transition = tz_table[(s->top.data.tz_num_entries - 1) * 2 + 1];
             }
+        }
+        else
+        {
+            s->top.data.utc_epoch = kORCTimeToUTC;
         }
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
         bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1765,7 +1779,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             if (!s->top.data.nrows && !s->u.rowdec.nz_count)
             {
                 // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
-                break;
+                return;
             }
             // Store decoded values to output
             if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
@@ -1845,7 +1859,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                     }
                     case TIMESTAMP:
                     {
-                        int64_t seconds = s->vals.i64[t] + kORCTimeToUTC;
+                        int64_t seconds = s->vals.i64[t] + s->top.data.utc_epoch;
                         uint32_t nanos = secondary_val;
                         nanos = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
                         if (tz_len > 0)
