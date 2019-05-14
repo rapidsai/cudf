@@ -7,6 +7,7 @@
 ## Bug Fixes
 
 - PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
+- PR #1734 Python: fix performance regression for groupby count() aggregations
 
 
 # cudf 0.7.1 (11 May 2019)
