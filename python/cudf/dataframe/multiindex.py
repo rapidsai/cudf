@@ -7,6 +7,7 @@ import warnings
 from collections.abc import Sequence
 
 from cudf.dataframe import columnops
+from cudf.dataframe.series import Series
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.index import Index, StringIndex
 from cudf.utils import utils
@@ -24,7 +25,8 @@ class MultiIndex(Index):
     names: Name for each level
     """
 
-    def __init__(self, levels, codes=None, labels=None, names=None):
+    def __init__(self, levels=None, codes=None, labels=None, names=None,
+                 **kwargs):
         self.names = names
         column_names = []
         if labels:
@@ -32,6 +34,15 @@ class MultiIndex(Index):
                           "instead", FutureWarning)
         if labels and not codes:
             codes = labels
+
+        # early termination enables lazy evaluation of codes
+        if 'source_data' in kwargs:
+            self._source_data = kwargs['source_data']
+            self._codes = codes
+            self._levels = levels
+            return
+
+        # name setup
         if isinstance(names, (Sequence,
                               pd.core.indexes.frozen.FrozenNDArray,
                               pd.core.indexes.frozen.FrozenList)):
@@ -53,23 +64,22 @@ class MultiIndex(Index):
                                pd.core.indexes.frozen.FrozenNDArray)):
             raise TypeError('Codes is not a Sequence of sequences')
         if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
-            self.codes = cudf.dataframe.dataframe.DataFrame()
+            self._codes = cudf.dataframe.dataframe.DataFrame()
             for idx, code in enumerate(codes):
                 code = np.array(code)
-                self.codes.add_column(column_names[idx],
-                                      columnops.as_column(code))
+                self._codes.add_column(column_names[idx],
+                                       columnops.as_column(code))
         else:
-            self.codes = codes
+            self._codes = codes
 
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
-        self.levels = np.array(levels)
-        self._validate_levels_and_codes(self.levels, self.codes)
+        self._levels = np.array([Series(level).to_array() for level in levels])
+        self._validate_levels_and_codes(self._levels, self._codes)
         self.name = None
         self.names = names
 
     def _validate_levels_and_codes(self, levels, codes):
-        levels = np.array(levels)
         if len(levels) != len(codes.columns):
             raise ValueError('MultiIndex has unequal number of levels and '
                              'codes and is inconsistent!')
@@ -84,8 +94,14 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        mi = MultiIndex(self.levels.copy(),
-                        self.codes.copy(deep))
+        if hasattr(self, '_source_data'):
+            mi = MultiIndex(source_data=self._source_data)
+            if self._levels is not None:
+                mi._levels = self._levels.copy()
+            if self._codes is not None:
+                mi._codes = self._codes.copy(deep)
+        else:
+            mi = MultiIndex(self.levels.copy(), self.codes.copy(deep))
         if self.names:
             mi.names = self.names.copy()
         return mi
@@ -115,10 +131,51 @@ class MultiIndex(Index):
                ",\ncodes=" + str(self.codes) + ")"
 
     @property
+    def codes(self):
+        if self._codes is not None:
+            return self._codes
+        else:
+            self._compute_levels_and_codes()
+            return self._codes
+
+    @property
+    def levels(self):
+        if self._levels is not None:
+            return self._levels
+        else:
+            self._compute_levels_and_codes()
+            return self._levels
+
+    @property
     def labels(self):
         warnings.warn("This feature is deprecated in pandas and will be"
                       "dropped from cudf as well.", FutureWarning)
         return self.codes
+
+    def _compute_levels_and_codes(self):
+        levels = []
+        from cudf import DataFrame
+        codes = DataFrame()
+        names = []
+        # Note: This is an O(N^2) solution using gpu masking
+        # to compute new codes for the MultiIndex. There may be
+        # a faster solution that could be executed on gpu at the same
+        # time the groupby is calculated.
+        for by in self._source_data.columns:
+            if len(self._source_data[by]) > 0:
+                level = self._source_data[by].unique()
+                replaced = self._source_data[by].replace(
+                        level, Series(range(len(level))))
+            else:
+                level = np.array([])
+                replaced = np.array([])
+            levels.append(level)
+            codes[by] = Series(replaced, dtype="int32")
+            names.append(by)
+
+        self._levels = levels
+        self._codes = codes
+        self.names = names
 
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
@@ -199,17 +256,32 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
-        return len(self.codes[self.codes.columns[0]])
+        if hasattr(self, '_source_data'):
+            return len(self._source_data)
+        else:
+            return len(self.codes[self.codes.columns[0]])
 
     def __eq__(self, other):
-        if not hasattr(other, 'levels'):
+        if not hasattr(other, '_levels'):
             return False
-        equal_levels = self.levels == other.levels
-        if isinstance(equal_levels, np.ndarray):
-            equal_levels = equal_levels.all()
-        return equal_levels and\
-            self.codes == other.codes and\
-            self.names == other.names
+        # Lazy comparison
+        if hasattr(other, '_source_data'):
+            for col in self._source_data.columns:
+                if col not in other._source_data.columns:
+                    return False
+                if not self._source_data[col].equals(other._source_data[col]):
+                    return False
+            return True
+        else:
+            # Lazy comparison isn't possible - MI was created manually.
+            # Actually compare the MI, not its source data (it doesn't have
+            # any).
+            equal_levels = self.levels == other.levels
+            if isinstance(equal_levels, np.ndarray):
+                equal_levels = equal_levels.all()
+            return equal_levels and\
+                self.codes.equals(other.codes) and\
+                self.names == other.names
 
     @property
     def is_contiguous(self):
@@ -217,7 +289,10 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        return len(self.codes[0])
+        if hasattr(self, '_source_data'):
+            return len(self._source_data)
+        else:
+            return len(self.codes[0])
 
     def take(self, indices):
         from collections.abc import Sequence
