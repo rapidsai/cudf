@@ -254,7 +254,7 @@ __inline__ __device__ T convertStrToValue(const char* data, long start, long end
     } else if (base == 10 && 
         (data[index] == 'e' || data[index] == 'E')) {
       break;
-    } else if (data[index] != opts.thousands) {
+    } else if (data[index] != opts.thousands && data[index] != '+') {
       value = (value * base) + decodeAsciiDigit<T>(data[index], base);
     }
     ++index;
@@ -267,7 +267,7 @@ __inline__ __device__ T convertStrToValue(const char* data, long start, long end
       if (data[index] == 'e' || data[index] == 'E') {
         ++index;
         break;
-      } else if (data[index] != opts.thousands) {
+      } else if (data[index] != opts.thousands && data[index] != '+') {
         divisor /= base;
         value += decodeAsciiDigit<T>(data[index], base) * divisor;
       }
