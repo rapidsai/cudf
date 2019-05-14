@@ -121,6 +121,8 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
             vector_out_col_values.push_back(column_view_from_column(out_col_values_series[i]._column))
 
         if agg_type == "count":
+            # To ensure that we update this code if gdf_size_type changes
+            assert np.dtype(np.int32).itemsize == sizeof(gdf_size_type)
             out_col_agg_series = Series(
                 Buffer(
                     rmm.device_array(
