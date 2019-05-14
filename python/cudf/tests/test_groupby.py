@@ -469,7 +469,6 @@ def test_groupby_unsupported_columns():
             dtype='category'
             )
         )
-
     pdf = pd.DataFrame({'x': [1, 2, 3],
                         'y': ['a', 'b', 'c'],
                         'z': ['d', 'e', 'f'],
@@ -490,4 +489,14 @@ def test_list_of_series():
     pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
     gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
     pytest.skip()
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_use_agg_column_as_index():
+    pdf = pd.DataFrame()
+    pdf['a'] = [1, 1, 1, 3, 5]
+    gdf = cudf.DataFrame()
+    gdf['a'] = [1, 1, 1, 3, 5]
+    pdg = pdf.groupby('a').agg({'a': 'count'})
+    gdg = gdf.groupby('a').agg({'a': 'count'})
     assert_eq(pdg, gdg)

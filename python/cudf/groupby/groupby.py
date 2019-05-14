@@ -113,7 +113,7 @@ class Groupby(object):
                 if self._df.index.names is None or sum(
                         x is None for x in self._df.index.names) > 1:
                     self._df_index_names = list(
-                            range(len(self._df_index.levels)))
+                            range(len(self._df.index._source_data.columns)))
                 for which_level in level:
                     # find the index of the level in the MultiIndex
                     if isinstance(which_level, str):
@@ -124,10 +124,7 @@ class Groupby(object):
                     try:
                         level_values = self._df.index.levels[which_level]
                     except IndexError:
-                        raise IndexError("Too many levels: Index has only "
-                                         "%d levels, not %d" % (
-                                               len(self._df.index.levels),
-                                               which_level+1))
+                        raise IndexError("Too many levels: Index has only %d levels, not %d" % (len(self._df.index._source_data.columns), which_level+1))  # noqa: E501
                     # protected by the above guard
                     code = self._df.index.codes[
                             self._df.index.names[which_level]]
@@ -183,7 +180,7 @@ class Groupby(object):
                 agg_groupby._df[self._by] = self._df[self._by]
             else:
                 for by in self._by:
-                    agg_groupby._df[by] = self._df[by]
+                    agg_groupby._df._cols[by] = self._df._cols[by]
         return _cpp_apply_basic_agg(agg_groupby, agg_type,
                                     sort_results=sort_results)
 
@@ -201,15 +198,8 @@ class Groupby(object):
                 index.name = name
                 final_result.index = index
             else:
-                levels = []
-                codes = []
-                names = []
-                for by in self._by:
-                    levels.append([])
-                    codes.append([])
-                    names.append(by)
-                mi = MultiIndex(levels, codes)
-                mi.names = names
+                mi = MultiIndex(source_data=result[self._by])
+                mi.names = self._by
                 final_result.index = mi
             if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
                 final_series = Series([], name=final_result.columns[0])
@@ -224,24 +214,15 @@ class Groupby(object):
             if idx.name == self._LEVEL_0_INDEX_NAME:
                 idx.name = self._original_index_name
             result = result.set_index(idx)
+            for col in result.columns:
+                if isinstance(col, str):
+                    colnames = col.split('_')
+                    if colnames[0] == 'cudfvalcol':
+                        result[colnames[1]] = result[col]
+                        result = result.drop(col)
             return result
         else:
-            levels = []
-            codes = DataFrame()
-            names = []
-            # Note: This is an O(N^2) solution using gpu masking
-            # to compute new codes for the MultiIndex. There may be
-            # a faster solution that could be executed on gpu at the same
-            # time the groupby is calculated.
-            for by in self._by:
-                level = result[by].unique()
-                replaced = result[by].replace(level, range(len(level)))
-                levels.append(level)
-                codes[by] = Series(replaced, dtype="int32")
-                names.append(by)
-            multi_index = MultiIndex(levels=levels,
-                                     codes=codes,
-                                     names=names)
+            multi_index = MultiIndex(source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:

@@ -265,22 +265,19 @@ cpdef cpp_read_csv(
 
     check_gdf_error(result)
 
-    out = csv_reader.data
-    if out is NULL:
-        raise ValueError("Failed to parse CSV")
-
     # Extract parsed columns
     outcols = []
     new_names = []
     for i in range(csv_reader.num_cols_out):
-        data_mem, mask_mem = gdf_column_to_column_mem(out[i])
+        column = csv_reader.data[i]
+        data_mem, mask_mem = gdf_column_to_column_mem(column)
         outcols.append(Column.from_mem_views(data_mem, mask_mem))
         if names is not None and isinstance(names[0], (int)):
-            new_names.append(int(out[i].col_name.decode()))
+            new_names.append(int(column.col_name.decode()))
         else:
-            new_names.append(out[i].col_name.decode())
-        free(out[i].col_name)
-        free(out[i])
+            new_names.append(column.col_name.decode())
+        free(column.col_name)
+        free(column)
 
     # Build dataframe
     df = DataFrame()
