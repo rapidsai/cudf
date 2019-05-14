@@ -155,7 +155,7 @@ struct MapTest : public GdfTest
   }
 
   void check_answer(){
-    std::vector<std::pair<key_type, value_type>> host_pairs(
+    std::vector<thrust::pair<key_type, value_type>> host_pairs(
         expected_values.begin(), expected_values.end());
 
     thrust::device_vector<thrust::pair<key_type, value_type>> expected_pairs(
