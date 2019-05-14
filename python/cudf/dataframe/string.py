@@ -562,7 +562,6 @@ class StringColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
-<<<<<<< HEAD
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$").data.mem
 
@@ -588,6 +587,9 @@ class StringColumn(columnops.TypedColumnBase):
         """
         result = StringColumn(self.nvcategory.keys())
         return result
+
+    def take(self, indices):
+        return self.element_indexing(indices)
 
 
 def string_column_binop(lhs, rhs, op):
