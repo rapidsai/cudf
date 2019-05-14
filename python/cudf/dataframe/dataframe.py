@@ -2831,6 +2831,14 @@ class DataFrame(object):
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
 
+    @ioutils.doc_to_csv()
+    def to_csv(self, path=None, sep=',', na_rep='',
+               columns=None, header=True, line_terminator='\n'):
+        """{docstring}"""
+        import cudf.io.csv as csv
+        return csv.to_csv(self, path, sep, na_rep, columns,
+                          header, line_terminator)
+
 
 def from_pandas(obj):
     """
