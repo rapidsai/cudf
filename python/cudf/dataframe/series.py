@@ -611,7 +611,14 @@ class Series(object):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            index = Index._concat([o.index for o in objs])
+            from cudf.dataframe.dataframe import DataFrame
+            from cudf.dataframe.multiindex import MultiIndex
+            if isinstance(objs[0].index, MultiIndex):
+                _source_data = DataFrame._concat(
+                        [o.index._source_data for o in objs])
+                index = MultiIndex(source_data=_source_data)
+            else:
+                index = Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
