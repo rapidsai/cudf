@@ -28,6 +28,7 @@
 #include <thrust/device_vector.h>
 #include <cstdlib>
 #include <limits>
+#include <thrust/logical.h>
 
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
