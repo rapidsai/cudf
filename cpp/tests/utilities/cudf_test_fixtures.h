@@ -60,20 +60,17 @@ struct GdfTest : public ::testing::Test
 */
 struct TempDirTestEnvironment : public ::testing::Environment
 {
-    char* tmpdir;
+    std::string tmpdir;
 
     void SetUp() {
-        tmpdir=new char[30];
-        strcpy(tmpdir, "/tmp/gtest.XXXXXX");
-        tmpdir=mkdtemp(tmpdir);
-        strcat(tmpdir, "/");
+        char tmp_format[]="/tmp/gtest.XXXXXX";
+        tmpdir = mkdtemp(tmp_format);
+        tmpdir += "/";
     }
 
     void TearDown() {
         //TODO: should use std::filesystem instead, once C++17 support added
-        nftw(tmpdir, rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
-        delete[] tmpdir;
-        tmpdir=NULL;
+        nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
     }
 
     static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
@@ -84,15 +81,10 @@ struct TempDirTestEnvironment : public ::testing::Environment
     /**
     * @brief get temporary path of filename for this test program
     *
-    * @param fname filename or relative path
-    *
-    * @return absolute temporary file path of filename
+    * @return temporary directory path
     */
-    char* get_temp_filename(const char *fname)
+    std::string get_temp_dir()
     {
-        char* tmpfname = new char[strlen(tmpdir)+strlen(fname)+1];
-        strcpy(tmpfname, tmpdir);
-        strcat(tmpfname, fname);
-        return tmpfname;
+        return tmpdir;
     }
 };
