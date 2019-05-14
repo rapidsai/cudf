@@ -1,5 +1,9 @@
 # cudf 0.7.2 (Date TBD)
 
+## New Features
+
+- PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
+
 ## Bug Fixes
 
 - PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
