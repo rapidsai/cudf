@@ -562,6 +562,7 @@ class StringColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
+<<<<<<< HEAD
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$").data.mem
 
@@ -580,6 +581,13 @@ class StringColumn(columnops.TypedColumnBase):
 
     def find_last_value(self, value):
         return self._find_first_and_last(value)[1]
+
+    def unique(self, method='sort'):
+        """
+        Get unique strings in the data
+        """
+        result = StringColumn(self.nvcategory.keys())
+        return result
 
 
 def string_column_binop(lhs, rhs, op):

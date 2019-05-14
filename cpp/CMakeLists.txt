@@ -284,6 +284,8 @@ add_library(cudf SHARED
             src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
+            src/copying/slice.cu
+            src/copying/split.cu
             src/bitmask/legacy_bitmask.cpp)
 
 #Override RPATH for cudf

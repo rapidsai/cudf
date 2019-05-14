@@ -22,7 +22,14 @@ def read_data():
     import pandas as pd
     basedir = os.path.dirname(__file__)
     datapath = os.path.join(basedir, 'data', 'ipums.pkl')
-    df = pd.read_pickle(datapath)
+    try:
+        df = pd.read_pickle(datapath)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'FileNotFoundError':
+            pytest.skip('.pkl file is not found')
+        else:
+            print(type(excpr).__name__)
+
     names = []
     arrays = []
     for k in df.columns:

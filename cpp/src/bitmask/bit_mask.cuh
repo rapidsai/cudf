@@ -100,16 +100,17 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
   return GDF_SUCCESS;
 }
 
+
 /**
  *  @brief Allocate device space for the valid bit mask.
  *
  *  @param[out] mask                  address of the bit mask pointer
  *  @param[in]  number_of_records     number of records
- *  @param[in]  fill_value            Initialize all bits to fill_value if and
- * only if it is 0 or 1
- *  @param[in]  padding_bytes         The byte boundary allocation should be
- * padded to. Default: 64, meaning the allocation size is rounded up to next
- * multiple of 64 bytes.
+ *  @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All other
+ *                                    values indicate un-initialized.  Default is uninitialized
+ *  @param[in]  padding_bytes         optional, specifies byte boundary the data should be padded to.
+ *                                    Defaults to 64 bytes, meaning the space allocated will be rounded
+ *                                    up to the next multiple of 64 bytes.
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
