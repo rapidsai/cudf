@@ -878,18 +878,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
-/**
- * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
- *
- * @param[in] gdf_column of input of any type
- * @param[in] gdf_column holding the stencil
- * @param[out] output gdf_column of same type as input. The output memory needs to be preallocated to be the same size as input
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
-
-
 /*
  * Hashing
  */

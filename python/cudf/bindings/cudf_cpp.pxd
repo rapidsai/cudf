@@ -220,8 +220,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    
-    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output) except +
 
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
 
