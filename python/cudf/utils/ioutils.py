@@ -195,7 +195,7 @@ keep_default_dates : boolean, default True
     If parsing dates, parse the default datelike columns (pandas engine only)
 numpy : boolean, default False
     Direct decoding to numpy arrays (pandas engine only). Supports numeric
-    data only, but non-numeric column and index labels are supported. Note 
+    data only, but non-numeric column and index labels are supported. Note
     also that the JSON ordering MUST be the same for each term if numpy=True.
 precise_float : boolean, default False
     Set to enable usage of higher precision (strtod) function when
