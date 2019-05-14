@@ -33,6 +33,50 @@
 #include <thrust/pair.h>
 #include <limits>
 
+namespace {
+    template <std::size_t N> struct packed { using type = void; };
+    template <> struct packed<sizeof(uint64_t)> { using type = uint64_t; };
+    template <> struct packed<sizeof(uint32_t)> { using type = uint32_t; };
+    template <typename pair_type>
+    using packed_t = typename packed<sizeof(pair_type)>::type;
+
+    /**---------------------------------------------------------------------------*
+     * @brief Indicates if a pair type can be packed.
+     *
+     * @tparam pair_type The pair type in question
+     * @return true If the pair type can be packed
+     * @return false  If the pair type cannot be packed
+     *---------------------------------------------------------------------------**/
+    template <typename pair_type,
+              typename key_type = typename pair_type::first_type,
+              typename value_type = typename pair_type::second_type>
+    constexpr bool is_packable() {
+      return std::is_integral<key_type>::value and
+             std::is_integral<value_type>::value and
+             not std::is_void<packed_t<pair_type>>::value;
+    }
+
+    /**---------------------------------------------------------------------------*
+     * @brief Allows viewing a pair in a packed representation
+     *
+     * Used as an optimization for inserting when a pair can be inserted with a
+     * single atomicCAS
+     *---------------------------------------------------------------------------**/
+    template <typename pair_type, typename Enable = void>
+    union pair_packer;
+
+    template <typename pair_type>
+    union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
+      using packed_type = packed_t<pair_type>;
+      packed_type const packed;
+      pair_type const pair;
+
+      __device__ pair_packer(pair_type _pair) : pair{_pair} {}
+
+      __device__ pair_packer(packed_type _packed) : packed{_packed} {}
+    };
+}
+
 /**
  * Supports concurrent insert, but not concurrent insert and find.
  *
@@ -278,48 +322,31 @@ public:
 
    private:
     /**---------------------------------------------------------------------------*
-     * @brief Allows viewing a pair as a packed 8B uint64_t value
-     *
-     * Used as an optimization for inserting when sizeof(value_type) ==
-     * sizeof(uint64_t)
-     *
-     *---------------------------------------------------------------------------**/
-    union pair_packer {
-      using packed_t = uint64_t;
-      packed_t const packed;
-      value_type const pair;
-
-      __device__ pair_packer(value_type _pair) : pair{_pair} {}
-
-      __device__ pair_packer(uint64_t _packed) : packed{_packed} {}
-    };
-
-    /**---------------------------------------------------------------------------*
      * @brief Enumeration of the possible results of attempting to insert into a
      * hash bucket
      *---------------------------------------------------------------------------**/
     enum class insert_result {
-      CONTINUE,  ///< Insert did not succeed, continue trying to insert
+      CONTINUE,  ///< Insert did not succeed, continue trying to insert (collision)
       SUCCESS,   ///< New pair inserted successfully
       DUPLICATE  ///< Insert did not succeed, key is already present
     };
 
-    template <typename K, typename V>
-    using deduced_type =
-        std::enable_if_t<std::is_integral<K>::value and
-                             std::is_integral<V>::value and
-                             (sizeof(typename pair_packer::packed_t) == sizeof(V)),
-                         insert_result>;
-
-    template <typename K = typename value_type::first_type,
-              typename V = typename value_type::second_type>
-    deduced_type<K, V> attempt_insert(value_type* insert_location,
-                                      value_type const& insert_pair) {
-      pair_packer const unused{
+    /**---------------------------------------------------------------------------*
+     * @brief Specialization for value types that can be packed.
+     *
+     * When the size of the key,value pair being inserted is equal in size to a
+     * type where atomicCAS is natively supported, this optimization path will
+     * insert the pair in a single atomicCAS operation.
+     *---------------------------------------------------------------------------**/
+    template <typename pair_type = value_type>
+    std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
+        value_type* insert_location, value_type const& insert_pair) {
+      pair_packer<pair_type> const unused{
           thrust::make_pair(m_unused_key, m_unused_element)};
-      pair_packer const new_pair{insert_pair};
-      pair_packer const old{atomicCAS(
-          reinterpret_cast<typename pair_packer::packed_t*>(insert_location),
+      pair_packer<pair_type> const new_pair{insert_pair};
+      pair_packer<pair_type> const old{atomicCAS(
+          reinterpret_cast<typename pair_packer<pair_type>::packed_type*>(
+              insert_location),
           unused.packed, new_pair.packed)};
 
       if (old.packed == unused.packed) {
@@ -340,8 +367,9 @@ public:
      * @param[in] insert_pair The pair to insert
      * @return Enum indicating result of insert attempt.
      *---------------------------------------------------------------------------**/
-    __device__ insert_result attempt_insert(value_type* const __restrict__ insert_location,
-                                            value_type const& insert_pair) {
+    __device__ insert_result
+    attempt_insert(value_type* const __restrict__ insert_location,
+                   value_type const& insert_pair) {
       key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key,
                                        insert_pair.first)};
 
