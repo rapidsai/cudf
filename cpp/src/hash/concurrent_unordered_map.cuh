@@ -326,8 +326,23 @@ public:
 //          }
 //}
 
-    enum class insert_result { CONTINUE, SUCCESS, FAILURE };
+    /**---------------------------------------------------------------------------*
+     * @brief Enumeration of the possible results of attempting to insert into a
+     * hash bucket
+     *---------------------------------------------------------------------------**/
+    enum class insert_result {
+      CONTINUE,  ///< Insert did not succeed, continue trying to insert
+      SUCCESS,   ///< New pair inserted successfully
+      DUPLICATE  ///< Insert did not succeed, key is already present
+    };
 
+    /**---------------------------------------------------------------------------*
+     * @brief Atempts to insert a key,value pair at the specified hash bucket.
+     *
+     * @param[in] insert_location Pointer to hash bucket to attempt insert
+     * @param[in] insert_pair The pair to insert
+     * @return Enum indicating result of insert attempt.
+     *---------------------------------------------------------------------------**/
     __device__ insert_result attempt_insert(value_type* const __restrict__ insert_location,
                                             value_type const& insert_pair) {
       key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key,
@@ -341,7 +356,7 @@ public:
 
       // Key already exists
       if (m_equal(old_key, insert_pair.first)) {
-        return insert_result::FAILURE;
+        return insert_result::DUPLICATE;
       }
 
       return insert_result::CONTINUE;
