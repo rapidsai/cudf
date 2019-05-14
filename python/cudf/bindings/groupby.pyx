@@ -125,7 +125,7 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
                 Buffer(
                     rmm.device_array(
                         col_agg.size,
-                        dtype=np.int64
+                        dtype=np.int32
                     )
                 )
             )
