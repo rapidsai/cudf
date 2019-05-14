@@ -9,7 +9,6 @@
 - PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
 
 
-
 # cudf 0.7.1 (11 May 2019)
 
 ## New Features
