@@ -141,7 +141,7 @@ class _DataFrameIndexer(object):
         if nrows == 1 and ncols == 1:
             if not _is_single_value(arg[0]):
                 axis = 1
-            else: 
+            else:
                 axis = 0
         elif nrows == 1:
             axis = 0
