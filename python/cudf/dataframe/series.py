@@ -282,10 +282,8 @@ class Series(object):
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
                 maps = columnops.as_column(arg).data.mem
-                index = cpp_copying.apply_gather_column(
-                    self.index.as_column(),
-                    maps)
-                selvals = cpp_copying.apply_gather_column(self._column, maps)
+                index = self.index.take(maps)
+                selvals = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
                 if self.dtype == np.dtype('object'):
                     idx = cudautils.boolean_array_to_index_array(
