@@ -11,6 +11,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 
+import cudf
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -20,6 +21,8 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
+
+import cudf.bindings.copying as cpp_copying
 
 
 class Index(object):
@@ -71,8 +74,8 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            index = cudautils.gather(data=self.gpu_values, index=indices)
-            col = self.as_column().replace(data=Buffer(index))
+            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
+            col = self.as_column().replace(data=index.data)
             return as_index(col)
 
     def argsort(self, ascending=True):
@@ -207,7 +210,11 @@ class Index(object):
         if len(self) != len(other):
             return False
         elif len(self) == 1:
-            return self[0] == other[0]
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
         else:
             result = (self == other)
             if isinstance(result, bool):
@@ -352,10 +359,10 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        return super(RangeIndex, self).__eq__(other)
+        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, cudf.dataframe.index.RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return (self == other)._values.all()
@@ -677,8 +684,12 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if len(arbitrary) == 0:
-            return RangeIndex(0, 0, name=name)
+        if hasattr(arbitrary, '__len__'):
+            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
+                # 0-d arrays are a special case:
+                pass
+            elif len(arbitrary) == 0:
+                return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 

@@ -1490,21 +1490,27 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize('func', [
-    lambda df: df.mean(),
-    lambda df: df.sum(),
+    lambda df: df.count(),
     lambda df: df.min(),
     lambda df: df.max(),
-    lambda df: df.std(),
-    lambda df: df.count(),
-    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
-])
-@pytest.mark.parametrize('accessor', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail(
-        reason="dataframe reductions not yet supported")),
-    lambda df: df.x,
-])
-def test_reductions(pdf, gdf, accessor, func):
-    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
+    lambda df: df.sum(),
+    lambda df: df.product(),
+    lambda df: df.cummin(),
+    lambda df: df.cummax(),
+    lambda df: df.cumsum(),
+    lambda df: df.cumprod(),
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.max(),
+    lambda df: df.std(ddof=1),
+    lambda df: df.var(ddof=1),
+    ])
+def test_dataframe_reductions(func):
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    print(func(pdf))
+    gdf = DataFrame.from_pandas(pdf)
+    print(func(gdf))
+    assert_eq(func(pdf), func(gdf))
 
 
 @pytest.mark.parametrize('binop', [
@@ -1588,6 +1594,7 @@ def test_unaryops_df(pdf, gdf, unaryop):
     lambda df: df.empty,
     lambda df: df.x.empty,
     lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+    lambda df: df.drop('x', axis=1, errors='raise'),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
@@ -1673,6 +1680,7 @@ def test_iteritems(gdf):
 
 @pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
 def test_quantile(pdf, gdf):
+    assert_eq(pdf['x'].quantile(), gdf['x'].quantile())
     assert_eq(pdf.quantile(), gdf.quantile())
 
 
@@ -2087,6 +2095,24 @@ def test_select_dtype():
         gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
+def test_select_dtype_datetime():
+    gdf = gd.datasets.timeseries(
+        start='2000-01-01',
+        end='2000-01-02',
+        freq='3600s',
+        dtypes={'x': int}
+    )
+    gdf = gdf.reset_index()
+
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(np.dtype('datetime64')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64[ms]'))
+    assert_eq(gdf[['timestamp']],
+              gdf.select_dtypes(np.dtype('datetime64[ms]')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64[ms]'))
+
+
 def test_array_ufunc():
     gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
     pdf = gdf.to_pandas()
@@ -2262,6 +2288,24 @@ def test_shift(dtype, period):
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+@pytest.mark.parametrize('period', [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_diff(dtype, period):
+    if dtype == np.int8:
+        # to keep data in range
+        data = gen_rand(dtype, 100000, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, 100000)
+
+    gdf = DataFrame({'a': data})
+    pdf = pd.DataFrame({'a': data})
+
+    diffed_outcome = gdf.a.diff(period)
+    expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
+    assert_eq(diffed_outcome, expected_outcome)
 
 
 def test_isnull_isna():

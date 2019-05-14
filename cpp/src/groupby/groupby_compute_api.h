@@ -219,8 +219,10 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
       if (status != GDF_SUCCESS)
         return status;
 
+      gdf_context ctxt;
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
       status = gdf_order_by(output_keys.begin(), nullptr,
-                            output_keys.num_columns(), &sorted_indices_col, 0);
+                            output_keys.num_columns(), &sorted_indices_col, &ctxt);
 
       if (status != GDF_SUCCESS)
         return status;

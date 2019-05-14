@@ -16,15 +16,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-try:
-    # pd 0.24.X
-    from pandas.core.dtypes.common import infer_dtype_from_object
-except ImportError:
-    # pd 0.23.X
-    from pandas.core.dtypes.common import \
-            _get_dtype_from_object as infer_dtype_from_object
-
-
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -228,8 +219,7 @@ class DataFrame(object):
         if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
-           isinstance(arg, tuple):
+        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -575,6 +565,16 @@ class DataFrame(object):
     def __iter__(self):
         return iter(self.columns)
 
+    def equals(self, other):
+        for col in self.columns:
+            if col not in other.columns:
+                return False
+            if not self[col].equals(other[col]):
+                return False
+        if not self.index.equals(other.index):
+            return False
+        return True
+
     def sin(self):
         return self._apply_op('sin')
 
@@ -722,7 +722,7 @@ class DataFrame(object):
     @index.setter
     def index(self, _index):
         if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
-            if len(_index) != len(self[self.columns[0]]):
+            if len(_index) != len(self):
                 msg = f"Length mismatch: Expected axis has "\
                        "%d elements, new values "\
                        "have %d elements"\
@@ -917,13 +917,17 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels, axis=None):
+    def drop(self, labels, axis=None, errors='raise'):
         """Drop column(s)
 
         Parameters
         ----------
         labels : str or sequence of strings
             Name of column(s) to be dropped.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Only axis=1 is currently supported.
+        errors : {'ignore', 'raise'}, default 'raise'
+            This parameter is currently ignored.
 
         Returns
         -------
@@ -953,6 +957,8 @@ class DataFrame(object):
         """
         if axis == 0:
             raise NotImplementedError("Can only drop columns, not rows")
+        if errors != 'raise':
+            raise NotImplementedError("errors= keyword not implemented")
 
         columns = [labels] if isinstance(
                 labels, (str, numbers.Number)) else list(labels)
@@ -1771,7 +1777,7 @@ class DataFrame(object):
         return df
 
     def groupby(self, by=None, sort=False, as_index=True, method="hash",
-                level=None):
+                level=None, group_keys=True):
         """Groupby
 
         Parameters
@@ -1806,7 +1812,10 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
                             'specified.')
@@ -1889,6 +1898,9 @@ class DataFrame(object):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
+        if self.empty:
+            return self.copy()
+
         if not isinstance(local_dict, dict):
             raise TypeError("local_dict type: expected dict but found {!r}"
                             .format(type(local_dict)))
@@ -2602,7 +2614,38 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def mean(axis=None, skipna=None, level=None, numeric_only=None, **kwargs):
+    #
+    # Stats
+    #
+    def count(self):
+        return self._apply_support_method('count')
+
+    def min(self):
+        return self._apply_support_method('min')
+
+    def max(self):
+        return self._apply_support_method('max')
+
+    def sum(self):
+        return self._apply_support_method('sum')
+
+    def product(self):
+        return self._apply_support_method('product')
+
+    def cummin(self):
+        return self._apply_support_method('cummin')
+
+    def cummax(self):
+        return self._apply_support_method('cummax')
+
+    def cumsum(self):
+        return self._apply_support_method('cumsum')
+
+    def cumprod(self):
+        return self._apply_support_method('cumprod')
+
+    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
+             **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2629,7 +2672,27 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        raise NotImplementedError("DataFrame.mean(...) is not yet implemented")
+        return self._apply_support_method('mean')
+
+    def std(self, ddof=1):
+        return self._apply_support_method('std', ddof)
+
+    def var(self, ddof=1):
+        return self._apply_support_method('var', ddof)
+
+    def _apply_support_method(self, *args, **kwargs):
+        method = args[0]
+        result = [getattr(self[col], method)(*kwargs)
+                  for col in self._cols.keys()]
+        if isinstance(result[0], Series):
+            support_result = result
+            result = DataFrame()
+            for idx, col in enumerate(self._cols.keys()):
+                result[col] = support_result[idx]
+        else:
+            result = Series(result)
+            result = result.set_index(self._cols.keys())
+        return result
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
@@ -2653,12 +2716,12 @@ class DataFrame(object):
 
         df = DataFrame()
 
-        # infer_dtype_from_object can distinguish between
+        # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
         include, exclude = map(
             lambda x: frozenset(
-                map(infer_dtype_from_object, x)),
+                map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 
@@ -2691,7 +2754,7 @@ class DataFrame(object):
                 if issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
-        include_all = set([infer_dtype_from_object(d)
+        include_all = set([utils.cudf_dtype_from_pydata_dtype(d)
                            for d in self.dtypes])
 
         # remove all exclude types
@@ -2702,7 +2765,7 @@ class DataFrame(object):
             inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            infered_type = infer_dtype_from_object(x.dtype)
+            infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 
@@ -2778,6 +2841,8 @@ class Loc(object):
             else:
                 raise TypeError(type(arg_1))
             col_slice = arg_2
+            if isinstance(arg_2, str):
+                col_slice = [arg_2]
 
         elif isinstance(arg, slice):
             row_slice = arg
@@ -2874,7 +2939,7 @@ def from_pandas(obj):
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.dataframe.multiindex.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, and "

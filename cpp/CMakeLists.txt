@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.7.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.7.1 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -223,6 +223,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/column/column.cpp
             src/column/context.cpp
+            src/table/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -232,6 +233,7 @@ add_library(cudf SHARED
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/rolling/rolling.cu
             src/binary/binary_ops.cu
             src/binary/jit/code/kernel.cpp
             src/binary/jit/code/operation.cpp
@@ -241,7 +243,7 @@ add_library(cudf SHARED
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
-            src/compaction/stream_compaction_ops.cu
+            src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
             src/hash/hash_ops.cu
@@ -253,11 +255,14 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
+            src/io/cuio_common.cpp
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
+            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
+            src/io/json/json_reader.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
@@ -276,8 +281,11 @@ add_library(cudf SHARED
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
+            src/copying/slice.cu
+            src/copying/split.cu
             src/bitmask/legacy_bitmask.cpp)
 
 #Override RPATH for cudf
@@ -331,16 +339,6 @@ endif(HT_LEGACY_ALLOCATOR)
 
 target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
-###################################################################################################
-# - python cffi bindings --------------------------------------------------------------------------
-
-add_custom_command(OUTPUT PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/../python ${CMAKE_BINARY_DIR}/python
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
-                   VERBATIM)
-
-add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -353,13 +351,6 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
-
-add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
-                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
-                   VERBATIM)
-
-add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

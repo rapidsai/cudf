@@ -15,7 +15,7 @@
  */
 
 #include "copying.hpp"
-#include <table/table.hpp>
+#include <table.hpp>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

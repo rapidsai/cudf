@@ -255,6 +255,12 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         if isinstance(val_columns_out, (str, Number)):
             result[val_columns_out] = out_col_agg_series[:num_row_results]
         else:
+            if len(val_columns_out) == 0:
+                if groupby_class._as_index:
+                    val_columns_out = ['cudfvalcol_'+by for by in groupby_class._by]
+                else:
+                    raise ValueError('cannot insert %s, already exists' % (
+                            groupby_class._by[0]))
             result[val_columns_out[col_count]
                     ] = out_col_agg_series[:num_row_results]
 
@@ -306,7 +312,7 @@ def agg(groupby_class, args):
     result = DataFrame()
     add_col_values = True
 
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
 
     sort_results = True
 
@@ -336,7 +342,7 @@ def agg(groupby_class, args):
             add_col_values = False  # we only want to add them once
         if(groupby_class._as_index):
             result = groupby_class.apply_multiindex_or_single_index(result)
-        if use_prefix:
+        if use_prefix and groupby_class._as_index:
             result = groupby_class.apply_multicolumn(result, args)
     elif isinstance(args, collections.abc.Mapping):
         if (len(args.keys()) == 1):
@@ -377,7 +383,7 @@ def agg(groupby_class, args):
             add_col_values = False  # we only want to add them once
         if groupby_class._as_index:
             result = groupby_class.apply_multiindex_or_single_index(result)
-        if use_prefix:
+        if use_prefix and groupby_class._as_index:
             result = groupby_class.apply_multicolumn_mapped(result, args)
     else:
         result = groupby_class.agg([args])
@@ -399,7 +405,7 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
     result = DataFrame()
     add_col_values = True
 
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0)
+    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
 
     val_columns = groupby_class._val_columns
     val_columns_out = groupby_class._val_columns

@@ -5,7 +5,6 @@
 set -e
 
 export LIBCUDF_FILE=`conda build conda/recipes/libcudf --output`
-export LIBCUDF_CFFI_FILE=`conda build conda/recipes/libcudf_cffi --python=$PYTHON --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 
 SOURCE_BRANCH=master
@@ -39,11 +38,6 @@ fi
 if [ "$UPLOAD_CUDF" == "1" ]; then
   LABEL_OPTION="--label main --label cuda9.2 --label cuda10.0"
   echo "LABEL_OPTION=${LABEL_OPTION}"
-
-  test -e ${LIBCUDF_CFFI_FILE}
-  echo "Upload libcudf_cffi"
-  echo ${LIBCUDF_CFFI_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${LIBCUDF_CFFI_FILE}
 
   test -e ${CUDF_FILE}
   echo "Upload cudf"
