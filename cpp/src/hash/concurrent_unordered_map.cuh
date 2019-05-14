@@ -43,6 +43,14 @@ namespace {
     /**---------------------------------------------------------------------------*
      * @brief Indicates if a pair type can be packed.
      *
+     * When the size of the key,value pair being inserted into the hash table is
+     * equal in size to a type where atomicCAS is natively supported, it is more
+     * efficient to "pack" the pair and insert it with a single atomicCAS.
+     *
+     * @note Only integral key and value types may be packed because we use
+     * bitwise equality comparison, which may not be valid for non-integral
+     * types.
+     *
      * @tparam pair_type The pair type in question
      * @return true If the pair type can be packed
      * @return false  If the pair type cannot be packed
