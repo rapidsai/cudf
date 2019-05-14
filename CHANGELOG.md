@@ -6,15 +6,20 @@
 - PR #1569 Add support for JSON objects to the JSON Lines reader
 - PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
+- PR #1310 Implemented the slice/split functionality.
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
 
 ## Improvements
 
+- PR #1422 C++: Added a RAII wrapper for CUDA streams
 - PR #1701 Added `unique` method for stringColumns
 - PR #1713 Add documentation for Dask-XGBoost
+- PR #1666 CSV Reader: Improve performance for files with large number of columns
+- PR #1725 Enable the ability to use a single column groupby as its own index
 
 ## Bug Fixes
 
+- PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
 - PR #1583 Fix underlying issue in `as_index()` that was causing `Series.quantile()` to fail
 - PR #1680 Add errors= keyword to drop() to fix cudf-dask bug
 - PR #1651 Fix `query` function on empty dataframe
@@ -23,6 +28,8 @@
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
+- PR #1704 CSV Reader: Add support for the plus sign in number fields
+- PR #1687 CSV reader: return an empty dataframe for zero size input
 
 
 # cuDF 0.7.1 (11 May 2019)
