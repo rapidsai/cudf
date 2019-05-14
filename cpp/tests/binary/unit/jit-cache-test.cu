@@ -33,8 +33,8 @@ struct JitCacheTest : public ::testing::Test
 
     virtual void SetUp() {
         // Single value column
-        auto column = cudf::test::column_wrapper<int>{{5,0}};
-        auto expect = cudf::test::column_wrapper<int>{{125,0}};
+        auto column = cudf::test::column_wrapper<int>{{4,0}};
+        auto expect = cudf::test::column_wrapper<int>{{64,0}};
 
         // make program
         auto program = getProgram("MemoryCacheTestProg", program_source);
@@ -99,8 +99,10 @@ TEST_F(JitCacheTest, MemoryCacheTest) {
         auto column = cudf::test::column_wrapper<int>{{5,0}};
         auto expect = cudf::test::column_wrapper<int>{{125,0}};
 
-        // give a different program and check that still the old kernel is used
-        auto program = getProgram("MemoryCacheTestProg", program2_source);
+        // make new program and rename it to match old program
+        auto program = getProgram("MemoryCacheTestProg1", program2_source);
+        // TODO: when I convert this pair to a class, make an inherited test class that can edit names
+        std::get<0>(program) = "MemoryCacheTestProg";
         auto kernel = getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
@@ -123,7 +125,7 @@ TEST_F(JitCacheTest, MemoryCacheTest) {
         auto column = cudf::test::column_wrapper<int>{{5,0}};
         auto expect = cudf::test::column_wrapper<int>{{625,0}};
 
-        // give a different program and check that still the old kernel is used
+        // give a different source and check that still the old program is used
         auto program = getProgram("MemoryCacheTestProg", program2_source);
         auto kernel = getKernelInstantiation("my_kernel",
                                                     program,
@@ -139,8 +141,44 @@ TEST_F(JitCacheTest, MemoryCacheTest) {
 
 // Test the file caching ability
 #if defined(JITIFY_USE_CACHE)
-TEST_F(JitCacheTest, FileCacheTest) {
+TEST_F(JitCacheTest, FileCacheProgramTest) {
+    // Brand new cache object that has nothing in in-memory cache
+    cudf::jit::cudfJitCache cache;
 
+    // Single value column
+    auto column = cudf::test::column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::column_wrapper<int>{{625,0}};
+
+    // make program
+    auto program = cache.getProgram("MemoryCacheTestProg", program2_source);
+    // make kernel that HAS to be compiled
+    auto kernel = cache.getKernelInstantiation("my_kernel",
+                                                program,
+                                                {"4", "int"});
+    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+                .launch(column.get()->data);
+
+    ASSERT_EQ(expect, column);
+}
+
+TEST_F(JitCacheTest, FileCacheKernelTest) {
+    // Brand new cache object that has nothing in in-memory cache
+    cudf::jit::cudfJitCache cache;
+
+    // Single value column
+    auto column = cudf::test::column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::column_wrapper<int>{{125,0}};
+
+    // make program
+    auto program = cache.getProgram("MemoryCacheTestProg", program_source);
+    // make kernel
+    auto kernel = cache.getKernelInstantiation("my_kernel",
+                                                program,
+                                                {"3", "int"});
+    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+                .launch(column.get()->data);
+
+    ASSERT_EQ(expect, column);
 }
 #endif
 
