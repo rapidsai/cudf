@@ -17,21 +17,22 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
-
-#include "cudf.h"
-#include "groupby/aggregation_operations.hpp"
-#include "managed_allocator.cuh"
-#include "managed.cuh"
-#include "hash_functions.cuh"
-#include "helper_functions.cuh"
-#include "utilities/device_atomics.cuh"
-#include <table/device_table.cuh>
-
 #include <iterator>
 #include <type_traits>
 #include <cassert>
 #include <iostream>
 #include <thrust/pair.h>
+
+#include "cudf.h"
+#include "groupby/aggregation_operations.hpp"
+
+#include "managed_allocator.cuh"
+#include "managed.cuh"
+#include "hash_functions.cuh"
+
+#include "helper_functions.cuh"
+
+#include "utilities/device_atomics.cuh"
 
 /**
  * Does support concurrent insert, but not concurrent insert and probping.
@@ -75,7 +76,7 @@ public:
                                       const Hasher& hf = hasher(),
                                       const Equality& eql = key_equal(),
                                       const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_capacity(n), m_collisions(0), m_unused_element(unused_element)
+        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0), m_unused_element(unused_element)
     {
         m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         constexpr int block_size = 128;
@@ -86,11 +87,11 @@ public:
             if ( cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
                 int dev_id = 0;
                 CUDA_RT_CALL( cudaGetDevice( &dev_id ) );
-                CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_capacity*sizeof(value_type), dev_id, 0) );
+                CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
             }
         }
         
-        init_hashtbl<<<((m_hashtbl_capacity-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_capacity, unused_key, m_unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
     }
@@ -102,23 +103,23 @@ public:
     
     __host__ __device__ iterator begin()
     {
-        return iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_capacity,m_hashtbl_values );
+        return iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values );
     }
     __host__ __device__ const_iterator begin() const
     {
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_capacity,m_hashtbl_values );
+        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values );
     }
     __host__ __device__ iterator end()
     {
-        return iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_capacity,m_hashtbl_values+m_hashtbl_capacity );
+        return iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values+m_hashtbl_size );
     }
     __host__ __device__ const_iterator end() const
     {
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_capacity,m_hashtbl_values+m_hashtbl_capacity );
+        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values+m_hashtbl_size );
     }
     __host__ __device__ size_type size() const
     {
-        return m_hashtbl_capacity;
+        return m_hashtbl_size;
     }
     __host__ __device__ value_type* data() const
     {
@@ -240,7 +241,7 @@ public:
                                bool precomputed_hash = false,
                                hash_value_type precomputed_hash_value = 0)
     {
-        const size_type hashtbl_size    = m_hashtbl_capacity;
+        const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
 
         hash_value_type hash_value{0};
@@ -294,13 +295,70 @@ public:
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
     }
-
-
+    
+    /* This function is not currently implemented
+    __forceinline__
+    __host__ __device__ iterator insert(const value_type& x)
+    {
+        const size_type hashtbl_size    = m_hashtbl_size;
+        value_type* hashtbl_values      = m_hashtbl_values;
+        const size_type key_hash        = m_hf( x.first );
+        size_type hash_tbl_idx          = key_hash%hashtbl_size;
+        
+        value_type* it = 0;
+        
+        while (0 == it) {
+            value_type* tmp_it = hashtbl_values + hash_tbl_idx;
+#ifdef __CUDA_ARCH__
+            if ( std::numeric_limits<key_type>::is_integer && std::numeric_limits<mapped_type>::is_integer &&
+                 sizeof(unsigned long long int) == sizeof(value_type) )
+            {
+                pair2longlong converter = {0ull};
+                converter.pair = thrust::make_pair( unused_key, m_unused_element );
+                const unsigned long long int unused = converter.longlong;
+                converter.pair = x;
+                const unsigned long long int value = converter.longlong;
+                const unsigned long long int old_val = atomicCAS( reinterpret_cast<unsigned long long int*>(tmp_it), unused, value );
+                if ( old_val == unused ) {
+                    it = tmp_it;
+                }
+                else if ( count_collisions )
+                {
+                    atomicAdd( &m_collisions, 1 );
+                }
+            } else {
+                const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
+                if ( m_equal( unused_key, old_key ) ) {
+                    (m_hashtbl_values+hash_tbl_idx)->second = x.second;
+                    it = tmp_it;
+                }
+                else if ( count_collisions )
+                {
+                    atomicAdd( &m_collisions, 1 );
+                }
+            }
+#else
+            
+            #pragma omp critical
+            {
+                if ( m_equal( unused_key, tmp_it->first ) ) {
+                    hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
+                    it = tmp_it;
+                }
+            }
+#endif
+            hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+        }
+        
+        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
+    }
+    */
+    
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
     {
         size_type key_hash = m_hf( k );
-        size_type hash_tbl_idx = key_hash%m_hashtbl_capacity;
+        size_type hash_tbl_idx = key_hash%m_hashtbl_size;
         
         value_type* begin_ptr = 0;
         
@@ -312,37 +370,37 @@ public:
                 begin_ptr = tmp_ptr;
                 break;
             }
-            if ( m_equal( unused_key , tmp_val ) || counter > m_hashtbl_capacity ) {
-                begin_ptr = m_hashtbl_values + m_hashtbl_capacity;
+            if ( m_equal( unused_key , tmp_val ) || counter > m_hashtbl_size ) {
+                begin_ptr = m_hashtbl_values + m_hashtbl_size;
                 break;
             }
-            hash_tbl_idx = (hash_tbl_idx+1)%m_hashtbl_capacity;
+            hash_tbl_idx = (hash_tbl_idx+1)%m_hashtbl_size;
             ++counter;
         }
         
-        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_capacity,begin_ptr);
+        return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
     
     gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;
-        if ( other.m_hashtbl_capacity <= m_hashtbl_capacity ) {
-            m_hashtbl_capacity = other.m_hashtbl_capacity;
+        if ( other.m_hashtbl_size <= m_hashtbl_capacity ) {
+            m_hashtbl_size = other.m_hashtbl_size;
         } else {
             m_allocator.deallocate( m_hashtbl_values, m_hashtbl_capacity );
-            m_hashtbl_capacity = other.m_hashtbl_capacity;
-            m_hashtbl_capacity = other.m_hashtbl_capacity;
+            m_hashtbl_capacity = other.m_hashtbl_size;
+            m_hashtbl_size = other.m_hashtbl_size;
             
             m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         }
-        CUDA_TRY( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_hashtbl_capacity*sizeof(value_type), cudaMemcpyDefault, stream ) );
+        CUDA_TRY( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_hashtbl_size*sizeof(value_type), cudaMemcpyDefault, stream ) );
         return GDF_SUCCESS;
     }
     
     void clear_async( cudaStream_t stream = 0 ) 
     {
         constexpr int block_size = 128;
-        init_hashtbl<<<((m_hashtbl_capacity-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_capacity, unused_key, m_unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         if ( count_collisions )
             m_collisions = 0;
     }
@@ -354,7 +412,7 @@ public:
     
     void print()
     {
-        for (size_type i = 0; i < m_hashtbl_capacity; ++i) 
+        for (size_type i = 0; i < m_hashtbl_size; ++i) 
         {
             std::cout<<i<<": "<<m_hashtbl_values[i].first<<","<<m_hashtbl_values[i].second<<std::endl;
         }
@@ -366,7 +424,7 @@ public:
         cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
         
         if ( cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-            CUDA_TRY( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_capacity*sizeof(value_type), dev_id, stream) );
+            CUDA_TRY( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, stream) );
         }
         CUDA_TRY( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream) );
 
@@ -381,6 +439,7 @@ private:
     
     allocator_type              m_allocator;
     
+    size_type   m_hashtbl_size;
     size_type   m_hashtbl_capacity;
     value_type* m_hashtbl_values;
     
