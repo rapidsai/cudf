@@ -48,6 +48,8 @@ namespace detail {
     __forceinline__  __device__
     T_output type_reinterpret(T_input value)
     {
+        static_assert(sizeof(T_output) == sizeof(T_input),
+            "type_reinterpret for different size");
         return *( reinterpret_cast<T_output*>(&value) );
     }
 
@@ -471,20 +473,12 @@ template <typename T, typename BinaryOp>
 __forceinline__  __device__
 T genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
 {
-    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{}
-            (address, update_value, op);
-    return T(ret);
-}
-
-// specialization for cudf::detail::wrapper types
-template <typename T, gdf_dtype dtype, typename BinaryOp, typename W = cudf::detail::wrapper<T, dtype> >
-__forceinline__  __device__
-W genericAtomicOperator( W* address, W const& update_value, BinaryOp op){
+    using T_int = cudf::detail::unwrapped_type_t<T>;
     // unwrap the input type to expect
     // that the native atomic API is used for the underlying type if possible
-    auto ret=  cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{}
-            (static_cast<T*>(address), cudf::detail::unwrap(update_value), op);
-    return W(ret);
+    auto ret=  cudf::detail::genericAtomicOperationImpl<T_int, BinaryOp>{}
+        (reinterpret_cast<T_int*>(address), cudf::detail::unwrap(update_value), op);
+    return T(ret);
 }
 
 // specialization for cudf::bool8 types
