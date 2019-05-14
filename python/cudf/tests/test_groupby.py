@@ -310,7 +310,8 @@ def test_groupby_cudf_2keys_agg(nelem, func, method):
         # verify
         np.testing.assert_array_almost_equal(expect_agg, got_agg)
     else:
-        assert_eq(got_df, expect_df)
+        check_dtype = False if func == 'count' else True
+        assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
@@ -321,7 +322,8 @@ def test_series_groupby(agg):
     gg = g.groupby(g // 2)
     sa = getattr(sg, agg)()
     ga = getattr(gg, agg)()
-    assert_eq(sa, ga)
+    check_dtype = False if agg == 'count' else True
+    assert_eq(sa, ga, check_dtype=check_dtype)
 
 
 @pytest.mark.xfail(reason="Prefixed column names are not removed yet")
@@ -331,7 +333,8 @@ def test_series_groupby_agg(agg):
     g = Series([1, 2, 3])
     sg = s.groupby(s // 2).agg(agg)
     gg = g.groupby(g // 2).agg(agg)
-    assert_eq(sg, gg)
+    check_dtype = False if agg == 'count' else True
+    assert_eq(sg, gg, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
@@ -342,7 +345,8 @@ def test_groupby_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    assert_eq(pdresult, gdresult)
+    check_dtype = False if agg == 'count' else True
+    assert_eq(pdresult, gdresult, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
@@ -353,7 +357,8 @@ def test_groupby_series_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    assert_eq(pdresult, gdresult)
+    check_dtype = False if agg == 'count' else True
+    assert_eq(pdresult, gdresult, check_dtype=check_dtype)
 
 
 def test_groupby_column_name():
