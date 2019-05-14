@@ -2,7 +2,7 @@
 
 ## New Features
 
-- PR #1735 Added overload for atomicAdd on int64
+- PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 
 ## Bug Fixes
 
