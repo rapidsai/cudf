@@ -3,7 +3,7 @@
 from __future__ import print_function, division
 
 import inspect
-
+import datetime
 import pytest
 import numpy as np
 import pandas as pd
@@ -101,6 +101,25 @@ def test_query_env_changing():
     np.testing.assert_array_equal(aa[aa < c], got['a'].to_array())
 
 
+def test_query_local_dict():
+    df = DataFrame()
+    df['a'] = aa = np.arange(100)
+    expr = "a < @val"
+
+    got = df.query(expr, local_dict={'val': 10})
+    np.testing.assert_array_equal(aa[aa < 10], got['a'].to_array())
+
+    # test for datetime
+    df = DataFrame()
+    data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+    df['datetimes'] = data
+    search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+    expr = 'datetimes==@search_date'
+
+    got = df.query(expr, local_dict={'search_date': search_date})
+    np.testing.assert_array_equal(data[1], got['datetimes'].to_array())
+
+
 def test_query_splitted_combine():
     np.random.seed(0)
     df = pd.DataFrame({'x': np.random.randint(0, 5, size=10),
@@ -120,4 +139,16 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
+    assert_frame_equal(got, expect)
+
+
+def test_query_empty_frames():
+    empty_pdf = pd.DataFrame({'a': [], 'b': []})
+    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    # Do the query
+    expr = 'a > 2'
+    got = empty_gdf.query(expr).to_pandas()
+    expect = empty_pdf.query(expr)
+
+    # assert euqal results
     assert_frame_equal(got, expect)

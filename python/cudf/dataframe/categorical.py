@@ -4,11 +4,13 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 
-from . import numerical, columnops
-from .buffer import Buffer
-from .series import Series
+from cudf.dataframe import numerical, columnops
+from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
+
+import cudf.bindings.replace as cpp_replace
+import cudf.bindings.copying as cpp_copying
 
 
 class CategoricalAccessor(object):
@@ -30,6 +32,7 @@ class CategoricalAccessor(object):
 
     @property
     def codes(self):
+        from cudf.dataframe.series import Series
         data = self._parent.data
         if self._parent.has_null_mask:
             mask = self._parent.mask
@@ -39,10 +42,19 @@ class CategoricalAccessor(object):
         else:
             return Series(data)
 
-    def set_categories(self, categories):
-        """Returns a new categorical column with the given indices.
-        """
-        codemap = {v: i for i, v in enumerate(categories)}
+    def set_categories(self, new_categories):
+        """Returns a new Series with the categories set to the
+        specified *new_categories*."""
+        from cudf.dataframe.series import Series
+        col = self._set_categories(new_categories)
+        return Series(data=col)
+
+    def _set_categories(self, new_categories):
+        """Returns a new CategoricalColumn with the categories set to the
+        specified *new_categories*."""
+        if new_categories is self._categories:
+            return self._parent.copy()
+        codemap = {v: i for i, v in enumerate(new_categories)}
         h_recoder = np.zeros(len(self.categories),
                              dtype=self._parent.data.dtype)
         for i, catval in enumerate(self.categories):
@@ -51,7 +63,7 @@ class CategoricalAccessor(object):
         recoded = cudautils.recode(self._parent.data.to_gpu_array(), h_recoder,
                                    self._parent.default_na_value())
         buf_rec = Buffer(recoded)
-        return self._parent.replace(data=buf_rec, categories=categories)
+        return self._parent.replace(data=buf_rec, categories=new_categories)
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
@@ -112,11 +124,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                    ordered=self._ordered)
 
     def binary_operator(self, binop, rhs):
-        msg = 'Categorical cannot perform the operation: {}'.format(binop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(binop)
         raise TypeError(msg)
 
     def unary_operator(self, unaryop):
-        msg = 'Categorical cannot perform the operation: {}'.format(unaryop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(unaryop)
         raise TypeError(msg)
 
     def unordered_compare(self, cmpop, rhs):
@@ -145,8 +159,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return self
         return self.as_numerical.astype(dtype)
 
-    def sort_by_values(self, ascending):
-        return self.as_numerical.sort_by_values(ascending)
+    def sort_by_values(self, ascending, na_position="last"):
+        return self.as_numerical.sort_by_values(ascending, na_position)
 
     def element_indexing(self, index):
         val = self.as_numerical.element_indexing(index)
@@ -160,26 +174,12 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self):
-        mask = None
-        if self.has_null_mask:
-            # Necessary because PyArrow doesn't support from_buffers for
-            # DictionaryArray yet
-            mask = pa.array(
-                # Why does expand_mask_bits return as int32?
-                cudautils.expand_mask_bits(
-                    len(self),
-                    self.nullmask.mem
-                )
-                .copy_to_host()
-                .astype('int8')
-            )
-        indices = pa.array(self.cat().codes.data.mem.copy_to_host())
+        indices = self.cat().codes.to_arrow()
         ordered = self.cat()._ordered
         dictionary = pa.array(self.cat().categories)
         return pa.DictionaryArray.from_arrays(
             indices=indices,
             dictionary=dictionary,
-            mask=mask,
             from_pandas=True,
             ordered=ordered
         )
@@ -202,92 +202,89 @@ class CategoricalColumn(columnops.TypedColumnBase):
             categories=self._categories,
             ordered=self._ordered)
 
-    def unique_count(self, method='sort'):
-        if method is not 'sort':
+    def unique_count(self, method='sort', dropna=True):
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out1 = cudautils.gather(data=sortedvals, index=segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=Buffer(out1), mask=None)
-        out_counts = numerical.NumericalColumn(data=Buffer(out2),
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=out_col.data, mask=None)
+        out_counts = numerical.NumericalColumn(data=Buffer(out),
                                                dtype=np.intp)
         return out_vals, out_counts
 
     def _encode(self, value):
-        for i, cat in enumerate(self._categories):
-            if cat == value:
-                return i
-        return -1
+        return self._categories.index(value)
 
     def _decode(self, value):
-        for i, cat in enumerate(self._categories):
-            if i == value:
-                return cat
+        return self._categories[value]
 
     def default_na_value(self):
         return -1
 
-    def join(self, other, how='left', return_indexers=False,
-             method='hash'):
-        if not isinstance(other, CategoricalColumn):
-            raise TypeError('*other* is not a categorical column')
-        if self._ordered != other._ordered or self._ordered:
-            raise TypeError('cannot join on ordered column')
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
+        replaced = columnops.as_column(self.cat().codes)
 
-        # Determine new categories after join
-        lcats = self._categories
-        rcats = other._categories
-        if how == 'left':
-            cats = lcats
-            other = other.cat().set_categories(cats).fillna(-1)
-        elif how == 'right':
-            cats = rcats
-            self = self.cat().set_categories(cats).fillna(-1)
-        elif how in ['inner', 'outer']:
-            # Do the join using the union of categories from both side.
-            # Adjust for inner joins afterwards
-            cats = sorted(set(lcats) | set(rcats))
-            self = self.cat().set_categories(cats).fillna(-1)
-            other = other.cat().set_categories(cats).fillna(-1)
+        to_replace_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in to_replace],
+                       dtype=replaced.dtype)
+        )
+        value_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in value],
+                       dtype=replaced.dtype)
+        )
+
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+
+        return self.replace(data=replaced.data)
+
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with *fill_value*
+        """
+
+        result = self.copy()
+
+        if not self.has_null_mask:
+            return result
+
+        fill_is_scalar = np.isscalar(fill_value)
+
+        if fill_is_scalar and fill_value == self.default_na_value():
+            fill_value_col = columnops.as_column(
+                [fill_value], nan_as_null=False, dtype=self.data.dtype)
         else:
-            raise ValueError('unknown *how* ({!r})'.format(how))
+            if fill_is_scalar:
+                if fill_value != self.default_na_value():
+                    if (fill_value not in self.cat().categories):
+                        raise ValueError("fill value must be in categories")
+                fill_value = pd.Categorical(fill_value,
+                                            categories=self.cat().categories)
 
-        # Do join as numeric column
-        join_result = self.as_numerical.join(
-            other.as_numerical, how=how,
-            return_indexers=return_indexers,
-            method=method)
+            fill_value_col = columnops.as_column(
+                fill_value, nan_as_null=False)
 
-        if return_indexers:
-            joined_index, indexers = join_result
-        else:
-            joined_index = join_result
+            # TODO: only required if fill_value has a subset of the categories:
+            fill_value_col = fill_value_col.cat()._set_categories(
+                self.cat().categories)
 
-        # Fix index.  Make it categorical
-        joined_index = joined_index.view(CategoricalColumn,
-                                         dtype=self.dtype,
-                                         categories=tuple(cats),
-                                         ordered=self._ordered)
+        cpp_replace.replace_nulls(result, fill_value_col)
 
-        if how == 'inner':
-            # Adjust for inner join.
-            # Only retain categories common on both side.
-            cats = sorted(set(lcats) & set(rcats))
-            joined_index = joined_index.cat().set_categories(cats)
-
-        if return_indexers:
-            return joined_index, indexers
-        else:
-            return joined_index
+        return self._mimic_inplace(result.replace(mask=None), inplace)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

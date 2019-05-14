@@ -1,11 +1,32 @@
-#pragma once
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#ifndef TEST_PARAMETERS_CUH
+#define TEST_PARAMETERS_CUH
+
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <cudf/types.h>
+
 #include <tuple>
 #include <algorithm>
 #include <random>
 #include <type_traits>
 #include <vector>
+#include <map>
 
-#include <cudf/types.h>
 
 // Selects the kind of join operation that is performed
 enum struct agg_op
@@ -156,3 +177,5 @@ typedef ::testing::Types<
 typedef ::testing::Types<
     TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>
   > ValidTestImplementations;
+
+#endif // TEST_PARAMETERS_CUH

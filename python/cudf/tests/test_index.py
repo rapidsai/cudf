@@ -6,9 +6,12 @@ Test related to Index
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from cudf.dataframe import DataFrame
-from cudf.dataframe.index import GenericIndex, RangeIndex
+from cudf.dataframe.index import (GenericIndex, RangeIndex, DatetimeIndex,
+                                  CategoricalIndex, as_index)
+from cudf.tests.utils import assert_eq
 
 
 def test_df_set_index_from_series():
@@ -67,10 +70,10 @@ def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
     gi = GenericIndex(np.arange(start, stop))
-    assert rg == gi
-    assert gi == rg
-    assert rg[:-1] != gi
-    assert rg[:-1] == gi[:-1]
+    assert rg.equals(gi)
+    assert gi.equals(rg)
+    assert not rg[:-1].equals(gi)
+    assert rg[:-1].equals(gi[:-1])
 
 
 @pytest.mark.parametrize('func', [
@@ -88,3 +91,96 @@ def test_reductions(func):
 def test_name():
     idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
     assert idx.name == 'foo'
+
+
+def test_index_immutable():
+    start, stop = 10, 34
+    rg = RangeIndex(start, stop)
+    with pytest.raises(TypeError):
+        rg[1] = 5
+    gi = GenericIndex(np.arange(start, stop))
+    with pytest.raises(TypeError):
+        gi[1] = 5
+
+
+def test_categorical_index():
+    pdf = pd.DataFrame()
+    pdf['a'] = [1, 2, 3]
+    pdf['index'] = pd.Categorical(['a', 'b', 'c'])
+    pdf = pdf.set_index('index')
+    gdf1 = DataFrame.from_pandas(pdf)
+    gdf2 = DataFrame()
+    gdf2['a'] = [1, 2, 3]
+    gdf2['index'] = pd.Categorical(['a', 'b', 'c'])
+    gdf2 = gdf2.set_index('index')
+
+    assert isinstance(gdf1.index, CategoricalIndex)
+    assert_eq(pdf, gdf1)
+    assert_eq(pdf.index, gdf1.index)
+
+    assert isinstance(gdf2.index, CategoricalIndex)
+    assert_eq(pdf, gdf2)
+    assert_eq(pdf.index, gdf2.index)
+
+
+def test_pandas_as_index():
+    # Define Pandas Indexes
+    pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])
+    pdf_float_index = pd.Float64Index([1., 2., 3., 4., 5.])
+    pdf_datetime_index = pd.DatetimeIndex(
+        [1000000, 2000000, 3000000, 4000000, 5000000])
+    pdf_category_index = pd.CategoricalIndex(['a', 'b', 'c', 'b', 'a'])
+
+    # Define cudf Indexes
+    gdf_int_index = as_index(pdf_int_index)
+    gdf_float_index = as_index(pdf_float_index)
+    gdf_datetime_index = as_index(pdf_datetime_index)
+    gdf_category_index = as_index(pdf_category_index)
+
+    # Check instance types
+    assert isinstance(gdf_int_index, GenericIndex)
+    assert isinstance(gdf_float_index, GenericIndex)
+    assert isinstance(gdf_datetime_index, DatetimeIndex)
+    assert isinstance(gdf_category_index, CategoricalIndex)
+
+    # Check equality
+    assert_eq(pdf_int_index, gdf_int_index)
+    assert_eq(pdf_float_index, gdf_float_index)
+    assert_eq(pdf_datetime_index, gdf_datetime_index)
+    assert_eq(pdf_category_index, gdf_category_index)
+
+
+def test_index_rename():
+    pds = pd.Index([1, 2, 3], name='asdf')
+    gds = as_index(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
+
+
+def test_set_index_as_property():
+    cdf = DataFrame()
+    col1 = np.arange(10)
+    col2 = np.arange(0, 20, 2)
+    cdf['a'] = col1
+    cdf['b'] = col2
+
+    # Check set_index(Series)
+    cdf.index = cdf['b']
+
+    np.testing.assert_array_equal(cdf.index.values, col2)
+
+    with pytest.raises(ValueError):
+        cdf.index = [list(range(10))]
+
+    idx = np.arange(0, 1000, 100)
+    cdf.index = idx
+    np.testing.assert_array_equal(cdf.index.values, idx)
+
+    df = cdf.to_pandas()
+    np.testing.assert_array_equal(df.index.values, idx)
+
+    head = cdf.head().to_pandas()
+    np.testing.assert_array_equal(head.index.values, idx[:5])

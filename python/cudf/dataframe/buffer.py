@@ -132,13 +132,16 @@ class Buffer(object):
             buf = Buffer(sliced)
             buf.dtype = self.dtype  # for np.datetime64 support
             return buf
-        elif isinstance(arg, int):
-            arg = utils.normalize_index(arg, self.size)
+        elif isinstance(arg, (int, np.integer)):
+            arg = utils.normalize_index(int(arg), self.size)
+            item = self.mem[arg]
+            if isinstance(item, str):
+                return item
             # the dtype argument is necessary for datetime64 support
             # because currently we can't pass datetime64 types into
             # cuda dev arrays, so the type of the cuda dev array is
             # an i64, and we view it as the dtype on the buffer
-            return self.mem[arg].view(self.dtype)
+            return item.view(self.dtype)
         else:
             raise NotImplementedError(type(arg))
 
@@ -158,7 +161,7 @@ class Buffer(object):
         needed = array.size
         self._sentry_capacity(needed)
         array = cudautils.astype(array, dtype=self.dtype)
-        self.mem[self.size:].copy_to_device(array)
+        self.mem[self.size:self.size+needed].copy_to_device(array)
         self.size += needed
 
     def astype(self, dtype):

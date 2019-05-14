@@ -3,7 +3,6 @@
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
 from Cython.Build import cythonize
-import numpy
 
 import versioneer
 from distutils.sysconfig import get_python_lib
@@ -14,17 +13,15 @@ install_requires = [
     'cython'
 ]
 
-try:
-    numpy_include = numpy.get_include()
-except AttributeError:
-    numpy_include = numpy.get_numpy_include()
-
 cython_files = ['cudf/bindings/*.pyx']
 
 extensions = [
     Extension("*",
               sources=cython_files,
-              include_dirs=[numpy_include, '../cpp/include/'],
+              include_dirs=[
+                '../cpp/include/',
+                '../cpp/thirdparty/dlpack/include/dlpack/'
+              ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
@@ -39,17 +36,14 @@ setup(name='cudf',
         "Intended Audience :: Developers",
         # "Operating System :: OS Independent",
         "Programming Language :: Python",
-        # "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7"
       ],
       # Include the separately-compiled shared library
       author="NVIDIA Corporation",
       setup_requires=['cython'],
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
-      package_data={
-        'cudf.tests': ['data/*.pickle'],
-      },
       install_requires=install_requires,
       license="Apache",
       cmdclass=versioneer.get_cmdclass(),

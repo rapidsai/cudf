@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef JOIN_KERNELS_CUH
+#define JOIN_KERNELS_CUH
 
 constexpr int JoinNoneValue = -1;
 
@@ -23,56 +25,48 @@ enum class JoinType {
 };
 
 #include "cudf.h"
-#include "dataframe/cudf_table.cuh"
+#include <table/device_table.cuh>
 #include "hash/concurrent_unordered_multimap.cuh"
 #include "hash/hash_functions.cuh"
 #include "utilities/bit_util.cuh"
 
 #include <cub/cub.cuh>
 
-// constexpr int warp_size = 32;
+ constexpr int warp_size = 32;
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Builds a hash table from a gdf_table that maps the hash values of 
+* @brief  Builds a hash table from a device_table that maps the hash values of 
   each row to its respective row index.
 * 
-* @Param[in,out] multi_map The hash table to be built to insert rows into
-* @Param[in] build_table The table to build the hash table on
-* @Param[in] build_table_num_rows The number of rows in the build table
+* @param[in,out] multi_map The hash table to be built to insert rows into
+* @param[in] build_table The table to build the hash table on
+* @param[in] build_table_num_rows The number of rows in the build table
 * @tparam multimap_type The type of the hash table
 * 
 */
 /* ----------------------------------------------------------------------------*/
-template<typename multimap_type,
-         typename size_type>
+template<typename multimap_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
-                                  gdf_table<size_type> const & build_table,
-                                  const size_type build_table_num_rows,
+                                  device_table build_table,
+                                  const gdf_size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
 {
-    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+    gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-    while( i < build_table_num_rows) {
+    while (i < build_table_num_rows) {
+      // Compute the hash value of this row
+      const hash_value_type row_hash_value{hash_row(build_table,i)};
 
-      // It is impossible for a row with a NULL value to match any other row,
-      // therefore, do not insert it into the hash table
-      if (build_table.is_row_valid(i)) {
+      // Insert the (row hash value, row index) into the map
+      // using the row hash value to determine the location in the
+      // hash map where the new pair should be inserted
+      const auto insert_location = multi_map->insert(
+          thrust::make_pair(row_hash_value, i), true, row_hash_value);
 
-        // Compute the hash value of this row
-        const hash_value_type row_hash_value{build_table.hash_row(i)};
-
-        // Insert the (row hash value, row index) into the map
-        // using the row hash value to determine the location in the 
-        // hash map where the new pair should be inserted
-        const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                        true,
-                                                        row_hash_value );
-
-        // If the insert failed, set the error code accordingly
-        if(multi_map->end() == insert_location){
-          *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
-        }
+      // If the insert failed, set the error code accordingly
+      if (multi_map->end() == insert_location) {
+        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
       }
       i += blockDim.x * gridDim.x;
     }
@@ -80,20 +74,19 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Adds a pair of indices to the shared memory cache
+* @brief  Adds a pair of indices to the shared memory cache
 * 
-* @Param[in] first The first index in the pair
-* @Param[in] second The second index in the pair
-* @Param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
+* @param[in] first The first index in the pair
+* @param[in] second The second index in the pair
+* @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
 memory cache the pair will be written
-* @Param[in] warp_id The ID of the warp of the calling the thread
-* @Param[out] joined_shared_l Pointer to the shared memory cache for left indices
-* @Param[out] joined_shared_r Pointer to the shared memory cache for right indices
+* @param[in] warp_id The ID of the warp of the calling the thread
+* @param[out] joined_shared_l Pointer to the shared memory cache for left indices
+* @param[out] joined_shared_r Pointer to the shared memory cache for right indices
 * 
 */
 /* ----------------------------------------------------------------------------*/
-template<typename size_type,
-         typename output_index_type>
+template<typename size_type, typename output_index_type>
 __inline__ __device__ void add_pair_to_cache(const output_index_type first, 
                                              const output_index_type second, 
                                              size_type *current_idx_shared, 
@@ -110,14 +103,14 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis  Computes the output size of joining the probe table to the build table
+* @brief  Computes the output size of joining the probe table to the build table
   by probing the hash map with the probe table and counting the number of matches.
 * 
-* @Param[in] multi_map The hash table built on the build table
-* @Param[in] build_table The build table
-* @Param[in] probe_table The probe table
-* @Param[in] probe_table_num_rows The number of rows in the probe table
-* @Param[out] output_size The resulting output size
+* @param[in] multi_map The hash table built on the build table
+* @param[in] build_table The build table
+* @param[in] probe_table The probe table
+* @param[in] probe_table_num_rows The number of rows in the probe table
+* @param[out] output_size The resulting output size
   @tparam join_type The type of join to be performed
   @tparam multimap_type The datatype of the hash table
   @tparam block_size The number of threads in a thread block for the kernel
@@ -127,17 +120,16 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 /* ----------------------------------------------------------------------------*/
 template< JoinType join_type,
           typename multimap_type,
-          typename size_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
-                                          gdf_table<size_type> const & build_table,
-                                          gdf_table<size_type> const & probe_table,
-                                          const size_type probe_table_num_rows,
-                                          size_type* output_size)
+                                          device_table build_table,
+                                          device_table probe_table,
+                                          const gdf_size_type probe_table_num_rows,
+                                          gdf_size_type* output_size)
 {
 
-  __shared__ size_type block_counter;
+  __shared__ gdf_size_type block_counter;
   block_counter=0;
   __syncthreads();
 
@@ -145,7 +137,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
   __syncwarp();
 #endif
 
-  size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
@@ -157,16 +149,10 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(probe_table.is_row_valid(probe_row_index))
-    {
-      // Search the hash map for the hash value of the probe row
-      probe_row_hash_value = probe_table.hash_row(probe_row_index);
-      found = multi_map->find(probe_row_hash_value,
-                              true,
-                              probe_row_hash_value);
-    }
+    // Search the hash map for the hash value of the probe row
+    probe_row_hash_value = hash_row(probe_table,probe_row_index);
+    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -193,11 +179,11 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           else if (found->first == probe_row_hash_value)
           {
             // If the hash values are equal, check that the rows are equal
-            if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
+            if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
-              atomicAdd(&block_counter,size_type(1)) ;
+              atomicAdd(&block_counter,1) ;
             }
             // Continue searching for matching rows until you hit an empty hash map entry
             ++found;
@@ -221,7 +207,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           }
 
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            atomicAdd(&block_counter,size_type(1));
+            atomicAdd(&block_counter,1);
           }
         }
       }
@@ -237,18 +223,18 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Probes the hash map with the probe table to find all matching rows 
+ * @brief  Probes the hash map with the probe table to find all matching rows 
  between the probe and hash table and generate the output for the desired Join operation.
  * 
- * @Param[in] multi_map The hash table built from the build table
- * @Param[in] build_table The build table
- * @Param[in] probe_table The probe table
- * @Param[in] probe_table_num_rows The length of the columns in the probe table
- * @Param[out] join_output_l The left result of the join operation
- * @Param[out] join_output_r The right result of the join operation
- * @Param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
- * @Param[in] max_size The maximum size of the output
- * @Param[in] offset An optional offset
+ * @param[in] multi_map The hash table built from the build table
+ * @param[in] build_table The build table
+ * @param[in] probe_table The probe table
+ * @param[in] probe_table_num_rows The length of the columns in the probe table
+ * @param[out] join_output_l The left result of the join operation
+ * @param[out] join_output_r The right result of the join operation
+ * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
+ * @param[in] max_size The maximum size of the output
+ * @param[in] offset An optional offset
  * @tparam join_type The type of join to be performed
  * @tparam multimap_type The type of the hash table
  * @tparam output_index_type The datatype used for the indices in the output arrays
@@ -260,23 +246,22 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 template< JoinType join_type,
           typename multimap_type,
           typename key_type,
-          typename size_type,
           typename output_index_type,
-          size_type block_size,
-          size_type output_cache_size>
+          gdf_size_type block_size,
+          gdf_size_type output_cache_size>
 __global__ void probe_hash_table( multimap_type const * const multi_map,
-                                  gdf_table<size_type> const & build_table,
-                                  gdf_table<size_type> const & probe_table,
-                                  const size_type probe_table_num_rows,
+                                  device_table build_table,
+                                  device_table probe_table,
+                                  const gdf_size_type probe_table_num_rows,
                                   output_index_type * join_output_l,
                                   output_index_type * join_output_r,
-                                  size_type* current_idx,
-                                  const size_type max_size,
+                                  gdf_size_type* current_idx,
+                                  const gdf_size_type max_size,
                                   bool flip_results,
                                   const output_index_type offset = 0)
 {
   constexpr int num_warps = block_size/warp_size;
-  __shared__ size_type current_idx_shared[num_warps];
+  __shared__ gdf_size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
   __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
   output_index_type *output_l = join_output_l, *output_r = join_output_r;
@@ -314,15 +299,9 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
     // Only probe the hash table if the probe row is valid
     hash_value_type probe_row_hash_value{0};
-    if(probe_table.is_row_valid(probe_row_index))
-    {
-      // Search the hash map for the hash value of the probe row
-      probe_row_hash_value = probe_table.hash_row(probe_row_index);
-      found = multi_map->find(probe_row_hash_value,
-                                   true,
-                                   probe_row_hash_value);
-    }
-
+    // Search the hash map for the hash value of the probe row
+    probe_row_hash_value = hash_row(probe_table,probe_row_index);
+    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
@@ -348,7 +327,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
         else if (found->first == probe_row_hash_value)
         {
           // If the hash values are equal, check that the rows are equal
-          if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
+          if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
           {
 
             // If the rows are equal, then we have found a true match
@@ -396,7 +375,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
         const unsigned int activemask = __ballot(1);
 #endif
         int num_threads = __popc(activemask);
-        size_type output_offset = 0;
+        gdf_size_type output_offset = 0;
 
         if ( 0 == lane_id )
         {
@@ -407,7 +386,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
         for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
         {
-          size_type thread_offset = output_offset + shared_out_idx;
+          gdf_size_type thread_offset = output_offset + shared_out_idx;
           if (thread_offset < max_size) {
             output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
             output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
@@ -434,7 +413,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
       const unsigned int activemask = __ballot(1);
 #endif
       int num_threads = __popc(activemask);
-      size_type output_offset = 0;
+      gdf_size_type output_offset = 0;
       if ( 0 == lane_id )
       {
         output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
@@ -444,7 +423,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
       for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
       {
-        size_type thread_offset = output_offset + shared_out_idx;
+        gdf_size_type thread_offset = output_offset + shared_out_idx;
         if (thread_offset < max_size) 
         {
           output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
@@ -510,3 +489,4 @@ __global__ void probe_hash_table_uniq_keys(
 }
 
 */
+#endif

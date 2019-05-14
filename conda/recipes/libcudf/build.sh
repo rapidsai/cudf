@@ -1,11 +1,6 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+
 CMAKE_COMMON_VARIABLES=" -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release"
-
-
-if [ -n "$MACOSX_DEPLOYMENT_TARGET" ]; then
-    # C++11 requires 10.9
-    # but cudatoolkit 8 is build for 10.11
-    export MACOSX_DEPLOYMENT_TARGET=10.11
-fi
 
 # show environment
 printenv
@@ -19,4 +14,4 @@ cd build
 # configure
 cmake $CMAKE_COMMON_VARIABLES ..
 # build
-make -j2 VERBOSE=1 install
+make -j${PARALLEL_LEVEL} VERBOSE=1 install

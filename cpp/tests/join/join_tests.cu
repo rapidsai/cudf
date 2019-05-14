@@ -14,29 +14,31 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
+// See this header for all of the recursive handling of tuples of vectors
+#include <tests/utilities/tuple_vectors.h>
+
+// See this header for all of the handling of valids' vectors
+#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <join/joining.h>
+#include <join/join_compute_api.h>
+#include <utilities/bit_util.cuh>
+
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
 #include <iostream>
 #include <vector>
 #include <map>
 #include <type_traits>
 #include <memory>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
-
-#include <cudf.h>
-#include <rmm/rmm.h>
-#include <cudf/functions.h>
-#include <join/joining.h>
-#include <utilities/bit_util.cuh>
-
-#include "tests/utilities/cudf_test_fixtures.h"
-
-// See this header for all of the recursive handling of tuples of vectors
-#include "tests/utilities/tuple_vectors.h"
-
-// See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <cstdlib>
 
 // Selects the kind of join operation that is performed
 enum struct join_op
@@ -114,14 +116,14 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+  * @brief Creates a unique_ptr that wraps a gdf_column structure 
   *           intialized with a host vector
   *
-  * @Param host_vector vector containing data to be transfered to device side column
-  * @Param host_valid  vector containing valid masks associated with the supplied vector
-  * @Param n_count     null_count to be set for the generated column
+  * @param host_vector vector containing data to be transfered to device side column
+  * @param host_valid  vector containing valid masks associated with the supplied vector
+  * @param n_count     null_count to be set for the generated column
   *
-  * @Returns A unique_ptr wrapping the new gdf_column
+  * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
@@ -155,9 +157,8 @@ struct JoinTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), gdf_valid_allocation_size(host_vector.size()), 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, gdf_num_bitmask_elements(host_vector.size()), cudaMemcpyHostToDevice), cudaSuccess);
       the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
@@ -210,16 +211,16 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Initializes two sets of columns, left and right, with random 
+   * @brief  Initializes two sets of columns, left and right, with random 
    *            values for the join operation.
    *
-   * @Param left_column_length The length of the left set of columns
-   * @Param left_column_range The upper bound of random values for the left 
+   * @param left_column_length The length of the left set of columns
+   * @param left_column_range The upper bound of random values for the left 
    *                          columns. Values are [0, left_column_range)
-   * @Param right_column_length The length of the right set of columns
-   * @Param right_column_range The upper bound of random values for the right 
+   * @param right_column_length The length of the right set of columns
+   * @param right_column_range The upper bound of random values for the right 
    *                           columns. Values are [0, right_column_range)
-   * @Param print Optionally print the left and right set of columns for debug
+   * @param print Optionally print the left and right set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
@@ -229,8 +230,8 @@ struct JoinTest : public GdfTest
     initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<size_t>(ctxt.flag_sorted));
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    initialize_valids(left_valids, n_columns, left_column_length, true);
-    initialize_valids(right_valids, n_columns, right_column_length, true);
+    initialize_valids(left_valids, n_columns, left_column_length, 0);
+    initialize_valids(right_valids, n_columns, right_column_length, 0);
 
     gdf_left_columns = initialize_gdf_columns(left_columns, left_valids, n_count);
     gdf_right_columns = initialize_gdf_columns(right_columns, right_valids, n_count);
@@ -257,39 +258,44 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Creates two empty columns, left and right.
+   * @brief  Creates two gdf_columns with size 1 data buffer allocations, but
+   * with a specified `size` attributed
    *
-   * @Param left_column_length The length of the left column
-   * @Param right_column_length The length of the right column
+   * @param left_column_length The length of the left column
+   * @param right_column_length The length of the right column
    * -------------------------------------------------------------------------*/
   void create_dummy_input( gdf_size_type const left_column_length, 
                            gdf_size_type const right_column_length)
   {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
     
-    std::vector<col_type> dummy_vector_left(left_column_length, static_cast<col_type>(0));
-    std::vector<col_type> dummy_vector_right(right_column_length, static_cast<col_type>(0));
+    // Only allocate a single element
+    std::vector<col_type> dummy_vector_left(1, static_cast<col_type>(0));
+    std::vector<col_type> dummy_vector_right(1, static_cast<col_type>(0));
     gdf_left_columns.push_back(create_gdf_column<col_type>(dummy_vector_left, nullptr, 0));
     gdf_right_columns.push_back(create_gdf_column<col_type>(dummy_vector_right, nullptr, 0));
+
     
     // Fill vector of raw pointers to gdf_columns
     for (auto const& c : gdf_left_columns) {
+      c->size = left_column_length;
       gdf_raw_left_columns.push_back(c.get());
     }
 
     for (auto const& c : gdf_right_columns) {
+      c->size = right_column_length;
       gdf_raw_right_columns.push_back(c.get());
     }
   }
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes a reference solution for joining the left and right sets of columns
+   * @brief  Computes a reference solution for joining the left and right sets of columns
    *
-   * @Param print Option to print the solution for debug
-   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf solution
+   * @param print Option to print the solution for debug
+   * @param sort Option to sort the solution. This is necessary for comparison against the gdf solution
    *
-   * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
+   * @returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
    * where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
@@ -393,11 +399,11 @@ struct JoinTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * @brief  Computes the result of joining the left and right sets of columns with the libgdf functions
    *
-   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
-   * @Param print Option to print the result computed by the libgdf function
-   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
+   * @param gdf_result A vector of result_type that holds the result of the libgdf join function
+   * @param print Option to print the result computed by the libgdf function
+   * @param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
@@ -785,19 +791,6 @@ using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH,
 
 TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
 
-TYPED_TEST(MaxJoinTest, HugeJoinSize)
-{
-  // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1, 
-  // however, this will currently cause OOM on a GV100 as it will attempt to allocate 
-  // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big 
-  // inputs until we can better handle OOM errors
-  // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-  const size_t right_table_size = 1<<29;
-  this->create_input(100, RAND_MAX,
-                     right_table_size, RAND_MAX);
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
-}
-
 TYPED_TEST(MaxJoinTest, InputTooLarge)
 {   
     const gdf_size_type left_table_size = 100;  
@@ -816,3 +809,28 @@ TYPED_TEST(MaxJoinTest, InputTooLarge)
                                                                    sort_result, 
                                                                    expected_error);
 }
+
+// These tests will only fail on a non-release build where `assert`s are enabled
+#ifndef NDEBUG
+TEST(HashTableSizeDeathTest, ZeroOccupancyTest){
+    int const num_insertions{100};
+    uint32_t occupancy{0};
+    EXPECT_DEATH(compute_hash_table_size(num_insertions,occupancy),"");
+}
+
+TEST(HashTableSizeDeathTest, TooLargeOccupancyTest){
+    int const num_insertions{100};
+    uint32_t occupancy{101};
+    EXPECT_DEATH(compute_hash_table_size(num_insertions,occupancy),"");
+}
+#endif
+
+TEST(HashTableSizeTest, OverflowTest){
+    int const num_insertions{std::numeric_limits<int>::max()};
+    uint32_t occupancy{50};
+    size_t hash_table_size = compute_hash_table_size(num_insertions, occupancy);
+    size_t expected_size{ size_t{2} * std::numeric_limits<int>::max()};
+    ASSERT_TRUE(hash_table_size > num_insertions);
+    EXPECT_EQ(expected_size, hash_table_size);
+}
+

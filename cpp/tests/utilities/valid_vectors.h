@@ -20,77 +20,34 @@
 
 #include <functional>
 #include <memory>
+#include <numeric>
+#include <algorithm>
+#include <iterator>
 #include <string>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
+#include <bitmask/legacy_bitmask.hpp>
 
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
 using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::function<void(gdf_valid_type*)>>;
 
-// Create a valid pointer and init randomly the last half column
-host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false)
-{
-  auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf_get_num_chars_bitmask(length);
-  auto valid_bits = new gdf_valid_type[n_bytes];
-
-  for (size_t i = 0; i < length; ++i) {
-    if (all_bits_on) {
-      gdf::util::turn_bit_on(valid_bits, i);
-    } else {
-      if (i < length / 2 || std::rand() % 2 == 1) {
-        gdf::util::turn_bit_on(valid_bits, i);
-      } else {
-        gdf::util::turn_bit_off(valid_bits, i);
-      }
-    }
-  }
-  return host_valid_pointer{ valid_bits, deleter };
-}
 
 // Create a valid pointer and init it with null_count invalids
-host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
-{
-  auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf_get_num_chars_bitmask(length);
-  auto valid_bits = new gdf_valid_type[n_bytes];
-   for (size_t i = 0; i < length; ++i) {
-    if ((float)std::rand()/(RAND_MAX + 1u) >= (float)null_count/(length-i)) {
-      gdf::util::turn_bit_on(valid_bits, i);
-    } else {
-      gdf::util::turn_bit_off(valid_bits, i);
-      --null_count;
-    }
-  }
-  return host_valid_pointer{ valid_bits, deleter };
-}
+host_valid_pointer create_and_init_valid(size_t length, size_t null_count);
 
-// Initialize valids
-void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, bool all_bits_on = false)
-{
-  valids.clear();
-  for (size_t i = 0; i < size; ++i) {
-    valids.push_back(create_and_init_valid(length, all_bits_on));
-  }
-}
-
-void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, size_t null_count)
-{
-  valids.clear();
-  for (size_t i = 0; i < size; ++i) {
-    valids.push_back(create_and_init_valid(length, null_count));
-  }
-}
+void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, size_t null_count);
 
 // Prints a vector and valids
 template <typename T>
-void print_vector_and_valid(std::vector<T>& v, gdf_valid_type* valid)
+void print_vector_and_valid(std::vector<T>& v, const gdf_valid_type* valid)
 {
   auto functor = [&valid, &v](int index) -> std::string {
-    if (gdf_is_valid(valid, index))
-      return std::to_string((int)v[index]);
-    return std::string("@");
+    std::string ret = (sizeof(v[index]) == 1)
+                      ? std::to_string((int)v[index])
+                      : std::to_string(v[index]);
+
+    return gdf_is_valid(valid, index) ? ret : (ret + "|@");
   };
   std::vector<int> indexes(v.size());
   std::iota(std::begin(indexes), std::end(indexes), 0);

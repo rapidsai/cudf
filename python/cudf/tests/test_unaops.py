@@ -3,10 +3,33 @@ from __future__ import division
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from cudf.dataframe import Series
 
-from . import utils
+from cudf.tests import utils
+
+
+@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+def test_series_abs(dtype):
+    arr = (np.random.random(1000) * 100).astype(dtype)
+    sr = Series(arr)
+    np.testing.assert_equal(sr.abs().to_array(), np.abs(arr))
+    np.testing.assert_equal(abs(sr).to_array(), abs(arr))
+
+
+@pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
+def test_series_not(dtype):
+    arr = (np.random.random(1000) * 100).astype(dtype)
+    sr = Series(arr)
+    np.testing.assert_equal((~sr).to_array(), np.invert(arr))
+    np.testing.assert_equal((~sr).to_array(), ~arr)
+
+
+def test_series_neg():
+    arr = np.random.random(100) * 100
+    sr = Series(arr)
+    np.testing.assert_equal((-sr).to_array(), -arr)
 
 
 def test_series_ceil():
@@ -47,3 +70,20 @@ def test_validity_ceil(nelem):
     print(got)
 
     np.testing.assert_array_equal(expect, got)
+
+
+@pytest.mark.parametrize('mth', ['min', 'max', 'sum', 'product'])
+def test_series_pandas_methods(mth):
+    np.random.seed(0)
+    arr = (1 + np.random.random(5) * 100).astype(np.int64)
+    sr = Series(arr)
+    psr = pd.Series(arr)
+    np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
+
+
+@pytest.mark.parametrize('mth', ['min', 'max', 'sum', 'product'])
+def test_series_pandas_methods_empty(mth):
+    arr = np.array([])
+    sr = Series(arr)
+    psr = pd.Series(arr)
+    np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())

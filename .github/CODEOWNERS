@@ -1,0 +1,17 @@
+#cpp code owners
+cpp/       @rapidsai/cudf-cpp-codeowners
+
+#python code owners
+python/    @rapidsai/cudf-python-codeowners
+
+#cmake code owners
+**/CMakeLists.txt  @rapidsai/cudf-cmake-codeowners
+**/cmake/          @rapidsai/cudf-cmake-codeowners
+
+#build/ops code owners
+.github/           @rapidsai/cudf-ops-codeowners 
+ci/                @rapidsai/cudf-ops-codeowners
+conda/             @rapidsai/cudf-ops-codeowners
+**/Dockerfile      @rapidsai/cudf-ops-codeowners
+**/.dockerignore   @rapidsai/cudf-ops-codeowners
+docker/            @rapidsai/cudf-ops-codeowners

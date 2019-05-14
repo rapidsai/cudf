@@ -7,8 +7,10 @@ from pandas.util.testing import (
     assert_index_equal, assert_series_equal,
     assert_frame_equal
 )
+import cudf
 from cudf.dataframe import Series, DataFrame
 from cudf.dataframe.index import DatetimeIndex
+from cudf.tests.utils import assert_eq
 
 
 def data1():
@@ -60,9 +62,26 @@ def test_dt_index(data, field):
 
 
 def test_setitem_datetime():
-    a = DataFrame()
-    a['a'] = pd.date_range('20010101', '20010105').values
-    # TODO check some stuff
+    df = DataFrame()
+    df['date'] = pd.date_range('20010101', '20010105').values
+    assert np.issubdtype(df.date.dtype, np.datetime64)
+
+
+def test_sort_datetime():
+    df = pd.DataFrame()
+    df['date'] = np.array([np.datetime64('2016-11-20'),
+                           np.datetime64('2020-11-20'),
+                           np.datetime64('2019-11-20'),
+                           np.datetime64('1918-11-20'),
+                           np.datetime64('2118-11-20')])
+    df['vals'] = np.random.sample(len(df['date']))
+
+    gdf = cudf.from_pandas(df)
+
+    s_df = df.sort_values(by='date')
+    s_gdf = gdf.sort_values(by='date')
+
+    assert_eq(s_df, s_gdf)
 
 
 def test_issue_165():
@@ -131,3 +150,21 @@ def test_typecast_to_datetime(data, dtype):
     gdf_casted = gdf_data.astype('datetime64[ms]')
 
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
+@pytest.mark.parametrize('data', [numerical_data()])
+@pytest.mark.parametrize('nulls', ['some', 'all'])
+def test_to_from_pandas_nulls(data, nulls):
+    pd_data = pd.Series(data.copy().astype('datetime64[ms]'))
+    if nulls == 'some':
+        # Fill half the values with NaT
+        pd_data[list(range(0, len(pd_data), 2))] = np.datetime64('nat')
+    elif nulls == 'all':
+        # Fill all the values with NaT
+        pd_data[:] = np.datetime64('nat')
+    gdf_data = Series.from_pandas(pd_data)
+
+    expect = pd_data
+    got = gdf_data.to_pandas()
+
+    assert_eq(expect, got)
