@@ -409,6 +409,8 @@ class StringColumn(columnops.TypedColumnBase):
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
+            if arg < 0:
+                arg = len(self) + arg
             if arg > (len(self) - 1):
                 raise IndexError
             out = self._data[arg]
