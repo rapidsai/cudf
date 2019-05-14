@@ -189,7 +189,7 @@ public:
 
     // Generic update of allocator hash table value for any aggregator
     template <typename aggregation_type>
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
     {
       const mapped_type insert_value = insert_pair.second;
@@ -215,53 +215,53 @@ public:
     // TODO Overload atomicAdd for 1 byte and 2 byte types, until then, overload specifically for the types
     // where atomicAdd already has an overload. Otherwise the generic update_existing_value will be used.
     // Specialization for COUNT aggregator
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
     // Specialization for COUNT aggregator
-    __forceinline__ __device__
+     __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
     {
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
 
     // Specialization for SUM aggregator (int32)
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int32_t> op)
     {
       atomicAdd(&existing_value, insert_pair.second);
     }
 
     // Specialization for SUM aggregator (int64)
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int64_t> op)
     {
       atomicAdd(&existing_value, insert_pair.second);
     }
 
     // Specialization for SUM aggregator (fp32)
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<float> op)
     {
       atomicAdd(&existing_value, insert_pair.second);
     }
 
     // Specialization for SUM aggregator (fp64)
-    __forceinline__  __device__
+    __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<double> op)
     {
       atomicAdd(&existing_value, insert_pair.second);
@@ -289,7 +289,7 @@ public:
     template<typename aggregation_type,
              class comparison_type = key_equal,
              typename hash_value_type = typename Hasher::result_type>
-    __forceinline__
+    
     __device__ iterator insert(const value_type& x, 
                                aggregation_type op,
                                comparison_type keys_equal = key_equal(),
