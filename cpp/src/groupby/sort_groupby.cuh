@@ -20,7 +20,6 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.hpp"
-#include "dataframe/cudf_table.cuh"
 
 #include "groupby_sort_compute_api.h"
 #include "aggregation_operations.hpp"
