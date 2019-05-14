@@ -14,35 +14,38 @@
  * limitations under the License.
  */
 
+#include <utilities/error_utils.hpp>
 #include "cache.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 namespace cudf {
 namespace jit {
 
-std::string getTempDir()
+std::string getCacheDir()
 {
     char const *tmpdir_path;
+    std::string cache_dir{"cudf"};
+    cache_dir = cache_dir + '_' + CUDF_STRINGIFY(CUDF_VERSION) + '/';
     
     #if defined(__unix__)
-        tmpdir_path = getenv("TMPDIR");
-        if (tmpdir_path != 0)
-            return std::string(tmpdir_path) + '/';
-        tmpdir_path = getenv("TMP");
-        if (tmpdir_path != 0)
-            return std::string(tmpdir_path) + '/';
-        tmpdir_path = getenv("TEMP");
-        if (tmpdir_path != 0)
-            return std::string(tmpdir_path) + '/';
-        tmpdir_path = getenv("TEMPDIR");
-        if (tmpdir_path != 0)
-            return std::string(tmpdir_path) + '/';
+
+        (tmpdir_path = std::getenv("TMPDIR" )) ||
+        (tmpdir_path = std::getenv("TMP"    )) ||
+        (tmpdir_path = std::getenv("TEMP"   )) ||
+        (tmpdir_path = std::getenv("TEMPDIR"));
+
+        tmpdir_path = ( tmpdir_path != 0 ) ? tmpdir_path : "/tmp";
         
-        tmpdir_path = "/tmp";
-        return std::string(tmpdir_path) + '/';
+        cache_dir = std::string(tmpdir_path) + '/' + cache_dir;
+
+        // if it doesn't exist, make it
+        mkdir(cache_dir.c_str(), S_IRWXU);
+
+        return cache_dir;
     #elif
         #error Only unix is supported
     #endif // __unix__

@@ -17,7 +17,6 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
-#include <utilities/error_utils.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
@@ -30,7 +29,7 @@ namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
-std::string getTempDir();
+std::string getCacheDir();
 
 class cudfJitCache
 {
@@ -108,7 +107,7 @@ private:
             bool successful_read = false;
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
-                std::string file_name = getFilePath(name);
+                std::string file_name = getCacheDir() + name;
                 cacheFile file{file_name};
                 serialized = file.read();
                 successful_read = file.is_read_successful();
@@ -125,11 +124,6 @@ private:
             map[name] = program;
             return std::make_pair(name, program);
         }
-    }
-
-protected:
-    std::string getFilePath(std::string name) {
-        return getTempDir() + name + CUDF_STRINGIFY(CUDF_VERSION);
     }
 };
 
