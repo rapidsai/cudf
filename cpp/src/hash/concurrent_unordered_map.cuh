@@ -187,7 +187,7 @@ public:
 
     __host__ __device__ key_type get_unused_key() const { return m_unused_key; }
 
-    // Generic update of allocator hash table value for any aggregator
+    // Generic update of a hash table value for any aggregator
     template <typename aggregation_type>
     __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
