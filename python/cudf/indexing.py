@@ -8,27 +8,6 @@ import cudf
 from cudf.dataframe.index import Index
 
 
-def _normalize_dtypes(df):
-    dtypes = df.dtypes.values.tolist()
-    normalized_dtype = np.result_type(*dtypes)
-    for name, col in df.iteritems():
-        df[name] = col.astype(normalized_dtype)
-    return df
-
-
-def _is_single_value(val):
-    from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
-    if (
-            isinstance(val, str)
-            or isinstance(val, numbers.Number)
-            or is_datetime_or_timedelta_dtype(val)
-            or isinstance(val, pd.Timestamp)
-            or isinstance(val, pd.Categorical)
-    ):
-        return True
-    return False
-
-
 class _SeriesLocIndexer(object):
     """
     Label-based selection
@@ -39,7 +18,6 @@ class _SeriesLocIndexer(object):
 
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
-
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
             if len(arg) == 0:
@@ -86,11 +64,6 @@ class _SeriesIlocIndexer(object):
             arg = list(arg)
         return self._sr[arg]
 
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)
-
 
 class _DataFrameIndexer(object):
 
@@ -107,10 +80,13 @@ class _DataFrameIndexer(object):
         df = self._getitem_tuple_arg(arg)
 
         if self._can_downcast_to_series(df, arg):
-            return self._downcast_to_series(df)
+            return self._downcast_to_series(df, arg)
         return df
 
     def _is_scalar_access(self, arg):
+        """
+        Determine if we are accessing a single value (scalar)
+        """
         if isinstance(arg, str):
             return False
         if not hasattr(arg, '__len__'):
@@ -121,18 +97,26 @@ class _DataFrameIndexer(object):
         return True
 
     def _is_multiindex_arg(self, arg):
+        """
+        Determine if we are indexing with a MultiIndex
+        """
         return (
             isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
             and isinstance(arg, tuple)
         )
 
     def _can_downcast_to_series(self, df, arg):
+        """
+        This method encapsulates the logic used
+        to determine whether or not the result of a loc/iloc
+        operation should be "downcasted" from a DataFrame to a
+        Series
+        """
         nrows, ncols = df.shape
         if nrows == 1:
-            # Don't downcast if slicing along this axis
-            # (e.g., df.loc[0:1, 'a'])
-            if isinstance(arg[0], slice):
-                return False
+            if type(arg[0]) is slice:
+                if not _is_single_value(arg[1]):
+                    return False
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
                 [pd.api.types.is_numeric_dtype(t) for t in dtypes]
@@ -141,19 +125,38 @@ class _DataFrameIndexer(object):
             if all_numeric or all_identical:
                 return True
         if ncols == 1:
-            if isinstance(arg[1], slice):
-                return False
+            if type(arg[1]) is slice:
+                if not _is_single_value(arg[0]):
+                    return False
             return True
         return False
 
-    def _downcast_to_series(self, df):
-        if df.shape[0] == 1:
+    def _downcast_to_series(self, df, arg):
+        """
+        "Downcast" from a DataFrame to a Series
+        based on Pandas indexing rules
+        """
+        nrows, ncols = df.shape
+        # determine the axis along which the Series is taken:
+        if nrows == 1 and ncols == 1:
+            if not _is_single_value(arg[0]):
+                axis = 1
+            else: 
+                axis = 0
+        elif nrows == 1:
+            axis = 0
+        elif ncols == 1:
+            axis = 1
+        else:
+            raise ValueError("Cannot downcast DataFrame selection to Series")
+
+        # take series along the axis:
+        if axis == 1:
+            return df[df.columns[0]]
+        else:
             df = _normalize_dtypes(df)
             sr = df.T
             return sr[sr.columns[0]]
-
-        if df.shape[1] == 1:
-            return df[df.columns[0]]
 
 
 class _DataFrameLocIndexer(_DataFrameIndexer):
@@ -163,6 +166,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def __init__(self, df):
         self._df = df
+
+    def _getitem_scalar(self, arg):
+        return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
         from cudf.dataframe.dataframe import DataFrame
@@ -177,9 +183,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 df.index = as_index(arg[0])
         return df
-
-    def _getitem_scalar(self, arg):
-        return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_multiindex_arg(self, arg):
         # Explicitly ONLY support tuple indexes into MultiIndex.
@@ -242,6 +245,21 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             return cols[arg]
 
-    def __setitem__(self):
-        raise ValueError("updating columns using"
-                         " df.iloc[] is not allowed")
+
+def _normalize_dtypes(df):
+    dtypes = df.dtypes.values.tolist()
+    normalized_dtype = np.result_type(*dtypes)
+    for name, col in df.iteritems():
+        df[name] = col.astype(normalized_dtype)
+    return df
+
+
+def _is_single_value(val):
+    from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
+    return (
+            isinstance(val, str)
+            or isinstance(val, numbers.Number)
+            or is_datetime_or_timedelta_dtype(val)
+            or isinstance(val, pd.Timestamp)
+            or isinstance(val, pd.Categorical)
+    )

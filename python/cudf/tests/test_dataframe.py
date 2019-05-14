@@ -442,8 +442,10 @@ def test_dataframe_loc(scalar, step):
     assert_eq(df.loc[begin:begin, 'a'],
               pdf.loc[begin:begin, 'a'])
 
+    # TODO: Pandas changes the dtype here when it shouldn't
     assert_eq(df.loc[begin, 'a':'a'],
-              pdf.loc[begin, 'a':'a'])
+              pdf.loc[begin, 'a':'a'],
+              check_dtype=False)
 
     # Make int64 index
     offset = 50
@@ -669,20 +671,6 @@ def test_dataframe_iloc_index_error():
         np.testing.assert_equal(g['b'].to_array(), p['b'])
 
     assert_col(gdf.iloc[nelem*2], pdf.iloc[nelem*2])
-
-
-@pytest.mark.xfail(
-    raises=ValueError,
-    reason="updating columns using df.iloc[] is not allowed"
-)
-def test_dataframe_iloc_setitem():
-    gdf = DataFrame()
-    nelem = 123
-    gdf['a'] = np.random.randint(low=0, high=100, size=nelem) \
-        .astype(np.int32)
-    gdf['b'] = np.random.random(nelem).astype(np.float32)
-
-    gdf.iloc[0] = nelem
 
 
 def test_dataframe_to_string():
