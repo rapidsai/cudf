@@ -5,7 +5,7 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.dataframe import columnops, numerical
-from cudf.utils import utils, cudautils
+from cudf.utils import utils
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
@@ -14,6 +14,7 @@ from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.copying as cpp_copying
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.unaryops as cpp_unaryops
 
@@ -193,17 +194,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cudautils.gather(data=self.data.mem,
-                                    index=sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=Buffer(col_keys),
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
