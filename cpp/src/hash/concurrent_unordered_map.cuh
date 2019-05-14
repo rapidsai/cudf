@@ -59,26 +59,6 @@ public:
     using iterator = cycle_iterator_adapter<value_type*>;
     using const_iterator = const cycle_iterator_adapter<value_type*>;
 
-private:
-
- /**---------------------------------------------------------------------------*
-  * @brief Allows viewing a pair as a packed 8B uint64_t value
-  *
-  * Used as an optimization for inserting when sizeof(value_type) ==
-  * sizeof(uint64_t)
-  *
-  *---------------------------------------------------------------------------**/
- union pair_packer {
-   using packed_t = uint64_t;
-   packed_t const packed;
-   value_type const pair;
-
-   __device__
-   pair_packer(value_type _pair) : pair{_pair} {}
-
-   __device__
-   pair_packer(uint64_t _packed) : packed{_packed} {}
- };
 
 public:
 
@@ -297,34 +277,22 @@ public:
     }
 
    private:
-//    template <typename K, V>
-//    using deduced_type =
-//        std::enable_if_t<std::is_integral<K>::value and
-//                             std::is_integral<V>::value and
-//                             (sizeof(pair_packer::packed_t) == sizeof(V)),
-//                         thrust::pair<bool, bool>>;
-//
-//    template <typename K = typename value_type::first_type,
-//              typename V = typename value_type::second_type>
-//    deduced_type<K, V> attempt_insert(value_type* insert_location,
-//                                      value_type const& insert_pair) {
-//
-//          pair_packer const unused{thrust::make_pair(m_unused_key, m_unused_element)};
-//          pair_packer const new_pair{insert_pair};
-//          pair_packer const old{atomicCAS(
-//              reinterpret_cast<typename pair_packer::packed_t*>(current_bucket),
-//              unused.packed, new_pair.packed)};
-//
-//          if (old.packed == unused.packed) {
-//            new_insert = true;
-//            break;
-//          }
-//
-//          if (m_equal(old.pair.first, insert_pair.first)) {
-//            new_insert = false;
-//            break;
-//          }
-//}
+    /**---------------------------------------------------------------------------*
+     * @brief Allows viewing a pair as a packed 8B uint64_t value
+     *
+     * Used as an optimization for inserting when sizeof(value_type) ==
+     * sizeof(uint64_t)
+     *
+     *---------------------------------------------------------------------------**/
+    union pair_packer {
+      using packed_t = uint64_t;
+      packed_t const packed;
+      value_type const pair;
+
+      __device__ pair_packer(value_type _pair) : pair{_pair} {}
+
+      __device__ pair_packer(uint64_t _packed) : packed{_packed} {}
+    };
 
     /**---------------------------------------------------------------------------*
      * @brief Enumeration of the possible results of attempting to insert into a
@@ -335,6 +303,35 @@ public:
       SUCCESS,   ///< New pair inserted successfully
       DUPLICATE  ///< Insert did not succeed, key is already present
     };
+
+    template <typename K, typename V>
+    using deduced_type =
+        std::enable_if_t<std::is_integral<K>::value and
+                             std::is_integral<V>::value and
+                             (sizeof(typename pair_packer::packed_t) == sizeof(V)),
+                         insert_result>;
+
+    template <typename K = typename value_type::first_type,
+              typename V = typename value_type::second_type>
+    deduced_type<K, V> attempt_insert(value_type* insert_location,
+                                      value_type const& insert_pair) {
+      pair_packer const unused{
+          thrust::make_pair(m_unused_key, m_unused_element)};
+      pair_packer const new_pair{insert_pair};
+      pair_packer const old{atomicCAS(
+          reinterpret_cast<typename pair_packer::packed_t*>(insert_location),
+          unused.packed, new_pair.packed)};
+
+      if (old.packed == unused.packed) {
+        return insert_result::SUCCESS;
+      }
+
+      if (m_equal(old.pair.first, insert_pair.first)) {
+        return insert_result::DUPLICATE;
+      }
+
+      return insert_result::CONTINUE;
+    }
 
     /**---------------------------------------------------------------------------*
      * @brief Atempts to insert a key,value pair at the specified hash bucket.
