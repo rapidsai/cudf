@@ -742,21 +742,23 @@ def gpu_mark_seg_segments(begins, markers):
 
 
 @cuda.jit
-def gpu_mark_found_int(arr, val, out):
+def gpu_mark_found_int(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
         if check_equals_int(arr[i], val):
             out[i] = i
+        else:
+            out[i] = not_found
 
 
 @cuda.jit
-def gpu_mark_found_float(arr, val, out):
+def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
         if check_equals_float(arr[i], val):
             out[i] = i
         else:
-            out[i] = 0
+            out[i] = not_found
 
 
 def find_first(arr, val):
@@ -770,12 +772,11 @@ def find_first(arr, val):
     val : scalar
     """
     found = rmm.device_array_like(arr)
-    found[:] = arr.size
     if found.size > 0:
         if arr.dtype in ('float32', 'float64'):
-            gpu_mark_found_float.forall(found.size)(arr, val, found)
+            gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found)
+            gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
     from cudf.dataframe.columnops import as_column
     found_col = as_column(found)
     min_index = found_col.min()
@@ -796,12 +797,11 @@ def find_last(arr, val):
     val : scalar
     """
     found = rmm.device_array_like(arr)
-    found[:] = -1
     if found.size > 0:
         if arr.dtype in ('float32', 'float64'):
-            gpu_mark_found_float.forall(found.size)(arr, val, found)
+            gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found)
+            gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
     from cudf.dataframe.columnops import as_column
     found_col = as_column(found)
     max_index = found_col.max()
