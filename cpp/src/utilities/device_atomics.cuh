@@ -208,6 +208,13 @@ namespace detail {
         }
     };
 
+    // Cuda natively supports `unsigned long long int` for `atomicAdd`,
+    // but doesn't supports `signed long long int`.
+    // However, since the signed integer is represented as Two's complement,
+    // the fundamental arithmetic operations of addition are identical to
+    // those for unsigned binary numbers.
+    // Then, this computes as `unsigned long long int` with `atomicAdd`
+    // @sa https://en.wikipedia.org/wiki/Two%27s_complement
     template<>
     struct genericAtomicOperationImpl<int64_t, DeviceSum, 8> {
         using T = int64_t;
