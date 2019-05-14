@@ -17,6 +17,35 @@
 #ifndef HELPER_FUNCTIONS_CUH
 #define HELPER_FUNCTIONS_CUH
 
+constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
+
+/**---------------------------------------------------------------------------*
+ * @brief  Compute requisite size of hash table.
+ * 
+ * Computes the number of entries required in a hash table to satisfy
+ * inserting a specified number of keys to achieve the specified hash table
+ * occupancy.
+ *
+ * @param num_keys_to_insert The number of keys that will be inserted
+ * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
+ * 50% occupancy
+ * @return size_t The size of the hash table that will satisfy the desired
+ * occupancy for the specified number of insertions
+ *---------------------------------------------------------------------------**/
+inline size_t compute_hash_table_size(
+    gdf_size_type num_keys_to_insert,
+    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
+  assert(desired_occupancy != 0);
+  assert(desired_occupancy <= 100);
+  double const grow_factor{100.0 / desired_occupancy};
+
+  // Calculate size of hash map based on the desired occupancy
+  size_t hash_table_size{
+      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
+
+  return hash_table_size;
+}
+
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL( call )                                                                       \
@@ -29,59 +58,6 @@
     }                                                                                              \
 }
 #endif
-
-// TODO: can we do this more efficiently?
-__inline__ __device__ int8_t atomicCAS(int8_t* address, int8_t compare, int8_t val)
-{
-  int32_t *base_address = (int32_t*)((char*)address - ((size_t)address & 3));
-  int32_t int_val = (int32_t)val << (((size_t)address & 3) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 3) * 8);
-  return (int8_t)atomicCAS(base_address, int_comp, int_val);
-}
-
-// TODO: can we do this more efficiently?
-__inline__ __device__ int16_t atomicCAS(int16_t* address, int16_t compare, int16_t val)
-{
-  int32_t *base_address = (int32_t*)((char*)address - ((size_t)address & 2));
-  int32_t int_val = (int32_t)val << (((size_t)address & 2) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 2) * 8);
-  return (int16_t)atomicCAS(base_address, int_comp, int_val);
-}
-
-__inline__ __device__ int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
-{
-  return (int64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
-}
-
-__inline__ __device__ uint64_t atomicCAS(uint64_t* address, uint64_t compare, uint64_t val)
-{
-  return (uint64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
-}
-
-__inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
-{
-  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
-}
-
-__inline__ __device__ double atomicCAS(double* address, double compare, double val)
-{
-  return __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(compare), __double_as_longlong(val)));
-}
-
-__inline__ __device__ float atomicCAS(float* address, float compare, float val)
-{
-  return __int_as_float(atomicCAS((int*)address, __float_as_int(compare), __float_as_int(val)));
-}
-
-__inline__ __device__ int64_t atomicAdd(int64_t* address, int64_t val)
-{
-  return (int64_t) atomicAdd((unsigned long long*)address, (unsigned long long)val);
-}
-
-__inline__ __device__ uint64_t atomicAdd(uint64_t* address, uint64_t val)
-{
-  return (uint64_t) atomicAdd((unsigned long long*)address, (unsigned long long)val);
-}
 
 template<typename pair_type>
 __forceinline__

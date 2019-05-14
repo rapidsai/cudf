@@ -1,11 +1,27 @@
-#pragma once
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#ifndef GROUPBY_TEST_HELPERS_CUH
+#define GROUPBY_TEST_HELPERS_CUH
+
 #include "test_parameters.cuh"
 #include <string>
 #include <limits>
 #include <type_traits>
-#include "valid_vectors.h"
-#include <bitmask/bit_mask.h>
 #include <bitmask/legacy_bitmask.hpp>
+#include <tests/utilities/valid_vectors.h>
 
 //Terminating call
 //Extract the value of the Ith element of a tuple of vectors keys
@@ -315,8 +331,6 @@ void copy_output_with_array(
     cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(gdf_size_type), cudaMemcpyDeviceToHost);
 }
 
- 
-
 //Copy device side gdf_column data to an std::vector
 template <typename T>
 void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_valid_pointer& output_valids) {
@@ -324,10 +338,8 @@ void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_va
     vec.resize(column->size);
     cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
 
-    cudaMemcpy((uint8_t*)output_valids.data(),  column->valid, bit_mask::num_elements(column->size), cudaMemcpyDeviceToHost);
-    
+    cudaMemcpy(output_valids.get(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost);
 }
-
 
 //Empty terminal call
 template<std::size_t I = 0, typename... K>
@@ -345,25 +357,7 @@ copy_gdf_tuple_with_nulls(
     std::tuple<std::vector<K>...>& output_key, std::vector<host_valid_pointer>& output_valids) {
     copy_gdf_column_with_nulls(group_by_output_key[I], std::get<I>(output_key), output_valids[I]);
     copy_gdf_tuple_with_nulls<I + 1, K...>(group_by_output_key, output_key, output_valids);
-} 
-
-// //Copy the contents of gdf_columns to std::vectors
-// //group_by_output_key is copied to a tuple of vectors output_key
-// //group_by_output_value is copied to a vector output_value
-// template <typename gdf_column, typename multi_column_t, typename output_t>
-// void copy_output_with_nulls(
-//     gdf_column **group_by_output_key,
-//     multi_column_t& output_key,
-//     std::vector<host_valid_pointer>& output_valids,
-//     gdf_column *group_by_output_value,
-//     std::vector<output_t>& output_value,
-//     gdf_column *gdf_out_indices,
-//     std::vector<output_t>& cpu_out_indices) {
-//     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
-//     copy_gdf_column(group_by_output_value, output_value);
-//     copy_gdf_column(gdf_out_indices, cpu_out_indices);
-// }
-
+}
 
 //Copy the contents of gdf_columns to std::vectors
 //group_by_output_key is copied to a tuple of vectors output_key
@@ -378,7 +372,6 @@ void copy_output_with_nulls(
     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
     copy_gdf_column(group_by_output_value, output_value);
 }
-
 
 template <typename gdf_column, typename multi_column_t>
 void copy_output_with_array_with_nulls(
@@ -397,76 +390,17 @@ void copy_output_with_array_with_nulls(
 // custom functions
 //
 
-
-// Prints a vector
-template<typename T>
-void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
-{
-    auto to_stringify_functor = [&valid, &v] (int index) -> std::string {
-        if ( gdf_is_valid(valid, index)) {
-            std::string ret;
-            if (sizeof(v[index]) == 1)
-                ret = std::to_string((int)v[index]);
-            else 
-                ret = std::to_string(v[index]);
-            return ret;
-        }
-        std::string ret;
-        if (sizeof(v[index]) == 1)
-            ret = std::to_string((int)v[index]);
-        else 
-            ret = std::to_string(v[index]);
-        return ret + "|" + std::string("@");
-    };
-    std::vector<int> indexes(v.size());
-    std::iota (std::begin(indexes), std::end(indexes), 0);
-    std::transform(indexes.begin(), indexes.end(), std::ostream_iterator<std::string>(std::cout, "; "), to_stringify_functor);
-}
-
-template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuple_vector(std::tuple<std::vector<Tp>...>& t, const std::vector<host_valid_pointer>& valids = {})
-{
-  //bottom of compile-time recursion
-  //purposely empty...
-}
-
-//compile time recursion to print a tuple of vectors
-template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I < sizeof...(Tp), void>::type
-print_tuple_vector(std::tuple<std::vector<Tp>...>& t, const std::vector<host_valid_pointer>& valids = {})
-{
-  // print the current vector:
-  if (valids.size() == 0)
-    print_vector(std::get<I>(t), nullptr);
-  else
-    print_vector(std::get<I>(t), valids[I].data());
-  std::cout << std::endl;
-
-  //recurse to next vector in tuple
-  print_tuple_vector<I + 1, Tp...>(t, valids);
-}
-
-
 //print a tuple recursively. Terminating empty call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...> t) { std::cout<<"\n"; }
+print_basic_tuple(std::tuple<Tp...> t) { std::cout<<"\n"; }
 
 //print a tuple recursively. Recursive call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...> t) {
+print_basic_tuple(std::tuple<Tp...> t) {
     std::cout<<std::get<I>(t)<<"\t";
-    print_tuple<I+1, Tp...>(t);
+    print_basic_tuple<I+1, Tp...>(t);
 }
-//compile time recursion to print a tuple of vectors
-template<typename... Tp>
-void
-print_tuple_vector_row_major(std::tuple<std::vector<Tp>...>& t)
-{
-    std::cout<<"\n";
-    for (size_t i = 0; i < std::get<0>(t).size(); ++i) {
-        print_tuple(extractKey(t, i));
-    }
-}
+
+#endif

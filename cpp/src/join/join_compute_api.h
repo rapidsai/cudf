@@ -21,9 +21,11 @@
 
 #include "join_kernels.cuh"
 
-#include "dataframe/cudf_table.cuh"
+#include <table/device_table.cuh>
 #include "rmm/rmm.h"
 #include "utilities/error_utils.hpp"
+#include "full_join.cuh"
+#include <hash/helper_functions.cuh>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -36,161 +38,8 @@
 //   3) replace input iterators & input counts with arrow::Datum
 //   3) replace output iterators & output counts with arrow::ArrayData
 
-constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Creates a vector of indices that do not appear in index_ptr
-*
-* @param index_ptr Array of indices
-* @param max_index_value The maximum value an index can have in index_ptr
-* @param index_size Number of left and right indices
-* @tparam index_type The type of data associated with index_ptr
-* @tparam size_type The data type used for size calculations
-*
-* @returns  thrust::device_vector containing the indices that are missing from index_ptr
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
-thrust::device_vector<index_type>
-create_missing_indices(
-        index_type const * const index_ptr,
-        const size_type max_index_value,
-		const size_type index_size) {
-	//Assume all the indices in invalid_index_map are invalid
-	thrust::device_vector<index_type> invalid_index_map(max_index_value, 1);
-	//Vector allocated for unmatched result
-	thrust::device_vector<index_type> unmatched_indices(max_index_value);
-	//lambda to check for index validity since left joins can create invalid indices
-    auto bounds_checker =
-    [max_index_value] __device__(gdf_index_type index) {
-        return ((index >= 0) && (index < max_index_value));
-    };
-
-	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
-	//Thus specifying that those locations are valid
-	thrust::scatter_if(
-			thrust::device,
-			thrust::make_constant_iterator(0),
-			thrust::make_constant_iterator(0) + index_size,
-			index_ptr,//Index locations
-			index_ptr,//Stencil - Check if index location is valid
-			invalid_index_map.begin(),//Output indices
-			bounds_checker);//Stencil Predicate
-	CHECK_STREAM(0);
-	size_type begin_counter = static_cast<size_type>(0);
-	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
-	//Create list of indices that have been marked as invalid
-	size_type compacted_size = thrust::copy_if(
-			thrust::device,
-			thrust::make_counting_iterator(begin_counter),
-			thrust::make_counting_iterator(end_counter),
-			invalid_index_map.begin(),
-			unmatched_indices.begin(),
-			thrust::identity<index_type>()) -
-		unmatched_indices.begin();
-	CHECK_STREAM(0);
-	unmatched_indices.resize(compacted_size);
-	return unmatched_indices;
-}
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Expands a buffer's size
-*
-* @param buffer Address of the buffer to expand
-* @param buffer_capacity Memory allocated for buffer
-* @param buffer_size Number of elements in the buffer
-* @param expand_size Amount of extra elements to be pushed into the buffer
-* @tparam data_type The type of data associated with the buffer
-* @tparam size_type The data type used for size calculations
-*
-* @returns  cudaSuccess upon successful completion of buffer expansion. Otherwise returns
-* the appropriate CUDA error code
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename data_type, typename size_type>
-gdf_error expand_buffer(
-        data_type ** buffer,
-        size_type * const buffer_capacity,
-        const size_type buffer_size,
-        const size_type expand_size) {
-    size_type requested_size = buffer_size + expand_size;
-    //No need to proceed if the buffer can contain requested additional elements
-    if (*buffer_capacity >= requested_size) {
-        return GDF_SUCCESS;
-    }
-    data_type * new_buffer{nullptr};
-    data_type * old_buffer = *buffer;
-    RMM_TRY( RMM_ALLOC((void**)&new_buffer, requested_size*sizeof(data_type), 0) );
-    CUDA_TRY( cudaMemcpy(new_buffer, old_buffer, buffer_size*sizeof(data_type), cudaMemcpyDeviceToDevice) );
-    RMM_TRY( RMM_FREE(old_buffer, 0) );
-    *buffer = new_buffer;
-    *buffer_capacity = requested_size;
-
-    return GDF_SUCCESS;
-}
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief  Adds indices that are missing in r_index_ptr at the ends and places
-* JoinNoneValue to the corresponding l_index_ptr.
-*
-* @param l_index_ptr Address of the left indices
-* @param r_index_ptr Address of the right indices
-* @param index_capacity Amount of memory allocated for left and right indices
-* @param index_size Number of left and right indices
-* @param max_index_value The maximum value an index can have in r_index_ptr
-* @tparam index_type The type of data associated with index_ptr
-* @tparam size_type The data type used for size calculations
-*
-* @returns  cudaSuccess upon successful completion of append call. Otherwise returns
-* the appropriate CUDA error code
-*/
-/* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
-gdf_error append_full_join_indices(
-        index_type ** l_index_ptr,
-        index_type ** r_index_ptr,
-        size_type * const index_capacity,
-        size_type * const index_size,
-        const size_type max_index_value) {
-    gdf_error err;
-    //Get array of indices that do not appear in r_index_ptr
-    thrust::device_vector<index_type> unmatched_indices =
-        create_missing_indices(
-                *r_index_ptr, max_index_value, *index_size);
-    CUDA_CHECK_LAST()
-
-    //Expand l_index_ptr and r_index_ptr if necessary
-    size_type mismatch_index_size = unmatched_indices.size();
-    size_type l_index_capacity = *index_capacity;
-    size_type r_index_capacity = *index_capacity;
-    err = expand_buffer(l_index_ptr, &l_index_capacity, *index_size, mismatch_index_size);
-    if (GDF_SUCCESS != err) return err;
-    err = expand_buffer(r_index_ptr, &r_index_capacity, *index_size, mismatch_index_size);
-    if (GDF_SUCCESS != err) return err;
-
-    //Copy JoinNoneValue to l_index_ptr to denote that a match does not exist on the left
-    thrust::fill(
-            thrust::device,
-            *l_index_ptr + *index_size,
-            *l_index_ptr + *index_size + mismatch_index_size,
-            JoinNoneValue);
-
-    //Copy unmatched indices to the r_index_ptr
-    thrust::copy(thrust::device,
-            unmatched_indices.begin(),
-            unmatched_indices.begin() + mismatch_index_size,
-            *r_index_ptr + *index_size);
-    *index_capacity = l_index_capacity;
-    *index_size = *index_size + mismatch_index_size;
-
-    CUDA_CHECK_LAST()
-	return GDF_SUCCESS;
-}
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -209,22 +58,21 @@ gdf_error append_full_join_indices(
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type,
-          typename multimap_type,
-          typename size_type>
-gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
-                                    gdf_table<size_type> const & probe_table,
+          typename multimap_type>
+gdf_error estimate_join_output_size(device_table const & build_table,
+                                    device_table const & probe_table,
                                     multimap_type const & hash_table,
-                                    size_type * join_output_size_estimate)
+                                    gdf_size_type * join_output_size_estimate)
 {
-  const size_type build_table_num_rows{build_table.get_column_length()};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  const gdf_size_type build_table_num_rows{build_table.num_rows()};
+  const gdf_size_type probe_table_num_rows{probe_table.num_rows()};
   
   // If the probe table is significantly larger (5x) than the build table, 
   // then we attempt to only use a subset of the probe table rows to compute an
   // estimate of the join output size.
-  size_type probe_to_build_ratio{0};
+  gdf_size_type probe_to_build_ratio{0};
   if(build_table_num_rows > 0) {
-    probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows));
+    probe_to_build_ratio = static_cast<gdf_size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows));
   }
   else {
     // If the build table is empty, we know exactly how large the output
@@ -250,21 +98,22 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     return GDF_SUCCESS;
   }
 
-  size_type sample_probe_num_rows{probe_table_num_rows};
-  constexpr size_type MAX_RATIO{5};
+  gdf_size_type sample_probe_num_rows{probe_table_num_rows};
+  constexpr gdf_size_type MAX_RATIO{5};
   if(probe_to_build_ratio > MAX_RATIO)
   {
     sample_probe_num_rows = build_table_num_rows;
   }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type * d_size_estimate{nullptr};
-  size_type h_size_estimate{0};
+  gdf_size_type * d_size_estimate{nullptr};
+  gdf_size_type h_size_estimate{0};
 
-  CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_type)));
+  CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_t)));
   *d_size_estimate = 0;
 
   CUDA_TRY( cudaGetLastError() );
+
 
   // Continue probing with a subset of the probe table until either:
   // a non-zero output size estimate is found OR
@@ -276,13 +125,12 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     *d_size_estimate = 0;
 
     constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    const size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
+    const gdf_size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
     
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<join_type,
                              multimap_type,
-                             size_type,
                              block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>>(&hash_table,
@@ -294,10 +142,14 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     // Device sync is required to ensure d_size_estimate is updated
     CUDA_TRY( cudaDeviceSynchronize() );
     
-    	
-    // Increase the estimated output size by a factor of the ratio between the
+    // Only in case subset of probe table is chosen,
+    // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
-    h_size_estimate = *d_size_estimate * probe_to_build_ratio;
+    if(sample_probe_num_rows < probe_table_num_rows) {
+      h_size_estimate = *d_size_estimate * probe_to_build_ratio;
+    } else {
+      h_size_estimate = *d_size_estimate;
+    }
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
@@ -313,9 +165,9 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
     // number of rows in the build table by the same factor
     if(0 == h_size_estimate)
     {
-      constexpr size_type GROW_RATIO{2};
+      constexpr gdf_size_type GROW_RATIO{2};
       sample_probe_num_rows *= GROW_RATIO;
-      probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_to_build_ratio)/GROW_RATIO));
+      probe_to_build_ratio = static_cast<gdf_size_type>(std::ceil(static_cast<float>(probe_to_build_ratio)/GROW_RATIO));
     }
 
   } while(true);
@@ -327,34 +179,10 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   return GDF_SUCCESS;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Computes the number of entries required in a hash table to satisfy
- * inserting a specified number of keys to achieve the specified hash table
- * occupancy.
- *
- * @param num_keys_to_insert The number of keys that will be inserted
- * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
- * 50% occupancy
- * @return size_t The size of the hash table that will satisfy the desired
- * occupancy for the specified number of insertions
- *---------------------------------------------------------------------------**/
-inline size_t compute_hash_table_size(
-    gdf_size_type num_keys_to_insert,
-    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
-  assert(desired_occupancy != 0);
-  assert(desired_occupancy <= 100);
-  double const grow_factor{100.0 / desired_occupancy};
-
-  // Calculate size of hash map based on the desired occupancy
-  size_t hash_table_size{
-      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
-
-  return hash_table_size;
-}
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Performs a hash-based join between two sets of gdf_tables.
+* @brief  Performs a hash-based join between two sets of device_tables.
 *
 * @param joined_output The output of the join operation
 * @param left_table The left table to join
@@ -364,20 +192,18 @@ inline size_t compute_hash_table_size(
 * @tparam join_type The type of join to be performed
 * @tparam hash_value_type The data type to be used for the Keys in the hash table
 * @tparam output_index_type The data type to be used for the output indices
-* @tparam size_type The data type used for size calculations, e.g. size of hash table
 *
 * @returns  cudaSuccess upon successful completion of the join. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-         typename output_index_type,
-         typename size_type>
+         typename output_index_type>
 gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
-                            gdf_table<size_type> const & left_table,
-                            gdf_table<size_type> const & right_table,
+                            cudf::table const & left_table,
+                            cudf::table const & right_table,
                             bool flip_results = false)
 {
   gdf_error gdf_error_code{GDF_SUCCESS};
@@ -390,7 +216,7 @@ gdf_error compute_hash_join(
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
-                                                      size_type,
+                                                      size_t,
                                                       std::numeric_limits<hash_value_type>::max(),
                                                       std::numeric_limits<output_index_type>::max(),
                                                       default_hash<hash_value_type>,
@@ -399,7 +225,7 @@ gdf_error compute_hash_join(
 #else
   using multimap_type = concurrent_unordered_multimap<hash_value_type,
                                                       output_index_type,
-                                                      size_type,
+                                                      size_t,
                                                       std::numeric_limits<hash_value_type>::max(),
                                                       std::numeric_limits<output_index_type>::max()>;
 #endif
@@ -407,12 +233,12 @@ gdf_error compute_hash_join(
   constexpr JoinType base_join_type = (join_type == JoinType::FULL_JOIN)? JoinType::LEFT_JOIN : join_type;
 
   // Hash table will be built on the right table
-  gdf_table<size_type> const & build_table{right_table};
-  const size_type build_table_num_rows{build_table.get_column_length()};
+  auto build_table = device_table::create(right_table);
+  const gdf_size_type build_table_num_rows{build_table->num_rows()};
   
   // Probe with the left table
-  gdf_table<size_type> const & probe_table{left_table};
-  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  auto probe_table = device_table::create(left_table);
+  const gdf_size_type probe_table_num_rows{probe_table->num_rows()};
 
   // Hash table size must be at least 1 in order to have a valid allocation.
   // Even if the hash table will be empty, it still must be allocated for the
@@ -423,7 +249,6 @@ gdf_error compute_hash_join(
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
-  // but moderngpu only provides cudaDeviceProp
   // (although should be possible once we move to Arrow)
   hash_table->prefetch(0);
 
@@ -441,9 +266,9 @@ gdf_error compute_hash_join(
   // build the hash table
   if(build_table_num_rows > 0)
   {
-    const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
+    const gdf_size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
     build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
-                                                      build_table,
+                                                      *build_table,
                                                       build_table_num_rows,
                                                       d_gdf_error_code);
     
@@ -459,8 +284,9 @@ gdf_error compute_hash_join(
   }
 
 
-  size_type estimated_join_output_size{0};
-  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+  gdf_size_type estimated_join_output_size{0};
+  gdf_error_code = estimate_join_output_size<base_join_type, multimap_type>(
+      *build_table, *probe_table, *hash_table, &estimated_join_output_size);
 
   if(GDF_SUCCESS != gdf_error_code){
     return gdf_error_code;
@@ -475,14 +301,14 @@ gdf_error compute_hash_join(
   // might be incorrect and we might have underestimated the number of joined elements. 
   // As such we will need to de-allocate memory and re-allocate memory to ensure 
   // that the final output is correct.
-  size_type h_actual_found{0};
+  gdf_size_type h_actual_found{0};
   output_index_type *output_l_ptr{nullptr};
   output_index_type *output_r_ptr{nullptr};
   bool cont = true;
 
   // Allocate device global counter used by threads to determine output write location
-  size_type *d_global_write_index{nullptr};
-  RMM_TRY( RMM_ALLOC((void**)&d_global_write_index, sizeof(size_type), 0) ); // TODO non-default stream?
+  gdf_size_type *d_global_write_index{nullptr};
+  RMM_TRY( RMM_ALLOC((void**)&d_global_write_index, sizeof(gdf_size_type), 0) ); // TODO non-default stream?
  
   // Because we only have an estimate of the output size, we may need to probe the
   // hash table multiple times until we've found an output buffer size that is large enough
@@ -495,22 +321,21 @@ gdf_error compute_hash_join(
     // Allocate temporary device buffer for join output
     RMM_TRY( RMM_ALLOC((void**)&output_l_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
     RMM_TRY( RMM_ALLOC((void**)&output_r_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
-    CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
+    CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(gdf_size_type), 0) );
 
-    const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
+    const gdf_size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
     
     // Do the probe of the hash table with the probe table and generate the output for the join
     probe_hash_table<base_join_type,
                      multimap_type,
                      hash_value_type,
-                     size_type,
                      output_index_type,
                      block_size,
                      DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>> (hash_table.get(),
-                                       build_table,
-                                       probe_table,
-                                       probe_table.get_column_length(),
+                                       *build_table,
+                                       *probe_table,
+                                       probe_table->num_rows(),
                                        output_l_ptr,
                                        output_r_ptr,
                                        d_global_write_index,
@@ -519,7 +344,7 @@ gdf_error compute_hash_join(
 
     CUDA_TRY( cudaGetLastError() );
 
-    CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
+    CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(gdf_size_type), cudaMemcpyDeviceToHost));
 
     // The estimate was too small. Double the estimate and try again
     if(estimated_join_output_size < h_actual_found){
@@ -538,11 +363,13 @@ gdf_error compute_hash_join(
   // free memory used for the counters
   RMM_TRY( RMM_FREE(d_global_write_index, 0) );
 
+  cudaStream_t stream = 0;
   if (join_type == JoinType::FULL_JOIN) {
       append_full_join_indices(
               &output_l_ptr, &output_r_ptr,
-              &estimated_join_output_size,
-              &h_actual_found, build_table_num_rows);
+              estimated_join_output_size,
+              h_actual_found, build_table_num_rows,
+              stream);
   }
 
   // If the estimated join output size was larger than the actual output size,

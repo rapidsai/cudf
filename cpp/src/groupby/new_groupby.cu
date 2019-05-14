@@ -1,6 +1,7 @@
 #include <cassert>
 #include <thrust/fill.h>
 #include <algorithm>
+#include <tuple>
 
 #include "cudf.h"
 #include "types.hpp"
@@ -12,23 +13,25 @@
 #include "groupby/hash_groupby.cuh"
 #include "groupby/sort_groupby.cuh"
 #include "string/nvcategory_util.hpp"
+#include "table/device_table.cuh"
+
 
 namespace{
   /* --------------------------------------------------------------------------*/
-  /** 
-   * @brief Verifies that a set gdf_columns contain non-null data buffers, and are all 
-   * of the same size. 
+  /**
+   * @brief Verifies that a set gdf_columns contain non-null data buffers, and are all
+   * of the same size.
    *
    *
-   * TODO: remove when null support added. 
+   * TODO: remove when null support added.
    *
    * Also ensures that the columns do not contain any null values
-   * 
+   *
    * @param[in] first Pointer to first gdf_column in set
    * @param[in] last Pointer to one past the last column in set
-   * 
-   * @returns GDF_DATASET_EMPTY if a column contains a null data buffer, 
-   * GDF_COLUMN_SIZE_MISMATCH if the columns are not of equal length, 
+   *
+   * @returns GDF_DATASET_EMPTY if a column contains a null data buffer,
+   * GDF_COLUMN_SIZE_MISMATCH if the columns are not of equal length,
    */
   /* ----------------------------------------------------------------------------*/
   gdf_error verify_columns(gdf_column * cols[], int num_cols)
@@ -39,7 +42,7 @@ namespace{
 
     for(int i = 0; i < num_cols; ++i)
     {
-      GDF_REQUIRE(nullptr != cols[i], GDF_DATASET_EMPTY); 
+      GDF_REQUIRE(nullptr != cols[i], GDF_DATASET_EMPTY);
       GDF_REQUIRE(nullptr != cols[i]->data, GDF_DATASET_EMPTY);
       GDF_REQUIRE(required_size == cols[i]->size, GDF_COLUMN_SIZE_MISMATCH );
 
@@ -51,18 +54,18 @@ namespace{
 } // anonymous namespace
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Groupby operation for an arbitrary number of key columns and an
  * arbitrary number of aggregation columns.
  *
  * "Groupby" is a reduce-by-key operation where rows in one or more "key" columns
  * act as the keys and one or more "aggregation" columns hold the values that will
- * be reduced. 
+ * be reduced.
  *
  * The output of the operation is the set of key columns that hold all the unique keys
  * from the input key columns and a set of aggregation columns that hold the specified
  * reduction among all identical keys.
- * 
+ *
  * @param[in] in_key_columns[] The input key columns
  * @param[in] num_key_columns The number of input columns to groupby
  * @param[in] in_aggregation_columns[] The columns that will be aggregated
@@ -72,12 +75,12 @@ namespace{
  * will be applied to in_aggregation_columns[i]
  * @param[in,out] out_key_columns[] Preallocated buffers for the output key columns
  * columns
- * @param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
+ * @param[in,out] out_aggregation_columns[] Preallocated buffers for the output
  * aggregation columns
  * @param[in] options Structure that controls behavior of groupby operation, i.e.,
  * sort vs. hash-based implementation, whether or not the output will be sorted,
  * etc. See definition of gdf_context.
- * 
+ *
  * @returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
@@ -133,13 +136,13 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
     sort_result = true;
   }
 
-  //Check that user is not trying to sum or avg string columns
+  // Check that user is not trying to sum or avg string columns
   for(int aggregation_index = 0; aggregation_index < num_aggregation_columns; aggregation_index++){
-	  if(( agg_ops[aggregation_index] == GDF_SUM ||
-		   agg_ops[aggregation_index] == GDF_AVG ) &&
-		   in_aggregation_columns[aggregation_index]->dtype == GDF_STRING_CATEGORY){
-		  return GDF_UNSUPPORTED_DTYPE;
-	  }
+    if(( agg_ops[aggregation_index] == GDF_SUM ||
+       agg_ops[aggregation_index] == GDF_AVG ) &&
+       in_aggregation_columns[aggregation_index]->dtype == GDF_STRING_CATEGORY){
+      return GDF_UNSUPPORTED_DTYPE;
+    }
 
   }
 
@@ -204,8 +207,8 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   }
 
   GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
-  
-  //The following code handles propogating an NVCategory into columns which are of type nvcategory
+
+  // The following code handles propogating an NVCategory into columns which are of type nvcategory
   for(int key_index = 0; key_index < num_key_columns; key_index++){
     if(out_key_columns[key_index]->dtype == GDF_STRING_CATEGORY){
       gdf_error_code = nvcategory_gather(out_key_columns[key_index],
@@ -226,173 +229,124 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   return gdf_error_code;
 }
 
-
-
-gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
-                             gdf_column** data_cols_in,
-									           gdf_index_type* unique_indices,
-                             gdf_size_type* num_unique_indices, 
-									           gdf_context* context)
+rmm::device_vector<gdf_index_type>
+gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 {
+  gdf_size_type ncols = input_table.num_columns();
+  gdf_size_type nrows = input_table.num_rows();
 
-  gdf_size_type nrows = data_cols_in[0]->size;
-  // setup for reduce by key  
-  bool const have_nulls{ std::any_of(data_cols_in, data_cols_in + num_data_cols, [](gdf_column * col){ return col->null_count > 0;}) };
-
-  rmm::device_vector<void*> d_cols(num_data_cols); 
-  rmm::device_vector<int> d_types(num_data_cols, 0);
+  rmm::device_vector<void*> d_cols(ncols);
+  rmm::device_vector<int> d_types(ncols, 0);
   void** d_col_data = d_cols.data().get();
   int* d_col_types = d_types.data().get();
-
-  bool nulls_are_smallest = context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST;
 
   gdf_index_type* result_end;
   cudaStream_t stream;
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
-  if (have_nulls){
 
-    rmm::device_vector<gdf_valid_type*> d_valids(num_data_cols);
-    gdf_valid_type** d_valids_data = d_valids.data().get();
+  rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
-    soa_col_info(data_cols_in, num_data_cols, d_col_data, d_valids_data, d_col_types);
-    
-    LesserRTTI<gdf_size_type> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_data_cols, nulls_are_smallest);
-    
-    auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
-    
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              unique_indices,
-                              [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
-                              return comp.equal_with_nulls(key1, key2);
-                            });
+  auto device_input_table = device_table::create(input_table);
+  auto comp = equality_comparator(*device_input_table, true);
 
-  } else {
+  auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
 
-    soa_col_info(data_cols_in, num_data_cols, d_col_data, nullptr, d_col_types);
-    
-    LesserRTTI<gdf_size_type> comp(d_col_data, nullptr, d_col_types, nullptr, num_data_cols, nulls_are_smallest);
+  result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
+                            unique_indices.data().get(),
+                            comp);
 
-    auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
-    
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              unique_indices,
-                              [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
-                              return comp.equal(key1, key2);  
-                            });
-  }
+  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
 
-  gdf_size_type new_sz = thrust::distance(unique_indices, result_end);
-  *num_unique_indices = new_sz;
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream); 
+  cudaStreamSynchronize(stream);
+  cudaStreamDestroy(stream);
 
-  return GDF_SUCCESS;
-
+  return unique_indices;
 }
 
-
-
-gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
-                                            gdf_column** data_cols_in,
-                                            gdf_size_type num_key_cols,
-                                            gdf_index_type const * key_col_indices,
-                                            gdf_column** data_cols_out,
-                                            gdf_index_type* group_start_indices,
-                                            gdf_size_type* num_group_start_indices, 
-                                            gdf_context* context)      
+std::tuple<cudf::table, rmm::device_vector<gdf_index_type>> 
+gdf_group_by_without_aggregations(cudf::table const& input_table,
+                                  gdf_size_type num_key_cols,
+                                  gdf_index_type const * key_col_indices,
+                                  gdf_context* context)
 {
-  GDF_REQUIRE((nullptr != data_cols_in), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((nullptr != data_cols_in[0]), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((nullptr != data_cols_out), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((nullptr != data_cols_out[0]), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((num_data_cols > 0), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((num_key_cols > 0), GDF_DATASET_EMPTY);
-  GDF_REQUIRE((nullptr != key_col_indices), GDF_DATASET_EMPTY);
-  
+  CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
+  CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
 
-  gdf_size_type nrows = data_cols_in[0]->size;
-
-  // setup for order by call
-  bool group_by_keys_contain_nulls = false;
-  std::vector<gdf_column*> orderby_cols_vect(num_key_cols);
-  for (gdf_size_type i = 0; i < num_key_cols; i++){
-    orderby_cols_vect[i] = data_cols_in[key_col_indices[i]];
-    group_by_keys_contain_nulls = group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0;
+  if (0 == input_table.num_rows()) {
+    return std::make_tuple(cudf::table(), rmm::device_vector<gdf_index_type>());
   }
+
+  gdf_size_type nrows = input_table.num_rows();
+  
+  // Allocate output columns
+  cudf::table destination_table(nrows, cudf::column_dtypes(input_table), true);
+
+  std::vector<gdf_column*> key_cols_vect(num_key_cols);
+  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect.begin(),
+                  [&input_table] (gdf_index_type const index) { return const_cast<gdf_column*>(input_table.get_column(index)); });
+  cudf::table key_col_table(key_cols_vect.data(), key_cols_vect.size());
 
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
   gdf_column sorted_indices_col;
-  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
-                            nullptr, nrows, GDF_INT32);
-  GDF_REQUIRE(GDF_SUCCESS == status, status);
+  CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
+                          nullptr, nrows, GDF_INT32));
 
-  if (context->flag_groupby_include_nulls || !group_by_keys_contain_nulls){  // SQL style
-  // run order by and get new sort indexes
-    status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+  if (context->flag_groupby_include_nulls || !cudf::has_nulls(key_col_table)){  // SQL style
+    CUDF_TRY(gdf_order_by(key_col_table.begin(),
                           nullptr,
-                          num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                          &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                          context);
-    GDF_REQUIRE(GDF_SUCCESS == status, status);
-
-    // run gather operation to establish new order
-    // run gather operation to establish new order
-    cudf::table table_in(data_cols_in, num_data_cols);
-    cudf::table table_out(data_cols_out, num_data_cols);
-    
-    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
-    
-    for (gdf_size_type i = 0; i < num_key_cols; i++){
-      orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
-    }
-
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
-
-    return status;
+                          key_col_table.num_columns(),
+                          &sorted_indices_col,
+                          context));
   } else {  // Pandas style
 
-    auto flag_null_sort_behavior = context->flag_null_sort_behavior;
-    context->flag_null_sort_behavior = GDF_NULL_AS_LARGEST_FOR_MULTISORT; // overide behaviour to filter out the nulls
+    // Pandas style ignores groups that have nulls in their keys, so we want to filter them out.
+    // We will create a bitmask (key_cols_bitmask) that represents if there is any null in any of they key columns.
+    // We create a modified set of key columns (modified_key_col_table), where the first key column will take this bitmask (key_cols_bitmask)
+    // Then if we set flag_null_sort_behavior = GDF_NULL_AS_LARGEST, then when we sort by the key columns, 
+    // then all the rows where any of the key columns contained a null, these will be at the end of the sorted set.
+    // Then we can figure out how many of those rows contained any nulls and adjust the size of our sorted data set 
+    // to ignore the rows where there were any nulls in the key columns
+    
+    auto key_cols_bitmask = row_bitmask(key_col_table);
 
-    // run order by and get new sort indexes
-    status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+    gdf_column modified_fist_key_col; 
+    modified_fist_key_col.data = key_cols_vect[0]->data;
+    modified_fist_key_col.size = key_cols_vect[0]->size;
+    modified_fist_key_col.dtype = key_cols_vect[0]->dtype;
+    modified_fist_key_col.null_count = key_cols_vect[0]->null_count;
+    modified_fist_key_col.valid = reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get());
+
+    std::vector<gdf_column*> modified_key_cols_vect = key_cols_vect;
+    modified_key_cols_vect[0] = &modified_fist_key_col;
+    cudf::table modified_key_col_table(modified_key_cols_vect.data(), modified_key_cols_vect.size());
+
+    gdf_context temp_ctx;
+    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+
+    CUDF_TRY(gdf_order_by(modified_key_col_table.begin(),
                           nullptr,
-                          num_key_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                          &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                          context);
-    GDF_REQUIRE(GDF_SUCCESS == status, status);
-
-    // lets filter out all the nulls in the group by key column by:
-    // we will take the data which has been sorted such that the nulls in the group by keys are all last
-    // then using the gdf_table's property of row-validity mask we can count how many rows have 
-    // a null in the group by keys and use that to resize the data
-    std::unique_ptr< gdf_table<gdf_size_type> > group_by_keys_table{new gdf_table<gdf_size_type>{num_key_cols, &orderby_cols_vect[0]}};
+                          modified_key_col_table.num_columns(),
+                          &sorted_indices_col,
+                          &temp_ctx));
+    
     int valid_count;
-    status = group_by_keys_table->get_num_valid_rows(valid_count);
-    GDF_REQUIRE(GDF_SUCCESS == status, status);
+    CUDF_TRY(gdf_count_nonzero_mask(reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get()),
+                                    nrows, &valid_count));
 
-    for (gdf_size_type i = 0; i < num_data_cols; i++)    {
-      data_cols_in[i]->size = valid_count;
-      data_cols_out[i]->size = valid_count;
-    }
-    
-    // run gather operation to establish new order
-    cudf::table table_in(data_cols_in, num_data_cols);
-    cudf::table table_out(data_cols_out, num_data_cols);
-    
-    cudf::gather(&table_in, sorted_indices.data().get(), &table_out);
-    
-    for (gdf_size_type i = 0; i < num_key_cols; i++){
-      orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
-    }
-   
-    context->flag_null_sort_behavior = flag_null_sort_behavior;
-
-    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, context);
-
-    return status;
+    std::for_each(destination_table.begin(), destination_table.end(), 
+                  [valid_count](gdf_column * col){ col->size = valid_count; });
   }
+
+  // run gather operation to establish new order
+  cudf::gather(&input_table, sorted_indices.data().get(), &destination_table);
+
+  std::vector<gdf_column*> key_cols_vect_out(num_key_cols);
+  std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect_out.begin(),
+                  [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
+  cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
+  
+  return std::make_tuple(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }
 
 

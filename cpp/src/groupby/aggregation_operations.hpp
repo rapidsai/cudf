@@ -17,8 +17,8 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
 
-#include <limits>
 #include "utilities/cudf_utils.h"
+#include "utilities/wrapper_types.hpp"
 
 
 /* --------------------------------------------------------------------------*/
@@ -147,9 +147,10 @@ struct count_op
   using with_valids = count_op_valids<value_type>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  value_type operator()(value_type new_value, value_type old_value)
+  value_type operator()(value_type, value_type old_value)
   {
-    return ++old_value;
+    old_value += value_type{1};
+    return old_value;
   }
 };
 

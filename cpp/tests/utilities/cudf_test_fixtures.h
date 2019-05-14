@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef CUDF_TEST_FIXTURES_H
+#define CUDF_TEST_FIXTURES_H
 
+#include <cudf.h>
 #include <gtest/gtest.h>
-
+#include <gmock/gmock.h>
 #include <rmm/rmm.h>
 
-#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
-#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
-#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
+#include "cudf_test_utils.cuh"
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
@@ -38,3 +36,5 @@ struct GdfTest : public ::testing::Test
         ASSERT_RMM_SUCCEEDED( rmmFinalize() );
     }
 };
+
+#endif // CUDF_TEST_FIXTURES_H
