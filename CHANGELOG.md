@@ -6,6 +6,7 @@
 - PR #1569 Add support for Json objects to the JSON Lines reader
 - PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
+- PR #1310 Implemented the slice/split functionality.
 
 ## Improvements
 

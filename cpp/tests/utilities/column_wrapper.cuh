@@ -1,5 +1,8 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
+ * 
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 William Malpica <william@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +149,35 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an already existing gdf_column*
+   *
+   * Constructs a column_wrapper using a gdf_column*. The data in gdf_column* is 
+   * copied over. The allocations in the original gdf_column* are not managed,
+   * and wont be freed by the destruction of this column wrapper
+   *
+   * @param column The gdf_column* that contains the originating data
+   *---------------------------------------------------------------------------**/
+  column_wrapper(const gdf_column & column) : data(static_cast<ColumnType*>(column.data), static_cast<ColumnType*>(column.data) + column.size)  {
+    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype, "data types do not match");
+
+    if (column.valid != nullptr){
+      bitmask.assign(column.valid, column.valid + gdf_valid_allocation_size(column.size));
+    }
+    the_column.data = data.data().get();
+    the_column.size = data.size();
+    the_column.dtype = column.dtype;
+    gdf_dtype_extra_info extra_info;
+    extra_info.time_unit = column.dtype_info.time_unit;
+    the_column.dtype_info = extra_info;
+    if (bitmask.size() > 0){
+      the_column.valid = bitmask.data().get();
+    } else {
+      the_column.valid = nullptr;
+    }
+    the_column.null_count = column.null_count;
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using host vector for column data and
    * lambda initializer for the bitmask.
    *
@@ -153,11 +185,7 @@ struct column_wrapper {
    *
    * The valid bitmask is initialized using the specified bit_initializer unary
    * lambda that returns a bool. Bit `i` in the bitmask will be equal to
-   * `bit_intiializer(i)`.
    *
-   * @tparam BitInitializerType The type of the bit initializer unary lambda
-   * @param host_data The vector of data to use for the column
-   * @param bit_initializer The unary lambda to intialize each bit of the
    * bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
