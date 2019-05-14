@@ -7,7 +7,8 @@
 
 ## Improvements
 
-...
+- PR #1703 Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
+
 
 ## Bug Fixes
 
