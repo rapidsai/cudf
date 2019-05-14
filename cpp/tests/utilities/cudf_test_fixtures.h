@@ -14,29 +14,17 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef CUDF_TEST_FIXTURES_H
+#define CUDF_TEST_FIXTURES_H
 
 #include <cudf.h>
 #include <gtest/gtest.h>
-
-#include <ftw.h>
+#include <gmock/gmock.h>
 
 #include <rmm/rmm.h>
 
-#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
-#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
-#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
-
-#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression) \
-do { \
-    gdf_error _assert_cudf_success_eval_result;\
-    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
-    const char* _assertion_failure_message = #gdf_error_expression; \
-    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) << "Failing expression: " << _assertion_failure_message; \
-} while (0)
-
+#include <ftw.h>
+#include "cudf_test_utils.cuh"
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
@@ -88,3 +76,4 @@ struct TempDirTestEnvironment : public ::testing::Environment
         return tmpdir;
     }
 };
+#endif // CUDF_TEST_FIXTURES_H
