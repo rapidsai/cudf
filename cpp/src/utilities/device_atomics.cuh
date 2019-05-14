@@ -209,6 +209,20 @@ namespace detail {
     };
 
     template<>
+    struct genericAtomicOperationImpl<int64_t, DeviceSum, 8> {
+        using T = int64_t;
+        __forceinline__  __device__
+        T operator()(T* addr, T const & update_value, DeviceSum op)
+        {
+            using T_int = unsigned long long int;
+            static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+            T ret = atomicAdd(reinterpret_cast<T_int*>(addr),
+                type_reinterpret<T_int, T>(update_value) );
+            return ret;
+        }
+    };
+
+    template<>
     struct genericAtomicOperationImpl<int32_t, DeviceMin, 4> {
         using T = int32_t;
         __forceinline__  __device__
