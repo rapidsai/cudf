@@ -69,7 +69,10 @@ named_prog<jitify_v2::Program> cudfJitCache::getProgram(
     std::lock_guard<std::mutex> lock(_program_cache_mutex);
 
     return getCached(prog_name, program_map, 
-        [&](){return jitify_v2::Program(cuda_source,
+        [&](){
+            CUDF_EXPECTS( not cuda_source.empty(),
+                "Program not found in cache, Needs source string.");
+            return jitify_v2::Program(cuda_source,
                                         given_headers,
                                         given_options,
                                         file_callback);

@@ -33,6 +33,8 @@ struct JitCacheTest : public ::testing::Test
     }
 
     virtual void SetUp() {
+        // Prime up the cache so that the in-memory and file cache is populated
+        
         purgeFileCache();
 
         // Single value column
@@ -93,6 +95,11 @@ struct JitCacheTest : public ::testing::Test
 
 };
 
+TEST_F(JitCacheTest, CacheExceptionTest) {
+    EXPECT_NO_THROW(auto program = getProgram("MemoryCacheTestProg"));
+    EXPECT_ANY_THROW(auto program1 = getProgram("MemoryCacheTestProg1"));
+}
+
 // Test the in memory caching ability
 TEST_F(JitCacheTest, MemoryCacheKernelTest) {
     // Check the kernel caching
@@ -106,35 +113,45 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest) {
     auto program = getProgram("MemoryCacheTestProg1", program2_source);
     // TODO: when I convert this pair to a class, make an inherited test class that can edit names
     std::get<0>(program) = "MemoryCacheTestProg";
+
+    // remove any file cache so below kernel should not be obtained from file
+    purgeFileCache();
+
+    // make kernel that if the cache tried to compile, will use a different
+    // program than intended and give wrong result. 
     auto kernel = getKernelInstantiation("my_kernel",
-                                                program,
-                                                {"3", "int"});
+                                         program,
+                                         {"3", "int"});
 
     (*std::get<1>(kernel)).configure_1d_max_occupancy()
                 .launch(column.get()->data);
 
     ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                    << "  Actual col: " << column.to_str();
+                                  << "  Actual col: " << column.to_str();
 }
 
 TEST_F(JitCacheTest, MemoryCacheProgramTest) {
     // Check program source caching
+
     // Single value column
     // TODO (dm): should be a scalar tho
     auto column = cudf::test::column_wrapper<int>{{5,0}};
     auto expect = cudf::test::column_wrapper<int>{{625,0}};
 
-    // give a different source and check that still the old program is used
-    auto program = getProgram("MemoryCacheTestProg", program2_source);
+    // remove any file cache so below program should not be obtained from file
+    purgeFileCache();
+
+    auto program = getProgram("MemoryCacheTestProg");
+    // make kernel that HAS to be compiled
     auto kernel = getKernelInstantiation("my_kernel",
-                                                program,
-                                                {"4", "int"});
+                                         program,
+                                         {"4", "int"});
 
     (*std::get<1>(kernel)).configure_1d_max_occupancy()
                 .launch(column.get()->data);
 
     ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                    << "  Actual col: " << column.to_str();
+                                  << "  Actual col: " << column.to_str();
 }
 
 // Test the file caching ability
@@ -148,7 +165,7 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
     auto expect = cudf::test::column_wrapper<int>{{625,0}};
 
     // make program
-    auto program = cache.getProgram("MemoryCacheTestProg", program2_source);
+    auto program = cache.getProgram("MemoryCacheTestProg");
     // make kernel that HAS to be compiled
     auto kernel = cache.getKernelInstantiation("my_kernel",
                                                 program,

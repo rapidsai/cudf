@@ -51,7 +51,7 @@ public:
 
     named_prog<jitify_v2::Program> getProgram(
         std::string const& prog_file_name, 
-        std::string const& cuda_source,
+        std::string const& cuda_source = "",
         std::vector<std::string> const& given_headers = {},
         std::vector<std::string> const& given_options = {},
         jitify_v2::file_callback_type file_callback = nullptr);
