@@ -61,44 +61,13 @@ struct elements_are_equal
 };
 } // namespace
 
-struct equality_comparator
-{
-
-  equality_comparator(device_table const &lhs, bool nulls_are_equal = false) : _lhs(lhs), _rhs(lhs), _nulls_are_equal(nulls_are_equal)
-  {
-  }
-  equality_comparator(device_table const &lhs, device_table const &rhs,
-                      bool nulls_are_equal = false) : _lhs(lhs), _rhs(rhs), _nulls_are_equal(nulls_are_equal)
-  {
-  }
-
-  __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index)
-  {
-
-    bool nulls_are_equal = this->_nulls_are_equal;
-    auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
-                              gdf_column const &l, gdf_column const &r) {
-      return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index, r,
-                                   rhs_index, nulls_are_equal);
-    };
-
-    return thrust::equal(thrust::seq, _lhs.begin(), _lhs.end(), _rhs.begin(),
-                         equal_elements);
-  }
-
-private:
-  device_table const _lhs;
-  device_table const _rhs;
-  bool _nulls_are_equal;
-};
-
 /**
  * @brief  Checks for equality between two rows between two tables.
  *
- * @param lhs The left table
- * @param lhs_index The index of the row in the rhs table to compare
- * @param rhs The right table
- * @param rhs_index The index of the row within rhs table to compare
+ * @param lhs             The left table
+ * @param lhs_index       The index of the row in the rhs table to compare
+ * @param rhs             The right table
+ * @param rhs_index       The index of the row within rhs table to compare
  * @param nulls_are_equal Flag indicating whether two null values are considered
  * equal
  *
@@ -120,6 +89,51 @@ __device__ inline bool rows_equal(device_table const &lhs,
   return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
                        equal_elements);
 }
+
+
+/**
+ * @brief  Operator struct that checks for equality between two rows between two tables.
+ */
+struct equality_comparator
+{
+
+/**
+ * @brief  Constructor for equality operator
+ *
+ * @param lhs             The left table
+ * @param nulls_are_equal Flag indicating whether two null values are considered
+ * equal
+ *
+ * Use this constructor when you will be comparing two rows from the same table
+ */
+  equality_comparator(device_table const &lhs, bool nulls_are_equal = false) : _lhs(lhs), _rhs(lhs), _nulls_are_equal(nulls_are_equal)
+  {
+  }
+/**
+ * @brief  Constructor for equality operator
+ *
+ * @param lhs             The left table
+ * @param rhs             The right table
+ * @param nulls_are_equal Flag indicating whether two null values are considered
+ * equal
+ *
+ * Use this constructor when you will be comparing rows from two different tables
+ */
+  equality_comparator(device_table const &lhs, device_table const &rhs,
+                      bool nulls_are_equal = false) : _lhs(lhs), _rhs(rhs), _nulls_are_equal(nulls_are_equal)
+  {
+  }
+
+  __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index)
+  {
+    return rows_equal(_lhs, lhs_index, _rhs, rhs_index, _nulls_are_equal);    
+  }
+
+private:
+  device_table const _lhs;
+  device_table const _rhs;
+  bool _nulls_are_equal;
+};
 
 
 namespace
@@ -180,15 +194,40 @@ struct typed_inequality_with_nulls_comparator
 };
 } // namespace
 
+
+/**
+ * @brief  Operator struct that checks for less than or greater than between two rows of two tables
+ */
 struct inequality_comparator
 {
 
-  inequality_comparator(device_table const &lhs, bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) : _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
+/**
+ * @brief  Constructor for inequality comparator
+ *
+ * @param lhs                 The left table
+ * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
+ * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending order and 1 is descending)
+ *
+ * Use this constructor when you will be comparing two rows from the same table
+ */
+  inequality_comparator(device_table const &lhs, bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) : 
+        _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
   {
     _has_nulls = _lhs.has_nulls();
   }
+/**
+ * @brief  Constructor for inequality comparator
+ *
+ * @param lhs                 The left table
+ * @param rhs                 The right table
+ * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
+ * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending order and 1 is descending)
+ *
+ * Use this constructor when you will be comparing two rows from the same table
+ */
   inequality_comparator(device_table const &lhs, device_table const &rhs,
-                        bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) : _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
+                        bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
+                           _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
   {
     _has_nulls = _lhs.has_nulls() || _rhs.has_nulls();
   }
