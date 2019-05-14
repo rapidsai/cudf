@@ -9,4 +9,4 @@ def get_renderable_pandas_dataframe(gdf):
         return pd.concat(
             [gdf.head(n + 1).to_pandas(),
              gdf.tail(n + 1).to_pandas(),
-         ])  # enough head and tail to look the same, plus some extra
+             ])  # enough head and tail to look the same, plus some extra

@@ -14,7 +14,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
-from .core import get_renderable_pandas_dataframe
+from cudf.dataframe.core import get_renderable_pandas_dataframe
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
