@@ -155,13 +155,15 @@ def json_input(request, tmp_path_factory):
         return str(fname)
 
 
-def test_json_lines_basic(json_input):
-    cu_df = cudf.read_json(json_input, lines=True)
+@pytest.mark.parametrize('engine', ['cudf', 'pandas'])
+def test_json_lines_basic(json_input, engine):
+    cu_df = cudf.read_json(json_input, engine=engine, lines=True)
     pd_df = pd.read_json(json_input, lines=True)
 
     assert(all(cu_df.dtypes == ['int64', 'int64', 'int64']))
-    for col in range(3):
-        np.testing.assert_array_equal(pd_df[col], cu_df[str(col)])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert (str(cu_col) == str(pd_col))
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col])
 
 
 def test_json_lines_byte_range(json_input):
