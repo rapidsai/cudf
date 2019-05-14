@@ -16,15 +16,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-try:
-    # pd 0.24.X
-    from pandas.core.dtypes.common import infer_dtype_from_object
-except ImportError:
-    # pd 0.23.X
-    from pandas.core.dtypes.common import \
-            _get_dtype_from_object as infer_dtype_from_object
-
-
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -228,8 +219,7 @@ class DataFrame(object):
         if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex) and\
            isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
-           isinstance(arg, tuple):
+        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -575,6 +565,16 @@ class DataFrame(object):
     def __iter__(self):
         return iter(self.columns)
 
+    def equals(self, other):
+        for col in self.columns:
+            if col not in other.columns:
+                return False
+            if not self[col].equals(other[col]):
+                return False
+        if not self.index.equals(other.index):
+            return False
+        return True
+
     def sin(self):
         return self._apply_op('sin')
 
@@ -917,13 +917,17 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels, axis=None):
+    def drop(self, labels, axis=None, errors='raise'):
         """Drop column(s)
 
         Parameters
         ----------
         labels : str or sequence of strings
             Name of column(s) to be dropped.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Only axis=1 is currently supported.
+        errors : {'ignore', 'raise'}, default 'raise'
+            This parameter is currently ignored.
 
         Returns
         -------
@@ -953,6 +957,8 @@ class DataFrame(object):
         """
         if axis == 0:
             raise NotImplementedError("Can only drop columns, not rows")
+        if errors != 'raise':
+            raise NotImplementedError("errors= keyword not implemented")
 
         columns = [labels] if isinstance(
                 labels, (str, numbers.Number)) else list(labels)
@@ -1810,7 +1816,6 @@ class DataFrame(object):
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-
         if by is None and level is None:
             raise TypeError('groupby() requires either by or level to be'
                             'specified.')
@@ -1893,6 +1898,9 @@ class DataFrame(object):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
+        if self.empty:
+            return self.copy()
+
         if not isinstance(local_dict, dict):
             raise TypeError("local_dict type: expected dict but found {!r}"
                             .format(type(local_dict)))
@@ -2708,12 +2716,12 @@ class DataFrame(object):
 
         df = DataFrame()
 
-        # infer_dtype_from_object can distinguish between
+        # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
         include, exclude = map(
             lambda x: frozenset(
-                map(infer_dtype_from_object, x)),
+                map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 
@@ -2746,7 +2754,7 @@ class DataFrame(object):
                 if issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
-        include_all = set([infer_dtype_from_object(d)
+        include_all = set([utils.cudf_dtype_from_pydata_dtype(d)
                            for d in self.dtypes])
 
         # remove all exclude types
@@ -2757,7 +2765,7 @@ class DataFrame(object):
             inclusion = inclusion & include_subtypes
 
         for x in self._cols.values():
-            infered_type = infer_dtype_from_object(x.dtype)
+            infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 
@@ -2833,6 +2841,8 @@ class Loc(object):
             else:
                 raise TypeError(type(arg_1))
             col_slice = arg_2
+            if isinstance(arg_2, str):
+                col_slice = [arg_2]
 
         elif isinstance(arg, slice):
             row_slice = arg

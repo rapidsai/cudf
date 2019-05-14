@@ -19,25 +19,36 @@ class SeriesGroupBy(object):
     """
     def __init__(self, source_series, group_series, level=None, sort=False):
         self.source_series = source_series
+        self.source_name = '_x'
+        if self.source_series is not None and\
+                self.source_series.name is not None:
+            self.source_name = source_series.name
         self.group_series = group_series
+        self.group_name = '_y'
+        if self.group_series is not None and\
+                self.group_series.name is not None:
+            self.group_name = group_series.name
         self.level = level
         self.sort = sort
 
     def __getattr__(self, attr):
         df = DataFrame()
-        df['x'] = self.source_series
+        df[self.source_name] = self.source_series
         if self.level is not None:
-            df['y'] = self.source_series.index
+            df[self.group_name] = self.source_series.index
         else:
-            df['y'] = self.group_series
-        groupby = df.groupby('y', level=self.level, sort=self.sort)
+            df[self.group_name] = self.group_series
+        groupby = df.groupby(self.group_name,
+                             level=self.level,
+                             sort=self.sort)
         result_df = getattr(groupby, attr)()
 
         def get_result():
-            result_series = result_df['x']
-            result_series.name = None
+            result_series = result_df[self.source_name]
+            result_series.name = self.source_name if self.source_name !=\
+                '_x' else None
             idx = result_df.index
-            idx.name = None
+            idx.name = self.group_name if self.group_name != '_y' else None
             result_series.set_index(idx)
             return result_series
         return get_result
@@ -79,7 +90,7 @@ class Groupby(object):
         self.level = None
         self._original_index_name = None
         self._val_columns = []
-        self._df = df.copy(deep=True)
+        self._df = df.copy(deep=False)
         self._as_index = as_index
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
@@ -102,7 +113,7 @@ class Groupby(object):
                 if self._df.index.names is None or sum(
                         x is None for x in self._df.index.names) > 1:
                     self._df_index_names = list(
-                            range(len(self._df_index.levels)))
+                            range(len(self._df.index._source_data.columns)))
                 for which_level in level:
                     # find the index of the level in the MultiIndex
                     if isinstance(which_level, str):
@@ -113,10 +124,7 @@ class Groupby(object):
                     try:
                         level_values = self._df.index.levels[which_level]
                     except IndexError:
-                        raise IndexError("Too many levels: Index has only "
-                                         "%d levels, not %d" % (
-                                               len(self._df.index.levels),
-                                               which_level+1))
+                        raise IndexError("Too many levels: Index has only %d levels, not %d" % (len(self._df.index._source_data.columns), which_level+1))  # noqa: E501
                     # protected by the above guard
                     code = self._df.index.codes[
                             self._df.index.names[which_level]]
@@ -160,7 +168,21 @@ class Groupby(object):
         agg_type : str
             The aggregation function to run.
         """
-        return _cpp_apply_basic_agg(self, agg_type, sort_results=sort_results)
+        agg_groupby = self.copy(deep=False)
+        if agg_type in ['mean', 'sum']:
+            agg_groupby._df = agg_groupby._df._get_numeric_data()
+            agg_groupby._val_columns = []
+            for val in self._val_columns:
+                if val in agg_groupby._df.columns:
+                    agg_groupby._val_columns.append(val)
+            # _get_numeric_data might have removed the by column
+            if isinstance(self._by, (str, Number)):
+                agg_groupby._df[self._by] = self._df[self._by]
+            else:
+                for by in self._by:
+                    agg_groupby._df._cols[by] = self._df._cols[by]
+        return _cpp_apply_basic_agg(agg_groupby, agg_type,
+                                    sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
@@ -176,16 +198,13 @@ class Groupby(object):
                 index.name = name
                 final_result.index = index
             else:
-                levels = []
-                codes = []
-                names = []
-                for by in self._by:
-                    levels.append([])
-                    codes.append([])
-                    names.append(by)
-                mi = MultiIndex(levels, codes)
-                mi.names = names
+                mi = MultiIndex(source_data=result[self._by])
+                mi.names = self._by
                 final_result.index = mi
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
+                final_series = Series([], name=final_result.columns[0])
+                final_series.index = final_result.index
+                return final_series
             return final_result
         if len(self._by) == 1:
             from cudf.dataframe import index
@@ -195,31 +214,24 @@ class Groupby(object):
             if idx.name == self._LEVEL_0_INDEX_NAME:
                 idx.name = self._original_index_name
             result = result.set_index(idx)
+            for col in result.columns:
+                if isinstance(col, str):
+                    colnames = col.split('_')
+                    if colnames[0] == 'cudfvalcol':
+                        result[colnames[1]] = result[col]
+                        result = result.drop(col)
             return result
         else:
-            levels = []
-            codes = DataFrame()
-            names = []
-            # Note: This is an O(N^2) solution using gpu masking
-            # to compute new codes for the MultiIndex. There may be
-            # a faster solution that could be executed on gpu at the same
-            # time the groupby is calculated.
-            for by in self._by:
-                level = result[by].unique()
-                code = result[by]
-                for idx, value in enumerate(level):
-                    level_mask = code == value
-                    code = code.masked_assign(idx, level_mask)
-                levels.append(level)
-                codes[by] = code
-                names.append(by)
-            multi_index = MultiIndex(levels=levels,
-                                     codes=codes,
-                                     names=names)
+            multi_index = MultiIndex(source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
+                final_series = Series(final_result[final_result.columns[0]])
+                final_series.name = final_result.columns[0]
+                final_series.index = multi_index
+                return final_series
             return final_result.set_index(multi_index)
 
     def apply_multicolumn(self, result, aggs):
@@ -270,8 +282,35 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self
+        result = self.copy(deep=False)
+        result._df = DataFrame()
+        setattr(result, "_gotattr", True)
+        if isinstance(self._by, (str, Number)):
+            result._df[self._by] = self._df[self._by]
+        else:
+            for by in self._by:
+                result._df[by] = self._df[by]
         result._val_columns = arg
+        if isinstance(arg, (str, Number)):
+            result._df[arg] = self._df[arg]
+        else:
+            for a in arg:
+                result._df[a] = self._df[a]
+        if len(result._by) == 1 and isinstance(result._val_columns,
+                                               (str, Number)):
+            new_by = [result._by] if isinstance(result._by, (str, Number))\
+                else list(result._by)
+            new_val_columns = [result._val_columns] if\
+                isinstance(result._val_columns, (str, Number))\
+                else list(result._val_columns)
+            new_val_series = result._df[new_val_columns[0]]
+            new_val_series.name = new_val_columns[0]
+            new_by_series = result._df[new_by[0]]
+            new_by_series.name = new_by[0]
+            if new_by[0] == self._LEVEL_0_INDEX_NAME:
+                new_by_series.name = None
+            return SeriesGroupBy(new_val_series,
+                                 new_by_series)
         return result
 
     def copy(self, deep=True):
@@ -282,6 +321,8 @@ class Groupby(object):
                          as_index=self._as_index,
                          level=self.level)
         result._original_index_name = self._original_index_name
+        if hasattr(self, "_gotattr"):
+            setattr(result, "_gotattr", True)
         return result
 
     def deepcopy(self):
@@ -330,4 +371,5 @@ class Groupby(object):
         Since multi-indexes aren't supported aggregation results are returned
         in columns using the naming scheme of `aggregation_columnname`.
         """
-        return cpp_agg(self, args)
+        agg_groupby = self.copy(deep=False)
+        return cpp_agg(agg_groupby, args)

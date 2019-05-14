@@ -445,17 +445,6 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
 
 
-def test_list_of_series():
-    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1]})
-    gdf = cudf.from_pandas(pdf)
-    pdg = pdf.groupby([pdf.x]).y.sum()
-    gdg = gdf.groupby([gdf.x]).y.sum()
-    assert_eq(pdg, gdg)
-    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
-    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
-    assert_eq(pdg, gdg)
-
-
 @pytest.mark.parametrize('func', [
     lambda df: df.groupby(['x', 'y', 'z']).sum(),
     lambda df: df.groupby(['x', 'y']).sum(),
@@ -470,3 +459,44 @@ def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
     gdf = cudf.from_pandas(pdf)
     assert_eq(func(pdf), func(gdf))
+
+
+def test_groupby_unsupported_columns():
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(['a', 'b', 1], 3),
+            dtype='category'
+            )
+        )
+    pdf = pd.DataFrame({'x': [1, 2, 3],
+                        'y': ['a', 'b', 'c'],
+                        'z': ['d', 'e', 'f'],
+                        'a': [3, 4, 5]})
+    pdf['b'] = pd_cat
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby('x').sum()
+    gdg = gdf.groupby('x').sum()
+    assert_eq(pdg, gdg)
+
+
+def test_list_of_series():
+    pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 1]})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby([pdf.x]).y.sum()
+    gdg = gdf.groupby([gdf.x]).y.sum()
+    assert_eq(pdg, gdg)
+    pdg = pdf.groupby([pdf.x, pdf.y]).y.sum()
+    gdg = gdf.groupby([gdf.x, gdf.y]).y.sum()
+    pytest.skip()
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_use_agg_column_as_index():
+    pdf = pd.DataFrame()
+    pdf['a'] = [1, 1, 1, 3, 5]
+    gdf = cudf.DataFrame()
+    gdf['a'] = [1, 1, 1, 3, 5]
+    pdg = pdf.groupby('a').agg({'a': 'count'})
+    gdg = gdf.groupby('a').agg({'a': 'count'})
+    assert_eq(pdg, gdg)
