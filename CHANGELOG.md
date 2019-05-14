@@ -10,6 +10,7 @@
 
 ## Improvements
 
+- PR #1422 C++: Added a RAII wrapper for CUDA streams
 - PR #1701 Added `unique` method for stringColumns
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
