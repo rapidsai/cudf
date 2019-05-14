@@ -210,11 +210,10 @@ cdef gdf_column* column_view_from_column(col, col_name=None):
         category = <void*> category
     )
 
-    if col_name:
-        col_name = str(col_name).encode()
-        c_col.col_name = col_name
-    else:
+    if col_name is None:
         c_col.col_name = NULL
+    else:
+        c_col.col_name = col_name
 
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,

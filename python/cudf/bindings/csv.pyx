@@ -323,21 +323,28 @@ cpdef cpp_write_csv(
     csv_writer.include_header = header
 
     cdef vector[gdf_column*] list_cols
+    # Variable for storing col name list that does not get garbage collected
+    # Allow setting colname during `column_view_from_column` without gc issues
+    col_names_encoded = []
 
     if columns is not None:
         if not isinstance(columns, list):
             raise TypeError('columns must be a list')
-        for name in columns:
-            if name not in cols:
+        for idx, col_name in enumerate(columns):
+            if col_name not in cols:
                 raise NameError('column {!r} does not exist in DataFrame'
-                                .format(name))
-            check_gdf_compatibility(cols[name])
-            c_col = column_view_from_column(cols[name]._column,name)
+                                .format(col_name))
+            check_gdf_compatibility(cols[col_name])
+            col_names_encoded.append(col_name.encode())
+            c_col = column_view_from_column(cols[col_name]._column,
+                                            col_names_encoded[idx])
             list_cols.push_back(c_col)
     else:
-        for name, col in cols.items():
+        for idx, (col_name, col) in enumerate(cols.items()):
             check_gdf_compatibility(col)
-            c_col = column_view_from_column(col._column,name)
+            col_names_encoded.append(col_name.encode())
+            c_col = column_view_from_column(col._column,
+                                            col_names_encoded[idx])
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()
