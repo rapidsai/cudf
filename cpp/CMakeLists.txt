@@ -173,6 +173,15 @@ if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 
 ###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
+    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+endif(JITIFY_USE_CACHE)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -298,12 +307,6 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
 add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
-
-option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
-if(JITIFY_USE_CACHE)
-    message(STATUS "Using file cache for JIT compiled kernels")
-    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
-endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
