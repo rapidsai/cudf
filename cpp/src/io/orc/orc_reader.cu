@@ -41,7 +41,7 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
                   !(sizeof(orc::gpu::ColumnDesc) & 7),
               "Unexpected sizeof(ColumnDesc)");
 
-#if 0
+#if 1
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
