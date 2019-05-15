@@ -197,8 +197,40 @@ struct elements_are_equal {
            static_cast<ColumnType const*>(rhs.data)[rhs_index];
   }
 };
-}  // namespace
 
+template <bool nullable, template <typename> typename hash_function>
+struct hash_element {
+  template <typename col_type>
+  __device__ inline hash_value_type operator()(gdf_column const& col,
+                                               gdf_size_type row_index) {
+    hash_function<col_type> hasher;
+
+    col_type value_to_hash{};
+
+    if (nullable) {
+      // treat null values as the lowest possible value of the type
+      value_to_hash = gdf_is_valid(col.valid, row_index)
+                          ? static_cast<col_type const*>(col.data)[row_index]
+                          : std::numeric_limits<col_type>::lowest();
+    } else {
+      value_to_hash = static_cast<col_type const*>(col.data)[row_index];
+    }
+
+    return hasher(value_to_hash);
+  }
+};
+
+struct copy_element {
+  template <typename T>
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    static_cast<T*>(target.data)[target_index] =
+        static_cast<T const*>(source.data)[source_index];
+  }
+};
+}  // namespace
 
 /**
  * @brief  Checks for equality between two rows between two tables.
@@ -232,9 +264,9 @@ __device__ inline bool rows_equal(device_table const& lhs,
 
 /**---------------------------------------------------------------------------*
  * @brief Functor to compute if two rows are equal.
- * 
- * @tparam nullable Flag indicating the possibility of null values 
-*---------------------------------------------------------------------------**/
+ *
+ * @tparam nullable Flag indicating the possibility of null values
+ *---------------------------------------------------------------------------**/
 template <bool nullable = true>
 struct row_equality_comparator {
   device_table lhs;
@@ -250,30 +282,6 @@ struct row_equality_comparator {
                                 nulls_are_equal);
   }
 };
-
-namespace {
-template <template <typename> typename hash_function, bool nullable>
-struct hash_element {
-  template <typename col_type>
-  __device__ inline hash_value_type operator()(gdf_column const& col,
-                                               gdf_size_type row_index) {
-    hash_function<col_type> hasher;
-
-    col_type value_to_hash{};
-
-    if (nullable) {
-      // treat null values as the lowest possible value of the type
-      value_to_hash = gdf_is_valid(col.valid, row_index)
-                          ? static_cast<col_type const*>(col.data)[row_index]
-                          : std::numeric_limits<col_type>::lowest();
-    } else {
-      value_to_hash = static_cast<col_type const*>(col.data)[row_index];
-    }
-
-    return hasher(value_to_hash);
-  }
-};
-}  // namespace
 
 /**
  * --------------------------------------------------------------------------*
@@ -309,7 +317,7 @@ __device__ inline hash_value_type hash_row(
                  hash_combiner](gdf_size_type column_index) {
     hash_value_type hash_value =
         cudf::type_dispatcher(t.get_column(column_index)->dtype,
-                              hash_element<hash_function, nullable>{},
+                              hash_element<nullable, hash_function>{},
                               *t.get_column(column_index), row_index);
 
     hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
@@ -351,7 +359,7 @@ __device__ inline hash_value_type hash_row(device_table const& t,
   // Hashes an element in a column
   auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
     return cudf::type_dispatcher(t.get_column(column_index)->dtype,
-                                 hash_element<hash_function, nullable>{},
+                                 hash_element<nullable, hash_function>{},
                                  *t.get_column(column_index), row_index);
   };
 
@@ -361,19 +369,6 @@ __device__ inline hash_value_type hash_row(device_table const& t,
       thrust::make_counting_iterator(t.num_columns()), hasher,
       hash_value_type{0}, hash_combiner);
 }
-
-namespace {
-struct copy_element {
-  template <typename T>
-  __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
-                                    gdf_column const& source,
-                                    gdf_size_type source_index) {
-    static_cast<T*>(target.data)[target_index] =
-        static_cast<T const*>(source.data)[source_index];
-  }
-};
-}  // namespace
 
 /**
  * @brief  Copies a row from a source table to a target table.
