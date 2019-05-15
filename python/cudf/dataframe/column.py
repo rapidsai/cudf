@@ -62,11 +62,6 @@ class Column(object):
                 dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
 
-        # Handle strings separately
-        if all(isinstance(o, StringColumn) for o in objs):
-            objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
-
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
             new_cats = tuple(set(
@@ -74,10 +69,28 @@ class Column(object):
             ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
+        # Find the first non-null column:
         head = objs[0]
-        for o in objs:
-            if not o.is_type_equivalent(head):
-                raise ValueError("All series must be of same type")
+        for i, obj in enumerate(objs):
+            if len(obj) != obj.null_count:
+                head = obj
+                break
+
+        for i, obj in enumerate(objs):
+            # Check that all columns are the same type:
+            if not objs[i].is_type_equivalent(head):
+                # if all null, cast to appropriate dtype
+                if len(obj) == obj.null_count:
+                    from cudf.dataframe.columnops import make_null_like
+                    objs[i] = make_null_like(head, size=len(obj))
+                else:
+                    raise ValueError("All series must be of same type")
+
+        # Handle strings separately
+        if all(isinstance(o, StringColumn) for o in objs):
+            objs = [o._data for o in objs]
+            return StringColumn(data=nvstrings.from_strings(*objs))
+
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = sum(o.null_count for o in objs)
