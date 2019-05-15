@@ -364,7 +364,7 @@ class MultiIndex(Index):
                         found_level = False
                         # for each value and index in the root level
                         for new_index, level_value in enumerate(levels[
-                            level_idx]):
+                                level_idx]):
                             # if the root level name matches the current index
                             if level_value == level[old_index]:
                                 old_codes.append(old_index)
@@ -378,14 +378,13 @@ class MultiIndex(Index):
                         new_codes.append(len(levels[level_idx])-1)
                     current_codes = current_codes.replace(old_codes, new_codes)
                     multiindex.codes[codes.columns[level_idx]] = current_codes
-                    multiindex.codes[codes.columns[level_idx]] = multiindex.codes[codes.columns[level_idx]].reset_index(drop=True)
+                    multiindex.codes[codes.columns[level_idx]] = multiindex.codes[codes.columns[level_idx]].reset_index(drop=True)  # noqa: E501
             codes = DataFrame._concat([o.codes for o in objs])
             index = MultiIndex(levels=levels, codes=codes)
         else:
             _source_data = DataFrame._concat([o._source_data for o in objs])
             index = MultiIndex(source_data=_source_data)
         return index
-
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
