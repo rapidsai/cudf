@@ -407,6 +407,7 @@ struct elementwise_aggregator {
  * @param ops Array of operators to perform between the elements of the
  * target and source rows
  *---------------------------------------------------------------------------**/
+template <bool values_have_nulls = true>
 __device__ inline void aggregate_row(device_table const& target,
                                      gdf_size_type target_index,
                                      device_table const& source,
@@ -420,16 +421,20 @@ __device__ inline void aggregate_row(device_table const& target,
         bit_mask_t* const __restrict__ source_mask{
             reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
 
-        if (nullptr != source_mask and is_valid(source_mask, source_index)) {
-          cudf::type_dispatcher(source.get_column(i)->dtype,
-                                elementwise_aggregator{}, *target.get_column(i),
-                                target_index, *source.get_column(i),
-                                source_index, ops[i]);
+        if (values_have_nulls and nullptr != source_mask and
+            not is_valid(source_mask, source_index)) {
+          return;
         }
+
+        cudf::type_dispatcher(source.get_column(i)->dtype,
+                              elementwise_aggregator{}, *target.get_column(i),
+                              target_index, *source.get_column(i), source_index,
+                              ops[i]);
       });
 }  // namespace
 
-template <typename Map>
+template <typename Map, bool keys_have_nulls = true,
+          bool values_have_nulls = true>
 __global__ void compute_hash_groupby(
     Map* map, device_table input_keys, device_table input_values,
     device_table output_keys, device_table output_values,
@@ -438,13 +443,14 @@ __global__ void compute_hash_groupby(
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
-    // Skip rows that contain null keys
-    if (bit_mask::is_valid(row_bitmask, i)) {
-      // result_t result = map->groupby_insert(i, input_keys);
-
-      // aggregate_row(output_values, result.first->second, input_values, i,
-      // ops);
+    if (keys_have_nulls and not bit_mask::is_valid(row_bitmask, i)) {
+      continue;
     }
+
+    auto result = map->insert(thrust::make_pair(i, i));
+
+    aggregate_row<values_have_nulls>(output_values, result.first->second,
+                                     input_values, i, ops);
     i += blockDim.x * gridDim.x;
   }
 }
@@ -476,6 +482,7 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   auto d_output_keys = device_table::create(output_keys);
   auto d_output_values = device_table::create(output_values);
 
+  // TODO Custom hasher and equal function...
   using map_type = concurrent_unordered_map<gdf_size_type, gdf_size_type>;
 
   std::unique_ptr<map_type> map =
