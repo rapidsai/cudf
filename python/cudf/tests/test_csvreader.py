@@ -1022,3 +1022,12 @@ def test_csv_empty_input(tmpdir):
     df = read_csv(StringIO(''), dtype=in_dtypes, names=col_names)
     assert(all(df.columns == col_names))
     assert((list(df.dtypes) == out_dtypes))
+
+
+def test_csv_reader_partial_dtype(tmpdir):
+    names_df = read_csv(StringIO('0,1,2'), names=['A', 'B', 'C'],
+                        dtype={'A':"int", 'C':"long"}, usecols=['A', 'C'])
+    header_df = read_csv(StringIO('"A","B","C"\n0,1,2'),
+                         dtype={'A':"int", 'C':"long"}, usecols=['A', 'C'])
+
+    assert(names_df == header_df)
