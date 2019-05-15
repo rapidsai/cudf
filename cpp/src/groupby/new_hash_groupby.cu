@@ -433,14 +433,35 @@ __device__ inline void aggregate_row(device_table const& target,
                               target_index, *source.get_column(i), source_index,
                               ops[i]);
       });
-}  // namespace
+}  
+
+struct row_hasher{
+  using result_type = hash_value_type;  // TODO Remove when aggregating
+                                        // map::insert function is removed
+  device_table table;
+  row_hasher(device_table const& t) : table{t} {}
+
+  __device__ auto operator()(gdf_size_type row_index) const {
+    return hash_row(table, row_index);
+  }
+};
+
+struct row_equality_comparator {
+  device_table lhs;
+  device_table rhs;
+  row_equality_comparator(device_table const& l, device_table const& r) : lhs{l}, rhs{r} {}
+
+  __device__ bool operator()(gdf_size_type lhs_index,
+                             gdf_size_type rhs_index) const {
+    return rows_equal(lhs, lhs_index, rhs, rhs_index);
+  }
+};
 
 template <typename Map, bool keys_have_nulls = true,
           bool values_have_nulls = true>
 __global__ void compute_hash_groupby(
     Map* map, device_table input_keys, device_table input_values,
-    device_table output_keys, device_table output_values,
-    distributive_operators* ops,
+    device_table output_values, distributive_operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -457,36 +478,16 @@ __global__ void compute_hash_groupby(
   }
 }
 
-struct row_hasher {
-  using result_type = hash_value_type;  // TODO Remove when aggregating
-                                        // map::insert function is removed
-  device_table table;
-  row_hasher(device_table const& t) : table{t} {}
-
-  __device__ auto operator()(gdf_size_type row_index) const {
-    return hash_row(table, row_index);
-  }
-};
-
-struct row_equality {
-  device_table lhs;
-  device_table rhs;
-  row_equality(device_table const& l, device_table const& r) : lhs{l}, rhs{r} {}
-
-  __device__ bool operator()(gdf_size_type lhs_index,
-                             gdf_size_type rhs_index) const {
-    return rows_equal(lhs, lhs_index, rhs, rhs_index);
-  }
-};
-
 }  // namespace
 
 std::tuple<cudf::table, cudf::table> hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<groupby::distributive_operators> const& operators,
     groupby::Options options, cudaStream_t stream) {
-  CUDF_EXPECTS(keys.num_rows() < std::numeric_limits<gdf_size_type>::max(),
-               "Groupby input size too large.");
+  gdf_size_type constexpr unused_key{std::numeric_limits<gdf_size_type>::max()};
+  gdf_size_type constexpr unused_value{
+      std::numeric_limits<gdf_size_type>::max()};
+  CUDF_EXPECTS(keys.num_rows() < unused_key, "Groupby input size too large.");
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
@@ -507,14 +508,14 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   auto d_output_values = device_table::create(output_values);
 
   using map_type = concurrent_unordered_map<gdf_size_type, gdf_size_type,
-                                            row_hasher, row_equality>;
+                                            row_hasher, row_equality_comparator>;
 
-  gdf_size_type const unused_key{std::numeric_limits<gdf_size_type>::max()};
-  gdf_size_type const unused_value{std::numeric_limits<gdf_size_type>::max()};
 
   std::unique_ptr<map_type> map = std::make_unique<map_type>(
       compute_hash_table_size(keys.num_rows()), unused_key, unused_value,
-      row_hasher{*d_input_keys}, row_equality{*d_input_keys, *d_input_keys});
+      row_hasher{*d_input_keys}, row_equality_comparator{*d_input_keys, *d_input_keys});
+
+  cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
 
   if (options.ignore_null_keys) {
     using namespace bit_mask;
@@ -523,12 +524,10 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
       rmm::device_vector<bit_mask_t> const row_bitmask{
           cudf::row_bitmask(keys, stream)};
 
-      cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
-
       compute_hash_groupby<<<grid_params.num_blocks,
                              grid_params.num_threads_per_block, 0, stream>>>(
-          map.get(), *d_input_keys, *d_input_values, *d_output_keys,
-          *d_output_values, d_operators.data().get(), row_bitmask.data().get());
+          map.get(), *d_input_keys, *d_input_values, *d_output_values,
+          d_operators.data().get(), row_bitmask.data().get());
     }
   }
 
