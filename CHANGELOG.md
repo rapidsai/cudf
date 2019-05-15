@@ -15,6 +15,7 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1748 Add `bool` nullability flag to `device_table` row operators
 
 ## Bug Fixes
 
