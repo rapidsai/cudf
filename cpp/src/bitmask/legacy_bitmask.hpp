@@ -36,4 +36,5 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
   else
     return true;
 }
+
 #endif
