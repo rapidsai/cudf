@@ -1402,8 +1402,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
             uint32_t rmax = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
             uint32_t r = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
             uint32_t valid = (t < nrows && r < rmax) ? (((const uint8_t *)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1 : 0;
-            volatile uint32_t *rows = &s->u.rowdec.row[s->u.rowdec.nz_count];
-            volatile uint16_t *row_ofs_plus1 = (volatile uint16_t *)rows;
+            volatile uint16_t *row_ofs_plus1 = (volatile uint16_t *)&s->u.rowdec.row[s->u.rowdec.nz_count];
             uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
             if (t < nrows)
             {
@@ -1435,7 +1434,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
             {
                 *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row;
             }
-            nz_pos = (valid) ? row_ofs_plus1[t] : 0;
+            nz_pos = (valid) ? nz_count : 0;
             __syncthreads();
             if (t < 32)
             {
@@ -1452,7 +1451,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
             }
             if (valid && nz_pos - 1 < s->u.rowdec.nz_count)
             {
-                rows[nz_pos - 1] = row_plus1;
+                s->u.rowdec.row[nz_pos - 1] = row_plus1;
             }
             __syncthreads();
         }
