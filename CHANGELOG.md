@@ -15,7 +15,6 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
-- PR #1739 ORC Reader: Add more pytest coverage
 
 ## Bug Fixes
 
@@ -30,6 +29,7 @@
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
+- PR #1743 ORC Reader: Debug datetime segfault
 
 
 # cuDF 0.7.1 (11 May 2019)
