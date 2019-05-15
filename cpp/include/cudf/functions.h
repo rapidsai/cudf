@@ -878,24 +878,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-
-/*
- * Hashing
- */
-
-/**
- * @brief  Creates a hash of multiple gdf_columns
- *
- * @param[in] an array of gdf_columns to be hashes together
- * @param[in] the number of columns in the array of gdf_columns to be hashes together
- * @param[out] output gdf_column of type GDF_INT64. The output memory needs to be preallocated
- * @param[in] A pointer to a cudaStream_t. If nullptr, the function will create a stream to use.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
-
-
 /*
  * gdf introspection utlities
  */

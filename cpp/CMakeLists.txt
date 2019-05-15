@@ -246,7 +246,6 @@ add_library(cudf SHARED
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
-            src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
             src/replace/replace.cu
@@ -254,7 +253,6 @@ add_library(cudf SHARED
             src/transpose/transpose.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
-            # src/windowed/windowed_ops.cu ... this is broken
             src/io/cuio_common.cpp
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
