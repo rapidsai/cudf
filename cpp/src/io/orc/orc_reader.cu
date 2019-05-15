@@ -663,6 +663,7 @@ gdf_error read_orc(orc_read_arg *args) {
       const auto stripe_footer = selected_stripes[i].second;
 
       auto stream_count = stream_info.size();
+      LOG_PRINTF("Gathering stream ingo for stripe %d/%d...\n", (int)i, (int)selected_stripes.size());
       const auto total_data_size = gather_stream_info(
           i, *stripe_info, stripe_footer, orc_col_map, selected_cols,
           md.ff.types, &num_dict_entries, chunks, stream_info);
@@ -671,6 +672,7 @@ gdf_error read_orc(orc_read_arg *args) {
       stripe_data.emplace_back(total_data_size);
       uint8_t *d_data = stripe_data.back().data();
 
+      LOG_PRINTF(" -> stripe data size = %d\n", (int)total_data_size);
       // Coalesce consecutive streams into one read
       while (stream_count < stream_info.size()) {
         const auto d_dst = d_data + stream_info[stream_count].dst_pos;
