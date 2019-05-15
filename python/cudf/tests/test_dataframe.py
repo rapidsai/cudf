@@ -2403,9 +2403,21 @@ def test_ndim():
 @pytest.mark.parametrize('decimal', range(-8, 8))
 def test_round(decimal):
     arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(arr)
     ser = Series(arr)
     result = ser.round(decimal)
-    expected = np.round(arr, decimal)
-    np.testing.assert_array_almost_equal(result.to_array(),
-                                         expected,
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(result.to_pandas(), expected,
                                          decimal=10)
+
+    # with nulls, maintaining existing null mask
+    mask = np.random.randint(0, 2, 10000)
+    arr[mask == 1] = np.nan
+
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(result.to_pandas(), expected,
+                                         decimal=10)
+    np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
