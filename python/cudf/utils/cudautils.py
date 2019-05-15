@@ -638,7 +638,7 @@ def gpu_round(in_col, out_col, decimal):
 
 def apply_round(data, decimal):
     output_dary = rmm.device_array_like(data)
-    if data.size > 0:
+    if output_dary.size > 0:
         gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
 
