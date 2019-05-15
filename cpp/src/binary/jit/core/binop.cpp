@@ -19,7 +19,7 @@
 
 #include "binary/jit/core/launcher.h"
 #include "binary/jit/util/operator.h"
-#include "bitmask/bitmask_ops.h"
+#include <bitmask/bitmask_ops.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
 #include "cudf.h"

@@ -1168,5 +1168,4 @@ uint64_t atomicXor(uint64_t* address, uint64_t val)
         (address, val, [](T* a, T v){return atomicXor(a, v);});
 }
 
-
 #endif
