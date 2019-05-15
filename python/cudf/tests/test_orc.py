@@ -5,9 +5,8 @@ from cudf.tests.utils import assert_eq
 
 import numpy as np
 import pandas as pd
-import pytest
 import pyarrow as pa
-
+import pytest
 
 @pytest.fixture(scope='module')
 def datadir(datadir):
@@ -23,7 +22,8 @@ def datadir(datadir):
         ('TestOrcFile.emptyFile.orc', ['boolean1']),
         ('TestOrcFile.test1.orc', ['boolean1', 'byte1', 'short1',
                                    'int1', 'long1', 'float1', 'double1']),
-        ('TestOrcFile.testSnappy.orc', None)
+        ('TestOrcFile.testSnappy.orc', None),
+        ('TestOrcFile.demo-12-zlib.orc', ['_col2', '_col3', '_col4', '_col5'])
     ]
 )
 def test_orc_reader_basic(datadir, inputfile, columns, engine):
