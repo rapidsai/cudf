@@ -607,38 +607,38 @@ class Groupby(object):
             print("Pandas results: \n", pd_results)
 
         Output:
-            .. code-block:: python
+        .. code-block:: python
 
-                Results: 
-                     cat  val                 avg
-                0    1   16                    
-                1    1   45                    
-                2    1   62                41.0
-                3    1   45  50.666666666666664
-                4    1   26  44.333333333333336
-                5    2    5                    
-                6    2   51                    
-                7    2   77  44.333333333333336
-                8    2    1                43.0
-                9    2   46  41.333333333333336
-                [5 more rows]
-                Pandas results: 
-                 cat    
-                1    0           NaN
-                     1           NaN
-                     2     41.000000
-                     3     50.666667
-                     4     44.333333
-                2    5           NaN
-                     6           NaN
-                     7     44.333333
-                     8     43.000000
-                     9     41.333333
-                3    10          NaN
-                     11          NaN
-                     12    39.000000
-                     13    32.000000
-                     14    44.333333
+            Results: 
+                 cat  val                 avg
+            0    1   16                    
+            1    1   45                    
+            2    1   62                41.0
+            3    1   45  50.666666666666664
+            4    1   26  44.333333333333336
+            5    2    5                    
+            6    2   51                    
+            7    2   77  44.333333333333336
+            8    2    1                43.0
+            9    2   46  41.333333333333336
+            [5 more rows]
+            Pandas results: 
+             cat    
+            1    0           NaN
+                 1           NaN
+                 2     41.000000
+                 3     50.666667
+                 4     44.333333
+            2    5           NaN
+                 6           NaN
+                 7     44.333333
+                 8     43.000000
+                 9     41.333333
+            3    10          NaN
+                 11          NaN
+                 12    39.000000
+                 13    32.000000
+                 14    44.333333
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
