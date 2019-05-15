@@ -988,7 +988,9 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
                 pos += n;
             }
             if (pos > maxpos || numvals + n > maxvals)
+            {
                 break;
+            }
             numruns++;
             numvals += n;
             lastpos = pos;
@@ -1632,7 +1634,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             s->bs.fill_count = 0;
             s->bs2.fill_count = 0;
             s->top.data.nrows = 0;
-            s->top.data.max_vals = min(s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row, NTHREADS);
+            s->top.data.max_vals = min(s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row, (s->chunk.type_kind == BOOLEAN) ? NTHREADS*2 : NTHREADS);
         }
         __syncthreads();
         // Decode data streams
@@ -1684,12 +1686,11 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         __syncthreads();
                     }
                 }
-            }
-            __syncthreads();
-            // Adjust the maximum number of values
-            if (t == 0 && numvals > 0 && numvals < s->top.data.max_vals)
-            {
-                s->top.data.max_vals = numvals;
+                // Adjust the maximum number of values
+                if (t == 0 && numvals > 0 && numvals < s->top.data.max_vals)
+                {
+                    s->top.data.max_vals = numvals;
+                }
             }
             __syncthreads();
             // Decode the primary data stream
@@ -1713,9 +1714,32 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             }
             else if (s->chunk.type_kind == BOOLEAN)
             {
-                numvals = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, (numvals + 7) >> 3, t);
-                numvals = min(numvals << 3u, s->top.data.max_vals);
+                int n = ((numvals + 7) >> 3);
+                if (n > s->top.data.buffered_count)
+                {
+                    numvals = Byte_RLE(&s->bs, &s->u.rle8, &s->vals.u8[s->top.data.buffered_count], n - s->top.data.buffered_count, t) + s->top.data.buffered_count;
+                }
+                else
+                {
+                    numvals = s->top.data.buffered_count;
+                }
                 __syncthreads();
+                if (t == 0)
+                {
+                    s->top.data.buffered_count = 0;
+                    s->top.data.max_vals = min(s->top.data.max_vals, NTHREADS);
+                }
+                __syncthreads();
+                n = numvals - ((s->top.data.max_vals + 7) >> 3);
+                if (t < n)
+                {
+                    secondary_val = s->vals.u8[((s->top.data.max_vals + 7) >> 3) + t];
+                    if (t == 0)
+                    {
+                        s->top.data.buffered_count = n;
+                    }
+                }
+                numvals = min(numvals << 3u, s->top.data.max_vals);
             }
             else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL)
             {
@@ -1880,6 +1904,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             if (s->chunk.type_kind == TIMESTAMP && t >= s->top.data.max_vals && t < s->top.data.max_vals + s->top.data.buffered_count)
             {
                 s->vals.u32[t - s->top.data.max_vals] = secondary_val;
+            }
+            else if (s->chunk.type_kind == BOOLEAN && t < s->top.data.buffered_count)
+            {
+                s->vals.u8[t] = secondary_val;
             }
         }
         __syncthreads();
