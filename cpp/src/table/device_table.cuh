@@ -125,6 +125,13 @@ class device_table {
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
 
+  __host__ void copy_columns_to_host(gdf_column* host_columns,
+                                     cudaStream_t stream = 0) const {
+    CUDA_TRY(cudaMemcpyAsync(host_columns, device_columns,
+                             sizeof(gdf_column) * _num_columns,
+                             cudaMemcpyDeviceToHost, stream));
+  }
+
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
   gdf_size_type _num_rows{0};  ///< The number of rows in the table
