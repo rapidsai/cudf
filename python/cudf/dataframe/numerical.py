@@ -22,6 +22,7 @@ import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 
@@ -158,17 +159,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cudautils.gather(data=self.data.mem,
-                                    index=sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=Buffer(col_keys),
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
@@ -216,8 +207,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out = cudautils.gather(data=sortedvals, index=segs)
-        return self.replace(data=Buffer(out), mask=None)
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        return out_col
 
     def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
@@ -234,9 +225,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out1 = cudautils.gather(data=sortedvals, index=segs)
+        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
         out2 = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=Buffer(out1), mask=None)
         out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
@@ -269,6 +259,15 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
+
+    def round(self, decimals=0):
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask
+
+        rounded = cudautils.apply_round(self.data.mem, decimals)
+        return NumericalColumn(data=Buffer(rounded), mask=mask,
+                               dtype=self.dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.

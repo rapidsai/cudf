@@ -96,6 +96,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
     null_index_column.valid = nullptr;
     null_index_column.null_count = 0;
+    null_index_column.dtype_info.category = nullptr; // we are using this column as a GDF_STRING_CATEGORY, but we are not actually using the category
 
     gdf_error err = gdf_replace_nulls(column, &null_index_column);
     CUDF_EXPECTS(err == GDF_SUCCESS,"couldnn replace");
