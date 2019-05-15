@@ -369,8 +369,8 @@ public:
      * insert the pair in a single atomicCAS operation.
      *---------------------------------------------------------------------------**/
     template <typename pair_type = value_type>
-    std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
-        value_type* insert_location, value_type const& insert_pair) {
+    __device__ std::enable_if_t<is_packable<pair_type>(), insert_result>
+    attempt_insert(value_type* insert_location, value_type const& insert_pair) {
       pair_packer<pair_type> const unused{
           thrust::make_pair(m_unused_key, m_unused_element)};
       pair_packer<pair_type> const new_pair{insert_pair};
@@ -396,7 +396,8 @@ public:
      * @param[in] insert_pair The pair to insert
      * @return Enum indicating result of insert attempt.
      *---------------------------------------------------------------------------**/
-    __device__ insert_result
+    template <typename pair_type = value_type>
+    __device__ std::enable_if_t<not is_packable<pair_type>(), insert_result>
     attempt_insert(value_type* const __restrict__ insert_location,
                    value_type const& insert_pair) {
       key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key,
