@@ -1103,6 +1103,7 @@ def test_concat_with_axis():
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
     assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+    assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
 
     # series multi index concat
     gdgz1 = gdg1.z
@@ -1110,6 +1111,7 @@ def test_concat_with_axis():
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
+    assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
 
 
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
