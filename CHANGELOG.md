@@ -32,7 +32,7 @@
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
-
+- PR #1696 Fix bugs in `Series.replace()` with nulls. 
 
 # cuDF 0.7.1 (11 May 2019)
 

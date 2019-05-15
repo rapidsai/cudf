@@ -308,7 +308,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = columnops.as_column(to_replace)
-        value_dtype = self.dtype if (value.count(None)==len(value)) else None
+        value_dtype = self.dtype if (value.count(None) == len(value)) else None
         value_col = columnops.as_column(value, dtype=value_dtype)
         replaced = self.copy()
         to_replace_col, value_col, replaced = numeric_normalize_types(
