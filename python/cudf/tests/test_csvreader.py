@@ -9,13 +9,12 @@ import pandas as pd
 from io import StringIO
 from io import BytesIO
 
-from cudf import read_csv, to_csv
+from cudf import read_csv
 import cudf
 from cudf.tests.utils import assert_eq
 import gzip
 import shutil
 import os
-import filecmp
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1049,8 +1048,84 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
-    cudf.to_csv(gdf, path=gdf_df_fname)
+    gdf.to_csv(path=gdf_df_fname)
 
     assert(os.path.exists(pdf_df_fname))
     assert(os.path.exists(gdf_df_fname))
-    assert(filecmp.cmp(pdf_df_fname, gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+def test_csv_writer_datetime_data(tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_2.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_2.csv")
+
+    df = make_datetime_dataframe()
+    df = df.astype('datetime64')
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
+    gdf.to_csv(path=gdf_df_fname)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'sep',
+    [
+        ',',
+        '|',
+        ' ',
+        ';',
+    ]
+)
+@pytest.mark.parametrize(
+    'columns',
+    [
+        ['Integer', 'Date', 'Float', 'Integer2', 'Category'],
+        ['Category', 'Date', 'Float'],
+        ['Integer2'],
+        ['Category', 'Integer2', 'Float', 'Date', 'Integer'],
+        None
+    ]
+)
+@pytest.mark.parametrize(
+    'header',
+    [
+        True,
+        False
+    ]
+)
+@pytest.mark.parametrize(
+    'line_terminator',
+    [
+        '\r',
+        '\n',
+        'NEWLINE',
+        '<<<<<'
+    ]
+)
+def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_3.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_3.csv")
+
+    df = make_numpy_mixed_dataframe()
+    df['Date'] = df['Date'].astype('datetime64')
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=False, sep=sep, columns=columns,
+              header=header, line_terminator=line_terminator)
+    gdf.to_csv(path=gdf_df_fname, sep=sep, columns=columns,
+               header=header, line_terminator=line_terminator)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
