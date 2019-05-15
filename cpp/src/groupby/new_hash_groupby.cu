@@ -291,7 +291,7 @@ struct update_target_element<
                                     gdf_size_type target_index,
                                     gdf_column const& source,
                                     gdf_size_type source_index) {
-    using TargetType = typename target_type<SourceType, op>::type;
+    using TargetType = target_type_t<SourceType, op>;
     assert(gdf_dtype_of<TargetType>() == target.dtype);
 
     TargetType* const __restrict__ target_data{
@@ -476,16 +476,10 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   auto d_output_keys = device_table::create(output_keys);
   auto d_output_values = device_table::create(output_values);
 
-  static constexpr gdf_size_type unused_key{
-      std::numeric_limits<gdf_size_type>::max()};
-
-  using map_type = concurrent_unordered_map<
-      gdf_size_type, gdf_size_type, unused_key, default_hash<gdf_size_type>,
-      equal_to<gdf_size_type>,
-      legacy_allocator<thrust::pair<gdf_size_type, gdf_size_type>>>;
+  using map_type = concurrent_unordered_map<gdf_size_type, gdf_size_type>;
 
   std::unique_ptr<map_type> map =
-      std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()), 0);
+      std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()));
 
   if (options.ignore_null_keys) {
     using namespace bit_mask;
