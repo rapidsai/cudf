@@ -276,6 +276,9 @@ struct update_target_element<
    * @note It is assumed the source element is not NULL, i.e., a NULL source
    * element should be detected before calling this function.
    *
+   * @note It is assumed the target column is always nullable, i.e., has a valid
+   * bitmask allocation.
+   *
    * If the target element is NULL, it is assumed that the target element was
    * initialized with the identity of the aggregation operation. The target is
    * updated with the result of the aggregation with the source element, and the
@@ -310,8 +313,7 @@ struct update_target_element<
     bit_mask::bit_mask_t* const __restrict__ target_mask{
         reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
 
-    if (nullptr != target_mask and
-        not bit_mask::is_valid(target_mask, target_index)) {
+    if (not bit_mask::is_valid(target_mask, target_index)) {
       bit_mask::set_bit_safe(target_mask, target_index);
     }
   }
