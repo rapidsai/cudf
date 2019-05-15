@@ -208,11 +208,12 @@ struct elements_are_equal {
  * @param rhs_index The index of the row within rhs table to compare
  * @param nulls_are_equal Flag indicating whether two null values are considered
  * equal
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @returns true If the two rows are element-wise equal
  * @returns false If any element differs between the two rows
  */
-template <bool nullable = false>
+template <bool nullable = true>
 __device__ inline bool rows_equal(device_table const& lhs,
                                   const gdf_size_type lhs_index,
                                   device_table const& rhs,
@@ -267,11 +268,12 @@ struct hash_element {
  * column
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash,
-          bool nullable = false>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type const* __restrict__ initial_hash_values) {
@@ -312,11 +314,12 @@ __device__ inline hash_value_type hash_row(
  * @param[in] row_index The row of the table to compute the hash value for
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash,
-          bool nullable = false>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(device_table const& t,
                                            gdf_size_type row_index) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
