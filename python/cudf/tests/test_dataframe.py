@@ -1080,6 +1080,37 @@ def test_concat_with_axis():
     concat_df_all = pd.concat([df1, s3, df2], axis=1)
     assert_eq(concat_cdf_all, concat_df_all)
 
+    # concat manual multi index
+    midf1 = gd.from_pandas(df1)
+    midf1.index = gd.MultiIndex(levels=[[0, 1, 2, 3], [0, 1]],
+                                codes=[[0, 1, 2, 3, 2], [0, 1, 0, 1, 0]])
+    midf2 = midf1[2:]
+    midf2.index = gd.MultiIndex(levels=[[3, 4, 5], [2, 0]],
+                                codes=[[0, 1, 2], [1, 0, 1]])
+    mipdf1 = midf1.to_pandas()
+    mipdf2 = midf2.to_pandas()
+    assert_eq(gd.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
+    assert_eq(gd.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
+
+    # concat groupby multi index
+    gdf1 = gd.DataFrame({'x': np.random.randint(0, 10, 10),
+                         'y': np.random.randint(0, 10, 10),
+                         'z': np.random.randint(0, 10, 10),
+                         'v': np.random.randint(0, 10, 10)})
+    gdf2 = gdf1[5:]
+    gdg1 = gdf1.groupby(['x', 'y']).min()
+    gdg2 = gdf2.groupby(['x', 'y']).min()
+    pdg1 = gdg1.to_pandas()
+    pdg2 = gdg2.to_pandas()
+    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+
+    # series multi index concat
+    gdgz1 = gdg1.z
+    gdgz2 = gdg2.z
+    pdgz1 = gdgz1.to_pandas()
+    pdgz2 = gdgz2.to_pandas()
+    assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
+
 
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
 def test_nonmatching_index_setitem(nrows):

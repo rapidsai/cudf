@@ -1046,10 +1046,8 @@ class DataFrame(object):
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         elif isinstance(objs[0].index, cudf.dataframe.multiindex.MultiIndex):
-            _source_data = DataFrame._concat(
-                    [o.index._source_data for o in objs])
-            index = cudf.dataframe.multiindex.MultiIndex(
-                    source_data=_source_data)
+            index = cudf.dataframe.multiindex.MultiIndex._concat(
+                    [o.index.copy(deep=False) for o in objs])
         else:
             index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))

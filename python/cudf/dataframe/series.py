@@ -614,9 +614,8 @@ class Series(object):
             from cudf.dataframe.dataframe import DataFrame
             from cudf.dataframe.multiindex import MultiIndex
             if isinstance(objs[0].index, MultiIndex):
-                _source_data = DataFrame._concat(
-                        [o.index._source_data for o in objs])
-                index = MultiIndex(source_data=_source_data)
+                index = MultiIndex._concat([o.index.copy(
+                    deep=False) for o in objs])
             else:
                 index = Index._concat([o.index for o in objs])
 
