@@ -685,6 +685,7 @@ gdf_error read_orc(orc_read_arg *args) {
           len += stream_info[stream_count].length;
           stream_count++;
         }
+        LOG_PRINTF(" gpuRead(%d @ %d -> %d)\n", (int)len, (int)offset, (int)(d_dst - d_data));
         const auto buffer = input.get_buffer(offset, len);
         CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len,
                                  cudaMemcpyHostToDevice));
