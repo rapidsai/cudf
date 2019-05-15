@@ -690,16 +690,18 @@ gdf_error read_orc(orc_read_arg *args) {
       }
 
       // Update chunks to reference streams pointers
-      LOG_PRINTF("Updating chunks...\n");
+      LOG_PRINTF("Updating chunks for stripe %d...\n", (int)i);
       for (int j = 0; j < num_columns; j++) {
         auto &chunk = chunks[i * num_columns + j];
         chunk.start_row = stripe_start_row;
         chunk.num_rows = stripe_info->numberOfRows;
+        LOG_PRINTF(" selected_col[%d] = %d\n", (int)j, (int)selected_cols[j]);
         chunk.encoding_kind = stripe_footer.columns[selected_cols[j]].kind;
         chunk.type_kind = md.ff.types[selected_cols[j]].kind;
         chunk.decimal_scale = md.ff.types[selected_cols[j]].scale;
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
+            LOG_PRINTF(" strm_len[%d] = %d, strm_id = %d/%d\n", k, (int)chunk.strm_len[k], (int)chunk.strm_id[k], (int)stream_info.size());
             chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
           }
         }
