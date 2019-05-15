@@ -35,7 +35,7 @@ cpdef replace(col, old_values, new_values):
         nnz = count_nonzero_mask(col._mask.mem, len(col))
         col._null_count = len(col)-nnz
 
-cpdef replace_nulls(col._mask.mem, fill_values):
+cpdef replace_nulls(col, fill_values):
     """
         Call gdf_replace_nulls
     """
