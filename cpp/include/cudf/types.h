@@ -284,25 +284,7 @@ typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
-
-
-
 typedef enum{
   GDF_ORDER_ASC,
   GDF_ORDER_DESC
 } order_by_type;
-
-typedef enum{
-  GDF_WINDOW_RANGE,
-  GDF_WINDOW_ROW
-} window_function_type;
-
-typedef enum{
-  GDF_WINDOW_AVG,
-  GDF_WINDOW_SUM,
-  GDF_WINDOW_MAX,
-  GDF_WINDOW_MIN,
-  GDF_WINDOW_COUNT,
-  GDF_WINDOW_STDDEV,
-  GDF_WINDOW_VAR ///< Window Variance
-} window_reduction_type;
