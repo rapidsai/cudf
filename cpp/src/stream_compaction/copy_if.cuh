@@ -26,7 +26,9 @@
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>
+#include <table/device_table.cuh>
 #include <cub/cub.cuh>
+#include <algorithm>
 
 using bit_mask::bit_mask_t;
 
@@ -64,6 +66,160 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
   return offset;
 }
 
+struct data_copy {
+  template <typename T>
+  __device__ inline
+  void operator()(void *out, gdf_index_type out_index,
+                  void *in,  gdf_index_type in_index) {
+    reinterpret_cast<T*>(out)[out_index] = reinterpret_cast<T*>(in)[in_index];
+  }
+};
+
+// This kernel scatters data and validity mask of a column based on the 
+// scan of the boolean mask. The block offsets for the scan are already computed.
+// Just compute the scan of the mask in each block and add it to the block's
+// output offset. This is the output index of each element. Scattering
+// the valid mask is not as easy, because each thread is only responsible for
+// one bit. Warp-level processing (ballot) makes this simpler.
+// To make scattering efficient, we "coalesce" the block's scattered data and 
+// valids in shared memory, and then write from shared memory to global memory
+// in a contiguous manner.
+// The has_validity template parameter allows us to specialize this kernel for
+// the non-nullable case for performance without writing another kernel.
+template <typename Filter, int block_size, int per_thread, bool has_validity>
+__launch_bounds__(block_size, 2048/block_size)
+__global__ void scatter_kernel(device_table output,
+                               device_table const input,
+                               //T* __restrict__ output_data,
+                               //bit_mask_t * __restrict__ output_valid,
+                               //gdf_size_type * output_null_count,
+                               //T const * __restrict__ input_data,
+                               //bit_mask_t const * __restrict__ input_valid,
+                               gdf_size_type const * __restrict__ block_offsets,
+                               Filter filter)
+{
+  static_assert(block_size <= 1024, "Maximum thread block size exceeded");
+
+  int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
+  gdf_size_type block_offset = block_offsets[blockIdx.x];
+  
+  // one extra warp worth in case the block is not aligned
+  __shared__ bool temp_valids[has_validity ? block_size+warp_size : 1];
+  __shared__ int64_t temp_data[block_size]; // use largest dtype we support
+  
+  for (int i = 0; i < per_thread; i++) {
+    bool mask_true = filter(tid);
+
+    // get output location using a scan of the mask result
+    gdf_index_type block_sum = 0;
+    const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
+                                                                   block_sum);
+
+    for(int col_i = 0; col_i < input.num_columns(); col_i++) {
+      gdf_column const *in_col = input.get_column(col_i);
+      gdf_column *out_col = const_cast<gdf_column*>(output.get_column(col_i));
+      bit_mask_t * __restrict__ output_valid =
+        reinterpret_cast<bit_mask_t *>(out_col->valid);
+
+      if (has_validity) {
+        temp_valids[threadIdx.x] = false; // init shared memory
+        if (threadIdx.x < warp_size) temp_valids[block_size + threadIdx.x] = false;
+        __syncthreads(); // wait for init
+      }
+
+      if (mask_true) {
+        //temp_data[local_index] = input_data[tid]; // scatter data to shared
+        cudf::type_dispatcher(in_col->dtype, data_copy{}, temp_data,
+                              local_index, in_col->data, tid);
+
+        // scatter validity mask to shared memory
+        bit_mask_t const __restrict__ *v = 
+          reinterpret_cast<bit_mask_t *>(in_col->valid);
+        if (has_validity && bit_mask::is_valid(v, tid)) {
+          // determine aligned offset for this warp's output
+          const gdf_size_type aligned_offset = block_offset % warp_size;
+          temp_valids[local_index + aligned_offset] = true;
+        }
+      }
+
+      // each warp shares its total valid count to shared memory to ease
+      // computing the total number of valid / non-null elements written out.
+      // note maximum block size is limited to 1024 by this, but that's OK
+      __shared__ uint32_t warp_valid_counts[has_validity ? warp_size : 1];
+      if (has_validity && threadIdx.x < warp_size) warp_valid_counts[threadIdx.x] = 0;
+
+      __syncthreads(); // wait for shared data and validity mask to be complete
+
+      // Copy output data coalesced from shared to global
+      if (threadIdx.x < block_sum) {
+        //output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
+        
+        cudf::type_dispatcher(in_col->dtype, data_copy{}, out_col->data,
+                              block_offset + threadIdx.x, temp_data,
+                              threadIdx.x);
+      }
+
+      if (has_validity) {
+        // Since the valid bools are contiguous in shared memory now, we can use
+        // __popc to combine them into a single mask element.
+        // Then, most mask elements can be directly copied from shared to global
+        // memory. Only the first and last 32-bit mask elements of each block must
+        // use an atomicOr, because these are where other blocks may overlap.
+
+        constexpr int num_warps = block_size / warp_size;
+        const int last_warp = block_sum / warp_size;
+        const int wid = threadIdx.x / warp_size;
+        const int lane = threadIdx.x % warp_size;
+
+        if (block_sum > 0 && wid <= last_warp) {
+          int valid_index = (block_offset / warp_size) + wid;
+
+          // compute the valid mask for this warp
+          uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+
+          if (lane == 0 && valid_warp != 0) {
+            warp_valid_counts[wid] = __popc(valid_warp);
+            if (wid > 0 && wid < last_warp)
+              output_valid[valid_index] = valid_warp;
+            else {
+              atomicOr(&output_valid[valid_index], valid_warp);
+            }
+          }
+
+          // if the block is full and not aligned then we have one more warp to cover
+          if ((wid == 0) && (last_warp == num_warps)) {
+            uint32_t valid_warp =
+              __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
+            if (lane == 0 && valid_warp != 0) {
+              warp_valid_counts[wid] += __popc(valid_warp);
+              atomicOr(&output_valid[valid_index + num_warps], valid_warp);
+            }
+          }
+        }
+
+        __syncthreads(); // wait for warp_valid_counts to be ready
+
+        // Compute total null_count for this block and add it to global count
+        if (threadIdx.x < warp_size) {
+          uint32_t my_valid_count = warp_valid_counts[threadIdx.x];
+
+          __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
+          
+          uint32_t block_valid_count =
+            cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
+          
+          if (lane == 0) // one thread computes and adds to null count
+            atomicAdd(&out_col->null_count, block_sum - block_valid_count);
+        }
+      }
+    }
+
+      block_offset += block_sum;
+      tid += block_size;
+    }
+  }
+
+  /*
 // This kernel scatters data and validity mask of a column based on the 
 // scan of the boolean mask. The block offsets for the scan are already computed.
 // Just compute the scan of the mask in each block and add it to the block's
@@ -233,24 +389,24 @@ struct scatter_functor
     }
   }
 };
-
-// Computes the output size of apply_boolean_mask, which is the sum of the 
-// last block's offset and the last block's pass count
-gdf_size_type get_output_size(gdf_size_type *block_counts,
-                              gdf_size_type *block_offsets,
-                              gdf_size_type num_blocks,
-                              cudaStream_t stream = 0)
-{
-  gdf_size_type last_block_count = 0;
-  cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
-                  sizeof(gdf_size_type), cudaMemcpyDefault, stream);
-  gdf_size_type last_block_offset = 0;
-  if (num_blocks > 1)
-    cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
+*/
+  // Computes the output size of apply_boolean_mask, which is the sum of the
+  // last block's offset and the last block's pass count
+  gdf_size_type get_output_size(gdf_size_type * block_counts,
+                                gdf_size_type * block_offsets,
+                                gdf_size_type num_blocks,
+                                cudaStream_t stream = 0)
+  {
+    gdf_size_type last_block_count = 0;
+    cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
                     sizeof(gdf_size_type), cudaMemcpyDefault, stream);
-  cudaStreamSynchronize(stream);
-  return last_block_count + last_block_offset;
-}
+    gdf_size_type last_block_offset = 0;
+    if (num_blocks > 1)
+      cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
+                      sizeof(gdf_size_type), cudaMemcpyDefault, stream);
+    cudaStreamSynchronize(stream);
+    return last_block_count + last_block_offset;
+  }
 
 } // namespace anonymous
 
@@ -271,8 +427,7 @@ namespace detail {
  * @return The filter-copied result column
  */
 template <typename Filter>
-gdf_column copy_if(gdf_column const &input, Filter filter,
-                   cudaStream_t stream = 0) {
+table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   /*  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask 
   * that scatters input[i] if boolean_mask[i] is non-null and "true". This is 
   * simply an exclusive scan of the mask. Second, use the `scatter_map` to
@@ -283,12 +438,26 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
   * intra-block scan inside the kernel that scatters the output
   */
   // no error for empty input, just return empty output
-  if (0 == input.size) return cudf::empty_like(input);
-  CUDF_EXPECTS(nullptr != input.data, "Null input data"); // nonzero size
+  if (0 == input.num_rows() || 0 == input.num_columns()) 
+    return table{column_dtypes(input)};
+  
+  CUDF_EXPECTS(std::all_of(input.begin(), input.end(), 
+                           [](gdf_column const* c) { return c->data != nullptr; }), 
+               "Null input data"); // nonzero size but null
+
+  bool has_valid = false;
+
+  if (std::any_of(input.begin(), input.end(),
+                  [](gdf_column const* c) { return c->valid != nullptr; })) {
+    has_valid = true;
+    CUDF_EXPECTS(std::all_of(input.begin(), input.end(), 
+                 [](gdf_column const* c) { return c->valid != nullptr; }), 
+                 "If any input column is nullable, all must be nullable");
+  }
 
   constexpr int block_size = 256;
   constexpr int per_thread = 32;
-  cudf::util::cuda::grid_config_1d grid{input.size, block_size, per_thread};
+  cudf::util::cuda::grid_config_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
   rmm::device_vector<gdf_size_type> temp_counts(2 * grid.num_blocks);
@@ -322,15 +491,24 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
 
   CHECK_STREAM(stream);
 
-  gdf_column output = cudf::empty_like(input);
+  // allocate output table
+  /*std::vector<gdf_dtype> dtypes = input.column_dtypes();
+  std::vector<gdf_column*> out_cols;
+  for (auto col : input) {
+    out_colsempty_like(col)
+  }
+  table output(input.column_dtypes);
+  //gdf_column output = cudf::empty_like(input);*/
   
   // 3. compute the output size from the last block's offset + count
   gdf_size_type output_size = 
     get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
 
-  if (output_size > 0) {    
-    // Allocate/initialize output column
-    gdf_size_type column_byte_width{gdf_dtype_size(input.dtype)};
+  if (output_size > 0) {
+    // Allocate/initialize output columns
+    table output(output_size, column_dtypes(input), has_valid, 0, stream);
+
+/*    gdf_size_type column_byte_width{gdf_dtype_size(input.dtype)};
 
     void *data = nullptr;
     gdf_valid_type *valid = nullptr;
@@ -345,16 +523,52 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
     CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, data, valid,
                                                 output_size, input.dtype),
                 "cudf::apply_boolean_mask failed to create output column view");
-
+*/
     // 4. Scatter the output data and valid mask
-    cudf::type_dispatcher(output.dtype,
+    /*cudf::type_dispatcher(output.dtype,
                           scatter_functor<Filter, block_size, per_thread>{},
                           output, input, block_offsets, filter,
-                          input.valid != nullptr, stream);
+                          input.valid != nullptr, stream);*/
+    auto scatter = (has_valid) ?
+      scatter_kernel<Filter, block_size, per_thread, true> :
+      scatter_kernel<Filter, block_size, per_thread, false>;
+    auto d_input = device_table::create(input, stream);
+    const auto d_output = device_table::create(output, stream);
+    scatter<<<grid.num_blocks, block_size, 0, stream>>>
+      (*d_output, *d_input, block_offsets, filter);
+
+    d_output->copy_columns_to_host(*output.begin());
 
     CHECK_STREAM(stream);
+
+    return output;
   }
-  return output;
+  return table(column_dtypes(input));
+}
+
+/*
+ * @brief Filters a column using a Filter function object
+ * 
+ * @p filter must be a functor or lambda with the following signature:
+ * __device__ bool operator()(gdf_index_type i);
+ * It return true if element i of @p input should be copied, false otherwise.
+ *
+ * @tparam Filter the filter functor type
+ * @param[in] input The column to filter-copy
+ * @param[in] filter A function object that takes an index and returns a bool
+ * @return The filter-copied result column
+ */
+template <typename Filter>
+gdf_column copy_if(gdf_column const &input, Filter filter,
+                   cudaStream_t stream = 0)
+{
+  // convert column to table
+  gdf_column * cols[1];
+  cols[0] = const_cast<gdf_column*>(&input);
+  const table input_table(cols, 1);
+  table output_table = copy_if(input_table, filter, stream);
+  gdf_column * out = output_table.get_column(0);
+  return *out;
 }
 
 } // namespace detail
