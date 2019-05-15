@@ -42,6 +42,20 @@ struct table {
   table(gdf_column* cols[], gdf_size_type num_cols);
 
   /**---------------------------------------------------------------------------*
+   * @brief Constructs a set of empty `gdf_column`s.
+   *
+   * Allocates an array of empty `gdf_column`s of the specified size and type.
+   *
+   * @note It is the caller's responsibility to free the array of gdf_columns
+   * and their associated device memory.
+   *
+   * @note Does not support `GDF_TIMESTAMP` columns as this would require
+   * passing in additional timestamp resolution information.
+   *
+   *---------------------------------------------------------------------------**/
+  table(std::vector<gdf_dtype> const& dtypes);
+
+  /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.
    *
    * Allocates an array of `gdf_column`s of the specified size and type.
