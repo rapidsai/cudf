@@ -2400,10 +2400,12 @@ def test_ndim():
     assert s.ndim == gs.ndim
 
 
-@pytest.mark.parametrize('decimal', range(-8,8))
+@pytest.mark.parametrize('decimal', range(-8, 8))
 def test_round(decimal):
     arr = np.random.normal(0, 100, 10000)
     ser = Series(arr)
     result = ser.round(decimal)
     expected = np.round(arr, decimal)
-    np.testing.assert_array_almost_equal(result.to_array(), expected, decimal=10)
+    np.testing.assert_array_almost_equal(result.to_array(),
+                                         expected,
+                                         decimal=10)

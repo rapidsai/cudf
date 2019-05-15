@@ -3,7 +3,7 @@
 import numpy as np
 
 from numba import cuda, int32, numpy_support
-from math import isnan
+from math import fmod, isnan
 
 from librmm_cffi import librmm as rmm
 
