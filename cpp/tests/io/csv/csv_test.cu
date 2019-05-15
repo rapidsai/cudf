@@ -791,9 +791,8 @@ TEST(gdf_csv_test, Writer)
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
-    // check result
     std::ifstream infile(ofname);
-    std::string csv((std::istreambuf_iterator<char>(infile)),std::istreambuf_iterator<char>());
+    std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
     std::string verify =
         "\"boolean\",\"integer\",\"float\",\"string\"\n"
         "true,1,1,\"one\"\n"
@@ -801,5 +800,5 @@ TEST(gdf_csv_test, Writer)
         "false,3,3.5,\"three\"\n"
         "true,4,4.75,\"four\"\n"
         "false,5,5,\"five\"\n";
-    EXPECT_EQ( csv.compare(verify), 0 );
+    EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }

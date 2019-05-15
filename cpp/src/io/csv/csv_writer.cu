@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include <fstream>
-#include <algorithm>
+#include "cudf.h"
+#include "io/utilities/wrapper_utils.hpp"
+#include "utilities/error_utils.hpp"
+#include "utilities/wrapper_types.hpp"
+
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf.h>
-#include <utilities/error_utils.hpp>
 
+#include <fstream>
+#include <algorithm>
 
 //
 // This is called by the write_csv method below.
@@ -46,7 +49,16 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
             rtn = (static_cast<NVStrings*>(column->data))->copy();
             break;
         case GDF_BOOL8:
-            rtn = NVStrings::create_from_bools(static_cast<const bool*>(column->data),rows,true_string,false_string,valid);
+            {
+            auto d_src = static_cast<const cudf::bool8*>(column->data);
+            device_buffer<bool> bool_buffer(rows);
+            thrust::transform(
+                rmm::exec_policy()->on(0), d_src, d_src + rows,
+                bool_buffer.data(),
+                [] __device__(const cudf::bool8 value) { return bool{value}; });
+            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
+                                               true_string, false_string, valid);
+            }
             break;
         case GDF_INT32:
             rtn = NVStrings::itos(static_cast<const int32_t*>(column->data),rows,valid);
