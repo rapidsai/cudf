@@ -55,8 +55,11 @@ namespace jit {
 
     public:
         /**---------------------------------------------------------------------------*
-         * @brief Method to generate vector containing all template types for a JIT
-         *  kernel. This vector is used to instantiate the kernel code for one set of types
+         * @brief Sets the kernel to launch using this launcher
+         * 
+         * Method to generate vector containing all template types for a JIT kernel.
+         *  This vector is used to get the compiled kernel for one set of types and set
+         *  it as the kernel to launch using this launcher.
          * 
          * @tparam Args  Output dtype, LHS dtype, RHS dtype
          * @param type   Operator type (direct (lhs op rhs) or reverse (rhs op lhs))
@@ -87,6 +90,12 @@ namespace jit {
             return *this;
         }
 
+        /**---------------------------------------------------------------------------*
+         * @brief Set the Program for this launcher
+         * 
+         * @param prog_file_name Name to give to the program held by this Launcher.
+         * @return Launcher& ref to this launcher object
+         *---------------------------------------------------------------------------**/
         Launcher& setProgram(std::string prog_file_name);
 
         /**---------------------------------------------------------------------------*

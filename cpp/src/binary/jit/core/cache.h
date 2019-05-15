@@ -29,11 +29,22 @@ namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
+/**---------------------------------------------------------------------------*
+ * @brief Get the string path to Cache Directory
+ * 
+ * This will return a path to the cache directory and will create the directory
+ * if it doesn't exist
+ *---------------------------------------------------------------------------**/
 std::string getCacheDir();
 
 class cudfJitCache
 {
 public:
+
+    /**---------------------------------------------------------------------------*
+     * @brief Get a process wide singleton cache object
+     * 
+     *---------------------------------------------------------------------------**/
     static cudfJitCache& Instance() {
         // Meyers' singleton is thread safe in C++11
         // Link: https://stackoverflow.com/a/1661564
@@ -44,11 +55,37 @@ public:
     cudfJitCache();
     ~cudfJitCache();
 
+    /**---------------------------------------------------------------------------*
+     * @brief Get the Kernel Instantiation object
+     * 
+     * Searches an internal in-memory cache and file based cache for the kernel
+     * and if not found, JIT compiles and returns the kernel
+     * 
+     * @param kern_name [in] name of kernel to return
+     * @param program   [in] Jitify preprocessed program to get the kernel from
+     * @param arguments [in] template arguments for kernel in vector of strings
+     * @return  Pair of string kernel identifier and compiled kernel object
+     *---------------------------------------------------------------------------**/
     named_prog<jitify_v2::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
         named_prog<jitify_v2::Program> const& program,
         std::vector<std::string> const& arguments);
 
+    /**---------------------------------------------------------------------------*
+     * @brief Get the Jitify preprocessed Program object
+     * 
+     * Searches an internal in-memory cache and file based cache for the Jitify
+     * pre-processed program and if not found, JIT processes and returns it
+     * 
+     * @param prog_file_name [in] name of program to return
+     * @param cuda_source    [in] string source code of program to compile
+     * @param given_headers  [in] vector of strings representing source or names of
+     *  each header included in cuda_source
+     * @param given_options  [in] vector of strings options to pass to NVRTC
+     * @param file_callback  [in] pointer to callback function to call whenever a
+     *  header needs to be loaded
+     * @return named_prog<jitify_v2::Program> 
+     *---------------------------------------------------------------------------**/
     named_prog<jitify_v2::Program> getProgram(
         std::string const& prog_file_name, 
         std::string const& cuda_source = "",
@@ -75,6 +112,10 @@ private:
     static std::mutex _program_cache_mutex;
 
 private:
+    /**---------------------------------------------------------------------------*
+     * @brief Class to allow process wise exclusive access to cache files
+     * 
+     *---------------------------------------------------------------------------**/
     class cacheFile
     {
     private:
@@ -85,9 +126,32 @@ private:
         cacheFile(std::string file_name);
         ~cacheFile();
 
+        /**---------------------------------------------------------------------------*
+         * @brief Read this file and return the contents as a std::string
+         * 
+         *---------------------------------------------------------------------------**/
         std::string read();
+
+        /**---------------------------------------------------------------------------*
+         * @brief Write the passed string to this file
+         * 
+         *---------------------------------------------------------------------------**/
         void write(std::string);
+
+        /**---------------------------------------------------------------------------*
+         * @brief Check whether the read() operation on the file completed successfully
+         * 
+         * @return true Read was successful. String returned by `read()` is valid
+         * @return false Read was unsuccessful. String returned by `read()` is empty
+         *---------------------------------------------------------------------------**/
         bool is_read_successful() { return successful_read; }
+
+        /**---------------------------------------------------------------------------*
+         * @brief Check whether the write() operation on the file completed successfully
+         * 
+         * @return true Write was successful.
+         * @return false Write was unsuccessful. File state is undefined
+         *---------------------------------------------------------------------------**/
         bool is_write_successful() { return successful_write; }
     };
 
