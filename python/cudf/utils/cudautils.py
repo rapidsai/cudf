@@ -610,6 +610,27 @@ def gpu_diff(in_col, out_col, N):
             out_col[i] = -1
 
 
+@cuda.jit
+def gpu_round(in_col, out_col, decimal):
+    i = cuda.grid(1)
+    round_val = 10 ** (-1.0 * decimal)
+
+    if i < in_col.size:
+        newval = in_col[i] // round_val * round_val
+        remainder = fmod(in_col[i], round_val)
+
+        if remainder > (.5 * round_val) and in_col[i] > 0:
+            newval = newval + round_val
+            out_col[i] = newval
+
+        elif abs(remainder) < (.5 * round_val) and in_col[i] < 0:
+            newval = newval + round_val
+            out_col[i] = newval
+
+        else:
+            out_col[i] = newval
+
+
 MAX_FAST_UNIQUE_K = 2 * 1024
 
 
