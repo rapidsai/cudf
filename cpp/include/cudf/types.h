@@ -281,10 +281,6 @@ struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 
 
-struct _OpaqueRadixsortPlan;
-typedef struct _OpaqueRadixsortPlan gdf_radixsort_plan_type;
-
-
 struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
