@@ -616,14 +616,19 @@ def gpu_round(in_col, out_col, decimal):
     round_val = 10 ** (-1.0 * decimal)
 
     if i < in_col.size:
+        if not in_col[i]:
+            out_col[i] = np.nan
+            return
+
         newval = in_col[i] // round_val * round_val
         remainder = fmod(in_col[i], round_val)
 
-        if remainder > (.5 * round_val) and in_col[i] > 0:
+        if remainder != 0 and remainder > (.5 * round_val) and in_col[i] > 0:
             newval = newval + round_val
             out_col[i] = newval
 
-        elif abs(remainder) < (.5 * round_val) and in_col[i] < 0:
+        elif remainder != 0 and abs(remainder) < (.5 * round_val) and \
+                in_col[i] < 0:
             newval = newval + round_val
             out_col[i] = newval
 
@@ -633,7 +638,8 @@ def gpu_round(in_col, out_col, decimal):
 
 def apply_round(data, decimal):
     output_dary = rmm.device_array_like(data)
-    gpu_round.forall(output_dary.size)(data, output_dary, decimal)
+    if data.size > 0:
+        gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
 
 

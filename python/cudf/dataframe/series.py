@@ -1227,11 +1227,8 @@ class Series(object):
     def round(self, decimals=0):
         """
         """
-        if self.empty:
-            return self
-
-        rounded = cudautils.apply_round(self.data.to_gpu_array(), decimals)
-        return Series(rounded, name=self.name, index=self.index)
+        return Series(self._column.round(decimals=decimals), name=self.name,
+                      index=self.index)
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
