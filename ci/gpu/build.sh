@@ -86,4 +86,4 @@ conda install -c conda-forge -y feather-format
 
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -k 'orc_reader_datetime' -sv --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term
+py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -sv --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term

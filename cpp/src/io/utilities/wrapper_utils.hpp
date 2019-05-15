@@ -103,6 +103,7 @@ class hostdevice_vector {
   explicit hostdevice_vector(size_t initial_size, size_t max_size)
       : num_elements(initial_size), max_elements(max_size) {
     CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
+    memset(h_data, 0, sizeof(T) * max_elements);
     RMM_ALLOC(&d_data, sizeof(T) * max_elements, 0);
   }
 
