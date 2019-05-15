@@ -172,6 +172,7 @@ class device_table {
 };
 
 namespace {
+template <bool nullable>
 struct elements_are_equal {
   template <typename ColumnType>
   __device__ __forceinline__ bool operator()(gdf_column const& lhs,
@@ -179,22 +180,21 @@ struct elements_are_equal {
                                              gdf_column const& rhs,
                                              gdf_size_type rhs_index,
                                              bool nulls_are_equal = false) {
-    bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
-    bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
-
-    // If both values are non-null, compare them
-    if (lhs_is_valid and rhs_is_valid) {
-      return static_cast<ColumnType const*>(lhs.data)[lhs_index] ==
-             static_cast<ColumnType const*>(rhs.data)[rhs_index];
+    if (nullable) {
+      bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
+      bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
+      // If both values are null
+      if (not lhs_is_valid and not rhs_is_valid) {
+        return nulls_are_equal;
+      }
+      // If only one value is null, they can never be equal
+      if (lhs_is_valid != rhs_is_valid) {
+        return false;
+      }
     }
 
-    // If both values are null
-    if (not lhs_is_valid and not rhs_is_valid) {
-      return nulls_are_equal;
-    }
-
-    // If only one value is null, they can never be equal
-    return false;
+    return static_cast<ColumnType const*>(lhs.data)[lhs_index] ==
+           static_cast<ColumnType const*>(rhs.data)[rhs_index];
   }
 };
 }  // namespace
@@ -212,6 +212,7 @@ struct elements_are_equal {
  * @returns true If the two rows are element-wise equal
  * @returns false If any element differs between the two rows
  */
+template <bool nullable = false>
 __device__ inline bool rows_equal(device_table const& lhs,
                                   const gdf_size_type lhs_index,
                                   device_table const& rhs,
@@ -219,8 +220,8 @@ __device__ inline bool rows_equal(device_table const& lhs,
                                   bool nulls_are_equal = false) {
   auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
                             gdf_column const& l, gdf_column const& r) {
-    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index, r,
-                                 rhs_index, nulls_are_equal);
+    return cudf::type_dispatcher(l.dtype, elements_are_equal<nullable>{}, l,
+                                 lhs_index, r, rhs_index, nulls_are_equal);
   };
 
   return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
@@ -228,18 +229,23 @@ __device__ inline bool rows_equal(device_table const& lhs,
 }
 
 namespace {
-template <template <typename> typename hash_function>
+template <template <typename> typename hash_function, bool nullable>
 struct hash_element {
   template <typename col_type>
   __device__ inline hash_value_type operator()(gdf_column const& col,
                                                gdf_size_type row_index) {
     hash_function<col_type> hasher;
 
-    // treat null values as the lowest possible value of the type
-    col_type const value_to_hash =
-        gdf_is_valid(col.valid, row_index)
-            ? static_cast<col_type*>(col.data)[row_index]
-            : std::numeric_limits<col_type>::lowest();
+    col_type value_to_hash{};
+
+    if (nullable) {
+      // treat null values as the lowest possible value of the type
+      value_to_hash = gdf_is_valid(col.valid, row_index)
+                          ? static_cast<col_type const*>(col.data)[row_index]
+                          : std::numeric_limits<col_type>::lowest();
+    } else {
+      value_to_hash = static_cast<col_type const*>(col.data)[row_index];
+    }
 
     return hasher(value_to_hash);
   }
@@ -264,7 +270,8 @@ struct hash_element {
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <template <typename> class hash_function = default_hash,
+          bool nullable = false>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type const* __restrict__ initial_hash_values) {
@@ -276,9 +283,10 @@ __device__ inline hash_value_type hash_row(
   // hash value
   auto hasher = [row_index, &t, initial_hash_values,
                  hash_combiner](gdf_size_type column_index) {
-    hash_value_type hash_value = cudf::type_dispatcher(
-        t.get_column(column_index)->dtype, hash_element<hash_function>{},
-        *t.get_column(column_index), row_index);
+    hash_value_type hash_value =
+        cudf::type_dispatcher(t.get_column(column_index)->dtype,
+                              hash_element<hash_function, nullable>{},
+                              *t.get_column(column_index), row_index);
 
     hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
 
@@ -307,7 +315,8 @@ __device__ inline hash_value_type hash_row(
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <template <typename> class hash_function = default_hash,
+          bool nullable = false>
 __device__ inline hash_value_type hash_row(device_table const& t,
                                            gdf_size_type row_index) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
@@ -317,7 +326,7 @@ __device__ inline hash_value_type hash_row(device_table const& t,
   // Hashes an element in a column
   auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
     return cudf::type_dispatcher(t.get_column(column_index)->dtype,
-                                 hash_element<hash_function>{},
+                                 hash_element<hash_function, nullable>{},
                                  *t.get_column(column_index), row_index);
   };
 
