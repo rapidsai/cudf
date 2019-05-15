@@ -99,19 +99,25 @@ def make_null_like(other, size=None, dtype=None):
     if dtype is None:
         dtype = other.dtype
     mask = utils.make_mask(size)
-    if dtype.kind in 'OU':
+
+    if pd.api.types.is_categorical_dtype(dtype):
+        mem = rmm.device_array((size,), dtype=other.data.dtype)
+        data = Buffer(mem)
+    elif dtype.kind in 'OU':
         mem = rmm.device_array((size,), dtype='float64')
-        mem = nvstrings.dtos(mem,
+        data = nvstrings.dtos(mem,
                              len(mem),
                              nulls=mask,
                              bdevmem=True)
     else:
         mem = rmm.device_array((size,), dtype=dtype)
+        data = Buffer(mem)
+    mask = Buffer(mask)
     categories = None
     if hasattr(other, 'cat'):
         categories = other.cat().categories
     from cudf.dataframe.columnops import build_column
-    return build_column(mem,
+    return build_column(data,
                         dtype,
                         mask,
                         categories)
