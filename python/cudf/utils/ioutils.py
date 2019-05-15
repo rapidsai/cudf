@@ -147,8 +147,9 @@ path_or_buf : a valid JSON string or file-like
     The string could be a URL (pandas engine only). Valid URL schemes include
     http, ftp, s3, gcs, and file. For file URLs, a host is expected.
     For instance, a local file could be ``file://localhost/path/to/table.json``
-    engine : {{ 'cudf', 'pandas' }}, default 'cudf'
-        Parser engine to use. Defaults to pandas when lines == False.
+    engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
+        Parser engine to use. If 'auto' is passed, the engine will be
+        automatically selected based on the other parameters.
 orient : string,
     Indication of expected JSON string format (pandas engine only).
     Compatible JSON strings can be produced by ``to_json()`` with a

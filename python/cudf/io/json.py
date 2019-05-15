@@ -10,11 +10,16 @@ import warnings
 
 
 @ioutils.doc_read_json()
-def read_json(path_or_buf, engine='cudf', dtype=True, lines=False,
+def read_json(path_or_buf, engine='auto', dtype=True, lines=False,
               compression='infer', byte_range=None, *args, **kwargs):
     """{docstring}"""
 
-    if lines and engine == 'cudf':
+    if engine == 'cudf' and not lines:
+        raise ValueError("cudf engine only supports JSON Lines format")
+    if engine == 'auto':
+        engine = 'cudf' if lines else 'pandas'
+
+    if engine == 'cudf':
         df = cpp_read_json(path_or_buf, dtype, lines, compression, byte_range)
     else:
         warnings.warn("Using CPU via Pandas to read JSON dataset, this may "

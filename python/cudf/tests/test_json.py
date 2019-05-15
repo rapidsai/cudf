@@ -155,7 +155,8 @@ def json_input(request, tmp_path_factory):
         return str(fname)
 
 
-@pytest.mark.parametrize('engine', ['cudf', 'pandas'])
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize('engine', ['auto', 'cudf', 'pandas'])
 def test_json_lines_basic(json_input, engine):
     cu_df = cudf.read_json(json_input, engine=engine, lines=True)
     pd_df = pd.read_json(json_input, lines=True)
@@ -210,3 +211,30 @@ def test_json_lines_compression(tmpdir):
                            dtype=['int', 'int'])
 
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_json_engine_selection():
+    json = '[1, 2, 3]'
+
+    # should use the cudf engine
+    df = cudf.read_json(json, lines=True)
+    # column names are strings when parsing with cudf
+    for col_name in df.columns:
+        assert(isinstance(col_name, str))
+
+    # should use the pandas engine
+    df = cudf.read_json(json, lines=False)
+    # column names are ints when parsing with pandas
+    for col_name in df.columns:
+        assert(isinstance(col_name, int))
+
+    # should use the pandas engine
+    df = cudf.read_json(json, lines=True, engine='pandas')
+    # column names are ints when parsing with pandas
+    for col_name in df.columns:
+        assert(isinstance(col_name, int))
+
+    # should raise an exception
+    with pytest.raises(ValueError):
+        df = cudf.read_json(json, lines=False, engine='cudf')
