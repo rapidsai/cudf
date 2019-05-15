@@ -76,6 +76,27 @@ def test_orc_reader_filenotfound(tmpdir):
         cudf.read_orc(tmpdir.mkdir("cudf_orc"))
 
 
+def test_orc_reader_trailing_nulls(datadir):
+    path = datadir / 'TestOrcFile.nulls-at-end-snappy.orc'
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas().fillna(0)
+    got = cudf.read_orc(path, engine='cudf').fillna(0)
+
+    # PANDAS uses NaN to represent invalid data, which forces float dtype
+    # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
+    for col in expect.columns:
+        expect[col] = expect[col].astype(got[col].dtype)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
 @pytest.mark.parametrize('num_rows', [1, 100, 3000])
 @pytest.mark.parametrize('skip_rows', [0, 1, 3000])
 def test_orc_read_rows(datadir, skip_rows, num_rows):
