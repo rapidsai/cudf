@@ -456,7 +456,9 @@ __global__ void compute_hash_groupby(
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
+
     if (keys_have_nulls and not bit_mask::is_valid(row_bitmask, i)) {
+      i += blockDim.x * gridDim.x;
       continue;
     }
 
