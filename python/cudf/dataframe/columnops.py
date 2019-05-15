@@ -106,9 +106,9 @@ def make_null_like(other, size=None, dtype=None):
     elif dtype.kind in 'OU':
         mem = rmm.device_array((size,), dtype='float64')
         data = nvstrings.dtos(mem,
-                             len(mem),
-                             nulls=mask,
-                             bdevmem=True)
+                              len(mem),
+                              nulls=mask,
+                              bdevmem=True)
     else:
         mem = rmm.device_array((size,), dtype=dtype)
         data = Buffer(mem)
