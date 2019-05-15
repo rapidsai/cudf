@@ -562,6 +562,83 @@ class Groupby(object):
             5    2    5   10    7
             6    2    6   12    8
 
+
+
+        .. code-block:: python
+
+            from cudf import DataFrame
+            import numpy as np
+            from numba import cuda
+            import pandas as pd
+            from random import randint
+
+
+            # Create a random 15 row dataframe with one categorical feature and one random integer valued feature
+            df = DataFrame(
+                {
+                    "cat": [1] * 5 + [2] * 5 + [3] * 5,
+                    "val": [randint(0, 100) for _ in range(15)],
+                }
+            )
+
+            # Group the dataframe by its categorical feature
+            groups = df.groupby("cat", method="cudf")
+
+            # Define a kernel which takes the moving average of a sliding window
+            def rolling_avg(val, avg):
+                win_size = 3
+                for row, i in enumerate(range(cuda.threadIdx.x, len(val), cuda.blockDim.x)):
+                    if row < win_size - 1:
+                        # If there is not enough data to fill the window, take the average to be NaN
+                        avg[i] = np.nan
+                    else:
+                        total = 0
+                        for j in range(i - win_size + 1, i + 1):
+                            total += val[j]
+                        avg[i] = total / win_size
+
+            # Compute moving avgs on all groups
+            results = groups.apply_grouped(rolling_avg, incols=['val'], outcols=dict(avg=np.float64))
+            print("Results: \n", results)
+
+            # Note this gives the same result as its pandas equivalent
+            pdf = df.to_pandas()
+            pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
+            print("Pandas results: \n", pd_results)
+
+        Output:
+            .. code-block:: python
+
+                Results: 
+                     cat  val                 avg
+                0    1   16                    
+                1    1   45                    
+                2    1   62                41.0
+                3    1   45  50.666666666666664
+                4    1   26  44.333333333333336
+                5    2    5                    
+                6    2   51                    
+                7    2   77  44.333333333333336
+                8    2    1                43.0
+                9    2   46  41.333333333333336
+                [5 more rows]
+                Pandas results: 
+                 cat    
+                1    0           NaN
+                     1           NaN
+                     2     41.000000
+                     3     50.666667
+                     4     44.333333
+                2    5           NaN
+                     6           NaN
+                     7     44.333333
+                     8     43.000000
+                     9     41.333333
+                3    10          NaN
+                     11          NaN
+                     12    39.000000
+                     13    32.000000
+                     14    44.333333
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
