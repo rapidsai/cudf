@@ -8,6 +8,7 @@
 - PR #1487 cython gather/scatter
 - PR #1310 Implemented the slice/split functionality.
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
+- PR #1745 Add rounding of numeric columns via Numba
 
 ## Improvements
 
