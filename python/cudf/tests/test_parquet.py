@@ -135,7 +135,7 @@ def test_parquet_reader_index_col(tmpdir, index_col):
         # Index column as normal
         df.set_index(index_col, inplace=True)
 
-    fname = tmpdir.join("test_pq_reader_no_index.parquet")
+    fname = tmpdir.join("test_pq_reader_index_col.parquet")
     df.to_parquet(fname)
     assert(os.path.exists(fname))
 
@@ -145,7 +145,6 @@ def test_parquet_reader_index_col(tmpdir, index_col):
     assert_eq(pdf, gdf, check_categorical=False)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 def test_parquet_read_metadata(tmpdir, pdf):
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
@@ -162,7 +161,6 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert(a == b)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 5, 100])
 def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
@@ -183,7 +181,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
