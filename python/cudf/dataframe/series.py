@@ -1225,7 +1225,7 @@ class Series(object):
         return self._column.sum_of_squares(dtype=dtype)
 
     def round(self, decimals=0):
-        """
+        """Round a Series to a configurable number of decimal places.
         """
         return Series(self._column.round(decimals=decimals), name=self.name,
                       index=self.index)
