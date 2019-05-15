@@ -654,6 +654,7 @@ gdf_error read_orc(orc_read_arg *args) {
   if (num_rows > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
+    LOG_PRINTF("Reading streams...\n");
 
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
@@ -689,6 +690,7 @@ gdf_error read_orc(orc_read_arg *args) {
       }
 
       // Update chunks to reference streams pointers
+      LOG_PRINTF("Updating chunks...\n");
       for (int j = 0; j < num_columns; j++) {
         auto &chunk = chunks[i * num_columns + j];
         chunk.start_row = stripe_start_row;
@@ -708,12 +710,14 @@ gdf_error read_orc(orc_read_arg *args) {
     // Setup table for converting timestamp columns from local to UTC time
     std::vector<int64_t> tz_table;
     if (has_time_stamp_column && !selected_stripes.empty()) {
+      LOG_PRINTF("Building timezone translation table...\n");
       CUDF_EXPECTS(BuildTimezoneTransitionTable(
                        tz_table, selected_stripes[0].second.writerTimezone),
                    "Cannot setup timezone LUT");
     }
 
     if (md.ps.compression != orc::NONE) {
+      LOG_PRINTF("Decompressing streams...\n");
       auto decomp_data =
           decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
                                  stream_info, selected_stripes.size());
@@ -730,6 +734,7 @@ gdf_error read_orc(orc_read_arg *args) {
             column->size * sizeof(std::pair<const char *, size_t>)));
       }
     }
+    LOG_PRINTF("Decoding stream data...\n");
     decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table, columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
