@@ -631,6 +631,12 @@ def gpu_round(in_col, out_col, decimal):
             out_col[i] = newval
 
 
+def apply_round(data, decimal):
+    output_dary = rmm.device_array_like(data)
+    gpu_round.forall(output_dary.size)(data, output_dary, decimal)
+    return output_dary
+
+
 MAX_FAST_UNIQUE_K = 2 * 1024
 
 
