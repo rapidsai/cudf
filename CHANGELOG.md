@@ -15,6 +15,7 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1746 Removed unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 
 ## Bug Fixes
 
