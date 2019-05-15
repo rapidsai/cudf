@@ -435,6 +435,7 @@ __device__ inline void aggregate_row(device_table const& target,
       });
 }  
 
+template <bool nullable = true>
 struct row_hasher{
   using result_type = hash_value_type;  // TODO Remove when aggregating
                                         // map::insert function is removed
@@ -442,18 +443,7 @@ struct row_hasher{
   row_hasher(device_table const& t) : table{t} {}
 
   __device__ auto operator()(gdf_size_type row_index) const {
-    return hash_row(table, row_index);
-  }
-};
-
-struct row_equality_comparator {
-  device_table lhs;
-  device_table rhs;
-  row_equality_comparator(device_table const& l, device_table const& r) : lhs{l}, rhs{r} {}
-
-  __device__ bool operator()(gdf_size_type lhs_index,
-                             gdf_size_type rhs_index) const {
-    return rows_equal(lhs, lhs_index, rhs, rhs_index);
+    return hash_row<nullable>(table, row_index);
   }
 };
 
@@ -507,13 +497,14 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   auto d_output_keys = device_table::create(output_keys);
   auto d_output_values = device_table::create(output_values);
 
-  using map_type = concurrent_unordered_map<gdf_size_type, gdf_size_type,
-                                            row_hasher, row_equality_comparator>;
-
+  using map_type =
+      concurrent_unordered_map<gdf_size_type, gdf_size_type, row_hasher<true>,
+                               row_equality_comparator<true>>;
 
   std::unique_ptr<map_type> map = std::make_unique<map_type>(
       compute_hash_table_size(keys.num_rows()), unused_key, unused_value,
-      row_hasher{*d_input_keys}, row_equality_comparator{*d_input_keys, *d_input_keys});
+      row_hasher<true>{*d_input_keys},
+      row_equality_comparator<true>{*d_input_keys, *d_input_keys});
 
   cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
 
