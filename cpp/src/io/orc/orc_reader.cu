@@ -654,6 +654,7 @@ gdf_error read_orc(orc_read_arg *args) {
   if (num_rows > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
+    memset(chunks.host_ptr(), 0, chunks.memory_size());
     LOG_PRINTF("Reading streams...\n");
 
     size_t stripe_start_row = 0;
