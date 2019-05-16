@@ -33,6 +33,7 @@
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
+- PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 
 
 # cuDF 0.7.1 (11 May 2019)
