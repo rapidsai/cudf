@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef TABLE_ROWWISE_OPERATIONS_CUH
-#define TABLE_ROWWISE_OPERATIONS_CUH
+#ifndef DEVICE_TABLE_ROW_OPERATORS_CUH
+#define DEVICE_TABLE_ROW_OPERATORS_CUH
 
 #include <cudf.h>
 #include "table/device_table.cuh"
@@ -106,9 +106,11 @@ struct equality_comparator
  *
  * Use this constructor when you will be comparing two rows from the same table
  */
-  equality_comparator(device_table const &lhs, bool nulls_are_equal = false) : _lhs(lhs), _rhs(lhs), _nulls_are_equal(nulls_are_equal)
+  equality_comparator(device_table const &lhs, bool nulls_are_equal = false) : 
+                            _lhs(lhs), _rhs(lhs), _nulls_are_equal(nulls_are_equal)
   {
   }
+
 /**
  * @brief  Constructor for equality operator
  *
@@ -120,10 +122,19 @@ struct equality_comparator
  * Use this constructor when you will be comparing rows from two different tables
  */
   equality_comparator(device_table const &lhs, device_table const &rhs,
-                      bool nulls_are_equal = false) : _lhs(lhs), _rhs(rhs), _nulls_are_equal(nulls_are_equal)
+        bool nulls_are_equal = false) : _lhs(lhs), _rhs(rhs), _nulls_are_equal(nulls_are_equal)
   {
   }
 
+/**
+ * @brief  Equality operator comparator
+ *
+ * @param lhs_index   Row index to the left table
+ * @param rhs_index   Row index to the right table
+ * 
+ * @returns true      If the two rows are element-wise equal
+ * @returns false     If any element differs between the two rows
+ */
   __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index)
   {
     return rows_equal(_lhs, lhs_index, _rhs, rhs_index, _nulls_are_equal);    
@@ -215,6 +226,7 @@ struct inequality_comparator
   {
     _has_nulls = _lhs.has_nulls();
   }
+
 /**
  * @brief  Constructor for inequality comparator
  *
@@ -232,6 +244,17 @@ struct inequality_comparator
     _has_nulls = _lhs.has_nulls() || _rhs.has_nulls();
   }
 
+/**
+ * @brief  Inquality operator comparator
+ *
+ * @param lhs_index   Row index to the left table
+ * @param rhs_index   Row index to the right table
+ * 
+ * @returns true      If the elements from the two rows fulfill the inequality as defined by 
+ *                        asc_desc_flags and nulls_are_smallest
+ * @returns false     If the elements from the two rows do not fulfill the inequality as defined by 
+ *                        asc_desc_flags and nulls_are_smallest
+ */
   __device__ inline bool operator()(gdf_index_type lhs_index, gdf_index_type rhs_index)
   {
 

@@ -23,51 +23,11 @@
 #include "utilities/error_utils.hpp"
 
 #include "table/device_table.cuh"
-#include "table/table_rowwise_operators.cuh"
+#include "table/device_table_row_operators.cuh"
 
 #include "rmm/thrust_rmm_allocator.h"
 
 #include "../sqls/sqls_rtti_comp.h"
-
-// namespace{ //annonymus
-
-//   gdf_error multi_col_order_by(gdf_column** cols,
-//                                int8_t* asc_desc,
-//                                size_t ncols,
-//                                gdf_column* output_indices,
-//                                bool flag_nulls_are_smallest, 
-//                                bool null_as_largest_for_multisort = false)
-//   {
-//     GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
-//     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
-//     /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
-//     GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
-
-//     // Check for null so we can use a faster sorting comparator 
-//     bool const have_nulls{ std::any_of(cols, cols + ncols, [](gdf_column * col){ return col->null_count > 0; }) };
-
-//     rmm::device_vector<void*> d_cols(ncols);
-//     rmm::device_vector<gdf_valid_type*> d_valids(ncols);
-//     rmm::device_vector<int> d_types(ncols, 0);
-
-//     void** d_col_data = d_cols.data().get();
-//     gdf_valid_type** d_valids_data = d_valids.data().get();
-//     int* d_col_types = d_types.data().get();
-
-//     gdf_error gdf_status = soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
-//     if(GDF_SUCCESS != gdf_status)
-//       return gdf_status;
-
-//     // if using null_as_largest_for_multisort = true, then you cant set ascending descending order (asc_desc)
-//     GDF_REQUIRE(((null_as_largest_for_multisort && (nullptr == asc_desc)) || !null_as_largest_for_multisort), GDF_INVALID_API_CALL);
-
-// 		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-// 				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, null_as_largest_for_multisort);
-
-//     return GDF_SUCCESS;
-//   }
-
-// } //end unknown namespace
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -103,7 +63,7 @@ gdf_error gdf_order_by(gdf_column** cols,
     nulls_are_smallest = true;
   } 
   
-  cudaStream_t stream = NULL;
+  cudaStream_t stream = 0;
   gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
   gdf_size_type nrows = cols[0]->size;
 

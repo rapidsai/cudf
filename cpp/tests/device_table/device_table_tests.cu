@@ -15,7 +15,7 @@
  */
 
 #include <table/device_table.cuh>
-#include <table/table_rowwise_operators.cuh>
+#include <table/device_table_row_operators.cuh>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"

@@ -28,7 +28,7 @@
 #include "utilities/type_dispatcher.hpp"
 #include "bitmask/legacy_bitmask.hpp"
 
-#include "table/table_rowwise_operators.cuh"
+#include "table/device_table_row_operators.cuh"
 
 template<typename IndexT>
 struct LesserRTTI
