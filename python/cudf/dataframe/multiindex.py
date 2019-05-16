@@ -348,39 +348,8 @@ class MultiIndex(Index):
             if not hasattr(o, '_source_data'):
                 _need_codes = True
         if _need_codes:
-            levels = objs[0].levels
-            codes = objs[0].codes.copy(deep=False)
-            # for each new multiindex
-            for multiindex_idx, multiindex in enumerate(objs[1:]):
-                multiindex_idx += 1
-                # for each level in the multiindex
-                for level_idx, level in enumerate(multiindex.levels):
-                    # get the codes for this level
-                    current_codes = multiindex.codes[codes.columns[level_idx]]
-                    old_codes = []
-                    new_codes = []
-                    # for each value and index in the multiindex level
-                    for old_index, l in enumerate(level):
-                        found_level = False
-                        # for each value and index in the root level
-                        for new_index, level_value in enumerate(levels[
-                                level_idx]):
-                            # if the root level name matches the current index
-                            if level_value == level[old_index]:
-                                old_codes.append(old_index)
-                                new_codes.append(new_index)
-                                found_level = True
-                                break
-                        if not found_level:
-                            levels[level_idx] = np.append(
-                                    levels[level_idx], l)
-                        old_codes.append(old_index)
-                        new_codes.append(len(levels[level_idx])-1)
-                    current_codes = current_codes.replace(old_codes, new_codes)
-                    multiindex.codes[codes.columns[level_idx]] = current_codes
-                    multiindex.codes[codes.columns[level_idx]] = multiindex.codes[codes.columns[level_idx]].reset_index(drop=True)  # noqa: E501
-            codes = DataFrame._concat([o.codes for o in objs])
-            index = MultiIndex(levels=levels, codes=codes)
+            raise NotImplementedError('MultiIndex._concat is only supported '
+                    'for groupby generated MultiIndexes at this time.')
         else:
             _source_data = DataFrame._concat([o._source_data for o in objs])
             index = MultiIndex(source_data=_source_data)
