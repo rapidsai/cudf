@@ -38,6 +38,8 @@
 using std::string;
 using std::vector;
 
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct gdf_json_test : GdfTest {};
 
 bool checkFile(std::string fname) {
@@ -51,7 +53,7 @@ template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
   return m_hostdata;
 }
 
-void checkStrColumn(gdf_column *col, vector<string> refs){
+void checkStrColumn(gdf_column *col, vector<string> refs) {
   ASSERT_EQ(col->dtype, GDF_STRING);
 
   const auto stringList = reinterpret_cast<NVStrings *>(col->data);
@@ -64,7 +66,7 @@ void checkStrColumn(gdf_column *col, vector<string> refs){
   ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
 
   // Check the actual strings themselves
-  std::vector<char*> strings(count);
+  std::vector<char *> strings(count);
   for (size_t i = 0; i < count; ++i) {
     strings[i] = new char[lengths[i] + 1];
     strings[i][lengths[i]] = 0;
@@ -158,7 +160,7 @@ TEST_F(gdf_json_test, BasicJsonLines) {
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
-  const char *types[] = {"int", "float64", "str"};
+  const char *types[] = {"2:str", "0:int", "1:float64"};
   json_read_arg args{};
   args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
@@ -223,14 +225,14 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
 }
 
 TEST_F(gdf_json_test, JsonLinesFileInput) {
-  const char *fname = "/tmp/JsonLinesFileTest.json";
+  const std::string fname = temp_env->get_temp_dir()+"JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname;
+  args.source = fname.c_str();
   args.source_type = FILE_PATH;
   args.lines = true;
 
@@ -256,14 +258,14 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
-  const char *fname = "/tmp/JsonLinesByteRangeTest.json";
+  const std::string fname = temp_env->get_temp_dir()+"JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname;
+  args.source = fname.c_str();
   args.source_type = FILE_PATH;
   args.lines = true;
   args.byte_range_offset = 11;
@@ -286,14 +288,14 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
-  const char *fname = "/tmp/JsonLinesObjectsTest.json";
+  const std::string fname = temp_env->get_temp_dir()+"JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname;
+  args.source = fname.c_str();
   args.source_type = FILE_PATH;
   args.lines = true;
 

@@ -8,6 +8,8 @@
 - PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
 - PR #1310 Implemented the slice/split functionality.
+- PR #1630 Add Python layer to the GPU-accelerated JSON reader
+- PR #1745 Add rounding of numeric columns via Numba
 
 ## Improvements
 
@@ -27,9 +29,12 @@
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
+- PR #1642 Fix failure of CSV_TEST gdf_csv_test.SkiprowsNrows on multiuser systems
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
+- PR #1758 Fix df.set_index() when setting index from an empty column
+- PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 
 
 # cuDF 0.7.1 (11 May 2019)
