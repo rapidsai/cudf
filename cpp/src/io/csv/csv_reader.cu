@@ -683,46 +683,44 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	if(args->dtype==NULL){
-		if (raw_csv.num_records == 0) {
-			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
-		}
+  if(args->dtype == NULL){
+    if (raw_csv.num_records == 0) {
+      checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
+    }
 
-		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-		device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
-		CUDA_TRY( cudaMemset(d_ColumnData.data(),	0, 	(sizeof(column_data_t) * (raw_csv.num_active_cols)) ) ) ;
+    vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
+    device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
+    CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
 
-		launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
-		CUDA_TRY( cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * (raw_csv.num_active_cols), cudaMemcpyDeviceToHost));
+    launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
+    CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * raw_csv.num_active_cols, cudaMemcpyDeviceToHost));
 
-		// host: array of dtypes (since gdf_columns are not created until end)
-		vector<gdf_dtype>	d_detectedTypes;
+    // host: array of dtypes (since gdf_columns are not created until end)
+    vector<gdf_dtype> d_detectedTypes;
 
-		raw_csv.dtypes.clear();
+    for(int col = 0; col < raw_csv.num_active_cols; col++){
+      unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
+                                    h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
-		for(int col = 0; col < raw_csv.num_active_cols; col++){
-			unsigned long long countInt = h_ColumnData[col].countInt8+h_ColumnData[col].countInt16+
-										  h_ColumnData[col].countInt32+h_ColumnData[col].countInt64;
-
-			if (h_ColumnData[col].countNULL == raw_csv.num_records){
-				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
-			} else if(h_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
-			} else if(h_ColumnData[col].countDateAndTime>0L){
-				d_detectedTypes.push_back(GDF_DATE64);
-			} else if(h_ColumnData[col].countFloat > 0L  ||  
-				(h_ColumnData[col].countFloat==0L && countInt >0L && h_ColumnData[col].countNULL >0L) ) {
-				// The second condition has been added to conform to PANDAS which states that a colum of 
-				// integers with a single NULL record need to be treated as floats.
-				d_detectedTypes.push_back(GDF_FLOAT64);
-			}
-			else { 
-				d_detectedTypes.push_back(GDF_INT64);
-			}
-		}
-		raw_csv.dtypes=d_detectedTypes;
-	}
-	else {
+      if (h_ColumnData[col].countNULL == raw_csv.num_records){
+        d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
+      } else if(h_ColumnData[col].countString > 0L){
+        d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
+      } else if(h_ColumnData[col].countDateAndTime > 0L){
+        d_detectedTypes.push_back(GDF_DATE64);
+      } else if(h_ColumnData[col].countFloat > 0L  ||  
+        (h_ColumnData[col].countFloat == 0L && countInt > 0L && h_ColumnData[col].countNULL > 0L) ) {
+        // The second condition has been added to conform to PANDAS which states that a colum of 
+        // integers with a single NULL record need to be treated as floats.
+        d_detectedTypes.push_back(GDF_FLOAT64);
+      }
+      else { 
+        d_detectedTypes.push_back(GDF_INT64);
+      }
+    }
+    raw_csv.dtypes = d_detectedTypes;
+  }
+  else {
     const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
                                      [](const auto& s) { return strchr(s, ':') != nullptr; });
     if (!is_dict) {
