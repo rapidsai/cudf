@@ -8,6 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+
 @pytest.fixture(scope='module')
 def datadir(datadir):
     return datadir / 'orc'
