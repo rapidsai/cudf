@@ -86,9 +86,9 @@ typedef struct {
   gdf_size_type nrows;                      ///< Number of rows to read, -1 indicates all
   gdf_size_type header;                     ///< Row of the header data, zero based counting. Default states that header should not be read from file.
 
-  int           num_names;                  ///< Number of columns in the names array
+  int           num_names;                  ///< Number of elements in the names array
   const char    **names;                    ///< Ordered List of column names
-  int           num_dtype;                  ///< Number of columns in the dtype array
+  int           num_dtype;                  ///< Number of elements in the dtype array
   const char    **dtype;                    ///< Ordered List of data types
 
   int           *index_col;                 ///< Indexes of columns to use as the row labels of the DataFrame.
