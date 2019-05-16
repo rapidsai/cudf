@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
+- PR #1741 Add MultiIndex concatenation
 
 ## Bug Fixes
 
