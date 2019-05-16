@@ -146,18 +146,14 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
   // for a given unique row
-  using map_type = concurrent_unordered_map<gdf_size_type, 
-                                            aggregation_type, 
-                                            std::numeric_limits<gdf_size_type>::max(), 
-                                            default_hash<gdf_size_type>, 
-                                            equal_to<gdf_size_type>,
-                                            legacy_allocator<thrust::pair<gdf_size_type, aggregation_type> > >;
+  using map_type = concurrent_unordered_map<gdf_size_type, aggregation_type>;
 
   // The hash table occupancy and the input size determines the size of the hash table
   const size_t hash_table_size{ compute_hash_table_size(input_num_rows) };
   
   // Initialize the hash table with the aggregation operation functor's identity value
-  std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
+  std::unique_ptr<map_type> the_map(
+      new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
   const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
