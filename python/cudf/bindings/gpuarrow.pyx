@@ -245,7 +245,7 @@ class GpuArrowReader(Sequence):
     def _parse_metdata(self):
         "Parse the metadata in the IPC handle"
 
-        cdef char[::1] schema_data = self._schema_data
+        cdef const char[::1] schema_data = self._schema_data
         cdef uintptr_t gpu_ptr = 0
         cdef gdf_ipc_parser_type* ipcparser = <gdf_ipc_parser_type*>NULL
 
