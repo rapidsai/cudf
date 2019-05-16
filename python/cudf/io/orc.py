@@ -9,8 +9,21 @@ import pyarrow.orc as orc
 import warnings
 
 
+@ioutils.doc_read_orc_metadata()
+def read_orc_metadata(path):
+    """{docstring}"""
+
+    orc_file = orc.ORCFile(path)
+
+    num_rows = orc_file.nrows
+    num_stripes = orc_file.nstripes
+    col_names = orc_file.schema.names
+
+    return num_rows, num_stripes, col_names
+
+
 @ioutils.doc_read_orc()
-def read_orc(path, engine='cudf', columns=None, skip_rows=None,
+def read_orc(path, engine='cudf', columns=None, stripe=None, skip_rows=None,
              num_rows=None):
     """{docstring}"""
 
@@ -18,6 +31,7 @@ def read_orc(path, engine='cudf', columns=None, skip_rows=None,
         df = cpp_read_orc(
             path,
             columns,
+            stripe,
             skip_rows,
             num_rows
         )

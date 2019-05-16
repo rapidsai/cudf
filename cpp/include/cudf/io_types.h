@@ -181,6 +181,7 @@ typedef struct {
   const char    **use_cols;                 ///< In: Columns of interest; only these columns will be parsed and returned.
   int           use_cols_len;               ///< In: Number of columns
 
+  int           stripe;                     ///< In: Stripe index of interest; only data in this stripe will be returned.
   int           skip_rows;                  ///< In: Number of rows to skip from the start
   int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
 
