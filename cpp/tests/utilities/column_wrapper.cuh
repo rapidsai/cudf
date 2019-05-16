@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
- * 
+ *
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 William Malpica <william@blazingdb.com>
  *
@@ -20,10 +20,10 @@
 #ifndef COLUMN_WRAPPER_H
 #define COLUMN_WRAPPER_H
 
+#include <cudf.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 #include <utilities/bit_util.cuh>
 #include <utilities/type_dispatcher.hpp>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <cudf.h>
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -120,6 +120,36 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper of a specified size with lambda data
+   * initializer and optionally allocated bitmask.
+   *
+   * Optionally allocates a default-initialized bitmask (i.e., all bits are
+   * null).
+   *
+   * @param column_size The desired size of the column
+   * @param value_initalizer The unary lambda to initialize each value in the
+   * column's data
+   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
+   *---------------------------------------------------------------------------**/
+  template <typename ValueInitializerType>
+  column_wrapper(gdf_size_type column_size,
+                 ValueInitializerType value_initalizer,
+                 bool allocate_bitmask = false) {
+    std::vector<ColumnType> host_data(column_size);
+    std::vector<gdf_valid_type> host_bitmask;
+
+    for (gdf_index_type row = 0; row < column_size; ++row) {
+      host_data[row] = value_initalizer(row);
+    }
+
+    if (allocate_bitmask) {
+      host_bitmask.resize(gdf_valid_allocation_size(column_size));
+    }
+
+    initialize_with_host_data(host_data, host_bitmask);
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using host vectors for data and
    * bitmask.
    *
@@ -160,7 +190,7 @@ struct column_wrapper {
   column_wrapper(const gdf_column & column) : data(static_cast<ColumnType*>(column.data), static_cast<ColumnType*>(column.data) + column.size)  {
     CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype, "data types do not match");
 
-    if (column.valid != nullptr){
+    if (column.valid != nullptr) {
       bitmask.assign(column.valid, column.valid + gdf_valid_allocation_size(column.size));
     }
     the_column.data = data.data().get();
@@ -169,7 +199,7 @@ struct column_wrapper {
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = column.dtype_info.time_unit;
     the_column.dtype_info = extra_info;
-    if (bitmask.size() > 0){
+    if (bitmask.size() > 0) {
       the_column.valid = bitmask.data().get();
     } else {
       the_column.valid = nullptr;
@@ -296,7 +326,6 @@ struct column_wrapper {
     print_gdf_column(&the_column);
   }
 
-
   gdf_size_type size() const{
       return the_column.size;
   }
@@ -358,9 +387,9 @@ struct column_wrapper {
       return false;
 
     if ((the_column.data == nullptr) != (rhs.data == nullptr))
-      return false; // if one is null but not both
+      return false;  // if one is null but not both
     else if (rhs.data == nullptr)
-      return true; // logically, both are null
+      return true;  // logically, both are null
     // both are non-null...
 
     if (not thrust::all_of(rmm::exec_policy()->on(0),
