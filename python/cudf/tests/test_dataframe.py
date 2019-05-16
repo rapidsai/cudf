@@ -1465,7 +1465,7 @@ def test_dataframe_shape_empty():
 
 
 @pytest.mark.parametrize('num_cols', [1, 2, 10])
-@pytest.mark.parametrize('num_rows', [1, 2, 1000])
+@pytest.mark.parametrize('num_rows', [1, 2, 20])
 @pytest.mark.parametrize(
     'dtype',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
