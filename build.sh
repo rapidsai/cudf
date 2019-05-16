@@ -69,7 +69,12 @@ fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
-    echo rm -rf ${BUILD_ARTIFACTS}
+    # If the dirs to clean are mounted dirs in a container, the
+    # contents should be removed but the mounted dirs will remain.
+    # The find removes all contents but leaves the dirs, the rmdir
+    # attempts to remove the dirs but can fail safely.
+    find ${BUILD_ARTIFACTS} -mindepth 1 -delete
+    rmdir ${BUILD_ARTIFACTS} || true
 fi
 
 ################################################################################
