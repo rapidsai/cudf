@@ -30,7 +30,7 @@ HELP="$0 [cudf | libcudf | clean] [-v] [-g] [-h]
 "
 LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
 CUDF_BUILD_DIR=${REPODIR}/python/build
-BUILD_ARTIFACTS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR}"
 VERBOSE=0
 BUILD_TYPE=Release
 
@@ -73,8 +73,8 @@ if hasArg clean; then
     # contents should be removed but the mounted dirs will remain.
     # The find removes all contents but leaves the dirs, the rmdir
     # attempts to remove the dirs but can fail safely.
-    find ${BUILD_ARTIFACTS} -mindepth 1 -delete
-    rmdir ${BUILD_ARTIFACTS} || true
+    find ${BUILD_DIRS} -mindepth 1 -delete
+    rmdir ${BUILD_DIRS} || true
 fi
 
 ################################################################################
