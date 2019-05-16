@@ -270,6 +270,7 @@ TEST_F(DeviceTableTest, TwoTablesAllRowsEqual) {
                      row_comparison<true>{*left_table, *right_table, false}));
 }
 
+template <bool update_target_bitmask>
 struct row_copier {
   device_table target;
   device_table source;
@@ -280,7 +281,8 @@ struct row_copier {
       : target{_target}, source{_source} {}
 
   __device__ void operator()(index_pair const& indices) {
-    copy_row(target, thrust::get<0>(indices), source, thrust::get<1>(indices));
+    copy_row<update_target_bitmask>(target, thrust::get<0>(indices), source,
+                                    thrust::get<1>(indices));
   }
 };
 
@@ -326,7 +328,7 @@ TEST_F(DeviceTableTest, CopyRowsNoNulls) {
           thrust::make_tuple(target_indices.begin(), source_indices.begin())),
       thrust::make_zip_iterator(
           thrust::make_tuple(target_indices.end(), source_indices.end())),
-      row_copier{*target_table, *source_table}));
+      row_copier<false>{*target_table, *source_table}));
 
   // ensure source_table row @ source_indices[i] == target_table row @
   // target_indices[i]
