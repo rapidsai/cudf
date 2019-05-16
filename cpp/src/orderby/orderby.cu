@@ -67,14 +67,21 @@ gdf_error gdf_order_by(gdf_column** cols,
   gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
   gdf_size_type nrows = cols[0]->size;
 
-  auto table = device_table::create(num_inputs, cols, stream);
-
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
-
-  inequality_comparator ineq_op(*table, nulls_are_smallest, asc_desc); 
-  thrust::sort(rmm::exec_policy(stream)->on(stream),
-                d_indx, d_indx+nrows,
-                ineq_op);				        
+  auto table = device_table::create(num_inputs, cols, stream);
+  bool nullable = table.get()->has_nulls();
+ 
+  if (nullable){
+    auto ineq_op = inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  ineq_op);				        
+  } else {
+    auto ineq_op = inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  ineq_op);				        
+  }
   
   return GDF_SUCCESS;
 }

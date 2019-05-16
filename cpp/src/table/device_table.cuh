@@ -24,6 +24,7 @@
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
 #include <table.hpp>
+#include <table/device_table_row_operators.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -177,25 +178,62 @@ class device_table {
   }
 };
 
-
 namespace {
-template <template <typename> typename hash_function>
+
+template <bool nullable, template <typename> typename hash_function>
 struct hash_element {
   template <typename col_type>
   __device__ inline hash_value_type operator()(gdf_column const& col,
                                                gdf_size_type row_index) {
     hash_function<col_type> hasher;
 
-    // treat null values as the lowest possible value of the type
-    col_type const value_to_hash =
-        gdf_is_valid(col.valid, row_index)
-            ? static_cast<col_type*>(col.data)[row_index]
-            : std::numeric_limits<col_type>::lowest();
+    col_type value_to_hash{};
+
+    if (nullable) {
+      // treat null values as the lowest possible value of the type
+      value_to_hash = gdf_is_valid(col.valid, row_index)
+                          ? static_cast<col_type const*>(col.data)[row_index]
+                          : std::numeric_limits<col_type>::lowest();
+    } else {
+      value_to_hash = static_cast<col_type const*>(col.data)[row_index];
+    }
 
     return hasher(value_to_hash);
   }
 };
+
+struct copy_element {
+  template <typename T>
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    static_cast<T*>(target.data)[target_index] =
+        static_cast<T const*>(source.data)[source_index];
+  }
+};
 }  // namespace
+
+/**---------------------------------------------------------------------------*
+ * @brief Functor to compute if two rows are equal.
+ *
+ * @tparam nullable Flag indicating the possibility of null values
+ *---------------------------------------------------------------------------**/
+template <bool nullable = true>
+struct row_equality_comparator {
+  device_table lhs;
+  device_table rhs;
+  bool nulls_are_equal;
+  row_equality_comparator(device_table const& l, device_table const& r,
+                          bool nulls_equal = false)
+      : lhs{l}, rhs{r}, nulls_are_equal{nulls_equal} {}
+
+  __device__ bool operator()(gdf_size_type lhs_index,
+                             gdf_size_type rhs_index) const {
+    return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index,
+                                nulls_are_equal);
+  }
+};
 
 /**
  * --------------------------------------------------------------------------*
@@ -212,10 +250,12 @@ struct hash_element {
  * column
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type const* __restrict__ initial_hash_values) {
@@ -227,9 +267,10 @@ __device__ inline hash_value_type hash_row(
   // hash value
   auto hasher = [row_index, &t, initial_hash_values,
                  hash_combiner](gdf_size_type column_index) {
-    hash_value_type hash_value = cudf::type_dispatcher(
-        t.get_column(column_index)->dtype, hash_element<hash_function>{},
-        *t.get_column(column_index), row_index);
+    hash_value_type hash_value =
+        cudf::type_dispatcher(t.get_column(column_index)->dtype,
+                              hash_element<nullable, hash_function>{},
+                              *t.get_column(column_index), row_index);
 
     hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
 
@@ -255,10 +296,12 @@ __device__ inline hash_value_type hash_row(
  * @param[in] row_index The row of the table to compute the hash value for
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(device_table const& t,
                                            gdf_size_type row_index) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
@@ -268,7 +311,7 @@ __device__ inline hash_value_type hash_row(device_table const& t,
   // Hashes an element in a column
   auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
     return cudf::type_dispatcher(t.get_column(column_index)->dtype,
-                                 hash_element<hash_function>{},
+                                 hash_element<nullable, hash_function>{},
                                  *t.get_column(column_index), row_index);
   };
 
@@ -278,19 +321,6 @@ __device__ inline hash_value_type hash_row(device_table const& t,
       thrust::make_counting_iterator(t.num_columns()), hasher,
       hash_value_type{0}, hash_combiner);
 }
-
-namespace {
-struct copy_element {
-  template <typename T>
-  __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
-                                    gdf_column const& source,
-                                    gdf_size_type source_index) {
-    static_cast<T*>(target.data)[target_index] =
-        static_cast<T const*>(source.data)[source_index];
-  }
-};
-}  // namespace
 
 /**
  * @brief  Copies a row from a source table to a target table.

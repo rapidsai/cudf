@@ -246,14 +246,20 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 
   rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
-  auto device_input_table = device_table::create(input_table);
-  auto comp = equality_comparator(*device_input_table, true);
-
   auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
-
-  result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                            unique_indices.data().get(),
-                            comp);
+  auto device_input_table = device_table::create(input_table);
+  bool nullable = device_input_table.get()->has_nulls();
+  if (nullable){
+    auto comp = equality_comparator<true>(*device_input_table, true);
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
+                              unique_indices.data().get(),
+                              comp);
+  } else {
+    auto comp = equality_comparator<false>(*device_input_table, true);
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
+                              unique_indices.data().get(),
+                              comp);
+  }
 
   unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
 
