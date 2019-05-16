@@ -1224,6 +1224,12 @@ class Series(object):
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
 
+    def round(self, decimals=0):
+        """Round a Series to a configurable number of decimal places.
+        """
+        return Series(self._column.round(decimals=decimals), name=self.name,
+                      index=self.index)
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
