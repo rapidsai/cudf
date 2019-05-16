@@ -86,6 +86,8 @@ class Column(object):
             ))
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
+        head = objs[0]
+
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             objs = [o._data for o in objs]
