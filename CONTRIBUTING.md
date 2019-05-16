@@ -107,10 +107,12 @@ source activate cudf_dev
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
-$ mkdir build                                                             # make a build directory
-$ cd build                                                                # enter the build directory
+$ cd $CUDF_HOME
+$ ./build.sh                                                             # compile the libraries librmm.so, libcudf.so and install them to CMAKE_INSTALL_PREFIX, then build the cudf Python package and install to your Python path.
+```
 
+- Customizing the build
+```bash
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 # -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
