@@ -139,6 +139,7 @@ TEST(gdf_csv_test, UseColumns)
         args.filepath_or_buffer = fname.c_str();
         args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = std::extent<decltype(types)>::value;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -179,6 +180,7 @@ TEST(gdf_csv_test, Numbers)
         args.filepath_or_buffer = fname.c_str();
         args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = std::extent<decltype(types)>::value;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';

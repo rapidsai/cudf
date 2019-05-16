@@ -724,13 +724,13 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else {
     const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
-                                     [](const auto s) { return strchr(s, ':') != nullptr; });
+                                     [](const auto& s) { return strchr(s, ':') != nullptr; });
     if (!is_dict) {
-      size_t active_col = 0;
-      for (bool is_col_active : raw_csv.h_parseCol) {
-        if (is_col_active) {
+      CUDF_EXPECTS(args->num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
           // dtype is an array of types, assign types to active columns in the given order
-          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[active_col++]));
+          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[col]));
           CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
         }
       }
@@ -738,11 +738,13 @@ gdf_error read_csv(csv_read_arg *args)
       // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
       std::unordered_map<std::string, gdf_dtype> col_type_map;
       for (int dtype_idx = 0; dtype_idx < args->num_dtype; dtype_idx++) {
-        const std::string dtype_elem(args->dtype[dtype_idx]);
-        const size_t colon_idx = dtype_elem.find(":");
-        const std::string col_name(dtype_elem.begin(), dtype_elem.begin() + colon_idx);
-        const std::string type_str(dtype_elem.begin() + colon_idx + 1, dtype_elem.end());
-        CUDF_EXPECTS((col_type_map[col_name] = convertStringToDtype(type_str)) != GDF_invalid, "Unsupported data type");
+        // Split the dtype elements around the last ':' character
+        const char* colon = strrchr(args->dtype[dtype_idx], ':');
+        const std::string col(args->dtype[dtype_idx], colon);
+        const std::string type(colon + 1);
+
+        col_type_map[col] = convertStringToDtype(type);
+        CUDF_EXPECTS(col_type_map[col] != GDF_invalid, "Unsupported data type");
       }
 
       for (int col = 0; col < raw_csv.num_actual_cols; col++) {
