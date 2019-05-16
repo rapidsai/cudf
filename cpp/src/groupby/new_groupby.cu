@@ -250,12 +250,12 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   auto device_input_table = device_table::create(input_table);
   bool nullable = device_input_table.get()->has_nulls();
   if (nullable){
-    auto comp = equality_comparator<true>(*device_input_table, true);
+    auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
                               unique_indices.data().get(),
                               comp);
   } else {
-    auto comp = equality_comparator<false>(*device_input_table, true);
+    auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
                               unique_indices.data().get(),
                               comp);

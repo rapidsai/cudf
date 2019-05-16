@@ -24,7 +24,6 @@
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
 #include <table.hpp>
-#include <table/device_table_row_operators.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -213,27 +212,6 @@ struct copy_element {
   }
 };
 }  // namespace
-
-/**---------------------------------------------------------------------------*
- * @brief Functor to compute if two rows are equal.
- *
- * @tparam nullable Flag indicating the possibility of null values
- *---------------------------------------------------------------------------**/
-template <bool nullable = true>
-struct row_equality_comparator {
-  device_table lhs;
-  device_table rhs;
-  bool nulls_are_equal;
-  row_equality_comparator(device_table const& l, device_table const& r,
-                          bool nulls_equal = false)
-      : lhs{l}, rhs{r}, nulls_are_equal{nulls_equal} {}
-
-  __device__ bool operator()(gdf_size_type lhs_index,
-                             gdf_size_type rhs_index) const {
-    return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index,
-                                nulls_are_equal);
-  }
-};
 
 /**
  * --------------------------------------------------------------------------*

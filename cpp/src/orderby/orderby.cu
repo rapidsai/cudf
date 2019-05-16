@@ -72,12 +72,12 @@ gdf_error gdf_order_by(gdf_column** cols,
   bool nullable = table.get()->has_nulls();
  
   if (nullable){
-    auto ineq_op = inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
+    auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                   d_indx, d_indx+nrows,
                   ineq_op);				        
   } else {
-    auto ineq_op = inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
+    auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                   d_indx, d_indx+nrows,
                   ineq_op);				        
