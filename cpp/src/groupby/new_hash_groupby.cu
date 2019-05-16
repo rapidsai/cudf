@@ -468,6 +468,35 @@ __global__ void build_aggregation_table(
   }
 }
 
+template <bool keys_have_nulls, bool values_have_nulls, typename Map>
+__global__ void extract_groupby_result(Map* map, device_table const input_keys,
+                                       device_table output_keys,
+                                       device_table const sparse_output_values,
+                                       device_table dense_output_values,
+                                       gdf_size_type* output_write_index) {
+  gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+
+  using pair_type = typename Map::value_type;
+
+  pair_type const* const __restrict__ table_pairs{map->data()};
+
+  while (i < map->capacity()) {
+    gdf_size_type source_key_row_index;
+    gdf_size_type source_value_row_index;
+
+    thrust::tie(source_key_row_index, source_value_row_index) = table_pairs[i];
+
+    if (source_key_row_index != map->get_unused_key()) {
+      auto output_index = atomicAdd(output_write_index, 1);
+
+      copy_row(output_keys, output_index, input_keys, source_key_row_index);
+      copy_row(dense_output_values, output_index, sparse_output_values,
+               source_value_row_index);
+    }
+    i += gridDim.x * blockDim.x;
+  }
+}
+
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(
     cudf::table const& keys, cudf::table const& values,
@@ -524,6 +553,8 @@ auto compute_hash_groupby(
                      *d_sparse_output_values, d_operators.data().get(),
                      nullptr);
   }
+
+  // TODO Extract results
 
   CHECK_STREAM(stream);
 
