@@ -1024,7 +1024,8 @@ def test_csv_empty_input(tmpdir):
     assert((list(df.dtypes) == out_dtypes))
 
 
-@pytest.mark.parametrize('dtype', [["short", "int"], {'A':"short", 'C':"int"}])
+@pytest.mark.parametrize('dtype',
+                         [["short", "int"], {'A': "short", 'C': "int"}])
 def test_csv_reader_partial_dtype(dtype):
     names_df = read_csv(StringIO('0,1,2'), names=['A', 'B', 'C'],
                         dtype=dtype, usecols=['A', 'C'])
