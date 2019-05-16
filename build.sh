@@ -77,8 +77,12 @@ if hasArg clean; then
     # contents should be removed but the mounted dirs will remain.
     # The find removes all contents but leaves the dirs, the rmdir
     # attempts to remove the dirs but can fail safely.
-    find ${BUILD_DIRS} -mindepth 1 -delete
-    rmdir ${BUILD_DIRS} || true
+    for bd in ${BUILD_DIRS}; do
+	if [ -d ${bd} ]; then
+	    find ${bd} -mindepth 1 -delete
+	    rmdir ${bd} || true
+	fi
+    done
 fi
 
 ################################################################################
