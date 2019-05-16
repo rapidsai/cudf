@@ -249,7 +249,7 @@ std::vector<gdf_dtype> target_dtypes(
  * specialization.
  *---------------------------------------------------------------------------**/
 template <typename SourceType, distributive_operators op,
-          typename Enable = void>
+          bool values_have_nulls, typename Enable = void>
 struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
@@ -265,9 +265,10 @@ struct update_target_element {
  * @tparam SourceType Type of the source element
  * @tparam op The operation to perform
  *---------------------------------------------------------------------------**/
-template <typename SourceType, distributive_operators op>
+template <typename SourceType, distributive_operators op,
+          bool values_have_nulls>
 struct update_target_element<
-    SourceType, op,
+    SourceType, op, values_have_nulls,
     std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Performs in-place update of a target element via a binary operation
@@ -313,8 +314,10 @@ struct update_target_element<
     bit_mask::bit_mask_t* const __restrict__ target_mask{
         reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
 
-    if (not bit_mask::is_valid(target_mask, target_index)) {
-      bit_mask::set_bit_safe(target_mask, target_index);
+    if (values_have_nulls) {
+      if (not bit_mask::is_valid(target_mask, target_index)) {
+        bit_mask::set_bit_safe(target_mask, target_index);
+      }
     }
   }
 };
@@ -322,8 +325,8 @@ struct update_target_element<
 /**---------------------------------------------------------------------------*
  * @brief Specialization for COUNT.
  *---------------------------------------------------------------------------**/
-template <typename SourceType>
-struct update_target_element<SourceType, COUNT,
+template <typename SourceType, bool values_have_nulls>
+struct update_target_element<SourceType, COUNT, values_have_nulls,
                              std::enable_if_t<not std::is_void<
                                  target_type_t<SourceType, COUNT>>::value>> {
   /**---------------------------------------------------------------------------*
@@ -348,6 +351,7 @@ struct update_target_element<SourceType, COUNT,
   }
 };
 
+template <bool values_have_nulls>
 struct elementwise_aggregator {
   template <typename SourceType>
   __device__ inline void operator()(gdf_column const& target,
@@ -357,23 +361,23 @@ struct elementwise_aggregator {
                                     distributive_operators op) {
     switch (op) {
       case MIN: {
-        update_target_element<SourceType, MIN>{}(target, target_index, source,
-                                                 source_index);
+        update_target_element<SourceType, MIN, values_have_nulls>{}(
+            target, target_index, source, source_index);
         break;
       }
       case MAX: {
-        update_target_element<SourceType, MAX>{}(target, target_index, source,
-                                                 source_index);
+        update_target_element<SourceType, MAX, values_have_nulls>{}(
+            target, target_index, source, source_index);
         break;
       }
       case SUM: {
-        update_target_element<SourceType, SUM>{}(target, target_index, source,
-                                                 source_index);
+        update_target_element<SourceType, SUM, values_have_nulls>{}(
+            target, target_index, source, source_index);
         break;
       }
       case COUNT: {
-        update_target_element<SourceType, COUNT>{}(target, target_index, source,
-                                                   source_index);
+        update_target_element<SourceType, COUNT, values_have_nulls>{}(
+            target, target_index, source, source_index);
       }
       default:
         return;
@@ -409,7 +413,7 @@ struct elementwise_aggregator {
  * @param ops Array of operators to perform between the elements of the
  * target and source rows
  *---------------------------------------------------------------------------**/
-template <bool values_have_nulls = true>
+template <bool values_have_nulls>
 __device__ inline void aggregate_row(device_table const& target,
                                      gdf_size_type target_index,
                                      device_table const& source,
@@ -429,9 +433,9 @@ __device__ inline void aggregate_row(device_table const& target,
         }
 
         cudf::type_dispatcher(source.get_column(i)->dtype,
-                              elementwise_aggregator{}, *target.get_column(i),
-                              target_index, *source.get_column(i), source_index,
-                              ops[i]);
+                              elementwise_aggregator<values_have_nulls>{},
+                              *target.get_column(i), target_index,
+                              *source.get_column(i), source_index, ops[i]);
       });
 }
 
@@ -489,9 +493,11 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
     if (source_key_row_index != map->get_unused_key()) {
       auto output_index = atomicAdd(output_write_index, 1);
 
-      copy_row(output_keys, output_index, input_keys, source_key_row_index);
-      copy_row(dense_output_values, output_index, sparse_output_values,
-               source_value_row_index);
+      copy_row<keys_have_nulls>(output_keys, output_index, input_keys,
+                                source_key_row_index);
+
+      copy_row<values_have_nulls>(dense_output_values, output_index,
+                                  sparse_output_values, source_value_row_index);
     }
     i += gridDim.x * blockDim.x;
   }
@@ -510,9 +516,10 @@ auto compute_hash_groupby(
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
+
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(values), operators),
-      true, stream};
+      values_have_nulls, stream};
 
   initialize_with_identity(sparse_output_values, operators, stream);
 
