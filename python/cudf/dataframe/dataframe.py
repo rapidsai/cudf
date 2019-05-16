@@ -1047,7 +1047,7 @@ class DataFrame(object):
             index = RangeIndex(sum(map(len, objs)))
         elif isinstance(objs[0].index, cudf.dataframe.multiindex.MultiIndex):
             index = cudf.dataframe.multiindex.MultiIndex._concat(
-                    [o.index.copy(deep=False) for o in objs])
+                    [o.index for o in objs])
         else:
             index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))

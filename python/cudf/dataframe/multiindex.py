@@ -344,11 +344,10 @@ class MultiIndex(Index):
         _need_codes = False
         from cudf import DataFrame
         from cudf import MultiIndex
-        for idx, o in enumerate(objs):
-            if not hasattr(o, '_source_data'):
-                _need_codes = True
+        _need_codes = not all([hasattr(o, '_source_data') for o in objs])
         if _need_codes:
-            raise NotImplementedError('MultiIndex._concat is only supported '
+            raise NotImplementedError(
+                    'MultiIndex._concat is only supported '
                     'for groupby generated MultiIndexes at this time.')
         else:
             _source_data = DataFrame._concat([o._source_data for o in objs])

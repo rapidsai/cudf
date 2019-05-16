@@ -613,8 +613,7 @@ class Series(object):
         if index is True:
             from cudf.dataframe.multiindex import MultiIndex
             if isinstance(objs[0].index, MultiIndex):
-                index = MultiIndex._concat([o.index.copy(
-                    deep=False) for o in objs])
+                index = MultiIndex._concat([o.index for o in objs])
             else:
                 index = Index._concat([o.index for o in objs])
 
