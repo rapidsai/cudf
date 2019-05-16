@@ -747,9 +747,8 @@ gdf_error read_csv(csv_read_arg *args)
 
       for (int col = 0; col < raw_csv.num_actual_cols; col++) {
         if (raw_csv.h_parseCol[col]) {
-            CUDF_EXPECTS(col_type_map.find(raw_csv.col_names[col]) != col_type_map.end(),
-              "Must specify data types for all active columns");
-          }
+          CUDF_EXPECTS(col_type_map.find(raw_csv.col_names[col]) != col_type_map.end(),
+            "Must specify data types for all active columns");
           raw_csv.dtypes.push_back(col_type_map[raw_csv.col_names[col]]);
         }
       }
