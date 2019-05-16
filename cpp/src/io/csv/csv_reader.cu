@@ -30,6 +30,8 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
+#include <cstring>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -645,8 +647,7 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_names, true);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			std::string col_name 	= args->names[i];
-			raw_csv.col_names.push_back(col_name);
+			raw_csv.col_names.emplace_back(args->names[i]);
 		}
 	}
 
@@ -722,35 +723,40 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		raw_csv.dtypes=d_detectedTypes;
 	}
-	else{
-		std::vector<std::string> typestrings;
-		typestrings.reserve(args->num_dtype);
-    for (int col = 0; col < args->num_dtype; ++col) {
-      typestrings.emplace_back(args->dtype[col]);
-    }
-    const bool is_dict = std::all_of(typestrings.begin(), typestrings.end(),
-																		 [](std::string &s) { return std::find(s.begin(), s.end(), ':') != s.end(); });
+	else {
+    const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
+                                     [](const auto s) { return strchr(s, ':') != nullptr; });
+    if (!is_dict) {
+      size_t active_col = 0;
+      for (bool is_col_active : raw_csv.h_parseCol) {
+        if (is_col_active) {
+          // dtype is an array of types, assign types to active columns in the given order
+          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[active_col++]));
+          CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
+        }
+      }
+    } else {
+      // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
+      std::unordered_map<std::string, gdf_dtype> col_type_map;
+      for (int dtype_idx = 0; dtype_idx < args->num_dtype; dtype_idx++) {
+        const std::string dtype_elem(args->dtype[dtype_idx]);
+        const size_t colon_idx = dtype_elem.find(":");
+        const std::string col_name(dtype_elem.begin(), dtype_elem.begin() + colon_idx);
+        const std::string type_str(dtype_elem.begin() + colon_idx + 1, dtype_elem.end());
+        CUDF_EXPECTS((col_type_map[col_name] = convertStringToDtype(type_str)) != GDF_invalid, "Unsupported data type");
+      }
 
-		for (int col = 0, active_col = 0; col < raw_csv.num_actual_cols; col++) {
-			if (!raw_csv.h_parseCol[col]) {
-				continue;
-			}
-			if(is_dict) {
-				for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-				std::size_t idx = typestrings[active_col].find(':');
-				if(typestrings[active_col].substr(0, idx) == *it){
-					raw_csv.dtypes.push_back(convertStringToDtype(typestrings[active_col].substr(idx +1)));
-					break;
-					}
-				}
-			}
-			else {
-				raw_csv.dtypes.push_back(convertStringToDtype(typestrings[active_col]));
-			}
-			CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
-			active_col++;
-		}
-	}
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
+          raw_csv.dtypes.push_back(col_type_map[raw_csv.col_names[col]]);
+        }
+      }
+    }
+    for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+      CUDF_EXPECTS(!raw_csv.h_parseCol[col] || raw_csv.dtypes[col] != GDF_invalid,
+                   "Must specify data types for all active columns");
+    }
+  }
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < raw_csv.num_actual_cols; ++col) {
