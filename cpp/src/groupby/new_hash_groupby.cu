@@ -433,10 +433,10 @@ __device__ inline void aggregate_row(device_table const& target,
                               target_index, *source.get_column(i), source_index,
                               ops[i]);
       });
-}  
+}
 
 template <bool nullable = true>
-struct row_hasher{
+struct row_hasher {
   using result_type = hash_value_type;  // TODO Remove when aggregating
                                         // map::insert function is removed
   device_table table;
@@ -447,17 +447,15 @@ struct row_hasher{
   }
 };
 
-template <typename Map, bool keys_have_nulls = true,
-          bool values_have_nulls = true>
-__global__ void compute_hash_groupby(
+template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
+__global__ void build_aggregation_table(
     Map* map, device_table input_keys, device_table input_values,
     device_table output_values, distributive_operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
-
-    if (keys_have_nulls and not bit_mask::is_valid(row_bitmask, i)) {
+    if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, i)) {
       i += blockDim.x * gridDim.x;
       continue;
     }
@@ -470,9 +468,8 @@ __global__ void compute_hash_groupby(
   }
 }
 
-}  // namespace
-
-std::tuple<cudf::table, cudf::table> hash_groupby(
+template <bool keys_have_nulls, bool values_have_nulls>
+auto compute_hash_groupby(
     cudf::table const& keys, cudf::table const& values,
     std::vector<groupby::distributive_operators> const& operators,
     groupby::Options options, cudaStream_t stream) {
@@ -480,53 +477,89 @@ std::tuple<cudf::table, cudf::table> hash_groupby(
   gdf_size_type constexpr unused_value{
       std::numeric_limits<gdf_size_type>::max()};
   CUDF_EXPECTS(keys.num_rows() < unused_key, "Groupby input size too large.");
+
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
+  cudf::table sparse_output_values{
+      output_size_estimate, target_dtypes(column_dtypes(values), operators),
+      true, stream};
 
-  cudf::table output_keys{output_size_estimate, column_dtypes(keys), true,
-                          stream};
-
-  cudf::table output_values{output_size_estimate,
-                            target_dtypes(column_dtypes(values), operators),
-                            true, stream};
-  initialize_with_identity(output_values, operators, stream);
-
-  rmm::device_vector<groupby::distributive_operators> d_operators(operators);
+  initialize_with_identity(sparse_output_values, operators, stream);
 
   auto d_input_keys = device_table::create(keys);
   auto d_input_values = device_table::create(values);
-  auto d_output_keys = device_table::create(output_keys);
-  auto d_output_values = device_table::create(output_values);
+  auto d_sparse_output_values = device_table::create(sparse_output_values);
+  rmm::device_vector<groupby::distributive_operators> d_operators(operators);
+
+  // If we ignore null keys, then nulls are not equivalent
+  bool const nulls_are_equal{not options.ignore_null_keys};
+  bool const skip_rows_with_nulls{keys_have_nulls and not nulls_are_equal};
+
+  row_hasher<keys_have_nulls> hasher{*d_input_keys};
+  row_equality_comparator<keys_have_nulls> rows_equal{
+      *d_input_keys, *d_input_keys, nulls_are_equal};
 
   using map_type =
-      concurrent_unordered_map<gdf_size_type, gdf_size_type, row_hasher<true>,
-                               row_equality_comparator<true>>;
+      concurrent_unordered_map<gdf_size_type, gdf_size_type, decltype(hasher),
+                               decltype(rows_equal)>;
 
-  std::unique_ptr<map_type> map = std::make_unique<map_type>(
-      compute_hash_table_size(keys.num_rows()), unused_key, unused_value,
-      row_hasher<true>{*d_input_keys},
-      row_equality_comparator<true>{*d_input_keys, *d_input_keys});
+  auto map =
+      std::make_unique<map_type>(compute_hash_table_size(keys.num_rows()),
+                                 unused_key, unused_value, hasher, rows_equal);
 
   cudf::util::cuda::grid_config_1d grid_params{keys.num_rows(), 256};
 
-  if (options.ignore_null_keys) {
-    using namespace bit_mask;
-
-    if (cudf::has_nulls(keys)) {
-      rmm::device_vector<bit_mask_t> const row_bitmask{
-          cudf::row_bitmask(keys, stream)};
-
-      compute_hash_groupby<<<grid_params.num_blocks,
-                             grid_params.num_threads_per_block, 0, stream>>>(
-          map.get(), *d_input_keys, *d_input_values, *d_output_values,
-          d_operators.data().get(), row_bitmask.data().get());
-    }
+  if (skip_rows_with_nulls) {
+    auto row_bitmask{cudf::row_bitmask(keys, stream)};
+    build_aggregation_table<true, values_have_nulls>
+        <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
+           stream>>>(map.get(), *d_input_keys, *d_input_values,
+                     *d_sparse_output_values, d_operators.data().get(),
+                     row_bitmask.data().get());
+  } else {
+    build_aggregation_table<false, values_have_nulls>
+        <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
+           stream>>>(map.get(), *d_input_keys, *d_input_values,
+                     *d_sparse_output_values, d_operators.data().get(),
+                     nullptr);
   }
 
-  // TODO Set output key/value columns null counts
-
   CHECK_STREAM(stream);
+
+  // TODO Set output key/value columns null counts
+  cudf::table output_keys;
+  cudf::table output_values;
+
+  return std::make_tuple(output_keys, output_values);
+}
+
+}  // namespace
+
+std::tuple<cudf::table, cudf::table> hash_groupby(
+    cudf::table const& keys, cudf::table const& values,
+    std::vector<groupby::distributive_operators> const& operators,
+    groupby::Options options, cudaStream_t stream) {
+  cudf::table output_keys;
+  cudf::table output_values;
+
+  if (cudf::has_nulls(keys)) {
+    if (cudf::has_nulls(values)) {
+      std::tie(output_keys, output_values) = compute_hash_groupby<true, true>(
+          keys, values, operators, options, stream);
+    } else {
+      std::tie(output_keys, output_values) = compute_hash_groupby<true, false>(
+          keys, values, operators, options, stream);
+    }
+  } else {
+    if (cudf::has_nulls(values)) {
+      std::tie(output_keys, output_values) = compute_hash_groupby<false, true>(
+          keys, values, operators, options, stream);
+    } else {
+      std::tie(output_keys, output_values) = compute_hash_groupby<false, false>(
+          keys, values, operators, options, stream);
+    }
+  }
 
   return std::make_tuple(output_keys, output_values);
 }  // namespace detail
