@@ -104,8 +104,22 @@ source activate cudf_dev
 ```
 - If you're using CUDA 9.2, you will need to create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
 
+- Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
+```bash
+$ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
+$ mkdir build                                                             # make a build directory
+$ cd build                                                                # enter the build directory
 
-- Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`. The libraries will be installed to the location set in `$INSTALL_PREFIX` if set (i.e. `export INSTALL_PREFIX=/install/path`), otherwise to `$CONDA_PREFIX`.
+# CMake options:
+# -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
+# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
+
+$ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
+```
+
+- As a convenience, a `build.sh` script is provided in `$CUDF_HOME`. To execute the same build commands above, run the script as shown below.  Note that the libraries will be installed to the location set in `$INSTALL_PREFIX` if set (i.e. `export INSTALL_PREFIX=/install/path`), otherwise to `$CONDA_PREFIX`.
 ```bash
 $ cd $CUDF_HOME
 $ ./build.sh libcudf                   # compile the cuDF libraries and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
@@ -116,7 +130,13 @@ $ ./build.sh libcudf                   # compile the cuDF libraries and install 
 $ make test
 ```
 
-- Build the `cudf` python package and install to your Python path:
+- Build the `cudf` python package, in the `python` folder:
+```bash
+$ cd $CUDF_HOME/python
+$ python setup.py build_ext --inplace
+```
+
+- Like the `libcudf` build step above, `build.sh` can also be used to build the `cudf` python package, as shown below:
 ```bash
 $ cd $CUDF_HOME
 $ ./build.sh cudf
