@@ -684,12 +684,6 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if hasattr(arbitrary, '__len__'):
-            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
-                # 0-d arrays are a special case:
-                pass
-            elif len(arbitrary) == 0:
-                return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 
