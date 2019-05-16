@@ -8,6 +8,10 @@ import os
 import numpy as np
 import pandas as pd
 import itertools
+import copy
+
+from io import StringIO
+from io import BytesIO
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -142,17 +146,22 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(expect_series, got_series)
 
 
-@pytest.fixture(params=[False, True])
+@pytest.fixture(params=['file_path', 'string', 'bytes_io', 'string_io'])
 def json_input(request, tmp_path_factory):
-    is_file = request.param
+    input_type = request.param
     buffer = '[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n'
-    if is_file:
+
+    if input_type == 'string':
         return buffer
-    else:
+    if input_type == 'file_path':
         fname = tmp_path_factory.mktemp("json") / "test_df.json"
         with open(str(fname), 'w') as fp:
             fp.write(buffer)
         return str(fname)
+    if input_type == 'bytes_io':
+        return BytesIO(buffer.encode())
+    if input_type == 'string_io':
+        return StringIO(buffer)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -168,35 +177,37 @@ def test_json_lines_basic(json_input, engine):
 
 
 def test_json_lines_byte_range(json_input):
-
     # include the first row and half of the second row
     # should parse the first two rows
-    df = cudf.read_json(json_input, lines=True, byte_range=(0, 15))
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(0, 15))
     assert(df.shape == (2, 3))
 
     # include half of the second row and half of the third row
     # should parse only the third row
-    df = cudf.read_json(json_input, lines=True, byte_range=(15, 10))
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(15, 10))
     assert(df.shape == (1, 3))
 
     # include half of the second row and entire third row
     # should parse only the third row
-    df = cudf.read_json(json_input, lines=True, byte_range=(15, 0))
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(15, 0))
     assert(df.shape == (1, 3))
 
     # include half of the second row till past the end of the file
     # should parse only the third row
-    df = cudf.read_json(json_input, lines=True, byte_range=(10, 50))
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(10, 50))
     assert(df.shape == (1, 3))
 
 
-def test_json_lines_dtypes(json_input):
-    df = cudf.read_json(json_input, lines=True,
-                        dtype=["float", "int", "short"])
-    assert(all(df.dtypes == ['float32', 'int32', 'int16']))
-
-    df = cudf.read_json(json_input, lines=True,
-                        dtype={1: "int", 2: "short", 0: "float"})
+@pytest.mark.parametrize('dtype', [
+        ["float", "int", "short"],
+        {1: "int", 2: "short", 0: "float"}
+    ])
+def test_json_lines_dtypes(json_input, dtype):
+    df = cudf.read_json(json_input, lines=True, dtype=dtype)
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
 
