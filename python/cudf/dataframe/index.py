@@ -615,7 +615,7 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
 
-        assert values.null_count = 0
+        assert values.null_count == 0
         self._values = values
         self.name = name
         self.names = [name]
