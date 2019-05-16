@@ -487,8 +487,8 @@ auto compute_hash_groupby(
 
   initialize_with_identity(sparse_output_values, operators, stream);
 
-  auto d_input_keys = device_table::create(keys);
-  auto d_input_values = device_table::create(values);
+  auto const d_input_keys = device_table::create(keys);
+  auto const d_input_values = device_table::create(values);
   auto d_sparse_output_values = device_table::create(sparse_output_values);
   rmm::device_vector<groupby::distributive_operators> d_operators(operators);
 
