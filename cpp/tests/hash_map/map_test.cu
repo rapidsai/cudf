@@ -74,9 +74,9 @@ struct MapTest : public GdfTest
   std::unique_ptr<map_type> the_map;
 
   const key_type unused_key{std::numeric_limits<key_type>::max()};
-  const value_type unused_value{op_type::IDENTITY};
+  const value_type unused_element{op_type::IDENTITY};
 
-  const int size;
+  const std::size_t size;
 
   const int THREAD_BLOCK_SIZE{256};
 
@@ -86,9 +86,10 @@ struct MapTest : public GdfTest
 
   std::unordered_map<key_type, value_type> expected_values;
 
-  MapTest(const int hash_table_size = 10000)
-    : size(hash_table_size), the_map(new map_type(hash_table_size, MapTest::unused_value, MapTest::unused_key))
-  {
+  MapTest(const std::size_t hash_table_size = 10000)
+      : size(hash_table_size),
+        the_map(new map_type(hash_table_size, unused_element, unused_key)) {
+    EXPECT_EQ(hash_table_size, the_map->capacity());
   }
 
   pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 2, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
@@ -96,7 +97,10 @@ struct MapTest : public GdfTest
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
-    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS, unused_value, unused_key));
+    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS, unused_element, unused_key));
+    EXPECT_EQ(static_cast<std::size_t>(ratio * TOTAL_PAIRS), the_map->capacity());
+    EXPECT_EQ(unused_key, the_map->get_unused_key());
+    EXPECT_EQ(unused_element, the_map->get_unused_element());
 
     pairs.reserve(TOTAL_PAIRS);
 
@@ -119,8 +123,8 @@ struct MapTest : public GdfTest
       {
         value_type current_value = std::rand() % max_value;
 
-        // Don't use unused_value
-        while(current_value == this->unused_value)
+        // Don't use unused_element
+        while(current_value == this->unused_element)
         {
           current_value = std::rand();
         }
