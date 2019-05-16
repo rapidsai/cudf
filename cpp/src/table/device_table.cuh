@@ -228,9 +228,12 @@ struct copy_element {
                                     gdf_size_type target_index,
                                     gdf_column const& source,
                                     gdf_size_type source_index) {
+    // FIXME: This will copy garbage data if the source element is null
     static_cast<T*>(target.data)[target_index] =
         static_cast<T const*>(source.data)[source_index];
 
+    // This is very inefficient, setting the target bitmask should be done
+    // separately when possible
     if (update_target_bitmask) {
       using namespace bit_mask;
 
@@ -239,8 +242,6 @@ struct copy_element {
       bit_mask_t* const target_mask{
           reinterpret_cast<bit_mask_t*>(target.valid)};
 
-      // This is very inefficient, setting the target bitmask should be done
-      // separately when possible
       if (nullptr != target_mask) {
         bool const target_is_valid{is_valid(target_mask, target_index)};
         if (nullptr != source_mask) {
