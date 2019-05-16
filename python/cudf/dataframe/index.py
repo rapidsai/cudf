@@ -546,7 +546,7 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(
                 np.array(values, dtype='<M8[ms]')
             )
-        assert values.null_count = 0
+        assert values.null_count == 0
         self._values = values
         self.name = name
 
