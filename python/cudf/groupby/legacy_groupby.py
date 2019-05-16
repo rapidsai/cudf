@@ -573,7 +573,8 @@ class Groupby(object):
             from random import randint
 
 
-            # Create a random 15 row dataframe with one categorical feature and one random integer valued feature
+            # Create a random 15 row dataframe with one categorical
+            # feature and one random integer valued feature
             df = DataFrame(
                 {
                     "cat": [1] * 5 + [2] * 5 + [3] * 5,
@@ -584,12 +585,15 @@ class Groupby(object):
             # Group the dataframe by its categorical feature
             groups = df.groupby("cat", method="cudf")
 
-            # Define a kernel which takes the moving average of a sliding window
+            # Define a kernel which takes the moving average of a
+            # sliding window
             def rolling_avg(val, avg):
                 win_size = 3
-                for row, i in enumerate(range(cuda.threadIdx.x, len(val), cuda.blockDim.x)):
+                for row, i in enumerate(range(cuda.threadIdx.x,
+                                              len(val), cuda.blockDim.x)):
                     if row < win_size - 1:
-                        # If there is not enough data to fill the window, take the average to be NaN
+                        # If there is not enough data to fill the window,
+                        # take the average to be NaN
                         avg[i] = np.nan
                     else:
                         total = 0
@@ -598,7 +602,9 @@ class Groupby(object):
                         avg[i] = total / win_size
 
             # Compute moving avgs on all groups
-            results = groups.apply_grouped(rolling_avg, incols=['val'], outcols=dict(avg=np.float64))
+            results = groups.apply_grouped(rolling_avg,
+                                           incols=['val'],
+                                           outcols=dict(avg=np.float64))
             print("Results: \n", results)
 
             # Note this gives the same result as its pandas equivalent
@@ -609,21 +615,21 @@ class Groupby(object):
         Output:
         .. code-block:: python
 
-            Results: 
+            Results:
                  cat  val                 avg
-            0    1   16                    
-            1    1   45                    
+            0    1   16
+            1    1   45
             2    1   62                41.0
             3    1   45  50.666666666666664
             4    1   26  44.333333333333336
-            5    2    5                    
-            6    2   51                    
+            5    2    5
+            6    2   51
             7    2   77  44.333333333333336
             8    2    1                43.0
             9    2   46  41.333333333333336
             [5 more rows]
-            Pandas results: 
-             cat    
+            Pandas results:
+             cat
             1    0           NaN
                  1           NaN
                  2     41.000000
