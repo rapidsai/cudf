@@ -168,7 +168,7 @@ class Series(object):
 
     def append(self, other, ignore_index=True):
         """Append values from another ``Series`` or array-like object.
-        Returns a new copy with the index resetted.
+        If ``ignore_index=True`` (default), the index is reset.
         """
         this = self
         other = Series(other)
