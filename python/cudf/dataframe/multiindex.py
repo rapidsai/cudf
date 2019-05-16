@@ -341,7 +341,6 @@ class MultiIndex(Index):
 
     @classmethod
     def _concat(cls, objs):
-        _need_codes = False
         from cudf import DataFrame
         from cudf import MultiIndex
         _need_codes = not all([hasattr(o, '_source_data') for o in objs])
