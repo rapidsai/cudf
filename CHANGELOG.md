@@ -23,6 +23,7 @@
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
+- PR #1739 ORC Reader: Add more pytest coverage
 
 ## Bug Fixes
 
@@ -43,8 +44,9 @@
 - PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
-- PR #1786 Maintain the original series name in series.unique output
+- PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
+- PR #1786 Maintain the original series name in series.unique output
 
 
 # cuDF 0.7.1 (11 May 2019)
