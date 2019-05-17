@@ -22,6 +22,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
@@ -39,7 +40,7 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     # Setup arguments
     cdef pq_read_arg pq_reader = pq_read_arg()
 
-    if not os.path.isfile(path) and not os.path.exists(path):
+    if not os.path.isfile(path) or not os.path.exists(path):
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )
@@ -101,5 +102,9 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     if pq_reader.index_col is not NULL:
         df = df.set_index(df.columns[pq_reader.index_col[0]])
         free(pq_reader.index_col)
+        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+            df.index.name, df.index.name
+        )
+        df.index.name = new_index_name
 
     return df

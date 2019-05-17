@@ -120,7 +120,31 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical):
         assert(list(gdf['b']) == list(df['b']))
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+@pytest.mark.parametrize('index_col', ['b', 'None', None])
+def test_parquet_reader_index_col(tmpdir, index_col):
+    df = pd.DataFrame({'a': range(3), 'b': range(3, 6), 'c': range(6, 9)})
+
+    if index_col is None:
+        # No index column
+        df.reset_index(drop=True, inplace=True)
+    elif index_col == 'None':
+        # Index column but no name
+        df.set_index('a', inplace=True)
+        df.index.name = None
+    else:
+        # Index column as normal
+        df.set_index(index_col, inplace=True)
+
+    fname = tmpdir.join("test_pq_reader_index_col.parquet")
+    df.to_parquet(fname)
+    assert(os.path.exists(fname))
+
+    pdf = pd.read_parquet(fname)
+    gdf = cudf.read_parquet(fname, engine='cudf')
+
+    assert_eq(pdf, gdf, check_categorical=False)
+
+
 def test_parquet_read_metadata(tmpdir, pdf):
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
@@ -137,7 +161,6 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert(a == b)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 5, 100])
 def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
@@ -158,7 +181,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
 
 
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('row_group_size', [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
@@ -181,13 +203,21 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
         assert(gdf['col_int32'][row] == row + skip_rows)
 
 
-def test_parquet_spark_timestamps(datadir):
+def test_parquet_reader_spark_timestamps(datadir):
     fname = datadir / 'spark_timestamp.snappy.parquet'
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_reader_filenotfound(tmpdir):
+    with pytest.raises(FileNotFoundError):
+        cudf.read_parquet('TestMissingFile.parquet')
+
+    with pytest.raises(FileNotFoundError):
+        cudf.read_parquet(tmpdir.mkdir("cudf_parquet"))
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

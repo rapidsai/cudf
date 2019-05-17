@@ -248,6 +248,13 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     return c_col
 
 
+cpdef uintptr_t column_view_pointer(col):
+    """
+    Return pointer to a view of the underlying <gdf_column*>
+    """
+    return <uintptr_t> column_view_from_column(col)
+
+
 cdef gdf_column_to_column_mem(gdf_column* input_col):
     gdf_dtype = input_col.dtype
     data_ptr = int(<uintptr_t>input_col.data)
@@ -303,8 +310,15 @@ _join_method_api = {
     'hash': GDF_HASH
 }
 
+_null_sort_behavior_api = {
+    'null_as_largest': GDF_NULL_AS_LARGEST, 
+    'null_as_smallest': GDF_NULL_AS_SMALLEST,
+    'null_as_largest_multisort': GDF_NULL_AS_LARGEST_FOR_MULTISORT
+}
+
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                 flag_sort_result, flag_sort_inplace):
+                                 flag_sort_result, flag_sort_inplace,
+                                 flag_null_sort_behavior):
 
     cdef gdf_method method_api = _join_method_api[method]
     cdef gdf_context* context = <gdf_context*>malloc(sizeof(gdf_context))
@@ -313,6 +327,7 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
     cdef int c_flag_distinct = flag_distinct
     cdef int c_flag_sort_result = flag_sort_result
     cdef int c_flag_sort_inplace = flag_sort_inplace
+    cdef gdf_null_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
     
     with nogil:
         gdf_context_view(context,
@@ -320,7 +335,8 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                          method_api,
                          c_flag_distinct,
                          c_flag_sort_result,
-                         c_flag_sort_inplace)
+                         c_flag_sort_inplace,
+                         nulls_sort_behavior_api)
 
     return context
 

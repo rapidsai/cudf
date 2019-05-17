@@ -10,6 +10,7 @@ from numba import cuda
 
 from cudf import concat
 from cudf.dataframe import DataFrame, Series
+from cudf.dataframe.index import StringIndex, StringColumn
 from cudf.bindings.GDFError import GDFError
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
@@ -753,13 +754,9 @@ def test_string_groupby_key_index():
     gdf['b'] = other_data
 
     expect = pdf.groupby('a').count()
-    with pytest.raises(
-        NotImplementedError,
-        match="Strings are not yet supported in the index"
-    ):
-        got = gdf.groupby('a').count()
+    got = gdf.groupby('a').count()
 
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('scalar', [
@@ -776,3 +773,45 @@ def test_string_set_scalar(scalar):
 
     assert_eq(pdf['b'], gdf['b'])
     assert_eq(pdf, gdf)
+
+
+def test_string_index():
+    pdf = pd.DataFrame(np.random.rand(5, 5))
+    gdf = DataFrame.from_pandas(pdf)
+    stringIndex = ['a', 'b', 'c', 'd', 'e']
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = np.array(['a', 'b', 'c', 'd', 'e'])
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = StringIndex(['a', 'b', 'c', 'd', 'e'], name='name')
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+    stringIndex = StringColumn(['a', 'b', 'c', 'd', 'e'], name='name')
+    pdf.index = stringIndex
+    gdf.index = stringIndex
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    'item',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A'],
+        ['A'],
+        ['abc', 'xyz', None, 'ab', '123'],
+        [None, None, 'abc', None, 'abc'],
+    ]
+)
+def test_string_unique(item):
+    ps = pd.Series(item)
+    gs = Series(item)
+    # Pandas `unique` returns a numpy array
+    pres = pd.Series(ps.unique())
+    # Nvstrings returns sorted unique with `None` placed before other strings
+    pres = pres.sort_values(na_position='first').reset_index(drop=True)
+    gres = gs.unique()
+    assert_eq(pres, gres)

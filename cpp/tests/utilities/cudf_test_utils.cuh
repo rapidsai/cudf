@@ -41,6 +41,41 @@ constexpr const char null_representative = '@';
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
+#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
+#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
+
+#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
+#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
+
+#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression)                           \
+do {                                                                          \
+    gdf_error _assert_cudf_success_eval_result;                               \
+    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
+    const char* _assertion_failure_message = #gdf_error_expression;           \
+    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) <<               \
+      "Failing expression: " << _assertion_failure_message;                   \
+} while (0)
+
+// Utility for testing the expectation that an expression x throws the specified
+// exception whose what() message ends with the msg
+#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
+do { \
+  EXPECT_THROW({                                                     \
+    try { x; }                                                       \
+    catch (const exception &e) {                                     \
+    ASSERT_NE(nullptr, e.what());                                    \
+    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
+    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
+    throw;                                                           \
+  }}, exception);                                                    \
+} while (0)
+
+#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
+
+#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+
 /**---------------------------------------------------------------------------*
  * @brief test macro to be expected as no exception.
  * The testing is same with EXPECT_NO_THROW() in gtest.
@@ -201,6 +236,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+  the_column->col_name = nullptr;
 
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector

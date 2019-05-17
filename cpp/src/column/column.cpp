@@ -28,6 +28,8 @@
 #include "bitmask/legacy_bitmask.hpp"
 #include <cuda_runtime_api.h>
 #include <algorithm>
+#include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -180,8 +182,21 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
 // Free the CUDA device memory of a gdf_column
 gdf_error gdf_column_free(gdf_column *column) 
 {
-  RMM_TRY( RMM_FREE(column->data, 0)  );
-  RMM_TRY( RMM_FREE(column->valid, 0) );
+  if (column->dtype == GDF_STRING){
+    if (column->data) {
+      NVStrings::destroy(static_cast<NVStrings*>(column->data));
+    }
+    RMM_TRY( RMM_FREE(column->valid, 0) );
+  } else if (column->dtype == GDF_STRING_CATEGORY) {
+    if (column->dtype_info.category) {
+      NVCategory::destroy(static_cast<NVCategory*>(column->dtype_info.category));
+    }
+    RMM_TRY( RMM_FREE(column->data, 0)  );
+    RMM_TRY( RMM_FREE(column->valid, 0) );  
+  } else {
+    RMM_TRY( RMM_FREE(column->data, 0)  );
+    RMM_TRY( RMM_FREE(column->valid, 0) );
+  }
   return GDF_SUCCESS;
 }
 
@@ -200,7 +215,6 @@ namespace{
 gdf_size_type gdf_dtype_size(gdf_dtype dtype) {
   return cudf::type_dispatcher(dtype, get_type_size{});
 }
-
 // Returns the size in bytes of the data type of the gdf_column
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)

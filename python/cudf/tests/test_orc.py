@@ -27,7 +27,14 @@ def datadir(datadir):
 )
 def test_orc_reader_basic(datadir, orc_args, engine):
     path = datadir / orc_args[0]
-    orcfile = pa.orc.ORCFile(path)
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+
     columns = orc_args[1]
 
     expect = orcfile.read(columns=columns).to_pandas()
@@ -44,13 +51,56 @@ def test_orc_reader_basic(datadir, orc_args, engine):
 
 def test_orc_reader_decimal(datadir):
     path = datadir / 'TestOrcFile.decimal.orc'
-    orcfile = pa.orc.ORCFile(path)
-
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine='cudf').to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
     pdf = pdf.apply(pd.to_numeric)
+
+    np.testing.assert_allclose(pdf, gdf)
+
+
+def test_orc_reader_filenotfound(tmpdir):
+    with pytest.raises(FileNotFoundError):
+        cudf.read_orc('TestMissingFile.orc')
+
+    with pytest.raises(FileNotFoundError):
+        cudf.read_orc(tmpdir.mkdir("cudf_orc"))
+
+
+@pytest.mark.parametrize('num_rows', [1, 100, 3000])
+@pytest.mark.parametrize('skip_rows', [0, 1, 3000])
+def test_orc_read_rows(datadir, skip_rows, num_rows):
+    path = datadir / 'TestOrcFile.decimal.orc'
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(
+        path,
+        engine='cudf',
+        skip_rows=skip_rows,
+        num_rows=num_rows
+    ).to_pandas()
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    pdf = pdf.apply(pd.to_numeric)
+
+    # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
+    # have an API to read a subsection of rows from the file
+    pdf = pdf[skip_rows:skip_rows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)

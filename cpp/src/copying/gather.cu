@@ -21,7 +21,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/type_dispatcher.hpp"
 #include <bitmask/legacy_bitmask.hpp>
-#include <table/table.hpp>
+#include <table.hpp>
 
 #include <algorithm>
 #include <thrust/gather.h>
