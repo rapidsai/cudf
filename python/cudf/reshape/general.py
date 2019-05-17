@@ -11,7 +11,7 @@ from cudf.dataframe.categorical import CategoricalColumn
 
 
 def melt(frame, id_vars=None, value_vars=None, var_name=None,
-         value_name='value'):
+         value_name='value', col_level=None):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -56,6 +56,8 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
     4    1    3        D   5.0
     5    5    6        D   6.0
     """
+    assert col_level in (None,)
+
     # Arg cleaning
     import collections
     # id_vars
