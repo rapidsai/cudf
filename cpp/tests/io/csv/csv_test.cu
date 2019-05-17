@@ -503,18 +503,19 @@ TEST(gdf_csv_test, IgnoreQuotes)
     }
 }
 
-TEST(gdf_csv_test, SpecifiedBoolValues)
+TEST(gdf_csv_test, Booleans)
 {
-    const std::string fname			= temp_env->get_temp_dir()+"CsvSpecifiedBoolValuesTest.csv";
-    const char* names[]			= { "A", "B", "C" };
-    const char* types[]			= { "int32", "int32", "short" };
-    const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
-    const char* falseValues[]	= { "no", "No", "NO", "Bar", "bar" };
+    const std::string fname = temp_env->get_temp_dir() + "CsvBooleansTest.csv";
+    const char* names[] = {"A", "B", "C", "D"};
+    const char* types[] = {"int32", "int32", "short", "bool"};
+    const char* trueValues[] = {"yes", "Yes", "YES", "foo", "FOO"};
+    const char* falseValues[] = {"no", "No", "NO", "Bar", "bar"};
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "YES,1,bar\nno,2,FOO\nBar,3,yes\nNo,4,NO\nYes,5,foo\n";
+    outfile << "YES,1,bar,true\nno,2,FOO,true\nBar,3,yes,false\nNo,4,NO,"
+              "true\nYes,5,foo,false\n";
     outfile.close();
-    ASSERT_TRUE( checkFile(fname) );
+    ASSERT_TRUE(checkFile(fname));
 
     {
         csv_read_arg args{};
@@ -538,11 +539,17 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
         EXPECT_EQ( args.num_cols_out, args.num_cols );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
         ASSERT_EQ( args.data[2]->dtype, GDF_INT16 );
+        ASSERT_EQ( args.data[3]->dtype, GDF_BOOL8 );
 
         auto firstCol = gdf_host_column<int32_t>(args.data[0]);
         EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
         auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
         EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
+        auto fourthCol = gdf_host_column<cudf::bool8>(args.data[3]);
+        EXPECT_THAT(
+            fourthCol.hostdata(),
+            ::testing::ElementsAre(cudf::true_v, cudf::true_v, cudf::false_v,
+                                  cudf::true_v, cudf::false_v));
     }
 }
 
