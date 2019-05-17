@@ -3,19 +3,28 @@
 ## New Features
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
-- PR #1569 Add support for Json objects to the JSON Lines reader
-- PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
+- PR #1569 Add support for JSON objects to the JSON Lines reader
+- PR #1654 C++: Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
 - PR #1310 Implemented the slice/split functionality.
+- PR #1630 Add Python layer to the GPU-accelerated JSON reader
+- PR #1745 Add rounding of numeric columns via Numba
+- PR #1772 JSON reader: add support for BytesIO and StringIO input
+- PR #1527 Support GDF_BOOL8 in readers and writers
 
 ## Improvements
 
+- PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
 - PR #1701 Added `unique` method for stringColumns
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
-- PR #1527 Support GDF_BOOL8 in readers and writers
+- PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
+- PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
+- PR #1767 Speed up Python unit tests
+- PR #1770 Added build.sh script, updated CI scripts and documentation
+- PR #1739 ORC Reader: Add more pytest coverage
 
 ## Bug Fixes
 
@@ -27,9 +36,17 @@
 - PR #1660 Fix bug in `loc` when indexing with a column name (a string)
 - PR #1683 ORC reader: fix timestamp conversion to UTC
 - PR #1613 Improve CategoricalColumn.fillna(-1) performance
+- PR #1642 Fix failure of CSV_TEST gdf_csv_test.SkiprowsNrows on multiuser systems
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
+- PR #1757 Concatenating columns with null columns
+- PR #1755 Add col_level keyword argument to melt
+- PR #1758 Fix df.set_index() when setting index from an empty column
+- PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
+- PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
+- PR #1782 Update libcudf doc version
+- PR #1783 Update conda dependencies
 
 
 # cuDF 0.7.1 (11 May 2019)
