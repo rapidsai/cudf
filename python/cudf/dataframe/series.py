@@ -964,11 +964,18 @@ class Series(object):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
+        # if all the elements of value column is None then
+        # propagate the same dtype as self.dtype in columnops.as_column() for value
+        all_nan = False
         if not is_scalar(to_replace):
             if is_scalar(value):
-                value = utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value))
-                )
+                all_nan = value is None
+                if all_nan:
+                    value = [value] * len(to_replace)
+                else:
+                    value = utils.scalar_broadcast_to(
+                        value, (len(to_replace),), np.dtype(type(value))
+                    )
         else:
             if not is_scalar(value):
                 raise TypeError(
@@ -990,7 +997,9 @@ class Series(object):
         if is_dict_like(to_replace) or is_dict_like(value):
             raise TypeError("Dict-like args not supported in Series.replace()")
 
-        result = self._column.find_and_replace(to_replace, value)
+        if isinstance(value, list):
+            all_nan = value.count(None) == len(value)
+        result = self._column.find_and_replace(to_replace, value, all_nan)
 
         return self._copy_construct(data=result)
 

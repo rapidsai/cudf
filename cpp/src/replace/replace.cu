@@ -73,7 +73,7 @@ namespace{ //anonymous
               }
               else{
                 //unset the i-th bit in valid mask of output col
-                bit_mask::clear_bit_unsafe(col_valid, i);
+                bit_mask::clear_bit_safe(col_valid, i);
               }
 
           }
@@ -102,13 +102,8 @@ namespace{ //anonymous
       const bool is_col_valid = (col_valid != nullptr);
       const bool is_new_valid = (new_valid != nullptr);
 
-
       bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(col_valid);
       const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(new_valid);
-
-      if (!is_col_valid && is_new_valid){
-          bit_mask::create_bit_mask(&typed_col_valid, nrows, 1);
-      }
 
       thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
 
@@ -144,6 +139,7 @@ namespace{ //anonymous
     GDF_REQUIRE(old_values->size == new_values->size, GDF_COLUMN_SIZE_MISMATCH);
     GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    GDF_REQUIRE((new_values->valid != nullptr) ? col->valid != nullptr : 1, GDF_VALIDITY_UNSUPPORTED);
 
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,

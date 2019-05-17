@@ -113,7 +113,7 @@ class Column(object):
                 mask = Buffer(mask_mem)
             return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
 
-    def __init__(self, data, mask=None, null_count=None):
+    def __init__(self, data, mask=None, null_count=None, keep_mask=False):
         """
         Parameters
         ----------
@@ -123,6 +123,8 @@ class Column(object):
             The validity mask
         null_count : int; optional
             The number of null values in the mask.
+        keep_mask : bool; optional
+            Force the mask even if null_count is 0.
         """
         # Forces Column content to be contiguous
         if not data.is_contiguous():
@@ -138,9 +140,9 @@ class Column(object):
             # check that mask length is sufficient
             assert mask.size * utils.mask_bitsize >= len(self)
 
-        self._update_null_count(null_count)
+        self._update_null_count(null_count, keep_mask)
 
-    def _update_null_count(self, null_count=None):
+    def _update_null_count(self, null_count=None, keep_mask=False):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
@@ -155,7 +157,7 @@ class Column(object):
                 null_count = 0
 
         assert 0 <= null_count <= len(self)
-        if null_count == 0:
+        if null_count == 0 and keep_mask is False:
             # Remove mask if null_count is zero
             self._mask = None
 
@@ -220,7 +222,7 @@ class Column(object):
         """
         return self._mask
 
-    def set_mask(self, mask, null_count=None):
+    def set_mask(self, mask, null_count=None, keep_mask=False):
         """Create new Column by setting the mask
 
         This will override the existing mask.  The returned Column will
@@ -237,25 +239,31 @@ class Column(object):
             The number of null values.
             If None, it is calculated automatically.
 
+        keep_mask : bool, optional
+            Force the mask even if null_count is 0.
+
         """
         if not isinstance(mask, Buffer):
             mask = Buffer(mask)
         if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
             msg = 'mask must be of byte; but got {}'.format(mask.dtype)
             raise ValueError(msg)
-        return self.replace(mask=mask, null_count=null_count)
+        return self.replace(mask=mask, null_count=null_count,
+                            keep_mask=keep_mask)
 
-    def allocate_mask(self, all_valid=True):
+    def allocate_mask(self, all_valid=True, keep_mask=False):
         """Return a new Column with a newly allocated mask buffer.
         If ``all_valid`` is True, the new mask is set to all valid.
         If ``all_valid`` is False, the new mask is set to all null.
+        If ``keep_mask`` is True, force the mask even with null_count=0.
         """
         nelem = len(self)
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
         mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xff if all_valid else 0)
-        return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
+        return self.set_mask(mask=mask, null_count=0 if all_valid else nelem,
+                             keep_mask=keep_mask)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
