@@ -504,4 +504,4 @@ def test_groupby_use_agg_column_as_index():
     gdf['a'] = [1, 1, 1, 3, 5]
     pdg = pdf.groupby('a').agg({'a': 'count'})
     gdg = gdf.groupby('a').agg({'a': 'count'})
-    assert_eq(pdg, gdg)
+    assert_eq(pdg, gdg, check_dtype=False)
