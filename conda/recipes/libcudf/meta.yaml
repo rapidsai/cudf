@@ -25,16 +25,11 @@ requirements:
   build:
     - cmake >=3.12.4
   host:
-<<<<<<< HEAD
     - librmm 0.8.*
     - libnvstrings 0.8.*
-=======
-    - librmm 0.7.*
-    - libnvstrings 0.7.*
     - cudatoolkit {{ cuda_version }}.*
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
->>>>>>> upstream/branch-0.8
 
 test:
   commands:
