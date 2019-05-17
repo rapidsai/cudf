@@ -20,6 +20,7 @@
 - PR #1725 Enable the ability to use a single column groupby as its own index
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
+- PR #1770 Added build.sh script, updated CI scripts and documentation
 
 ## Bug Fixes
 

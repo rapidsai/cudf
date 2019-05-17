@@ -1,4 +1,4 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-cd python
-$PYTHON setup.py install --single-version-externally-managed --record=record.txt
+# This assumes the script is executed from the root of the repo directory
+./build.sh cudf
