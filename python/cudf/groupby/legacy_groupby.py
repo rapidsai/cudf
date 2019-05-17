@@ -628,7 +628,7 @@ class Groupby(object):
             9    2   46  41.333333333333336
             [5 more rows]
 
-        This is functionally equivalent to 
+        This is functionally equivalent to
         `pandas.DataFrame.Rolling <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
         """
         if not callable(function):
