@@ -44,6 +44,7 @@
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
 - PR #1783 Update conda dependencies
+- PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
 
 
 # cuDF 0.7.1 (11 May 2019)
