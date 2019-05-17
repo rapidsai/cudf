@@ -305,61 +305,6 @@ const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
 const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
 
 
-/* sorting */
-
-/**
- * @brief  Constructor for the gdf_radixsort_plan_type object
- *
- * @param[in] Number of items to sort
- * @param[in] Indicates if sort should be ascending or descending. 1 = Descending, 0 = Ascending
- * @param[in] The least-significant bit index (inclusive) needed for key comparison
- * @param[in] The most-significant bit index (exclusive) needed for key comparison (e.g., sizeof(unsigned int) * 8)
- *
- * @returns  gdf_radixsort_plan_type object pointer
- */
-gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
-                                        unsigned begin_bit, unsigned end_bit);
-
-/**
- * @brief  Allocates device memory for the radixsort
- *
- * @param[in] Radix sort plan
- * @param[in] sizeof data type of key
- * @param[in] sizeof data type of val
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
-                                   size_t sizeof_key, size_t sizeof_val);
-
-/**
- * @brief  Frees device memory used for the radixsort
- *
- * @param[in] Radix sort plan
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
-
-
-/**
- * @brief  Performs a radixsort on the key and value columns
- * 
- * The null_count of the keycol and valcol columns are expected to be 0
- * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
-                        gdf_column *keycol,
-                        gdf_column *valcol);
-
-
-
 /* segmented sorting */
 
 /**
@@ -420,8 +365,6 @@ gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
                                   unsigned num_segments,
                                   unsigned *d_begin_offsets,
                                   unsigned *d_end_offsets);
-
-
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
@@ -877,24 +820,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 /* validity */
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-
-/*
- * Hashing
- */
-
-/**
- * @brief  Creates a hash of multiple gdf_columns
- *
- * @param[in] an array of gdf_columns to be hashes together
- * @param[in] the number of columns in the array of gdf_columns to be hashes together
- * @param[out] output gdf_column of type GDF_INT64. The output memory needs to be preallocated
- * @param[in] A pointer to a cudaStream_t. If nullptr, the function will create a stream to use.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
-
 
 /*
  * gdf introspection utlities
