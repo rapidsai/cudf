@@ -1247,7 +1247,7 @@ class Series(object):
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
         res = self._column.unique(method=method)
-        return Series(res)
+        return Series(res, name=self.name)
 
     def nunique(self, method='sort', dropna=True):
         """Returns the number of unique values of the Series: approximate version,
