@@ -25,6 +25,13 @@ import collections.abc
 import os
 
 
+def is_file_like(obj):
+    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+        return False
+    if not hasattr(obj, "__iter__"):
+        return False
+    return True
+
 cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
@@ -53,8 +60,32 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     cdef vector[const char*] vector_dtypes
     vector_dtypes = arr_dtypes
 
-    path = str(path_or_buf).encode()
-    source_ptr = <char*>path
+    # Setup arguments
+    cdef json_read_arg args = json_read_arg()
+
+    if is_file_like(path_or_buf):
+        if compression == 'infer':
+            compression = None
+        source = path_or_buf.read()
+        # check if StringIO is used
+        if hasattr(source, 'encode'):
+            source_as_bytes = source.encode()
+        else:
+            source_as_bytes = source
+    else:
+        # file path or a string
+        source_as_bytes = str(path_or_buf).encode()
+
+    source_data_holder = <char*>source_as_bytes
+    args.source = source_data_holder
+
+    if not is_file_like(path_or_buf) and os.path.exists(path_or_buf):
+        if not os.path.isfile(path_or_buf):
+            raise(FileNotFoundError)
+        args.source_type = FILE_PATH
+    else:
+        args.source_type = HOST_BUFFER
+        args.buffer_size = len(source_as_bytes)
 
     if compression is None or compression == 'infer':
         compression_bytes = <char*>NULL
@@ -62,18 +93,8 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         compression = compression.encode()
         compression_bytes = <char*>compression
 
-    # Setup arguments
-    cdef json_read_arg args = json_read_arg()
-
-    args.source = source_ptr
     args.lines = lines
     args.compression = compression_bytes
-
-    if os.path.exists(path_or_buf):
-        args.source_type = FILE_PATH
-    else:
-        args.source_type = HOST_BUFFER
-        args.buffer_size = len(path_or_buf)
 
     if dtype is not None:
         args.dtype = vector_dtypes.data()
