@@ -12,12 +12,14 @@
 
 ## Improvements
 
+- PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
 - PR #1701 Added `unique` method for stringColumns
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
 - PR #1764 Improve Numerical column: `mean_var` and `mean`
+- PR #1767 Speed up unit tests
 
 ## Bug Fixes
 
@@ -33,6 +35,8 @@
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
+- PR #1755 Add col_level keyword argument to melt
+- PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 
 
