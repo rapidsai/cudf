@@ -43,7 +43,7 @@
 - PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
-
+- PR #1782 Update librmm doc version
 
 # cuDF 0.7.1 (11 May 2019)
 
