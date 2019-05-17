@@ -27,8 +27,8 @@ requirements:
     - numba >=0.41
     - pyarrow 0.12.1.*
     - libcudf_cffi {{ version }}
-    - rmm 0.7.*
-    - nvstrings 0.7.*
+    - rmm 0.8.*
+    - nvstrings 0.8.*
 
 test:
   commands:
