@@ -43,7 +43,16 @@
 - PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
-- PR #1783 Update conda dependencies
+
+# cuDF 0.7.1 (11 May 2019)
+
+## New Features
+
+- PR #1702 Lazy load MultiIndex to return groupby performance to near optimal.
+
+## Bug Fixes
+
+- PR #1708 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 
 
 # cuDF 0.7.0 (10 May 2019)
