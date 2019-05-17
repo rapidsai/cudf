@@ -4,7 +4,7 @@
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
 - PR #1569 Add support for JSON objects to the JSON Lines reader
-- PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
+- PR #1654 C++: Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
 - PR #1310 Implemented the slice/split functionality.
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
@@ -18,9 +18,9 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
-- PR #1746 Removed unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
-- PR #1767 Speed up unit tests
-
+- PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
+- PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
+- PR #1767 Speed up Python unit tests
 
 ## Bug Fixes
 

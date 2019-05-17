@@ -54,7 +54,7 @@ struct row_hasher_initial_values {
       : the_table{table_to_hash}, initial_hash_values(initial_hash_values) {}
 
   __device__ hash_value_type operator()(gdf_size_type row_index) const {
-    return hash_row<hash_function>(the_table, row_index, initial_hash_values);
+    return hash_row<true,hash_function>(the_table, row_index, initial_hash_values);
   }
 
   device_table the_table;
@@ -69,7 +69,7 @@ struct row_hasher {
   row_hasher(device_table const& table_to_hash) : the_table{table_to_hash} {}
 
   __device__ hash_value_type operator()(gdf_size_type row_index) const {
-    return hash_row<hash_function>(the_table, row_index);
+    return hash_row<true,hash_function>(the_table, row_index);
   }
 
   device_table the_table;
@@ -305,7 +305,7 @@ void compute_row_partition_numbers(device_table the_table,
   while( row_number < num_rows)
   {
     const hash_value_type row_hash_value =
-        hash_row<hash_function>(the_table, row_number);
+        hash_row<true, hash_function>(the_table, row_number);
 
     const gdf_size_type partition_number = the_partitioner(row_hash_value);
 
