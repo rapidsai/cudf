@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -182,8 +183,8 @@ void JsonReader::ingestRawInput() {
     // Ignore page padding for parsing purposes
     input_size_ = map_size - page_padding;
   } else if (args_->source_type == gdf_csv_input_form::HOST_BUFFER) {
-    input_data_ = args_->source;
-    input_size_ = args_->buffer_size;
+    input_data_ = args_->source + args_->byte_range_offset;
+    input_size_ = args_->buffer_size - args_->byte_range_offset;
   } else {
     CUDF_FAIL("Invalid input type");
   }
@@ -267,30 +268,32 @@ void JsonReader::setRecordStarts() {
 
 void JsonReader::uploadDataToDevice() {
   size_t start_offset = 0;
-  size_t bytes_to_upload = uncomp_size_;
+  size_t end_offset = uncomp_size_;
 
   // Trim lines that are outside range
-  if (args_->byte_range_size != 0) {
+  if (args_->byte_range_size != 0 || args_->byte_range_offset != 0) {
     std::vector<uint64_t> h_rec_starts(rec_starts_.size());
     CUDA_TRY(
         cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t) * h_rec_starts.size(), cudaMemcpyDefault));
 
-    auto it = h_rec_starts.end() - 1;
-    while (it >= h_rec_starts.begin() && *it > args_->byte_range_size) {
-      --it;
+    if (args_->byte_range_size != 0) {
+      auto it = h_rec_starts.end() - 1;
+      while (it >= h_rec_starts.begin() && *it > args_->byte_range_size) {
+        end_offset = *it;
+        --it;
+      }
+      h_rec_starts.erase(it + 1, h_rec_starts.end());
     }
-    const auto end_offset = *(it + 1);
-    h_rec_starts.erase(it + 1, h_rec_starts.end());
-
-    start_offset = h_rec_starts.front();
-    bytes_to_upload = end_offset - start_offset;
-    CUDF_EXPECTS(bytes_to_upload <= uncomp_size_, "Error finding the record within the specified byte range.\n");
 
     // Resize to exclude rows outside of the range; adjust row start positions to account for the data subcopy
+    start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
     thrust::transform(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + rec_starts_.size(),
                       thrust::make_constant_iterator(start_offset), rec_starts_.data(), thrust::minus<uint64_t>());
   }
+
+  const size_t bytes_to_upload = end_offset - start_offset;
+  CUDF_EXPECTS(bytes_to_upload <= uncomp_size_, "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
   d_data_ = device_buffer<char>(bytes_to_upload);
@@ -354,6 +357,8 @@ void JsonReader::setColumnNames() {
   // based on the top level opening bracket
   const auto first_square_bracket = std::find(first_row.begin(), first_row.end(), '[');
   const auto first_curly_bracket = std::find(first_row.begin(), first_row.end(), '{');
+  CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
+               "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
@@ -457,12 +462,12 @@ struct ConvertFunctor {
  * @return void
  *---------------------------------------------------------------------------**/
 __device__ void limitRangeToBrackets(const char *data, long &start, long &stop) {
-  while (data[start] != '[' && data[start] != '{') {
+  while (start < stop && data[start] != '[' && data[start] != '{') {
     start++;
   }
   start++;
 
-  while (data[stop - 1] != ']' && data[stop - 1] != '}') {
+  while (start < stop && data[stop - 1] != ']' && data[stop - 1] != '}') {
     stop--;
   }
   stop--;
@@ -560,8 +565,8 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
   }
 }
 
-void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
-                                      gdf_size_type *num_valid_fields) {
+void JsonReader::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns,
+                                      gdf_valid_type *const *valid_fields, gdf_size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
@@ -716,8 +721,31 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
 void JsonReader::setDataTypes() {
   if (args_->dtype != nullptr) {
     CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.\n");
+    CUDF_EXPECTS(args_->num_cols == (int)column_names_.size(), "Need to specify the type of each column.\n");
+    std::vector<std::string> typestrings(args_->num_cols);
     for (int col = 0; col < args_->num_cols; ++col) {
-      dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
+      typestrings[col] = std::string(args_->dtype[col]);
+    }
+    // Assume that the dtype is in dictionary format only if all elements contain a colon
+    const bool is_dict = std::all_of(typestrings.begin(), typestrings.end(),
+                                     [](std::string &s) { return std::find(s.begin(), s.end(), ':') != s.end(); });
+    if (is_dict) {
+      std::map<std::string, gdf_dtype> col_type_map;
+      for (const auto &ts : typestrings) {
+        const size_t colon_idx = ts.find(":");
+        const std::string col_name(ts.begin(), ts.begin() + colon_idx);
+        const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
+        col_type_map[col_name] = convertStringToDtype(type_str);
+      }
+
+      // Using the map here allows O(n log n) complexity
+      for (int col = 0; col < args_->num_cols; ++col) {
+        dtypes_.push_back(col_type_map[column_names_[col]]);
+      }
+    } else {
+      for (int col = 0; col < args_->num_cols; ++col) {
+        dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
+      }
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
