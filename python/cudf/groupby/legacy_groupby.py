@@ -610,7 +610,6 @@ class Groupby(object):
             # Note this gives the same result as its pandas equivalent
             pdf = df.to_pandas()
             pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
-            print("Pandas results: \n", pd_results)
 
         Output:
         .. code-block:: python
@@ -628,23 +627,9 @@ class Groupby(object):
             8    2    1                43.0
             9    2   46  41.333333333333336
             [5 more rows]
-            Pandas results:
-             cat
-            1    0           NaN
-                 1           NaN
-                 2     41.000000
-                 3     50.666667
-                 4     44.333333
-            2    5           NaN
-                 6           NaN
-                 7     44.333333
-                 8     43.000000
-                 9     41.333333
-            3    10          NaN
-                 11          NaN
-                 12    39.000000
-                 13    32.000000
-                 14    44.333333
+
+        This is functionally equivalent to 
+        `pandas.DataFrame.Rolling <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
