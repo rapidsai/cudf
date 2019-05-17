@@ -2450,3 +2450,13 @@ def test_repr(func, transform, pdf, gdf):
     else:
         gdf_text = func(gdf)
         assert gdf_text == pdf_text
+
+
+def test_isnan_conversion_int():
+    data = np.arange(4)
+    mask = np.zeros(1, dtype=np.uint8)
+    mask[0] = 0b00001101
+    x = Series.from_masked_array(data, mask)
+    print(x)
+    print(x.to_pandas())
+    assert False

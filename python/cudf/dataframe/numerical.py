@@ -166,7 +166,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        return pd.Series(self.to_array(fillna='pandas'), index=index)
+        return pd.Series(self.to_array(fillna='pandas'), index=index,
+                         dtype=self.dtype)
 
     def to_arrow(self):
         mask = None
@@ -294,11 +295,12 @@ class NumericalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
+        breakpoint()
         dkind = self.dtype.kind
         if dkind == 'f':
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
-            return -1
+            return np.nan
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
@@ -319,8 +321,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
+        breakpoint()
         result = self.copy()
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False,
+                                             dtype=self.dtype)
         if is_integer_dtype(result.dtype):
             fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
         else:

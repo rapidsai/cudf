@@ -288,7 +288,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             new_dtype = dtype
             if (type(dtype) == str and dtype == 'empty') or dtype is None:
                 new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
-
             if pd.api.types.is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
@@ -309,6 +308,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                             (len(arbitrary),),
                             dtype=new_dtype
                         )
+            breakpoint()
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
