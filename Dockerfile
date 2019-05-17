@@ -70,9 +70,7 @@ RUN source activate cudf && \
     mkdir -p /cudf/cpp/build && \
     cd /cudf/cpp/build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j install && \
-    make python_cffi && \
-    make install_python
+    make -j install
 
 # cuDF build/install
 RUN source activate cudf && \

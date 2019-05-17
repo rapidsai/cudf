@@ -47,27 +47,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-mkdir -p $WORKSPACE/cpp/build
-cd $WORKSPACE/cpp/build
-logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
-
-logger "Clean up make..."
-make clean
-
-logger "Make libcudf..."
-make -j${PARALLEL_LEVEL}
-
-logger "Install libcudf..."
-make -j${PARALLEL_LEVEL} install
-
-logger "Install libcudf for Python..."
-make python_cffi
-make install_python
-
-logger "Build cuDF..."
-cd $WORKSPACE/python
-python setup.py build_ext --inplace
+$WORKSPACE/build.sh clean libcudf cudf
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF
@@ -79,10 +59,6 @@ nvidia-smi
 logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
 GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
-
-logger "Python py.test for libcudf..."
-cd $WORKSPACE/cpp/build/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
 
 # Temporarily install cupy for testing
 logger "pip install cupy"

@@ -599,7 +599,6 @@ gdf_error join_call_compute_df(
 
     //freeing up the temp column used to synch categories between columns
     for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
-      NVCategory::destroy(static_cast<NVCategory *>(temp_columns_to_free[column_to_free]->dtype_info.category));
       gdf_column_free(temp_columns_to_free[column_to_free]);
       delete temp_columns_to_free[column_to_free];
     }

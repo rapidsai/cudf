@@ -13,7 +13,7 @@ set -e
 RELEASE_TYPE=$1
 
 # Get current version and calculate next versions
-CURRENT_TAG=`git describe --abbrev=0 --tags | tr -d 'v'`
+CURRENT_TAG=`git tag | grep -xE 'v[0-9\.]+' | sort --version-sort | tail -n 1 | tr -d 'v'`
 CURRENT_MAJOR=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[1]}'`
 CURRENT_MINOR=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[2]}'`
 CURRENT_PATCH=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[3]}'`
@@ -38,8 +38,6 @@ else
   exit 1
 fi
 
-# Move to root of repo
-cd ../..
 echo "Preparing '$RELEASE_TYPE' release [$CURRENT_TAG -> $NEXT_FULL_TAG]"
 
 # Inplace sed replace; workaround for Linux and Mac
@@ -48,15 +46,7 @@ function sed_runner() {
 }
 
 # cpp update
-sed_runner 's/'"CUDA_DATAFRAME VERSION ${CURRENT_TAG}"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
-
-# libcudf
-sed_runner 's/version=.*/version=\"'"${NEXT_FULL_TAG}"'\",/g' cpp/python/setup.py
-
-# Conda recipe updates
-sed_runner 's/libcudf .*/libcudf '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
-sed_runner 's/libcudf_cffi .*/libcudf_cffi '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
+sed_runner 's/'"CUDA_DATAFRAME VERSION .* LANGUAGES"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
 
 # RTD update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/source/conf.py
-sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/source/conf.py
