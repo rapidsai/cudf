@@ -49,11 +49,11 @@ def make_numpy_mixed_dataframe():
 def make_all_numeric_dtypes_dataframe():
     df = pd.DataFrame()
 
-    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
-                  "int32", "int64", "long"]
+    gdf_dtypes = ["float", "float32", "double", "float64", "int8",
+                  "short", "int16", "int", "int32", "long", "int64"]
 
-    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
-                 np.int32, np.int32, np.int64, np.int64]
+    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int8,
+                 np.int16, np.int16, np.int32, np.int32, np.int64, np.int64]
 
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
