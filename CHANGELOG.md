@@ -44,6 +44,8 @@
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
 - PR #1782 Update libcudf doc version
+- PR #1783 Update conda dependencies
+
 
 # cuDF 0.7.1 (11 May 2019)
 
