@@ -9,6 +9,7 @@
 - PR #1310 Implemented the slice/split functionality.
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
 - PR #1745 Add rounding of numeric columns via Numba
+- PR #1772 JSON reader: add support for BytesIO and StringIO input
 
 ## Improvements
 
@@ -37,9 +38,11 @@
 - PR #1709 Fix handling of `datetime64[ms]` in `dataframe.select_dtypes`
 - PR #1704 CSV Reader: Add support for the plus sign in number fields
 - PR #1687 CSV reader: return an empty dataframe for zero size input
+- PR #1757 Concatenating columns with null columns
 - PR #1755 Add col_level keyword argument to melt
 - PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
+- PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
 
 
 # cudf 0.7.2 (16 May 2019)
