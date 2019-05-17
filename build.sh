@@ -18,24 +18,26 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf -v -g -h"
-HELP="$0 [clean] [libcudf] [cudf] [-v] [-g] [-h]
+VALIDARGS="clean libcudf cudf -v -g -n -h"
+HELP="$0 [clean] [libcudf] [cudf] [-v] [-g] [-n] [-h]
    clean   - remove all existing build artifacts and configuration (start over)
    libcudf - build the cudf C++ code only
    cudf    - build the cudf Python package
    -v      - verbose build mode
    -g      - build for debug
+   -n      - no install step
    -h      - print this text
 
-   default action (no args) is to build 'libcudf' then 'cudf' targets
+   default action (no args) is to build and install 'libcudf' then 'cudf' targets
 "
 LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
 CUDF_BUILD_DIR=${REPODIR}/python/build
 BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
-VERBOSE=0
+VERBOSE=""
 BUILD_TYPE=Release
+INSTALL_TARGET=install
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -70,6 +72,9 @@ fi
 if hasArg -g; then
     BUILD_TYPE=Debug
 fi
+if hasArg -n; then
+    INSTALL_TARGET=""
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -94,13 +99,17 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} install
+    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} ${INSTALL_TARGET}
 fi
 
 # Build and install the cudf Python package
 if (( ${NUMARGS} == 0 )) || hasArg cudf; then
 
     cd ${REPODIR}/python
-    ${PYTHON} setup.py build_ext --inplace
-    ${PYTHON} setup.py install --single-version-externally-managed --record=record.txt
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+	${PYTHON} setup.py build_ext --inplace
+	${PYTHON} setup.py install --single-version-externally-managed --record=record.txt
+    else
+	${PYTHON} setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+    fi
 fi

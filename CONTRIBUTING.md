@@ -160,6 +160,7 @@ $ ./build.sh clean                     # remove any prior build artifacts and co
 $ ./build.sh libcudf -v                # compile and install libcudf with verbose output
 $ ./build.sh libcudf -g                # compile and install libcudf for debug
 $ PARALLEL_LEVEL=4 ./build.sh libcudf  # compile and install libcudf limiting parallel build jobs to 4 (make -j4)
+$ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
 
 - The `build.sh` script can be customized to support other features:
