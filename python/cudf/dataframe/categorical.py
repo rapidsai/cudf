@@ -233,7 +233,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return -1
 
-    def find_and_replace(self, to_replace, value):
+    def find_and_replace(self, to_replace, value, all_nan):
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -247,6 +247,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
             np.asarray([self._encode(val) for val in value],
                        dtype=replaced.dtype)
         )
+        if replaced.mask is None and value_col.mask is not None:
+            replaced = replaced.allocate_mask(keep_mask=True)
 
         cpp_replace.replace(replaced, to_replace_col, value_col)
 
