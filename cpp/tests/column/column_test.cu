@@ -342,7 +342,7 @@ TEST(ColumnByteWidth, TestByteWidth)
     int byte_width{0};
     gdf_column col;
     col.dtype = pair.first;
-    ASSERT_NO_THROW(byte_width = cudf::width(col));
+    ASSERT_NO_THROW(byte_width = cudf::byte_width(col));
     EXPECT_EQ(pair.second, byte_width);
   }
 }

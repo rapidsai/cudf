@@ -86,7 +86,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = cudf::width(*output_column);
+  int column_byte_width = cudf::byte_width(*output_column);
 
   // copy data
 
@@ -222,6 +222,6 @@ gdf_error get_column_byte_width(gdf_column * col,
 {
   CUDF_EXPECTS(col != nullptr, "Null column pointer");
   CUDF_EXPECTS(width != nullptr, "Null return value location pointer");
-  *width = cudf::width(*col);
+  *width = cudf::byte_width(*col);
   return GDF_SUCCESS;
 }

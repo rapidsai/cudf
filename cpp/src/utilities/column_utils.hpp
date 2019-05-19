@@ -54,7 +54,7 @@ constexpr inline bool is_an_integer(gdf_dtype element_type)
 constexpr inline bool is_integral(const gdf_column& column) noexcept { return is_an_integer(column.dtype); }
 constexpr inline bool is_integral(const gdf_column* column) noexcept{ return is_integral(*column); }
 
-constexpr bool has_validity(const gdf_column& column) noexcept { return column.valid != nullptr; }
+constexpr bool is_nullable(const gdf_column& column) noexcept { return column.valid != nullptr; }
 
 namespace detail {
 
@@ -75,7 +75,7 @@ constexpr std::size_t inline size_of(gdf_dtype element_type) {
 /**
  * @brief Returns the size in bytes of each element of a column (a.k.a. the column's width)
  */
-inline std::size_t width(const gdf_column& col) noexcept { return size_of(col.dtype); }
+inline std::size_t byte_width(const gdf_column& col) noexcept { return size_of(col.dtype); }
 
 // @TODO implement this using the type dispatcher
 // std::size_t data_size_in_bytes(const gdf_column& col);

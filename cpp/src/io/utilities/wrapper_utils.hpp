@@ -63,7 +63,7 @@ class gdf_column_wrapper {
     const auto num_rows = std::max(col->size, 1);
     const auto column_byte_width = (col->dtype == GDF_STRING)
                                        ? sizeof(std::pair<const char *, size_t>)
-                                       : cudf::width(*col);
+                                       : cudf::byte_width(*col);
 
     RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
     RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
