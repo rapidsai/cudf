@@ -1022,15 +1022,19 @@ class Series(object):
             raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
-        out = []
-        for cat in cats:
-            mask = None  # self.nullmask.to_gpu_array()
-            buf = cudautils.apply_equal_constant(
-                arr=self.data.to_gpu_array(),
-                mask=mask,
-                val=cat, dtype=dtype)
-            out.append(Series(buf, index=self.index))
-        return out
+        # out = []
+        # for cat in cats:
+        #     mask = None  # self.nullmask.to_gpu_array()
+        #     buf = cudautils.apply_equal_constant(
+        #         arr=self.data.to_gpu_array(),
+        #         mask=mask,
+        #         val=cat, dtype=dtype)
+        #     out.append(Series(buf, index=self.index))
+
+        return ((self == cat).fillna(False).astype(dtype)
+                for cat in cats)
+
+        # return out
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
