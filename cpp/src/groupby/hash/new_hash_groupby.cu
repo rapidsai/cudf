@@ -528,12 +528,12 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   rmm::device_vector<operators> d_ops(ops);
 
   // If we ignore null keys, then nulls are not equivalent
-  bool const nulls_are_equal{not options.ignore_null_keys};
-  bool const skip_rows_with_nulls{keys_have_nulls and not nulls_are_equal};
+  bool const null_keys_are_equal{not options.ignore_null_keys};
+  bool const skip_rows_with_nulls{keys_have_nulls and not null_keys_are_equal};
 
   row_hasher<keys_have_nulls> hasher{*d_input_keys};
   row_equality_comparator<keys_have_nulls> rows_equal{
-      *d_input_keys, *d_input_keys, nulls_are_equal};
+      *d_input_keys, *d_input_keys, null_keys_are_equal};
 
   using map_type =
       concurrent_unordered_map<gdf_size_type, gdf_size_type, decltype(hasher),
