@@ -46,28 +46,6 @@ namespace {
 
 using namespace groupby;
 
-/**---------------------------------------------------------------------------*
- * @brief Functor that uses the target_type trait to map the combination of a
- * dispatched SourceType and aggregation operation to required target gdf_dtype.
- *
- *---------------------------------------------------------------------------**/
-struct dtype_mapper {
-  template <typename SourceType>
-  gdf_dtype operator()(operators op) const noexcept {
-    switch (op) {
-      case MIN:
-        return gdf_dtype_of<target_type_t<SourceType, MIN>>();
-      case MAX:
-        return gdf_dtype_of<target_type_t<SourceType, MAX>>();
-      case SUM:
-        return gdf_dtype_of<target_type_t<SourceType, SUM>>();
-      case COUNT:
-        return gdf_dtype_of<target_type_t<SourceType, COUNT>>();
-      default:
-        return GDF_invalid;
-    }
-  }
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Deteremines target gdf_dtypes to use for combinations of source
