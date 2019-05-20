@@ -19,6 +19,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <cudf.h>
+#include <bitmask/bit_mask.cuh>
 
 #include <thrust/device_vector.h>
 
@@ -33,8 +34,10 @@ template <class T>
 struct ReplaceTest : public GdfTest
 {
   std::vector<T> replace_column;
+  std::vector<gdf_valid_type> replace_valid_column;
   std::vector<T> old_values_column;
   std::vector<T> new_values_column;
+  std::vector<gdf_valid_type> new_valid_column;
 
   gdf_col_pointer gdf_replace_column;
   gdf_col_pointer gdf_old_values_column;
@@ -65,17 +68,21 @@ struct ReplaceTest : public GdfTest
    * @param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input(const std::initializer_list<T> &replace_column_list,
+                    const std::vector<gdf_valid_type> &replace_column_valid_list,
                     const std::initializer_list<T> &old_values_column_list,
                     const std::initializer_list<T> &new_values_column_list,
+                    const std::vector<gdf_valid_type> &new_column_valid_list,
                     bool print = false)
   {
     replace_column    = replace_column_list;
+    replace_valid_column = replace_column_valid_list;
     old_values_column = old_values_column_list;
     new_values_column = new_values_column_list;
+    new_valid_column = new_column_valid_list;
 
-    gdf_replace_column    = create_gdf_column(replace_column);
+    gdf_replace_column    = create_gdf_column(replace_column, replace_column_valid_list);
     gdf_old_values_column = create_gdf_column(old_values_column);
-    gdf_new_values_column = create_gdf_column(new_values_column);
+    gdf_new_values_column = create_gdf_column(new_values_column, new_column_valid_list);
 
     gdf_raw_replace_column = gdf_replace_column.get();
     gdf_raw_old_values_column = gdf_old_values_column.get();
@@ -102,6 +109,11 @@ struct ReplaceTest : public GdfTest
   {
     std::vector<T> reference_result(replace_column);
     std::vector<bool> isReplaced(reference_result.size(), false);
+    bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
+    const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(this->new_valid_column.data());
+
+    const bool is_col_valid = (typed_col_valid != nullptr);
+    const bool is_new_valid = (typed_new_valid != nullptr);
 
     for(size_t i = 0; i < old_values_column.size(); i++)
     {
@@ -110,8 +122,14 @@ struct ReplaceTest : public GdfTest
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
-          toBeReplaced = (element == this->old_values_column[i]);
+        if((!is_col_valid || bit_mask::is_valid(typed_col_valid, k)) && (element == this->old_values_column[i])) {
+          toBeReplaced = true;
           isReplaced[k] = toBeReplaced;
+          if(is_new_valid && !bit_mask::is_valid(typed_new_valid, i)){
+              if(print)std::cout << "clearing bit at: "<<k<<"\n";
+              bit_mask::clear_bit_unsafe(typed_col_valid, (int)k);
+            }
+          }
         }    
 
         ++k;
@@ -184,11 +202,11 @@ TYPED_TEST_CASE(ReplaceTest, Types);
 // The input sizes are small and has a large amount of debug printing enabled.
 TYPED_TEST(ReplaceTest, DISABLED_DebugTest)
 {
-  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {2, 6, 4, 8}, {0, 4, 2, 6}, true);
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {}, {2, 6, 4, 8}, {0, 4, 2, 6}, {}, true);
 
   auto reference_result = this->compute_reference_solution(true);
   auto gdf_result = this->compute_gdf_result(true);
-  
+
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
    // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
@@ -200,8 +218,8 @@ TYPED_TEST(ReplaceTest, DISABLED_DebugTest)
 // Simple test, replacing all even gdf_new_values_column
 TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
 {
-  this->create_input({1, 2, 3, 4, 5, 6, 7, 8}, {2, 4, 6, 8}, {0, 2, 4, 6});
-  
+  this->create_input({1, 2, 3, 4, 5, 6, 7, 8}, {}, {2, 4, 6, 8}, {0, 2, 4, 6}, {});
+
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
   
@@ -215,7 +233,7 @@ TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
 // Similar test as ReplaceEvenPosition, but with unordered data
 TYPED_TEST(ReplaceTest, Unordered)
 {
-  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {2, 6, 4, 8}, {0, 4, 2, 6});
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {}, {2, 6, 4, 8}, {0, 4, 2, 6}, {});
   
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
@@ -230,8 +248,8 @@ TYPED_TEST(ReplaceTest, Unordered)
 // Testing with Empty Replace
 TYPED_TEST(ReplaceTest, EmptyReplace)
 {
-  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {}, {});
-  
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {}, {}, {}, {});
+
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
   
@@ -245,8 +263,8 @@ TYPED_TEST(ReplaceTest, EmptyReplace)
 // Testing with Nothing To Replace
 TYPED_TEST(ReplaceTest, NothingToReplace)
 {
-  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {10, 11, 12}, {15, 16, 17});
-  
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {}, {10, 11, 12}, {15, 16, 17}, {});
+
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
   
@@ -260,8 +278,8 @@ TYPED_TEST(ReplaceTest, NothingToReplace)
 // Testing with Empty Data
 TYPED_TEST(ReplaceTest, EmptyData)
 {
-  this->create_input({}, {10, 11, 12}, {15, 16, 17});
-  
+  this->create_input({}, {}, {10, 11, 12}, {15, 16, 17}, {});
+
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
   
@@ -269,6 +287,63 @@ TYPED_TEST(ReplaceTest, EmptyData)
    // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
     EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+// Testing with input column containing nulls
+TYPED_TEST(ReplaceTest, NullsInData)
+{
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0x0F}, {2, 6, 4, 8}, {0, 4, 2, 6}, {});
+
+  bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
+  const bool is_col_valid = (typed_col_valid != nullptr);
+
+  auto reference_result = this->compute_reference_solution();
+  auto gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+   // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+      EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+// Testing with replacement column containing nulls
+TYPED_TEST(ReplaceTest, NullsInNewValues)
+{
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0xFF}, {2, 6, 4, 8}, {0, 4, 2, 6}, {0x0});
+
+  bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
+  const bool is_col_valid = (typed_col_valid != nullptr);
+
+  auto reference_result = this->compute_reference_solution();
+  auto gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+   // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+      EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+// Testing with both replacement and input column containing nulls
+TYPED_TEST(ReplaceTest, NullsInBoth)
+{
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0xF0}, {2, 6, 4, 8}, {0, 4, 2, 6}, {0x0});
+
+  bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
+  const bool is_col_valid = (typed_col_valid != nullptr);
+
+  auto reference_result = this->compute_reference_solution();
+  auto gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+   // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+      EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
 
