@@ -2457,6 +2457,30 @@ def test_isnan_conversion_int():
     mask = np.zeros(1, dtype=np.uint8)
     mask[0] = 0b00001101
     x = Series.from_masked_array(data, mask)
-    print(x)
-    print(x.to_pandas())
-    assert False
+    assert 'NaN' in x.__repr__()
+    y = Series([1, np.nan, 2])
+    assert 'NaN' in y.__repr__()
+
+
+def test_isnan_conversion_cat():
+    df = pd.DataFrame()
+    df['a'] = pd.Series(['a', 'b', 'c', 'd'], dtype="category")
+    mask = np.zeros(1, dtype=np.uint8)
+    mask[0] = 0b00001101
+    x = Series.from_masked_array(df['a'], mask)
+    assert 'NaN' in x.__repr__()
+    y = Series([1, np.nan, 2], dtype="category")
+    assert 'NaN' in y.__repr__()
+
+
+def test_isnan_conversion_datetime():
+    df = pd.DataFrame()
+    df['a'] = np.random.randint(0, 100, 8).astype('datetime64[ms]')
+    mask = np.zeros(1, dtype=np.uint8)
+    mask[0] = 0b01111101
+    x = Series.from_masked_array(df['a'], mask)
+    assert 'NaT' in x.__repr__()
+    y = np.array([1, 10, np.nan, 25]).astype('datetime64[ms]')
+    assert 'NaT' in y.__repr__()
+    z = np.array([1, 10, None, 25]).astype('datetime64[ms]')
+    assert 'NaT' in z.__repr__()

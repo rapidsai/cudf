@@ -166,8 +166,19 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        return pd.Series(self.to_array(fillna='pandas'), index=index,
-                         dtype=self.dtype)
+        original_type = self.dtype
+        if self.has_null_mask:
+            self = self.astype('float64')
+        array = self.to_array(fillna='pandas')
+        if original_type == np.int8:
+            new_type = pd.Int8Dtype()
+        elif original_type == np.int16:
+            new_type = pd.Int16Dtype()
+        elif original_type == np.int32:
+            new_type = pd.Int32Dtype()
+        elif original_type == np.int64:
+            new_type = pd.Int32Dtype()
+        return pd.Series(array, index=index, dtype=new_type)
 
     def to_arrow(self):
         mask = None

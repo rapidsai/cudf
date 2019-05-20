@@ -2,7 +2,6 @@
 
 
 import warnings
-from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
@@ -13,11 +12,9 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 
 from cudf.utils import cudautils, utils, ioutils
-from cudf import formatting
 from cudf.dataframe.core import get_renderable_pandas_dataframe
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
-from cudf.settings import NOTSET, settings
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
@@ -368,44 +365,14 @@ class Series(object):
 
         return self.iloc[-n:]
 
-    def to_string(self, nrows=NOTSET):
+    def to_string(self):
         """Convert to string
-
-        Parameters
-        ----------
-        nrows : int
-            Maximum number of rows to show.
-            If it is None, all rows are shown.
         """
-        if nrows is NOTSET:
-            nrows = settings.formatting.get(nrows)
 
-        str_dtype = self.dtype
-
-        if len(self) == 0:
-            return "<empty Series of dtype={}>".format(str_dtype)
-
-        if nrows is None:
-            nrows = len(self)
-        else:
-            nrows = min(nrows, len(self))  # cap row count
-
-        more_rows = len(self) - nrows
-
-        # Prepare cells
-        cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
-        dtypes = OrderedDict([('', self.dtype)])
-        # Format into a table
-        output = formatting.format(index=self.index,
-                                   cols=cols, dtypes=dtypes,
-                                   more_rows=more_rows,
-                                   series_spacing=True)
-        return output + "\nName: {}, dtype: {}".format(self.name, str_dtype)\
-            if self.name is not None else output + \
-            "\ndtype: {}".format(str_dtype)
+        return self.__repr__()
 
     def __str__(self):
-        return self.to_string(nrows=10)
+        return self.to_string()
 
     def __repr__(self):
         lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
