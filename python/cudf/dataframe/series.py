@@ -504,9 +504,8 @@ class Series(object):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        # TODO: replace self.dtype.type with self.dtype
-        if (np.issubdtype(self.dtype.type, np.integer) and
-                np.issubdtype(other.dtype.type, np.integer)):
+        if (np.issubdtype(self.dtype, np.integer) and
+                np.issubdtype(other.dtype, np.integer)):
             # this broke Series (op) DataFrame because dataframe doesn't have dtype
             return self._binaryop(other, op)
         # (1) Allow bool and check what happens.
@@ -523,9 +522,8 @@ class Series(object):
         """
         # Check if bool and pass logical-and in arg (requires logical-and in libcudf)
         # Do this after (1) fails
-        # TODO: replace self.dtype.type with self.dtype
-        if (np.issubdtype(self.dtype.type, np.bool_) or
-                np.issubdtype(other.dtype.type, np.bool_)):
+        if (np.issubdtype(self.dtype, np.bool_) or
+                np.issubdtype(other.dtype, np.bool_)):
             return self._binaryop(other, 'l_and')
         return self._bitwise_binop(other, 'and')
 
@@ -534,8 +532,8 @@ class Series(object):
         series.
         """
         # Check if bool and pass logical-or in arg (requires logical-or in libcudf)
-        if (np.issubdtype(self.dtype.type, np.bool_) or
-                np.issubdtype(other.dtype.type, np.bool_)):
+        if (np.issubdtype(self.dtype, np.bool_) or
+                np.issubdtype(other.dtype, np.bool_)):
             return self._binaryop(other, 'l_or')
         return self._bitwise_binop(other, 'or')
 
