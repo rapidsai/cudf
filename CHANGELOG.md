@@ -24,6 +24,7 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1795 Add printing of git submodule info to `print_env.sh`
 
 ## Bug Fixes
 
