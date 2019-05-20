@@ -31,7 +31,12 @@ class table;
 namespace groupby {
 
 /**---------------------------------------------------------------------------*
- * @brief Options for controlling behavior of the groupby operation.
+ * @brief Top-level options for controlling behavior of the groupby operation.
+ *
+ * This structure defines all of the shared options between the hash and
+ * sort-based groupby algorithms. Implementation specific options should be
+ * defined by a new structure that inherits from this one inside the appropriate
+ * namespace.
  *
  *---------------------------------------------------------------------------**/
 struct Options {
@@ -61,9 +66,16 @@ struct Options {
 
 namespace hash {
 
-// Inherit from shared groupby options and define specific options here
+/**---------------------------------------------------------------------------*
+ * @brief  Options unique to the hash-based groupby
+ *
+ *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {};
 
+/**---------------------------------------------------------------------------*
+ * @brief Supported aggregation operations
+ *
+ *---------------------------------------------------------------------------**/
 enum operators { SUM, MIN, MAX, COUNT };
 
 /**---------------------------------------------------------------------------*
@@ -95,13 +107,44 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
 namespace sort {
 
-// Inherit from shared groupby options and define specific options here
+/**---------------------------------------------------------------------------*
+ * @brief  Options unique to the sort-based groupby
+ *
+ *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {};
-// sort-based groupby impl goes here
+
+/**---------------------------------------------------------------------------*
+ * @brief Supported aggregation operations
+ *
+ *---------------------------------------------------------------------------**/
+enum operators { SUM, MIN, MAX, COUNT };
+
+/**---------------------------------------------------------------------------*
+ * @brief Performs groupby operation(s) via a sort-based implementation
+ *
+ * Given a table of keys and corresponding table of values, equivalent keys will
+ * be grouped together and a reduction operation performed across the associated
+ * values (i.e., reduce by key). The reduction operation to be performed is
+ * specified by a list of operator enums of equal length to the number of value
+ * columns.
+ *
+ * The output of the operation is the table of key columns that hold all the
+ * unique keys from the input key columns and a table of aggregation columns
+ * that hold the specified reduction across associated values among all
+ * identical keys.
+ *
+ * @param keys The table of keys
+ * @param values The table of aggregation values
+ * @param ops The list of aggregation operations
+ * @return A tuple whose first member contains the table of output keys, and
+ * second member contains the table of reduced output values
+ *---------------------------------------------------------------------------**/
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options);
 }  // namespace sort
-
 }  // namespace groupby
-
 }  // namespace cudf
 
 /**
