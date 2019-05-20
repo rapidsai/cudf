@@ -40,12 +40,7 @@
 namespace cudf {
 namespace groupby {
 namespace hash {
-namespace detail {
-
 namespace {
-
-using namespace groupby;
-
 /**---------------------------------------------------------------------------*
  * @brief Deteremines target gdf_dtypes to use for combinations of source
  * gdf_dtypes and aggregation operations.
@@ -204,12 +199,24 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   return std::make_tuple(output_keys, output_values);
 }
 }  // namespace
+namespace detail {
 
 std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops,
                                              Options options,
                                              cudaStream_t stream) {
+  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
+               "Size mismatch between ops and value columns");
+
+  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+    if ((ops[i] == SUM) and
+        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
+      CUDF_FAIL(
+          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
+    }
+  }
+
   cudf::table output_keys;
   cudf::table output_values;
 
@@ -230,31 +237,6 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
           keys, values, ops, options, stream);
     }
   }
-
-  return std::make_tuple(output_keys, output_values);
-}
-
-}  // namespace detail
-
-std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                             cudf::table const& values,
-                                             std::vector<operators> const& ops,
-                                             Options options) {
-  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
-               "Size mismatch between ops and value columns");
-
-  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
-    if ((ops[i] == SUM) and
-        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
-      CUDF_FAIL(
-          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
-    }
-  }
-
-  cudf::table output_keys;
-  cudf::table output_values;
-  std::tie(output_keys, output_values) =
-      detail::groupby(keys, values, ops, options);
 
   // Compact NVCategory columns to contain only the strings referenced by the
   // indices in the output key/value columns
@@ -278,6 +260,14 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
                  output_values.begin(), gather_nvcategories);
 
   return std::make_tuple(output_keys, output_values);
+}
+}  // namespace detail
+
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options) {
+  return detail::groupby(keys, values, ops, options);
 }
 }  // namespace hash
 }  // namespace groupby
