@@ -566,7 +566,7 @@ class Groupby(object):
 
         .. code-block:: python
 
-            from cudf import DataFrame
+            import cudf
             import numpy as np
             from numba import cuda
             import pandas as pd
@@ -575,12 +575,12 @@ class Groupby(object):
 
             # Create a random 15 row dataframe with one categorical
             # feature and one random integer valued feature
-            df = DataFrame(
-                {
-                    "cat": [1] * 5 + [2] * 5 + [3] * 5,
-                    "val": [randint(0, 100) for _ in range(15)],
-                }
-            )
+            df = cudf.DataFrame(
+                    {
+                        "cat": [1] * 5 + [2] * 5 + [3] * 5,
+                        "val": [randint(0, 100) for _ in range(15)],
+                    }
+                 )
 
             # Group the dataframe by its categorical feature
             groups = df.groupby("cat", method="cudf")
@@ -628,7 +628,7 @@ class Groupby(object):
             9    2   46  41.333333333333336
             [5 more rows]
 
-        This is functionally equivalent to `pandas.DataFrame.Rolling 
+        This is functionally equivalent to `pandas.DataFrame.Rolling
         <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
         """
         if not callable(function):
