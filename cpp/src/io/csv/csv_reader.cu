@@ -704,18 +704,23 @@ gdf_error read_csv(csv_read_arg *args)
                                     h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
       if (h_ColumnData[col].countNULL == raw_csv.num_records){
-        d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
+        // Entire column is NULL; allocate the smallest amount of memory
+        d_detectedTypes.push_back(GDF_INT8);
       } else if(h_ColumnData[col].countString > 0L){
-        d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
+        d_detectedTypes.push_back(GDF_STRING);
       } else if(h_ColumnData[col].countDateAndTime > 0L){
         d_detectedTypes.push_back(GDF_DATE64);
-      } else if(h_ColumnData[col].countFloat > 0L  ||  
-        (h_ColumnData[col].countFloat == 0L && countInt > 0L && h_ColumnData[col].countNULL > 0L) ) {
-        // The second condition has been added to conform to PANDAS which states that a colum of 
-        // integers with a single NULL record need to be treated as floats.
+      } else if(h_ColumnData[col].countBool > 0L) {
+        d_detectedTypes.push_back(GDF_BOOL8);
+      } else if(h_ColumnData[col].countFloat > 0L ||
+        (h_ColumnData[col].countFloat == 0L &&
+         countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
+        // The second condition has been added to conform to
+        // PANDAS which states that a column of integers with
+        // a single NULL record need to be treated as floats.
         d_detectedTypes.push_back(GDF_FLOAT64);
-      }
-      else { 
+      } else {
+        // All other integers are stored as 64-bit to conform to PANDAS
         d_detectedTypes.push_back(GDF_INT64);
       }
     }
