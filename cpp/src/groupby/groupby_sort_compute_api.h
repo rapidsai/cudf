@@ -27,7 +27,7 @@
 
 #include "rmm/thrust_rmm_allocator.h"
 #include <table/device_table.cuh>
-#include <table/table_rowwise_operators.cuh>
+#include <table/device_table_row_operators.cuh>
 #include "utilities/bit_util.cuh"
 
 
@@ -66,7 +66,7 @@ gdf_error GroupbySort(size_type num_groupby_cols,
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols, &(in_groupby_columns[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<false>(*device_input_table, true);
   
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -150,7 +150,7 @@ gdf_error GroupbySortWithNulls(size_type num_groupby_cols,
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols, &(in_groupby_columns[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<true>(*device_input_table, true);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -197,8 +197,7 @@ gdf_error GroupbySortWithNulls(size_type num_groupby_cols,
 
 
 template< typename aggregation_type,
-          typename size_type,
-          typename aggregation_operation>
+          typename size_type>
 gdf_error GroupbySortCountDistinct(size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
                         gdf_column* in_groupby_columns[],
@@ -207,13 +206,12 @@ gdf_error GroupbySortCountDistinct(size_type num_groupby_cols,
                         gdf_column* out_groupby_columns[],
                         aggregation_type * out_aggregation_column,
                         size_type * out_size,
-                        aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols + 1, &(in_groupby_columns_with_agg[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<false>(*device_input_table, true);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -248,8 +246,7 @@ gdf_error GroupbySortCountDistinct(size_type num_groupby_cols,
 
 
 template< typename aggregation_type,
-          typename size_type,
-          typename aggregation_operation>
+          typename size_type>
 gdf_error GroupbySortCount(size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
                         gdf_column* in_groupby_columns[],
@@ -258,13 +255,12 @@ gdf_error GroupbySortCount(size_type num_groupby_cols,
                         gdf_column* out_groupby_columns[],
                         aggregation_type * out_aggregation_column,
                         size_type * out_size,
-                        aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols, &(in_groupby_columns_with_agg[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<false>(*device_input_table, true);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -295,8 +291,7 @@ gdf_error GroupbySortCount(size_type num_groupby_cols,
 
 
 template< typename aggregation_type,
-          typename size_type,
-          typename aggregation_operation>
+          typename size_type>
 gdf_error GroupbySortCountDistinctWithNulls(size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
                         gdf_column* in_groupby_columns[],
@@ -305,13 +300,12 @@ gdf_error GroupbySortCountDistinctWithNulls(size_type num_groupby_cols,
                         gdf_column* out_groupby_columns[],
                         gdf_column* out_aggregation_column,
                         size_type * out_size,
-                        aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols + 1, &(in_groupby_columns_with_agg[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<true>(*device_input_table, true);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -328,8 +322,7 @@ gdf_error GroupbySortCountDistinctWithNulls(size_type num_groupby_cols,
 
 	auto out_agg_col_zip_iter = thrust::make_zip_iterator( thrust::make_tuple((aggregation_type*)out_col.data().get(), d_out_agg_col_valids.begin()));
 
-  using op_with_valids = typename aggregation_operation::with_valids;
-  op_with_valids agg_op;
+  count_distinct_op_valids<aggregation_type> agg_op;
   auto ret =
         thrust::reduce_by_key(exec,
                               d_sorted_indices, d_sorted_indices+nrows, 
@@ -362,8 +355,7 @@ gdf_error GroupbySortCountDistinctWithNulls(size_type num_groupby_cols,
 
 
 template< typename aggregation_type,
-          typename size_type,
-          typename aggregation_operation>
+          typename size_type>
 gdf_error GroupbySortCountWithNulls(size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
                         gdf_column* in_groupby_columns[],
@@ -372,13 +364,12 @@ gdf_error GroupbySortCountWithNulls(size_type num_groupby_cols,
                         gdf_column* out_groupby_columns[],
                         gdf_column* out_aggregation_column,
                         size_type * out_size,
-                        aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
   int32_t nrows = in_groupby_columns[0]->size;
   
   auto device_input_table = device_table::create(num_groupby_cols, &(in_groupby_columns_with_agg[0]));
-  auto comp = equality_comparator(*device_input_table, true);
+  auto comp = row_equality_comparator<true>(*device_input_table, true);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
@@ -394,8 +385,7 @@ gdf_error GroupbySortCountWithNulls(size_type num_groupby_cols,
 
 	auto out_agg_col_zip_iter = thrust::make_zip_iterator( thrust::make_tuple((aggregation_type*)out_aggregation_column->data, d_out_agg_col_valids.begin()));
 
-  using op_with_valids = typename aggregation_operation::with_valids;
-  op_with_valids agg_op;
+  count_op_valids<aggregation_type> agg_op;
   auto ret =
         thrust::reduce_by_key(exec,
                               d_sorted_indices, d_sorted_indices+nrows, 

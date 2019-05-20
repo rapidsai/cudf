@@ -136,7 +136,6 @@ gdf_error typed_groupby(size_type num_groupby_cols,
                                   out_groupby_columns, 
                                   out_agg_col, 
                                   &output_size, 
-                                  op_type(),
                                   ctxt);
     } else if (is_count_op) {
       auto in_groupby_columns_with_agg = orderby_cols_vect.data();
@@ -154,8 +153,7 @@ gdf_error typed_groupby(size_type num_groupby_cols,
                                   in_agg_col, 
                                   out_groupby_columns, 
                                   out_agg_col, 
-                                  &output_size, 
-                                  op_type(),
+                                  &output_size,
                                   ctxt); 
     } 
     else {
@@ -200,8 +198,7 @@ gdf_error typed_groupby(size_type num_groupby_cols,
                                   in_aggregation_column, 
                                   out_groupby_columns, 
                                   out_aggregation_column, 
-                                  &output_size, 
-                                  op_type(),
+                                  &output_size,
                                   ctxt);
     } else {
       // run order by and get new sort indexes

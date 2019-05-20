@@ -381,14 +381,7 @@ struct GroupTest : public GdfTest {
     if (GDF_SUCCESS == expected_error) {
         copy_output(
                 group_by_output_key, output_key,
-                group_by_output_value, output_value);
-
-        if (print) {
-          std::cout << "\nGDF: Key column(s) created. Size: " << std::get<0>(output_key).size() << std::endl;
-          print_tuple_vector(output_key);
-          std::cout << "GDF: Value column(s) created. Size: " << output_value.size() << std::endl;
-          print_vector(output_value);
-        }
+                group_by_output_value, output_value);        
     }
   }
 
