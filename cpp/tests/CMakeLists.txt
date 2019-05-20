@@ -270,6 +270,14 @@ set(UTILITIES_TEST_SRC
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
 ###################################################################################################
+# - iterator tests -------------------------------------------------------------------------------
+
+set(ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+
+ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
+
+###################################################################################################
 # - device atomics tests -------------------------------------------------------------------------------
 
 set(DEVICE_ATOMICS_TEST_SRC
