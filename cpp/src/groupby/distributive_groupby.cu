@@ -20,21 +20,21 @@
 #include <utilities/error_utils.hpp>
 #include "new_hash_groupby.hpp"
 
-#include <vector>
 #include <algorithm>
+#include <vector>
 
 namespace cudf {
 namespace groupby {
-
-std::tuple<cudf::table, cudf::table> distributive(
-    cudf::table const& keys, cudf::table const& values,
-    std::vector<distributive_operators> const& operators, Options options) {
-  CUDF_EXPECTS(
-      static_cast<gdf_size_type>(operators.size()) == values.num_columns(),
-      "Size mismatch between operators and value columns");
+namespace hash {
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options) {
+  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
+               "Size mismatch between ops and value columns");
 
   for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
-    if ((operators[i] == SUM) and
+    if ((ops[i] == SUM) and
         (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
       CUDF_FAIL(
           "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
@@ -44,7 +44,7 @@ std::tuple<cudf::table, cudf::table> distributive(
   cudf::table output_keys;
   cudf::table output_values;
   std::tie(output_keys, output_values) =
-      cudf::detail::hash_groupby(keys, values, operators, options);
+      detail::groupby(keys, values, ops, options);
 
   // Compact NVCategory columns to contain only the strings referenced by the
   // indices in the output key/value columns
@@ -69,5 +69,8 @@ std::tuple<cudf::table, cudf::table> distributive(
 
   return std::make_tuple(output_keys, output_values);
 }
+
+}  // namespace hash
 }  // namespace groupby
+
 }  // namespace cudf

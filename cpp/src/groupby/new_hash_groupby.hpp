@@ -24,16 +24,18 @@
 #include <vector>
 
 namespace cudf {
-
-
+namespace groupby {
+namespace hash {
 namespace detail {
 
-std::tuple<cudf::table, cudf::table> hash_groupby(
-    cudf::table const& keys, cudf::table const& values,
-    std::vector<cudf::groupby::distributive_operators> const& operators,
-    groupby::Options options, cudaStream_t stream = 0);
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options,
+                                             cudaStream_t stream = 0);
 }  // namespace detail
-
+}  // namespace hash
+}  // namespace groupby
 }  // namespace cudf
 
 #endif

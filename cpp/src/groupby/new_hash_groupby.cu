@@ -35,6 +35,8 @@
 #include <vector>
 
 namespace cudf {
+namespace groupby {
+namespace hash {
 namespace detail {
 
 namespace {
@@ -42,12 +44,12 @@ namespace {
 using namespace groupby;
 
 /**---------------------------------------------------------------------------*
- * @brief Maps a distributive_operators enum value to it's corresponding binary
+ * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
  *
  * @tparam op The enum to map to its corresponding functor
  *---------------------------------------------------------------------------**/
-template <distributive_operators op>
+template <operators op>
 struct corresponding_functor {
   using type = void;
 };
@@ -72,12 +74,12 @@ struct corresponding_functor<COUNT> {
   using type = DeviceSum;
 };
 
-template <distributive_operators op>
+template <operators op>
 using corresponding_functor_t = typename corresponding_functor<op>::type;
 
 struct identity_initializer {
   template <typename T>
-  T get_identity(distributive_operators op) {
+  T get_identity(operators op) {
     switch (op) {
       case SUM:
         return corresponding_functor_t<SUM>::identity<T>();
@@ -93,7 +95,7 @@ struct identity_initializer {
   }
 
   template <typename T>
-  void operator()(gdf_column const& col, distributive_operators op,
+  void operator()(gdf_column const& col, operators op,
                   cudaStream_t stream = 0) {
     T* typed_data = static_cast<T*>(col.data);
     thrust::fill(rmm::exec_policy(stream)->on(stream), typed_data,
@@ -123,16 +125,14 @@ struct identity_initializer {
  * @param operators The aggregation operations whose identity values will be
  *used to initialize the columns.
  *---------------------------------------------------------------------------**/
-void initialize_with_identity(
-    cudf::table const& table,
-    std::vector<distributive_operators> const& operators,
-    cudaStream_t stream = 0) {
+void initialize_with_identity(cudf::table const& table,
+                              std::vector<operators> const& ops,
+                              cudaStream_t stream = 0) {
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (gdf_size_type i = 0; i < table.num_columns(); ++i) {
     gdf_column const* col = table.get_column(i);
-    cudf::type_dispatcher(col->dtype, identity_initializer{}, *col,
-                          operators[i]);
+    cudf::type_dispatcher(col->dtype, identity_initializer{}, *col, ops[i]);
   }
 }
 
@@ -143,7 +143,7 @@ void initialize_with_identity(
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
  *---------------------------------------------------------------------------**/
-template <typename SourceType, distributive_operators op, typename dummy = void>
+template <typename SourceType, operators op, typename dummy = void>
 struct target_type {
   using type = void;
 };
@@ -163,6 +163,7 @@ struct target_type<SourceType, MAX> {
 // Always use int64_t accumulator for COUNT
 template <typename SourceType>
 struct target_type<SourceType, COUNT> {
+  // TODO Use `gdf_size_type`
   using type = int64_t;
 };
 
@@ -181,7 +182,7 @@ struct target_type<
   using type = SourceType;
 };
 
-template <typename SourceType, distributive_operators op>
+template <typename SourceType, operators op>
 using target_type_t = typename target_type<SourceType, op>::type;
 
 /**---------------------------------------------------------------------------*
@@ -191,7 +192,7 @@ using target_type_t = typename target_type<SourceType, op>::type;
  *---------------------------------------------------------------------------**/
 struct dtype_mapper {
   template <typename SourceType>
-  gdf_dtype operator()(distributive_operators op) {
+  gdf_dtype operator()(operators op) {
     switch (op) {
       case MIN:
         return gdf_dtype_of<target_type_t<SourceType, MIN>>();
@@ -221,13 +222,12 @@ struct dtype_mapper {
  *---------------------------------------------------------------------------**/
 std::vector<gdf_dtype> target_dtypes(
     std::vector<gdf_dtype> const& source_dtypes,
-    std::vector<distributive_operators> const& operators) {
+    std::vector<operators> const& ops) {
   std::vector<gdf_dtype> output_dtypes(source_dtypes.size());
 
   std::transform(
-      source_dtypes.begin(), source_dtypes.end(), operators.begin(),
-      output_dtypes.begin(),
-      [](gdf_dtype source_dtype, distributive_operators op) {
+      source_dtypes.begin(), source_dtypes.end(), ops.begin(),
+      output_dtypes.begin(), [](gdf_dtype source_dtype, operators op) {
         gdf_dtype t = cudf::type_dispatcher(source_dtype, dtype_mapper{}, op);
         CUDF_EXPECTS(
             t != GDF_invalid,
@@ -249,8 +249,8 @@ std::vector<gdf_dtype> target_dtypes(
  * @note A struct is used instead of a function to allow for partial
  * specialization.
  *---------------------------------------------------------------------------**/
-template <typename SourceType, distributive_operators op,
-          bool values_have_nulls, typename Enable = void>
+template <typename SourceType, operators op, bool values_have_nulls,
+          typename Enable = void>
 struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
@@ -266,8 +266,7 @@ struct update_target_element {
  * @tparam SourceType Type of the source element
  * @tparam op The operation to perform
  *---------------------------------------------------------------------------**/
-template <typename SourceType, distributive_operators op,
-          bool values_have_nulls>
+template <typename SourceType, operators op, bool values_have_nulls>
 struct update_target_element<
     SourceType, op, values_have_nulls,
     std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
@@ -358,8 +357,7 @@ struct elementwise_aggregator {
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
                                     gdf_column const& source,
-                                    gdf_size_type source_index,
-                                    distributive_operators op) {
+                                    gdf_size_type source_index, operators op) {
     switch (op) {
       case MIN: {
         update_target_element<SourceType, MIN, values_have_nulls>{}(
@@ -419,7 +417,7 @@ __device__ inline void aggregate_row(device_table const& target,
                                      gdf_size_type target_index,
                                      device_table const& source,
                                      gdf_size_type source_index,
-                                     distributive_operators* ops) {
+                                     operators* ops) {
   using namespace bit_mask;
   thrust::for_each(
       thrust::seq, thrust::make_counting_iterator(0),
@@ -455,7 +453,7 @@ struct row_hasher {
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
 __global__ void build_aggregation_table(
     Map* map, device_table input_keys, device_table input_values,
-    device_table output_values, distributive_operators* ops,
+    device_table output_values, operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -505,10 +503,9 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
 }
 
 template <bool keys_have_nulls, bool values_have_nulls>
-auto compute_hash_groupby(
-    cudf::table const& keys, cudf::table const& values,
-    std::vector<groupby::distributive_operators> const& operators,
-    groupby::Options options, cudaStream_t stream) {
+auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
+                          std::vector<operators> const& ops, Options options,
+                          cudaStream_t stream) {
   gdf_size_type constexpr unused_key{std::numeric_limits<gdf_size_type>::max()};
   gdf_size_type constexpr unused_value{
       std::numeric_limits<gdf_size_type>::max()};
@@ -519,16 +516,16 @@ auto compute_hash_groupby(
   gdf_size_type const output_size_estimate{keys.num_rows()};
 
   // TODO Do we always need to allocate the output bitmask?
-  cudf::table sparse_output_values{
-      output_size_estimate, target_dtypes(column_dtypes(values), operators),
-      values_have_nulls, stream};
+  cudf::table sparse_output_values{output_size_estimate,
+                                   target_dtypes(column_dtypes(values), ops),
+                                   values_have_nulls, stream};
 
-  initialize_with_identity(sparse_output_values, operators, stream);
+  initialize_with_identity(sparse_output_values, ops, stream);
 
   auto const d_input_keys = device_table::create(keys);
   auto const d_input_values = device_table::create(values);
   auto d_sparse_output_values = device_table::create(sparse_output_values);
-  rmm::device_vector<groupby::distributive_operators> d_operators(operators);
+  rmm::device_vector<operators> d_ops(ops);
 
   // If we ignore null keys, then nulls are not equivalent
   bool const nulls_are_equal{not options.ignore_null_keys};
@@ -553,14 +550,13 @@ auto compute_hash_groupby(
     build_aggregation_table<true, values_have_nulls>
         <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
            stream>>>(map.get(), *d_input_keys, *d_input_values,
-                     *d_sparse_output_values, d_operators.data().get(),
+                     *d_sparse_output_values, d_ops.data().get(),
                      row_bitmask.data().get());
   } else {
     build_aggregation_table<false, values_have_nulls>
         <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
            stream>>>(map.get(), *d_input_keys, *d_input_values,
-                     *d_sparse_output_values, d_operators.data().get(),
-                     nullptr);
+                     *d_sparse_output_values, d_ops.data().get(), nullptr);
   }
 
   // TODO Extract results
@@ -576,33 +572,36 @@ auto compute_hash_groupby(
 
 }  // namespace
 
-std::tuple<cudf::table, cudf::table> hash_groupby(
-    cudf::table const& keys, cudf::table const& values,
-    std::vector<groupby::distributive_operators> const& operators,
-    groupby::Options options, cudaStream_t stream) {
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options,
+                                             cudaStream_t stream) {
   cudf::table output_keys;
   cudf::table output_values;
 
   if (cudf::has_nulls(keys)) {
     if (cudf::has_nulls(values)) {
-      std::tie(output_keys, output_values) = compute_hash_groupby<true, true>(
-          keys, values, operators, options, stream);
+      std::tie(output_keys, output_values) =
+          compute_hash_groupby<true, true>(keys, values, ops, options, stream);
     } else {
-      std::tie(output_keys, output_values) = compute_hash_groupby<true, false>(
-          keys, values, operators, options, stream);
+      std::tie(output_keys, output_values) =
+          compute_hash_groupby<true, false>(keys, values, ops, options, stream);
     }
   } else {
     if (cudf::has_nulls(values)) {
-      std::tie(output_keys, output_values) = compute_hash_groupby<false, true>(
-          keys, values, operators, options, stream);
+      std::tie(output_keys, output_values) =
+          compute_hash_groupby<false, true>(keys, values, ops, options, stream);
     } else {
       std::tie(output_keys, output_values) = compute_hash_groupby<false, false>(
-          keys, values, operators, options, stream);
+          keys, values, ops, options, stream);
     }
   }
 
   return std::make_tuple(output_keys, output_values);
-}  // namespace detail
+}
 
 }  // namespace detail
+}  // namespace hash
+}  // namespace groupby
 }  // namespace cudf
