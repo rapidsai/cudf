@@ -21,6 +21,7 @@
 #include <hash/concurrent_unordered_map.cuh>
 #include <table.hpp>
 #include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
@@ -413,7 +414,7 @@ struct elementwise_aggregator {
  * @param ops Array of operators to perform between the elements of the
  * target and source rows
  *---------------------------------------------------------------------------**/
-template <bool values_have_nulls>
+template <bool values_have_nulls = true>
 __device__ inline void aggregate_row(device_table const& target,
                                      gdf_size_type target_index,
                                      device_table const& source,
@@ -517,6 +518,7 @@ auto compute_hash_groupby(
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
 
+  // TODO Do we always need to allocate the output bitmask?
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(values), operators),
       values_have_nulls, stream};
