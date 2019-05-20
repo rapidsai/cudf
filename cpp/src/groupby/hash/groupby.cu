@@ -46,7 +46,6 @@ namespace {
 
 using namespace groupby;
 
-
 /**---------------------------------------------------------------------------*
  * @brief Deteremines target gdf_dtypes to use for combinations of source
  * gdf_dtypes and aggregation operations.
@@ -67,7 +66,8 @@ inline std::vector<gdf_dtype> target_dtypes(
   std::transform(
       source_dtypes.begin(), source_dtypes.end(), ops.begin(),
       output_dtypes.begin(), [](gdf_dtype source_dtype, operators op) {
-        gdf_dtype t = cudf::type_dispatcher(source_dtype, dtype_mapper{}, op);
+        gdf_dtype t =
+            cudf::type_dispatcher(source_dtype, target_type_mapper{}, op);
         CUDF_EXPECTS(
             t != GDF_invalid,
             "Invalid combination of input type and aggregation operation.");

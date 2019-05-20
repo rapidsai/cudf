@@ -60,7 +60,7 @@ struct target_type<SourceType, MAX> { using type = SourceType; };
 // Always use int64_t accumulator for COUNT
 // TODO Use `gdf_size_type`
 template <typename SourceType>
-struct target_type<SourceType, COUNT> { using type = int64_t; };
+struct target_type<SourceType, COUNT> { using type = gdf_size_type; };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
@@ -84,7 +84,7 @@ using target_type_t = typename target_type<SourceType, op>::type;
  * @brief Functor that uses the target_type trait to map the combination of a
  * dispatched SourceType and aggregation operation to required target gdf_dtype.
  *---------------------------------------------------------------------------**/
-struct dtype_mapper {
+struct target_type_mapper {
   template <typename SourceType>
   gdf_dtype operator()(operators op) const noexcept {
     switch (op) {
