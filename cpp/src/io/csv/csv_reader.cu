@@ -30,6 +30,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <cstring>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,7 +82,6 @@ typedef struct raw_csv_ {
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
 	gdf_size_type 		num_records;	// host: number of records loaded into device memory, and then number of records to read
-	// int				num_cols;		// host: number of columns
 	int					num_active_cols;// host: number of columns that will be return to user.
 	int					num_actual_cols;// host: number of columns in the file --- based on the number of columns in header
     vector<gdf_dtype>	dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
@@ -400,8 +400,8 @@ gdf_error read_csv(csv_read_arg *args)
 	// Done first to validate data types
 	raw_csv_t raw_csv{};
 	// error = parseArguments(args, raw_csv);
-	raw_csv.num_actual_cols	= args->num_cols;
-	raw_csv.num_active_cols	= args->num_cols;
+	raw_csv.num_actual_cols	= args->num_names;
+	raw_csv.num_active_cols	= args->num_names;
 	raw_csv.num_records		= 0;
 
 	raw_csv.header_row = args->header;
@@ -539,7 +539,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 			if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
 				// Need to make sure that w/ padding we don't overshoot the end of file
-				map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
+				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args->num_names, args->num_dtype)), map_size);
 			}
 
 			// Ignore page padding for parsing purposes
@@ -644,11 +644,10 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 	}
 	else {
-		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_cols, true);
+		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_names, true);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			std::string col_name 	= args->names[i];
-			raw_csv.col_names.push_back(col_name);
+			raw_csv.col_names.emplace_back(args->names[i]);
 		}
 	}
 
@@ -685,84 +684,87 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	if(args->dtype==NULL){
-		if (raw_csv.num_records == 0) {
-			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
-		}
+  if(args->dtype == NULL){
+    if (raw_csv.num_records == 0) {
+      checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
+    }
 
-		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-		device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
-		CUDA_TRY( cudaMemset(d_ColumnData.data(),	0, 	(sizeof(column_data_t) * (raw_csv.num_active_cols)) ) ) ;
+    vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
+    device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
+    CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
 
-		launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
-		CUDA_TRY( cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * (raw_csv.num_active_cols), cudaMemcpyDeviceToHost));
+    launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
+    CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * raw_csv.num_active_cols, cudaMemcpyDeviceToHost));
 
-		// host: array of dtypes (since gdf_columns are not created until end)
-		vector<gdf_dtype>	d_detectedTypes;
+    // host: array of dtypes (since gdf_columns are not created until end)
+    vector<gdf_dtype> d_detectedTypes;
 
-		raw_csv.dtypes.clear();
+    for(int col = 0; col < raw_csv.num_active_cols; col++){
+      unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
+                                    h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
-		for(int col = 0; col < raw_csv.num_active_cols; col++){
-			unsigned long long countInt = h_ColumnData[col].countInt8+h_ColumnData[col].countInt16+
-										  h_ColumnData[col].countInt32+h_ColumnData[col].countInt64;
+      if (h_ColumnData[col].countNULL == raw_csv.num_records){
+        // Entire column is NULL; allocate the smallest amount of memory
+        d_detectedTypes.push_back(GDF_INT8);
+      } else if(h_ColumnData[col].countString > 0L){
+        d_detectedTypes.push_back(GDF_STRING);
+      } else if(h_ColumnData[col].countDateAndTime > 0L){
+        d_detectedTypes.push_back(GDF_DATE64);
+      } else if(h_ColumnData[col].countBool > 0L) {
+        d_detectedTypes.push_back(GDF_BOOL8);
+      } else if(h_ColumnData[col].countFloat > 0L ||
+        (h_ColumnData[col].countFloat == 0L &&
+         countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
+        // The second condition has been added to conform to
+        // PANDAS which states that a column of integers with
+        // a single NULL record need to be treated as floats.
+        d_detectedTypes.push_back(GDF_FLOAT64);
+      } else {
+        // All other integers are stored as 64-bit to conform to PANDAS
+        d_detectedTypes.push_back(GDF_INT64);
+      }
+    }
+    raw_csv.dtypes = d_detectedTypes;
+  }
+  else {
+    const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
+                                     [](const auto& s) { return strchr(s, ':') != nullptr; });
+    if (!is_dict) {
+      CUDF_EXPECTS(args->num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
+          // dtype is an array of types, assign types to active columns in the given order
+          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[col]));
+          CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
+        }
+      }
+    } else {
+      // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
+      std::unordered_map<std::string, gdf_dtype> col_type_map;
+      for (int dtype_idx = 0; dtype_idx < args->num_dtype; dtype_idx++) {
+        // Split the dtype elements around the last ':' character
+        const char* colon = strrchr(args->dtype[dtype_idx], ':');
+        const std::string col(args->dtype[dtype_idx], colon);
+        const std::string type(colon + 1);
 
-			if (h_ColumnData[col].countNULL == raw_csv.num_records) {
-				// Entire column is NULL; allocate the smallest amount of memory
-				d_detectedTypes.push_back(GDF_INT8);
-			} else if(h_ColumnData[col].countString > 0L) {
-				d_detectedTypes.push_back(GDF_STRING);
-			} else if(h_ColumnData[col].countDateAndTime > 0L) {
-				d_detectedTypes.push_back(GDF_DATE64);
-			} else if(h_ColumnData[col].countBool > 0L) {
-				d_detectedTypes.push_back(GDF_BOOL8);
-			} else if (h_ColumnData[col].countFloat > 0L ||
-				         (h_ColumnData[col].countFloat == 0L &&
-				          countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
-				// The second condition has been added to conform to
-				// PANDAS which states that a column of integers with
-				// a single NULL record need to be treated as floats.
-				d_detectedTypes.push_back(GDF_FLOAT64);
-			} else {
-				// All other integers are stored as 64-bit to conform to PANDAS
-				d_detectedTypes.push_back(GDF_INT64);
-			}
-		}
-		raw_csv.dtypes=d_detectedTypes;
-	}
-	else{
-		for ( int x = 0; x < raw_csv.num_actual_cols; x++) {
+        col_type_map[col] = convertStringToDtype(type);
+        CUDF_EXPECTS(col_type_map[col] != GDF_invalid, "Unsupported data type");
+      }
 
-			std::string temp_type 	= args->dtype[x];
-                        gdf_dtype col_dtype = GDF_invalid;
-			if(temp_type.find(':') != std::string::npos){
-				for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-				std::size_t idx = temp_type.find(':');
-				if(temp_type.substr( 0, idx) == *it){
-					std::string temp_dtype = temp_type.substr( idx +1);
-					col_dtype	= convertStringToDtype(temp_dtype);
-					break;
-					}
-				}
-			}
-			else{
-				col_dtype	= convertStringToDtype( temp_type );
-			}
-
-			if (col_dtype == GDF_invalid)
-				return GDF_UNSUPPORTED_DTYPE;
-
-			raw_csv.dtypes.push_back(col_dtype);
-		}
-	}
-
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
+          CUDF_EXPECTS(col_type_map.find(raw_csv.col_names[col]) != col_type_map.end(),
+            "Must specify data types for all active columns");
+          raw_csv.dtypes.push_back(col_type_map[raw_csv.col_names[col]]);
+        }
+      }
+    }
+  }
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < raw_csv.num_actual_cols; ++col) {
     if (raw_csv.h_parseCol[col]) {
-      // When dtypes are inferred, it contains only active column values
-      auto dtype = raw_csv.dtypes[args->dtype == nullptr ? active_col : col];
-
-      columns.emplace_back(raw_csv.num_records, dtype,
+      columns.emplace_back(raw_csv.num_records, raw_csv.dtypes[active_col],
                            gdf_dtype_extra_info{TIME_UNIT_NONE},
                            raw_csv.col_names[col]);
       CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");

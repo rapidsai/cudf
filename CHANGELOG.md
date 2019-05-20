@@ -48,6 +48,7 @@
 - PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
 - PR #1786 Maintain the original series name in series.unique output
+- PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 
 
 # cudf 0.7.2 (16 May 2019)

@@ -1024,3 +1024,17 @@ def test_csv_empty_input(tmpdir):
     df = read_csv(StringIO(''), dtype=in_dtypes, names=col_names)
     assert(all(df.columns == col_names))
     assert((list(df.dtypes) == out_dtypes))
+
+
+@pytest.mark.parametrize('dtype', [
+        ['short', 'float', 'int'],
+        {'A': 'short', 'C': 'int'}
+    ])
+def test_csv_reader_partial_dtype(dtype):
+    names_df = read_csv(StringIO('0,1,2'), names=['A', 'B', 'C'],
+                        dtype=dtype, usecols=['A', 'C'])
+    header_df = read_csv(StringIO('"A","B","C"\n0,1,2'),
+                         dtype=dtype, usecols=['A', 'C'])
+
+    assert(names_df == header_df)
+    assert(all(names_df.dtypes == ['int16', 'int32']))
