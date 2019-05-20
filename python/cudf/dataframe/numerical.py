@@ -64,7 +64,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
-            out_dtype = np.result_type(self.dtype, rhs.dtype)
+            if (np.issubdtype(self.dtype, np.bool_) or
+                    np.issubdtype(rhs.dtype, np.bool_)):
+                out_dtype = np.bool_
+            else:
+                out_dtype = np.result_type(self.dtype, rhs.dtype)
             return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
                                         out_dtype=out_dtype)
         else:

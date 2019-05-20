@@ -417,6 +417,8 @@ class Series(object):
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
+            # i removed _binaryop from dataframe in #1292 (bitwise binary ops)
+            # that should've broken this. This needs a fix and a test
             return other._binaryop(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
@@ -502,9 +504,13 @@ class Series(object):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
+        # TODO: replace self.dtype.type with self.dtype
         if (np.issubdtype(self.dtype.type, np.integer) and
                 np.issubdtype(other.dtype.type, np.integer)):
+            # this broke Series (op) DataFrame because dataframe doesn't have dtype
             return self._binaryop(other, op)
+        # (1) Allow bool and check what happens.
+        # It worked but I'm not sure if it's right
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
@@ -515,12 +521,22 @@ class Series(object):
         """Performs vectorized bitwise and (&) on corresponding elements of two
         series.
         """
+        # Check if bool and pass logical-and in arg (requires logical-and in libcudf)
+        # Do this after (1) fails
+        # TODO: replace self.dtype.type with self.dtype
+        if (np.issubdtype(self.dtype.type, np.bool_) or
+                np.issubdtype(other.dtype.type, np.bool_)):
+            return self._binaryop(other, 'l_and')
         return self._bitwise_binop(other, 'and')
 
     def __or__(self, other):
         """Performs vectorized bitwise or (|) on corresponding elements of two
         series.
         """
+        # Check if bool and pass logical-or in arg (requires logical-or in libcudf)
+        if (np.issubdtype(self.dtype.type, np.bool_) or
+                np.issubdtype(other.dtype.type, np.bool_)):
+            return self._binaryop(other, 'l_or')
         return self._bitwise_binop(other, 'or')
 
     def __xor__(self, other):
@@ -584,6 +600,8 @@ class Series(object):
         """
         if np.issubdtype(self.dtype.type, np.integer):
             return self._unaryop('not')
+        # Allow bool and check what happens. 0000 0001 will become 1111 1110
+        # or maybe because of proper casting in C++, we'll get the correct result regardless
         else:
             raise TypeError(
                 f"Operation `~` not supported on {self.dtype.type.__name__}"

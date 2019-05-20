@@ -127,6 +127,7 @@ struct DeviceAbs {
 // bitwise op
 
 struct DeviceInvert {
+    // TODO: maybe sfinae overload this for cudf::bool8
     template<typename T>
     __device__
     T apply(T data) {

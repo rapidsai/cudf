@@ -19,6 +19,7 @@ _COMPILED_OPS = [
     'le', 'ge', 'and', 'or', 'xor'
 ]
 
+# TODO: convert to single declaration of dictionary
 _BINARY_OP = {}
 _BINARY_OP['add'] = GDF_ADD
 _BINARY_OP['sub'] = GDF_SUB
@@ -37,6 +38,8 @@ _BINARY_OP['ge'] = GDF_GREATER_EQUAL
 _BINARY_OP['and'] = GDF_BITWISE_AND
 _BINARY_OP['or'] = GDF_BITWISE_OR
 _BINARY_OP['xor'] = GDF_BITWISE_XOR
+_BINARY_OP['l_and'] = GDF_LOGICAL_AND
+_BINARY_OP['l_or'] = GDF_LOGICAL_OR
 
 
 cdef apply_jit_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):

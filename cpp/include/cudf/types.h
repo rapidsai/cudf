@@ -223,6 +223,8 @@ typedef enum {
   GDF_BITWISE_AND,    ///< operator &
   GDF_BITWISE_OR,     ///< operator |
   GDF_BITWISE_XOR,    ///< operator ^
+  GDF_LOGICAL_AND,    ///< operator &&
+  GDF_LOGICAL_OR,     ///< operator ||
   GDF_COALESCE,       ///< operator x,y  x is null ? y : x
   GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
