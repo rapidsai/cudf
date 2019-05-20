@@ -106,13 +106,14 @@ typedef struct raw_csv_ {
 } raw_csv_t;
 
 typedef struct column_data_ {
-	unsigned long long countFloat;
-	unsigned long long countDateAndTime;
-	unsigned long long countString;
-	unsigned long long countInt8;
-	unsigned long long countInt16;
-	unsigned long long countInt32;
-	unsigned long long countInt64;
+	gdf_size_type countFloat;
+	gdf_size_type countDateAndTime;
+	gdf_size_type countString;
+	gdf_size_type countBool;
+	gdf_size_type countInt8;
+	gdf_size_type countInt16;
+	gdf_size_type countInt32;
+	gdf_size_type countInt64;
 	gdf_size_type countNULL;
 } column_data_t;
 
@@ -461,7 +462,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1
-	vector<string> true_values{"True", "TRUE"};
+	vector<string> true_values{"True", "TRUE", "true"};
 	if (args->true_values != nullptr && args->num_true_values > 0) {
 		for (int i = 0; i < args->num_true_values; ++i) {
 			true_values.emplace_back(args->true_values[i]);
@@ -470,7 +471,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv.d_trueTrie = createSerializedTrie(true_values);
 	raw_csv.opts.trueValuesTrie = raw_csv.d_trueTrie.data().get();
 
-	vector<string> false_values{"False", "FALSE"};
+	vector<string> false_values{"False", "FALSE", "false"};
 	if (args->false_values != nullptr && args->num_false_values > 0) {
 		for (int i = 0; i < args->num_false_values; ++i) {
 			false_values.emplace_back(args->false_values[i]);
@@ -705,19 +706,24 @@ gdf_error read_csv(csv_read_arg *args)
 			unsigned long long countInt = h_ColumnData[col].countInt8+h_ColumnData[col].countInt16+
 										  h_ColumnData[col].countInt32+h_ColumnData[col].countInt64;
 
-			if (h_ColumnData[col].countNULL == raw_csv.num_records){
-				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
-			} else if(h_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
-			} else if(h_ColumnData[col].countDateAndTime>0L){
+			if (h_ColumnData[col].countNULL == raw_csv.num_records) {
+				// Entire column is NULL; allocate the smallest amount of memory
+				d_detectedTypes.push_back(GDF_INT8);
+			} else if(h_ColumnData[col].countString > 0L) {
+				d_detectedTypes.push_back(GDF_STRING);
+			} else if(h_ColumnData[col].countDateAndTime > 0L) {
 				d_detectedTypes.push_back(GDF_DATE64);
-			} else if(h_ColumnData[col].countFloat > 0L  ||  
-				(h_ColumnData[col].countFloat==0L && countInt >0L && h_ColumnData[col].countNULL >0L) ) {
-				// The second condition has been added to conform to PANDAS which states that a colum of 
-				// integers with a single NULL record need to be treated as floats.
+			} else if(h_ColumnData[col].countBool > 0L) {
+				d_detectedTypes.push_back(GDF_BOOL8);
+			} else if (h_ColumnData[col].countFloat > 0L ||
+				         (h_ColumnData[col].countFloat == 0L &&
+				          countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
+				// The second condition has been added to conform to
+				// PANDAS which states that a column of integers with
+				// a single NULL record need to be treated as floats.
 				d_detectedTypes.push_back(GDF_FLOAT64);
-			}
-			else { 
+			} else {
+				// All other integers are stored as 64-bit to conform to PANDAS
 				d_detectedTypes.push_back(GDF_INT64);
 			}
 		}
@@ -1316,44 +1322,44 @@ void dataTypeDetection(char *raw_csv,
 				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
 				const size_t field_len = tempPos - start + 1;
 				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
-					serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
-					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+						serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
+					atomicAdd(& d_columnData[actual_col].countBool, 1);
 				}
 				else if(value >= (1L<<31)){
-					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt64, 1);
 				}
 				else if(value >= (1L<<15)){
-					atomicAdd(& d_columnData[actual_col].countInt32, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt32, 1);
 				}
 				else if(value >= (1L<<7)){
-					atomicAdd(& d_columnData[actual_col].countInt16, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt16, 1);
 				}
 				else{
-					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt8, 1);
 				}
 			}
 			else if(isLikeFloat(strLen, countNumber, countDecimal, countSign, countExponent)){
-					atomicAdd(& d_columnData[actual_col].countFloat, 1L);
+					atomicAdd(& d_columnData[actual_col].countFloat, 1);
 			}
 			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 
 			// a data-time field. Also, if a string has multiple decimals, then is not a legit number.
 			else if(countString > 3 || countDecimal > 1){
-				atomicAdd(& d_columnData[actual_col].countString, 1L);
+				atomicAdd(& d_columnData[actual_col].countString, 1);
 			}
 			else {
 				// A date field can have either one or two '-' or '\'. A legal combination will only have one of them.
 				// To simplify the process of auto column detection, we are not covering all the date-time formation permutations.
 				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && countSlash<=2) ){
 					if((countColon<=2)){
-						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1L);
+						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1);
 					}
 					else{
-						atomicAdd(& d_columnData[actual_col].countString, 1L);
+						atomicAdd(& d_columnData[actual_col].countString, 1);
 					}
 				}
 				// Default field is string type.
 				else{
-					atomicAdd(& d_columnData[actual_col].countString, 1L);
+					atomicAdd(& d_columnData[actual_col].countString, 1);
 				}
 			}
 			actual_col++;

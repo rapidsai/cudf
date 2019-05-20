@@ -47,5 +47,7 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
     return GDF_INT64;
   if (dtype == "long")
     return GDF_INT64;
+  if (dtype == "bool")
+    return GDF_BOOL8;
   return GDF_invalid;
 }
