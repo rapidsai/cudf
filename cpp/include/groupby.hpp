@@ -96,7 +96,6 @@ std::tuple<cudf::table, cudf::table> distributive(
  *             context->flag_null_sort_behavior
  *                    GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
  *                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  *
  * @returns A device vector containing the first index of every unique row.
  */
@@ -115,7 +114,6 @@ gdf_unique_indices(cudf::table const& input_table,
  *             context->flag_null_sort_behavior
  *                      GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
  *                      GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                      GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  *             context-> flag_groupby_include_nulls 
  *                      false = Nulls keys are ignored (Pandas style),
  *                      true = Nulls keys are treated as values. NULL keys will compare as equal NULL == NULL (SQL style)
