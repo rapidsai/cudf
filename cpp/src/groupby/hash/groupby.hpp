@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef NEW_HASH_GROUPBY_HPP
-#define NEW_HASH_GROUPBY_HPP
+#ifndef HASH_GROUPBY_HPP
+#define HASH_GROUPBY_HPP
 
 #include <cudf.h>
 #include <groupby.hpp>

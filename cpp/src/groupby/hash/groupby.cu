@@ -19,6 +19,7 @@
 #include <bitmask/bit_mask.cuh>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
+#include <string/nvcategory_util.hpp>
 #include <table.hpp>
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
@@ -26,7 +27,7 @@
 #include <utilities/device_atomics.cuh>
 #include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
-#include "new_hash_groupby.hpp"
+#include "groupby.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
@@ -602,6 +603,50 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }
 
 }  // namespace detail
+
+std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+                                             cudf::table const& values,
+                                             std::vector<operators> const& ops,
+                                             Options options) {
+  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
+               "Size mismatch between ops and value columns");
+
+  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+    if ((ops[i] == SUM) and
+        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
+      CUDF_FAIL(
+          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
+    }
+  }
+
+  cudf::table output_keys;
+  cudf::table output_values;
+  std::tie(output_keys, output_values) =
+      detail::groupby(keys, values, ops, options);
+
+  // Compact NVCategory columns to contain only the strings referenced by the
+  // indices in the output key/value columns
+  auto gather_nvcategories = [](gdf_column const* input_column,
+                                gdf_column* output_column) {
+    CUDF_EXPECTS(input_column->dtype == output_column->dtype,
+                 "Column type mismatch");
+    if (input_column->dtype == GDF_STRING_CATEGORY) {
+      auto status = nvcategory_gather(
+          output_column,
+          static_cast<NVCategory*>(input_column->dtype_info.category));
+      CUDF_EXPECTS(status == GDF_SUCCESS, "Failed to gather NVCategory.");
+    }
+    return output_column;
+  };
+
+  std::transform(keys.begin(), keys.end(), output_keys.begin(),
+                 output_keys.begin(), gather_nvcategories);
+
+  std::transform(values.begin(), values.end(), output_values.begin(),
+                 output_values.begin(), gather_nvcategories);
+
+  return std::make_tuple(output_keys, output_values);
+}
 }  // namespace hash
 }  // namespace groupby
 }  // namespace cudf
