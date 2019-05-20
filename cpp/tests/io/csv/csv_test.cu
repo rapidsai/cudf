@@ -509,18 +509,19 @@ TEST(gdf_csv_test, IgnoreQuotes)
     }
 }
 
-TEST(gdf_csv_test, SpecifiedBoolValues)
+TEST(gdf_csv_test, Booleans)
 {
-    const std::string fname			= temp_env->get_temp_dir()+"CsvSpecifiedBoolValuesTest.csv";
-    const char* names[]			= { "A", "B", "C" };
-    const char* types[]			= { "int32", "int32", "short" };
-    const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
-    const char* falseValues[]	= { "no", "No", "NO", "Bar", "bar" };
+    const std::string fname = temp_env->get_temp_dir() + "CsvBooleansTest.csv";
+    const char* names[] = {"A", "B", "C", "D"};
+    const char* types[] = {"int32", "int32", "short", "bool"};
+    const char* trueValues[] = {"yes", "Yes", "YES", "foo", "FOO"};
+    const char* falseValues[] = {"no", "No", "NO", "Bar", "bar"};
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "YES,1,bar\nno,2,FOO\nBar,3,yes\nNo,4,NO\nYes,5,foo\n";
+    outfile << "YES,1,bar,true\nno,2,FOO,true\nBar,3,yes,false\nNo,4,NO,"
+              "true\nYes,5,foo,false\n";
     outfile.close();
-    ASSERT_TRUE( checkFile(fname) );
+    ASSERT_TRUE(checkFile(fname));
 
     {
         csv_read_arg args{};
@@ -545,11 +546,17 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
         EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
         ASSERT_EQ( args.data[2]->dtype, GDF_INT16 );
+        ASSERT_EQ( args.data[3]->dtype, GDF_BOOL8 );
 
         auto firstCol = gdf_host_column<int32_t>(args.data[0]);
         EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
         auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
         EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
+        auto fourthCol = gdf_host_column<cudf::bool8>(args.data[3]);
+        EXPECT_THAT(
+            fourthCol.hostdata(),
+            ::testing::ElementsAre(cudf::true_v, cudf::true_v, cudf::false_v,
+                                  cudf::true_v, cudf::false_v));
     }
 }
 
@@ -773,15 +780,15 @@ TEST(gdf_csv_test, BlanksAndComments)
 TEST(gdf_csv_test, Writer)
 {
     const std::string fname	= temp_env->get_temp_dir()+"CsvWriteTest.csv";
-    const char* names[] = { "integer", "float", "string" };
-    const char* types[] = { "int32", "float32", "str" };
+    const char* names[] = { "boolean", "integer", "float", "string" };
+    const char* types[] = { "bool", "int32", "float32", "str" };
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "1,1.0,one" << '\n';
-    outfile << "2,2.25,two" << '\n';
-    outfile << "3,3.50,three" << '\n';
-    outfile << "4,4.75,four" << '\n';
-    outfile << "5,5.0,five" << '\n';
+    outfile << "true,1,1.0,one" << '\n';
+    outfile << "false,2,2.25,two" << '\n';
+    outfile << "false,3,3.50,three" << '\n';
+    outfile << "true,4,4.75,four" << '\n';
+    outfile << "false,5,5.0,five" << '\n';
     outfile.close();
 
     csv_read_arg rargs{};
@@ -803,15 +810,20 @@ TEST(gdf_csv_test, Writer)
     csv_write_arg wargs{};
     wargs.columns = rargs.data;  // columns from reader above
     wargs.filepath = ofname.c_str();
-    wargs.num_cols = std::extent<decltype(names)>::value;
+    wargs.num_cols = rargs.num_cols_out;
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
-    // check result
     std::ifstream infile(ofname);
-    std::string csv((std::istreambuf_iterator<char>(infile)),std::istreambuf_iterator<char>());
-    std::string verify = "\"integer\",\"float\",\"string\"\n1,1,\"one\"\n2,2.25,\"two\"\n3,3.5,\"three\"\n4,4.75,\"four\"\n5,5,\"five\"\n";
-    EXPECT_EQ( csv.compare(verify), 0 );
+    std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
+    std::string verify =
+        "\"boolean\",\"integer\",\"float\",\"string\"\n"
+        "true,1,1,\"one\"\n"
+        "false,2,2.25,\"two\"\n"
+        "false,3,3.5,\"three\"\n"
+        "true,4,4.75,\"four\"\n"
+        "false,5,5,\"five\"\n";
+    EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }
