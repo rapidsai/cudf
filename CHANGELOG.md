@@ -19,6 +19,7 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1759 Add an example showing simultaneous rolling averages to `apply_grouped` documentation
 - PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
