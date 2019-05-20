@@ -16,7 +16,6 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 
-#include <sqls/sqls_rtti_comp.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.h>
 #include <cudf.h>
