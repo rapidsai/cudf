@@ -312,8 +312,7 @@ _join_method_api = {
 
 _null_sort_behavior_api = {
     'null_as_largest': GDF_NULL_AS_LARGEST, 
-    'null_as_smallest': GDF_NULL_AS_SMALLEST,
-    'null_as_largest_multisort': GDF_NULL_AS_LARGEST_FOR_MULTISORT
+    'null_as_smallest': GDF_NULL_AS_SMALLEST
 }
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,

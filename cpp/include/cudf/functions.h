@@ -161,7 +161,6 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
@@ -1043,7 +1042,6 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  *             context->flag_null_sort_behavior
  *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
  *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                        GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
