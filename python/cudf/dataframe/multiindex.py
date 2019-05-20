@@ -306,8 +306,11 @@ class MultiIndex(Index):
             start, stop, step, sln = utils.standard_python_slice(len(self),
                                                                  indices)
             indices = np.arange(start, stop, step)
-        codes = self.codes.take(indices)
-        result = MultiIndex(self.levels, codes)
+        if hasattr(self, '_source_data'):
+            result = MultiIndex(source_data=self._source_data.take(indices))
+        else:
+            codes = self.codes.take(indices)
+            result = MultiIndex(self.levels, codes)
         result.names = self.names
         return result
 
@@ -335,6 +338,20 @@ class MultiIndex(Index):
     @property
     def _values(self):
         return list([i for i in self])
+
+    @classmethod
+    def _concat(cls, objs):
+        from cudf import DataFrame
+        from cudf import MultiIndex
+        _need_codes = not all([hasattr(o, '_source_data') for o in objs])
+        if _need_codes:
+            raise NotImplementedError(
+                    'MultiIndex._concat is only supported '
+                    'for groupby generated MultiIndexes at this time.')
+        else:
+            _source_data = DataFrame._concat([o._source_data for o in objs])
+            index = MultiIndex(source_data=_source_data)
+        return index
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
