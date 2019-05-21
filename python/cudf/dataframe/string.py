@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical, series
+from cudf.dataframe import column, columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
@@ -565,6 +565,20 @@ class StringColumn(columnops.TypedColumnBase):
         result = StringColumn(self.nvcategory.keys())
         return result
 
+    def normalize_binop_value(self, other):
+        if isinstance(other, column.Column):
+            return other.astype(self.dtype)
+        elif hasattr(other, '__str__'):
+            other = str(other)
+            col = utils.scalar_broadcast_to(other,
+                                            shape=len(self),
+                                            dtype="object")
+            return self.replace(data=col.data)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+    def default_na_value(self):
+        return None
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

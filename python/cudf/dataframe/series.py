@@ -671,6 +671,14 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        data = self._column.dropna()
+        index = self.index[self._column != self._column.default_na_value()]
+        return self._copy_construct(data=data)
+
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 

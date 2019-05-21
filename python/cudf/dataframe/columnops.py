@@ -17,6 +17,7 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
+from cudf.bindings.stream_compaction import cpp_drop_nulls
 
 import warnings
 import cudf.bindings.copying as cpp_copying
@@ -88,6 +89,10 @@ class TypedColumnBase(Column):
 
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
+
+    def dropna(self):
+        dropped_col = cpp_drop_nulls(self)
+        return self.replace(data=dropped_col.data, mask=None, null_count=0)
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
