@@ -11,7 +11,8 @@ constexpr size_t GDF_VALID_BITSIZE{(sizeof(gdf_valid_type) * 8)};
 
 extern "C" {
 #include "cudf/functions.h"
-#include "cudf/io_functions.h"
 }
+#include "cudf/io_functions.h"
+
 
 #endif /* GDF_GDF_H */

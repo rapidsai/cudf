@@ -38,8 +38,8 @@
 using std::string;
 using std::vector;
 
-TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
-    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+TempDirTestEnvironment *const temp_env =
+    static_cast<TempDirTestEnvironment *>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct gdf_json_test : GdfTest {};
 
 bool checkFile(std::string fname) {
@@ -47,13 +47,13 @@ bool checkFile(std::string fname) {
   return (stat(fname.c_str(), &st) ? 0 : 1);
 }
 
-template <typename T> std::vector<T> gdf_column_to_host(gdf_column *const col) {
-  auto m_hostdata = std::vector<T>(col->size);
+template <typename T> std::vector<T> gdf_column_to_host(gdf_column const *col) {
+  std::vector<T> m_hostdata(col->size);
   cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
   return m_hostdata;
 }
 
-void checkStrColumn(gdf_column *col, vector<string> refs) {
+void checkStrColumn(gdf_column const *col, vector<string> refs) {
   ASSERT_EQ(col->dtype, GDF_STRING);
 
   const auto stringList = reinterpret_cast<NVStrings *>(col->data);
@@ -139,24 +139,24 @@ TEST_F(gdf_json_test, BasicJsonLines) {
   args.num_cols = 2;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 2);
+    ASSERT_EQ(df.num_rows(), 3);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT32);
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
+
+    const auto firstCol = gdf_column_to_host<int32_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2, 3));
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2, 3.3));
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 2);
-  ASSERT_EQ(args.num_rows_out, 3);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-
-  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
-  ASSERT_EQ(std::string(args.data[1]->col_name), "1");
-
-  const auto firstCol = gdf_column_to_host<int32_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2, 3));
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2, 3.3));
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
@@ -170,27 +170,27 @@ TEST_F(gdf_json_test, JsonLinesStrings) {
   args.num_cols = 3;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 3);
+    ASSERT_EQ(df.num_rows(), 2);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT32);
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
+    ASSERT_EQ(std::string(df.get_column(2)->col_name), "2");
+
+    const auto firstCol = gdf_column_to_host<int32_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2));
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+
+    checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 3);
-  ASSERT_EQ(args.num_rows_out, 2);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT32);
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-
-  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
-  ASSERT_EQ(std::string(args.data[1]->col_name), "1");
-  ASSERT_EQ(std::string(args.data[2]->col_name), "2");
-
-  const auto firstCol = gdf_column_to_host<int32_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2));
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
-
-  checkStrColumn(args.data[2], {"aa ", "  bbb"});
 }
 
 TEST_F(gdf_json_test, JsonLinesDtypeInference) {
@@ -201,31 +201,31 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
   args.lines = true;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 3);
+    ASSERT_EQ(df.num_rows(), 2);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
+    ASSERT_EQ(std::string(df.get_column(2)->col_name), "2");
+
+    const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+
+    checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 3);
-  ASSERT_EQ(args.num_rows_out, 2);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-
-  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
-  ASSERT_EQ(std::string(args.data[1]->col_name), "1");
-  ASSERT_EQ(std::string(args.data[2]->col_name), "2");
-
-  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
-
-  checkStrColumn(args.data[2], {"aa ", "  bbb"});
 }
 
 TEST_F(gdf_json_test, JsonLinesFileInput) {
-  const std::string fname = temp_env->get_temp_dir()+"JsonLinesFileTest.json";
+  const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
   outfile.close();
@@ -237,28 +237,28 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
   args.lines = true;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 2);
+    ASSERT_EQ(df.num_rows(), 2);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
+
+    const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(11, 22));
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 2);
-  ASSERT_EQ(args.num_rows_out, 2);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-
-  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
-  ASSERT_EQ(std::string(args.data[1]->col_name), "1");
-
-  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(11, 22));
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
-  const std::string fname = temp_env->get_temp_dir()+"JsonLinesByteRangeTest.json";
+  const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
@@ -272,23 +272,23 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
   args.byte_range_size = 20;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 1);
+    ASSERT_EQ(df.num_rows(), 3);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
+
+    const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(3000, 4000, 5000));
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 1);
-  ASSERT_EQ(args.num_rows_out, 3);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(std::string(args.data[0]->col_name), "0");
-
-  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(3000, 4000, 5000));
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
-  const std::string fname = temp_env->get_temp_dir()+"JsonLinesObjectsTest.json";
+  const std::string fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
   outfile.close();
@@ -300,24 +300,24 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
   args.lines = true;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 2);
+    ASSERT_EQ(df.num_rows(), 1);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "co\\\"l1");
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "col2");
+
+    const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(1));
+
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(2.0));
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 2);
-  ASSERT_EQ(args.num_rows_out, 1);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(std::string(args.data[0]->col_name), "co\\\"l1");
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-  ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
-
-  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1));
-
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(2.0));
 }
 
 TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
@@ -329,25 +329,25 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   args.lines = true;
 
   try {
-    read_json(&args);
+    const auto df = read_json(&args);
+
+    ASSERT_EQ(df.num_columns(), 3);
+    ASSERT_EQ(df.num_rows(), 2);
+
+    ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+    ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
+
+    ASSERT_EQ(std::string(df.get_column(0)->col_name), "col1");
+    ASSERT_EQ(std::string(df.get_column(1)->col_name), "col2");
+    ASSERT_EQ(std::string(df.get_column(2)->col_name), "col3");
+
+    const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
+    EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
+    const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
+    EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+
+    checkStrColumn(df.get_column(2), {"aaa", "bbb"});
   } catch (std::exception &e) {
     std::cerr << e.what();
   }
-
-  ASSERT_EQ(args.num_cols_out, 3);
-  ASSERT_EQ(args.num_rows_out, 2);
-
-  ASSERT_EQ(args.data[0]->dtype, GDF_INT64);
-  ASSERT_EQ(args.data[1]->dtype, GDF_FLOAT64);
-
-  ASSERT_EQ(std::string(args.data[0]->col_name), "col1");
-  ASSERT_EQ(std::string(args.data[1]->col_name), "col2");
-  ASSERT_EQ(std::string(args.data[2]->col_name), "col3");
-
-  const auto firstCol = gdf_column_to_host<int64_t>(args.data[0]);
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
-  const auto secondCol = gdf_column_to_host<double>(args.data[1]);
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
-
-  checkStrColumn(args.data[2], {"aaa", "bbb"});
 }

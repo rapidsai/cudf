@@ -53,21 +53,17 @@
 
 using string_pair = std::pair<const char *, size_t>;
 
-gdf_error read_json(json_read_arg *args) {
+cudf::table read_json(json_read_arg const *args) {
   // Check if the passed arguments are valid
   CUDF_EXPECTS(args != nullptr, "The args parameter cannot be null.\n");
   CUDF_EXPECTS(args->source != nullptr, "Input source cannot be null.\n");
 
   JsonReader reader(args);
 
-  reader.parse();
-
-  reader.setOutputArguments(args);
-
-  return GDF_SUCCESS;
+  return reader.parse();
 }
 
-JsonReader::JsonReader(json_read_arg *args) : args_(args) {
+JsonReader::JsonReader(json_read_arg const *args) : args_(args) {
   // Check if the passed arguments are supported
   CUDF_EXPECTS(args_->lines, "Only Json Lines format is currently supported.\n");
 }
@@ -96,7 +92,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-void JsonReader::parse() {
+cudf::table JsonReader::parse() {
   ingestRawInput();
   CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
   CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size.\n");
@@ -119,6 +115,13 @@ void JsonReader::parse() {
 
   convertDataToColumns();
   CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
+
+  // Transfer ownership to raw pointer output
+  std::vector<gdf_column *>out_cols(columns_.size());
+  for (size_t i = 0; i < columns_.size(); ++i) {
+    out_cols[i] = columns_[i].release();
+  }
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 /**---------------------------------------------------------------------------*
@@ -421,21 +424,10 @@ void JsonReader::convertDataToColumns() {
   }
 }
 
-void JsonReader::setOutputArguments(json_read_arg *out_args) {
-
-  // Transfer ownership to raw pointer output arguments
-  out_args->data = (gdf_column **)malloc(sizeof(gdf_column *) * columns_.size());
-  for (size_t i = 0; i < columns_.size(); ++i) {
-    out_args->data[i] = columns_[i].release();
-  }
-  out_args->num_cols_out = columns_.size();
-  out_args->num_rows_out = rec_starts_.size();
-}
-
 /**---------------------------------------------------------------------------*
  * @brief Functor for converting plain text data to cuDF data type value.
  *---------------------------------------------------------------------------**/
-struct ConvertFunctor {
+ struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
    * @brief Default template operator() dispatch
    *---------------------------------------------------------------------------**/

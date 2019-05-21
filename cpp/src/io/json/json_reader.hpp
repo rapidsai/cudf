@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <cudf.h>
+#include <table.hpp>
 
 #include "../csv/type_conversion.cuh"
 #include "io/utilities/file_utils.hpp"
@@ -153,7 +154,7 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief JsonReader constructor; throws if the arguments are not supported
    *---------------------------------------------------------------------------**/
-  explicit JsonReader(json_read_arg *args);
+  explicit JsonReader(json_read_arg const *args);
 
   /**---------------------------------------------------------------------------*
    * @brief Parse the input JSON file as specified with the args_ data member
@@ -162,17 +163,5 @@ public:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void parse();
-
-  /**---------------------------------------------------------------------------*
-   * @brief Sets the output paramenters of the read_json call
-   *
-   * Transfers the ownership from private data members without copying
-   * the gdf column data
-   *
-   * @param[out] out_args Pointer to the output structure to be populated
-   *
-   * @return void
-   *---------------------------------------------------------------------------**/
-  void setOutputArguments(json_read_arg *out_args);
+  cudf::table parse();
 };

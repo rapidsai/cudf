@@ -133,9 +133,4 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     for k, v in zip(new_names, outcols):
         df[k] = v
 
-    # Set column to use as row indexes if available
-    if args.index_col is not NULL:
-        df = df.set_index(df.columns[args.index_col[0]])
-        free(args.index_col)
-
     return df

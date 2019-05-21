@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <table.hpp>
+
 /*
  * @brief Interface to parse CSV data to GDF columns
  */
@@ -70,4 +72,4 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  */
-gdf_error read_json(json_read_arg *args);
+cudf::table read_json(json_read_arg const *args);

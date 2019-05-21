@@ -91,7 +91,6 @@ typedef struct {
   int           num_dtype;                  ///< Number of elements in the dtype array
   const char    **dtype;                    ///< Ordered List of data types
 
-  int           *index_col;                 ///< Indexes of columns to use as the row labels of the DataFrame.
   int           *use_cols_int;              ///< Indexes of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
   int           use_cols_int_len;           ///< Number of elements in use_cols_int
   const char    **use_cols_char;            ///< Names of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
@@ -218,20 +217,9 @@ typedef struct {
 } pq_read_arg;
 
 /**---------------------------------------------------------------------------*
- * @brief Input and output arguments to the read_json interface.
+ * @brief Arguments to the read_json interface.
  *---------------------------------------------------------------------------**/
 typedef struct {
-  /*
-   * Output arguments
-   */
-  int           num_cols_out;               ///< Out: Number of columns returned
-  int           num_rows_out;               ///< Out: Number of rows returned
-  gdf_column    **data;                     ///< Out: Array of gdf_column*
-  int           *index_col;                 ///< Out: If available, column index to use as row labels
-
-  /*
-   * Input arguments
-   */
   gdf_input_type source_type;               ///< In: Type of data source
   const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
