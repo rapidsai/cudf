@@ -102,5 +102,9 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     if pq_reader.index_col is not NULL:
         df = df.set_index(df.columns[pq_reader.index_col[0]])
         free(pq_reader.index_col)
+        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+            df.index.name, df.index.name
+        )
+        df.index.name = new_index_name
 
     return df

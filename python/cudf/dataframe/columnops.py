@@ -93,6 +93,37 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
 
+def make_null_like(other, size=None, dtype=None):
+    if size is None:
+        size = other.size
+    if dtype is None:
+        dtype = other.dtype
+    mask = cudautils.make_mask(size)
+    cudautils.fill_value(mask, 0)
+
+    if pd.api.types.is_categorical_dtype(dtype):
+        mem = rmm.device_array((size,), dtype=other.data.dtype)
+        data = Buffer(mem)
+    elif dtype.kind in 'OU':
+        mem = rmm.device_array((size,), dtype='float64')
+        data = nvstrings.dtos(mem,
+                              len(mem),
+                              nulls=mask,
+                              bdevmem=True)
+    else:
+        mem = rmm.device_array((size,), dtype=dtype)
+        data = Buffer(mem)
+    mask = Buffer(mask)
+    categories = None
+    if hasattr(other, 'cat'):
+        categories = other.cat().categories
+    from cudf.dataframe.columnops import build_column
+    return build_column(data,
+                        dtype,
+                        mask,
+                        categories)
+
+
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
     """
@@ -162,16 +193,16 @@ def column_select_by_position(column, positions):
 
 def build_column(buffer, dtype, mask=None, categories=None):
     from cudf.dataframe import numerical, categorical, datetime, string
-    if np.dtype(dtype).type == np.datetime64:
-        return datetime.DatetimeColumn(data=buffer,
-                                       dtype=np.dtype(dtype),
-                                       mask=mask)
-    elif pd.api.types.is_categorical_dtype(dtype):
+    if pd.api.types.is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(data=buffer,
                                              dtype='categorical',
                                              categories=categories,
                                              ordered=False,
                                              mask=mask)
+    elif np.dtype(dtype).type == np.datetime64:
+        return datetime.DatetimeColumn(data=buffer,
+                                       dtype=np.dtype(dtype),
+                                       mask=mask)
     elif np.dtype(dtype).type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError

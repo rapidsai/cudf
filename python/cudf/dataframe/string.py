@@ -521,6 +521,7 @@ class StringColumn(columnops.TypedColumnBase):
     def _replace_defaults(self):
         params = {
             'data': self.data,
+            'mask': self.mask,
             'null_count': self.null_count,
         }
         return params
