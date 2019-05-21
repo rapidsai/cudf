@@ -27,8 +27,6 @@
 
 #include "rmm/thrust_rmm_allocator.h"
 
-#include "../sqls/sqls_rtti_comp.h"
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Sorts an array of gdf_column.

@@ -10,6 +10,7 @@
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
+- PR #1527 Support GDF_BOOL8 in readers and writers
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -25,6 +26,7 @@
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
 - PR #1795 Add printing of git submodule info to `print_env.sh`
+- PR #1796 Removing old sort based group by code and gdf_filter
 
 ## Bug Fixes
 
@@ -48,6 +50,7 @@
 - PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
 - PR #1786 Maintain the original series name in series.unique output
+- PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 
 
 # cudf 0.7.2 (16 May 2019)

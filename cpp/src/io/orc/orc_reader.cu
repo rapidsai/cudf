@@ -54,6 +54,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     const orc::SchemaType &schema) {
   switch (schema.kind) {
     case orc::BOOLEAN:
+      return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::BYTE:
       return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::SHORT:

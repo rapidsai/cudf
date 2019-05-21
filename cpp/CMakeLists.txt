@@ -229,7 +229,6 @@ add_library(cudf SHARED
             src/orderby/orderby.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
-            src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
