@@ -21,6 +21,7 @@
 #include <cassert>
 #include <types.hpp>
 
+#include <initializer_list>
 #include <vector>
 
 // Forward declaration
@@ -33,6 +34,8 @@ namespace cudf {
  *
  */
 struct table {
+  table(std::vector<gdf_column*> const& cols);
+
   /**---------------------------------------------------------------------------*
    * @brief Constructs a table object from an array of `gdf_column`s
    *
@@ -40,6 +43,8 @@ struct table {
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols);
+
+  table(std::initializer_list<gdf_column*> list);
 
   /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.
