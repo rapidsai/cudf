@@ -247,6 +247,7 @@ typedef enum {
   GDF_FLOOR,        ///< largest integer value not greater than arg
   GDF_ABS,          ///< Absolute value
   GDF_BIT_INVERT,   ///< Bitwise Not (~)
+  GDF_NOT,          ///< Logical Not (!)
 } gdf_unary_math_op;
 
 
