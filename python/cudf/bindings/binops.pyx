@@ -197,21 +197,64 @@ cdef apply_compiled_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, 
     else:
         return 0
 
+# Not sure where to put this
+def _is_single_value(val):
+    from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
+            return (
+                    isinstance(val, str)
+                    or isinstance(val, numbers.Number)
+                    or is_datetime_or_timedelta_dtype(val)
+                    or isinstance(val, pd.Timestamp)
+                    or isinstance(val, pd.Categorical)
+                    )
+
 
 def apply_op(lhs, rhs, out, op):
     """
     Dispatches a binary op call to the appropriate libcudf function
     """
-    check_gdf_compatibility(lhs)
-    check_gdf_compatibility(rhs)
     check_gdf_compatibility(out)
-
-    cdef gdf_column* c_lhs = column_view_from_column(lhs)
-    cdef gdf_column* c_rhs = column_view_from_column(rhs)
     cdef gdf_column* c_out = column_view_from_column(out)
 
     cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
+
+    # Simultaneously track whether we have any scalars, and which one
+    # TODO is this the cleanest way?
+    left = None
+
+    # Check if either lhs or rhs are scalars
+    # TODO do we need to check if both are scalars?
+    # TODO would we prefer to put scalars on stack instead of heap?
+    if _is_single_value(lhs):
+        cdef gdf_scalar *s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+        gdf_scalar_from_scalar(<gdf_scalar*>s, lhs)
+        left = True
+    else:
+        check_gdf_compatibility(lhs)
+        cdef gdf_column* c_col = column_view_from_column(lhs)
+
+    if _is_single_value(rhs):
+        cdef gdf_scalar *s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+        gdf_scalar_from_scalar(<gdf_scalar*>s, rhs)
+        left = False
+    else:
+        check_gdf_compatibility(rhs)
+        cdef gdf_column* c_col = column_view_from_column(rhs)
+
+    # Careful, because None is a sentinel value here, `if left:` doesn't work
+    if left is not None:
+        nullct = apply_scalar_op(
+                <gdf_scalar*> s,
+                <gdf_column*> c_col,
+                <gdf_column*> out,
+                op,
+                left)
+        
+        free(c_out)
+        free(s)
+        free(c_col)
+        return nullct
 
     if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
         try:
@@ -245,9 +288,9 @@ def apply_op(lhs, rhs, out, op):
 
     return nullct
 
-cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out, op, left):
+cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out, 
+                     gdf_binary_operator op, left):
     cdef gdf_error result
-    cdef gdf_binary_operator c_op = _BINARY_OP[op]
 
     with nogil:
         if left:
@@ -255,41 +298,43 @@ cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out, op, left):
                     <gdf_column*>out,
                     <gdf_scalar*>s,
                     <gdf_column*>col,
-                    op)
+                    <gdf_binary_operator>op)
         else:
             result = gdf_binary_operation_v_s(
                     <gdf_column*>out,
                     <gdf_column*>col,
                     <gdf_scalar*>s,
-                    op)
+                    <gdf_binary_operator>op)
 
     check_gdf_error(result)
+    cdef int nullct = c_out[0].null_count
+    return nullct
 
 
-// def apply_scalar_eq(lhs, s_dtype, rhs, out):
-//     check_gdf_compatibility(rhs)
-//     check_gdf_compatibility(out)
+# // def apply_scalar_eq(lhs, s_dtype, rhs, out):
+# //     check_gdf_compatibility(rhs)
+# //     check_gdf_compatibility(out)
 
-//     cdef gdf_scalar* s_lhs = <gdf_scalar*>malloc(sizeof(gdf_scalar))
-//     if s_lhs == NULL:
-//         # TODO what do?
+# //     cdef gdf_scalar* s_lhs = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+# //     if s_lhs == NULL:
+# //         # TODO what do?
 
-//     s_lhs.gdf_data = lhs
-//     s_lhs.gdf_dtype = s_dtype
-//     cdef gdf_column* c_rhs = column_view_from_column(rhs)
-//     cdef gdf_column* out = column_view_from_column(out)
+# //     s_lhs.gdf_data = lhs
+# //     s_lhs.gdf_dtype = s_dtype
+# //     cdef gdf_column* c_rhs = column_view_from_column(rhs)
+# //     cdef gdf_column* out = column_view_from_column(out)
 
-//     if s_lhs.dtype == c_rhs.dtype:
-//         cdef gdf_binary_operator op = _BINARY_OP['eq']
-//         cdef gdf_error result
-//         result = gdf_binary_operation_s_v(
-//             <gdf_column*>out,
-//             <gdf_scalar*>s_lhs,
-//             <gdf_column*>c_rhs,
+# //     if s_lhs.dtype == c_rhs.dtype:
+# //         cdef gdf_binary_operator op = _BINARY_OP['eq']
+# //         cdef gdf_error result
+# //         result = gdf_binary_operation_s_v(
+# //             <gdf_column*>out,
+# //             <gdf_scalar*>s_lhs,
+# //             <gdf_column*>c_rhs,
 
-//         )
+# //         )
 
-//     check_gdf_error(result)
-//     free(s_lhs)
-//     free(c_rhs) # TODO do i need to free this?
-//     free(out) # TODO do i need to free this?
+# //     check_gdf_error(result)
+# //     free(s_lhs)
+# //     free(c_rhs) # TODO do i need to free this?
+# //     free(out) # TODO do i need to free this?
