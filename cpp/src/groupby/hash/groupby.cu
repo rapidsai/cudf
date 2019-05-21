@@ -17,6 +17,7 @@
 #include <cudf.h>
 #include <bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
+#include <copying.hpp>
 #include <groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
@@ -189,12 +190,23 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   }
   CHECK_STREAM(stream);
 
+  cudf::table output_keys{cudf::allocate_like(keys, stream)};
+  cudf::table output_values{cudf::allocate_like(values, stream)};
+
+  auto d_output_keys = device_table::create(output_keys);
+  auto d_output_values = device_table::create(output_values);
+
+  rmm::device_vector<gdf_size_type> result_size(1, 0);
+
+  extract_groupby_result<keys_have_nulls, values_have_nulls>
+      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
+         stream>>>(map.get(), *d_input_keys, *d_output_keys,
+                   *d_sparse_output_values, *d_output_values,
+                   result_size.data().get());
+
+  CHECK_STREAM(stream);
+
   // TODO Set output key/value columns null counts
-  cudf::table output_keys;
-  cudf::table output_values;
-
-  // TODO Extract results
-
   return std::make_tuple(output_keys, output_values);
 }
 }  // namespace
