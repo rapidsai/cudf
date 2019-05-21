@@ -196,15 +196,31 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   auto d_output_keys = device_table::create(output_keys);
   auto d_output_values = device_table::create(output_values);
 
-  rmm::device_vector<gdf_size_type> result_size(1, 0);
+  gdf_size_type* d_result_size{nullptr};
+  RMM_TRY(RMM_ALLOC(&d_result_size, sizeof(gdf_size_type), stream));
+  CUDA_TRY(cudaMemsetAsync(d_result_size, 0, sizeof(gdf_size_type), stream));
 
   extract_groupby_result<keys_have_nulls, values_have_nulls>
       <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
          stream>>>(map.get(), *d_input_keys, *d_output_keys,
-                   *d_sparse_output_values, *d_output_values,
-                   result_size.data().get());
+                   *d_sparse_output_values, *d_output_values, d_result_size);
 
   CHECK_STREAM(stream);
+
+  gdf_size_type result_size{-1};
+  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
+                           cudaMemcpyDeviceToHost, stream));
+
+  // Update size and null count of output columns
+  auto update_column = [result_size](gdf_column* col) {
+    col->size = result_size;
+    set_null_count(*col);
+    return col;
+  };
+  std::transform(output_keys.begin(), output_keys.end(), output_keys.begin(),
+                 update_column);
+  std::transform(output_values.begin(), output_values.end(),
+                 output_values.begin(), update_column);
 
   // TODO Set output key/value columns null counts
   return std::make_tuple(output_keys, output_values);
