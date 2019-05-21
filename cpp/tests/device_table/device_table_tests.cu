@@ -17,6 +17,7 @@
 #include <bitmask/bit_mask.cuh>
 #include <bitmask/bitmask_ops.hpp>
 #include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"

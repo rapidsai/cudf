@@ -10,9 +10,10 @@
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
+- PR #1527 Support GDF_BOOL8 in readers and writers
 
 ## Improvements
-
+- PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
 - PR #1701 Added `unique` method for stringColumns
@@ -23,6 +24,8 @@
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
+- PR #1739 ORC Reader: Add more pytest coverage
+- PR #1796 Removing old sort based group by code and gdf_filter
 
 ## Bug Fixes
 
@@ -43,11 +46,28 @@
 - PR #1758 Fix df.set_index() when setting index from an empty column
 - PR #1749 ORC reader: fix long strings of NULL values resulting in incorrect data
 - PR #1742 Parquet Reader: Fix index column name to match PANDAS compat
+- PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
+- PR #1786 Maintain the original series name in series.unique output
+- PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
 
 
-# cuDF 0.7.1 (11 May 2019)
+# cudf 0.7.2 (16 May 2019)
+
+## New Features
+
+- PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
+- PR #1741 Add MultiIndex concatenation
+
+## Bug Fixes
+
+- PR #1718 Fix issue with SeriesGroupBy MultiIndex in dask-cudf
+- PR #1734 Python: fix performance regression for groupby count() aggregations
+- PR #1768 Cython: fix handling read only schema buffers in gpuarrow reader
+
+
+# cudf 0.7.1 (11 May 2019)
 
 ## New Features
 

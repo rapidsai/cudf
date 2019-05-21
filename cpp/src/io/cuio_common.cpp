@@ -21,10 +21,11 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
   if (dtype == "timestamp") return GDF_TIMESTAMP;
   if (dtype == "category") return GDF_CATEGORY;
   if (dtype == "date32") return GDF_DATE32;
+  if (dtype == "bool" || dtype == "boolean") return GDF_BOOL8;
   if (dtype == "date" || dtype == "date64") return GDF_DATE64;
   if (dtype == "float" || dtype == "float32") return GDF_FLOAT32;
   if (dtype == "double" || dtype == "float64") return GDF_FLOAT64;
-  if (dtype == "bool" || dtype == "int8") return GDF_INT8;
+  if (dtype == "byte" || dtype == "int8") return GDF_INT8;
   if (dtype == "short" || dtype == "int16") return GDF_INT16;
   if (dtype == "int" || dtype == "int32") return GDF_INT32;
   if (dtype == "long" || dtype == "int64") return GDF_INT64;
