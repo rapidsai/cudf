@@ -968,7 +968,7 @@ class Series(object):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
-        # if all the elements of value column is None then propagate the
+        # if all the elements of value column are None then propagate the
         # same dtype as self.dtype in columnops.as_column() for value
         all_nan = False
         if not is_scalar(to_replace):

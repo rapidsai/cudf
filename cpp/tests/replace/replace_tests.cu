@@ -112,8 +112,8 @@ struct ReplaceTest : public GdfTest
     bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
     const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(this->new_valid_column.data());
 
-    const bool is_col_valid = (typed_col_valid != nullptr);
-    const bool is_new_valid = (typed_new_valid != nullptr);
+    const bool col_is_nullable = (typed_col_valid != nullptr);
+    const bool new_is_nullable = (typed_new_valid != nullptr);
 
     for(size_t i = 0; i < old_values_column.size(); i++)
     {
@@ -122,10 +122,10 @@ struct ReplaceTest : public GdfTest
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
-        if((!is_col_valid || bit_mask::is_valid(typed_col_valid, k)) && (element == this->old_values_column[i])) {
+        if((!col_is_nullable || bit_mask::is_valid(typed_col_valid, k)) && (element == this->old_values_column[i])) {
           toBeReplaced = true;
           isReplaced[k] = toBeReplaced;
-          if(is_new_valid && !bit_mask::is_valid(typed_new_valid, i)){
+          if(new_is_nullable && !bit_mask::is_valid(typed_new_valid, i)){
               if(print)std::cout << "clearing bit at: "<<k<<"\n";
               bit_mask::clear_bit_unsafe(typed_col_valid, (int)k);
             }
@@ -296,7 +296,7 @@ TYPED_TEST(ReplaceTest, NullsInData)
   this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0x0F}, {2, 6, 4, 8}, {0, 4, 2, 6}, {});
 
   bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
-  const bool is_col_valid = (typed_col_valid != nullptr);
+  const bool col_is_nullable = (typed_col_valid != nullptr);
 
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
@@ -304,7 +304,7 @@ TYPED_TEST(ReplaceTest, NullsInData)
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
    // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
-    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+    if(!col_is_nullable || bit_mask::is_valid(typed_col_valid, i))
       EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
@@ -315,7 +315,7 @@ TYPED_TEST(ReplaceTest, NullsInNewValues)
   this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0xFF}, {2, 6, 4, 8}, {0, 4, 2, 6}, {0x0});
 
   bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
-  const bool is_col_valid = (typed_col_valid != nullptr);
+  const bool col_is_nullable = (typed_col_valid != nullptr);
 
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
@@ -323,7 +323,7 @@ TYPED_TEST(ReplaceTest, NullsInNewValues)
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
    // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
-    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+    if(!col_is_nullable || bit_mask::is_valid(typed_col_valid, i))
       EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
@@ -334,7 +334,7 @@ TYPED_TEST(ReplaceTest, NullsInBoth)
   this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {0xF0}, {2, 6, 4, 8}, {0, 4, 2, 6}, {0x0});
 
   bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(this->replace_valid_column.data());
-  const bool is_col_valid = (typed_col_valid != nullptr);
+  const bool col_is_nullable = (typed_col_valid != nullptr);
 
   auto reference_result = this->compute_reference_solution();
   auto gdf_result = this->compute_gdf_result();
@@ -342,7 +342,7 @@ TYPED_TEST(ReplaceTest, NullsInBoth)
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
    // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
-    if(!is_col_valid || bit_mask::is_valid(typed_col_valid, i))
+    if(!col_is_nullable || bit_mask::is_valid(typed_col_valid, i))
       EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }

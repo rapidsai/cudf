@@ -49,7 +49,7 @@ namespace{ //anonymous
    */
   /* ----------------------------------------------------------------------------*/
   template <class T,
-            bool is_col_valid, bool is_new_valid>
+            bool col_is_nullable, bool new_is_nullable>
   __global__
   void replace_kernel(T*                          d_col_data,
                       gdf_size_type                      nrows,
@@ -63,12 +63,12 @@ namespace{ //anonymous
     gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
     while(i < nrows)
     {
-      if ( !is_col_valid || bit_mask::is_valid(col_valid, i)){
+      if ( !col_is_nullable || bit_mask::is_valid(col_valid, i)){
           auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
 
           if (found_ptr != old_values_end) {
               auto d = thrust::distance(old_values_begin, found_ptr);
-              if (!is_new_valid || bit_mask::is_valid(new_valid, d)){
+              if (!new_is_nullable || bit_mask::is_valid(new_valid, d)){
                 d_col_data[i] = d_new_values[d];
               }
               else{
@@ -91,41 +91,37 @@ namespace{ //anonymous
   /* ----------------------------------------------------------------------------*/
   struct replace_kernel_forwarder {
     template <typename col_type>
-    void operator()(void*       d_col_data,
-                    gdf_size_type      nrows,
-                    const void* d_old_values,
-                    const void* d_new_values,
-                    gdf_size_type     nvalues,
-                    gdf_valid_type* col_valid,
-                    gdf_valid_type* new_valid)
+    void operator()(gdf_column*       col,
+                    const gdf_column* old_values,
+                    const gdf_column* new_values)
     {
-      const bool is_col_valid = (col_valid != nullptr);
-      const bool is_new_valid = (new_valid != nullptr);
+      const bool col_is_nullable = (col->valid != nullptr);
+      const bool new_is_nullable = (new_values->valid != nullptr);
 
-      bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(col_valid);
-      const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(new_valid);
+      bit_mask::bit_mask_t *typed_col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(col->valid);
+      const bit_mask::bit_mask_t *typed_new_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(new_values->valid);
 
-      thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
+      thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(old_values->data));
 
-      const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
+      cudf::util::cuda::grid_config_1d grid{col->size, BLOCK_SIZE, 1};
 
       auto replace = replace_kernel<col_type, true, true>;
 
-      if(true == is_col_valid && false == is_new_valid){
+      if(true == col_is_nullable && false == new_is_nullable){
         replace = replace_kernel<col_type, true, false>;
       }
-      else if (false == is_col_valid && true == is_new_valid){
+      else if (false == col_is_nullable && true == new_is_nullable){
         replace = replace_kernel<col_type, false, true>;
       }
-      else if (false == is_col_valid && false == is_new_valid){
+      else if (false == col_is_nullable && false == new_is_nullable){
         replace = replace_kernel<col_type, false, false>;
       }
 
-      replace<<<grid_size, BLOCK_SIZE>>>(static_cast<col_type*>(d_col_data),
-                                             nrows,
+      replace<<<grid.num_blocks, BLOCK_SIZE>>>(static_cast<col_type*>(col->data),
+                                             col->size,
                                              old_values_begin,
-                                             old_values_begin + nvalues,
-                                             static_cast<const col_type*>(d_new_values),
+                                             old_values_begin + new_values->size,
+                                             static_cast<const col_type*>(new_values->data),
                                              typed_col_valid,
                                              typed_new_valid);
     }
@@ -142,13 +138,9 @@ namespace{ //anonymous
     GDF_REQUIRE((new_values->valid != nullptr) ? col->valid != nullptr : 1, GDF_VALIDITY_UNSUPPORTED);
 
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
-                          col->data,
-                          col->size,
-                          old_values->data,
-                          new_values->data,
-                          new_values->size,
-                          col->valid,
-                          new_values->valid);
+                          col,
+                          old_values,
+                          new_values);
 
     return GDF_SUCCESS;
   }

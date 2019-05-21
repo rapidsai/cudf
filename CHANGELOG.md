@@ -24,7 +24,7 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
-- PR #1696 Added support in `Series.replace()` with nulls.
+- PR #1696 Added null support in `Series.replace()`.
 
 ## Bug Fixes
 
