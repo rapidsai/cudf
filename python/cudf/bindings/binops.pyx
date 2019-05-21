@@ -244,3 +244,52 @@ def apply_op(lhs, rhs, out, op):
     free(c_out)
 
     return nullct
+
+cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out, op, left):
+    cdef gdf_error result
+    cdef gdf_binary_operator c_op = _BINARY_OP[op]
+
+    with nogil:
+        if left:
+            result = gdf_binary_operation_s_v(
+                    <gdf_column*>out,
+                    <gdf_scalar*>s,
+                    <gdf_column*>col,
+                    op)
+        else:
+            result = gdf_binary_operation_v_s(
+                    <gdf_column*>out,
+                    <gdf_column*>col,
+                    <gdf_scalar*>s,
+                    op)
+
+    check_gdf_error(result)
+
+
+// def apply_scalar_eq(lhs, s_dtype, rhs, out):
+//     check_gdf_compatibility(rhs)
+//     check_gdf_compatibility(out)
+
+//     cdef gdf_scalar* s_lhs = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+//     if s_lhs == NULL:
+//         # TODO what do?
+
+//     s_lhs.gdf_data = lhs
+//     s_lhs.gdf_dtype = s_dtype
+//     cdef gdf_column* c_rhs = column_view_from_column(rhs)
+//     cdef gdf_column* out = column_view_from_column(out)
+
+//     if s_lhs.dtype == c_rhs.dtype:
+//         cdef gdf_binary_operator op = _BINARY_OP['eq']
+//         cdef gdf_error result
+//         result = gdf_binary_operation_s_v(
+//             <gdf_column*>out,
+//             <gdf_scalar*>s_lhs,
+//             <gdf_column*>c_rhs,
+
+//         )
+
+//     check_gdf_error(result)
+//     free(s_lhs)
+//     free(c_rhs) # TODO do i need to free this?
+//     free(out) # TODO do i need to free this?

@@ -96,6 +96,14 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
+cdef gdf_scalar_from_scalar(gdf_scalar* s, val, dtype):
+    """ Initialize a `gdf_scalar` with dtype `dtype` and value `val`
+    """
+    if s is NULL:
+        raise TypeError('Cannot initialize a NULL pointer')
+    gdf_scalar.gdf_data = val
+    gdf_scalar.gdf_dtype = dtype
+
 cdef get_scalar_value(gdf_scalar scalar):
     """
     Returns typed value from a gdf_scalar
