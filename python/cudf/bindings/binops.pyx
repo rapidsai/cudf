@@ -231,7 +231,10 @@ def apply_op(lhs, rhs, out, op):
     # Check if either lhs or rhs are scalars
     # TODO do we need to check if both are scalars?
     # if _is_single_value(lhs):
+    print("lhs: {}".format(type(lhs)))
+    print("rhs: {}".format(type(rhs)))
     if not isinstance(lhs, Column):
+        print("in lhs")
         s = gdf_scalar_from_scalar(lhs)
         left = True
     else:
@@ -241,6 +244,7 @@ def apply_op(lhs, rhs, out, op):
 
     # if _is_single_value(rhs):
     if not isinstance(rhs, Column):
+        print("in rhs")
         gdf_scalar_from_scalar(rhs)
         left = False
     else:
@@ -250,6 +254,7 @@ def apply_op(lhs, rhs, out, op):
 
     # Careful, because None is a sentinel value here, `if left:` doesn't work
     if left is not None:
+
         nullct = apply_scalar_op(
                 <gdf_scalar*> s,
                 <gdf_column*> c_col,
@@ -260,6 +265,7 @@ def apply_op(lhs, rhs, out, op):
         free(c_out)
         free(s)
         free(c_col)
+        print(nullct)
         return nullct
 
     if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:

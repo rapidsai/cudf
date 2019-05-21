@@ -103,6 +103,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
         # TODO what should be done here?
         raise MemoryError
 
+    print(type(s[0]))
     s[0].gdf_data = val
 
     if dtype is not None:
