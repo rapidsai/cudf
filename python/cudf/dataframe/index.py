@@ -21,6 +21,7 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
+from cudf.indexing import _IndexLocIndexer
 
 import cudf.bindings.copying as cpp_copying
 
@@ -292,6 +293,9 @@ class Index(object):
         from cudf.dataframe.series import Series
         return Series(self._values)
 
+    @property
+    def loc(self):
+        return _IndexLocIndexer(self)
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.

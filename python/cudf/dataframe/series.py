@@ -679,9 +679,11 @@ class Series(object):
         """
         Return a Series with null values removed.
         """
+        if self.null_count == 0:
+            return self
         data = self._column.dropna()
-        index = self.index[self._column != self._column.default_na_value()]
-        return self._copy_construct(data=data)
+        index = self.index.loc[(self != self._column.default_na_value()).fillna(False)]
+        return self._copy_construct(data=data, index=index)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
