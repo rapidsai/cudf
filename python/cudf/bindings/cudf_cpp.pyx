@@ -17,7 +17,7 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
-from cudf.dataframe import columnops
+import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
@@ -97,27 +97,19 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
-# cdef gdf_scalar_from_scalar(gdf_scalar* s, val, dtype=None):
-#     """ 
-#     Initialize a `gdf_scalar` with dtype `dtype` and value `val`. If not
-#     provided, dtype is inferred
-#     """
-#     if s is NULL:
-#         raise TypeError('Cannot initialize a NULL pointer')
-
-#     gdf_scalar.gdf_data = val
-
-#     if dtype is not None:
-#         gdf_scalar.gdf_dtype = dtype
-#     else:
-#         # potential overhead here
-#         gdf_scalar.gdf_dtype = columnops.as_column(val).dtype
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
     cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     if s is NULL:
+        # TODO what should be done here?
         raise MemoryError
-    s.gdf_data = <gdf_data>val
-    s.gdf_dtype = <gdf_dtype>columnops.as_column(val).dtype
+
+    s[0].gdf_data = val
+
+    if dtype is not None:
+        s[0].gdf_dtype = dtype
+    # TODO potential overhead here using as_column
+    s[0].gdf_dtype = cudf.dataframe.columnops.as_column(val).dtype
+
     return s
 
 cdef get_scalar_value(gdf_scalar scalar):
