@@ -34,6 +34,11 @@ namespace cudf {
  *
  */
 struct table {
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a table from a vector of `gdf_column` pointers
+   *
+   * @param cols The vector of columns wrapped by the table
+   *---------------------------------------------------------------------------**/
   table(std::vector<gdf_column*> const& cols);
 
   /**---------------------------------------------------------------------------*
@@ -44,6 +49,11 @@ struct table {
    *---------------------------------------------------------------------------**/
   table(gdf_column* cols[], gdf_size_type num_cols);
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a table from an initializer_list of `gdf_column` pointers
+   *
+   * @param list The initializer_list of `gdf_column` pointers
+   * ---------------------------------------------------------------------------**/
   table(std::initializer_list<gdf_column*> list);
 
   /**---------------------------------------------------------------------------*
