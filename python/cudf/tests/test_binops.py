@@ -98,6 +98,36 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     np.testing.assert_almost_equal(result.to_array(), binop(arr1, arr2))
 
 
+_logical_binops = [
+    operator.and_,
+    operator.or_,
+]
+
+
+@pytest.mark.parametrize('obj_class', ['Series', 'Index'])
+@pytest.mark.parametrize('binop', _logical_binops)
+def test_series_logical_binop(binop, obj_class):
+    import pandas as pd
+
+    arr1 = pd.Series(np.random.choice([True, False], 100))
+    sr1 = Series(arr1)
+
+    arr2 = pd.Series(np.random.choice([True, False], 100))
+    sr2 = Series(arr2)
+
+    if obj_class == 'Index':
+        sr1 = as_index(sr1)
+        sr2 = as_index(sr2)
+
+    result = binop(sr1, sr2)
+    expect = binop(arr1, arr2)
+
+    if obj_class == 'Index':
+        result = Series(result)
+
+    np.testing.assert_almost_equal(result.to_array(), expect.to_numpy())
+
+
 _cmpops = [
     operator.lt,
     operator.gt,

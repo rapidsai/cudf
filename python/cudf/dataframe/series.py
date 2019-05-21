@@ -508,8 +508,6 @@ class Series(object):
                 np.issubdtype(other.dtype, np.integer)):
             # this broke Series (op) DataFrame because dataframe doesn't have dtype
             return self._binaryop(other, op)
-        # (1) Allow bool and check what happens.
-        # It worked but I'm not sure if it's right
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
@@ -518,10 +516,8 @@ class Series(object):
 
     def __and__(self, other):
         """Performs vectorized bitwise and (&) on corresponding elements of two
-        series.
+        series. Performs logical AND if one of the series is of bool dtype.
         """
-        # Check if bool and pass logical-and in arg (requires logical-and in libcudf)
-        # Do this after (1) fails
         if (np.issubdtype(self.dtype, np.bool_) or
                 np.issubdtype(other.dtype, np.bool_)):
             return self._binaryop(other, 'l_and')
@@ -529,9 +525,8 @@ class Series(object):
 
     def __or__(self, other):
         """Performs vectorized bitwise or (|) on corresponding elements of two
-        series.
+        series. Performs logical OR if one of the series is of bool dtype.
         """
-        # Check if bool and pass logical-or in arg (requires logical-or in libcudf)
         if (np.issubdtype(self.dtype, np.bool_) or
                 np.issubdtype(other.dtype, np.bool_)):
             return self._binaryop(other, 'l_or')
