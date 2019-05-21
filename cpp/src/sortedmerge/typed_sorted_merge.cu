@@ -7,7 +7,6 @@
 #include <thrust/sequence.h>
 
 #include "rmm/thrust_rmm_allocator.h"
-#include "sqls/sqls_rtti_comp.h"
 
 #include "alloc_filtered_cols.cuh"
 #include "pair_rtti.cuh"

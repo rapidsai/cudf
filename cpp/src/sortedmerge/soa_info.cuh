@@ -2,7 +2,7 @@
 
 #include <cudf.h>
 #include "rmm/thrust_rmm_allocator.h"
-#include "sqls/sqls_rtti_comp.h"
+#include "utilities/cudf_utils.h"
 
 #define INITIALIZE_D_VALUES(PREFIX)                                            \
     rmm::device_vector<void *>           PREFIX##_d_cols(ncols);               \

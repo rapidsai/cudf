@@ -49,7 +49,7 @@ TYPED_TEST(SortedMergeTest, MergeTwoSortedColumns) {
     cudf::test::column_wrapper<int8_t> ordersWrap(std::vector<int8_t>({GDF_ORDER_ASC, GDF_ORDER_DESC}));
     gdf_column *orders = ordersWrap.get();
 
-    cudf::test::column_wrapper<int32_t> outputIndicesWrap({0}, std::vector<gdf_valid_type>{});
+    cudf::test::column_wrapper<int32_t> outputIndicesWrap({0});
     gdf_column *outputIndices = outputIndicesWrap.get();
 
     const gdf_size_type columnsLength = 2;

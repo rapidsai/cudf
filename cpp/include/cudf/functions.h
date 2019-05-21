@@ -1,43 +1,43 @@
 #pragma once
 
-/**
+/** 
  * @brief  Start a NVTX range with predefined color.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * demarcates the begining of a user-defined range with a specified name and
  * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
  * nested within other ranges.
- *
+ * 
  * @param[in] name The name of the NVTX range
  * @param[in] color The predefined gdf_color enum to use to color this range
- *
- * @returns
+ * 
+ * @returns   
  */
 gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
 
-/**
+/** 
  * @brief  Start a NVTX range with a custom ARGB color code.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * demarcates the begining of a user-defined range with a specified name and
  * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
  * nested within other ranges.
- *
+ * 
  * @param[in] name The name of the NVTX range
  * @param[in] color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
- *
- * @returns
+ * 
+ * @returns   
  */
 gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
 
-/**
+/** 
  * @brief Ends the inner-most NVTX range.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * will demarcate the end of the inner-most range, i.e., the most recent call to
  * gdf_nvtx_range_push.
- *
- * @returns
+ * 
+ * @returns   
  */
 gdf_error gdf_nvtx_range_pop();
 
@@ -77,14 +77,14 @@ gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 /* column operations */
 
-/**
+/** 
  * @brief Return the size of the gdf_column data type.
  *
  * @returns gdf_size_type Size of the gdf_column data type.
  */
 gdf_size_type gdf_column_sizeof();
 
-/**
+/** 
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
  *        datatype
  *
@@ -93,13 +93,13 @@ gdf_size_type gdf_column_sizeof();
  * @param[in] valid Pointer to validity bitmask for the data.
  * @param[in] size Number of rows in the column.
  * @param[in] dtype Data type of the column.
- *
+ * 
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
-/**
+/** 
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
  *        datatype, and count of null (non-valid) elements
  *
@@ -110,18 +110,18 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @param[in] dtype Data type of the column.
  * @param[in] null_count The number of non-valid elements in the validity bitmask.
  * @param[in] extra_info see gdf_dtype_extra_info. Extra data for column description.
- *
+ * 
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
 gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count,
                           gdf_dtype_extra_info extra_info);
 
-/**
+/** 
  * @brief Free the CUDA device memory of a gdf_column
  *
  * @param[in,out] column Data and validity bitmask pointers of this column will be freed
- *
+ * 
  * @returns gdf_error GDF_SUCCESS or GDF_ERROR if there is an error freeing the data
  */
 gdf_error gdf_column_free(gdf_column *column);
@@ -129,7 +129,7 @@ gdf_error gdf_column_free(gdf_column *column);
 /**
  * @brief Concatenates multiple gdf_columns into a single, contiguous column,
  * including the validity bitmasks.
- *
+ * 
  * Note that input columns with nullptr validity masks are treated as if all
  * elements are valid.
  *
@@ -138,7 +138,7 @@ gdf_error gdf_column_free(gdf_column *column);
  *             validity bitmasks
  * @param[in] columns_to_concat[] The columns to concatenate
  * @param[in] num_columns The number of columns to concatenate
- *
+ * 
  * @return gdf_error GDF_SUCCESS upon completion; GDF_DATASET_EMPTY if any data
  *         pointer is NULL, GDF_COLUMN_SIZE_MISMATCH if the output column size
  *         != the total size of the input columns; GDF_DTYPE_MISMATCH if the
@@ -367,7 +367,7 @@ gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
- *
+ * 
  * @param[in] ncols Number of columns in in_cols
  * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
  * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
@@ -379,13 +379,13 @@ gdf_error gdf_transpose(gdf_size_type ncols,
 
 // joins
 
-/**
+/** 
  * @brief  Performs an inner join on the specified columns of two
  * dataframes (left, right)
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
  * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
  * returned.
- *
+ * 
  * @param[in] left_cols[] The columns of the left dataframe
  * @param[in] num_left_cols The number of columns in the left dataframe
  * @param[in] left_join_cols[] The column indices of columns from the left dataframe
@@ -402,25 +402,12 @@ gdf_error gdf_transpose(gdf_size_type ncols,
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
- *
+ * 
  * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
 gdf_error gdf_inner_join(
-                         gdf_column **left_cols,
-                         int num_left_cols,
-                         int left_join_cols[],
- * @param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
- * the left and right tables on the specified columns
- * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
- * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- *
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
- * error code
- */
-gdf_error gdf_left_join(
-                         gdf_column **left_cols,
+                         gdf_column **left_cols, 
                          int num_left_cols,
                          int left_join_cols[],
                          gdf_column **right_cols,
@@ -433,13 +420,13 @@ gdf_error gdf_left_join(
                          gdf_column * right_indices,
                          gdf_context *join_context);
 
-/**
- * @brief  Performs a full join (also known as full outer join) on the
+/** 
+ * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
  * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
  * returned.
- *
+ * 
  * @param[in] left_cols[] The columns of the left dataframe
  * @param[in] num_left_cols The number of columns in the left dataframe
  * @param[in] left_join_cols[] The column indices of columns from the left dataframe
@@ -456,12 +443,53 @@ gdf_error gdf_left_join(
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
- *
+ * 
+ * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
+ */
+gdf_error gdf_left_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context);
+
+/** 
+ * @brief  Performs a full join (also known as full outer join) on the
+ * specified columns of two dataframes (left, right)
+ * If join_context->flag_method is set to GDF_SORT then the null_count of the
+ * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
+ * returned.
+ * 
+ * @param[in] left_cols[] The columns of the left dataframe
+ * @param[in] num_left_cols The number of columns in the left dataframe
+ * @param[in] left_join_cols[] The column indices of columns from the left dataframe
+ * to join on
+ * @param[in] right_cols[] The columns of the right dataframe
+ * @param[in] num_right_cols The number of columns in the right dataframe
+ * @param[in] right_join_cols[] The column indices of columns from the right dataframe
+ * to join on
+ * @param[in] num_cols_to_join The total number of columns to join on
+ * @param[in] result_num_cols The number of columns in the resulting dataframe
+ * @param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
+ * the left and right tables on the specified columns
+ * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
+ * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @param[in] join_context The context to use to control how the join is performed,e.g.,
+ * sort vs hash based implementation
+ * 
  * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
 gdf_error gdf_full_join(
-                         gdf_column **left_cols,
+                         gdf_column **left_cols, 
                          int num_left_cols,
                          int left_join_cols[],
                          gdf_column **right_cols,
@@ -476,31 +504,31 @@ gdf_error gdf_full_join(
 
 /* partioning */
 
-/**
- * @brief Computes the hash values of the rows in the specified columns of the
- * input columns and bins the hash values into the desired number of partitions.
- * Rearranges the input columns such that rows with hash values in the same bin
+/** 
+ * @brief Computes the hash values of the rows in the specified columns of the 
+ * input columns and bins the hash values into the desired number of partitions. 
+ * Rearranges the input columns such that rows with hash values in the same bin 
  * are contiguous.
- *
+ * 
  * @param[in] num_input_cols The number of columns in the input columns
  * @param[in] input[] The input set of columns
  * @param[in] columns_to_hash[] Indices of the columns in the input set to hash
  * @param[in] num_cols_to_hash The number of columns to hash
  * @param[in] num_partitions The number of partitions to rearrange the input rows into
- * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
+ * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement 
  * of the input columns into the desired number of partitions
  * @param[out] partition_offsets Preallocated array the size of the number of
  * partitions. Where partition_offsets[i] indicates the starting position
  * of partition 'i'
  * @param[in] hash The hash function to use
- *
+ * 
  * @returns  If the operation was successful, returns GDF_SUCCESS
  */
-gdf_error gdf_hash_partition(int num_input_cols,
-                             gdf_column * input[],
+gdf_error gdf_hash_partition(int num_input_cols, 
+                             gdf_column * input[], 
                              int columns_to_hash[],
                              int num_cols_to_hash,
-                             int num_partitions,
+                             int num_partitions, 
                              gdf_column * partitioned_output[],
                              int partition_offsets[],
                              gdf_hash_func hash);
@@ -815,7 +843,7 @@ gdf_size_type gdf_dtype_size(gdf_dtype dtype);
 gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 
-/*
+/* 
  Multi-Column SQL ops:
    WHERE (Filtering)
    ORDER-BY
@@ -841,7 +869,7 @@ gdf_error gdf_group_by_sum(int ncols,
                            gdf_column* out_col_indices,
                            gdf_column** out_col_values,
                            gdf_column* out_col_agg,
-                           gdf_context* ctxt);
+                           gdf_context* ctxt); 
 
 /**
  * @brief  Performs SQL like GROUP BY with MIN aggregation
@@ -860,7 +888,7 @@ gdf_error gdf_group_by_min(int ncols,
                            gdf_column** cols,
                            gdf_column* col_agg,
                            gdf_column* out_col_indices,
-                           gdf_column** out_col_values,
+                           gdf_column** out_col_values, 
                            gdf_column* out_col_agg,
                            gdf_context* ctxt);
 
@@ -923,7 +951,7 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_column** cols,
                              gdf_column* col_agg,
                              gdf_column* out_col_indices,
-                             gdf_column** out_col_values,
+                             gdf_column** out_col_values,      
                              gdf_column* out_col_agg,
                              gdf_context* ctxt);
 
@@ -962,15 +990,15 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
                               gdf_scalar*  result,
                               gdf_context* ctxt);
 
-/**
+/** 
  * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col`
+ *        `new_values`, that is, replace all `old_values[i]` present in `col` 
  *        with `new_values[i]`.
- *
+ * 
  * @param[in,out] col gdf_column with the data to be modified
  * @param[in] old_values gdf_column with the old values to be replaced
  * @param[in] new_values gdf_column with the new values
- *
+ * 
  * @returns GDF_SUCCESS upon successful completion
  *
  */
@@ -978,7 +1006,7 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    const gdf_column* old_values,
                                    const gdf_column* new_values);
 
-/**
+/** 
  * @brief Sorts an array of gdf_column.
  * 
  * @param[in]  input_columns Array of gdf_columns
@@ -1005,26 +1033,46 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
  *
  * This function is a binary function. It will take in two gdf_columns.
-
  * The first one is expected to be a regular gdf_column, the second one
  * has to be a column of the same type as the first, and it has to be of
  * size one or of the same size as the other column.
- *
+ * 
  * case 1: If the second column contains only one value, then this funciton will
  * replace all nulls in the first column with the value in the second
  * column.
- *
+ *  
  * case 2: If the second column is of the same size as the first, then the function will
  * replace all nulls of the first column with the corresponding elemetns of the
  * second column
- *
+ * 
  * @param[in,out] col_out A gdf_column that is the output of this function with null values replaced
  * @param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
- *
+ * 
  * @returns GDF_SUCCESS upon successful completion
  */
 gdf_error gdf_replace_nulls(gdf_column*       col_out,
                                    const gdf_column* col_in);
+
+/**
+ * @brief Merge sorted arrays of gdf_column.
+ *
+ * @Param[in] left_cols A column array to be merged with right_cols
+ * @Param[in] right_cols A column array to be merged with left_cols
+ * @Param[in] ncols Column length in left_cols and right_cols
+ * @Param[in] sort_by_cols Indices of left_cols and right_cols to be used
+ *                         for comparison criteria
+ * @Param[in] asc_desc Sort order types of columns indexed by sort_by_cols
+ * @Param[out] output_cols Merged columns
+ *
+ * @Returns GDF_SUCCESS upon successful merge
+ */
+gdf_error gdf_sorted_merge(gdf_column **     left_cols,
+                           gdf_column **     right_cols,
+                           const gdf_size_type ncols,
+                           gdf_column *      sort_by_cols,
+                           gdf_column *      asc_desc,
+                           gdf_column **     output_cols);
+
 /**
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.
@@ -1050,27 +1098,6 @@ gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
                        gdf_index_type out_indices[]);
-
-/* ----------------------------------------------------------------------------*/
-/**
- * @brief Merge sorted arrays of gdf_column.
- *
- * @Param[in] left_cols A column array to be merged with right_cols
- * @Param[in] right_cols A column array to be merged with left_cols
- * @Param[in] ncols Column length in left_cols and right_cols
- * @Param[in] sort_by_cols Indices of left_cols and right_cols to be used
- *                         for comparison criteria
- * @Param[in] asc_desc Sort order types of columns indexed by sort_by_cols
- * @Param[out] output_cols Merged columns
- *
- * @Returns GDF_SUCCESS upon successful merge
- */
-gdf_error gdf_sorted_merge(gdf_column **     left_cols,
-                           gdf_column **     right_cols,
-                           const gdf_size_type ncols,
-                           gdf_column *      sort_by_cols,
-                           gdf_column *      asc_desc,
-                           gdf_column **     output_cols);
 
 // forward declaration for DLPack functions below
 // This approach is necessary to satisfy CFFI
