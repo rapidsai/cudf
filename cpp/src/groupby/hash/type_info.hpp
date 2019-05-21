@@ -22,6 +22,11 @@
 
 #include <algorithm>
 
+/**---------------------------------------------------------------------------*
+ * @file type_info.hpp
+ * @brief Type info traits used in hash-based groupby.
+*---------------------------------------------------------------------------**/
+
 namespace cudf {
 namespace groupby {
 namespace hash {

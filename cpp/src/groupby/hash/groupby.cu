@@ -147,7 +147,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // TODO Do we always need to allocate the output bitmask?
   cudf::table sparse_output_values{output_size_estimate,
                                    target_dtypes(column_dtypes(values), ops),
-                                   values_have_nulls, stream};
+                                   values_have_nulls, false, stream};
 
   initialize_with_identity(sparse_output_values, ops, stream);
 
@@ -187,14 +187,13 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
            stream>>>(map.get(), *d_input_keys, *d_input_values,
                      *d_sparse_output_values, d_ops.data().get(), nullptr);
   }
-
-  // TODO Extract results
-
   CHECK_STREAM(stream);
 
   // TODO Set output key/value columns null counts
   cudf::table output_keys;
   cudf::table output_values;
+
+  // TODO Extract results
 
   return std::make_tuple(output_keys, output_values);
 }
