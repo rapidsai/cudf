@@ -15,10 +15,11 @@ import nvstrings
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
-from cudf import _gdf
 from cudf.utils.utils import buffers_from_pyarrow
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 
 import warnings
+import cudf.bindings.copying as cpp_copying
 
 
 class TypedColumnBase(Column):
@@ -88,17 +89,55 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, inplace):
         raise NotImplementedError
+
+
+def make_null_like(other, size=None, dtype=None):
+    if size is None:
+        size = other.size
+    if dtype is None:
+        dtype = other.dtype
+    mask = cudautils.make_mask(size)
+    cudautils.fill_value(mask, 0)
+
+    if pd.api.types.is_categorical_dtype(dtype):
+        mem = rmm.device_array((size,), dtype=other.data.dtype)
+        data = Buffer(mem)
+    elif dtype.kind in 'OU':
+        mem = rmm.device_array((size,), dtype='float64')
+        data = nvstrings.dtos(mem,
+                              len(mem),
+                              nulls=mask,
+                              bdevmem=True)
+    else:
+        mem = rmm.device_array((size,), dtype=dtype)
+        data = Buffer(mem)
+    mask = Buffer(mask)
+    categories = None
+    if hasattr(other, 'cat'):
+        categories = other.cat().categories
+    from cudf.dataframe.columnops import build_column
+    return build_column(data,
+                        dtype,
+                        mask,
+                        categories)
 
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
     """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
+    return column_empty(len(column), dtype, masked)
+
+
+def column_empty(row_count, dtype, masked):
+    """Allocate a new column like the given row_count and dtype.
+    """
+    data = rmm.device_array(shape=row_count, dtype=dtype)
     params = dict(data=Buffer(data))
     if masked:
-        mask = utils.make_mask(data.size)
+        mask = utils.make_mask(row_count)
+        cudautils.fill_value(mask, 0)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
 
@@ -143,13 +182,10 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
-    assert column.null_count == 0
 
-    selvals = cudautils.gather(column.data.to_gpu_array(),
-                               positions.data.to_gpu_array())
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(positions.data.to_gpu_array())
+    pos_ary = positions.data.to_gpu_array()
+    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_index = Buffer(pos_ary)
 
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
@@ -157,16 +193,16 @@ def column_select_by_position(column, positions):
 
 def build_column(buffer, dtype, mask=None, categories=None):
     from cudf.dataframe import numerical, categorical, datetime, string
-    if np.dtype(dtype).type == np.datetime64:
-        return datetime.DatetimeColumn(data=buffer,
-                                       dtype=np.dtype(dtype),
-                                       mask=mask)
-    elif pd.api.types.is_categorical_dtype(dtype):
+    if pd.api.types.is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(data=buffer,
                                              dtype='categorical',
                                              categories=categories,
                                              ordered=False,
                                              mask=mask)
+    elif np.dtype(dtype).type == np.datetime64:
+        return datetime.DatetimeColumn(data=buffer,
+                                       dtype=np.dtype(dtype),
+                                       mask=mask)
     elif np.dtype(dtype).type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
@@ -228,8 +264,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        if (data.dtype in [np.float16, np.float32, np.float64]
-                and arbitrary.size > 0):
+        if (data.dtype in
+           [np.float16, np.float32, np.float64] and arbitrary.size > 0):
             if nan_as_null:
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)
@@ -288,7 +324,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
-                    arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
                 else:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
@@ -393,7 +429,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
-            data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
+            data_type = np_to_pa_dtype(arbitrary.dtype)
             if data_type in (pa.date64(), pa.date32()):
                 # PyArrow can't construct date64 or date32 arrays from np
                 # datetime types
@@ -420,7 +456,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
+                            pa_type = np_to_pa_dtype(np.dtype(dtype).type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null

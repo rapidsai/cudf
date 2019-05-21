@@ -1,6 +1,6 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](https://rapidsai.github.io/projects/cudf/en/latest)
+[![Build Status](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.7)](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.7)
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
 
@@ -46,29 +46,27 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 ### Conda
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
+For `cudf version == 0.7` :
 ```bash
 # for CUDA 9.2
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
-    cudf=0.6 python=3.6
+    cudf=0.7 python=3.6 cudatoolkit=9.2
 
 # or, for CUDA 10.0
-conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba \
-    -c conda-forge -c defaults cudf=0.6 python=3.6
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
+    cudf=0.7 python=3.6 cudatoolkit=10.0
 ```
 
-We also provide [nightly conda packages](https://anaconda.org/rapidsai-nightly) built from the tip of our latest development branch.
-
-### Pip
-
-cuDF can also be installed from [PyPi](https://pypi.org/project/cudf/).
-
+For `cudf version == 0.6` :
 ```bash
-# for CUDA 9.2
-python3.6 -m pip install cudf-cuda92==0.6
 
-# or, for CUDA 10.0
-python3.6 -m pip install cudf-cuda100==0.6
+# CUDA 9.2
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.6
+
+# CUDA 10.0
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf=0.6
 ```
+We also provide [nightly conda packages](https://anaconda.org/rapidsai-nightly) built from the tip of our latest development branch.
 
 Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
 

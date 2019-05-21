@@ -1,21 +1,17 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import collections
 
 from numbers import Number
-from pandas.api.types import is_categorical_dtype
 
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.categorical import CategoricalColumn
-from cudf.utils.cudautils import zeros
-from cudf._gdf import nvtx_range_pop
-import cudf.dataframe.index as index
+from cudf import MultiIndex
 
-from libgdf_cffi import ffi, libgdf
-from librmm_cffi import librmm as rmm
+from cudf.bindings.groupby import (
+    agg as cpp_agg,
+    _apply_basic_agg as _cpp_apply_basic_agg
+)
 
 
 class SeriesGroupBy(object):
@@ -23,25 +19,44 @@ class SeriesGroupBy(object):
     """
     def __init__(self, source_series, group_series, level=None, sort=False):
         self.source_series = source_series
+        self.source_name = '_x'
+        if self.source_series is not None and\
+                self.source_series.name is not None:
+            self.source_name = source_series.name
         self.group_series = group_series
+        self.group_name = '_y'
+        if self.group_series is not None and\
+                self.group_series.name is not None:
+            self.group_name = group_series.name
         self.level = level
         self.sort = sort
 
     def __getattr__(self, attr):
         df = DataFrame()
-        df['x'] = self.source_series
+        df[self.source_name] = self.source_series
+        by = []
         if self.level is not None:
-            df['y'] = self.source_series.index
+            if isinstance(self.source_series.index, MultiIndex):
+                # Add index columns specified by multiindex into _df
+                # Record the index column names for the groupby
+                for col in self.source_series.index.codes:
+                    df[self.group_name + col] = self.source_series.index.codes[
+                            col]
+                    by.append(self.group_name + col)
         else:
-            df['y'] = self.group_series
-        groupby = df.groupby('y', level=self.level, sort=self.sort)
+            df[self.group_name] = self.group_series
+            by = self.group_name
+        groupby = df.groupby(by,
+                             level=self.level,
+                             sort=self.sort)
         result_df = getattr(groupby, attr)()
 
         def get_result():
-            result_series = result_df['x']
-            result_series.name = None
+            result_series = result_df[self.source_name]
+            result_series.name = self.source_name if self.source_name !=\
+                '_x' else None
             idx = result_df.index
-            idx.name = None
+            idx.name = self.group_name if self.group_name != '_y' else None
             result_series.set_index(idx)
             return result_series
         return get_result
@@ -64,13 +79,6 @@ class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 
-    _NAMED_FUNCTIONS = {'mean': libgdf.gdf_group_by_avg,
-                        'min': libgdf.gdf_group_by_min,
-                        'max': libgdf.gdf_group_by_max,
-                        'count': libgdf.gdf_group_by_count,
-                        'sum': libgdf.gdf_group_by_sum,
-                        }
-
     _LEVEL_0_INDEX_NAME = 'cudf_groupby_level_index'
 
     def __init__(self, df, by, method="hash", as_index=True, level=None):
@@ -89,7 +97,9 @@ class Groupby(object):
         """
         self.level = None
         self._original_index_name = None
-        self._df = df
+        self._val_columns = []
+        self._df = df.copy(deep=False)
+        self._as_index = as_index
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
@@ -98,227 +108,66 @@ class Groupby(object):
             self._df[self._LEVEL_0_INDEX_NAME] = by
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level == 0:
-            self.level = level
-            self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
-            self._original_index_name = self._df.index.name
-            self._by = [self._LEVEL_0_INDEX_NAME]
-        elif level and level > 0:
-            raise NotImplementedError('MultiIndex not supported yet in cudf')
+        elif level is not None:
+            if level == 0 and not hasattr(self._df.index, 'levels'):
+                self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
+                self._original_index_name = self._df.index.name
+                self._by = [self._LEVEL_0_INDEX_NAME]
+            else:
+                level = [level] if isinstance(
+                        level, (str, Number)) else list(level)
+                self._by = []
+                # guard against missing MI names
+                if self._df.index.names is None or sum(
+                        x is None for x in self._df.index.names) > 1:
+                    self._df_index_names = list(
+                            range(len(self._df.index._source_data.columns)))
+                for which_level in level:
+                    # find the index of the level in the MultiIndex
+                    if isinstance(which_level, str):
+                        for idx, name in enumerate(self._df.index.names):
+                            if name == which_level:
+                                which_level = idx
+                                break
+                    try:
+                        level_values = self._df.index.levels[which_level]
+                    except IndexError:
+                        raise IndexError("Too many levels: Index has only %d levels, not %d" % (len(self._df.index._source_data.columns), which_level+1))  # noqa: E501
+                    # protected by the above guard
+                    code = self._df.index.codes[
+                            self._df.index.names[which_level]]
+                    # Replace the codes in this column with the levels
+                    # that the codes encode.
+                    result = code.copy()
+                    for idx, value in enumerate(level_values):
+                        level_mask = code == idx
+                        result = result.masked_assign(value, level_mask)
+                    # Add this new "decoded" column to the dataframe and add
+                    # the key to "by"
+                    self._df[self._df.index.names[which_level]] = result
+                    self._by.append(self._df.index.names[which_level])
         else:
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
-        self._val_columns = [idx for idx in self._df.columns
-                             if idx not in self._by]
-        self._as_index = as_index
+        if isinstance(self._by[0], (str, Number)):
+            # by is a list of column names or numerals
+            # The base case!
+            # Everything else in __init__ handles more complicated
+            # configurations of "by"
+            self._val_columns = [idx for idx in self._df.columns
+                                 if idx not in self._by]
+        else:
+            # by is a list of objects - lists, or Series
+            self._val_columns = self._df.columns
+            by = self._by
+            self._by = []
+            for idx, each_by in enumerate(by):
+                self._df[each_by.name] = each_by
+                self._by.append(each_by.name)
         if (method == "hash"):
-            self._method = libgdf.GDF_HASH
+            self._method = method
         else:
             msg = "Method {!r} is not a supported group by method"
             raise NotImplementedError(msg.format(method))
-
-    def _apply_agg(self, agg_type, result, add_col_values,
-                   ctx, val_columns, val_columns_out, sort_result=True):
-        """
-        Parameters
-        ----------
-        agg_type : str
-            The aggregation function to run.
-        result : DataFrame
-            The DataFrame to store the result of the aggregation into.
-        add_col_values : bool
-            Boolean to indicate whether this is the first aggregation being
-            run and should add the additional columns' values.
-        ctx : gdf_context cffi object
-            Context object to pass information such as if the dataframe
-            is sorted and/or which method to use for grouping.
-        val_columns : list of *str*
-            The list of column names that the aggregation should be performed
-            on.
-        val_columns_out : list of *str*
-            The list of columns names that the aggregation results should be
-            output into.
-        """
-
-        if sort_result:
-            ctx.flag_sort_result = 1
-
-        ncols = len(self._by)
-        cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
-
-        first_run = add_col_values
-        need_to_index = self._as_index
-
-        col_count = 0
-        if isinstance(val_columns, (str, Number)):
-            val_columns = [val_columns]
-        for val_col in val_columns:
-            col_agg = self._df[val_col]._column.cffi_view
-
-            # assuming here that if there are multiple aggregations that the
-            # aggregated results will be in the same order for GDF_SORT method
-            if need_to_index:
-                out_col_indices_series = Series(
-                    Buffer(
-                        rmm.device_array(
-                            col_agg.size,
-                            dtype=np.int32
-                        )
-                    )
-                )
-                out_col_indices = out_col_indices_series._column.cffi_view
-            else:
-                out_col_indices = ffi.NULL
-
-            out_col_values_series = []
-            for i in range(0, ncols):
-                if self._df[self._by[i]].dtype == np.dtype('object'):
-                    # This isn't ideal, but no better way to create an
-                    # nvstrings object of correct size
-                    gather_map = zeros(col_agg.size, dtype='int32')
-                    col = Series([''], dtype='str')[gather_map]\
-                        .reset_index(drop=True)
-                else:
-                    col = Series(
-                        Buffer(
-                            rmm.device_array(
-                                col_agg.size,
-                                dtype=self._df[self._by[i]]._column.data.dtype
-                            )
-                        )
-                    )
-                out_col_values_series.append(col)
-            out_col_values = [
-                out_col_values_series[i]._column.cffi_view
-                for i in range(0, ncols)]
-
-            if agg_type == "count":
-                out_col_agg_series = Series(
-                    Buffer(
-                        rmm.device_array(
-                            col_agg.size,
-                            dtype=np.int64
-                        )
-                    )
-                )
-            elif agg_type == "mean":
-                out_col_agg_series = Series(
-                    Buffer(
-                        rmm.device_array(
-                            col_agg.size,
-                            dtype=np.float64
-                        )
-                    )
-                )
-            else:
-                if self._df[val_col].dtype == np.dtype('object'):
-                    # This isn't ideal, but no better way to create an
-                    # nvstrings object of correct size
-                    gather_map = zeros(col_agg.size, dtype='int32')
-                    out_col_agg_series = Series(
-                        [''],
-                        dtype='str'
-                    )[gather_map].reset_index(drop=True)
-                else:
-                    out_col_agg_series = Series(
-                        Buffer(
-                            rmm.device_array(
-                                col_agg.size,
-                                dtype=self._df[val_col]._column.data.dtype
-                            )
-                        )
-                    )
-
-            out_col_agg = out_col_agg_series._column.cffi_view
-
-            agg_func = self._NAMED_FUNCTIONS.get(agg_type, None)
-            if agg_func is None:
-                raise RuntimeError(
-                    "ERROR: this aggregator has not been implemented yet")
-
-            err = agg_func(
-                ncols,
-                cols,
-                col_agg,
-                out_col_indices,
-                out_col_values,
-                out_col_agg,
-                ctx)
-
-            if (err is not None):
-                raise RuntimeError(err)
-
-            num_row_results = out_col_agg.size
-
-            # NVStrings columns are not the same going in as coming out but we
-            # can't create entire CFFI views otherwise multiple objects will
-            # try to free the memory
-            for i, col in enumerate(out_col_values_series):
-                if col.dtype == np.dtype("object") and len(col) > 0:
-                    import nvcategory
-                    nvcat_ptr = int(
-                        ffi.cast(
-                            "uintptr_t",
-                            out_col_values[i].dtype_info.category
-                        )
-                    )
-                    nvcat_obj = None
-                    if nvcat_ptr:
-                        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                        nvstr_obj = nvcat_obj.to_strings()
-                    else:
-                        import nvstrings
-                        nvstr_obj = nvstrings.to_device([])
-                    out_col_values_series[i]._column._data = nvstr_obj
-                    out_col_values_series[i]._column._nvcategory = nvcat_obj
-            if out_col_agg_series.dtype == np.dtype("object") and \
-                    len(out_col_agg_series) > 0:
-                import nvcategory
-                nvcat_ptr = int(
-                    ffi.cast(
-                        "uintptr_t",
-                        out_col_agg.dtype_info.category
-                    )
-                )
-                nvcat_obj = None
-                if nvcat_ptr:
-                    nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-                    nvstr_obj = nvcat_obj.to_strings()
-                else:
-                    import nvstrings
-                    nvstr_obj = nvstrings.to_device([])
-                out_col_agg_series._column._data = nvstr_obj
-                out_col_agg_series._column._nvcategory = nvcat_obj
-
-            if first_run:
-                for i, thisBy in enumerate(self._by):
-                    result[thisBy] = out_col_values_series[i][
-                        :num_row_results]
-
-                    if is_categorical_dtype(self._df[thisBy].dtype):
-                        result[thisBy] = CategoricalColumn(
-                            data=result[thisBy].data,
-                            categories=self._df[thisBy].cat.categories,
-                            ordered=self._df[thisBy].cat.ordered
-                        )
-
-            if out_col_agg_series.dtype != np.dtype("object"):
-                out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
-
-            if isinstance(val_columns_out, (str, Number)):
-                result[val_columns_out] = out_col_agg_series[:num_row_results]
-            else:
-                result[val_columns_out[col_count]
-                       ] = out_col_agg_series[:num_row_results]
-
-            if out_col_agg_series.dtype != np.dtype("object"):
-                out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
-
-            first_run = False
-            col_count = col_count + 1
-
-        return result
 
     def _apply_basic_agg(self, agg_type, sort_results=False):
         """
@@ -327,46 +176,110 @@ class Groupby(object):
         agg_type : str
             The aggregation function to run.
         """
-        result = DataFrame()
-        add_col_values = True
-
-        ctx = ffi.new('gdf_context*')
-        ctx.flag_sorted = 0
-        ctx.flag_method = self._method
-        ctx.flag_distinct = 0
-
-        val_columns = self._val_columns
-        val_columns_out = self._val_columns
-
-        result = self._apply_agg(
-            agg_type, result, add_col_values, ctx, val_columns,
-            val_columns_out, sort_result=sort_results)
-
-        # If a Groupby has one index column and one value column
-        # and as_index is set, return a Series instead of a df
-        if isinstance(val_columns, (str, Number)) and self._as_index:
-            result_series = result[val_columns]
-            idx = index.as_index(result[self._by[0]])
-            if self.level == 0:
-                idx.name = self._original_index_name
+        agg_groupby = self.copy(deep=False)
+        if agg_type in ['mean', 'sum']:
+            agg_groupby._df = agg_groupby._df._get_numeric_data()
+            agg_groupby._val_columns = []
+            for val in self._val_columns:
+                if val in agg_groupby._df.columns:
+                    agg_groupby._val_columns.append(val)
+            # _get_numeric_data might have removed the by column
+            if isinstance(self._by, (str, Number)):
+                agg_groupby._df[self._by] = self._df[self._by]
             else:
-                idx.name = self._by[0]
-            result_series = result_series.set_index(idx)
-            return result_series
+                for by in self._by:
+                    agg_groupby._df._cols[by] = self._df._cols[by]
+        return _cpp_apply_basic_agg(agg_groupby, agg_type,
+                                    sort_results=sort_results)
 
-        # TODO: Do MultiIndex here
-        if(self._as_index):
+    def apply_multiindex_or_single_index(self, result):
+        if len(result) == 0:
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            if len(self._by) == 1 or len(final_result.columns) == 0:
+                dtype = 'float64' if len(self._by) == 1 else 'object'
+                name = self._by[0] if len(self._by) == 1 else None
+                from cudf.dataframe.index import GenericIndex
+                index = GenericIndex(Series([], dtype=dtype))
+                index.name = name
+                final_result.index = index
+            else:
+                mi = MultiIndex(source_data=result[self._by])
+                mi.names = self._by
+                final_result.index = mi
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
+                final_series = Series([], name=final_result.columns[0])
+                final_series.index = final_result.index
+                return final_series
+            return final_result
+        if len(self._by) == 1:
+            from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]
-            result.drop_column(idx.name)
-            if self.level == 0:
+            result = result.drop(idx.name)
+            if idx.name == self._LEVEL_0_INDEX_NAME:
                 idx.name = self._original_index_name
-            else:
-                idx.name = self._by[0]
             result = result.set_index(idx)
+            for col in result.columns:
+                if isinstance(col, str):
+                    colnames = col.split('_')
+                    if colnames[0] == 'cudfvalcol':
+                        result[colnames[1]] = result[col]
+                        result = result.drop(col)
+            return result
+        else:
+            multi_index = MultiIndex(source_data=result[self._by])
+            final_result = DataFrame()
+            for col in result.columns:
+                if col not in self._by:
+                    final_result[col] = result[col]
+            if len(final_result.columns) == 1 and hasattr(self, "_gotattr"):
+                final_series = Series(final_result[final_result.columns[0]])
+                final_series.name = final_result.columns[0]
+                final_series.index = multi_index
+                return final_series
+            return final_result.set_index(multi_index)
 
-        nvtx_range_pop()
+    def apply_multicolumn(self, result, aggs):
+        levels = []
+        codes = []
+        levels.append(self._val_columns)
+        levels.append(aggs)
 
+        # if the values columns have length == 1, codes is a nested list of
+        # zeros equal to the size of aggs (sum, min, mean, etc.)
+        # if the values columns are length>1, codes will monotonically
+        # increase by 1 for every n values where n is the number of aggs
+        # [['x,', 'z'], ['sum', 'min']]
+        # codes == [[0, 1], [0, 1]]
+        code_size = max(len(aggs), len(self._val_columns))
+        codes.append(list(np.zeros(code_size, dtype='int64')))
+        codes.append(list(range(code_size)))
+
+        if len(aggs) == 1:
+            # unprefix columns
+            new_cols = []
+            for c in result.columns:
+                new_col = c.split('_')[1]  # sum_z-> (sum, z)
+                new_cols.append(new_col)
+            result.columns = new_cols
+        else:
+            result.columns = MultiIndex(levels, codes)
+        return result
+
+    def apply_multicolumn_mapped(self, result, aggs):
+        if len(set(aggs.keys())) == len(aggs.keys()) and\
+                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+            result.columns = aggs.keys()
+        else:
+            tuples = []
+            for k in aggs.keys():
+                for v in aggs[k]:
+                    tuples.append((k, v))
+            multiindex = MultiIndex.from_tuples(tuples)
+            result.columns = multiindex
         return result
 
     def __getitem__(self, arg):
@@ -377,18 +290,51 @@ class Groupby(object):
             for val in arg:
                 if val not in self._val_columns:
                     raise KeyError("Column not found: " + str(val))
-        result = self.copy()
+        result = self.copy(deep=False)
+        result._df = DataFrame()
+        setattr(result, "_gotattr", True)
+        if isinstance(self._by, (str, Number)):
+            result._df[self._by] = self._df[self._by]
+        else:
+            for by in self._by:
+                result._df[by] = self._df[by]
         result._val_columns = arg
+        if isinstance(arg, (str, Number)):
+            result._df[arg] = self._df[arg]
+        else:
+            for a in arg:
+                result._df[a] = self._df[a]
+        if len(result._by) == 1 and isinstance(result._val_columns,
+                                               (str, Number)):
+            new_by = [result._by] if isinstance(result._by, (str, Number))\
+                else list(result._by)
+            new_val_columns = [result._val_columns] if\
+                isinstance(result._val_columns, (str, Number))\
+                else list(result._val_columns)
+            new_val_series = result._df[new_val_columns[0]]
+            new_val_series.name = new_val_columns[0]
+            new_by_series = result._df[new_by[0]]
+            new_by_series.name = new_by[0]
+            if new_by[0] == self._LEVEL_0_INDEX_NAME:
+                new_by_series.name = None
+            return SeriesGroupBy(new_val_series,
+                                 new_by_series)
         return result
 
     def copy(self, deep=True):
         df = self._df.copy(deep) if deep else self._df
-        result = Groupby(df, self._by)
-        result._method = self._method
-        result._val_columns = self._val_columns
-        result.level = self.level
+        result = Groupby(df,
+                         self._by,
+                         method=self._method,
+                         as_index=self._as_index,
+                         level=self.level)
         result._original_index_name = self._original_index_name
+        if hasattr(self, "_gotattr"):
+            setattr(result, "_gotattr", True)
         return result
+
+    def deepcopy(self):
+        return self.copy(deep=True)
 
     def __getattr__(self, key):
         if key != '_val_columns' and key in self._val_columns:
@@ -433,70 +379,5 @@ class Groupby(object):
         Since multi-indexes aren't supported aggregation results are returned
         in columns using the naming scheme of `aggregation_columnname`.
         """
-        result = DataFrame()
-        add_col_values = True
-
-        ctx = ffi.new('gdf_context*')
-        ctx.flag_sorted = 0
-        ctx.flag_method = self._method
-        ctx.flag_distinct = 0
-
-        sort_result = True
-
-        # TODO: Use MultiColumn here instead of use_prefix
-        # use_prefix enables old functionality - prefixing column
-        # groupby names since we don't support MultiColumn quite yet
-        use_prefix = 1 < len(self._val_columns) or 1 < len(args)
-        if not isinstance(args, str) and isinstance(
-                args, collections.abc.Sequence):
-            for agg_type in args:
-                val_columns_out = [agg_type + '_' +
-                                   val for val in self._val_columns]
-                if not use_prefix:
-                    val_columns_out = self._val_columns
-                result = self._apply_agg(
-                    agg_type, result, add_col_values, ctx, self._val_columns,
-                    val_columns_out, sort_result=sort_result)
-                add_col_values = False  # we only want to add them once
-            # TODO: Do multindex here
-            if(self._as_index) and 1 == len(self._by):
-                idx = index.as_index(result[self._by[0]])
-                idx.name = self._by[0]
-                result = result.set_index(idx)
-                result.drop_column(idx.name)
-        elif isinstance(args, collections.abc.Mapping):
-            if (len(args.keys()) == 1):
-                if(len(list(args.values())[0]) == 1):
-                    sort_result = False
-            for val, agg_type in args.items():
-
-                if not isinstance(agg_type, str) and \
-                       isinstance(agg_type, collections.abc.Sequence):
-                    for sub_agg_type in agg_type:
-                        val_columns_out = [sub_agg_type + '_' + val]
-                        if not use_prefix:
-                            val_columns_out = self._val_columns
-                        result = self._apply_agg(sub_agg_type, result,
-                                                 add_col_values, ctx, [val],
-                                                 val_columns_out,
-                                                 sort_result=sort_result)
-                elif isinstance(agg_type, str):
-                    val_columns_out = [agg_type + '_' + val]
-                    if not use_prefix:
-                        val_columns_out = self._val_columns
-                    result = self._apply_agg(agg_type, result,
-                                             add_col_values, ctx, [val],
-                                             val_columns_out,
-                                             sort_result=sort_result)
-                add_col_values = False  # we only want to add them once
-            # TODO: Do multindex here
-            if(self._as_index) and 1 == len(self._by):
-                idx = index.as_index(result[self._by[0]])
-                idx.name = self._by[0]
-                result = result.set_index(idx)
-                result.drop_column(idx.name)
-        else:
-            result = self.agg([args])
-
-        nvtx_range_pop()
-        return result
+        agg_groupby = self.copy(deep=False)
+        return cpp_agg(agg_groupby, args)

@@ -1,55 +1,30 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 from __future__ import print_function, division
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api.types import is_integer_dtype
 
-
-from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
 from cudf.dataframe import columnops, datetime, string
 from cudf.utils import cudautils, utils
-from cudf import _gdf
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
+import cudf.bindings.copying as cpp_copying
+import cudf.bindings.hash as cpp_hash
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-
-
-# Operator mappings
-
-_binary_impl = {
-    # Unordered comparators
-    'eq': libgdf.gdf_eq_generic,
-    'ne': libgdf.gdf_ne_generic,
-    # Ordered comparators
-    'lt': libgdf.gdf_lt_generic,
-    'le': libgdf.gdf_le_generic,
-    'gt': libgdf.gdf_gt_generic,
-    'ge': libgdf.gdf_ge_generic,
-    # Binary operators
-    'add': libgdf.gdf_add_generic,
-    'sub': libgdf.gdf_sub_generic,
-    'mul': libgdf.gdf_mul_generic,
-    'floordiv': libgdf.gdf_floordiv_generic,
-    'truediv': libgdf.gdf_div_generic,
-}
-
-#   Unary operators
-_unary_impl = {
-    'ceil': libgdf.gdf_ceil_generic,
-    'floor': libgdf.gdf_floor_generic,
-    'sqrt': libgdf.gdf_sqrt_generic,
-}
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -97,7 +72,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+        return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
@@ -105,6 +80,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def ordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
+
+    def _apply_scan_op(self, op):
+        out_col = columnops.column_empty_like_same_mask(self, dtype=self.dtype)
+        cpp_reduce.apply_scan(self, out_col, op, inclusive=True)
+        return out_col
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
@@ -179,17 +159,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cudautils.gather(data=self.data.mem,
-                                    index=sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=Buffer(col_keys),
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
@@ -203,7 +173,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
-        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
@@ -237,8 +207,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out = cudautils.gather(data=sortedvals, index=segs)
-        return self.replace(data=Buffer(out), mask=None)
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        return out_col
 
     def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
@@ -255,41 +225,49 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out1 = cudautils.gather(data=sortedvals, index=segs)
+        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
         out2 = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=Buffer(out1), mask=None)
         out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
     def all(self):
         return bool(self.min())
 
-    def min(self):
-        return cpp_reduce.apply_reduce('min', self)
+    def min(self, dtype=None):
+        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
 
-    def max(self):
-        return cpp_reduce.apply_reduce('max', self)
+    def max(self, dtype=None):
+        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
 
-    def sum(self):
-        return cpp_reduce.apply_reduce('sum', self)
+    def sum(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
 
-    def product(self):
-        return cpp_reduce.apply_reduce('product', self)
+    def product(self, dtype=None):
+        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self):
-        return self.sum().astype('f8') / self.valid_count
+    def mean(self, dtype=None):
+        return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1):
+    def mean_var(self, ddof=1, dtype=None):
         x = self.astype('f8')
-        mu = x.mean()
+        mu = x.mean(dtype=dtype)
         n = x.valid_count
-        asum = x.sum_of_squares()
+        asum = x.sum_of_squares(dtype=dtype)
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
 
-    def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_of_squares', self)
+    def sum_of_squares(self, dtype=None):
+        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
+
+    def round(self, decimals=0):
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask
+
+        rounded = cudautils.apply_round(self.data.mem, decimals)
+        return NumericalColumn(data=Buffer(rounded), mask=mask,
+                               dtype=self.dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -325,109 +303,6 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
 
-    def join(self, other, how='left', return_indexers=False, method='sort'):
-
-        # Single column join using sort-based implementation
-        if method == 'sort' or how == 'outer':
-            return self._sortjoin(other=other, how=how,
-                                  return_indexers=return_indexers)
-        elif method == 'hash':
-            # Get list of columns from self with left_on and
-            # from other with right_on
-            return self._hashjoin(other=other, how=how,
-                                  return_indexers=return_indexers)
-        else:
-            raise ValueError('Unsupported join method')
-
-    def _hashjoin(self, other, how='left', return_indexers=False):
-
-        from cudf.dataframe.series import Series
-
-        if not self.is_type_equivalent(other):
-            raise TypeError('*other* is not compatible')
-
-        with _gdf.apply_join(
-                [self], [other], how=how, method='hash') as (lidx, ridx):
-            if lidx.size > 0:
-                raw_index = cudautils.gather_joined_index(
-                        self.to_gpu_array(),
-                        other.to_gpu_array(),
-                        lidx,
-                        ridx,
-                        )
-                buf_index = Buffer(raw_index)
-            else:
-                buf_index = Buffer.null(dtype=self.dtype)
-
-            joined_index = self.replace(data=buf_index)
-
-            if return_indexers:
-                def gather(idxrange, idx):
-                    mask = (Series(idx) != -1).as_mask()
-                    return idxrange.take(idx).set_mask(mask).fillna(-1)
-
-                if len(joined_index) > 0:
-                    indexers = (
-                            gather(Series(range(0, len(self))), lidx),
-                            gather(Series(range(0, len(other))), ridx),
-                            )
-                else:
-                    indexers = (
-                            Series(Buffer.null(dtype=np.intp)),
-                            Series(Buffer.null(dtype=np.intp))
-                            )
-                return joined_index, indexers
-            else:
-                return joined_index
-        # return
-
-    def _sortjoin(self, other, how='left', return_indexers=False):
-        """Join with another column.
-
-        When the column is a index, set *return_indexers* to obtain
-        the indices for shuffling the remaining columns.
-        """
-        from cudf.dataframe.series import Series
-
-        if not self.is_type_equivalent(other):
-            raise TypeError('*other* is not compatible')
-
-        lkey, largsort = self.sort_by_values(True)
-        rkey, rargsort = other.sort_by_values(True)
-        with _gdf.apply_join(
-                [lkey], [rkey], how=how, method='sort') as (lidx, ridx):
-            if lidx.size > 0:
-                raw_index = cudautils.gather_joined_index(
-                        lkey.to_gpu_array(),
-                        rkey.to_gpu_array(),
-                        lidx,
-                        ridx,
-                        )
-                buf_index = Buffer(raw_index)
-            else:
-                buf_index = Buffer.null(dtype=self.dtype)
-
-            joined_index = lkey.replace(data=buf_index)
-
-            if return_indexers:
-                def gather(idxrange, idx):
-                    mask = (Series(idx) != -1).as_mask()
-                    return idxrange.take(idx).set_mask(mask).fillna(-1)
-
-                if len(joined_index) > 0:
-                    indexers = (
-                            gather(Series(largsort), lidx),
-                            gather(Series(rargsort), ridx),
-                            )
-                else:
-                    indexers = (
-                            Series(Buffer.null(dtype=np.intp)),
-                            Series(Buffer.null(dtype=np.intp))
-                            )
-                return joined_index, indexers
-            else:
-                return joined_index
-
     def find_and_replace(self, to_replace, value):
         """
         Return col with *to_replace* replaced with *value*.
@@ -445,8 +320,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         Fill null values with *fill_value*
         """
         result = self.copy()
-        fill_value_col, result = numeric_normalize_types(
-            columnops.as_column(fill_value, nan_as_null=False), result)
+        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        if is_integer_dtype(result.dtype):
+            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        else:
+            fill_value_col = fill_value_col.astype(result.dtype)
         cpp_replace.replace_nulls(result, fill_value_col)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
@@ -458,12 +336,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype or op not in _binary_impl:
-        # Use JIT implementation
-        null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-    else:
-        # Use compiled implementation
-        null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
+    null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
@@ -473,7 +346,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 def numeric_column_unaryop(operand, op, out_dtype):
     out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    _gdf.apply_unaryop(op, operand, out)
+    cpp_unaryops.apply_math_op(operand, out, op)
     return out.view(NumericalColumn, dtype=out_dtype)
 
 
@@ -491,6 +364,24 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def safe_cast_to_int(col, dtype):
+    """
+    Cast given NumericalColumn to given integer dtype safely.
+    """
+    assert is_integer_dtype(dtype)
+
+    if col.dtype == dtype:
+        return col
+
+    new_col = col.astype(dtype)
+    if new_col.unordered_compare('eq', col).all():
+        return new_col
+    else:
+        raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
+            col.dtype.type.__name__,
+            np.dtype(dtype).type.__name__))
+
+
 def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
@@ -500,7 +391,7 @@ def column_hash_values(column0, *other_columns, initial_hash_values=None):
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     if initial_hash_values:
         initial_hash_values = rmm.to_device(initial_hash_values)
-    _gdf.hash_columns(columns, result, initial_hash_values)
+    cpp_hash.hash_columns(columns, result, initial_hash_values)
     return result
 
 

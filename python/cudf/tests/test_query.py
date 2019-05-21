@@ -140,3 +140,15 @@ def test_query_splitted_combine():
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
     assert_frame_equal(got, expect)
+
+
+def test_query_empty_frames():
+    empty_pdf = pd.DataFrame({'a': [], 'b': []})
+    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    # Do the query
+    expr = 'a > 2'
+    got = empty_gdf.query(expr).to_pandas()
+    expect = empty_pdf.query(expr)
+
+    # assert euqal results
+    assert_frame_equal(got, expect)

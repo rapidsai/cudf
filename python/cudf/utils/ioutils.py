@@ -2,6 +2,39 @@
 
 from cudf.utils.docutils import docfmt_partial
 
+_docstring_read_parquet_metadata = """
+Read a Parquet file's metadata and schema
+
+Parameters
+----------
+path : string or path object
+    Path of file to be read
+
+Returns
+-------
+Total number of rows
+Number of row groups
+List of column names
+
+Examples
+--------
+>>> import cudf
+>>> num_rows, num_row_groups, names = cudf.read_parquet_metadata(filename)
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = cudf.concat(df)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.parquet.read_parquet
+"""
+doc_read_parquet_metadata = docfmt_partial(
+    docstring=_docstring_read_parquet_metadata)
+
 _docstring_read_parquet = """
 Read a Parquet file into DataFrame
 
@@ -9,10 +42,16 @@ Parameters
 ----------
 path : string or path object
     Path of file to be read
-engine : { 'cudf', 'pyarrow' }, default='cudf'
+engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
-columns : list, default=None
+columns : list, default None
     If not None, only these columns will be read.
+row_group : int, default None
+    If not None, only the row group with the specified index will be read.
+skip_rows : int, default None
+    If not None, the nunber of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 
 Returns
 -------
@@ -30,6 +69,7 @@ Examples
 
 See Also
 --------
+cudf.io.parquet.read_parquet_metadata
 cudf.io.parquet.to_parquet
 cudf.io.orc.read_orc
 """
@@ -61,14 +101,20 @@ cudf.io.orc.read_orc
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_read_orc = """
-Load an orc object from the file path, returning a DataFrame.
+Load an ORC object from the file path, returning a DataFrame.
 
 Parameters
 ----------
 path : string
     File path
-columns : list, default=None
+engine : { 'cudf', 'pyarrow' }, default 'cudf'
+    Parser engine to use.
+columns : list, default None
     If not None, only these columns will be read from the file.
+skip_rows : int, default None
+    If not None, the number of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
 kwargs are passed to the engine
 
 Returns
@@ -97,12 +143,15 @@ Convert a JSON string to a cuDF object.
 
 Parameters
 ----------
-path_or_buf : a valid JSON string or file-like, default: None
-    The string could be a URL. Valid URL schemes include http, ftp, s3,
-    gcs, and file. For file URLs, a host is expected. For instance, a local
-    file could be ``file://localhost/path/to/table.json``
+path_or_buf : a valid JSON string or file-like
+    The string could be a URL (pandas engine only). Valid URL schemes include
+    http, ftp, s3, gcs, and file. For file URLs, a host is expected.
+    For instance, a local file could be ``file://localhost/path/to/table.json``
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
+    Parser engine to use. If 'auto' is passed, the engine will be
+    automatically selected based on the other parameters.
 orient : string,
-    Indication of expected JSON string format.
+    Indication of expected JSON string format (pandas engine only).
     Compatible JSON strings can be produced by ``to_json()`` with a
     corresponding orient value.
     The set of possible orients is:
@@ -129,40 +178,42 @@ orient : string,
         ``'columns'``, and ``'records'``.
        'table' as an allowed value for the ``orient`` argument
 typ : type of object to recover (series or frame), default 'frame'
+    With cudf engine, only frame output is supported.
 dtype : boolean or dict, default True
     If True, infer dtypes, if a dict of column to dtype, then use those,
     if False, then don't infer dtypes at all, applies only to the data.
 convert_axes : boolean, default True
-    Try to convert the axes to the proper dtypes.
+    Try to convert the axes to the proper dtypes (pandas engine only).
 convert_dates : boolean, default True
-    List of columns to parse for dates; If True, then try to parse
-    datelike columns default is True; a column label is datelike if
+    List of columns to parse for dates (pandas engine only); If True, then try
+    to parse datelike columns default is True; a column label is datelike if
     * it ends with ``'_at'``,
     * it ends with ``'_time'``,
     * it begins with ``'timestamp'``,
     * it is ``'modified'``, or
     * it is ``'date'``
 keep_default_dates : boolean, default True
-    If parsing dates, then parse the default datelike columns
+    If parsing dates, parse the default datelike columns (pandas engine only)
 numpy : boolean, default False
-    Direct decoding to numpy arrays. Supports numeric data only, but
-    non-numeric column and index labels are supported. Note also that the
-    JSON ordering MUST be the same for each term if numpy=True.
+    Direct decoding to numpy arrays (pandas engine only). Supports numeric
+    data only, but non-numeric column and index labels are supported. Note
+    also that the JSON ordering MUST be the same for each term if numpy=True.
 precise_float : boolean, default False
     Set to enable usage of higher precision (strtod) function when
-    decoding string to double values. Default (False) is to use fast but
-    less precise builtin functionality
+    decoding string to double values (pandas engine only). Default (False)
+    is to use fast but less precise builtin functionality
 date_unit : string, default None
-    The timestamp unit to detect if converting dates. The default behaviour
-    is to try and detect the correct precision, but if this is not desired
-    then pass one of 's', 'ms', 'us' or 'ns' to force parsing only seconds,
-    milliseconds, microseconds or nanoseconds respectively.
+    The timestamp unit to detect if converting dates (pandas engine only).
+    The default behaviour is to try and detect the correct precision, but if
+    this is not desired then pass one of 's', 'ms', 'us' or 'ns' to force
+    parsing only seconds, milliseconds, microseconds or nanoseconds.
 encoding : str, default is 'utf-8'
     The encoding to use to decode py3 bytes.
+    With cudf engine, only utf-8 is supported.
 lines : boolean, default False
     Read the file as a json object per line.
 chunksize : integer, default None
-    Return JsonReader object for iteration.
+    Return JsonReader object for iteration (pandas engine only).
     See the `line-delimted json docs
     <http://pandas.pydata.org/pandas-docs/stable/io.html#io-jsonl>`_
     for more information on ``chunksize``.
@@ -174,6 +225,12 @@ compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
     '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
     otherwise. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read (cudf engine only).
+    The first number is the offset in bytes, the second number is the range
+    size in bytes. Set the size to zero to read all data after the offset
+    location. Reads the row that starts before or at the end of the range,
+    even if it ends after the end of the range.
 
 Returns
 -------

@@ -16,21 +16,38 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction(ConfigureTest)
 
+option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
+
+function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
+    if(CMAKE_ENABLE_BENCHMARKS)
+        add_executable(${CMAKE_BENCH_NAME}
+                    ${CMAKE_BENCH_SRC}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_link_libraries(${CMAKE_BENCH_NAME} cudf)
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
+                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
+        add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
+    endif(CMAKE_ENABLE_BENCHMARKS)
+endfunction(ConfigureBench)
+
+
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include",
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${GTEST_INCLUDE_DIR}"
+                    "${ARROW_INCLUDE_DIR}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${RMM_INCLUDE}"
+                    "${NVSTRINGS_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -38,7 +55,11 @@ include_directories("${GTEST_INCLUDE_DIR}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${FLATBUFFERS_LIBRARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
+                 "${GTEST_LIBRARY_DIR}"
+                 "${RMM_LIBRARY}"
+                 "${NVSTRINGS_LIBRARY}"
+                 "${NVCATEGORY_LIBRARY}"
+                 "${NVTEXT_LIBRARY}")
 
 ###################################################################################################
 ### test sources ##################################################################################
@@ -61,24 +82,18 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - filter tests ----------------------------------------------------------------------------------
-
-set(FILTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
-
-ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
-
-###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_test.cu")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
+
+set(GROUPBY_WO_AGG_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+
+ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -102,7 +117,7 @@ ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
@@ -147,6 +162,15 @@ set(QUANTILES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
+
+###################################################################################################
+# - reduction tests ---------------------------------------------------------------------------------
+
+set(REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+
+ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
 # - replace tests ---------------------------------------------------------------------------------
@@ -211,7 +235,8 @@ ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 # - nvcategory tests -------------------------------------------------------------------------------
 
 set(NVCATEGORY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
@@ -227,8 +252,12 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -236,10 +265,17 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/device_atomics_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - device atomics tests -------------------------------------------------------------------------------
+
+set(DEVICE_ATOMICS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_atomics/device_atomics_test.cu")
+
+ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 
 ###################################################################################################
 # - transpose tests -------------------------------------------------------------------------------
@@ -256,6 +292,13 @@ set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+###################################################################################################
+# - device table tests -----------------------------------------------------------------------------------
+
+set(DEVICE_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
+
+ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - sorted-merge tests -------------------------------------------------------------------------------------
@@ -266,7 +309,46 @@ set(SORTED_MERGE_TEST_SRC
 ConfigureTest(SORTED_MERGE_TEST "${SORTED_MERGE_TEST_SRC}")
 
 ###################################################################################################
+# - stream compaction tests -----------------------------------------------------------------------
+
+set(STREAM_COMPACTION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu")
+
+ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
+
+###################################################################################################
+# - rolling tests ---------------------------------------------------------------------------------
+
+set(ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
+
+ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - json tests -------------------------------------------------------------------------------------
+
+set(JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp")
+
+ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
+
+###################################################################################################
 ### enable testing ################################################################################
 ###################################################################################################
 
 enable_testing()
+
+
+###################################################################################################
+### benchmarks ####################################################################################
+###################################################################################################
+
+# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
+
+###################################################################################################
+# - stream compaction benchmarks-------------------------------------------------------------------
+
+set(STREAM_COMPACTION_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")

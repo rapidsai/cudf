@@ -10,6 +10,8 @@ import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from librmm_cffi import librmm as rmm
+
 from cudf.utils import cudautils, utils, ioutils
 from cudf import formatting
 from cudf.dataframe.buffer import Buffer
@@ -19,7 +21,9 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+
+import cudf.bindings.copying as cpp_copying
 
 
 class Series(object):
@@ -82,7 +86,6 @@ class Series(object):
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
-
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
@@ -120,6 +123,12 @@ class Series(object):
         else:
             raise AttributeError("Can only use .dt accessor with datetimelike "
                                  "values")
+
+    @property
+    def ndim(self):
+        """Dimension of the data. Series ndim is always 1.
+        """
+        return 1
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -233,9 +242,10 @@ class Series(object):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == '__call__' and 'sqrt' == ufunc.__name__:
-            from cudf import sqrt
-            return sqrt(self)
+        import cudf
+        if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
@@ -287,7 +297,11 @@ class Series(object):
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        indices = Buffer(indices).to_gpu_array()
+        from cudf import Series
+        if isinstance(indices, Series):
+            indices = indices.to_gpu_array()
+        else:
+            indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return self._copy_construct(data=self.data[:0],
@@ -296,7 +310,7 @@ class Series(object):
         if self.dtype == np.dtype("object"):
             return self[indices]
 
-        data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
+        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
 
         if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
@@ -308,7 +322,7 @@ class Series(object):
         else:
             index = self.index.take(indices)
 
-        col = self._column.replace(data=Buffer(data), mask=mask)
+        col = self._column.replace(data=col.data, mask=mask)
         return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):
@@ -545,6 +559,9 @@ class Series(object):
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
 
+    def equals(self, other):
+        return self._unordered_compare(other, 'eq').min()
+
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
 
@@ -559,6 +576,25 @@ class Series(object):
 
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
+
+    def __invert__(self):
+        """Bitwise invert (~)/(not) for each element
+
+        Returns a new Series.
+        """
+        if np.issubdtype(self.dtype.type, np.integer):
+            return self._unaryop('not')
+        else:
+            raise TypeError(
+                f"Operation `~` not supported on {self.dtype.type.__name__}"
+            )
+
+    def __neg__(self):
+        """Negatated value (-) for each element
+
+        Returns a new Series.
+        """
+        return self.__mul__(-1)
 
     @property
     def cat(self):
@@ -577,7 +613,11 @@ class Series(object):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            index = Index._concat([o.index for o in objs])
+            from cudf.dataframe.multiindex import MultiIndex
+            if isinstance(objs[0].index, MultiIndex):
+                index = MultiIndex._concat([o.index for o in objs])
+            else:
+                index = Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -676,6 +716,31 @@ class Series(object):
         """
         return self._column.to_array(fillna=fillna)
 
+    def isnull(self):
+        """Identify missing values in a Series.
+        """
+        if not self.has_null_mask:
+            return Series(cudautils.zeros(len(self), np.bool_), name=self.name,
+                          index=self.index)
+
+        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        return Series(mask, name=self.name, index=self.index)
+
+    def isna(self):
+        """Identify missing values in a Series. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in a Series.
+        """
+        if not self.has_null_mask:
+            return Series(cudautils.ones(len(self), np.bool_), name=self.name,
+                          index=self.index)
+
+        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        return Series(mask, name=self.name, index=self.index)
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -713,6 +778,10 @@ class Series(object):
         """The index object
         """
         return self._index
+
+    @index.setter
+    def index(self, _index):
+        self._index = _index
 
     @property
     def iloc(self):
@@ -932,9 +1001,10 @@ class Series(object):
     def reverse(self):
         """Reverse the Series
         """
-        data = cudautils.reverse_array(self.to_gpu_array())
-        index = as_index(cudautils.reverse_array(self.index.gpu_values))
-        col = self._column.replace(data=Buffer(data))
+        rinds = cudautils.arange_reversed(self._column.data.size,
+                                          dtype=np.int32)
+        col = cpp_copying.apply_gather_column(self._column, rinds)
+        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds)
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype='float64'):
@@ -1071,33 +1141,70 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self, axis=None, skipna=True):
+    def min(self, axis=None, skipna=True, dtype=None):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min()
+        return self._column.min(dtype=dtype)
 
-    def max(self, axis=None, skipna=True):
+    def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max()
+        return self._column.max(dtype=dtype)
 
-    def sum(self, axis=None, skipna=True):
+    def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum()
+        return self._column.sum(dtype=dtype)
 
-    def product(self, axis=None, skipna=True):
+    def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product()
+        return self._column.product(dtype=dtype)
 
-    def mean(self, axis=None, skipna=True):
+    def cummin(self, axis=0, skipna=True):
+        """Compute the cumulative minimum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('min'), name=self.name,
+                      index=self.index)
+
+    def cummax(self, axis=0, skipna=True):
+        """Compute the cumulative maximum of the series"""
+        assert axis in (None, 0) and skipna is True
+        return Series(self._column._apply_scan_op('max'), name=self.name,
+                      index=self.index)
+
+    def cumsum(self, axis=0, skipna=True):
+        """Compute the cumulative sum of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(self.astype(np.int64)._column._apply_scan_op('sum'),
+                          name=self.name, index=self.index)
+        else:
+            return Series(self._column._apply_scan_op('sum'), name=self.name,
+                          index=self.index)
+
+    def cumprod(self, axis=0, skipna=True):
+        """Compute the cumulative product of the series"""
+        assert axis in (None, 0) and skipna is True
+
+        # pandas always returns int64 dtype if original dtype is int
+        if np.issubdtype(self.dtype, np.integer):
+            return Series(
+                self.astype(np.int64)._column._apply_scan_op('product'),
+                name=self.name, index=self.index)
+        else:
+            return Series(self._column._apply_scan_op('product'),
+                          name=self.name, index=self.index)
+
+    def mean(self, axis=None, skipna=True, dtype=None):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self._column.mean(dtype=dtype)
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
@@ -1118,8 +1225,14 @@ class Series(object):
         mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
-    def sum_of_squares(self):
-        return self._column.sum_of_squares()
+    def sum_of_squares(self, dtype=None):
+        return self._column.sum_of_squares(dtype=dtype)
+
+    def round(self, decimals=0):
+        """Round a Series to a configurable number of decimal places.
+        """
+        return Series(self._column.round(decimals=decimals), name=self.name,
+                      index=self.index)
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
@@ -1138,7 +1251,7 @@ class Series(object):
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
         res = self._column.unique(method=method)
-        return Series(res)
+        return Series(res, name=self.name)
 
     def nunique(self, method='sort', dropna=True):
         """Returns the number of unique values of the Series: approximate version,
@@ -1178,6 +1291,17 @@ class Series(object):
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
+    # Absolute
+    def abs(self):
+        """Absolute value of each element of the series.
+
+        Returns a new Series.
+        """
+        return self._unaryop('abs')
+
+    def __abs__(self):
+        return self.abs()
+
     # Rounding
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
@@ -1194,6 +1318,42 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('floor')
+
+    # Math
+    def _float_math(self, op):
+        if np.issubdtype(self.dtype.type, np.floating):
+            return self._unaryop(op)
+        else:
+            raise TypeError(
+                f"Operation '{op}' not supported on {self.dtype.type.__name__}"
+            )
+
+    def sin(self):
+        return self._float_math('sin')
+
+    def cos(self):
+        return self._float_math('cos')
+
+    def tan(self):
+        return self._float_math('tan')
+
+    def asin(self):
+        return self._float_math('asin')
+
+    def acos(self):
+        return self._float_math('acos')
+
+    def atan(self):
+        return self._float_math('atan')
+
+    def exp(self):
+        return self._float_math('exp')
+
+    def log(self):
+        return self._float_math('log')
+
+    def sqrt(self):
+        return self._unaryop('sqrt')
 
     # Misc
 
@@ -1232,7 +1392,7 @@ class Series(object):
         mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
         return Series(mod_vals)
 
-    def quantile(self, q, interpolation='midpoint', exact=True,
+    def quantile(self, q=0.5, interpolation='linear', exact=True,
                  quant_index=True):
         """
         Return values at the given quantile.
@@ -1264,6 +1424,95 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
+    def describe(self, percentiles=None, include=None, exclude=None):
+        """Compute summary statistics of a Series. For numeric
+        data, the output includes the minimum, maximum, mean, median,
+        standard deviation, and various quantiles. For object data, the output
+        includes the count, number of unique values, the most common value, and
+        the number of occurrences of the most common value.
+
+        Parameters
+        ----------
+        percentiles : list-like, optional
+            The percentiles used to generate the output summary statistics.
+            If None, the default percentiles used are the 25th, 50th and 75th.
+            Values should be within the interval [0, 1].
+
+        Returns
+        -------
+        A DataFrame containing summary statistics of relevant columns from
+        the input DataFrame.
+
+        Examples
+        --------
+        Describing a ``Series`` containing numeric values.
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> print(s.describe())
+           stats   values
+        0  count     10.0
+        1   mean      5.5
+        2    std  3.02765
+        3    min      1.0
+        4    25%      2.5
+        5    50%      5.5
+        6    75%      7.5
+        7    max     10.0
+        """
+
+        from cudf import DataFrame
+
+        def _prepare_percentiles(percentiles):
+            percentiles = list(percentiles)
+
+            if not all(0 <= x <= 1 for x in percentiles):
+                raise ValueError("All percentiles must be between 0 and 1, "
+                                 "inclusive.")
+
+            # describe always includes 50th percentile
+            if 0.5 not in percentiles:
+                percentiles.append(0.5)
+
+            percentiles = np.sort(percentiles)
+            return percentiles
+
+        def _format_percentile_names(percentiles):
+            return ['{0}%'.format(int(x*100)) for x in percentiles]
+
+        def _format_stats_values(stats_data):
+            return list(map(lambda x: round(x, 6), stats_data))
+
+        def describe_numeric(self):
+            # mimicking pandas
+            names = ['count', 'mean', 'std', 'min'] + \
+                    _format_percentile_names(percentiles) + ['max']
+            data = [self.count(), self.mean(), self.std(), self.min()] + \
+                self.quantile(percentiles).to_array().tolist() + [self.max()]
+            data = _format_stats_values(data)
+
+            values_name = 'values'
+            if self.name:
+                values_name = self.name
+
+            return DataFrame({'stats': names, values_name: data})
+
+        def describe_categorical(self):
+            # blocked by StringColumn/DatetimeColumn support for
+            # value_counts/unique
+            pass
+
+        if percentiles is not None:
+            percentiles = _prepare_percentiles(percentiles)
+        else:
+            # pandas defaults
+            percentiles = np.array([0.25, 0.5, 0.75])
+
+        if np.issubdtype(self.dtype, np.number):
+            return describe_numeric(self)
+        else:
+            raise NotImplementedError("Describing non-numeric columns is not "
+                                      "yet supported")
+
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
 
@@ -1286,7 +1535,62 @@ class Series(object):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def groupby(self, group_series=None, level=None, sort=False):
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values of an input array by periods positions and store the
+        output in a new array.
+
+        Notes
+        -----
+        Shift currently only supports float and integer dtype columns with
+        no null values.
+        """
+        assert axis in (None, 0) and freq is None and fill_value is None
+
+        if self.null_count != 0:
+            raise AssertionError("Shift currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Shift currently only supports "
+                                      "numeric dtypes")
+        if periods == 0:
+            return self
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_shift.forall(output_dary.size)(input_dary, output_dary,
+                                                     periods)
+        return Series(output_dary, name=self.name, index=self.index)
+
+    def diff(self, periods=1):
+        """Calculate the difference between values at positions i and i - N in
+        an array and store the output in a new array.
+        Notes
+        -----
+        Diff currently only supports float and integer dtype columns with
+        no null values.
+        """
+        if self.null_count != 0:
+            raise AssertionError("Diff currently requires columns with no "
+                                 "null values")
+
+        if not np.issubdtype(self.dtype, np.number):
+            raise NotImplementedError("Diff currently only supports "
+                                      "numeric dtypes")
+
+        input_dary = self.data.to_gpu_array()
+        output_dary = rmm.device_array_like(input_dary)
+        cudautils.gpu_diff.forall(output_dary.size)(input_dary, output_dary,
+                                                    periods)
+        return Series(output_dary, name=self.name, index=self.index)
+
+    def groupby(self, group_series=None, level=None, sort=False,
+                group_keys=True):
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
+
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
 

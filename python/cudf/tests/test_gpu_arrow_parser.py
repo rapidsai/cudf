@@ -36,13 +36,14 @@ def make_gpu_parse_arrow_data_batch():
                     reason='need compatible pyarrow to generate test data')
 def test_gpu_parse_arrow_data():
     batch = make_gpu_parse_arrow_data_batch()
-    schema_data = batch.schema.serialize().to_pybytes()
-    recbatch_data = batch.serialize().to_pybytes()
+    schema_data = batch.schema.serialize()
+    recbatch_data = batch.serialize()
 
-    cpu_schema = np.ndarray(shape=len(schema_data), dtype=np.byte,
-                            buffer=bytearray(schema_data))
-    cpu_data = np.ndarray(shape=len(recbatch_data), dtype=np.byte,
-                          buffer=bytearray(recbatch_data))
+    # To ensure compatibility for OmniSci we're going to create this numpy
+    # array to be read-only as that's how numpy arrays created from foreign
+    # memory buffers will be set
+    cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
+    cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
     gpu_data = rmm.to_device(cpu_data)
     del cpu_data
 
@@ -158,23 +159,18 @@ def test_gpu_parse_arrow_cats():
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
 
-def make_gpu_parse_arrow_int16_batch():
-    depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=np.int16)
-    arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=np.int16)
-    d_depdelay = pa.array(depdelay)
-    d_arrdelay = pa.array(arrdelay)
-    if arrow_version == '0.7.1':
-        d_depdelay = d_depdelay.cast(pa.int16())
-        d_arrdelay = d_arrdelay.cast(pa.int16())
-    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay],
-                                       ['depdelay', 'arrdelay'])
-    return batch
-
-
 @pytest.mark.skipif(arrow_version is None,
                     reason='need compatible pyarrow to generate test data')
-def test_gpu_parse_arrow_int16():
-    batch = make_gpu_parse_arrow_int16_batch()
+@pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
+def test_gpu_parse_arrow_int(dtype):
+
+    depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=dtype)
+    arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=dtype)
+    d_depdelay = pa.array(depdelay)
+    d_arrdelay = pa.array(arrdelay)
+    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay],
+                                       ['depdelay', 'arrdelay'])
+
     schema_bytes = batch.schema.serialize().to_pybytes()
     recordbatches_bytes = batch.serialize().to_pybytes()
 
@@ -187,7 +183,7 @@ def test_gpu_parse_arrow_int16():
     rb_gpu_data = rmm.to_device(rb_cpu_data)
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
-    assert columns['depdelay'].dtype == np.int16
+    assert columns['depdelay'].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
 

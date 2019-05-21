@@ -1,14 +1,17 @@
 #pragma once
 
 // TODO: Update to use fixed width types when CFFI goes away
-typedef int gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
+typedef int           gdf_size_type; ///< Limits the maximum size of a gdf_column to 2^31-1
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
-typedef  long  gdf_date64;
-typedef  int    gdf_date32;
-typedef  int    gdf_category;
-typedef  long  gdf_timestamp;
-typedef int   gdf_nvstring_category;
+typedef char          gdf_bool8;     /*< Storage type for Boolean values. 
+                                        char is used to guarantee 8-bit storage. 
+                                        zero == false, nonzero == true. */
+typedef	long          gdf_date64;
+typedef	int           gdf_date32;
+typedef	int           gdf_category;
+typedef	long          gdf_timestamp;
+typedef int           gdf_nvstring_category;
 
 
  /**
@@ -22,6 +25,7 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
+    GDF_BOOL8,      ///< Boolean stored in 8 bits per Boolean. zero==false, nonzero==true.
     GDF_DATE32,     ///< int32_t days since the UNIX epoch
     GDF_DATE64,     ///< int64_t milliseconds since the UNIX epoch
     GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
@@ -30,7 +34,6 @@ typedef enum {
     GDF_STRING_CATEGORY, ///< Stores indices of an NVCategory in data and in extra col info a reference to the nv_category
     N_GDF_TYPES,   ///< additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
-
 
 
 /**
@@ -110,6 +113,7 @@ typedef union {
   long          si64;  /**< GDF_INT64     */
   float         fp32;  /**< GDF_FLOAT32   */
   double        fp64;  /**< GDF_FLOAT64   */
+  char           b08;  /**< GDF_BOOL8     */
   gdf_date32    dt32;  /**< GDF_DATE32    */
   gdf_date64    dt64;  /**< GDF_DATE64    */
   gdf_timestamp tmst;  /**< GDF_TIMESTAMP */
@@ -178,7 +182,6 @@ typedef enum {
 } gdf_agg_op;
 
 
-
 /** 
  * @brief  Colors for use with NVTX ranges.
  *
@@ -225,6 +228,35 @@ typedef enum {
 } gdf_binary_operator;
 
 
+/**
+ * @brief Types of unary math operations that can be performed on data.
+ */
+typedef enum {
+  GDF_SIN,          ///< Trigonometric sine
+  GDF_COS,          ///< Trigonometric cosine
+  GDF_TAN,          ///< Trigonometric tangent
+  GDF_ARCSIN,       ///< Trigonometric sine inverse
+  GDF_ARCCOS,       ///< Trigonometric cosine inverse
+  GDF_ARCTAN,       ///< Trigonometric tangent inverse
+  GDF_EXP,          ///< Exponential (base e, Euler number)
+  GDF_LOG,          ///< Natural Logarithm (base e)
+  GDF_SQRT,         ///< Square-root (x^0.5)
+  GDF_CEIL,         ///< Smallest integer value not less than arg
+  GDF_FLOOR,        ///< largest integer value not greater than arg
+  GDF_ABS,          ///< Absolute value
+  GDF_BIT_INVERT,   ///< Bitwise Not (~)
+} gdf_unary_math_op;
+
+
+/**
+ * @brief Options for how nulls are treated in group_by/order_by operations.
+ */
+typedef enum {
+  GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
+  GDF_NULL_AS_SMALLEST               ///< NULLS are treated as the smallest number in comparisons  
+} gdf_null_sort_behavior;
+
+
 /** 
  * @brief  This struct holds various information about how an operation should be 
  * performed as well as additional information about the input data.
@@ -235,47 +267,22 @@ typedef struct gdf_context_{
   int flag_distinct;            ///< for COUNT: DISTINCT = 1, else = 0
   int flag_sort_result;         ///< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
   int flag_sort_inplace;        ///< 0 = No sort in place allowed, 1 = else
+  bool flag_groupby_include_nulls; 
+                                /**< false = Nulls are ignored in group by keys (Pandas style), 
+                                true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
+  gdf_null_sort_behavior flag_null_sort_behavior;
+                                ///< Indicates how nulls are treated in group_by/order_by operations
 } gdf_context;
+
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 
 
-struct _OpaqueRadixsortPlan;
-typedef struct _OpaqueRadixsortPlan gdf_radixsort_plan_type;
-
-
 struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
-
-
-
 typedef enum{
-  GDF_ORDER_ASC,
+  GDF_ORDER_ASC=0,
   GDF_ORDER_DESC
 } order_by_type;
-
-typedef enum{
-  GDF_EQUALS,
-  GDF_NOT_EQUALS,
-  GDF_LESS_THAN,
-  GDF_LESS_THAN_OR_EQUALS,
-  GDF_GREATER_THAN,
-  GDF_GREATER_THAN_OR_EQUALS
-} gdf_comparison_operator;
-
-typedef enum{
-  GDF_WINDOW_RANGE,
-  GDF_WINDOW_ROW
-} window_function_type;
-
-typedef enum{
-  GDF_WINDOW_AVG,
-  GDF_WINDOW_SUM,
-  GDF_WINDOW_MAX,
-  GDF_WINDOW_MIN,
-  GDF_WINDOW_COUNT,
-  GDF_WINDOW_STDDEV,
-  GDF_WINDOW_VAR ///< Window Variance
-} window_reduction_type;
