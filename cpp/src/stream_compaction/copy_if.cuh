@@ -26,6 +26,7 @@
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>
+#include <string/nvcategory_util.hpp>
 #include <cub/cub.cuh>
 
 using bit_mask::bit_mask_t;
@@ -351,6 +352,14 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
                           scatter_functor<Filter, block_size, per_thread>{},
                           output, input, block_offsets, filter,
                           input.valid != nullptr, stream);
+
+    // TODO: TEMPORARY FIX
+    if(output.dtype == GDF_STRING_CATEGORY) {
+      gdf_error gdf_error_code;
+      gdf_error_code = nvcategory_gather(&output,
+                                         static_cast<NVCategory *>(input.dtype_info.category));
+      CUDF_EXPECTS((GDF_SUCCESS == gdf_error_code), "could not set nvcategory");
+    }
 
     CHECK_STREAM(stream);
   }
