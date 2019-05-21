@@ -1035,9 +1035,9 @@ class Series(object):
         #         val=cat, dtype=dtype)
         #     out.append(Series(buf, index=self.index))
 
-        return ((self == cat).fillna(False).astype(dtype)
+        fill_value = columnops.as_column(False)
+        return ((self == cat).fillna(fill_value).astype(dtype)
                 for cat in cats)
-
         # return out
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):

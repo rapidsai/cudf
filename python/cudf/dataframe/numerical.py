@@ -63,7 +63,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col
 
     def binary_operator(self, binop, rhs):
-        if isinstance(rhs, NumericalColumn):
+        # if isinstance(rhs, NumericalColumn):
+        if True:
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
                                         out_dtype=out_dtype)
@@ -88,11 +89,16 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
+        ret =  np.dtype(other_dtype).type(other)
+        print(ret)
+        return ret
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
             # Temporary workaround since libcudf doesn't support int16 ops
             if other_dtype == np.dtype('int16'):
                 other_dtype = np.dtype('int32')
+
+            #####
             ary = utils.scalar_broadcast_to(other, shape=len(self),
                                             dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
@@ -333,9 +339,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
+    # masked = lhs.has_null_mask or rhs.has_null_mask
+    masked = False
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
+    print(lhs, rhs, out, op)
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
