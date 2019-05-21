@@ -10,7 +10,7 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.binops cimport *
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
-from libc.stdlib cimport free
+from libc.stdlib cimport malloc, free
 
 from librmm_cffi import librmm as rmm
 
@@ -200,13 +200,13 @@ cdef apply_compiled_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, 
 # Not sure where to put this
 def _is_single_value(val):
     from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
-            return (
-                    isinstance(val, str)
-                    or isinstance(val, numbers.Number)
-                    or is_datetime_or_timedelta_dtype(val)
-                    or isinstance(val, pd.Timestamp)
-                    or isinstance(val, pd.Categorical)
-                    )
+    return (
+            isinstance(val, str)
+            or isinstance(val, numbers.Number)
+            or is_datetime_or_timedelta_dtype(val)
+            or isinstance(val, pd.Timestamp)
+            or isinstance(val, pd.Categorical)
+            )
 
 
 def apply_op(lhs, rhs, out, op):
@@ -218,6 +218,8 @@ def apply_op(lhs, rhs, out, op):
 
     cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
+    cdef gdf_scalar* s
+    cdef gdf_column* c_col
 
     # Simultaneously track whether we have any scalars, and which one
     # TODO is this the cleanest way?
@@ -225,22 +227,21 @@ def apply_op(lhs, rhs, out, op):
 
     # Check if either lhs or rhs are scalars
     # TODO do we need to check if both are scalars?
-    # TODO would we prefer to put scalars on stack instead of heap?
     if _is_single_value(lhs):
-        cdef gdf_scalar *s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
-        gdf_scalar_from_scalar(<gdf_scalar*>s, lhs)
+        # s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+        s = gdf_scalar_from_scalar(lhs)
         left = True
     else:
         check_gdf_compatibility(lhs)
-        cdef gdf_column* c_col = column_view_from_column(lhs)
+        c_col = column_view_from_column(lhs)
 
     if _is_single_value(rhs):
-        cdef gdf_scalar *s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
-        gdf_scalar_from_scalar(<gdf_scalar*>s, rhs)
+        # s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+        gdf_scalar_from_scalar(rhs)
         left = False
     else:
         check_gdf_compatibility(rhs)
-        cdef gdf_column* c_col = column_view_from_column(rhs)
+        c_col = column_view_from_column(rhs)
 
     # Careful, because None is a sentinel value here, `if left:` doesn't work
     if left is not None:
@@ -292,19 +293,18 @@ cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out,
                      gdf_binary_operator op, left):
     cdef gdf_error result
 
-    with nogil:
-        if left:
-            result = gdf_binary_operation_s_v(
-                    <gdf_column*>out,
-                    <gdf_scalar*>s,
-                    <gdf_column*>col,
-                    <gdf_binary_operator>op)
-        else:
-            result = gdf_binary_operation_v_s(
-                    <gdf_column*>out,
-                    <gdf_column*>col,
-                    <gdf_scalar*>s,
-                    <gdf_binary_operator>op)
+    if left:
+        result = gdf_binary_operation_s_v(
+                <gdf_column*>out,
+                <gdf_scalar*>s,
+                <gdf_column*>col,
+                <gdf_binary_operator>op)
+    else:
+        result = gdf_binary_operation_v_s(
+                <gdf_column*>out,
+                <gdf_column*>col,
+                <gdf_scalar*>s,
+                <gdf_binary_operator>op)
 
     check_gdf_error(result)
     cdef int nullct = c_out[0].null_count
