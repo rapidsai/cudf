@@ -296,6 +296,7 @@ class Groupby(object):
         # Prepare dataframe
         orig_df = df.copy()
         df = df.loc[:, levels].reset_index(drop=True)
+        df = df.to_frame() if isinstance(df, Series) else df
         rowid_column = '__cudf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
@@ -402,6 +403,7 @@ class Groupby(object):
         """Shuffle columns in *src_df* with *reordering_indices*
         and store the new columns into *out_df*
         """
+        src_df = src_df.to_frame() if isinstance(src_df, Series) else src_df
         for k in src_df.columns:
             col = src_df[k].reset_index(drop=True)
             newcol = col.take(reordering_indices, ignore_index=True)
