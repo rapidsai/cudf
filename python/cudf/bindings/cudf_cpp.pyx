@@ -98,23 +98,21 @@ cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
-    cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+    """
+    Returns a gdf_scalar* constructed from the numpy scalar ``val``.
+    """
     cdef bool is_valid = True
+
+    cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     if s is NULL:
-        # TODO what should be done here?
         raise MemoryError
 
     set_scalar_value(s, val)
-
     if dtype is not None:
         s[0].dtype = dtypes[dtype.type]
     else:
-        # TODO potential overhead here using as_column
-        #s[0].dtype = dtypes[cudf.dataframe.columnops.as_column(val).dtype.type]
         s[0].dtype = dtypes[val.dtype.type]
-
     s[0].is_valid = is_valid
-
     return s
 
 cdef get_scalar_value(gdf_scalar scalar):
@@ -137,7 +135,9 @@ cdef get_scalar_value(gdf_scalar scalar):
 
 
 cdef set_scalar_value(gdf_scalar *scalar, val):
-    # TODO find a cleaner way to do this
+    """
+    Sets the value of a gdf_scalar from a numpy scalar.
+    """
     if val.dtype.type == np.float64:
         scalar.data.fp64 = val
     elif val.dtype.type == np.float32:
@@ -150,6 +150,10 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si16 = val
     elif val.dtype.type == np.int8:
         scalar.data.si08 = val
+    else:
+        raise ValueError("Cannot convert numpy scalar of dtype {}"
+                         "to gdf_calar".format(val.dtype.name))
+
 
 # gdf_column functions
 
