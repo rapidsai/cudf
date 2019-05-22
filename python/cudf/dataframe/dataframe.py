@@ -459,17 +459,18 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
         elif isinstance(other, Series):
