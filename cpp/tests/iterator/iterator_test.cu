@@ -44,6 +44,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
 
+#include <thrust/tuple.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/iterator_adaptor.h>
+
+
 void gen_nullbitmap(std::vector<gdf_valid_type>& v, std::vector<bool>& host_bools)
 {
     int length = host_bools.size();
@@ -80,23 +88,6 @@ public:
     {};
 
     CUDA_HOST_DEVICE_CALLABLE
-    T operator*() const
-    {
-//        return (gdf_is_valid(valid, index))? data[index] : identity;
-        T val = (gdf_is_valid(valid, index))? data[index] : identity;
-        printf("val(%d, %d) = %d\n", data[index], gdf_is_valid(valid, index), val);
-        return val;
-
-};
-
-    CUDA_HOST_DEVICE_CALLABLE
-    T operator[](const difference_type length) const
-    {
-        gdf_size_type id = index + length;
-        return (gdf_is_valid(valid, id))? data[id] : identity;
-    };
-
-    CUDA_HOST_DEVICE_CALLABLE
     bool operator==(const IteratorWithNulls& others)
     {//printf("cmp (%d, %d)\n", index, others.index);
         return index == others.index; };
@@ -104,6 +95,28 @@ public:
     CUDA_HOST_DEVICE_CALLABLE
     bool operator!=(const IteratorWithNulls& others)
     { return !(*this == others); };
+
+    CUDA_HOST_DEVICE_CALLABLE
+    difference_type operator-(const IteratorWithNulls& others)
+    {
+        return (index - others.index );
+    };
+
+    CUDA_HOST_DEVICE_CALLABLE
+    T operator*() const
+    {
+//        return (gdf_is_valid(valid, index))? data[index] : identity;
+        T val = (gdf_is_valid(valid, index))? data[index] : identity;
+//        printf("val(%d, %d) = %d\n", data[index], gdf_is_valid(valid, index), val);
+        return val;
+    };
+
+    CUDA_HOST_DEVICE_CALLABLE
+    T operator[](const difference_type length) const
+    {
+        gdf_size_type id = index + length;
+        return (gdf_is_valid(valid, id))? data[id] : identity;
+    };
 
     CUDA_HOST_DEVICE_CALLABLE
     IteratorWithNulls& operator+=(const difference_type length)
@@ -127,13 +140,6 @@ public:
         return (tmp += length);
     };
 
-
-    CUDA_HOST_DEVICE_CALLABLE
-    difference_type operator-(const IteratorWithNulls& others)
-    {
-        return (index - others.index );
-    };
-
 protected:
     const T *data;
     const gdf_valid_type *valid;
@@ -143,6 +149,54 @@ protected:
 };
 
 
+
+template <typename T>
+class IteratorGroupBy : public IteratorWithNulls<T>
+{
+public:
+    using difference_type = gdf_size_type;
+
+    // Discussion: std::iterator is deprecated in C++17
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy(const T* _data, const int32_t* _indices)
+    : IteratorWithNulls<T>(_data, nullptr, T{0}), indices(_indices)
+    {};
+
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy(const IteratorGroupBy& ref)
+    : IteratorWithNulls<T>(ref), indices(ref.indices)
+    {};
+
+    CUDA_HOST_DEVICE_CALLABLE
+    T operator*() const
+    {
+        T val = this->data[indices[this->index]];
+        return val;
+    };
+
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy& operator+=(const difference_type length)
+    { //printf("operator+ (%d, %d)\n", index, length);
+        this->index += length;
+        return *this; };
+
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy& operator++() { return (*this += 1);};
+
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy operator++(int) {IteratorGroupBy retval = *this; ++(*this); return retval;}
+
+    CUDA_HOST_DEVICE_CALLABLE
+    IteratorGroupBy operator+(const difference_type length) {
+        IteratorGroupBy tmp(*this);
+        return (tmp += length);
+    };
+
+
+protected:
+    const int32_t *indices;
+
+};
 
 
 template <typename T>
@@ -172,13 +226,20 @@ struct IteratorTest : public GdfTest
 
     // iterator test case which uses thrust
     template <typename InputIterator, typename T_output>
-    void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
+    void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items, bool is_device=true)
     {
         T init = T{0};
 
         InputIterator d_in_last =  d_in + num_items;
 
-        T result = thrust::reduce(d_in, d_in_last, init, cudf::DeviceSum{});
+        T result;
+        if( is_device){
+            result = thrust::reduce(thrust::device, d_in, d_in_last, init, cudf::DeviceSum{});
+        }else{
+            std::cout << "thrust test (host)" << std::endl;
+            result = thrust::reduce(thrust::host, d_in, d_in_last, init, cudf::DeviceSum{});
+            std::cout << "thrust test (host)" << std::endl;
+        }
 
         EXPECT_EQ(expected, result) << "thrust test";
     }
@@ -213,7 +274,115 @@ TYPED_TEST(IteratorTest, non_null_iterator)
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 }
 
-// tests for null iterator (column with null bitmap)
+
+#if 0
+
+template <typename T>
+struct InputHelper
+{
+    struct ColumnData{
+        const T *data;
+        const gdf_valid_type *valid;
+        T identity;
+
+        ColumnData(T *_data, gdf_valid_type *_valid, T _identity)
+        : data(_data), valid(_valid), identity(_identity){};
+    };
+
+
+    using IteratorTuple = thrust::tuple<
+        thrust::constant_iterator<ColumnData>,
+        thrust::counting_iterator<int>
+    > ;
+    using IteratorZipped = thrust::zip_iterator<IteratorTuple>;
+
+    struct null_func  : public thrust::unary_function<IteratorZipped, T>
+    {
+        __host__ __device__
+        T operator()(IteratorZipped zipped) const
+        {
+            ColumnData col = * thrust::get<0>(*zipped);
+            int id = * thrust::get<1>(*zipped));
+
+            return (gdf_is_valid(col.valid, id))? col.data[id] : col.identity;
+        };
+    };
+
+    using IteratorTransformed = thrust::transform_iterator<InputHelper<T>::null_func, IteratorZipped>;
+
+    IteratorTransformed make_transform_iterator(const T *_data, const gdf_valid_type *_valid, T _identity)
+    {
+        ColumnData col{_data, _valid, _identity};
+
+        IteratorTransformed it = thrust::make_transform_iterator(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    thrust::make_constant_iterator(col),
+                    thrust::make_counting_iterator(0)
+                )
+            ),
+            InputHelper<T>::null_func()
+        );
+
+        return it;
+    };
+
+
+};
+
+#endif
+
+template<typename T>
+struct ColumnData{
+    const T *data;
+    const gdf_valid_type *valid;
+    T identity;
+
+    ColumnData(T *_data, gdf_valid_type *_valid, T _identity)
+    : data(_data), valid(_valid), identity(_identity){};
+};
+
+
+// derive repeat_iterator from iterator_adaptor
+template<typename T, typename Iterator>
+  class column_input_iterator
+    : public thrust::iterator_adaptor<
+        column_input_iterator<T, Iterator>, // the first template parameter is the name of the iterator we're creating
+        Iterator,                   // the second template parameter is the name of the iterator we're adapting
+        thrust::use_default, thrust::use_default, thrust::use_default, T, thrust::use_default
+      >
+      {
+  public:
+    // shorthand for the name of the iterator_adaptor we're deriving from
+    using super_t = thrust::iterator_adaptor<
+      column_input_iterator<T, Iterator>,
+      Iterator,
+      thrust::use_default, thrust::use_default, thrust::use_default, T, thrust::use_default
+    >;
+
+    __host__ __device__
+    column_input_iterator(const Iterator &it, const ColumnData<T> col) : super_t(it), colData(col){}
+    // befriend thrust::iterator_core_access to allow it access to the private interface below
+    friend class thrust::iterator_core_access;
+  private:
+    const ColumnData<T> colData;
+
+    // it is private because only thrust::iterator_core_access needs access to it
+    __host__ __device__
+    typename super_t::reference dereference() const
+    {
+      int id = *(this->base());
+
+      return (gdf_is_valid(colData.valid, id))? colData.data[id] : colData.identity;
+    }
+};
+
+
+
+/* tests for null iterator (column with null bitmap)
+   actually, we can use cub for reduction with nulls.
+    we may accelarate the reduction for a column using cub
+*/
 TYPED_TEST(IteratorTest, null_iterator)
 {
     using T = int32_t;
@@ -235,11 +404,38 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    if(0)
+    if(1)
     {  // check host side `IteratorWithNulls`.
         IteratorWithNulls<T> it_hos(hos_array.data(), host_nulls.data(), init);
         T expected_value_host = std::accumulate(it_hos, it_hos + hos_array.size(), T{0});
         EXPECT_EQ(expected_value, expected_value_host) << "CPU iterator test";
+
+//        this->iterator_test_thrust(expected_value, it_hos2, dev_array.size(), false);
+
+#if 0
+        auto it_hos2 = InputHelper<T>::make_transform_iterator(
+            hos_array.data(),
+            host_nulls.data(), init);
+
+
+        T expected_value_host2 = std::accumulate(it_hos2, it_hos2 + hos_array.size(), T{0});
+        EXPECT_EQ(expected_value, expected_value_host2) << "CPU iterator test";
+#else
+        ColumnData<T> col(hos_array.data(), host_nulls.data(), init);
+        thrust::counting_iterator<int32_t> counting_it = thrust::make_counting_iterator(int32_t{0});
+
+        column_input_iterator<T, thrust::counting_iterator<int32_t>> it_hos2(counting_it, col);
+        this->iterator_test_thrust(expected_value, it_hos2, dev_array.size(), false);
+
+#endif
+
+//        this->iterator_test_thrust(expected_value, it_hos2, dev_array.size(), false);
+
+
+//        ZipIterator iter(thrust::make_tuple(int_v.begin(), float_v.begin(), char_v.begin()));
+
+
+
     }
 
     // create device side `IteratorWithNulls`.
@@ -248,17 +444,62 @@ TYPED_TEST(IteratorTest, null_iterator)
         static_cast<const gdf_valid_type*>( dev_nulls.data().get() ),
         init);
 
+    // reduction using cub
     this->iterator_test_cub(expected_value, it_dev, dev_array.size());
-//    this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 
+    ColumnData<T> col(hos_array.data(), host_nulls.data(), init);
+    thrust::counting_iterator<int32_t> counting_it = thrust::make_counting_iterator(int32_t{0});
+
+    column_input_iterator<T, thrust::counting_iterator<int32_t>> it_dev2(counting_it, col);
+
+    // reduction using thrust
+    this->iterator_test_thrust(expected_value, it_dev2, dev_array.size());
+    // reduction using cub
+    this->iterator_test_cub(expected_value, it_dev2, dev_array.size());
+
+
+    std::cout << "test done." << std::endl;
+    // reduction using thrust
+//    this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 }
 
-// tests for group_by iterator
+/*
+    tests for group_by iterator
+    this was used by old implementation of group_by.
+
+    This won't be used with the newer implementation
+     (a.k.a. Single pass, distributive groupby https://github.com/rapidsai/cudf/pull/1478)
+    distributive groupby uses atomic operation to accumulate.
+
+*/
+
 TYPED_TEST(IteratorTest, group_by_iterator)
 {
-    // TBD.
-}
+#if 0
+    using T = int32_t;
+    using T_index = int32_t;
 
+    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+    thrust::device_vector<T> dev_array(hos_array);
+
+    std::vector<T_index> hos_indices({0, 1, 3, 5}); // sorted indices belongs to a group
+    thrust::device_vector<T_index> dev_indices(hos_indices);
+
+    T expected_value = std::accumulate(hos_indices.begin(), hos_indices.end(), T{0},
+        [&](T acc, T_index id){ return (acc + hos_array[id]); } );
+    std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
+
+    if(0)
+    {  // check host side `IteratorWithNulls`.
+        IteratorGroupBy<T> it_hos(hos_array.data(), hos_indices.data());
+        T expected_value_host = std::accumulate(it_hos, it_hos + hos_indices.size(), T{0});
+        EXPECT_EQ(expected_value, expected_value_host) << "CPU iterator test";
+
+        this->iterator_test_thrust(expected_value, it_hos, dev_array.size(), false);
+    }
+#endif
+
+}
 
 // tests for group_by iterator
 TYPED_TEST(IteratorTest, group_by_iterator_null)
@@ -266,5 +507,6 @@ TYPED_TEST(IteratorTest, group_by_iterator_null)
     // Discussion: how to do if all of values are nulls ?
     // maybe need to exclude null values first ? (it also gives `count` of a column value in the group)
 
-    // TBD.
+
+    // TBD. it should be possible.
 }
