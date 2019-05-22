@@ -50,7 +50,7 @@ namespace cudf {
  */
 gdf_column point_in_polygon(gdf_column const & polygon_latitudes,
                             gdf_column const & polygon_longitudes,
-	                        gdf_column const & point_latitudes,
+	                    gdf_column const & point_latitudes,
                             gdf_column const & point_longitudes);
 
 }  // namespace cudf
