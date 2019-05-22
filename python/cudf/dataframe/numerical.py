@@ -89,19 +89,15 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
-        ret =  np.dtype(other_dtype).type(other)
-        print(ret)
-        return ret
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            # Temporary workaround since libcudf doesn't support int16 ops
-            if other_dtype == np.dtype('int16'):
-                other_dtype = np.dtype('int32')
-
-            #####
-            ary = utils.scalar_broadcast_to(other, shape=len(self),
-                                            dtype=other_dtype)
-            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+            if np.isscalar(other):
+                other = np.dtype(other_dtype).type(other)
+                return other
+            else:
+                ary = utils.scalar_broadcast_to(other, shape=len(self),
+                                dtype=other_dtype)
+                return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 

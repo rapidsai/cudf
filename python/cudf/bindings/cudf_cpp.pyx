@@ -99,17 +99,20 @@ cdef gdf_dtype get_dtype(dtype):
 
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
     cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+    cdef bool is_valid = True
     if s is NULL:
         # TODO what should be done here?
         raise MemoryError
 
-    print(type(s[0]))
-    s[0].gdf_data = val
+    set_scalar_value(s, val)
 
     if dtype is not None:
-        s[0].gdf_dtype = dtype
-    # TODO potential overhead here using as_column
-    s[0].gdf_dtype = cudf.dataframe.columnops.as_column(val).dtype
+        s[0].dtype = dtypes[dtype.type]
+    else:
+        # TODO potential overhead here using as_column
+        s[0].dtype = dtypes[cudf.dataframe.columnops.as_column(val).dtype.type]
+
+    s[0].is_valid = is_valid
 
     return s
 
@@ -130,6 +133,21 @@ cdef get_scalar_value(gdf_scalar scalar):
         GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
         GDF_TIMESTAMP: np.array(scalar.data.tmst).astype('datetime64[ns]'),
     }[scalar.dtype]
+
+
+cdef set_scalar_value(gdf_scalar *scalar, val):
+    dtype_to_gdf_data_mapping = {
+        np.float64: 'fp64',
+        np.float32: 'fp32',
+        np.int64:   'si64',
+        np.int32:   'si32',
+        np.int16:   'si16',
+        np.int8:    'si08'
+    }
+    #scalar.data.si64 = 1
+    #print(scalar.data.si64)
+    setattr(scalar.data, mapping[val.dtype.type], np.ctypeslib.as_ctypes(val))
+
 
 # gdf_column functions
 

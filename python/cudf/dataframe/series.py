@@ -420,7 +420,7 @@ class Series(object):
             return other._binaryop(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other._column)
+        outcol = self._column.binary_operator(fn, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -437,7 +437,7 @@ class Series(object):
             return other._binaryop(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator(fn, self._column)
+        outcol = other._column.binary_operator(fn, self)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -536,12 +536,12 @@ class Series(object):
             return Series(other)
         else:
             col = self._column.normalize_binop_value(other)
-            return self._copy_construct(data=col)
+            return col
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.unordered_compare(cmpops, other._column)
+        outcol = self._column.unordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -550,7 +550,7 @@ class Series(object):
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.ordered_compare(cmpops, other._column)
+        outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
