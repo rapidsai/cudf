@@ -17,7 +17,7 @@ from cudf.dataframe.buffer import Buffer
 
 def transpose(df):
     """Transpose index and columns.
-    
+
     See Also
     --------
     cudf.dataframe.DataFrame.transpose
@@ -26,7 +26,7 @@ def transpose(df):
     if len(df.columns) == 0:
         return df
 
-    dtype = df.dtypes[0]
+    dtype = df.dtypes.iloc[0]
     if pd.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError('Categorical columns are not yet '
                                   'supported for function')
