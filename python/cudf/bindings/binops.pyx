@@ -230,42 +230,34 @@ def apply_op(lhs, rhs, out, op):
 
     # Check if either lhs or rhs are scalars
     # TODO do we need to check if both are scalars?
-    # if _is_single_value(lhs):
-    print("lhs: {}".format(type(lhs)))
-    print("rhs: {}".format(type(rhs)))
     if not isinstance(lhs, Column):
-        print("in lhs")
         s = gdf_scalar_from_scalar(lhs)
         left = True
+        c_col = column_view_from_column(rhs)
     else:
         check_gdf_compatibility(lhs)
-        # c_lhs = c_col = column_view_from_column(lhs)
         c_lhs = column_view_from_column(lhs)
 
-    # if _is_single_value(rhs):
     if not isinstance(rhs, Column):
-        print("in rhs")
-        gdf_scalar_from_scalar(rhs)
+        s = gdf_scalar_from_scalar(rhs)
         left = False
+        c_col = column_view_from_column(lhs)
     else:
         check_gdf_compatibility(rhs)
-        # c_rhs = c_col = column_view_from_column(rhs)
         c_rhs = column_view_from_column(rhs)
 
     # Careful, because None is a sentinel value here, `if left:` doesn't work
     if left is not None:
 
         nullct = apply_scalar_op(
-                <gdf_scalar*> s,
-                <gdf_column*> c_col,
-                <gdf_column*> out,
-                op,
-                left)
-        
+                 s,
+                 c_col,
+                 c_out,
+                 c_op,
+                 left)
         free(c_out)
         free(s)
         free(c_col)
-        print(nullct)
         return nullct
 
     if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
@@ -318,7 +310,7 @@ cdef apply_scalar_op(gdf_scalar *s, gdf_column *col, gdf_column *out,
                 <gdf_binary_operator>op)
 
     check_gdf_error(result)
-    cdef int nullct = c_out[0].null_count
+    cdef int nullct = out[0].null_count
     return nullct
 
 

@@ -117,8 +117,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef enum gdf_null_sort_behavior:
       GDF_NULL_AS_LARGEST = 0, 
       GDF_NULL_AS_SMALLEST,
-      GDF_NULL_AS_LARGEST_FOR_MULTISORT,
-
+   
     ctypedef enum gdf_method:
       GDF_SORT = 0,
       GDF_HASH,

@@ -98,7 +98,8 @@ def make_null_like(other, size=None, dtype=None):
         size = other.size
     if dtype is None:
         dtype = other.dtype
-    mask = utils.make_mask(size)
+    mask = cudautils.make_mask(size)
+    cudautils.fill_value(mask, 0)
 
     if pd.api.types.is_categorical_dtype(dtype):
         mem = rmm.device_array((size,), dtype=other.data.dtype)
