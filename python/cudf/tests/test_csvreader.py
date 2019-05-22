@@ -16,8 +16,6 @@ import gzip
 import shutil
 import os
 
-from cudf.bindings.GDFError import GDFError
-
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
