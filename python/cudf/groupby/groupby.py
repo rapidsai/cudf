@@ -167,6 +167,7 @@ class Groupby(object):
             self._method = method
         else:
             msg = "Method {!r} is not a supported group by method"
+            raise NotImplementedError(msg.format(method))
 
     def _apply_basic_agg(self, agg_type, sort_results=False):
         """
@@ -273,7 +274,8 @@ class Groupby(object):
         # and all of the actual aggregations in the mapping set are only
         # length 1, we can assign the columns directly as keys.
         if len(set(aggs.keys())) == len(aggs.keys()) and\
-                (np.array(list(map(lambda x: len([x] if isinstance(x, str) else list(x)), aggs.values())))==1).all():
+                (np.array(list(map(lambda x: len([x] if isinstance(
+                    x, str) else list(x)), aggs.values()))) == 1).all():
             result.columns = aggs.keys()
         else:
             tuples = []
