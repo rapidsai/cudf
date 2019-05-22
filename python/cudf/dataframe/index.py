@@ -288,6 +288,10 @@ class Index(object):
         """
         return self._values.to_array(fillna=fillna)
 
+    def to_series(self):
+        from cudf.dataframe.series import Series
+        return Series(self._values)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -441,6 +445,11 @@ class GenericIndex(Index):
         elif isinstance(values, columnops.TypedColumnBase):
             values = values
         else:
+            if isinstance(values, (list, tuple)):
+                if len(values) == 0:
+                    values = np.asarray([], dtype="int64")
+                else:
+                    values = np.asarray(values)
             values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
@@ -533,7 +542,11 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
             values = DatetimeColumn.from_numpy(values.values)
-
+        elif isinstance(values, (list, tuple)):
+            values = DatetimeColumn.from_numpy(
+                np.array(values, dtype='<M8[ms]')
+            )
+        assert values.null_count == 0
         self._values = values
         self.name = name
 
@@ -597,7 +610,12 @@ class CategoricalIndex(GenericIndex):
                 categories=values.categories.tolist(),
                 ordered=values.ordered
             )
+        elif isinstance(values, (list, tuple)):
+            values = columnops.as_column(
+                pd.Categorical(values, categories=values)
+            )
 
+        assert values.null_count == 0
         self._values = values
         self.name = name
         self.names = [name]
@@ -630,6 +648,7 @@ class StringIndex(GenericIndex):
         else:
             self._values = columnops.build_column(nvstrings.to_device(values),
                                                   dtype='object')
+        assert self._values.null_count == 0
         self.name = name
 
     @property
@@ -643,6 +662,9 @@ class StringIndex(GenericIndex):
     def to_pandas(self):
         result = pd.Index(self.values, name=self.name)
         return result
+
+    def take(self, indices):
+        return columnops.as_column(self._values).element_indexing(indices)
 
     def __repr__(self):
         return "{}({}, dtype='object', name={})".format(
@@ -684,12 +706,6 @@ def as_index(arbitrary, name=None):
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if hasattr(arbitrary, '__len__'):
-            if hasattr(arbitrary, 'ndim') and arbitrary.ndim == 0:
-                # 0-d arrays are a special case:
-                pass
-            elif len(arbitrary) == 0:
-                return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 

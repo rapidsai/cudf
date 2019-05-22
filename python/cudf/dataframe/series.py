@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-
 import warnings
 from collections import OrderedDict
 from numbers import Number
@@ -20,6 +19,7 @@ from cudf.settings import NOTSET, settings
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
+from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
@@ -166,6 +166,25 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
+    def append(self, other, ignore_index=True):
+        """Append values from another ``Series`` or array-like object.
+        If ``ignore_index=True`` (default), the index is reset.
+        """
+        this = self
+        other = Series(other)
+
+        from cudf.dataframe import numerical
+        if isinstance(this._column, numerical.NumericalColumn):
+            if self.dtype != other.dtype:
+                this, other = numerical.numeric_normalize_types(this, other)
+
+        if ignore_index:
+            index = None
+        else:
+            index = True
+
+        return Series._concat([this, other], index=index)
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -262,14 +281,9 @@ class Series(object):
                 arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                if self.dtype == np.dtype('object'):
-                    idx = arg.to_gpu_array()
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_position(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                maps = columnops.as_column(arg).data.mem
+                index = self.index.take(maps)
+                selvals = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
                 if self.dtype == np.dtype('object'):
                     idx = cudautils.boolean_array_to_index_array(
@@ -283,7 +297,6 @@ class Series(object):
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
-
         elif isinstance(arg, slice):
             index = self.index[arg]         # slice index
             col = self._column[arg]         # slice column
@@ -625,7 +638,11 @@ class Series(object):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            index = Index._concat([o.index for o in objs])
+            from cudf.dataframe.multiindex import MultiIndex
+            if isinstance(objs[0].index, MultiIndex):
+                index = MultiIndex._concat([o.index for o in objs])
+            else:
+                index = Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -634,15 +651,6 @@ class Series(object):
             name = None
         col = Column._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
-
-    def append(self, arbitrary):
-        """Append values from another ``Series`` or array-like object.
-        Returns a new copy with the index resetted.
-        """
-        other = Series(arbitrary)
-        other_col = other._column
-        # return new series
-        return Series(self._column.append(other_col))
 
     @property
     def valid_count(self):
@@ -783,6 +791,7 @@ class Series(object):
 
     @property
     def index(self):
+
         """The index object
         """
         return self._index
@@ -790,6 +799,10 @@ class Series(object):
     @index.setter
     def index(self, _index):
         self._index = _index
+
+    @property
+    def loc(self):
+        return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
@@ -826,7 +839,7 @@ class Series(object):
         -------
         Series containing the elements corresponding to the indices
         """
-        return Iloc(self)
+        return _SeriesIlocIndexer(self)
 
     @property
     def nullmask(self):
@@ -1133,7 +1146,7 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        return self._column.find_first_value(value)
+        return self._column._first_value(value)
 
     def find_last_value(self, value):
         """
@@ -1259,7 +1272,7 @@ class Series(object):
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
         res = self._column.unique(method=method)
-        return Series(res)
+        return Series(res, name=self.name)
 
     def nunique(self, method='sort', dropna=True):
         """Returns the number of unique values of the Series: approximate version,
@@ -1814,22 +1827,3 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, sr):
-        self._sr = sr
-
-    def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        return self._sr[arg]
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)

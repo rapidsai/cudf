@@ -1,8 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '9.2').split('.')[:2]) %}
+
 package:
   name: libcudf
   version: {{ version }}
@@ -25,8 +27,8 @@ requirements:
   build:
     - cmake >=3.12.4
   host:
-    - librmm 0.7.*
-    - libnvstrings 0.7.*
+    - librmm {{ minor_version }}.*
+    - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}

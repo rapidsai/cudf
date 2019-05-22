@@ -15,9 +15,12 @@
  */
 
 #include <copying.hpp>
+#include <utilities/error_utils.hpp>
+#include <table.hpp>
+
+#include <algorithm>
 #include <cudf.h>
 #include <cuda_runtime.h>
-#include "utilities/error_utils.hpp"
 
 namespace cudf
 {
@@ -84,6 +87,42 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
   }
 
   return output;
+}
+
+table empty_like(table const& t) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+                 [](gdf_column* out_col, gdf_column const* in_col) {
+                   out_col = new gdf_column;
+                   *out_col = empty_like(*in_col);
+                   return out_col;
+                 });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+}
+
+table allocate_like(table const& t, cudaStream_t stream) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+                 [stream](gdf_column* out_col, gdf_column const* in_col) {
+                   out_col = new gdf_column;
+                   *out_col = allocate_like(*in_col,stream);
+                   return out_col;
+                 });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+}
+
+table copy(table const& t, cudaStream_t stream) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+                 [stream](gdf_column* out_col, gdf_column const* in_col) {
+                   out_col = new gdf_column;
+                   *out_col = copy(*in_col, stream);
+                   return out_col;
+                 });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
 
 } // namespace cudf

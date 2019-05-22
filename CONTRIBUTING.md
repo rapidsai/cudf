@@ -104,7 +104,6 @@ source activate cudf_dev
 ```
 - If you're using CUDA 9.2, you will need to create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
 
-
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
 $ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
@@ -120,6 +119,12 @@ $ make -j                                                                 # comp
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
 
+- As a convenience, a `build.sh` script is provided in `$CUDF_HOME`. To execute the same build commands above, run the script as shown below.  Note that the libraries will be installed to the location set in `$INSTALL_PREFIX` if set (i.e. `export INSTALL_PREFIX=/install/path`), otherwise to `$CONDA_PREFIX`.
+```bash
+$ cd $CUDF_HOME
+$ ./build.sh libcudf                   # compile the cuDF libraries and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
+```
+
 - To run tests (Optional):
 ```bash
 $ make test
@@ -131,6 +136,12 @@ $ cd $CUDF_HOME/python
 $ python setup.py build_ext --inplace
 ```
 
+- Like the `libcudf` build step above, `build.sh` can also be used to build the `cudf` python package, as shown below:
+```bash
+$ cd $CUDF_HOME
+$ ./build.sh cudf
+```
+
 - You will also need the following environment variables, including `$CUDA_HOME`.
 ```bash
 NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
@@ -139,13 +150,22 @@ NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 
 - To run Python tests (Optional):
 ```bash
-$ py.test -v                                        # run python tests on cudf python bindings
+$ py.test -v                           # run python tests on cudf python bindings
 ```
 
-- Finally, install the Python package to your Python path:
+- Other `build.sh` options:
 ```bash
-$ python setup.py install                           # install cudf python bindings
+$ cd $CUDF_HOME
+$ ./build.sh clean                     # remove any prior build artifacts and configuration (start over)
+$ ./build.sh libcudf -v                # compile and install libcudf with verbose output
+$ ./build.sh libcudf -g                # compile and install libcudf for debug
+$ PARALLEL_LEVEL=4 ./build.sh libcudf  # compile and install libcudf limiting parallel build jobs to 4 (make -j4)
+$ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
+
+- The `build.sh` script can be customized to support other features:
+  - **ABI version:** The cmake -DCMAKE_CXX11_ABI option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
+
 
 Done! You are ready to develop for the cuDF OSS project.
 

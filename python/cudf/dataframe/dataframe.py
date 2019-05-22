@@ -32,6 +32,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
+from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
@@ -641,7 +642,7 @@ class DataFrame(object):
         5   5    5
         8   8    8
         """
-        return Loc(self)
+        return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
@@ -670,7 +671,7 @@ class DataFrame(object):
         7    7    7    7
         9    9    9    9
         """
-        return Iloc(self)
+        return _DataFrameIlocIndexer(self)
 
     @property
     def columns(self):
@@ -1051,6 +1052,9 @@ class DataFrame(object):
         objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
+        elif isinstance(objs[0].index, cudf.dataframe.multiindex.MultiIndex):
+            index = cudf.dataframe.multiindex.MultiIndex._concat(
+                    [o.index for o in objs])
         else:
             index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))
@@ -1322,7 +1326,10 @@ class DataFrame(object):
         Not supporting *copy* because default and only behaviour is copy=True
         """
         from cudf.bindings.transpose import transpose as cpp_tranpose
-        return cpp_tranpose(self)
+        result = cpp_tranpose(self)
+        result = result.rename(dict(zip(result.columns, self.index)))
+        result = result.set_index(self.columns)
+        return result
 
     @property
     def T(self):
@@ -2805,114 +2812,6 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
-
-
-class Loc(object):
-    """
-    For selection by label.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        row_slice = None
-        row_label = None
-
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)\
-                and isinstance(arg, tuple):  # noqa: E501
-            # Explicitly ONLY support tuple indexes into MultiIndex.
-            # Pandas allows non tuple indices and warns "results may be
-            # undefined."
-            return self._df._index._get_row_major(self._df, arg)
-
-        if isinstance(arg, int):
-            if arg < 0 or arg >= len(self._df):
-                raise IndexError("label scalar %s is out of bound" % arg)
-            row_label = arg
-            col_slice = self._df.columns
-
-        elif isinstance(arg, tuple):
-            arg_1, arg_2 = arg
-            if isinstance(arg_1, int):
-                row_label = arg_1
-            elif isinstance(arg_1, slice):
-                row_slice = arg_1
-            else:
-                raise TypeError(type(arg_1))
-            col_slice = arg_2
-            if isinstance(arg_2, str):
-                col_slice = [arg_2]
-
-        elif isinstance(arg, slice):
-            row_slice = arg
-            col_slice = self._df.columns
-        else:
-            raise TypeError(type(arg))
-
-        if row_label is not None:
-            ret_list = []
-            col_list = pd.Categorical(list(col_slice))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                        self._df[col][row_label].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in loc"
-                    )
-                ret_list.append(self._df[col][row_label])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
-
-        df = DataFrame()
-        begin, end = self._df.index.find_label_range(row_slice.start,
-                                                     row_slice.stop)
-        row_step = row_slice.step if row_slice.step is not None else 1
-        for col in col_slice:
-            sr = self._df[col]
-            df.add_column(col, sr[begin:end:row_step], forceindex=True)
-
-        return df
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        if isinstance(arg, (tuple)):
-            if len(arg) == 1:
-                arg = list(arg)
-            elif len(arg) == 2:
-                return self[arg[0]][arg[1]]
-            else:
-                return pd.core.indexing.IndexingError(
-                    "Too many indexers"
-                )
-
-        if isinstance(arg, numbers.Integral):
-            rows = []
-            for col in self._df.columns:
-                rows.append(self._df[col][arg])
-            return Series(np.array(rows), name=arg)
-        else:
-            df = DataFrame()
-            for col in self._df.columns:
-                df[col] = self._df[col][arg]
-            df.index = self._df.index[arg]
-
-            return df
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)
 
 
 def from_pandas(obj):
