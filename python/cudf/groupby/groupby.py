@@ -276,7 +276,9 @@ class Groupby(object):
         else:
             tuples = []
             for k in aggs.keys():
-                for v in aggs[k]:
+                value = [aggs[k]] if isinstance(aggs[k], str) else list(
+                        aggs[k])
+                for v in value:
                     tuples.append((k, v))
             multiindex = MultiIndex.from_tuples(tuples)
             result.columns = multiindex

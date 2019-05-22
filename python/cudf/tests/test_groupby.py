@@ -505,3 +505,16 @@ def test_groupby_use_agg_column_as_index():
     pdg = pdf.groupby('a').agg({'a': 'count'})
     gdg = gdf.groupby('a').agg({'a': 'count'})
     assert_eq(pdg, gdg, check_dtype=False)
+
+
+def test_groupby_list_then_string():
+    gdf = cudf.DataFrame()
+    gdf['a'] = [0, 1, 0, 1, 2]
+    gdf['b'] = [11, 2, 15, 12, 2]
+    gdf['c'] = [6, 7, 6, 7, 6]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby('a', as_index=True).agg({'b': [
+        'min', 'max'], 'c': 'max'})
+    pdg = pdf.groupby('a', as_index=True).agg({'b': [
+        'min', 'max'], 'c': 'max'})
+    assert_eq(gdg, pdg)
