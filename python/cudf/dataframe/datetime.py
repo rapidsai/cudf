@@ -192,7 +192,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
             fill_value = np.datetime64(fill_value, 'ms')
         elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
             fill_value = pd.to_datetime(fill_value)
-
         fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
 
         cpp_replace.replace_nulls(result, fill_value_col)
@@ -213,6 +212,22 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def max(self, dtype=None):
         return cpp_reduce.apply_reduce('max', self, dtype=dtype)
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_first_value(value)
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_last_value(value)
 
 
 def binop(lhs, rhs, op, out_dtype):
