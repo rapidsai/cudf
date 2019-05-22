@@ -19,10 +19,18 @@ def test_series_abs(dtype):
 
 
 @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
-def test_series_not(dtype):
+def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
     np.testing.assert_equal((~sr).to_array(), np.invert(arr))
+    np.testing.assert_equal((~sr).to_array(), ~arr)
+
+
+def test_series_not():
+    import pandas as pd
+    arr = pd.Series(np.random.choice([True, False], 1000))
+    sr = Series(arr)
+    np.testing.assert_equal((~sr).to_array(), np.logical_not(arr))
     np.testing.assert_equal((~sr).to_array(), ~arr)
 
 

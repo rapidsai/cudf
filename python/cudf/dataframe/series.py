@@ -587,14 +587,15 @@ class Series(object):
         return self._ordered_compare(other, 'ge')
 
     def __invert__(self):
-        """Bitwise invert (~)/(not) for each element
+        """Bitwise invert (~) for each element.
+        Logical NOT if dtype is bool
 
         Returns a new Series.
         """
-        if np.issubdtype(self.dtype.type, np.integer):
+        if np.issubdtype(self.dtype, np.integer):
+            return self._unaryop('invert')
+        elif np.issubdtype(self.dtype, np.bool_):
             return self._unaryop('not')
-        # Allow bool and check what happens. 0000 0001 will become 1111 1110
-        # or maybe because of proper casting in C++, we'll get the correct result regardless
         else:
             raise TypeError(
                 f"Operation `~` not supported on {self.dtype.type.__name__}"
