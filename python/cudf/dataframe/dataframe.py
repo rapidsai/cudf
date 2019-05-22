@@ -462,6 +462,10 @@ class DataFrame(object):
             max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
+                    if self.shape[0] != other.shape[0]:
+                        raise NotImplementedError(
+                                "%s on columns with different "
+                                "length is not supported", fn)
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
