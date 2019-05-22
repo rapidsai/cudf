@@ -27,6 +27,7 @@
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
 - PR #1796 Removing old sort based group by code and gdf_filter
+- PR #1811 Added funtions for copying/allocating `cudf::table`s
 
 ## Bug Fixes
 
