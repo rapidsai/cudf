@@ -116,7 +116,7 @@ constexpr orc::gpu::StreamIndexType to_stream_index(
  **/
 class OrcMetadata {
   using OrcStripeInfo =
-      std::pair<const orc::StripeInformation *, const orc::StripeFooter*>;
+      std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:
   explicit OrcMetadata(const DataSource &input_) : input(&input_) {
