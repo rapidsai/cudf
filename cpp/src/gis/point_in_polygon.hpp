@@ -52,7 +52,7 @@ namespace gis {
  */
 gdf_column point_in_polygon(gdf_column const & polygon_latitudes,
                             gdf_column const & polygon_longitudes,
-	                        gdf_column const & point_latitudes,
+	                    gdf_column const & point_latitudes,
                             gdf_column const & point_longitudes,
                             cudaStream_t stream = 0);
 }  // namespace gis
