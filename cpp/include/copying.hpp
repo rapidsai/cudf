@@ -52,6 +52,51 @@ gdf_column allocate_like(gdf_column const& input, cudaStream_t stream = 0);
  */
 gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
 
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of empty columns with the same types as the inputs
+ *
+ * Creates the `gdf_column` objects, but does not allocate any underlying device
+ * memory for the column's data or bitmask.
+ *
+ * @note It is the caller's responsibility to delete the `gdf_column` object for
+ * every column in the new table.
+ *
+ * @param t The input table to emulate
+ * @return table A table of empty columns of same type as input
+ *---------------------------------------------------------------------------**/
+table empty_like(table const& t);
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of columns with the same type and allocation size as
+ * the input.
+ *
+ * Creates the `gdf_column` objects, and allocates underlying device memory for
+ * each column matching the input columns
+ *
+ * @note It is the caller's responsibility to free each column's device memory
+ * allocation in addition to deleting the `gdf_column` object for every column
+ * in the new table.
+ *
+ * @param t The table to emulate
+ * @param stream Optional stream in which to perform allocations
+ * @return table A table of columns with same type and allocation size as input
+ *---------------------------------------------------------------------------**/
+table allocate_like(table const& t, cudaStream_t stream = 0);
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of columns and deep copies the data from an input
+ * table.
+ *
+ * @note It is the caller's responsibility to free each column's device memory
+ * allocation in addition to deleting the `gdf_column` object for every column
+ * in the new table.
+ *
+ * @param t
+ * @param stream
+ * @return table
+ *---------------------------------------------------------------------------**/
+table copy(table const& t, cudaStream_t stream = 0);
+
 /**
  * @brief Scatters the rows (including null values) of a set of source columns
  * into a set of destination columns.

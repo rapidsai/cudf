@@ -774,6 +774,73 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
+@cuda.jit
+def gpu_mark_found_int(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_int(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+@cuda.jit
+def gpu_mark_found_float(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_float(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+def find_first(arr, val):
+    """
+    Returns the index of the first occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    min_index = found_col.min()
+    if min_index == arr.size:
+        return - 1
+    else:
+        return min_index
+
+
+def find_last(arr, val):
+    """
+    Returns the index of the last occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    max_index = found_col.max()
+    return max_index
+
+
 def find_segments(arr, segs=None, markers=None):
     """Find beginning indices of runs of equal values.
 
