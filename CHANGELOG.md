@@ -53,6 +53,7 @@
 - PR #1783 Update conda dependencies
 - PR #1786 Maintain the original series name in series.unique output
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
+- PR #1826 CSV Reader: Set the column type to float64 when all fields are empty
 
 
 # cudf 0.7.2 (16 May 2019)
