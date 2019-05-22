@@ -273,8 +273,7 @@ class Groupby(object):
         # if there are no repeated keys in the mapping set,
         # and all of the actual aggregations in the mapping set are only
         # length 1, we can assign the columns directly as keys.
-        if len(set(aggs.keys())) == len(aggs.keys()) and\
-                (np.array(list(map(lambda x: len([x] if isinstance(
+        if (np.array(list(map(lambda x: len([x] if isinstance(
                     x, str) else list(x)), aggs.values()))) == 1).all():
             result.columns = aggs.keys()
         else:
