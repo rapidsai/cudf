@@ -125,7 +125,7 @@ TYPED_TEST_CASE(PIPTest, NumericTypes);
 TYPED_TEST(PIPTest, InsidePolygonClockwise)
 {
     // Latitudes polygon, longitudes polygon, latitudes of query points, longitudes of query points, print = false
-    this->create_input({-10, -10, 10, 10, -10}, {10, -10, -10, 10, 10}, {4, 5, 2, 6, 2, 8}, {2, 6, 5, 8, 1, 3}, false);
+    this->create_input({-10, -10, 10, 10, -10}, {10, -10, -10, 10, 10}, {4, 5, 2, 6, 8, -4, -2}, {2, 6, 5, 8, -7, -3, 7}, false);
 
     std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
