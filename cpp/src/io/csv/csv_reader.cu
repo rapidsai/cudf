@@ -703,21 +703,18 @@ gdf_error read_csv(csv_read_arg *args)
       unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
                                     h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
-      if (h_ColumnData[col].countNULL == raw_csv.num_records){
-        // Entire column is NULL; allocate the smallest amount of memory
-        d_detectedTypes.push_back(GDF_INT8);
-      } else if(h_ColumnData[col].countString > 0L){
+      if(h_ColumnData[col].countString > 0L){
         d_detectedTypes.push_back(GDF_STRING);
       } else if(h_ColumnData[col].countDateAndTime > 0L){
         d_detectedTypes.push_back(GDF_DATE64);
       } else if(h_ColumnData[col].countBool > 0L) {
         d_detectedTypes.push_back(GDF_BOOL8);
       } else if(h_ColumnData[col].countFloat > 0L ||
-        (h_ColumnData[col].countFloat == 0L &&
-         countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
-        // The second condition has been added to conform to
-        // PANDAS which states that a column of integers with
-        // a single NULL record need to be treated as floats.
+        (countInt > 0L && h_ColumnData[col].countNULL > 0L) ||
+        h_ColumnData[col].countNULL == raw_csv.num_records) {
+        // Additional conditions have been added to conform to PANDAS:
+        //   1. Columns of integers with one or more NULL records are treated as floats;
+        //   2. Columns containing only NULL records are treated as floats;
         d_detectedTypes.push_back(GDF_FLOAT64);
       } else {
         // All other integers are stored as 64-bit to conform to PANDAS

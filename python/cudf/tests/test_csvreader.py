@@ -1038,3 +1038,13 @@ def test_csv_reader_partial_dtype(dtype):
 
     assert(names_df == header_df)
     assert(all(names_df.dtypes == ['int16', 'int32']))
+
+
+def test_csv_reader_null_column():
+    # first column consists of empty fields, should be float64
+    # second column is a mix of numbers and empty fields, should be float64
+    buffer = ',1\n,2\n,'
+
+    cu_df = read_csv(StringIO(buffer), header=None)
+    pd_df = pd.read_csv(StringIO(buffer), header=None)
+    assert(list(cu_df.dtypes) == list(pd_df.dtypes))
