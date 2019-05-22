@@ -136,17 +136,28 @@ cdef get_scalar_value(gdf_scalar scalar):
 
 
 cdef set_scalar_value(gdf_scalar *scalar, val):
-    dtype_to_gdf_data_mapping = {
-        np.float64: 'fp64',
-        np.float32: 'fp32',
-        np.int64:   'si64',
-        np.int32:   'si32',
-        np.int16:   'si16',
-        np.int8:    'si08'
-    }
-    #scalar.data.si64 = 1
-    #print(scalar.data.si64)
-    setattr(scalar.data, mapping[val.dtype.type], np.ctypeslib.as_ctypes(val))
+    # scalar.data.si64 = 1
+    # {
+    #     np.float64: lambda: scalar.data.fp64 = val,
+    #     np.float32: lambda: scalar.data.fp32 = val,
+    #     np.int64:   lambda: scalar.data.si64 = val,
+    #     np.int32:   lambda: scalar.data.si32 = val,
+    #     np.int16:   lambda: scalar.data.si16 = val,
+    #     np.int8:    lambda: scalar.data.si08 = val
+    #  }[val.dtype.type]()
+    # TODO find a cleaner way to do this
+    if val.dtype.type == np.float64:
+        scalar.data.fp64 = val
+    elif val.dtype.type == np.float32:
+        scalar.data.fp32 = val
+    elif val.dtype.type == np.int64:
+        scalar.data.si64 = val
+    elif val.dtype.type == np.int32:
+        scalar.data.si32 = val
+    elif val.dtype.type == np.int16:
+        scalar.data.si16 = val
+    elif val.dtype.type == np.int8:
+        scalar.data.si08 = val
 
 
 # gdf_column functions

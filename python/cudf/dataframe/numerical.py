@@ -339,7 +339,6 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = False
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    print(lhs, rhs, out, op)
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
