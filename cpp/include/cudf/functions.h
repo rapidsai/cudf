@@ -851,29 +851,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
  */
 
 /**
- * @brief  Performs SQL like WHERE (Filtering)
- *
- * @param[in] # rows
- * @param[in] host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
- * @param[in] # cols
- * @param[out] pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
- * @param[out] pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
- * @param[in] device-side array of values to filter against (type-erased)
- * @param[out] device-side array of row indices that remain after filtering
- * @param[out] host-side # rows that remain after filtering
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_filter(size_t nrows,
-                    gdf_column* cols,
-                    size_t ncols,
-                    void** d_cols,
-                    int* d_types, 
-                    void** d_vals,
-                    size_t* d_indx,
-                    size_t* new_sz);
-
-/**
  * @brief  Performs SQL like GROUP BY with SUM aggregation
  *
  * @param[in] # columns

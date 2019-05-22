@@ -102,8 +102,11 @@ class NumericalColumn(columnops.TypedColumnBase):
                 other = np.dtype(other_dtype).type(other)
                 return other
             else:
-                ary = utils.scalar_broadcast_to(other, shape=len(self),
-                                dtype=other_dtype)
+                ary = utils.scalar_broadcast_to(
+                    other,
+                    shape=len(self),
+                    dtype=other_dtype
+                )
                 return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
@@ -338,6 +341,28 @@ class NumericalColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        found = cudautils.find_first(
+            self.data.mem,
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        found = cudautils.find_last(
+            self.data.mem,
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
@@ -379,9 +404,6 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
-    # Temporary workaround since libcudf doesn't support int16 ops
-    if dtype == np.dtype('int16'):
-        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 

@@ -3,8 +3,9 @@
 ## New Features
 
 - PR #1524 Add GPU-accelerated JSON Lines parser with limited feature set
-- PR #1569 Add support for JSON objects to the JSON Lines reader
-- PR #1654 C++: Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
+- PR #1569 Add support for Json objects to the JSON Lines reader
+- PR #1622 Add Series.loc
+- PR #1654 Add cudf::apply_boolean_mask: faster replacement for gdf_apply_stencil
 - PR #1487 cython gather/scatter
 - PR #1310 Implemented the slice/split functionality.
 - PR #1630 Add Python layer to the GPU-accelerated JSON reader
@@ -26,6 +27,9 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1795 Add printing of git submodule info to `print_env.sh`
+- PR #1796 Removing old sort based group by code and gdf_filter
+- PR #1811 Added funtions for copying/allocating `cudf::table`s
 
 ## Bug Fixes
 
