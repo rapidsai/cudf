@@ -409,18 +409,20 @@ class Series(object):
     def __repr__(self):
         return "<cudf.Series nrows={} >".format(len(self))
 
-    def _binaryop(self, other, fn):
+    def _binaryop(self, other, fn, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
+
+        If ``reflect`` is ``True``, swap the order of the operands.
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other)
+        outcol = self._column.binary_operator(fn, other, reflect=reflect)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -432,16 +434,7 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
-        from cudf import DataFrame
-        if isinstance(other, DataFrame):
-            return other._binaryop(self, fn)
-        nvtx_range_push("CUDF_BINARY_OP", "orange")
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator(fn, self)
-        result = self._copy_construct(data=outcol)
-        result.name = None
-        nvtx_range_pop()
-        return result
+        return self._binaryop(other, fn, reflect=True)
 
     def _unaryop(self, fn):
         """
@@ -530,10 +523,13 @@ class Series(object):
         return self._bitwise_binop(other, 'xor')
 
     def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
         if isinstance(other, Series):
-            return other
+            return other._column
         elif isinstance(other, Index):
-            return Series(other)
+            return Series(other)._column
         else:
             col = self._column.normalize_binop_value(other)
             return col
