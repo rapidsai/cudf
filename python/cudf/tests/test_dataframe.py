@@ -1399,7 +1399,7 @@ def test_dataframe_shape_empty():
 
 
 @pytest.mark.parametrize('num_cols', [1, 2, 10])
-@pytest.mark.parametrize('num_rows', [1, 2, 1000])
+@pytest.mark.parametrize('num_rows', [1, 2, 20])
 @pytest.mark.parametrize(
     'dtype',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -1594,6 +1594,7 @@ def test_unaryops_df(pdf, gdf, unaryop):
     lambda df: df.empty,
     lambda df: df.x.empty,
     lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+    lambda df: df.drop('x', axis=1, errors='raise'),
 ])
 def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
@@ -2094,6 +2095,24 @@ def test_select_dtype():
         gdf.select_dtypes(exclude=np.number, include=np.number)
 
 
+def test_select_dtype_datetime():
+    gdf = gd.datasets.timeseries(
+        start='2000-01-01',
+        end='2000-01-02',
+        freq='3600s',
+        dtypes={'x': int}
+    )
+    gdf = gdf.reset_index()
+
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(np.dtype('datetime64')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64'))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes('datetime64[ms]'))
+    assert_eq(gdf[['timestamp']],
+              gdf.select_dtypes(np.dtype('datetime64[ms]')))
+    assert_eq(gdf[['timestamp']], gdf.select_dtypes(include='datetime64[ms]'))
+
+
 def test_array_ufunc():
     gdf = gd.DataFrame({'x': [2, 3, 4.0], 'y': [9.0, 2.5, 1.1]})
     pdf = gdf.to_pandas()
@@ -2379,3 +2398,26 @@ def test_ndim():
     s = pd.Series()
     gs = Series()
     assert s.ndim == gs.ndim
+
+
+@pytest.mark.parametrize('decimal', range(-8, 8))
+def test_round(decimal):
+    arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(result.to_pandas(), expected,
+                                         decimal=10)
+
+    # with nulls, maintaining existing null mask
+    mask = np.random.randint(0, 2, 10000)
+    arr[mask == 1] = np.nan
+
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(result.to_pandas(), expected,
+                                         decimal=10)
+    np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())

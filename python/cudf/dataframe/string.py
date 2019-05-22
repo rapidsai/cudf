@@ -557,6 +557,13 @@ class StringColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
+    def unique(self, method='sort'):
+        """
+        Get unique strings in the data
+        """
+        result = StringColumn(self.nvcategory.keys())
+        return result
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
