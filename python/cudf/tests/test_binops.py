@@ -47,7 +47,7 @@ def test_series_binop(binop, obj_class):
 @pytest.mark.parametrize('nelem,binop', list(product([1, 2, 100], _binops)))
 def test_series_binop_scalar(nelem, binop, obj_class):
     arr = np.random.random(nelem)
-    rhs = np.asscalar(random.choice(arr))
+    rhs = random.choice(arr).item()
     sr = Series(arr)
     if obj_class == 'Index':
         sr = as_index(sr)
@@ -144,7 +144,7 @@ def test_series_compare(cmpop, obj_class, dtype):
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
-    rhs = np.asscalar(random.choice(arr1))
+    rhs = random.choice(arr1).item()
 
     if obj_class == 'Index':
         sr1 = as_index(sr1)
