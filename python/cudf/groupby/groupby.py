@@ -167,7 +167,6 @@ class Groupby(object):
             self._method = method
         else:
             msg = "Method {!r} is not a supported group by method"
-            raise NotImplementedError(msg.format(method))
 
     def _apply_basic_agg(self, agg_type, sort_results=False):
         """
@@ -270,8 +269,11 @@ class Groupby(object):
         return result
 
     def apply_multicolumn_mapped(self, result, aggs):
+        # if there are no repeated keys in the mapping set,
+        # and all of the actual aggregations in the mapping set are only
+        # length 1, we can assign the columns directly as keys.
         if len(set(aggs.keys())) == len(aggs.keys()) and\
-                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+                (np.array(list(map(lambda x: len([x] if isinstance(x, str) else list(x)), aggs.values())))==1).all():
             result.columns = aggs.keys()
         else:
             tuples = []
