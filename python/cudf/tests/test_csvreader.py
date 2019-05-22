@@ -672,10 +672,12 @@ def test_csv_reader_empty_dataframe():
     # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['float64', 'int64']))
 
-    # should raise an error without dtypes
-    with pytest.raises(GDFError):
-        read_csv(StringIO(buffer))
+    # should default to string columns without dtypes
+    df = read_csv(StringIO(buffer))
+    assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['object', 'object']))
 
 
 def test_csv_reader_filenotfound(tmpdir):
