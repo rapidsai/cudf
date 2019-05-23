@@ -43,7 +43,6 @@ INSTALL_TARGET=install
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
 #         CONDA_PREFIX, but there is no fallback from there!
 INSTALL_PREFIX=${INSTALL_PREFIX:=${PREFIX:=${CONDA_PREFIX}}}
-PYTHON=${PYTHON:=python}
 PARALLEL_LEVEL=${PARALLEL_LEVEL:=""}
 
 function hasArg {
@@ -107,9 +106,9 @@ if (( ${NUMARGS} == 0 )) || hasArg cudf; then
 
     cd ${REPODIR}/python
     if [[ ${INSTALL_TARGET} != "" ]]; then
-	${PYTHON} setup.py build_ext --inplace
-	${PYTHON} setup.py install --single-version-externally-managed --record=record.txt
+	python setup.py build_ext --inplace
+	python setup.py install --single-version-externally-managed --record=record.txt
     else
-	${PYTHON} setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+	python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
