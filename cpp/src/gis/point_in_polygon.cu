@@ -21,6 +21,7 @@
 #include <bitmask/BitMask.cuh>
 #include "bitmask/bitmask_ops.hpp"
 #include "utilities/type_dispatcher.hpp"
+#include <utilities/cuda_utils.hpp>
 
 #include <type_traits>
 
@@ -36,7 +37,7 @@ namespace {
  *
  * Orientation is calculated as if a 2D vector from P1 to P2 (e.g. U = P2 - P1) 
  * were rotated to orient toward P3. It is positive for clockwise rotation, 
- * negative for counter-clockwise rotation, and 0 if the points are collinear
+ * negative for counter-clockwise rotation, and 0 if the points are collinear.
  *
  * @param[in] p1_x: Longitude of the first point p1
  * @param[in] p1_y: Latitude of the first point p1
@@ -56,19 +57,20 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
 }
 
 /** 
- * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
+ * @brief Determine whether or not coordinates (query points) are completely inside a static polygon.
  *
- * Polygon must not have holes neither intersect with itself. Polygons must be closed
+ * The polygon must not have holes or intersect with itself, but it is not
+ * required to be convex. Polygon must be closed.
  *
- * Each thread check if a query point is inside the polygon
+ * Each thread check if a query point is inside the polygon.
  *
- * First check if the query point's longitude is between two contiguous sides of the polygon
+ * First check if the query point longitude is between two contiguous sides of the polygon
  * If so, then check the orientations. If the orientation is clockwise then it increases by one,
  * otherwise it decreases by one at the count variable.
  *
  * For instance the "q" query point is between longitudes of Po and P1, also P2 and P3
- * In both "q" has a clockwise orientation, so the count value increases in 2
- * The P polygon {P0, P1, P2, P3, P0}
+ * In both "q" has a clockwise orientation, so the count value increases in 2.
+ * The P polygon {P0, P1, P2, P3, P0}.
  *
  *  Po --------------- P1
  *  |                  |
@@ -76,12 +78,12 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
  *  |                  |
  *  P3 --------------- P2
  *
- * For a more complex polygon P. The "q" query point's longitude is between the longitudes of:
+ * For a more complex polygon P. The "q" query point longitude is between the longitudes of:
  * Po to P1: q has clockwise orientation, "count" increases by one (count = 1)
  * P2 to P3: q has counter-clockwise orientation, "count" decreases by one (count = 0)
  * P4 to P5: q has counter-clockwise orientation, "count" decreases by one (count = -1)
  * P6 to P7: q has clockwise orientation, "count" increases by one (count = 0)
- * Finally: count = 0, so "q" is outside of P polygon
+ * Finally: count = 0, so "q" is outside of P polygon.
  *
  * Po --------------------- P1
  * |                        |
@@ -126,24 +128,21 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
         {
             if(poly_lons[poly_side] <= point_lon && point_lon < poly_lons[poly_side + 1])
             {
-                if (orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat) > 0)
-                {
-                    count++;
-                } else {
-                    count--;
-                }
+                T orientation_ = orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat);
+                
+                if (orientation_ > 0) count++;
+                else if (orientation_ < 0) count--;
+
             }
             else if (point_lon <= poly_lons[poly_side] && poly_lons[poly_side + 1] < point_lon) 
             {
-                if (orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat) > 0)
-                {
-                    count++;
-                } else {
-                    count--;
-                }
+                T orientation_ = orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat);
+
+                if (orientation_ > 0) count++;
+                else if (orientation_ < 0) count--;
             }
         }
-        point_is_in_polygon[idx] = cudf::bool8{count > 0};
+        point_is_in_polygon[idx] = cudf::bool8{(count != 0) && (count % 2 == 0)};
     }
 }
 
@@ -166,9 +165,10 @@ struct point_in_polygon_functor {
 
         gdf_size_type min_grid_size = 0, block_size = 0;
         CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, point_in_polygon_kernel<col_type>) );
-        gdf_size_type grid_size = (d_point_lats.size + block_size - 1) / block_size;
 
-        point_in_polygon_kernel<col_type> <<< grid_size, block_size >>> ( static_cast<col_type*>(d_poly_lats.data), 
+        cudf::util::cuda::grid_config_1d grid{d_point_lats.size, block_size, 1};
+
+        point_in_polygon_kernel<col_type> <<< grid.num_blocks, block_size >>> ( static_cast<col_type*>(d_poly_lats.data), 
                 static_cast<col_type*>(d_poly_lons.data), static_cast<col_type*>(d_point_lats.data), static_cast<col_type*>(d_point_lons.data), 
                 d_poly_lats.size, d_point_lats.size, static_cast<cudf::bool8*>(d_point_is_in_polygon.data) );
 

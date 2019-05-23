@@ -23,23 +23,24 @@
 namespace cudf {
 
 /** 
- * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
+ * @brief Determine whether or not coordinates (query points) are completely inside a static polygon.
  * 
- * Polygon is considered as a set of coordinates (latitudes and longitudes)
- * where the first and last coordinates must have the same value (closed)
+ * The polygon is defined by a set of coordinates (latitudes and longitudes),
+ * where the first and last coordinates must have the same value (closed).
  * 
- * It supports clockwise and counter-clockwise polygons
+ * This function supports clockwise and counter-clockwise polygons.
  * 
- * If a query point is colinear with two contiguous polygon's coordinates
- * then this query point isn't completely inside
+ * If a query point is colinear with two contiguous polygon coordinates
+ * then this query point isn't inside.
  * 
- * Polygon must not have holes neither intersect with itself.
+ * The polygon must not have holes or intersect with itself, but it is not
+ * required to be convex.
  * 
- * Both polygon_latitudes and polygon_longitudes must have equal size
+ * polygon_latitudes and polygon_longitudes must have equal size.
  * 
- * Both point_latitudes and point_longitudes must have equal size
+ * point_latitudes and point_longitudes must have equal size.
  * 
- * All input params must have equal datatypes (for numeric operations)
+ * All input params must have equal datatypes (for numeric operations).
  *
  * @param[in] polygon_latitudes: column with latitudes of a polygon
  * @param[in] polygon_longitudes: column with longitudes of a polygon

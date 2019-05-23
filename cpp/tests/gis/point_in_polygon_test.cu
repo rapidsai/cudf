@@ -38,7 +38,7 @@ struct PIPTest : public GdfTest
     {
         size_t min_polygon_size_accepted = 4;
         
-        EXPECT_LT( min_polygon_size_accepted, polygon_lats_v.size() ) << "TEST: Unbuilt polygon";
+        EXPECT_LE( min_polygon_size_accepted, polygon_lats_v.size() ) << "TEST: Unbuilt polygon";
         EXPECT_EQ( polygon_lats_v.size(), polygon_lons_v.size() ) << "TEST: Polygon size doesn't match.";
         EXPECT_EQ( point_lats_v.size(), point_lons_v.size() ) << "TEST: Points size doesn't match." ;
         
@@ -54,15 +54,15 @@ struct PIPTest : public GdfTest
         }
     }
 
-    void create_random_data( const std::initializer_list<T> & polygon_lats_list,
-                             const std::initializer_list<T> & polygon_lons_list,
-                             const int size_points, bool print = false )
+    // It Initialize random query points with a specific range
+    void initialize_random( const std::initializer_list<T> & polygon_lats_list,
+                            const std::initializer_list<T> & polygon_lons_list,
+                            const int & size_points, const T & min_value_lats,
+                            const T & max_value_lats, const T & min_value_lons,
+                            const T & max_value_lons, bool print = false )
     {
         polygon_lats = polygon_lats_list;
         polygon_lons = polygon_lons_list;
-
-        const T min_value_lats = -90, max_value_lats = 90;
-        const T min_value_lons = -180, max_value_lons = 180;
 
         for (int i = 0; i < size_points; ++i) {
             RandomValues<T>random_lat(min_value_lats, max_value_lats);
@@ -74,17 +74,18 @@ struct PIPTest : public GdfTest
         validation(polygon_lats, polygon_lons, point_lats, point_lons, print);
     }
 
-    void create_input( const std::initializer_list<T> & polygon_lats_list,
-                       const std::initializer_list<T> & polygon_lons_list,
-                       const std::initializer_list<T> & point_lats_list,
-                       const std::initializer_list<T> & point_lons_list,
-                       bool print = false )
+    // It Initialize query points with a initializer list
+    void set_initialize( const std::initializer_list<T> & polygon_lats_list,
+                         const std::initializer_list<T> & polygon_lons_list,
+                         const std::initializer_list<T> & point_lats_list,
+                         const std::initializer_list<T> & point_lons_list,
+                         bool print = false )
     {
         polygon_lats = polygon_lats_list;
         polygon_lons = polygon_lons_list;
         point_lats = point_lats_list;
         point_lons = point_lons_list;
-
+        
         validation(polygon_lats, polygon_lons, point_lats, point_lons, print);
     }
 
@@ -110,24 +111,20 @@ struct PIPTest : public GdfTest
             {
                 if(polygon_lons[poly_idx] <= point_lon && point_lon < polygon_lons[poly_idx + 1])
                 {
-                    if (orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat) > 0)
-                    {
-                        count++;
-                    } else {
-                        count--;
-                    }
+                    T orientation_ = orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat);
+                
+                    if (orientation_ > 0) count++;
+                    else if (orientation_ < 0) count--;
                 }
                 else if (point_lon <= polygon_lons[poly_idx] && polygon_lons[poly_idx + 1] < point_lon) 
                 {
-                    if (orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat) > 0)
-                    {
-                        count++;
-                    } else {
-                        count--;
-                    }
+                    T orientation_ = orientation(polygon_lons[poly_idx], polygon_lats[poly_idx], polygon_lons[poly_idx + 1], polygon_lats[poly_idx + 1], point_lon, point_lat);
+                
+                    if (orientation_ > 0) count++;
+                    else if (orientation_ < 0) count--;
                 }
             }
-            h_inside_polygon[id_point] = (count > 0) ? 1 : 0;
+            h_inside_polygon[id_point] = ( (count != 0) && (count % 2 == 0) ) ? 1 : 0;
         }
 
         return h_inside_polygon;
@@ -149,18 +146,20 @@ struct PIPTest : public GdfTest
     }
 };
 
-// Geographical data are real numeric (int8_t is lesser than the min_max longitude value)
+// Geographical data are numeric
 typedef testing::Types<int16_t, int32_t, int64_t, float, double> NumericTypes;
 
 TYPED_TEST_CASE(PIPTest, NumericTypes);
 
-// All points should be inside the polygon with clockwise orientation
+// All points should be inside the polygon with clockwise orientation.
 TYPED_TEST(PIPTest, InsidePolygonClockwise)
 {
-    // Latitudes polygon, longitudes polygon, latitudes of query points, longitudes of query points, print = false
-    this->create_input({-10, -10, 10, 10, -10}, {10, -10, -10, 10, 10}, {4, 5, 2, 6, 8, -4, -2}, {2, 6, 5, 8, -7, -3, 7});
+    const int n_random_points = 1000;
+    
+    // static polygon and random points (range latitudes: [-9 , 9], range longitudes: [-9, 9]) 
+    this->initialize_random( {-10, -10, 10, 10, -10}, {10, -10, -10, 10, 10}, n_random_points, -9, 9, -9, 9 );
 
-    std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> reference_pip_result(n_random_points, 1);
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
 
     ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
@@ -171,12 +170,13 @@ TYPED_TEST(PIPTest, InsidePolygonClockwise)
     }
 }
 
-// All points should be outside the polygon with clockwise orientation
+// All points should be outside the polygon with clockwise orientation.
 TYPED_TEST(PIPTest, OutsidePolygonClockwise)
 {
-    this->create_input({-10, 10, 10, -10, -10}, {-10, -10, 10, 10, -10}, {-14, 15, 12, -18, 5}, {2, 6, 4, 3, 18});
+    const int n_random_points = 1000;
+    this->initialize_random( {-10, -10, 10, 10, -10}, {10, -10, -10, 10, 10}, n_random_points, -90, -11, -180, -11 );
 
-    std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> reference_pip_result(n_random_points, 0);
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
 
     ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
@@ -186,12 +186,13 @@ TYPED_TEST(PIPTest, OutsidePolygonClockwise)
     }
 }
 
-// All points should be inside the polygon with counter-clockwise orientation
+// All points should be inside the polygon with counter-clockwise orientation.
 TYPED_TEST(PIPTest, InsidePolygonCounterClockwise)
 {
-    this->create_input({-10, -10, 10, 10, -10}, {-10, 10, 10, -10, -10}, {4, 5, 2, 6, 2, 8}, {2, 6, 5, 8, 1, 3});
+    const int n_random_points = 1000;
+    this->initialize_random( {-10, -10, 10, 10, -10}, {-10, 10, 10, -10, -10}, n_random_points, -9, 9, -9, 9 );
 
-    std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> reference_pip_result(n_random_points, 1);;
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
 
     ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
@@ -201,12 +202,13 @@ TYPED_TEST(PIPTest, InsidePolygonCounterClockwise)
     }
 }
 
-// All points should be outside the polygon with counter-clockwise orientation
+// All points should be outside the polygon with counter-clockwise orientation.
 TYPED_TEST(PIPTest, OutsidePolygonCounterClockwise)
 {
-    this->create_input({-10, 10, 10, -10, -10}, {10, 10, -10, -10, 10},{-14, 15, 12, -18, 5}, {2, 6, 4, 3, 18});
+    const int n_random_points = 1000;
+    this->initialize_random( {-10, -10, 10, 10, -10}, {-10, 10, 10, -10, -10}, n_random_points, -90, -11, -180, -11 );
 
-    std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> reference_pip_result(n_random_points, 0);
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
 
     ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
@@ -216,10 +218,11 @@ TYPED_TEST(PIPTest, OutsidePolygonCounterClockwise)
     }
 }
 
-// Some points should be inside and other outside the polygon with clockwise orientation
+// Some points should be inside and other outside the polygon with clockwise orientation.
 TYPED_TEST(PIPTest, MixedUpPointsInPolygonClockwise)
 {
-    this->create_input({-10, 10, 10, -10, -10}, {-10, -10, 10, 10, -10}, {4, 15, -2, 6, 2, -28}, {2, 6, 5, 11, 9, 3});
+    const int n_random_points = 1000;
+    this->initialize_random( {-10, 10, 10, -10, -10}, {-10, -10, 10, 10, -10}, n_random_points, -90, 90, -180, 180 );
 
     std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
@@ -231,10 +234,11 @@ TYPED_TEST(PIPTest, MixedUpPointsInPolygonClockwise)
     }
 }
 
-// Some points should be inside and other outside the polygon with counter-clockwise orientation
+// Some points should be inside and other outside the polygon with counter-clockwise orientation.
 TYPED_TEST(PIPTest, MixedUpPointsInPolygonCounterClockwise)
 {
-    this->create_input({-10, -10, 10, 10, -10}, {-10, 10, 10, -10, -10}, {4, 15, -2, 6, 2, -28}, {2, 6, 5, 11, 9, 3});
+    const int n_random_points = 1000;
+    this->initialize_random( {-10, -10, 10, 10, -10}, {-10, 10, 10, -10, -10}, n_random_points, -90, 90, -180, 180 );
 
     std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
@@ -246,13 +250,13 @@ TYPED_TEST(PIPTest, MixedUpPointsInPolygonCounterClockwise)
     }
 }
 
-// Some random points should be inside and other outside the polygon with clockwise orientation
-TYPED_TEST(PIPTest, RandomPointsMixedUpInPolygonClockwise)
+// Some points should be inside and other outside the bigger polygon with clockwise orientation.
+TYPED_TEST(PIPTest, MixedUpPointsInBiggerPolygonClockwise)
 {
-    const int N_RANDOM_SIZE = 1000;
-    this->create_random_data( {-10, 25, 25, 10, 10, -10, -10, -25, -25, -10},
-                              {-50, -30, 20, 40, 5, 5, 40, 20, -30, -50}, 
-                              N_RANDOM_SIZE );
+    const int n_random_points = 1000;
+    this->initialize_random( {-35, -15, 5, 25, 35, 20, 30, 40, 15, 5, -10, -5, -25, -35},
+                             {5, -30, -40, -35, -20, -5, 10, 25, 40, 15, 5, 35, 20, 5}, 
+                             n_random_points, -90, 90, -180, 180 );
 
     std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
@@ -264,15 +268,181 @@ TYPED_TEST(PIPTest, RandomPointsMixedUpInPolygonClockwise)
     }
 }
 
-// Some random points should be inside and other outside the polygon with counter-clockwise orientation
-TYPED_TEST(PIPTest, RandomPointsMixedUpInPolygonCounterClockwise)
+// Some points should be inside and other outside the bigger polygon with counter-clockwise orientation.
+TYPED_TEST(PIPTest, MixedUpPointsInBiggerPolygonCounterClockwise)
 {
-    const int N_RANDOM_SIZE = 1000;
-    this->create_random_data( {-10, -25, -25, -10, -10, 10, 10, 25, 25, -10},
-                              {-50, -30, 20, 40, 5, 5, 40, 20, -30, -50},
-                              N_RANDOM_SIZE );
+    const int n_random_points = 1000;
+    this->initialize_random( {-35, -25, -5, -10, 5, 15, 40, 30, 20, 35, 25, 5, -15, -35},
+                             {5, 20, 35, 5, 15, 40, 25, 10, -5, -20, -35, -40, -30, 5},
+                             n_random_points, -90, 90, -180, 180 );
 
     std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+
+/* Case: Degenerate polygon P {P0, P0 ,P0 , ..., P0} (area = 0) all points are equal. 
+*  Query points {q1, q2, ...} are random.
+*  Result: No points must be inside the polygon.
+*/
+TYPED_TEST(PIPTest, DegeneratePolygonWithMixedUpPoints)
+{
+    const int n_random_points = 1000;
+    this->initialize_random( {10, 10, 10, 10, 10, 10}, {20, 20, 20, 20, 20, 20}, n_random_points, -90, 90, -180, 180 );
+
+    std::vector<int8_t> reference_pip_result(n_random_points, 0) ;
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+ 
+/* Case: Degenerate polygon P {P0, P0 ,P0 , ..., P0} (area = 0) all points are equal. 
+*  Query point q {P0} is equal to the degenerate polygon.
+*  Result: query point q must be outside the polygon.
+*/
+TYPED_TEST(PIPTest, DegeneratePolygonWithSamePoint)
+{
+    this->set_initialize( {10, 10, 10, 10, 10, 10}, {20, 20, 20, 20, 20, 20}, {10}, {20} );
+
+    std::vector<int8_t> reference_pip_result(1, 0);
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+
+/* Case: Degenerate Polygon P {P0, P1, P2, P0} with colinear coordinates.
+*  It is degenerate because it must be a multiline.
+*  Query points {q1, q2, q3, ...} are all random.
+*
+*            P2
+*    .q1    /
+*          / .q2
+*         /
+*        /
+*       P1       .q3
+*      /
+*     /
+*   P0
+*
+* Result: query points must be outside the polygon.
+*/
+TYPED_TEST(PIPTest, ColinearPolygonWithMixedUpPoints)
+{
+    const int n_random_points = 1000;
+    this->initialize_random( {10, 15, 20, 25, 30, 10}, {10, 15, 20, 25, 30, 10}, n_random_points, -90, 90, -180, 180 );
+
+    std::vector<int8_t> reference_pip_result = this->compute_reference_pip();
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+
+/* Case: Degenerate Polygon P {P0, P1, P2, P0} with colinear coordinates.
+*  It is degenerate because it must be a multiline.
+*  Two Query points {q1, q2} are colinear with the Polygon.
+*
+*              P2
+*             /
+*            .q2
+*           /
+*          /
+*         P1
+*        /
+*       /
+*      .q1
+*     /
+*    P0
+*
+* Result: query points must be outside the polygon.
+*/
+TYPED_TEST(PIPTest, ColinearPolygonWithColinearPoint)
+{
+    this->set_initialize( {10, 15, 20, 10}, {10, 15, 20, 10}, {12, 18}, {12, 18} );
+
+    std::vector<int8_t> reference_pip_result(2, 0);
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+
+/* Case: Degenerate polygon P {P0, P1, P2, P3, P0} intersects with itself.
+*  Three query points are considered {q1, q2, q3}.
+* 
+*        P0        P2
+*        | \      / |
+*        |  \    /  |
+*        |   \  /   |
+*   .q1  |.q2 \/    |  .q3
+*        |    /\    |
+*        |   /  \   |
+*        |  /    \  |
+*        | /      \ |
+*        P3        P1
+*
+* Result: q2 must be inside P while q1 and q3 must be outside P.
+** For this polygon there is no problem with the algorithm.
+*/
+TYPED_TEST(PIPTest, PolygonIntersectsWithItselfPassed)
+{
+    this->set_initialize( {10, -10, 10, -10, 10}, {-10, 10, 10, -10, -10}, {0, 0, 0}, {20, -8, 20} );
+
+    std::vector<int8_t> reference_pip_result{0, 1, 0};
+    std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
+
+    ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
+
+    for(size_t i = 0; i < reference_pip_result.size(); ++i) {
+        EXPECT_EQ(reference_pip_result[i], gdf_pip_result[i]);
+    }
+}
+
+/* Case: Degenerate polygon P {P0, P1, P2, P3, P4, P5, P6, P7, P0} intersects with itself.
+*  This polygon is more complex than the previous one.
+*  Five query points are considered {q1, q2, q3, q4, q5}.
+*
+* P0 ------------------- P1
+* |                .q2   |
+* |                      |
+* |         P4 ------------------- P5
+* |         |    .q3     |          |
+* |         |            |   .q4    |
+* |         P3 -------- P2          |   .q5
+* |   .q1                           |
+* |                                 |
+* P7 ----------------------------- P6
+*
+*
+* Result: {q1, q2, q4} must be inside and {q3, q5} must be outside P.
+** For this more complex polygon threre is a problem with the algorithm
+** The algorithm consider q3 as inside which es wrong.
+** The real ouptut must be: [1, 1, 0, 1, 0]
+*/
+TYPED_TEST(PIPTest, PolygonIntersectsWithItselfNotPassed)
+{
+    this->set_initialize( {15, 15, 5, 5, 10, 10, 0, 0, 15}, {0, 10, 10, 5, 5, 15, 15, 0, 0}, {3, 12, 8, 7, 6}, {2, 8, 7, 12, 18} );
+
+    std::vector<int8_t> reference_pip_result{1, 1, 1, 1, 0};
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
 
     ASSERT_EQ(reference_pip_result.size(), gdf_pip_result.size()) << "Size of gdf result doesn't match with reference result";
