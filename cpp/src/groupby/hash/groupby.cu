@@ -43,6 +43,33 @@ namespace groupby {
 namespace hash {
 namespace {
 /**---------------------------------------------------------------------------*
+ * @brief Verifies the requested aggregation is valid for the type of the value
+ * column.
+ *
+ * Given a table of values and a set of operators, verifies that `ops[i]` is
+ * valid to perform on `column[i]`.
+ *
+ * @throw cudf::logic_error if an invalid combination of value type and operator
+ * is requested.
+ *
+ * @param values The table of columns
+ * @param ops The aggregation operators
+ *---------------------------------------------------------------------------**/
+void verify_operators(table const& values, std::vector<operators> const& ops) {
+  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
+               "Size mismatch between ops and value columns");
+  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+    // TODO Add more checks here, i.e., can't compute sum of non-arithemtic
+    // types
+    if ((ops[i] == SUM) and
+        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
+      CUDF_FAIL(
+          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
+    }
+  }
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Deteremines target gdf_dtypes to use for combinations of source
  * gdf_dtypes and aggregation operations.
  *
@@ -132,6 +159,70 @@ void initialize_with_identity(cudf::table const& table,
   }
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Compacts any GDF_STRING_CATEGORY columns in the output keys or values.
+ *
+ * After the groupby operation, any GDF_STRING_CATEGORY column in either the
+ * keys or values may reference only a subset of the strings in the original
+ * input category. This function will create a new associated NVCategory object
+ * for the output GDF_STRING_CATEGORY columns whose dictionary contains only the
+ * strings referenced in the output result.
+ *
+ * @param[in] input_keys The set of input key columns
+ * @param[in/out] output_keys The set of output key columns
+ * @param[in] input_values The set of input value columns
+ * @param[in/out] output_values The set of output value columns
+ *---------------------------------------------------------------------------**/
+void update_nvcategories(table const& input_keys, table& output_keys,
+                         table const& input_values, table& output_values) {
+  nvcategory_gather_table(input_keys, output_keys);
+  nvcategory_gather_table(input_values, output_values);
+}
+
+template <bool keys_have_nulls, bool values_have_nulls, typename Map>
+auto extract_results(table const& input_keys, table const& input_values,
+                     device_table const& d_input_keys,
+                     device_table const& d_input_values,
+                     device_table const& d_sparse_output_values, Map* map,
+                     cudaStream_t stream) {
+  cudf::table output_keys{cudf::allocate_like(input_keys, stream)};
+  cudf::table output_values{cudf::allocate_like(input_values, stream)};
+
+  auto d_output_keys = device_table::create(output_keys);
+  auto d_output_values = device_table::create(output_values);
+
+  gdf_size_type* d_result_size{nullptr};
+  RMM_TRY(RMM_ALLOC(&d_result_size, sizeof(gdf_size_type), stream));
+  CUDA_TRY(cudaMemsetAsync(d_result_size, 0, sizeof(gdf_size_type), stream));
+
+  cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
+
+  extract_groupby_result<keys_have_nulls, values_have_nulls>
+      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
+         stream>>>(map, d_input_keys, *d_output_keys, d_sparse_output_values,
+                   *d_output_values, d_result_size);
+
+  CHECK_STREAM(stream);
+
+  gdf_size_type result_size{-1};
+  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
+                           cudaMemcpyDeviceToHost, stream));
+
+  // Update size and null count of output columns
+  auto update_column = [result_size](gdf_column* col) {
+    col->size = result_size;
+    set_null_count(*col);
+    return col;
+  };
+
+  std::transform(output_keys.begin(), output_keys.end(), output_keys.begin(),
+                 update_column);
+  std::transform(output_values.begin(), output_values.end(),
+                 output_values.begin(), update_column);
+
+  return std::make_tuple(output_keys, output_values);
+}
+
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
@@ -145,7 +236,6 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // an upper bound
   gdf_size_type const output_size_estimate{keys.num_rows()};
 
-  // TODO Do we always need to allocate the output bitmask?
   cudf::table sparse_output_values{output_size_estimate,
                                    target_dtypes(column_dtypes(values), ops),
                                    values_have_nulls, false, stream};
@@ -190,39 +280,33 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   }
   CHECK_STREAM(stream);
 
-  cudf::table output_keys{cudf::allocate_like(keys, stream)};
-  cudf::table output_values{cudf::allocate_like(values, stream)};
+  return extract_results<keys_have_nulls, values_have_nulls>(
+      keys, values, *d_input_keys, *d_input_values, *d_sparse_output_values,
+      map.get(), stream);
+}
 
-  auto d_output_keys = device_table::create(output_keys);
-  auto d_output_values = device_table::create(output_values);
-
-  gdf_size_type* d_result_size{nullptr};
-  RMM_TRY(RMM_ALLOC(&d_result_size, sizeof(gdf_size_type), stream));
-  CUDA_TRY(cudaMemsetAsync(d_result_size, 0, sizeof(gdf_size_type), stream));
-
-  extract_groupby_result<keys_have_nulls, values_have_nulls>
-      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
-         stream>>>(map.get(), *d_input_keys, *d_output_keys,
-                   *d_sparse_output_values, *d_output_values, d_result_size);
-
-  CHECK_STREAM(stream);
-
-  gdf_size_type result_size{-1};
-  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
-                           cudaMemcpyDeviceToHost, stream));
-
-  // Update size and null count of output columns
-  auto update_column = [result_size](gdf_column* col) {
-    col->size = result_size;
-    set_null_count(*col);
-    return col;
-  };
-  std::transform(output_keys.begin(), output_keys.end(), output_keys.begin(),
-                 update_column);
-  std::transform(output_values.begin(), output_values.end(),
-                 output_values.begin(), update_column);
-
-  return std::make_tuple(output_keys, output_values);
+/**---------------------------------------------------------------------------*
+ * @brief Returns instantiation of `compute_hash_groupby` based on presence of
+ * null values in keys and values.
+ *
+ * @param keys The groupby key columns
+ * @param values The groupby value columns
+ * @return Specialized callable of compute_hash_groupby
+ *---------------------------------------------------------------------------**/
+auto groupby_null_specialization(table const& keys, table const& values) {
+  if (cudf::has_nulls(keys)) {
+    if (cudf::has_nulls(values)) {
+      return compute_hash_groupby<true, true>;
+    } else {
+      return compute_hash_groupby<true, false>;
+    }
+  } else {
+    if (cudf::has_nulls(values)) {
+      return compute_hash_groupby<false, true>;
+    } else {
+      return compute_hash_groupby<false, false>;
+    }
+  }
 }
 }  // namespace
 namespace detail {
@@ -232,57 +316,17 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              std::vector<operators> const& ops,
                                              Options options,
                                              cudaStream_t stream) {
-  CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
-               "Size mismatch between ops and value columns");
+  verify_operators(values, ops);
 
-  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
-    if ((ops[i] == SUM) and
-        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
-      CUDF_FAIL(
-          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
-    }
-  }
+  auto compute_groupby = groupby_null_specialization(keys, values);
 
   cudf::table output_keys;
   cudf::table output_values;
 
-  auto F = compute_hash_groupby<true, true>;
+  std::tie(output_keys, output_values) =
+      compute_groupby(keys, values, ops, options, stream);
 
-  if (cudf::has_nulls(keys)) {
-    if (cudf::has_nulls(values)) {
-      F = compute_hash_groupby<true, true>;
-    } else {
-      F = compute_hash_groupby<true, false>;
-    }
-  } else {
-    if (cudf::has_nulls(values)) {
-      F = compute_hash_groupby<false, true>;
-    } else {
-      F = compute_hash_groupby<false, false>;
-    }
-  }
-  std::tie(output_keys, output_values) = F(keys, values, ops, options, stream);
-
-  // Compact NVCategory columns to contain only the strings referenced by the
-  // indices in the output key/value columns
-  auto gather_nvcategories = [](gdf_column const* input_column,
-                                gdf_column* output_column) {
-    CUDF_EXPECTS(input_column->dtype == output_column->dtype,
-                 "Column type mismatch");
-    if (input_column->dtype == GDF_STRING_CATEGORY) {
-      auto status = nvcategory_gather(
-          output_column,
-          static_cast<NVCategory*>(input_column->dtype_info.category));
-      CUDF_EXPECTS(status == GDF_SUCCESS, "Failed to gather NVCategory.");
-    }
-    return output_column;
-  };
-
-  std::transform(keys.begin(), keys.end(), output_keys.begin(),
-                 output_keys.begin(), gather_nvcategories);
-
-  std::transform(values.begin(), values.end(), output_values.begin(),
-                 output_values.begin(), gather_nvcategories);
+  update_nvcategories(keys, output_keys, values, output_values);
 
   return std::make_tuple(output_keys, output_values);
 }
