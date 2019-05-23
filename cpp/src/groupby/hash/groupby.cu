@@ -222,7 +222,6 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
 
-  // TODO Set output key/value columns null counts
   return std::make_tuple(output_keys, output_values);
 }
 }  // namespace
@@ -247,23 +246,22 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
   cudf::table output_keys;
   cudf::table output_values;
 
+  auto F = compute_hash_groupby<true, true>;
+
   if (cudf::has_nulls(keys)) {
     if (cudf::has_nulls(values)) {
-      std::tie(output_keys, output_values) =
-          compute_hash_groupby<true, true>(keys, values, ops, options, stream);
+      F = compute_hash_groupby<true, true>;
     } else {
-      std::tie(output_keys, output_values) =
-          compute_hash_groupby<true, false>(keys, values, ops, options, stream);
+      F = compute_hash_groupby<true, false>;
     }
   } else {
     if (cudf::has_nulls(values)) {
-      std::tie(output_keys, output_values) =
-          compute_hash_groupby<false, true>(keys, values, ops, options, stream);
+      F = compute_hash_groupby<false, true>;
     } else {
-      std::tie(output_keys, output_values) = compute_hash_groupby<false, false>(
-          keys, values, ops, options, stream);
+      F = compute_hash_groupby<false, false>;
     }
   }
+  std::tie(output_keys, output_values) = F(keys, values, ops, options, stream);
 
   // Compact NVCategory columns to contain only the strings referenced by the
   // indices in the output key/value columns
