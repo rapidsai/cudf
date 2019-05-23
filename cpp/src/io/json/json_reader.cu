@@ -70,6 +70,12 @@ gdf_error read_json(json_read_arg *args) {
 JsonReader::JsonReader(json_read_arg *args) : args_(args) {
   // Check if the passed arguments are supported
   CUDF_EXPECTS(args_->lines, "Only Json Lines format is currently supported.\n");
+
+  d_true_trie_ = createSerializedTrie({"true"});
+  opts_.trueValuesTrie = d_true_trie_.data().get();
+
+  d_false_trie_ = createSerializedTrie({"false"});
+  opts_.falseValuesTrie = d_false_trie_.data().get();
 }
 
 /**---------------------------------------------------------------------------*
@@ -437,11 +443,37 @@ void JsonReader::setOutputArguments(json_read_arg *out_args) {
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
-   * @brief Default template operator() dispatch
+   * @brief Template specialization for operator() for types whose values can be
+   * convertible to a 0 or 1 to represent false/true. The converting is done by
+   * checking against the default and user-specified true/false values list.
+   *
+   * It is handled here rather than within convertStrToValue() as that function
+   * is used by other types (ex. timestamp) that aren't 'booleable'.
    *---------------------------------------------------------------------------**/
-  template <typename T>
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
-                                                      long end, const ParseOptions &opts) {
+    long end, const ParseOptions &opts) {
+    T &value{static_cast<T *>(gdf_columns)[row]};
+
+    // Check for user-specified true/false values first, where the output is
+    // replaced with 1/0 respectively
+    const size_t field_len = end - start + 1;
+    if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len)) {
+      value = 1;
+    } else if (serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
+      value = 0;
+    } else {
+      value = convertStrToValue<T>(data, start, end, opts);
+    }
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Default template operator() dispatch specialization all data types
+   * (including wrapper types) that is not covered by above.
+   *---------------------------------------------------------------------------**/
+  template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
+    long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(gdf_columns)[row]};
     value = convertStrToValue<T>(data, start, end, opts);
   }
@@ -676,7 +708,10 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
     if (maybe_hex) {
       --int_req_number_cnt;
     }
-    if (digit_count == int_req_number_cnt) {
+    if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len) ||
+        serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
+      atomicAdd(&column_infos[col].bool_count, 1);
+    } else if (digit_count == int_req_number_cnt) {
       atomicAdd(&column_infos[col].int_count, 1);
     } else if (isLikeFloat(field_len, digit_count, decimal_count, dash_count, exponent_count)) {
       atomicAdd(&column_infos[col].float_count, 1);
@@ -766,6 +801,8 @@ void JsonReader::setDataTypes() {
         dtypes_.push_back(GDF_FLOAT64);
       } else if (cinfo.int_count > 0) {
         dtypes_.push_back(GDF_INT64);
+      } else if (cinfo.bool_count > 0) {
+        dtypes_.push_back(GDF_BOOL8);
       } else {
         CUDF_FAIL("Data type detection failed.\n");
       }
