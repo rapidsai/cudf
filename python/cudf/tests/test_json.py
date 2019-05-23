@@ -262,5 +262,5 @@ def test_json_bool_values():
     # boolean values should be converted to 0/1
     np.testing.assert_array_equal(pd_df[1], cu_df['1'])
 
-    cu_df = cudf.read_json(buffer, lines=True, dtype=['bool','long'])
+    cu_df = cudf.read_json(buffer, lines=True, dtype=['bool', 'long'])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
