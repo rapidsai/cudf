@@ -184,11 +184,11 @@ void update_nvcategories(table const& input_keys, table& output_keys,
 }
 
 template <bool keys_have_nulls, bool values_have_nulls>
-auto build_aggregation_table(table const& input_keys, table const& input_values,
-                             device_table const& d_input_keys,
-                             device_table const& d_input_values,
-                             std::vector<operators> const& ops, Options options,
-                             cudaStream_t stream) {
+auto build_aggregation_map(table const& input_keys, table const& input_values,
+                           device_table const& d_input_keys,
+                           device_table const& d_input_values,
+                           std::vector<operators> const& ops, Options options,
+                           cudaStream_t stream) {
   gdf_size_type constexpr unused_key{std::numeric_limits<gdf_size_type>::max()};
   gdf_size_type constexpr unused_value{
       std::numeric_limits<gdf_size_type>::max()};
@@ -229,13 +229,13 @@ auto build_aggregation_table(table const& input_keys, table const& input_values,
 
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{cudf::row_bitmask(input_keys, stream)};
-    build_aggregation_table<true, values_have_nulls>
+    build_aggregation_map<true, values_have_nulls>
         <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
            stream>>>(map.get(), d_input_keys, d_input_values,
                      *d_sparse_output_values, d_ops.data().get(),
                      row_bitmask.data().get());
   } else {
-    build_aggregation_table<false, values_have_nulls>
+    build_aggregation_map<false, values_have_nulls>
         <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
            stream>>>(map.get(), d_input_keys, d_input_values,
                      *d_sparse_output_values, d_ops.data().get(), nullptr);
@@ -289,6 +289,44 @@ auto extract_results(table const& input_keys, table const& input_values,
   return std::make_tuple(output_keys, output_values);
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Computes the groupby operation for a set of keys, values, and
+ * operators using a hash-based implementation.
+ *
+ * The algorithm has two primary steps:
+ * 1.) Build a hash map
+ * 2.) Extract the non-empty entries from the hash table
+ *
+ * 1.) The hash map is built by inserting every row `i` from the `keys` and
+ * `values` tables as a single (key,value) pair. When the pair is inserted, if
+ * the key was not already present in the map, then the corresponding value is
+ * simply copied to the output. If the key was already present in the map,
+ * then the inserted `values` row is aggregated with the existing row. This
+ * aggregation is done for every element `j` in the row by applying aggregation
+ * operation `j` between the new and existing element.
+ *
+ * This process yields a hash map and table holding the resulting aggregation
+ * rows. The aggregation output table is sparse, i.e., not every row is
+ * populated. This is because the size of the output is not known a priori, and
+ * so the output aggregation table is allocated to be as large as the input (the
+ * upper bound of the output size).
+ *
+ * 2.) The final result is materialized by extracting the non-empty keys from
+ * the hash map and the non-empty rows from the sparse output aggregation table.
+ * Every non-empty key and value row is appended to the output key and value
+ * tables.
+ *
+ * @tparam keys_have_nulls Indicates keys have one or more null values
+ * @tparam values_have_nulls Indicates values have one or more null values
+ * @param keys Table whose rows are used as keys of the groupby
+ * @param values Table whose rows are aggregated in the groupby
+ * @param ops Set of aggregation operations to perform for each element in a row
+ * in the values table
+ * @param options Options to control behavior of the groupby operation
+ * @param stream CUDA stream on which all memory allocations and kernels will be
+ * executed
+ * @return A tuple of the output keys table and output values table
+ *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
@@ -296,7 +334,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   auto const d_input_keys = device_table::create(keys);
   auto const d_input_values = device_table::create(values);
 
-  auto result = build_aggregation_table<keys_have_nulls, values_have_nulls>(
+  auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
       keys, values, *d_input_keys, *d_input_values, ops, options, stream);
 
   auto const map{std::move(std::get<0>(result))};

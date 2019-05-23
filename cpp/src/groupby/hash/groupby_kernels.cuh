@@ -235,7 +235,7 @@ struct row_hasher {
 };
 
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
-__global__ void build_aggregation_table(
+__global__ void build_aggregation_map(
     Map* map, device_table input_keys, device_table input_values,
     device_table output_values, operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
