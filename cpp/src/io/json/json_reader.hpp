@@ -37,6 +37,7 @@ public:
     gdf_size_type datetime_count;
     gdf_size_type string_count;
     gdf_size_type int_count;
+    gdf_size_type bool_count;
     gdf_size_type null_count;
   };
 
@@ -60,7 +61,9 @@ private:
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
-  const ParseOptions opts_{',', '\n', '\"', '.'};
+  ParseOptions opts_{',', '\n', '\"', '.'};
+  rmm::device_vector<SerialTrieNode>	d_true_trie_;
+  rmm::device_vector<SerialTrieNode>	d_false_trie_;
 
   /**---------------------------------------------------------------------------*
    * @brief Ingest input JSON file/buffer, without decompression
