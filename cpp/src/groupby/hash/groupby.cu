@@ -100,6 +100,10 @@ inline std::vector<gdf_dtype> target_dtypes(
   return output_dtypes;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Dispatched functor to initialize a column with the identity of an
+ *aggregation operation.
+ *---------------------------------------------------------------------------**/
 struct identity_initializer {
   template <typename T>
   T get_identity(operators op) {
@@ -141,8 +145,8 @@ struct identity_initializer {
  * The `i`th column will be initialized with the identity value of the `i`th
  * aggregation operation.
  *
- * @note The validity bitmask for the column corresponding to a COUNT operator
- * will be initialized to all valid.
+ * @note The validity bitmask (if not `nullptr`) for the column corresponding to
+ * a COUNT operator will be initialized to all valid.
  *
  * @param table The table of columns to initialize.
  * @param operators The aggregation operations whose identity values will be
