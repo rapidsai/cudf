@@ -75,7 +75,9 @@ class Column(object):
                 # if all null, cast to appropriate dtype
                 if len(obj) == obj.null_count:
                     from cudf.dataframe.columnops import column_empty_like
-                    objs[i] = column_empty_like(head, dtype=head.dtype, masked=True,
+                    objs[i] = column_empty_like(head,
+                                                dtype=head.dtype,
+                                                masked=True,
                                                 newsize=len(obj))
 
         # Handle categories for categoricals

@@ -115,7 +115,8 @@ def column_empty(row_count, dtype, masked, categories=None):
     else:
         mask = None
 
-    if (categories is not None
+    if (
+        categories is not None
         or pd.api.types.is_categorical_dtype(dtype)
     ):
         mem = rmm.device_array((row_count,), dtype=dtype)

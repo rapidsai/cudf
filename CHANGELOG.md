@@ -29,6 +29,7 @@
 - PR #1795 Add printing of git submodule info to `print_env.sh`
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
+- PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
 
 ## Bug Fixes
 
