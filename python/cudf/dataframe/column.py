@@ -76,8 +76,6 @@ class Column(object):
                 if len(obj) == obj.null_count:
                     from cudf.dataframe.columnops import make_null_like
                     objs[i] = make_null_like(head, size=len(obj))
-                else:
-                    raise ValueError("All series must be of same type")
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
@@ -87,6 +85,9 @@ class Column(object):
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
+        for obj in objs:
+            if not(obj.is_type_equivalent(head)):
+                raise ValueError("All series must be of same type")
 
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
@@ -400,6 +401,11 @@ class Column(object):
         ------
         ``IndexError`` if out-of-bound
         """
+        index = int(index)
+        if index < 0:
+            index = len(self) + index
+        if index > len(self) - 1:
+            raise IndexError
         val = self.data[index]  # this can raise IndexError
         valid = (cudautils.mask_get.py_func(self.nullmask, index)
                  if self.has_null_mask else True)
@@ -533,7 +539,7 @@ class Column(object):
         indices = np.argwhere(arr == value)
         if not len(indices):
             raise ValueError('value not found')
-        return indices[0, 0]
+        return indices[-1, 0]
 
     def find_last_value(self, value):
         """
@@ -546,21 +552,8 @@ class Column(object):
         return indices[-1, 0]
 
     def append(self, other):
-        """Append another column
-        """
-        if self.null_count > 0 or other.null_count > 0:
-            raise NotImplementedError("Appending columns with nulls is not "
-                                      "yet supported")
-        newsize = len(self) + len(other)
-        # allocate memory
-        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
-        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
-        newbuf = Buffer.from_empty(mem)
-        # copy into new memory
-        for buf in [self.data, other.data]:
-            newbuf.extend(buf.to_gpu_array())
-        # return new column
-        return self.replace(data=newbuf)
+        from cudf.dataframe.columnops import as_column
+        return Column._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
