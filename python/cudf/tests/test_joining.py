@@ -94,13 +94,13 @@ def test_dataframe_join_how(aa, bb, how, method):
     gotb = got.b
     gota = got.a
     del got['b']
-    got.add_column('b', gotb.astype(np.float64).fillna(np.nan))
+    got.add_column('b', gotb)
     del got['a']
-    got.add_column('a', gota.astype(np.float64).fillna(np.nan))
+    got.add_column('a', gota)
     expect.drop(['b'], axis=1)
-    expect['b'] = expectb.astype(np.float64).fillna(np.nan)
+    expect['b'] = expectb
     expect.drop(['a'], axis=1)
-    expect['a'] = expecta.astype(np.float64).fillna(np.nan)
+    expect['a'] = expecta
 
     # print(expect)
     # print(got.to_string(nrows=None))
@@ -566,7 +566,7 @@ def test_merge_left_on_right_on():
               gleft.merge(gright, left_on='xx', right_on='xx'))
 
 
-def test_mergee_on_index_retained():
+def test_merge_on_index_retained():
     df = cudf.DataFrame()
     df['a'] = [1, 2, 3, 4, 5]
     df['b'] = ['a', 'b', 'c', 'd', 'e']
@@ -581,4 +581,5 @@ def test_mergee_on_index_retained():
 
     gdm = df.merge(df2, left_index=True, right_index=True, how='left')
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how='left')
+    gdm['a2'] = gdm['a2'].astype('float64')
     assert_eq(gdm, pdm)
