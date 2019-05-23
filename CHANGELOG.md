@@ -12,6 +12,7 @@
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
+- PR #1813 ORC Reader: Add support for stripe selection
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -21,6 +22,7 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1759 Add an example showing simultaneous rolling averages to `apply_grouped` documentation
 - PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
@@ -29,7 +31,8 @@
 - PR #1795 Add printing of git submodule info to `print_env.sh`
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
-- PR #1736 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 
 ## Bug Fixes
 
