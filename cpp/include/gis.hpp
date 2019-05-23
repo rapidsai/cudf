@@ -28,12 +28,12 @@ namespace cudf {
  * Polygon is considered as a set of coordinates (latitudes and longitudes)
  * where the first and last coordinates must have the same value (closed)
  * 
- * It works for clockwise and counter-clockwise polygons
- * 
- * Polygon must not have holes
+ * It supports clockwise and counter-clockwise polygons
  * 
  * If a query point is colinear with two contiguous polygon's coordinates
  * then this query point isn't completely inside
+ * 
+ * Polygon must not have holes neither intersect with itself.
  * 
  * Both polygon_latitudes and polygon_longitudes must have equal size
  * 
@@ -48,10 +48,10 @@ namespace cudf {
  *
  * @returns gdf_column of type GDF_BOOL8 indicating whether the i-th query point is inside (true) or not (false)
  */
-gdf_column point_in_polygon(gdf_column const & polygon_latitudes,
-                            gdf_column const & polygon_longitudes,
-	                        gdf_column const & point_latitudes,
-                            gdf_column const & point_longitudes);
+gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
+                             gdf_column const & polygon_longitudes,
+                             gdf_column const & point_latitudes,
+                             gdf_column const & point_longitudes );
 
 }  // namespace cudf
 

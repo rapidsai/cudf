@@ -35,7 +35,8 @@ namespace {
  * P2 *--*P3
  *
  * Orientation is calculated as if a 2D vector from P1 to P2 (e.g. U = P2 - P1) 
- * were rotated to orient toward P3. 
+ * were rotated to orient toward P3. It is positive for clockwise rotation, 
+ * negative for counter-clockwise rotation, and 0 if the points are collinear
  *
  * @param[in] p1_x: Longitude of the first point p1
  * @param[in] p1_y: Latitude of the first point p1
@@ -44,16 +45,55 @@ namespace {
  * @param[in] p3_x: Longitude of the third point p3
  * @param[in] p3_y: Latitude of the third point p3
  *
- * @returns positive if it's clockwise, negative if is counter-clockwise and 0 if is colinear
+ * @returns positive if it's clockwise, negative if is counter-clockwise and 0 if p1, p2 and p3 are colinear
  */
 template <typename T>
-__device__ T orientation(const T & p1_x, const T & p1_y, const T & p2_x, const T & p2_y, const T p3_x, const T & p3_y)
+__device__ T orientation( const T & p1_x, const T & p1_y,
+                          const T & p2_x, const T & p2_y,
+                          const T p3_x, const T & p3_y )
 {
-    return ((p2_y - p1_y) * (p3_x - p2_x) - (p2_x - p1_x) * (p3_y - p2_y));
+    return ( (p2_y - p1_y) * (p3_x - p2_x) - (p2_x - p1_x) * (p3_y - p2_y) );
 }
 
 /** 
- *  @brief Determine whether or not coordinates (query points) are completely inside a static polygon
+ * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
+ *
+ * Polygon must not have holes neither intersect with itself. Polygons must be closed
+ *
+ * Each thread check if a query point is inside the polygon
+ *
+ * First check if the query point's longitude is between two contiguous sides of the polygon
+ * If so, then check the orientations. If the orientation is clockwise then it increases by one,
+ * otherwise it decreases by one at the count variable.
+ *
+ * For instance the "q" query point is between longitudes of Po and P1, also P2 and P3
+ * In both "q" has a clockwise orientation, so the count value increases in 2
+ * The P polygon {P0, P1, P2, P3, P0}
+ *
+ *  Po --------------- P1
+ *  |                  |
+ *  |       *q         |
+ *  |                  |
+ *  P3 --------------- P2
+ *
+ * For a more complex polygon P. The "q" query point's longitude is between the longitudes of:
+ * Po to P1: q has clockwise orientation, "count" increases by one (count = 1)
+ * P2 to P3: q has counter-clockwise orientation, "count" decreases by one (count = 0)
+ * P4 to P5: q has counter-clockwise orientation, "count" decreases by one (count = -1)
+ * P6 to P7: q has clockwise orientation, "count" increases by one (count = 0)
+ * Finally: count = 0, so "q" is outside of P polygon
+ *
+ * Po --------------------- P1
+ * |                        |
+ * |                        |
+ * |         P3 ----------- P2
+ * |         |
+ * |         |     * q
+ * |         |
+ * |         P4 ----------- P5
+ * |                        |
+ * |                        |
+ * P7 --------------------- P6
  *
  * @param[in] poly_lats: Pointer to latitudes of a polygon
  * @param[in] poly_lons: Pointer to longitudes of a polygon
@@ -71,35 +111,39 @@ __device__ T orientation(const T & p1_x, const T & p1_y, const T & p2_x, const T
                                          const T* const __restrict__ point_lats,
                                          const T* const __restrict__ point_lons,
                                          gdf_size_type poly_size,
-                                         gdf_size_type point_size,
+                                         gdf_size_type points_size,
                                          cudf::bool8* const __restrict__ point_is_in_polygon)
 {
     gdf_index_type start_idx = blockIdx.x * blockDim.x + threadIdx.x;
  
-    for(gdf_index_type idx = start_idx; idx < point_size; idx += blockDim.x * gridDim.x)
+    for(gdf_index_type idx = start_idx; idx < points_size; idx += blockDim.x * gridDim.x)
     {
         T point_lat = point_lats[idx];
         T point_lon = point_lons[idx];
         gdf_size_type count = 0;
  
-        for(gdf_index_type poly_idx = 0; poly_idx < poly_size - 1; poly_idx++) 
+        for(gdf_index_type poly_side = 0; poly_side < poly_size - 1; poly_side++) 
         {
-            if(poly_lons[poly_idx] <= point_lon && point_lon < poly_lons[poly_idx + 1])
+            if(poly_lons[poly_side] <= point_lon && point_lon < poly_lons[poly_side + 1])
             {
-                if (orientation(poly_lons[poly_idx], poly_lats[poly_idx], poly_lons[poly_idx + 1], poly_lats[poly_idx + 1], point_lon, point_lat) > 0)
+                if (orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat) > 0)
                 {
                     count++;
+                } else {
+                    count--;
                 }
             }
-            else if (point_lon <= poly_lons[poly_idx] && poly_lons[poly_idx + 1] < point_lon) 
+            else if (point_lon <= poly_lons[poly_side] && poly_lons[poly_side + 1] < point_lon) 
             {
-                if (orientation(poly_lons[poly_idx], poly_lats[poly_idx], poly_lons[poly_idx + 1], poly_lats[poly_idx + 1], point_lon, point_lat) > 0)
+                if (orientation(poly_lons[poly_side], poly_lats[poly_side], poly_lons[poly_side + 1], poly_lats[poly_side + 1], point_lon, point_lat) > 0)
                 {
                     count++;
+                } else {
+                    count--;
                 }
             }
         }
-        point_is_in_polygon[idx] = cudf::bool8{(count > 0) && (count % 2) == 0};
+        point_is_in_polygon[idx] = cudf::bool8{count > 0};
     }
 }
 
@@ -112,17 +156,19 @@ struct point_in_polygon_functor {
 
     template <typename col_type, std::enable_if_t< is_supported<col_type>() >* = nullptr>
     gdf_column operator()(gdf_column const & d_poly_lats, gdf_column const & d_poly_lons,
-                    gdf_column const & d_point_lats, gdf_column const & d_point_lons, cudaStream_t stream = 0)
+                          gdf_column const & d_point_lats, gdf_column const & d_point_lons,
+                          cudaStream_t stream = 0)
     {
         gdf_column d_point_is_in_polygon;
         cudf::bool8* data;
-        RMM_TRY(RMM_ALLOC(&data, d_point_lats.size * sizeof(cudf::bool8), 0));
+        RMM_TRY( RMM_ALLOC(&data, d_point_lats.size * sizeof(cudf::bool8), 0) );
         gdf_column_view(&d_point_is_in_polygon, data, nullptr, d_point_lats.size, GDF_BOOL8);
 
         gdf_size_type min_grid_size = 0, block_size = 0;
         CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, point_in_polygon_kernel<col_type>) );
+        gdf_size_type grid_size = (d_point_lats.size + block_size - 1) / block_size;
 
-        point_in_polygon_kernel<col_type> <<< min_grid_size, block_size >>> (static_cast<col_type*>(d_poly_lats.data), 
+        point_in_polygon_kernel<col_type> <<< grid_size, block_size >>> ( static_cast<col_type*>(d_poly_lats.data), 
                 static_cast<col_type*>(d_poly_lons.data), static_cast<col_type*>(d_point_lats.data), static_cast<col_type*>(d_point_lons.data), 
                 d_poly_lats.size, d_point_lats.size, static_cast<cudf::bool8*>(d_point_is_in_polygon.data) );
 
@@ -133,7 +179,8 @@ struct point_in_polygon_functor {
 
     template <typename col_type, std::enable_if_t< !is_supported<col_type>() >* = nullptr>
     gdf_column operator()(gdf_column const & d_poly_lats, gdf_column const & d_poly_lons,
-                    gdf_column const & d_point_lats, gdf_column const & d_point_lons, cudaStream_t stream = 0)
+                          gdf_column const & d_point_lats, gdf_column const & d_point_lons,
+                          cudaStream_t stream = 0)
     {
         CUDF_FAIL("Non-arithmetic operation is not supported");
     }
@@ -165,7 +212,7 @@ gdf_column point_in_polygon(gdf_column const & polygon_lats, gdf_column const & 
                                             point_lons,
                                             stream);
     
-    if (point_lats.null_count == 0 && point_lons.null_count == 0) inside_polygon.null_count = 0;
+    if ( point_lats.null_count == 0 && point_lons.null_count == 0 ) inside_polygon.null_count = 0;
     else {
         auto error_copy_bit_mask = bit_mask::copy_bit_mask( reinterpret_cast<bit_mask::bit_mask_t*>(inside_polygon.valid),
                                                             reinterpret_cast<bit_mask::bit_mask_t*>(point_lats.valid), 
