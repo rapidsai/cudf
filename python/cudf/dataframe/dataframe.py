@@ -1640,8 +1640,9 @@ class DataFrame(object):
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
+            df = df.set_index(lhs.LEFT_RIGHT_INDEX_NAME)
+            df.index.name = None
+            df = df.sort_values(df.columns[0])
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on[0]])))
