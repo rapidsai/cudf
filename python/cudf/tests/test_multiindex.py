@@ -216,8 +216,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
               gdf.loc[('c', 'forest', 'clear')])
 
 
-@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet",
-                   raises=AttributeError)
+@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet")
 def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)

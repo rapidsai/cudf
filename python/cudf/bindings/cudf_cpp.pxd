@@ -116,8 +116,7 @@ cdef extern from "cudf.h" nogil:
     ctypedef enum gdf_null_sort_behavior:
       GDF_NULL_AS_LARGEST = 0, 
       GDF_NULL_AS_SMALLEST,
-      GDF_NULL_AS_LARGEST_FOR_MULTISORT,
-
+   
     ctypedef enum gdf_method:
       GDF_SORT = 0,
       GDF_HASH,
@@ -225,15 +224,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width) except +
-
-    cdef gdf_error gdf_filter(size_t nrows,
-                 gdf_column* cols,
-                 size_t ncols,
-                 void** d_cols,
-                 int* d_types,
-                 void** d_vals,
-                 size_t* d_indx,
-                 size_t* new_sz) except +
 
     cdef gdf_error gdf_group_by_sum(int ncols,
                                gdf_column** cols,

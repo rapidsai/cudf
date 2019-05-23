@@ -253,9 +253,7 @@ typedef enum {
  */
 typedef enum {
   GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
-  GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
-  GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< In multicolumn sorting, a row with NULL in any column is
-                                          treated as the largest number in comparisons */
+  GDF_NULL_AS_SMALLEST               ///< NULLS are treated as the smallest number in comparisons  
 } gdf_null_sort_behavior;
 
 
@@ -285,6 +283,6 @@ struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 typedef enum{
-  GDF_ORDER_ASC,
+  GDF_ORDER_ASC=0,
   GDF_ORDER_DESC
 } order_by_type;

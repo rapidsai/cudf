@@ -21,6 +21,7 @@
 #include <hash/managed.cuh>
 #include "hash_groupby_kernels.cuh"
 #include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 #include <copying/gather.hpp>
 #include "rmm/thrust_rmm_allocator.h"
 #include "types.hpp"
