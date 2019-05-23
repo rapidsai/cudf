@@ -316,14 +316,12 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
-        result = self.copy()
         fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-        if is_integer_dtype(result.dtype):
-            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        if is_integer_dtype(self.dtype):
+            fill_value_col = safe_cast_to_int(fill_value_col, self.dtype)
         else:
-            fill_value_col = fill_value_col.astype(result.dtype)
-        cpp_replace.replace_nulls(result, fill_value_col)
-        result = result.replace(mask=None)
+            fill_value_col = fill_value_col.astype(self.dtype)
+        result = cpp_replace.apply_replace_nulls(self, fill_value_col)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):

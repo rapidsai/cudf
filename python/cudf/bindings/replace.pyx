@@ -9,15 +9,11 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.replace cimport *
+from cudf.dataframe.column import Column
 
-import numpy as np
-import pandas as pd
-import pyarrow as pa
-
-from librmm_cffi import librmm as rmm
-
-from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
+
 
 
 cpdef replace(col, old_values, new_values):
@@ -30,11 +26,15 @@ cpdef replace(col, old_values, new_values):
 
     gdf_find_and_replace_all(c_col, c_old_values, c_new_values)
 
-cpdef replace_nulls(col, fill_values):
-    """
-        Call gdf_replace_nulls
-    """
-    cdef gdf_column* c_col = column_view_from_column(col)
-    cdef gdf_column* fill_values_col = column_view_from_column(fill_values)
 
-    gdf_replace_nulls(c_col, fill_values_col)
+cpdef apply_replace_nulls(inp, replacement_values):
+    """
+    Call replace_nulls
+    """
+    cdef gdf_column* inp_col = column_view_from_column(inp)
+    cdef gdf_column* replacement_col = column_view_from_column(replacement_values)
+    cdef gdf_column result = replace_nulls(inp_col[0], replacement_col[0])
+
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
+

@@ -257,10 +257,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
         Fill null values with *fill_value*
         """
 
-        result = self.copy()
-
         if not self.has_null_mask:
-            return result
+            return self
 
         fill_is_scalar = np.isscalar(fill_value)
 
@@ -282,7 +280,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
             fill_value_col = fill_value_col.cat()._set_categories(
                 self.cat().categories)
 
-        cpp_replace.replace_nulls(result, fill_value_col)
+        result = cpp_replace.apply_replace_nulls(self, fill_value_col)
+
+        result = columnops.build_column(result.data, 'category', result.mask,
+                               categories=self.cat().categories)
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
 

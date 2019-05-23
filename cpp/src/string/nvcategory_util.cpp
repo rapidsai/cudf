@@ -1,5 +1,6 @@
-
+#include <utility>
 #include "nvcategory_util.hpp"
+#include <replace.hpp>
 #include <types.hpp>
 #include <table.hpp>
 #include <nvstrings/NVCategory.h>
@@ -98,8 +99,10 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     null_index_column.null_count = 0;
     null_index_column.dtype_info.category = nullptr; // we are using this column as a GDF_STRING_CATEGORY, but we are not actually using the category
 
-    gdf_error err = gdf_replace_nulls(column, &null_index_column);
-    CUDF_EXPECTS(err == GDF_SUCCESS,"couldnn replace");
+    gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_column);
+    gdf_column_free(column);
+    column = &column_nulls_replaced;
+
     gdf_column_free(&null_index_column);
   }
 
