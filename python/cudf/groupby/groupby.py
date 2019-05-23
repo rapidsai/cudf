@@ -270,11 +270,15 @@ class Groupby(object):
         return result
 
     def apply_multicolumn_mapped(self, result, aggs):
-        # if there are no repeated keys in the mapping set,
-        # and all of the actual aggregations in the mapping set are only
+        # if all of the aggregations in the mapping set are only
         # length 1, we can assign the columns directly as keys.
-        if (np.array(list(map(lambda x: len([x] if isinstance(
-                    x, str) else list(x)), aggs.values()))) == 1).all():
+        can_map_directly = True
+        for values in aggs.values():
+            value = [values] if isinstance(values, str) else list(values)
+            if len(value) != 1:
+                can_map_directly = False
+                break
+        if can_map_directly:
             result.columns = aggs.keys()
         else:
             tuples = []
