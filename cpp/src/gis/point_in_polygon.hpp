@@ -50,11 +50,19 @@ namespace gis {
  *
  * @returns gdf_column of type GDF_BOOL8 indicating whether the i-th query point is inside (true) or not (false)
  */
+<<<<<<< HEAD
 gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
                              gdf_column const & polygon_longitudes,
                              gdf_column const & point_latitudes,
                              gdf_column const & point_longitudes,
                              cudaStream_t stream = 0 );
+=======
+gdf_column point_in_polygon(gdf_column const & polygon_latitudes,
+                            gdf_column const & polygon_longitudes,
+	                    gdf_column const & point_latitudes,
+                            gdf_column const & point_longitudes,
+                            cudaStream_t stream = 0);
+>>>>>>> 41b32fd18b7554d3c41a6ac758c6f7db8bb7cc42
 }  // namespace gis
 }  // namespace cudf
 
