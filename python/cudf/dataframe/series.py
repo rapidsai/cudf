@@ -519,7 +519,8 @@ class Series(object):
     def _bitwise_binop(self, other, op):
         if (np.issubdtype(self.dtype, np.integer) and
                 np.issubdtype(other.dtype, np.integer)):
-            # this broke Series (op) DataFrame because dataframe doesn't have dtype
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
             return self._binaryop(other, op)
         else:
             raise TypeError(
