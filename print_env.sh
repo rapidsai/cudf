@@ -8,6 +8,8 @@
 echo "**git***"
 if [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]; then
 git log --decorate -n 1
+echo "**git submodules***"
+git submodule status --recursive
 else
 echo "Not inside a git repository"
 fi
