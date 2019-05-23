@@ -25,6 +25,7 @@ cdef extern from "cudf.h" nogil:
         GDF_ABS,
         GDF_BIT_INVERT,
         GDF_NOT,
+        GDF_INVALID_UNARY
 
     cdef gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op) except +
 

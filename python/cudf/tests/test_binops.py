@@ -125,7 +125,7 @@ def test_series_logical_binop(binop, obj_class):
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), expect.to_numpy())
+    np.testing.assert_almost_equal(result.to_array(), expect)
 
 
 _cmpops = [

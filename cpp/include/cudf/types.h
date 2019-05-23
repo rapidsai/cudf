@@ -248,6 +248,7 @@ typedef enum {
   GDF_ABS,          ///< Absolute value
   GDF_BIT_INVERT,   ///< Bitwise Not (~)
   GDF_NOT,          ///< Logical Not (!)
+  GDF_INVALID_UNARY ///< invalid operation
 } gdf_unary_math_op;
 
 

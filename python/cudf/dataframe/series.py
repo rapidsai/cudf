@@ -430,9 +430,9 @@ class Series(object):
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
-            # i removed _binaryop from dataframe in #1292 (bitwise binary ops)
-            # that should've broken this. This needs a fix and a test
-            return other._binaryop(self, fn)
+            # TODO: fn is not the same as arg expected by _apply_op
+            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
+            return other._apply_op(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
