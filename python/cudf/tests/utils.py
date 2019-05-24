@@ -41,6 +41,7 @@ def assert_eq(a, b, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
+    __tracebackhide__ = True
     if hasattr(a, 'to_pandas'):
         a = a.to_pandas()
     if hasattr(b, 'to_pandas'):
@@ -65,6 +66,7 @@ def assert_eq(a, b, **kwargs):
 
 
 def assert_neq(a, b, **kwargs):
+    __tracebackhide__ = True
     try:
         assert_eq(a, b, **kwargs)
     except AssertionError:
