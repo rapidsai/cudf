@@ -8,6 +8,7 @@ from itertools import product
 
 import pytest
 import numpy as np
+import cudf
 
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
@@ -99,31 +100,31 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
 
 
 _logical_binops = [
-    operator.and_,
-    operator.or_,
+    (operator.and_, operator.and_),
+    (operator.or_, operator.or_),
+    (np.logical_and, cudf.logical_and),
+    (np.logical_or, cudf.logical_or),
 ]
 
 
-@pytest.mark.parametrize('obj_class', ['Series', 'Index'])
-@pytest.mark.parametrize('binop', _logical_binops)
-def test_series_logical_binop(binop, obj_class):
+@pytest.mark.parametrize('lhstype', _int_types + [np.bool_])
+@pytest.mark.parametrize('rhstype', _int_types + [np.bool_])
+@pytest.mark.parametrize('binop,cubinop', _logical_binops)
+def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
     import pandas as pd
 
-    arr1 = pd.Series(np.random.choice([True, False], 100))
+    arr1 = pd.Series(np.random.choice([True, False], 10))
+    if lhstype is not np.bool_:
+        arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
     sr1 = Series(arr1)
 
-    arr2 = pd.Series(np.random.choice([True, False], 100))
+    arr2 = pd.Series(np.random.choice([True, False], 10))
+    if rhstype is not np.bool_:
+        arr2 = arr2 * (np.random.random(10) * 100).astype(rhstype)
     sr2 = Series(arr2)
 
-    if obj_class == 'Index':
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
-
-    result = binop(sr1, sr2)
+    result = cubinop(sr1, sr2)
     expect = binop(arr1, arr2)
-
-    if obj_class == 'Index':
-        result = Series(result)
 
     np.testing.assert_almost_equal(result.to_array(), expect)
 

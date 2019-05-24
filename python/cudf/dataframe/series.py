@@ -517,11 +517,22 @@ class Series(object):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (np.issubdtype(self.dtype, np.integer) and
-                np.issubdtype(other.dtype, np.integer)):
+        if (
+            np.issubdtype(self.dtype, np.bool_)
+            or np.issubdtype(self.dtype, np.integer)
+        ) and (
+            np.issubdtype(other.dtype, np.bool_)
+            or np.issubdtype(other.dtype, np.integer)
+        ):
             # TODO: This doesn't work on Series (op) DataFrame
             # because dataframe doesn't have dtype
-            return self._binaryop(other, op)
+            ser = self._binaryop(other, op)
+            if (
+                np.issubdtype(self.dtype, np.bool_)
+                or np.issubdtype(other.dtype, np.bool_)
+            ):
+                ser = ser.astype(np.bool_)
+            return ser
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
@@ -532,18 +543,12 @@ class Series(object):
         """Performs vectorized bitwise and (&) on corresponding elements of two
         series. Performs logical AND if one of the series is of bool dtype.
         """
-        if (np.issubdtype(self.dtype, np.bool_) or
-                np.issubdtype(other.dtype, np.bool_)):
-            return self._binaryop(other, 'l_and')
         return self._bitwise_binop(other, 'and')
 
     def __or__(self, other):
         """Performs vectorized bitwise or (|) on corresponding elements of two
         series. Performs logical OR if one of the series is of bool dtype.
         """
-        if (np.issubdtype(self.dtype, np.bool_) or
-                np.issubdtype(other.dtype, np.bool_)):
-            return self._binaryop(other, 'l_or')
         return self._bitwise_binop(other, 'or')
 
     def __xor__(self, other):
@@ -551,6 +556,18 @@ class Series(object):
         series.
         """
         return self._bitwise_binop(other, 'xor')
+
+    def logical_and(self, other):
+        ser = self._binaryop(other, 'l_and')
+        return ser.astype(np.bool_)
+
+    def logical_or(self, other):
+        ser = self._binaryop(other, 'l_or')
+        return ser.astype(np.bool_)
+
+    def logical_not(self):
+        outcol = self._column.unary_logic_op('not')
+        return self._copy_construct(data=outcol)
 
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):

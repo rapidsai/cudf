@@ -64,11 +64,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
-            if (np.issubdtype(self.dtype, np.bool_) or
-                    np.issubdtype(rhs.dtype, np.bool_)):
-                out_dtype = np.bool_
-            else:
-                out_dtype = np.result_type(self.dtype, rhs.dtype)
+            out_dtype = np.result_type(self.dtype, rhs.dtype)
             return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
                                         out_dtype=out_dtype)
         else:
@@ -78,6 +74,10 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unary_operator(self, unaryop):
         return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
+
+    def unary_logic_op(self, unaryop):
+        return numeric_column_unaryop(self, op=unaryop,
+                                      out_dtype=np.bool_)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
