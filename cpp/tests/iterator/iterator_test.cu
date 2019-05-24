@@ -56,12 +56,15 @@
 
 // --------------------------------------------------------------------------------------------------------
 // structs for column_input_iterator
+template<typename T, bool nulls_present=true>
+struct ColumnData;
+
 template<typename T>
-struct ColumnDataNonNull{
+struct ColumnData<T, false>{
     const T *data;
 
     __device__ __host__
-    ColumnDataNonNull(T *_data)
+    ColumnData(T *_data)
     : data(_data){};
 
     __device__ __host__
@@ -71,7 +74,7 @@ struct ColumnDataNonNull{
 };
 
 template<typename T>
-struct ColumnData{
+struct ColumnData<T, true>{
     const T *data;
     const gdf_valid_type *valid;
     T identity;
@@ -86,17 +89,31 @@ struct ColumnData{
     };
 };
 
-template<typename T>
-struct ColumnDataSquare : public ColumnData<T>
+
+template<typename T, bool nulls_present=true>
+struct ColumnDataSquare : public ColumnData<T, nulls_present>
 {
+    __device__ __host__
     ColumnDataSquare(T *_data, gdf_valid_type *_valid, T _identity)
-    : ColumnData<T>(_data, _valid, _identity){};
+    : ColumnData<T, true>(_data, _valid, _identity){};
+
+    __device__ __host__
+    ColumnDataSquare(T *_data)
+    : ColumnData<T, false>(_data){};
 
     __device__ __host__
     T at(gdf_index_type id) const {
         T val = ColumnData<T>::at(id);
         return (val * val);
     };
+};
+
+template<typename T_output>
+struct ColumnDataOutput
+{
+    T_output value;
+    T_output value_squared;
+    gdf_index_type count;
 };
 
 // TBD. ColumnDataSquareNonNull
@@ -108,14 +125,15 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     : public thrust::iterator_adaptor<
         column_input_iterator<T_output, T_input, Iterator>, // the first template parameter is the name of the iterator we're creating
         Iterator,                   // the second template parameter is the name of the iterator we're adapting
-        thrust::use_default, thrust::use_default, thrust::use_default, T_output, thrust::use_default
+        thrust::use_default, thrust::use_default, thrust::use_default,
+        T_output,                   // set `super_t::reference` to `T_output`
+        thrust::use_default
       >
-      {
+  {
   public:
     // shorthand for the name of the iterator_adaptor we're deriving from
     using super_t = thrust::iterator_adaptor<
-      column_input_iterator<T_output, T_input, Iterator>,
-      Iterator,
+      column_input_iterator<T_output, T_input, Iterator>, Iterator,
       thrust::use_default, thrust::use_default, thrust::use_default, T_output, thrust::use_default
     >;
 
@@ -373,8 +391,8 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
-    ColumnDataNonNull<T> col(dev_array.data().get());
-    column_input_iterator<T, ColumnDataNonNull<T>, T_index*> it_dev(col, dev_indices.data().get());
+    ColumnData<T, false> col(dev_array.data().get());
+    column_input_iterator<T, ColumnData<T, false>, T_index*> it_dev(col, dev_indices.data().get());
 
     // reduction using thrust
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
