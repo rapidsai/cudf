@@ -316,6 +316,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
+        if np.isscalar(fill_value):
+            fill_value = np.array(fill_value)
+            dtype = fill_value.dtype
+            fill_value = utils.scalar_broadcast_to(fill_value.item(), (len(self)),
+                                                   dtype)
         fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
         if is_integer_dtype(self.dtype):
             fill_value_col = safe_cast_to_int(fill_value_col, self.dtype)

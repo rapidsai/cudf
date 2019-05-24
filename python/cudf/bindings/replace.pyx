@@ -27,13 +27,33 @@ cpdef replace(col, old_values, new_values):
     gdf_find_and_replace_all(c_col, c_old_values, c_new_values)
 
 
+cdef apply_replace_nulls_column(inp, replacement):
+    cdef gdf_column* inp_col = column_view_from_column(inp)
+    cdef gdf_column* replacement_col = column_view_from_column(replacement_values)
+    cdef gdf_column result
+
+    with nogil:
+        result = replace_nulls(inp_col[0], replacement_col[0])
+
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
+
+cdef apply_replace_nulls_scalar(inp, replacement):
+    cdef gdf_column* inp_col = column_view_from_column(inp)
+    cdef gdf_column* replacement_col = column_view_from_column(replacement_values)
+    cdef gdf_scalar
+
+
 cpdef apply_replace_nulls(inp, replacement_values):
     """
     Call replace_nulls
     """
     cdef gdf_column* inp_col = column_view_from_column(inp)
     cdef gdf_column* replacement_col = column_view_from_column(replacement_values)
-    cdef gdf_column result = replace_nulls(inp_col[0], replacement_col[0])
+    cdef gdf_column result
+
+    with nogil:
+        result = replace_nulls(inp_col[0], replacement_col[0])
 
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)

@@ -11,3 +11,6 @@ cdef extern from "replace.hpp" namespace "cudf" nogil:
 
     cdef gdf_column replace_nulls(const gdf_column& inp,
                                   const gdf_column& replacement_values) except +
+
+    cdef gdf_column replace_nulls(const gdf_column& inp,
+                                  const gdf_scalar& replacement_value) except +
