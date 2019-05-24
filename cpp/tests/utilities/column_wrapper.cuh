@@ -30,8 +30,8 @@
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
-#include <string>
 #include <initializer_list>
+#include <string>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -94,7 +94,6 @@ struct column_wrapper {
 
   operator gdf_column&() { return the_column; };
   operator const gdf_column&() const { return the_column; };
-
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
@@ -179,6 +178,14 @@ struct column_wrapper {
     initialize_with_host_data(host_data);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an initializer list for the
+   *column's data.
+   *
+   * The bitmask is not allocated.
+   *
+   * @param list initializer_list to use for column's data
+   *---------------------------------------------------------------------------**/
   explicit column_wrapper(std::initializer_list<ColumnType> list)
       : column_wrapper{std::vector<ColumnType>(list)} {}
 
@@ -221,10 +228,11 @@ struct column_wrapper {
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
-   * The valid bitmask is initialized using the specified bit_initializer unary
-   * lambda that returns a bool. Bit `i` in the bitmask will be equal to
-   *
-   * bitmask
+   * Allocates and initializes the column's bitmask using the specified
+   * bit_initializer unary callable. Bit `i` in the column's bitmask will be
+   * equal to `bit_initializer(i)`.
+   * @param host_data The vector of data to use for the column
+   * @param bit_initializer The unary callable to initialize the bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
   column_wrapper(std::vector<ColumnType> const& host_data,
@@ -241,6 +249,22 @@ struct column_wrapper {
     }
     initialize_with_host_data(host_data, host_bitmask);
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an initializer list for the
+   * column's data and a lambda initializer for the bitmask.
+   *
+   * Allocates and initializes the column's bitmask using the specified
+   * bit_initializer unary callable. Bit `i` in the column's bitmask will be
+   * equal to `bit_initializer(i)`.
+   *
+   * @param list initializer_list to use for column's data
+   * @param bit_initializer The unary callable to initialize the bitmask
+   *---------------------------------------------------------------------------**/
+  template <typename BitInitializerType>
+  column_wrapper(std::initializer_list<ColumnType> list,
+                 BitInitializerType bit_initializer)
+      : column_wrapper{std::vector<ColumnType>(list), bit_initializer} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using lambda initializers for both
