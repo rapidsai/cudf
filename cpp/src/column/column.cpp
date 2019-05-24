@@ -210,7 +210,11 @@ namespace{
   };
 }
 
-// returns the size in bytes of the specified gdf_dtype
+/*
+ * @note this is an implementation of a libcudf C API function; otherwise, we would
+ * just have dropped it in light `cudf::size_of(gdf_dtype)`. In fact, within libcudf
+ * you _should not_ use this function yourself.
+ */
 gdf_size_type gdf_dtype_size(gdf_dtype dtype)
 {
   return cudf::size_of(dtype);

@@ -42,13 +42,21 @@ T* get_data(const gdf_column& column) noexcept { return static_cast<T*>(column.d
 template<typename T>
 T* get_data(const gdf_column* column) noexcept { return get_data<T>(*column); }
 
-constexpr inline bool is_an_integer(gdf_dtype element_type)
+namespace detail {
+
+struct integral_check {
+   template <typename T>
+   constexpr bool operator()(void) const noexcept
+   {
+      return std::is_integral<T>::value;
+   }
+};
+
+} // namespace detail
+
+constexpr inline bool is_an_integer(gdf_dtype element_type) noexcept
 {
-    return
-        element_type == GDF_INT8  or
-        element_type == GDF_INT16 or
-        element_type == GDF_INT32 or
-        element_type == GDF_INT64;
+   return cudf::type_dispatcher(element_type, detail::integral_check{});
 }
 
 constexpr inline bool is_integral(const gdf_column& column) noexcept { return is_an_integer(column.dtype); }

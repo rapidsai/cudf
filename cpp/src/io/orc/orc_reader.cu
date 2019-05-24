@@ -569,7 +569,7 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
       chunk.column_data_base = columns[j]->data;
       chunk.dtype_len = (columns[j]->dtype == GDF_STRING)
                             ? sizeof(std::pair<const char *, size_t>)
-                            : gdf_dtype_size(columns[j]->dtype);
+                            : cudf::size_of(columns[j]->dtype);
     }
   }
 
