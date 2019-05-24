@@ -1519,11 +1519,7 @@ class DataFrame(object):
             if pd.api.types.is_categorical_dtype(lhs[name]):
                 lcats = lhs[name].cat.categories
                 rcats = rhs[name].cat.categories
-                if how == 'rhs':
-                    cats = rcats
-                    lhs[name] = (lhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                elif how in ['inner', 'outer']:
+                if how in ['inner', 'outer']:
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
