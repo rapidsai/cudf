@@ -1013,7 +1013,7 @@ class DataFrame(object):
         copy : boolean, default True
             Also copy underlying data
         inplace: boolean, default False
-            Retrun new DataFrame.  If True, assign columns without copy
+            Return new DataFrame.  If True, assign columns without copy
 
         Returns
         -------
