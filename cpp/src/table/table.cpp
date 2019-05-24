@@ -17,6 +17,7 @@
 #include <cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cassert>
+#include <copying.hpp>
 #include <table.hpp>
 #include <utilities/error_utils.hpp>
 
@@ -24,8 +25,7 @@
 
 namespace cudf {
 
-table::table(gdf_column* cols[], gdf_size_type num_cols)
-    : _columns(cols, cols + num_cols) {
+table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
   CUDF_EXPECTS(nullptr != cols[0], "Null input column");
   this->_num_rows = cols[0]->size;
 
@@ -35,27 +35,11 @@ table::table(gdf_column* cols[], gdf_size_type num_cols)
   });
 }
 
-table::table(std::vector<gdf_dtype> const& dtypes)
-    : _columns(dtypes.size()), _num_rows{0} {
-  std::transform(
-    _columns.begin(), _columns.end(), dtypes.begin(), _columns.begin(),
-    [](gdf_column*& col, gdf_dtype dtype) {
-      CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
-      CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
-      col = new gdf_column;
+table::table(std::initializer_list<gdf_column*> list)
+    : table{std::vector<gdf_column*>(list)} {}
 
-      // Timestamp currently unsupported as it would require passing in
-      // additional resolution information
-      gdf_dtype_extra_info extra_info;
-      extra_info.time_unit = TIME_UNIT_NONE;
-
-      CUDF_EXPECTS(GDF_SUCCESS ==
-                    gdf_column_view_augmented(col, nullptr, nullptr, 0, dtype,
-                                              0, extra_info),
-                   "Invalid column parameters");
-      return col;
-  });
-}
+table::table(gdf_column* cols[], gdf_size_type num_cols)
+    : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
 
 table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)

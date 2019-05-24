@@ -121,11 +121,13 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
             vector_out_col_values.push_back(column_view_from_column(out_col_values_series[i]._column))
 
         if agg_type == "count":
+            # To ensure that we update this code if gdf_size_type changes
+            assert np.dtype(np.int32).itemsize == sizeof(gdf_size_type)
             out_col_agg_series = Series(
                 Buffer(
                     rmm.device_array(
                         col_agg.size,
-                        dtype=np.int64
+                        dtype=np.int32
                     )
                 )
             )
@@ -255,6 +257,12 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         if isinstance(val_columns_out, (str, Number)):
             result[val_columns_out] = out_col_agg_series[:num_row_results]
         else:
+            if len(val_columns_out) == 0:
+                if groupby_class._as_index:
+                    val_columns_out = ['cudfvalcol_'+by for by in groupby_class._by]
+                else:
+                    raise ValueError('cannot insert %s, already exists' % (
+                            groupby_class._by[0]))
             result[val_columns_out[col_count]
                     ] = out_col_agg_series[:num_row_results]
 

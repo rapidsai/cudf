@@ -1,8 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set py_version=environ.get('CONDA_PY', 35) %}
+
 package:
   name: cudf
   version: {{ version }}
@@ -26,8 +28,8 @@ requirements:
     - pandas >=0.23.4
     - numba >=0.41
     - pyarrow 0.12.1.*
-    - rmm 0.7.*
-    - nvstrings 0.7.*
+    - rmm {{ minor_version }}.*
+    - nvstrings {{ minor_version }}.*
     - cython >=0.29,<0.30
 
 test:

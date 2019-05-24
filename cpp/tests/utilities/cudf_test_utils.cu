@@ -97,7 +97,22 @@ struct column_printer {
         }
     }
 };
+
+struct columns_equal
+{
+  template <typename T>
+  bool operator()(gdf_column *left, gdf_column *right) {
+    return gdf_equal_columns<T>(left, right);
+  }
+};
+
 } // namespace
+
+bool gdf_equal_columns(gdf_column* left, gdf_column* right)
+{
+  return (left != nullptr) && (right != nullptr) &&
+    cudf::type_dispatcher(left->dtype, columns_equal{}, left, right);
+}
 
 void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width)
 {

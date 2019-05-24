@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include "cudf.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <sys/stat.h>
-
-#include <iostream>
+#include <cstdlib>
 #include <fstream>
+#include <iostream>
+#include <random>
+#include <sstream>
 #include <vector>
 
-#include <cstdlib>
+#include <sys/stat.h>
 
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {
@@ -36,11 +40,32 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
             std::get<0>(arg)<std::get<1>(arg)+tolerance) ;
 }
 
-bool checkFile(const char *fname)
+namespace {
+
+bool checkFile(const std::string fname)
 {
     struct stat st;
-    return (stat(fname, &st) ? 0 : 1);
+    return (stat(fname.c_str(), &st) ? 0 : 1);
 }
+
+template <typename T>
+auto random_values(size_t size) {
+  std::vector<T> values(size);
+
+  using uniform_distribution =
+      typename std::conditional<std::is_integral<T>::value,
+                                std::uniform_int_distribution<T>,
+                                std::uniform_real_distribution<T>>::type;
+
+  static constexpr auto seed = 0xf00d;
+  static std::mt19937 engine{seed};
+  static uniform_distribution dist{};
+  std::generate_n(values.begin(), size, [&]() { return dist(engine); });
+
+  return values;
+}
+
+}  // namespace
 
 // DESCRIPTION: Simple test internal helper class to transfer cudf column data
 // from device to host for test comparisons and debugging/development
@@ -74,7 +99,7 @@ private:
 
 TEST(gdf_csv_test, DetectColumns)
 {
-    const char* fname	= "/tmp/DetectColumnsTest.csv";
+    const std::string fname	= temp_env->get_temp_dir()+"DetectColumnsTest.csv";
     const char* names[]	= { "A", "B", "C" };
     const char* use_cols[]	= { "A", "C" };
 
@@ -90,8 +115,8 @@ TEST(gdf_csv_test, DetectColumns)
     {
         csv_read_arg args{};
         args.input_data_form    = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
         args.dtype = NULL;
         args.delimiter = ',';
@@ -116,7 +141,7 @@ TEST(gdf_csv_test, DetectColumns)
 
 TEST(gdf_csv_test, UseColumns)
 {
-    const char* fname	= "/tmp/UseColumnsTest.csv";
+    const std::string fname	= temp_env->get_temp_dir()+"UseColumnsTest.csv";
     const char* names[]	= { "A", "B", "C" };
     const char* types[]	= { "int", "float64", "int" };
     const char* use_cols[]	= { "A", "C" };
@@ -132,9 +157,10 @@ TEST(gdf_csv_test, UseColumns)
     {
         csv_read_arg args{};
         args.input_data_form    = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = std::extent<decltype(types)>::value;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -155,55 +181,63 @@ TEST(gdf_csv_test, UseColumns)
     }
 }
 
-TEST(gdf_csv_test, Numbers)
-{
-    const char* fname	= "/tmp/CsvNumbersTest.csv";
-    const char* names[]	= { "A", "B", "C", "D", "E" };
-    const char* types[]	= { "short", "int", "long", "float64", "float32" };
+TEST(gdf_csv_test, Numbers) {
+  const std::string fname = temp_env->get_temp_dir() + "CsvNumbersTest.csv";
+  const char* types[] = {"int8",    "short",  "int16",  "int",
+                         "int32",   "long",   "int64",  "float",
+                         "float32", "double", "float64"};
 
-    std::ofstream outfile(fname, std::ofstream::out);
-    outfile << " 10, 20, 30, 0.40, 50000\n"\
-               "-11,-21,-31,-0.41,-51111\n"\
-               " 12, 22, 32, 0.42, 52222\n"\
-               "-13,-23,-33,-0.43,-53333\n";
-    outfile.close();
-    ASSERT_TRUE( checkFile(fname) );
+  constexpr int num_rows = 4;
+  auto int8_values = random_values<int8_t>(num_rows);
+  auto int16_values = random_values<int16_t>(num_rows);
+  auto int32_values = random_values<int32_t>(num_rows);
+  auto int64_values = random_values<int64_t>(num_rows);
+  auto float32_values = random_values<float>(num_rows);
+  auto float64_values = random_values<double>(num_rows);
 
-    {
-        csv_read_arg args{};
-        args.input_data_form    = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
-        args.names = names;
-        args.dtype = types;
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.decimal = '.';
-        args.skip_blank_lines = true;
-        args.header = -1;
-        args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
-
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT16 );
-        ASSERT_EQ( args.data[1]->dtype, GDF_INT32 );
-        ASSERT_EQ( args.data[2]->dtype, GDF_INT64 );
-        ASSERT_EQ( args.data[3]->dtype, GDF_FLOAT64 );
-        ASSERT_EQ( args.data[4]->dtype, GDF_FLOAT32 );
-        auto ACol = gdf_host_column<int16_t>(args.data[0]);
-        auto BCol = gdf_host_column<int32_t>(args.data[1]);
-        auto CCol = gdf_host_column<int64_t>(args.data[2]);
-        auto DCol = gdf_host_column<double>(args.data[3]);
-        auto ECol = gdf_host_column<float>(args.data[4]);
-        EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int16_t>(10, -11, 12, -13) );
-        EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
-        EXPECT_THAT( CCol.hostdata(), ::testing::ElementsAre<int64_t>(30, -31, 32, -33) );
-        EXPECT_THAT( DCol.hostdata(),
-            ::testing::Pointwise(FloatNearPointwise(1e-7),
-                std::vector<double>{ 0.40, -0.41, 0.42, -0.43 }) );
-        EXPECT_THAT( ECol.hostdata(),
-            ::testing::Pointwise(FloatNearPointwise(1e-7),
-                std::vector<float>{ 50000, -51111, 52222, -53333 }) );
+  {
+    std::ostringstream line;
+    for (int i = 0; i < num_rows; ++i) {
+      line << std::to_string(int8_values[i]) << ","
+           << int16_values[i] << "," << int16_values[i] << ","
+           << int32_values[i] << "," << int32_values[i] << ","
+           << int64_values[i] << "," << int64_values[i] << ","
+           << float32_values[i] << "," << float32_values[i] << ","
+           << float64_values[i] << "," << float64_values[i] << "\n";
     }
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << line.str();
+    outfile.close();
+    ASSERT_TRUE(checkFile(fname));
+  }
+
+  {
+    csv_read_arg args{};
+    args.input_data_form = gdf_csv_input_form::FILE_PATH;
+    args.filepath_or_buffer = fname.c_str();
+    args.num_dtype = std::extent<decltype(types)>::value;
+    args.dtype = types;
+    args.delimiter = ',';
+    args.lineterminator = '\n';
+    args.decimal = '.';
+    args.skip_blank_lines = true;
+    args.header = -1;
+    args.nrows = -1;
+    ASSERT_EQ(read_csv(&args), GDF_SUCCESS);
+
+    EXPECT_THAT(gdf_host_column<int8_t>(args.data[0]).hostdata(),
+                ::testing::ElementsAreArray(int8_values));
+    EXPECT_THAT(gdf_host_column<int16_t>(args.data[2]).hostdata(),
+                ::testing::ElementsAreArray(int16_values));
+    EXPECT_THAT(gdf_host_column<int32_t>(args.data[4]).hostdata(),
+                ::testing::ElementsAreArray(int32_values));
+    EXPECT_THAT(gdf_host_column<int64_t>(args.data[6]).hostdata(),
+                ::testing::ElementsAreArray(int64_values));
+    EXPECT_THAT(gdf_host_column<float>(args.data[8]).hostdata(),
+                ::testing::Pointwise(FloatNearPointwise(1e-5), float32_values));
+    EXPECT_THAT(gdf_host_column<double>(args.data[10]).hostdata(),
+                ::testing::Pointwise(FloatNearPointwise(1e-5), float64_values));
+  }
 }
 
 TEST(gdf_csv_test, MortPerf)
@@ -213,7 +247,7 @@ TEST(gdf_csv_test, MortPerf)
     csv_read_arg	args{};
     const int num_cols = 31;
 
-    args.num_cols = num_cols;
+    args.num_names = num_cols;
     args.nrows = -1;
 
     const char ** dnames = new const char *[num_cols] {
@@ -251,6 +285,7 @@ TEST(gdf_csv_test, MortPerf)
     };
     args.names = dnames;
 
+    args.num_dtype = num_cols;
     const char ** dtype = new const char *[num_cols] {
             "int64",
             "date",
@@ -288,7 +323,7 @@ TEST(gdf_csv_test, MortPerf)
         args.dtype = dtype;
 
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
+        args.filepath_or_buffer = (char *)("Performance_2000Q1.txt");
 
     if (  checkFile(args.filepath_or_buffer))
     {
@@ -320,7 +355,7 @@ TEST(gdf_csv_test, MortPerf)
 
 TEST(gdf_csv_test, Strings)
 {
-    const char* fname	= "/tmp/CsvStringsTest.csv";
+    const std::string fname	= temp_env->get_temp_dir()+"CsvStringsTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -335,9 +370,10 @@ TEST(gdf_csv_test, Strings)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -347,7 +383,7 @@ TEST(gdf_csv_test, Strings)
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
 
         // Check the parsed string column metadata
         ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
@@ -379,7 +415,7 @@ TEST(gdf_csv_test, Strings)
 
 TEST(gdf_csv_test, QuotedStrings)
 {
-    const char* fname	= "/tmp/CsvQuotedStringsTest.csv";
+    const std::string fname	= temp_env->get_temp_dir()+"CsvQuotedStringsTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -394,9 +430,10 @@ TEST(gdf_csv_test, QuotedStrings)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -409,7 +446,7 @@ TEST(gdf_csv_test, QuotedStrings)
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
 
         // Check the parsed string column metadata
         ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
@@ -440,7 +477,7 @@ TEST(gdf_csv_test, QuotedStrings)
 
 TEST(gdf_csv_test, IgnoreQuotes)
 {
-    const char* fname	= "/tmp/CsvIgnoreQuotesTest.csv";
+    const std::string fname	= temp_env->get_temp_dir()+"CsvIgnoreQuotesTest.csv";
     const char* names[]	= { "line", "verse" };
     const char* types[]	= { "int32", "str" };
 
@@ -455,9 +492,10 @@ TEST(gdf_csv_test, IgnoreQuotes)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -470,7 +508,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
 
         // Check the parsed string column metadata
         ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
@@ -499,25 +537,27 @@ TEST(gdf_csv_test, IgnoreQuotes)
     }
 }
 
-TEST(gdf_csv_test, SpecifiedBoolValues)
+TEST(gdf_csv_test, Booleans)
 {
-    const char* fname			= "/tmp/CsvSpecifiedBoolValuesTest.csv";
-    const char* names[]			= { "A", "B", "C" };
-    const char* types[]			= { "int32", "int32", "short" };
-    const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
-    const char* falseValues[]	= { "no", "No", "NO", "Bar", "bar" };
+    const std::string fname = temp_env->get_temp_dir() + "CsvBooleansTest.csv";
+    const char* names[] = {"A", "B", "C", "D"};
+    const char* types[] = {"int32", "int32", "short", "bool"};
+    const char* trueValues[] = {"yes", "Yes", "YES", "foo", "FOO"};
+    const char* falseValues[] = {"no", "No", "NO", "Bar", "bar"};
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "YES,1,bar\nno,2,FOO\nBar,3,yes\nNo,4,NO\nYes,5,foo\n";
+    outfile << "YES,1,bar,true\nno,2,FOO,true\nBar,3,yes,false\nNo,4,NO,"
+              "true\nYes,5,foo,false\n";
     outfile.close();
-    ASSERT_TRUE( checkFile(fname) );
+    ASSERT_TRUE(checkFile(fname));
 
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -531,20 +571,26 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
         // Booleans are the same (integer) data type, but valued at 0 or 1
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
         ASSERT_EQ( args.data[2]->dtype, GDF_INT16 );
+        ASSERT_EQ( args.data[3]->dtype, GDF_BOOL8 );
 
         auto firstCol = gdf_host_column<int32_t>(args.data[0]);
         EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
         auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
         EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
+        auto fourthCol = gdf_host_column<cudf::bool8>(args.data[3]);
+        EXPECT_THAT(
+            fourthCol.hostdata(),
+            ::testing::ElementsAre(cudf::true_v, cudf::true_v, cudf::false_v,
+                                  cudf::true_v, cudf::false_v));
     }
 }
 
 TEST(gdf_csv_test, Dates)
 {
-    const char* fname			= "/tmp/CsvDatesTest.csv";
+    const std::string fname			= temp_env->get_temp_dir()+"CsvDatesTest.csv";
     const char* names[]			= { "A" };
     const char* types[]			= { "date" };
 
@@ -558,9 +604,10 @@ TEST(gdf_csv_test, Dates)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -570,7 +617,7 @@ TEST(gdf_csv_test, Dates)
         args.nrows = -1;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_DATE64 );
 
         auto ACol = gdf_host_column<uint64_t>(args.data[0]);
@@ -583,7 +630,7 @@ TEST(gdf_csv_test, Dates)
 
 TEST(gdf_csv_test, FloatingPoint)
 {
-    const char* fname			= "/tmp/CsvFloatingPoint.csv";
+    const std::string fname			= temp_env->get_temp_dir()+"CsvFloatingPoint.csv";
     const char* names[]			= { "A" };
     const char* types[]			= { "float32" };
 
@@ -595,9 +642,10 @@ TEST(gdf_csv_test, FloatingPoint)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.decimal = '.';
         args.delimiter = ',';
@@ -607,7 +655,7 @@ TEST(gdf_csv_test, FloatingPoint)
         args.nrows = -1;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_FLOAT32 );
 
         auto ACol = gdf_host_column<float>(args.data[0]);
@@ -619,7 +667,7 @@ TEST(gdf_csv_test, FloatingPoint)
 
 TEST(gdf_csv_test, Category)
 {
-    const char* fname = "/tmp/CsvCategory.csv";
+    const std::string fname = temp_env->get_temp_dir()+"CsvCategory.csv";
     const char* names[] = { "UserID" };
     const char* types[] = { "category" };
 
@@ -631,9 +679,10 @@ TEST(gdf_csv_test, Category)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = ';';
@@ -641,7 +690,7 @@ TEST(gdf_csv_test, Category)
         args.nrows = -1;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_CATEGORY );
 
         auto ACol = gdf_host_column<int32_t>(args.data[0]);
@@ -652,7 +701,7 @@ TEST(gdf_csv_test, Category)
 
 TEST(gdf_csv_test, SkiprowsNrows)
 {
-    const char* fname = "/tmp/CsvSkiprowsNrows.csv";
+    const std::string fname = temp_env->get_temp_dir()+"CsvSkiprowsNrows.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -664,9 +713,10 @@ TEST(gdf_csv_test, SkiprowsNrows)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -676,7 +726,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
         args.nrows = 2;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
 
         auto ACol = gdf_host_column<int32_t>(args.data[0]);
@@ -686,7 +736,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
 
 TEST(gdf_csv_test, ByteRange)
 {
-    const char* fname = "/tmp/CsvByteRange.csv";
+    const std::string fname = temp_env->get_temp_dir()+"CsvByteRange.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -698,9 +748,10 @@ TEST(gdf_csv_test, ByteRange)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -711,7 +762,7 @@ TEST(gdf_csv_test, ByteRange)
         args.byte_range_size = 15;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
 
         auto ACol = gdf_host_column<int32_t>(args.data[0]);
@@ -721,7 +772,7 @@ TEST(gdf_csv_test, ByteRange)
 
 TEST(gdf_csv_test, BlanksAndComments)
 {
-    const char* fname = "/tmp/CsvSkiprowsNrows.csv";
+    const std::string fname = temp_env->get_temp_dir()+"BlanksAndComments.csv";
     const char* names[] = { "A" };
     const char* types[] = { "int32" };
 
@@ -733,9 +784,10 @@ TEST(gdf_csv_test, BlanksAndComments)
     {
         csv_read_arg args{};
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
-        args.filepath_or_buffer = fname;
-        args.num_cols = std::extent<decltype(names)>::value;
+        args.filepath_or_buffer = fname.c_str();
+        args.num_names = std::extent<decltype(names)>::value;
         args.names = names;
+        args.num_dtype = args.num_names;
         args.dtype = types;
         args.delimiter = ',';
         args.lineterminator = '\n';
@@ -745,7 +797,7 @@ TEST(gdf_csv_test, BlanksAndComments)
         args.nrows = -1;
         EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
-        EXPECT_EQ( args.num_cols_out, args.num_cols );
+        EXPECT_EQ( args.num_cols_out, args.num_names );
         ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
 
         auto ACol = gdf_host_column<int32_t>(args.data[0]);
@@ -755,23 +807,24 @@ TEST(gdf_csv_test, BlanksAndComments)
 
 TEST(gdf_csv_test, Writer)
 {
-    const char* fname	= "/tmp/CsvWriteTest.csv";
-    const char* names[] = { "integer", "float", "string" };
-    const char* types[] = { "int32", "float32", "str" };
+    const std::string fname	= temp_env->get_temp_dir()+"CsvWriteTest.csv";
+    const char* names[] = { "boolean", "integer", "float", "string" };
+    const char* types[] = { "bool", "int32", "float32", "str" };
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "1,1.0,one" << '\n';
-    outfile << "2,2.25,two" << '\n';
-    outfile << "3,3.50,three" << '\n';
-    outfile << "4,4.75,four" << '\n';
-    outfile << "5,5.0,five" << '\n';
+    outfile << "true,1,1.0,one" << '\n';
+    outfile << "false,2,2.25,two" << '\n';
+    outfile << "false,3,3.50,three" << '\n';
+    outfile << "true,4,4.75,four" << '\n';
+    outfile << "false,5,5.0,five" << '\n';
     outfile.close();
 
     csv_read_arg rargs{};
     rargs.input_data_form = gdf_csv_input_form::FILE_PATH;
-    rargs.filepath_or_buffer = fname;
-    rargs.num_cols = std::extent<decltype(names)>::value;
+    rargs.filepath_or_buffer = fname.c_str();
+    rargs.num_names = std::extent<decltype(names)>::value;
     rargs.names = names;
+    rargs.num_dtype = rargs.num_names;
     rargs.dtype = types;
     rargs.decimal = '.';
     rargs.delimiter = ',';
@@ -781,19 +834,24 @@ TEST(gdf_csv_test, Writer)
     rargs.nrows = -1;
     EXPECT_EQ( read_csv(&rargs), GDF_SUCCESS );
 
-    const char* ofname = "/tmp/CsvWriteTestOut.csv";
+    const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
     csv_write_arg wargs{};
     wargs.columns = rargs.data;  // columns from reader above
-    wargs.filepath = ofname;
-    wargs.num_cols = std::extent<decltype(names)>::value;
+    wargs.filepath = ofname.c_str();
+    wargs.num_cols = rargs.num_cols_out;
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
-    // check result
     std::ifstream infile(ofname);
-    std::string csv((std::istreambuf_iterator<char>(infile)),std::istreambuf_iterator<char>());
-    std::string verify = "\"integer\",\"float\",\"string\"\n1,1,\"one\"\n2,2.25,\"two\"\n3,3.5,\"three\"\n4,4.75,\"four\"\n5,5,\"five\"\n";
-    EXPECT_EQ( csv.compare(verify), 0 );
+    std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
+    std::string verify =
+        "\"boolean\",\"integer\",\"float\",\"string\"\n"
+        "true,1,1,\"one\"\n"
+        "false,2,2.25,\"two\"\n"
+        "false,3,3.5,\"three\"\n"
+        "true,4,4.75,\"four\"\n"
+        "false,5,5,\"five\"\n";
+    EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }

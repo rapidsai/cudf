@@ -16,8 +16,6 @@ import gzip
 import shutil
 import os
 
-from cudf.bindings.GDFError import GDFError
-
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
@@ -49,11 +47,11 @@ def make_numpy_mixed_dataframe():
 def make_all_numeric_dtypes_dataframe():
     df = pd.DataFrame()
 
-    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
-                  "int32", "int64", "long"]
+    gdf_dtypes = ["float", "float32", "double", "float64", "int8",
+                  "short", "int16", "int", "int32", "long", "int64"]
 
-    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
-                 np.int32, np.int32, np.int64, np.int64]
+    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int8,
+                 np.int16, np.int16, np.int32, np.int32, np.int64, np.int64]
 
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
@@ -285,28 +283,19 @@ def test_csv_reader_usecols_int_char(tmpdir):
                                        check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols_header(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
-              index=False, header=False)
+def test_csv_reader_mangle_dupe_cols(tmpdir):
+    buffer = 'abc,ABC,abc,abcd,abc\n1,2,3,4,5\n'
 
-    # Default: header=0 when names not passed, mangle_dupe_cols = True
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
-    out = read_csv(str(fname), dayfirst=True)
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
-    # Compare mangled column names for duplicate names in header row
-    assert list(df_out.columns.values) == list(out.columns.values)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    # Default: mangle_dupe_cols=True
+    pd_df = pd.read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer))
+    pd.util.testing.assert_frame_equal(cu_df.to_pandas(), pd_df)
 
-    # header = 3
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True, header=2)
-    out = read_csv(str(fname), dayfirst=True, header=2)
-    assert len(out.columns) == len(df_out.columns)
-    # assert len(out) == len(df_out)
-    # Compare column names
-    assert list(df_out.columns.values) == list(out.columns.values)
+    # Pandas does not support mangle_dupe_cols=False
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
+    # check that the dupe columns were removed
+    assert(len(cu_df.columns) == 3)
+    np.testing.assert_array_equal(cu_df['abc'], [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -474,6 +463,8 @@ def test_csv_reader_gzip_compression(tmpdir):
 
 
 @pytest.mark.parametrize('names, dtypes, data, trues, falses', [
+    (['A', 'B'], ['bool', 'bool'], 'True,True\nFalse,False\nTrue,False',
+        None, None),
     (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
     (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
         ["yes", "Yes", "YES"], ["no", "NO", "No"]),
@@ -679,10 +670,12 @@ def test_csv_reader_empty_dataframe():
     # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['float64', 'int64']))
 
-    # should raise an error without dtypes
-    with pytest.raises(GDFError):
-        read_csv(StringIO(buffer))
+    # should default to string columns without dtypes
+    df = read_csv(StringIO(buffer))
+    assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['object', 'object']))
 
 
 def test_csv_reader_filenotfound(tmpdir):
@@ -863,7 +856,7 @@ def test_csv_reader_unnamed_cols():
 
 
 def test_csv_reader_header_quotation():
-    buffer = '"1,,1","2,\n,2",3\n4,5,6'
+    buffer = '"1,,1","2,\n,2",3\n+4,+5,+6'
 
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
@@ -982,8 +975,10 @@ def test_csv_reader_pd_consistent_quotes(quoting):
 
 
 def test_csv_reader_scientific_type_detection():
-    buffer = '1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1'
-    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11]
+    buffer = """1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1
+                +1.1,1E+1,1e+1,+1e1,+1e-1,1e-1,+1.1e1,1.1e+1,+1.1e+1,+1.1e1"""
+    expected = [1., 1.1, -1.1, 10., 10., -10, -0.1, 0.1, 11, 0.11, -0.11, -11,
+                1.1, 10., 10., 10, 0.1, 0.1, 11, 11, 11, 11]
 
     df = read_csv(StringIO(buffer),
                   header=None)
@@ -1007,3 +1002,39 @@ def test_csv_blank_first_row(line_terminator):
 
     assert(cu_df.shape == (2, 2))
     assert(all(cu_df.columns == ['colA', 'colB']))
+
+
+def test_csv_empty_input(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file20.csv")
+    # create an empty file
+    open(fname, 'a').close()
+
+    col_names = ['col1', 'col2', 'col3', 'col4']
+    in_dtypes = ['int', 'str', 'float', 'short']
+    out_dtypes = ['int32', 'object', 'float32', 'int16']
+
+    df = read_csv(str(fname))
+    assert(len(df.columns) == 0)
+    df = read_csv(str(fname), dtype=in_dtypes, names=col_names)
+    assert(all(df.columns == col_names))
+    assert((list(df.dtypes) == out_dtypes))
+
+    df = read_csv(StringIO(''))
+    assert(len(df.columns) == 0)
+    df = read_csv(StringIO(''), dtype=in_dtypes, names=col_names)
+    assert(all(df.columns == col_names))
+    assert((list(df.dtypes) == out_dtypes))
+
+
+@pytest.mark.parametrize('dtype', [
+        ['short', 'float', 'int'],
+        {'A': 'short', 'C': 'int'}
+    ])
+def test_csv_reader_partial_dtype(dtype):
+    names_df = read_csv(StringIO('0,1,2'), names=['A', 'B', 'C'],
+                        dtype=dtype, usecols=['A', 'C'])
+    header_df = read_csv(StringIO('"A","B","C"\n0,1,2'),
+                         dtype=dtype, usecols=['A', 'C'])
+
+    assert(names_df == header_df)
+    assert(all(names_df.dtypes == ['int16', 'int32']))

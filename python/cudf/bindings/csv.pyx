@@ -81,9 +81,6 @@ cpdef cpp_read_csv(
         else:
             msg = '''dtype must be 'list like' or 'dict' '''
             raise TypeError(msg)
-        if names is not None and len(dtype) != len(names):
-            msg = '''All column dtypes must be specified.'''
-            raise TypeError(msg)
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
@@ -127,28 +124,25 @@ cpdef cpp_read_csv(
         if header is None:
             header_infer = -1
         csv_reader.names = NULL
-        csv_reader.num_cols = 0
-        if dtype is not None:
-            if dtype_dict:
-                for k, v in dtype.items():
-                    arr_dtypes.append(str(str(k)+":"+str(v)).encode())
-
+        csv_reader.num_names = 0
     else:
         if header is None:
             header_infer = -1
-        csv_reader.num_cols = len(names)
+        csv_reader.num_names = len(names)
         for col_name in names:
             arr_names.append(str(col_name).encode())
-            if dtype is not None:
-                if dtype_dict:
-                    arr_dtypes.append(str(dtype[col_name]).encode())
         vector_names = arr_names
         csv_reader.names = vector_names.data()
 
     if dtype is None:
         csv_reader.dtype = NULL
+        csv_reader.num_dtype = 0
     else:
-        if not dtype_dict:
+        csv_reader.num_dtype = len(dtype)
+        if dtype_dict:
+            for k, v in dtype.items():
+                arr_dtypes.append(str(str(k)+":"+str(v)).encode())
+        else:
             for col_dtype in dtype:
                 arr_dtypes.append(str(col_dtype).encode())
 
@@ -265,22 +259,19 @@ cpdef cpp_read_csv(
 
     check_gdf_error(result)
 
-    out = csv_reader.data
-    if out is NULL:
-        raise ValueError("Failed to parse CSV")
-
     # Extract parsed columns
     outcols = []
     new_names = []
     for i in range(csv_reader.num_cols_out):
-        data_mem, mask_mem = gdf_column_to_column_mem(out[i])
+        column = csv_reader.data[i]
+        data_mem, mask_mem = gdf_column_to_column_mem(column)
         outcols.append(Column.from_mem_views(data_mem, mask_mem))
         if names is not None and isinstance(names[0], (int)):
-            new_names.append(int(out[i].col_name.decode()))
+            new_names.append(int(column.col_name.decode()))
         else:
-            new_names.append(out[i].col_name.decode())
-        free(out[i].col_name)
-        free(out[i])
+            new_names.append(column.col_name.decode())
+        free(column.col_name)
+        free(column)
 
     # Build dataframe
     df = DataFrame()

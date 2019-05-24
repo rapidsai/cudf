@@ -21,6 +21,7 @@
 #include <cassert>
 #include <types.hpp>
 
+#include <initializer_list>
 #include <vector>
 
 // Forward declaration
@@ -34,6 +35,13 @@ namespace cudf {
  */
 struct table {
   /**---------------------------------------------------------------------------*
+   * @brief Construct a table from a vector of `gdf_column` pointers
+   *
+   * @param cols The vector of columns wrapped by the table
+   *---------------------------------------------------------------------------**/
+  table(std::vector<gdf_column*> const& cols);
+
+  /**---------------------------------------------------------------------------*
    * @brief Constructs a table object from an array of `gdf_column`s
    *
    * @param cols The array of columns wrapped by the table
@@ -42,18 +50,11 @@ struct table {
   table(gdf_column* cols[], gdf_size_type num_cols);
 
   /**---------------------------------------------------------------------------*
-   * @brief Constructs a set of empty `gdf_column`s.
+   * @brief Construct a table from an initializer_list of `gdf_column` pointers
    *
-   * Allocates an array of empty `gdf_column`s of the specified size and type.
-   *
-   * @note It is the caller's responsibility to free the array of gdf_columns
-   * and their associated device memory.
-   *
-   * @note Does not support `GDF_TIMESTAMP` columns as this would require
-   * passing in additional timestamp resolution information.
-   *
-   *---------------------------------------------------------------------------**/
-  table(std::vector<gdf_dtype> const& dtypes);
+   * @param list The initializer_list of `gdf_column` pointers
+   * ---------------------------------------------------------------------------**/
+  table(std::initializer_list<gdf_column*> list);
 
   /**---------------------------------------------------------------------------*
    * @brief Allocates and constructs a set of `gdf_column`s.

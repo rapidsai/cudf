@@ -409,7 +409,9 @@ class StringColumn(columnops.TypedColumnBase):
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
-            if arg > (len(self) - 1) or arg < 0:
+            if arg < 0:
+                arg = len(self) + arg
+            if arg > (len(self) - 1):
                 raise IndexError
             out = self._data[arg]
         elif isinstance(arg, slice):
@@ -519,6 +521,7 @@ class StringColumn(columnops.TypedColumnBase):
     def _replace_defaults(self):
         params = {
             'data': self.data,
+            'mask': self.mask,
             'null_count': self.null_count,
         }
         return params
@@ -529,6 +532,11 @@ class StringColumn(columnops.TypedColumnBase):
 
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
+
+    def normalize_binop_value(self, other):
+        col = utils.scalar_broadcast_to(other, shape=len(self),
+                                        dtype="object")
+        return self.replace(data=col.data)
 
     def fillna(self, fill_value, inplace=False):
         """
@@ -556,6 +564,29 @@ class StringColumn(columnops.TypedColumnBase):
         result = StringColumn(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
+
+    def _find_first_and_last(self, value):
+        found_indices = self.str().contains(f"^{value}$").data.mem
+        found_indices = cudautils.astype(found_indices, "int32")
+        first = columnops.as_column(found_indices).find_first_value(1)
+        last = columnops.as_column(found_indices).find_last_value(1)
+        return first, last
+
+    def find_first_value(self, value):
+        return self._find_first_and_last(value)[0]
+
+    def find_last_value(self, value):
+        return self._find_first_and_last(value)[1]
+
+    def unique(self, method='sort'):
+        """
+        Get unique strings in the data
+        """
+        result = StringColumn(self.nvcategory.keys())
+        return result
+
+    def take(self, indices):
+        return self.element_indexing(indices)
 
 
 def string_column_binop(lhs, rhs, op):

@@ -69,7 +69,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   // format in combination with the encoding type.
   switch (physical) {
     case parquet::BOOLEAN:
-      return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT32:
       return std::make_pair(GDF_INT32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT64:
@@ -169,7 +169,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
       if (pos != std::string::npos) {
         const auto begin = it->value.find('[', pos);
         const auto end = it->value.find(']', begin);
-        if ((end - begin) > 4) {
+        if ((end - begin - 3) > 0) {
           return it->value.substr(begin + 2, end - begin - 3);
         }
       }
@@ -679,7 +679,7 @@ gdf_error read_parquet_arrow(
           "type_width=%d, max_def_level=%d, "
           "max_rep_level=%d\n     data_page_offset=%zd, index_page_offset=%zd, "
           "dict_page_offset=%zd\n",
-          col.first, col.second.c_str(), start_row, row_group_rows,
+          col.first, col.second.c_str(), row_group_start, row_group_rows,
           col_meta.codec, col_meta.num_values, col_meta.total_compressed_size,
           col_meta.total_uncompressed_size,
           row_group.columns[col.first].schema_idx,

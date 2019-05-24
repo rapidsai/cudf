@@ -17,35 +17,18 @@
 #include "cuio_common.hpp"
 
 gdf_dtype convertStringToDtype(const std::string &dtype) {
-  if (dtype == "str")
-    return GDF_STRING;
-  if (dtype == "date")
-    return GDF_DATE64;
-  if (dtype == "date32")
-    return GDF_DATE32;
-  if (dtype == "date64")
-    return GDF_DATE64;
-  if (dtype == "timestamp")
-    return GDF_TIMESTAMP;
-  if (dtype == "category")
-    return GDF_CATEGORY;
-  if (dtype == "float")
-    return GDF_FLOAT32;
-  if (dtype == "float32")
-    return GDF_FLOAT32;
-  if (dtype == "float64")
-    return GDF_FLOAT64;
-  if (dtype == "double")
-    return GDF_FLOAT64;
-  if (dtype == "short")
-    return GDF_INT16;
-  if (dtype == "int")
-    return GDF_INT32;
-  if (dtype == "int32")
-    return GDF_INT32;
-  if (dtype == "int64")
-    return GDF_INT64;
-  if (dtype == "long")
-    return GDF_INT64;
+  if (dtype == "str") return GDF_STRING;
+  if (dtype == "timestamp") return GDF_TIMESTAMP;
+  if (dtype == "category") return GDF_CATEGORY;
+  if (dtype == "date32") return GDF_DATE32;
+  if (dtype == "bool" || dtype == "boolean") return GDF_BOOL8;
+  if (dtype == "date" || dtype == "date64") return GDF_DATE64;
+  if (dtype == "float" || dtype == "float32") return GDF_FLOAT32;
+  if (dtype == "double" || dtype == "float64") return GDF_FLOAT64;
+  if (dtype == "byte" || dtype == "int8") return GDF_INT8;
+  if (dtype == "short" || dtype == "int16") return GDF_INT16;
+  if (dtype == "int" || dtype == "int32") return GDF_INT32;
+  if (dtype == "long" || dtype == "int64") return GDF_INT64;
+
   return GDF_invalid;
 }

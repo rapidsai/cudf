@@ -683,7 +683,7 @@ def test_string_groupby_key(str_data, str_data_raise, num_keys):
         expect = expect.sort_values([0]).reset_index(drop=True)
         got = got.sort_values([0]).reset_index(drop=True)
 
-        assert_eq(expect, got)
+        assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize('str_data,str_data_raise', [
@@ -715,7 +715,7 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
         expect = expect.sort_values(['a']).reset_index(drop=True)
         got = got.sort_values(['a']).reset_index(drop=True)
 
-        assert_eq(expect, got)
+        assert_eq(expect, got, check_dtype=False)
 
         expect = pdf.groupby('a', as_index=False).max()
         got = gdf.groupby('a', as_index=False).max()
@@ -756,7 +756,7 @@ def test_string_groupby_key_index():
     expect = pdf.groupby('a').count()
     got = gdf.groupby('a').count()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize('scalar', [
@@ -794,3 +794,24 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    'item',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A'],
+        ['A'],
+        ['abc', 'xyz', None, 'ab', '123'],
+        [None, None, 'abc', None, 'abc'],
+    ]
+)
+def test_string_unique(item):
+    ps = pd.Series(item)
+    gs = Series(item)
+    # Pandas `unique` returns a numpy array
+    pres = pd.Series(ps.unique())
+    # Nvstrings returns sorted unique with `None` placed before other strings
+    pres = pres.sort_values(na_position='first').reset_index(drop=True)
+    gres = gs.unique()
+    assert_eq(pres, gres)

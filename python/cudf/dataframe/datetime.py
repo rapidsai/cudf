@@ -5,7 +5,7 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.dataframe import columnops, numerical
-from cudf.utils import utils, cudautils
+from cudf.utils import utils
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
@@ -14,6 +14,7 @@ from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.copying as cpp_copying
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.unaryops as cpp_unaryops
 
@@ -183,7 +184,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
             fill_value = np.datetime64(fill_value, 'ms')
         elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
             fill_value = pd.to_datetime(fill_value)
-
         fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
 
         cpp_replace.replace_nulls(result, fill_value_col)
@@ -193,17 +193,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cudautils.gather(data=self.data.mem,
-                                    index=sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=Buffer(col_keys),
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
@@ -214,6 +204,22 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def max(self, dtype=None):
         return cpp_reduce.apply_reduce('max', self, dtype=dtype)
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_first_value(value)
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_last_value(value)
 
 
 def binop(lhs, rhs, op, out_dtype):

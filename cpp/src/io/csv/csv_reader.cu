@@ -29,6 +29,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
+#include <cstring>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +82,6 @@ typedef struct raw_csv_ {
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
 	gdf_size_type 		num_records;	// host: number of records loaded into device memory, and then number of records to read
-	// int				num_cols;		// host: number of columns
 	int					num_active_cols;// host: number of columns that will be return to user.
 	int					num_actual_cols;// host: number of columns in the file --- based on the number of columns in header
     vector<gdf_dtype>	dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
@@ -105,13 +106,14 @@ typedef struct raw_csv_ {
 } raw_csv_t;
 
 typedef struct column_data_ {
-	unsigned long long countFloat;
-	unsigned long long countDateAndTime;
-	unsigned long long countString;
-	unsigned long long countInt8;
-	unsigned long long countInt16;
-	unsigned long long countInt32;
-	unsigned long long countInt64;
+	gdf_size_type countFloat;
+	gdf_size_type countDateAndTime;
+	gdf_size_type countString;
+	gdf_size_type countBool;
+	gdf_size_type countInt8;
+	gdf_size_type countInt16;
+	gdf_size_type countInt32;
+	gdf_size_type countInt64;
 	gdf_size_type countNULL;
 } column_data_t;
 
@@ -398,8 +400,8 @@ gdf_error read_csv(csv_read_arg *args)
 	// Done first to validate data types
 	raw_csv_t raw_csv{};
 	// error = parseArguments(args, raw_csv);
-	raw_csv.num_actual_cols	= args->num_cols;
-	raw_csv.num_active_cols	= args->num_cols;
+	raw_csv.num_actual_cols	= args->num_names;
+	raw_csv.num_active_cols	= args->num_names;
 	raw_csv.num_records		= 0;
 
 	raw_csv.header_row = args->header;
@@ -460,7 +462,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1
-	vector<string> true_values{"True", "TRUE"};
+	vector<string> true_values{"True", "TRUE", "true"};
 	if (args->true_values != nullptr && args->num_true_values > 0) {
 		for (int i = 0; i < args->num_true_values; ++i) {
 			true_values.emplace_back(args->true_values[i]);
@@ -469,7 +471,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv.d_trueTrie = createSerializedTrie(true_values);
 	raw_csv.opts.trueValuesTrie = raw_csv.d_trueTrie.data().get();
 
-	vector<string> false_values{"False", "FALSE"};
+	vector<string> false_values{"False", "FALSE", "false"};
 	if (args->false_values != nullptr && args->num_false_values > 0) {
 		for (int i = 0; i < args->num_false_values; ++i) {
 			false_values.emplace_back(args->false_values[i]);
@@ -499,6 +501,8 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv.opts.naValuesTrie = raw_csv.d_naTrie.data().get();
 	}
 	args->data = nullptr;
+	args->num_cols_out = 0;
+	args->num_rows_out = 0;
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -515,35 +519,35 @@ gdf_error read_csv(csv_read_arg *args)
 		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
 	
 		const auto file_size = st.st_size;
-		const auto page_size = sysconf(_SC_PAGESIZE);
-
-		if (args->byte_range_offset >= (size_t)file_size) { 
-			close(fd); 
-			checkError(GDF_INVALID_API_CALL, "The byte_range offset is larger than the file size");
+		if (args->byte_range_offset > (size_t)file_size) {
+			close(fd);
+			CUDF_FAIL("The byte_range offset is larger than the file size");
 		}
 
-		// Have to align map offset to page size
-		map_offset = (args->byte_range_offset/page_size)*page_size;
+		// Can't map an empty file, will return an empty dataframe further down
+		if (file_size != 0) {
+			// Have to align map offset to page size
+			const auto page_size = sysconf(_SC_PAGESIZE);
+			map_offset = (args->byte_range_offset/page_size)*page_size;
 
-		// Set to rest-of-the-file size, will reduce based on the byte range size
-		raw_csv.num_bytes = map_size = file_size - map_offset;
+			// Set to rest-of-the-file size, will reduce based on the byte range size
+			raw_csv.num_bytes = map_size = file_size - map_offset;
 
-		// Include the page padding in the mapped size
-		const size_t page_padding = args->byte_range_offset - map_offset;
-		const size_t padded_byte_range_size = raw_csv.byte_range_size + page_padding;
+			// Include the page padding in the mapped size
+			const size_t page_padding = args->byte_range_offset - map_offset;
+			const size_t padded_byte_range_size = raw_csv.byte_range_size + page_padding;
 
-		if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
-			// Need to make sure that w/ padding we don't overshoot the end of file
-			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
+			if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
+				// Need to make sure that w/ padding we don't overshoot the end of file
+				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args->num_names, args->num_dtype)), map_size);
+			}
 
+			// Ignore page padding for parsing purposes
+			raw_csv.num_bytes = map_size - page_padding;
+
+			map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
+			if (map_data == MAP_FAILED || map_size==0) { close(fd); CUDF_FAIL("Error mapping file"); }
 		}
-
-		// Ignore page padding for parsing purposes
-		raw_csv.num_bytes = map_size - page_padding;
-
-		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
-	
-		if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 	}
 	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
 	{
@@ -552,39 +556,47 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-	const char* h_uncomp_data;
+	// Return an empty dataframe if the input is empty and user did not specify the column names and types
+	if (raw_csv.num_bytes == 0 && (args->names == nullptr || args->dtype == nullptr)){
+		return GDF_SUCCESS;
+	}
+
+	const char* h_uncomp_data = nullptr;
 	size_t h_uncomp_size = 0;
 	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
 	vector<char> h_uncomp_data_owner;
-	if (compression_type == "none") {
-		// Do not use the owner vector here to avoid copying the whole file to the heap
-		h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
-		h_uncomp_size = raw_csv.num_bytes;
+	// Skip if the input is empty and proceed to set the column names and types based on user's input
+	if(raw_csv.num_bytes != 0) {
+		if (compression_type == "none") {
+			// Do not use the owner vector here to avoid copying the whole file to the heap
+			h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
+			h_uncomp_size = raw_csv.num_bytes;
+		}
+		else {
+			error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
+			checkError(error, "call to getUncompressedHostData");
+			h_uncomp_data = h_uncomp_data_owner.data();
+			h_uncomp_size = h_uncomp_data_owner.size();
+		}
+	
+		error = countRecordsAndQuotes(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to count the number of rows");
+
+		error = setRecordStarts(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to store the row offsets");
+
+		error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, &raw_csv);
+		checkError(error, "call to upload the CSV data to the device");
 	}
-	else {
-		error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
-		checkError(error, "call to getUncompressedHostData");
-		h_uncomp_data = h_uncomp_data_owner.data();
-		h_uncomp_size = h_uncomp_data_owner.size();
-	}
-	assert(h_uncomp_data != nullptr);
-	assert(h_uncomp_size != 0);
-
-	error = countRecordsAndQuotes(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to count the number of rows");
-
-	error = setRecordStarts(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to store the row offsets");
-
-	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, &raw_csv);
-	checkError(error, "call to upload the CSV data to the device");
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		close(fd);
-		munmap(map_data, map_size);
+		if (map_data != nullptr) {
+			munmap(map_data, map_size);
+		}
 	}
 
 	//-----------------------------------------------------------------------------
@@ -597,11 +609,11 @@ gdf_error read_csv(csv_read_arg *args)
 		if (error != GDF_SUCCESS) {
 			return error;
 		}
-		const int h_num_cols = raw_csv.col_names.size();
+		raw_csv.num_actual_cols = raw_csv.num_active_cols = raw_csv.col_names.size();
 
 		// Initialize a boolean array that states if a column needs to read or filtered.
-		raw_csv.h_parseCol = thrust::host_vector<bool>(h_num_cols, true);
-		
+		raw_csv.h_parseCol = thrust::host_vector<bool>(raw_csv.num_actual_cols, true);
+
 		// Rename empty column names to "Unnamed: col_index"
 		for (size_t col_idx = 0; col_idx < raw_csv.col_names.size(); ++col_idx) {
 			if (raw_csv.col_names[col_idx].empty()) {
@@ -609,47 +621,33 @@ gdf_error read_csv(csv_read_arg *args)
 			}
 		}
 
-		int h_dup_cols_removed = 0;
 		// Looking for duplicates
-		for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-			bool found_dupe = false;
-			for (auto it2 = (it+1); it2 != raw_csv.col_names.end(); it2++){
-				if (*it==*it2){
-					found_dupe=true;
-					break;
+		std::unordered_map<string, int> col_names_histogram;
+		for (auto& col_name: raw_csv.col_names){
+			// Operator [] inserts a default-initialized value if the given key is not present
+			if (++col_names_histogram[col_name] > 1){
+				if (args->mangle_dupe_cols) {
+					// Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
+					col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
 				}
-			}
-			if(found_dupe){
-				int count=1;
-				for (auto it2 = (it+1); it2 != raw_csv.col_names.end(); it2++){
-					if (*it==*it2){
-						if(args->mangle_dupe_cols){
-							// Replace all the duplicates of column X with X.1,X.2,... First appearance stays as X.
-							std::string newColName  = *it2;
-							newColName += "." + std::to_string(count); 
-							count++;
-							*it2 = newColName;							
-						} else{
-							// All duplicate fields will be ignored.
-							int pos=std::distance(raw_csv.col_names.begin(), it2);
-							raw_csv.h_parseCol[pos]=false;
-							h_dup_cols_removed++;
-						}
-					}
+				else {
+					// All duplicate columns will be ignored; First appearance is parsed
+					const auto idx = &col_name - raw_csv.col_names.data();
+					raw_csv.h_parseCol[idx] = false;
 				}
 			}
 		}
 
-		raw_csv.num_actual_cols = h_num_cols;							// Actual number of columns in the CSV file
-		raw_csv.num_active_cols = h_num_cols-h_dup_cols_removed;		// Number of fields that need to be processed based on duplicatation fields
-
+		// Update the number of columns to be processed, if some might have been removed
+		if (!args->mangle_dupe_cols) {
+			raw_csv.num_active_cols = col_names_histogram.size();
+		}
 	}
 	else {
-		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_cols, true);
+		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_names, true);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			std::string col_name 	= args->names[i];
-			raw_csv.col_names.push_back(col_name);
+			raw_csv.col_names.emplace_back(args->names[i]);
 		}
 	}
 
@@ -684,90 +682,89 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv.d_parseCol = raw_csv.h_parseCol;
 
 	//-----------------------------------------------------------------------------
-	//---  done with host data
-	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
-	{
-		close(fd);
-		munmap(map_data, map_size);
-	}
-
-
-	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	if(args->dtype==NULL){
-		if (raw_csv.num_records == 0) {
-			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
-		}
+  if(args->dtype == NULL){
+    if (raw_csv.num_records == 0) {
+      raw_csv.dtypes = vector<gdf_dtype>(raw_csv.num_active_cols, GDF_STRING);
+    } else {
+      vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
+      device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
+      CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
 
-		vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-		device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
-		CUDA_TRY( cudaMemset(d_ColumnData.data(),	0, 	(sizeof(column_data_t) * (raw_csv.num_active_cols)) ) ) ;
+      launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
+      CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * raw_csv.num_active_cols, cudaMemcpyDeviceToHost));
 
-		launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
-		CUDA_TRY( cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * (raw_csv.num_active_cols), cudaMemcpyDeviceToHost));
+      // host: array of dtypes (since gdf_columns are not created until end)
+      vector<gdf_dtype> d_detectedTypes;
 
-		// host: array of dtypes (since gdf_columns are not created until end)
-		vector<gdf_dtype>	d_detectedTypes;
+      for(int col = 0; col < raw_csv.num_active_cols; col++){
+        unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
+                                      h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
-		raw_csv.dtypes.clear();
+        if (h_ColumnData[col].countNULL == raw_csv.num_records){
+          // Entire column is NULL; allocate the smallest amount of memory
+          d_detectedTypes.push_back(GDF_INT8);
+        } else if(h_ColumnData[col].countString > 0L){
+          d_detectedTypes.push_back(GDF_STRING);
+        } else if(h_ColumnData[col].countDateAndTime > 0L){
+          d_detectedTypes.push_back(GDF_DATE64);
+        } else if(h_ColumnData[col].countBool > 0L) {
+          d_detectedTypes.push_back(GDF_BOOL8);
+        } else if(h_ColumnData[col].countFloat > 0L ||
+          (h_ColumnData[col].countFloat == 0L &&
+           countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
+          // The second condition has been added to conform to
+          // PANDAS which states that a column of integers with
+          // a single NULL record need to be treated as floats.
+          d_detectedTypes.push_back(GDF_FLOAT64);
+        } else {
+          // All other integers are stored as 64-bit to conform to PANDAS
+          d_detectedTypes.push_back(GDF_INT64);
+        }
+      }
+      raw_csv.dtypes = d_detectedTypes;
+    }
+  }
+  else {
+    const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
+                                     [](const auto& s) { return strchr(s, ':') != nullptr; });
+    if (!is_dict) {
+      CUDF_EXPECTS(args->num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
+          // dtype is an array of types, assign types to active columns in the given order
+          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[col]));
+          CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
+        }
+      }
+    } else {
+      // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
+      std::unordered_map<std::string, gdf_dtype> col_type_map;
+      for (int dtype_idx = 0; dtype_idx < args->num_dtype; dtype_idx++) {
+        // Split the dtype elements around the last ':' character
+        const char* colon = strrchr(args->dtype[dtype_idx], ':');
+        const std::string col(args->dtype[dtype_idx], colon);
+        const std::string type(colon + 1);
 
-		for(int col = 0; col < raw_csv.num_active_cols; col++){
-			unsigned long long countInt = h_ColumnData[col].countInt8+h_ColumnData[col].countInt16+
-										  h_ColumnData[col].countInt32+h_ColumnData[col].countInt64;
+        col_type_map[col] = convertStringToDtype(type);
+        CUDF_EXPECTS(col_type_map[col] != GDF_invalid, "Unsupported data type");
+      }
 
-			if (h_ColumnData[col].countNULL == raw_csv.num_records){
-				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
-			} else if(h_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_STRING); // For auto-detection, we are currently not supporting strings.
-			} else if(h_ColumnData[col].countDateAndTime>0L){
-				d_detectedTypes.push_back(GDF_DATE64);
-			} else if(h_ColumnData[col].countFloat > 0L  ||  
-				(h_ColumnData[col].countFloat==0L && countInt >0L && h_ColumnData[col].countNULL >0L) ) {
-				// The second condition has been added to conform to PANDAS which states that a colum of 
-				// integers with a single NULL record need to be treated as floats.
-				d_detectedTypes.push_back(GDF_FLOAT64);
-			}
-			else { 
-				d_detectedTypes.push_back(GDF_INT64);
-			}
-		}
-		raw_csv.dtypes=d_detectedTypes;
-	}
-	else{
-		for ( int x = 0; x < raw_csv.num_actual_cols; x++) {
-
-			std::string temp_type 	= args->dtype[x];
-                        gdf_dtype col_dtype = GDF_invalid;
-			if(temp_type.find(':') != std::string::npos){
-				for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-				std::size_t idx = temp_type.find(':');
-				if(temp_type.substr( 0, idx) == *it){
-					std::string temp_dtype = temp_type.substr( idx +1);
-					col_dtype	= convertStringToDtype(temp_dtype);
-					break;
-					}
-				}
-			}
-			else{
-				col_dtype	= convertStringToDtype( temp_type );
-			}
-
-			if (col_dtype == GDF_invalid)
-				return GDF_UNSUPPORTED_DTYPE;
-
-			raw_csv.dtypes.push_back(col_dtype);
-		}
-	}
-
+      for (int col = 0; col < raw_csv.num_actual_cols; col++) {
+        if (raw_csv.h_parseCol[col]) {
+          CUDF_EXPECTS(col_type_map.find(raw_csv.col_names[col]) != col_type_map.end(),
+            "Must specify data types for all active columns");
+          raw_csv.dtypes.push_back(col_type_map[raw_csv.col_names[col]]);
+        }
+      }
+    }
+  }
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < raw_csv.num_actual_cols; ++col) {
     if (raw_csv.h_parseCol[col]) {
-      // When dtypes are inferred, it contains only active column values
-      auto dtype = raw_csv.dtypes[args->dtype == nullptr ? active_col : col];
-
-      columns.emplace_back(raw_csv.num_records, dtype,
+      columns.emplace_back(raw_csv.num_records, raw_csv.dtypes[active_col],
                            gdf_dtype_extra_info{TIME_UNIT_NONE},
                            raw_csv.col_names[col]);
       CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
@@ -1265,6 +1262,7 @@ void dataTypeDetection(char *raw_csv,
 			long countDecimal=0;
 			long countSlash=0;
 			long countDash=0;
+			long countPlus=0;
 			long countColon=0;
 			long countString=0;
 			long countExponent=0;
@@ -1289,6 +1287,8 @@ void dataTypeDetection(char *raw_csv,
 						countDecimal++;break;
 					case '-':
 						countDash++; break;
+					case '+':
+						countPlus++; break;
 					case '/':
 						countSlash++;break;
 					case ':':
@@ -1302,11 +1302,12 @@ void dataTypeDetection(char *raw_csv,
 						break;	
 				}
 			}
+			const int countSign = countDash + countPlus;
 
 			// Integers have to have the length of the string
 			long int_req_number_cnt = strLen;
 			// Off by one if they start with a minus sign
-			if(raw_csv[start]=='-' && strLen > 1){
+			if((raw_csv[start]=='-' || raw_csv[start]=='+') && strLen > 1){
 				--int_req_number_cnt;
 			}
 			// Off by one if they are a hexadecimal number
@@ -1323,44 +1324,44 @@ void dataTypeDetection(char *raw_csv,
 				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
 				const size_t field_len = tempPos - start + 1;
 				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
-					serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
-					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+						serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
+					atomicAdd(& d_columnData[actual_col].countBool, 1);
 				}
 				else if(value >= (1L<<31)){
-					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt64, 1);
 				}
 				else if(value >= (1L<<15)){
-					atomicAdd(& d_columnData[actual_col].countInt32, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt32, 1);
 				}
 				else if(value >= (1L<<7)){
-					atomicAdd(& d_columnData[actual_col].countInt16, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt16, 1);
 				}
 				else{
-					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+					atomicAdd(& d_columnData[actual_col].countInt8, 1);
 				}
 			}
-			else if(isLikeFloat(strLen, countNumber, countDecimal, countDash, countExponent)){
-					atomicAdd(& d_columnData[actual_col].countFloat, 1L);
+			else if(isLikeFloat(strLen, countNumber, countDecimal, countSign, countExponent)){
+					atomicAdd(& d_columnData[actual_col].countFloat, 1);
 			}
 			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 
 			// a data-time field. Also, if a string has multiple decimals, then is not a legit number.
 			else if(countString > 3 || countDecimal > 1){
-				atomicAdd(& d_columnData[actual_col].countString, 1L);
+				atomicAdd(& d_columnData[actual_col].countString, 1);
 			}
 			else {
 				// A date field can have either one or two '-' or '\'. A legal combination will only have one of them.
 				// To simplify the process of auto column detection, we are not covering all the date-time formation permutations.
-				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && 	countSlash<=2) ){
+				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && countSlash<=2) ){
 					if((countColon<=2)){
-						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1L);
+						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1);
 					}
 					else{
-						atomicAdd(& d_columnData[actual_col].countString, 1L);					
+						atomicAdd(& d_columnData[actual_col].countString, 1);
 					}
 				}
 				// Default field is string type.
 				else{
-					atomicAdd(& d_columnData[actual_col].countString, 1L);					
+					atomicAdd(& d_columnData[actual_col].countString, 1);
 				}
 			}
 			actual_col++;
