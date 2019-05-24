@@ -34,7 +34,8 @@ def is_file_like(obj):
     return True
 
 
-cpdef cpp_read_orc(path, columns=None, skip_rows=None, num_rows=None):
+cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
+                   num_rows=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -64,6 +65,11 @@ cpdef cpp_read_orc(path, columns=None, skip_rows=None, num_rows=None):
         vector_use_cols = arr_cols
         orc_reader.use_cols = vector_use_cols.data()
         orc_reader.use_cols_len = len(usecols)
+
+    if stripe is not None:
+        orc_reader.stripe = stripe
+    else:
+        orc_reader.stripe = -1
 
     if skip_rows is not None:
         orc_reader.skip_rows = skip_rows
