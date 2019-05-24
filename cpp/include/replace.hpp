@@ -47,6 +47,9 @@ namespace cudf {
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement_values);
 
+gdf_column replace_nulls(const gdf_column& input,
+                         const gdf_scalar& replacement_value);
+
 }  // namespace cudf
 
 

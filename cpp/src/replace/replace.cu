@@ -15,12 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <iostream>
 #include <thrust/device_ptr.h>
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
 
 #include "cudf.h"
+#include "rmm/rmm.h"
 #include <copying.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities//type_dispatcher.hpp"
@@ -146,7 +147,7 @@ __global__
   void replace_nulls_with_scalar(gdf_size_type size,
                                  const Type* in_data,
                                  gdf_valid_type* in_valid,
-                                 const Type* replacement_value,
+                                 const Type* replacement,
                                  Type* out_data) 
 {
   int tid = threadIdx.x;
@@ -158,7 +159,7 @@ __global__
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : *replacement_value;
+    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : *replacement;
   }
 }
 
@@ -168,7 +169,7 @@ __global__
 void replace_nulls_with_column(gdf_size_type size,
                                const Type* in_data,
                                gdf_valid_type* in_valid,
-                               const Type* replacement_values,
+                               const Type* replacement,
                                Type* out_data) 
 {
   int tid = threadIdx.x;
@@ -180,7 +181,7 @@ void replace_nulls_with_column(gdf_size_type size,
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : replacement_values[i];
+    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : replacement[i];
   }
 }
 
@@ -191,34 +192,59 @@ void replace_nulls_with_column(gdf_size_type size,
  *        `replace_nulls` with the apropiate data types.
  */
 /* ----------------------------------------------------------------------------*/
-struct replace_nulls_kernel_forwarder {
+struct replace_nulls_column_kernel_forwarder {
   template <typename col_type>
   void operator()(gdf_size_type    nrows,
-                  gdf_size_type    replacement_values_length,
                   void*            d_in_data,
                   gdf_valid_type*  d_in_valid,
-                  const void*      d_replacement_values,
+                  const void*      d_replacement,
                   void*            d_out_data)
   {
     const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
-    if (replacement_values_length == 1) {
-      replace_nulls_with_scalar<<<grid_size, BLOCK_SIZE>>>(nrows,
-                                            static_cast<const col_type*>(d_in_data),
-                                            (d_in_valid),
-                                            static_cast<const col_type*>(d_replacement_values),
-                                            static_cast<col_type*>(d_out_data)
-                                            );
-    } else if(replacement_values_length == nrows) {
-      replace_nulls_with_column<<<grid_size, BLOCK_SIZE>>>(nrows,
-                                            static_cast<const col_type*>(d_in_data),
-                                            (d_in_valid),
-                                            static_cast<const col_type*>(d_replacement_values),
-                                            static_cast<col_type*>(d_out_data)
-                                            );
-      
-    }
+
+    replace_nulls_with_column<<<grid_size, BLOCK_SIZE>>>(nrows,
+                                          static_cast<const col_type*>(d_in_data),
+                                          (d_in_valid),
+                                          static_cast<const col_type*>(d_replacement),
+                                          static_cast<col_type*>(d_out_data)
+                                          );
+
   }
 };
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
+ *        `replace_nulls` with the apropiate data types.
+ */
+/* ----------------------------------------------------------------------------*/
+struct replace_nulls_scalar_kernel_forwarder {
+  template <typename col_type>
+  void operator()(gdf_size_type    nrows,
+                  void*            d_in_data,
+                  gdf_valid_type*  d_in_valid,
+                  const void*      replacement,
+                  void*            d_out_data)
+  {
+    const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
+
+    auto t_replacement = static_cast<const col_type*>(replacement);
+    void *d_replacement = NULL;
+    RMM_TRY(RMM_ALLOC(&d_replacement, sizeof(col_type), 0));
+    CUDA_TRY(cudaMemcpy(d_replacement, t_replacement, sizeof(col_type),
+                        cudaMemcpyHostToDevice));
+
+    replace_nulls_with_scalar<<<grid_size, BLOCK_SIZE>>>(nrows,
+                                          static_cast<const col_type*>(d_in_data),
+                                          (d_in_valid),
+                                          static_cast<const col_type*>(d_replacement),
+                                          static_cast<col_type*>(d_out_data)
+                                          );
+  }
+};
+
+
 
 } //end anonymous namespace
 
@@ -226,24 +252,43 @@ struct replace_nulls_kernel_forwarder {
 namespace cudf {
 
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_column& replacement_values)
+                         const gdf_column& replacement)
 {
-  CUDF_EXPECTS(input.dtype == replacement_values.dtype, "Data type mismatch");
-  CUDF_EXPECTS(replacement_values.size == 1 || replacement_values.size == input.size, "Column size mismatch");
+  CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
+  CUDF_EXPECTS(replacement.size == 1 || replacement.size == input.size, "Column size mismatch");
    
-  CUDF_EXPECTS(nullptr != replacement_values.data, "Null replacement values");
+  CUDF_EXPECTS(nullptr != replacement.data, "Null replacement data");
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
-  CUDF_EXPECTS(nullptr == replacement_values.valid || 0 == replacement_values.null_count,
-               "Replacement values must be all valid");
+  CUDF_EXPECTS(nullptr == replacement.valid || 0 == replacement.null_count,
+               "Invalid replacement data");
 
   gdf_column output = cudf::allocate_like(input);
 
-  cudf::type_dispatcher(input.dtype, replace_nulls_kernel_forwarder{},
+  cudf::type_dispatcher(input.dtype, replace_nulls_column_kernel_forwarder{},
                         input.size,
-                        replacement_values.size,
                         input.data,
                         input.valid,
-                        replacement_values.data,
+                        replacement.data,
+                        output.data);
+  output.valid = nullptr;
+  return output;
+}
+
+
+gdf_column replace_nulls(const gdf_column& input,
+                         const gdf_scalar& replacement)
+{
+  CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
+  CUDF_EXPECTS(nullptr != input.data, "Null input data");
+  CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
+
+  gdf_column output = cudf::allocate_like(input);
+
+  cudf::type_dispatcher(input.dtype, replace_nulls_scalar_kernel_forwarder{},
+                        input.size,
+                        input.data,
+                        input.valid,
+                        &(replacement.data),
                         output.data);
   output.valid = nullptr;
   return output;
