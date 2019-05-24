@@ -11,10 +11,9 @@ from cudf.bindings.json cimport *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
-from cudf.dataframe.column import Column
-from cudf.dataframe.numerical import NumericalColumn
+from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe.column import Column
 from cudf.utils import ioutils
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
@@ -110,23 +109,21 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         args.byte_range_offset = 0
         args.byte_range_size = 0
 
+    cdef cudf_table* table
     with nogil:
-        result = read_json(&args)
-    check_gdf_error(result)
-
-    out = args.data
-    if out is NULL:
-        raise ValueError("Failed to parse Json")
+        table = read_json(&args)
 
     # Extract parsed columns
     outcols = []
     new_names = []
-    for i in range(args.num_cols_out):
-        data_mem, mask_mem = gdf_column_to_column_mem(out[i])
+    for i in range(table.num_columns()):
+        data_mem, mask_mem = gdf_column_to_column_mem(table.get_column(i))
         outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        new_names.append(out[i].col_name.decode())
-        free(out[i].col_name)
-        free(out[i])
+        new_names.append(table.get_column(i).col_name.decode())
+        free(table.get_column(i).col_name)
+        free(table.get_column(i))
+
+    free(table)
 
     # Construct dataframe from columns
     df = DataFrame()

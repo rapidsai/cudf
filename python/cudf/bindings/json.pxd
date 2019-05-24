@@ -7,19 +7,13 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
+from cudf.bindings.types cimport table as cudf_table
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf.h" namespace "cudf" nogil:
 
     # See cpp/include/cudf/io_types.h:222
     ctypedef struct json_read_arg:
-        # Output Arguments - Allocated in reader
-        int             num_cols_out
-        int             num_rows_out
-        gdf_column      **data
-        int             *index_col
-
-        # Input arguments
         gdf_input_type  source_type;
         const char      *source;
         size_t          buffer_size;
@@ -30,5 +24,5 @@ cdef extern from "cudf.h" nogil:
         size_t          byte_range_offset;
         size_t          byte_range_size;
 
-    cdef gdf_error read_json(json_read_arg *args) except +
+    cdef cudf_table* read_json(json_read_arg *args) except +
     

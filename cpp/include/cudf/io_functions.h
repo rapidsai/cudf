@@ -65,6 +65,7 @@ gdf_error read_parquet(pq_read_arg *args);
  */
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
 
+namespace cudf {
 /*
  * @brief Reads JSON-structured data and returns an array of gdf_columns.
  *
@@ -72,4 +73,5 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
  *
  * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
  */
-cudf::table read_json(json_read_arg const *args);
+cudf::table *read_json(json_read_arg const *args);
+} // namespace cudf

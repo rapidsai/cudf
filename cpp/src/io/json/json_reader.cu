@@ -51,9 +51,11 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/wrapper_utils.hpp"
 
+namespace cudf {
+
 using string_pair = std::pair<const char *, size_t>;
 
-cudf::table read_json(json_read_arg const *args) {
+cudf::table *read_json(json_read_arg const *args) {
   // Check if the passed arguments are valid
   CUDF_EXPECTS(args != nullptr, "The args parameter cannot be null.\n");
   CUDF_EXPECTS(args->source != nullptr, "Input source cannot be null.\n");
@@ -98,7 +100,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-cudf::table JsonReader::parse() {
+cudf::table *JsonReader::parse() {
   ingestRawInput();
   CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
   CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size.\n");
@@ -123,11 +125,13 @@ cudf::table JsonReader::parse() {
   CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
 
   // Transfer ownership to raw pointer output
-  std::vector<gdf_column *>out_cols(columns_.size());
+  std::vector<gdf_column *> out_cols(columns_.size());
   for (size_t i = 0; i < columns_.size(); ++i) {
     out_cols[i] = columns_[i].release();
   }
-  return cudf::table(out_cols.data(), out_cols.size());
+
+  auto *out_table = new cudf::table(out_cols.data(), out_cols.size());
+  return out_table;
 }
 
 /**---------------------------------------------------------------------------*
@@ -433,7 +437,7 @@ void JsonReader::convertDataToColumns() {
 /**---------------------------------------------------------------------------*
  * @brief Functor for converting plain text data to cuDF data type value.
  *---------------------------------------------------------------------------**/
- struct ConvertFunctor {
+struct ConvertFunctor {
   /**---------------------------------------------------------------------------*
    * @brief Template specialization for operator() for types whose values can be
    * convertible to a 0 or 1 to represent false/true. The converting is done by
@@ -444,7 +448,7 @@ void JsonReader::convertDataToColumns() {
    *---------------------------------------------------------------------------**/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
-    long end, const ParseOptions &opts) {
+                                                      long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(gdf_columns)[row]};
 
     // Check for user-specified true/false values first, where the output is
@@ -465,7 +469,7 @@ void JsonReader::convertDataToColumns() {
    *---------------------------------------------------------------------------**/
   template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
-    long end, const ParseOptions &opts) {
+                                                      long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(gdf_columns)[row]};
     value = convertStrToValue<T>(data, start, end, opts);
   }
@@ -801,3 +805,5 @@ void JsonReader::setDataTypes() {
     }
   }
 }
+
+} // namespace cudf
