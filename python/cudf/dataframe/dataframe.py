@@ -1385,6 +1385,15 @@ class DataFrame(object):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
+        how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
+            Type of merge to be performed.
+                left: use only keys from left frame, similar to a SQL left
+                      outer join; preserve key order.
+                right: not supported.
+                outer: use union of keys from both frames, similar to a SQL
+                       full outer join; sort keys lexicographically.
+                inner: use intersection of keys from both frames, similar to
+                       a SQL inner join; preserve the order of the left keys.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -1397,10 +1406,6 @@ class DataFrame(object):
             Use the index from the left DataFrame as the join key(s).
         right_index : bool, default False
             Use the index from the right DataFrame as the join key.
-        how : str, defaults to 'left'
-            Only accepts 'left'
-            left: use only keys from left frame, similar to
-            a SQL left outer join; preserve key order
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
