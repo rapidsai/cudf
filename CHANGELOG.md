@@ -34,6 +34,7 @@
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
 
 ## Bug Fixes
 
