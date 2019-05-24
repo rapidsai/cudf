@@ -36,6 +36,7 @@ from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
+from cudf.bindings.stream_compaction import get_unique_indices as cpp_get_unique_indices 
 
 
 class DataFrame(object):
@@ -984,6 +985,32 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def drop_duplicates(self, subset=None, keep='first', inplace=False):
+        """
+        Return DataFrame with duplicate rows removed, optionally only 
+        considering certain subset of columns.
+        """
+        in_cols  = [series._column for series in self._cols.values()]
+        if subset is None:
+            subset = self._cols
+        elif (not np.iterable(subset) or
+                isinstance(subset, pd.compat.string_types) or
+                isinstance(subset, tuple) and subset in self.columns):
+            subset = subset,
+        diff = set(subset)-set(self._cols)
+        if len(diff) != 0:
+            raise KeyError(diff)
+        subset_cols = [series._column for name, series in self._cols.items()
+                        if name in subset]
+        new_index = cpp_get_unique_indices([self.index.as_column()], in_cols, subset_cols, keep)
+        if inplace:
+            outdf = self.set_index(as_index(new_index))
+            self._cols =  outdf._cols
+        else:
+            outdf = self.take(new_index)
+            #outdf = self.set_index(as_index(new_index))
+            return outdf
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.

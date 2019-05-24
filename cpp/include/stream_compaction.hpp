@@ -18,6 +18,7 @@
 #define STREAM_COMPACTION_HPP
 
 #include "cudf.h"
+#include <types.hpp>
 
 namespace cudf {
 
@@ -71,6 +72,21 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  * @return gdf_column Column containing copy of all non-null elements of @p input.
  */
 gdf_column drop_nulls(gdf_column const &input);
+
+
+
+/**
+* @brief Filter only unique row indices and return the unique indices count
+*
+* @param key_columns cudf::table containing key columns to check duplicates rows
+* @param unique_indices pointer to index column of input table length
+* @param keep_first keep first or last entry as unique if duplicate is found
+*
+* @return 
+*/
+uint32_t gdf_get_unique_ordered_indices(const cudf::table& key_columns,
+                                        gdf_index_type* unique_indices,
+                                        const bool keep_first);
 }  // namespace cudf
 
 #endif

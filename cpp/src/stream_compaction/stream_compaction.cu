@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
- #include "copy_if.cuh"
+#include "copy_if.cuh"
+#include <table.hpp>
+#include "table/device_table.cuh"
+#include <table/device_table_row_operators.cuh>
  
 namespace {
 
@@ -106,6 +109,61 @@ gdf_column drop_nulls(gdf_column const &input) {
   else { // no null bitmask, so just copy
     return cudf::copy(input);
   }
+}
+
+uint32_t gdf_get_unique_ordered_indices(const cudf::table &key_columns,
+                                        gdf_index_type* unique_indices,
+                                        const bool keep_first)
+{
+  gdf_size_type ncols = key_columns.num_columns();
+  gdf_size_type nrows = key_columns.num_rows();
+  gdf_context context;
+
+  // sort only indices
+  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  gdf_column sorted_indices_col;
+  CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
+        nullptr, nrows, GDF_INT32));
+  CUDF_TRY(gdf_order_by(key_columns.begin(),
+        nullptr,
+        key_columns.num_columns(),
+        &sorted_indices_col,
+        &context));
+
+  // extract unique indices 
+  rmm::device_vector<void*> d_cols(ncols);
+  rmm::device_vector<int> d_types(ncols, 0);
+  void** d_col_data = d_cols.data().get();
+  int* d_col_types = d_types.data().get();
+
+  cudaStream_t stream;
+  cudaStreamCreate(&stream);
+  auto exec = rmm::exec_policy(stream)->on(stream);
+
+  auto device_input_table = device_table::create(key_columns);
+  auto comp = row_equality_comparator<true>(*device_input_table, true);
+
+  gdf_index_type* result_end;
+  if(keep_first)
+  result_end = thrust::unique_copy(exec, 
+      sorted_indices.begin(),
+      sorted_indices.end(),
+      unique_indices,
+      comp
+      );
+  else
+    result_end = thrust::unique_copy(exec, 
+      sorted_indices.rbegin(),
+      sorted_indices.rend(),
+      unique_indices,
+      comp
+      );
+  // reorder unique indices
+  thrust::sort(exec, unique_indices, result_end);
+  cudaStreamSynchronize(stream);
+  cudaStreamDestroy(stream);
+
+  return thrust::distance(unique_indices, result_end);
 }
 
 }  // namespace cudf
