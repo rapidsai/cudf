@@ -422,18 +422,20 @@ class Series(object):
     def __repr__(self):
         return "<cudf.Series nrows={} >".format(len(self))
 
-    def _binaryop(self, other, fn):
+    def _binaryop(self, other, fn, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
+
+        If ``reflect`` is ``True``, swap the order of the operands.
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other._column)
+        outcol = self._column.binary_operator(fn, other, reflect=reflect)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -445,16 +447,7 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
-        from cudf import DataFrame
-        if isinstance(other, DataFrame):
-            return other._binaryop(self, fn)
-        nvtx_range_push("CUDF_BINARY_OP", "orange")
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator(fn, self._column)
-        result = self._copy_construct(data=outcol)
-        result.name = None
-        nvtx_range_pop()
-        return result
+        return self._binaryop(other, fn, reflect=True)
 
     def _unaryop(self, fn):
         """
@@ -543,18 +536,21 @@ class Series(object):
         return self._bitwise_binop(other, 'xor')
 
     def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
         if isinstance(other, Series):
-            return other
+            return other._column
         elif isinstance(other, Index):
-            return Series(other)
+            return Series(other)._column
         else:
             col = self._column.normalize_binop_value(other)
-            return self._copy_construct(data=col)
+            return col
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.unordered_compare(cmpops, other._column)
+        outcol = self._column.unordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -563,7 +559,7 @@ class Series(object):
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.ordered_compare(cmpops, other._column)
+        outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -1035,15 +1031,19 @@ class Series(object):
             raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
-        out = []
-        for cat in cats:
-            mask = None  # self.nullmask.to_gpu_array()
-            buf = cudautils.apply_equal_constant(
-                arr=self.data.to_gpu_array(),
-                mask=mask,
-                val=cat, dtype=dtype)
-            out.append(Series(buf, index=self.index))
-        return out
+        # out = []
+        # for cat in cats:
+        #     mask = None  # self.nullmask.to_gpu_array()
+        #     buf = cudautils.apply_equal_constant(
+        #         arr=self.data.to_gpu_array(),
+        #         mask=mask,
+        #         val=cat, dtype=dtype)
+        #     out.append(Series(buf, index=self.index))
+
+        fill_value = columnops.as_column(False)
+        return ((self == cat).fillna(fill_value).astype(dtype)
+                for cat in cats)
+        # return out
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding

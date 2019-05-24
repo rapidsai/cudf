@@ -9,8 +9,9 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.binops cimport *
 from cudf.bindings.GDFError import GDFError
+from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
-from libc.stdlib cimport free
+from libc.stdlib cimport malloc, free
 
 from librmm_cffi import librmm as rmm
 
@@ -39,17 +40,59 @@ _BINARY_OP['or'] = GDF_BITWISE_OR
 _BINARY_OP['xor'] = GDF_BITWISE_XOR
 
 
-cdef apply_jit_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
+cdef apply_jit_op_v_v(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
     """
-    Call JITified gdf binary ops.
+    Call JITified gdf binary ops between two columns.
     """
 
     cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
-    with nogil:    
+    with nogil:
         result = gdf_binary_operation_v_v(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
+            <gdf_column*>c_rhs,
+            c_op)
+
+    cdef int nullct = c_out[0].null_count
+
+    check_gdf_error(result)
+
+    return nullct
+
+
+cdef apply_jit_op_v_s(gdf_column* c_lhs, gdf_scalar* c_rhs, gdf_column* c_out, op):
+    """
+    Call JITified gdf binary ops between a column and a scalar.
+    """
+
+    cdef gdf_error result
+    cdef gdf_binary_operator c_op = _BINARY_OP[op]
+    with nogil:
+        result = gdf_binary_operation_v_s(
+            <gdf_column*>c_out,
+            <gdf_column*>c_lhs,
+            <gdf_scalar*>c_rhs,
+            c_op)
+
+    cdef int nullct = c_out[0].null_count
+
+    check_gdf_error(result)
+
+    return nullct
+
+
+cdef apply_jit_op_s_v(gdf_scalar* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
+    """
+    Call JITified gdf binary ops between a scalar and a column.
+    """
+
+    cdef gdf_error result
+    cdef gdf_binary_operator c_op = _BINARY_OP[op]
+    with nogil:
+        result = gdf_binary_operation_s_v(
+            <gdf_column*>c_out,
+            <gdf_scalar*>c_lhs,
             <gdf_column*>c_rhs,
             c_op)
 
@@ -200,47 +243,71 @@ cdef apply_compiled_op(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, 
 
 def apply_op(lhs, rhs, out, op):
     """
-    Dispatches a binary op call to the appropriate libcudf function
+    Dispatches a binary op call to the appropriate libcudf function:
     """
-    check_gdf_compatibility(lhs)
-    check_gdf_compatibility(rhs)
     check_gdf_compatibility(out)
-
-    cdef gdf_column* c_lhs = column_view_from_column(lhs)
-    cdef gdf_column* c_rhs = column_view_from_column(rhs)
+    cdef gdf_column* c_lhs = NULL
+    cdef gdf_column* c_rhs = NULL
+    cdef gdf_scalar* c_scalar = NULL
     cdef gdf_column* c_out = column_view_from_column(out)
 
-    cdef gdf_error result
-    cdef gdf_binary_operator c_op = _BINARY_OP[op]
+    if np.isscalar(lhs):
+        check_gdf_compatibility(rhs)
+        c_rhs = column_view_from_column(rhs)
+        c_scalar = gdf_scalar_from_scalar(lhs)
+        nullct = apply_jit_op_s_v(
+            <gdf_scalar*> c_scalar,
+            <gdf_column*> c_rhs,
+            <gdf_column*> c_out,
+            op
+        )
 
-    if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
-        try:
-            nullct = apply_compiled_op(
-                <gdf_column*>c_lhs,
-                <gdf_column*>c_rhs,
-                <gdf_column*>c_out,
-                op
-            )
-        except GDFError as e:
-            if e.errcode == b'GDF_UNSUPPORTED_DTYPE':
-                nullct = apply_jit_op(
+    elif np.isscalar(rhs):
+         check_gdf_compatibility(lhs)
+         c_lhs = column_view_from_column(lhs)
+         c_scalar = gdf_scalar_from_scalar(rhs)
+         nullct = apply_jit_op_v_s(
+             <gdf_column*> c_lhs,
+             <gdf_scalar*> c_scalar,
+             <gdf_column*> c_out,
+             op
+         )
+
+    else:
+        check_gdf_compatibility(lhs)
+        check_gdf_compatibility(rhs)
+        c_lhs = column_view_from_column(lhs)
+        c_rhs = column_view_from_column(rhs)
+
+        if c_lhs.dtype == c_rhs.dtype and op in _COMPILED_OPS:
+            try:
+                nullct = apply_compiled_op(
                     <gdf_column*>c_lhs,
                     <gdf_column*>c_rhs,
                     <gdf_column*>c_out,
                     op
                 )
-            else:
-                raise e
-    else:
-        nullct = apply_jit_op(
-            <gdf_column*>c_lhs,
-            <gdf_column*>c_rhs,
-            <gdf_column*>c_out,
-            op
-        )
+            except GDFError as e:
+                if e.errcode == b'GDF_UNSUPPORTED_DTYPE':
+                    nullct = apply_jit_op_v_v(
+                        <gdf_column*>c_lhs,
+                        <gdf_column*>c_rhs,
+                        <gdf_column*>c_out,
+                        op
+                    )
+                else:
+                    raise e
+        else:
+            nullct = apply_jit_op_v_v(
+                <gdf_column*>c_lhs,
+                <gdf_column*>c_rhs,
+                <gdf_column*>c_out,
+                op
+            )
 
     free(c_lhs)
     free(c_rhs)
+    free(c_scalar)
     free(c_out)
 
     return nullct

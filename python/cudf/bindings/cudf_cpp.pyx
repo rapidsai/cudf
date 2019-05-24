@@ -17,6 +17,7 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
@@ -96,6 +97,24 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
+cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
+    """
+    Returns a gdf_scalar* constructed from the numpy scalar ``val``.
+    """
+    cdef bool is_valid = True
+
+    cdef gdf_scalar* s = <gdf_scalar*>malloc(sizeof(gdf_scalar))
+    if s is NULL:
+        raise MemoryError
+
+    set_scalar_value(s, val)
+    if dtype is not None:
+        s[0].dtype = dtypes[dtype.type]
+    else:
+        s[0].dtype = dtypes[val.dtype.type]
+    s[0].is_valid = is_valid
+    return s
+
 cdef get_scalar_value(gdf_scalar scalar):
     """
     Returns typed value from a gdf_scalar
@@ -113,6 +132,28 @@ cdef get_scalar_value(gdf_scalar scalar):
         GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
         GDF_TIMESTAMP: np.array(scalar.data.tmst).astype('datetime64[ns]'),
     }[scalar.dtype]
+
+
+cdef set_scalar_value(gdf_scalar *scalar, val):
+    """
+    Sets the value of a gdf_scalar from a numpy scalar.
+    """
+    if val.dtype.type == np.float64:
+        scalar.data.fp64 = val
+    elif val.dtype.type == np.float32:
+        scalar.data.fp32 = val
+    elif val.dtype.type == np.int64:
+        scalar.data.si64 = val
+    elif val.dtype.type == np.int32:
+        scalar.data.si32 = val
+    elif val.dtype.type == np.int16:
+        scalar.data.si16 = val
+    elif val.dtype.type == np.int8:
+        scalar.data.si08 = val
+    else:
+        raise ValueError("Cannot convert numpy scalar of dtype {}"
+                         "to gdf_calar".format(val.dtype.name))
+
 
 # gdf_column functions
 
