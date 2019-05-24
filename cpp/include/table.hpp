@@ -136,12 +136,15 @@ struct table {
    * @brief Returns the number of rows in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_rows() const { return _num_rows; }
+  gdf_size_type num_rows() const {
+    if (this->get_column(0) != nullptr) {
+      return this->get_column(0)->size;
+    }
+    return 0;
+  }
 
  private:
-
   std::vector<gdf_column*> _columns;  ///< Pointers to the wrapped columns
-  gdf_size_type _num_rows{0};         ///< The number of elements in each column
 };
 
 /**---------------------------------------------------------------------------*
@@ -160,7 +163,6 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
  * @return false If the table contains zero null values
  *---------------------------------------------------------------------------**/
 bool has_nulls(cudf::table const& table);
-
 
 }  // namespace cudf
 

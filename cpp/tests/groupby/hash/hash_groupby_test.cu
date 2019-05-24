@@ -15,6 +15,7 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <groupby.hpp>
 #include <table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/type_dispatcher.hpp>
@@ -31,13 +32,33 @@ struct GroupbyTest : public GdfTest {
   int random_size() { return distribution(generator); }
 };
 
-using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                      double, cudf::date32, cudf::date64,
-                                      cudf::timestamp, cudf::category, cudf::bool8>;
+using TestingTypes =
+    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
+                     cudf::date32, cudf::date64, cudf::category, cudf::bool8>;
 
 TYPED_TEST_CASE(GroupbyTest, TestingTypes);
 
-TYPED_TEST(GroupbyTest, FirstTest){
-    
+TYPED_TEST(GroupbyTest, OneGroup) {
+  using namespace cudf::groupby::hash;
+  using T = TypeParam;
+  cudf::test::column_wrapper<TypeParam> keys{T(1), T(1), T(1), T(1)};
+  cudf::test::column_wrapper<TypeParam> values{T(1), T(2), T(3), T(4)};
+
+  cudf::table input_keys{keys.get()};
+  cudf::table input_values{values.get()};
+  std::vector<operators> ops{MAX};
+
+  cudf::table output_keys;
+  cudf::table output_values;
+  std::tie(output_keys, output_values) = groupby(input_keys, input_values, ops);
+
+  EXPECT_EQ(1, output_keys.num_rows());
+  EXPECT_EQ(1, output_values.num_rows());
+
+  auto input_key_types = cudf::column_dtypes(input_keys);
+
+  EXPECT_TRUE(std::equal(input_key_types.begin(), input_key_types.end(),
+                         cudf::column_dtypes(output_keys).begin()));
+
 
 }

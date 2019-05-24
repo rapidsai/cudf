@@ -274,6 +274,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
                            cudaMemcpyDeviceToHost, stream));
 
+
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
     col->size = result_size;
@@ -285,6 +286,7 @@ auto extract_results(table const& input_keys, table const& input_values,
                  update_column);
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
+
 
   return std::make_tuple(output_keys, output_values);
 }
