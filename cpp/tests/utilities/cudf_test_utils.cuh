@@ -365,18 +365,20 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
   if (left->null_count != right->null_count) return false;
   if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
 
-  if (!(left->data && right->data))
+  if ((left->data == nullptr) != (right->data == nullptr))
     return false;  // if one is null but not both
 
-  if (!thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
+  if ((left->data != nullptr) && 
+      !thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
                      reinterpret_cast<T*>(left->data) + left->size,
                      reinterpret_cast<T*>(right->data)))
     return false;
 
-  if (!(left->valid && right->valid))
+  if ((left->valid == nullptr) != (right->valid == nullptr))
     return false;  // if one is null but not both
 
-  if (!thrust::equal(thrust::cuda::par, left->valid,
+  if ((left->valid != nullptr) && 
+      !thrust::equal(thrust::cuda::par, left->valid,
                      left->valid + gdf_num_bitmask_elements(left->size),
                      right->valid))
     return false;
@@ -384,5 +386,17 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
   return true;
 }
 
+/**
+ * ---------------------------------------------------------------------------*
+ * @brief Compare two gdf_columns on all fields, including pairwise comparison
+ * of data and valid arrays. 
+ * 
+ * Uses type_dispatcher to dispatch the data comparison
+ *
+ * @param left The left column
+ * @param right The right column
+ * @return bool Whether or not the columns are equal
+ * ---------------------------------------------------------------------------**/
+bool gdf_equal_columns(gdf_column *left, gdf_column *right);
 
-#endif
+#endif // CUDF_TEST_UTILS_CUH_
