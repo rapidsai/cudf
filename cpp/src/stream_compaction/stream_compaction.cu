@@ -78,7 +78,7 @@ namespace cudf {
 /*
  * Filters a column using a column of boolean values as a mask.
  *
- * calls apply_filter() with the `boolean_mask_filter` functor.
+ * calls copy_if() with the `boolean_mask_filter` functor.
  */
 gdf_column apply_boolean_mask(gdf_column const &input,
                               gdf_column const &boolean_mask) {
@@ -86,7 +86,29 @@ gdf_column apply_boolean_mask(gdf_column const &input,
   CUDF_EXPECTS(boolean_mask.data != nullptr ||
                boolean_mask.valid != nullptr, "Null boolean_mask");
   // zero-size inputs are OK, but otherwise input size must match mask size
-  CUDF_EXPECTS(input.size == 0 || input.size == boolean_mask.size, 
+  CUDF_EXPECTS(input.size == 0 || input.size == boolean_mask.size,
+               "Column size mismatch");
+
+  if (boolean_mask.data == nullptr)
+    return detail::copy_if(input, boolean_mask_filter<false, true>{boolean_mask});
+  else if (boolean_mask.valid == nullptr || boolean_mask.null_count == 0)
+    return detail::copy_if(input, boolean_mask_filter<true, false>{boolean_mask});
+  else
+    return detail::copy_if(input, boolean_mask_filter<true, true>{boolean_mask});
+}
+
+/*
+ * Filters a table using a column of boolean values as a mask.
+ *
+ * calls copy_if() with the `boolean_mask_filter` functor.
+ */
+table apply_boolean_mask(table const &input,
+                         gdf_column const &boolean_mask) {
+  CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask.data != nullptr ||
+               boolean_mask.valid != nullptr, "Null boolean_mask");
+  // zero-size inputs are OK, but otherwise input size must match mask size
+  CUDF_EXPECTS(input.num_rows() == 0 || input.num_rows() == boolean_mask.size,
                "Column size mismatch");
 
   if (boolean_mask.data == nullptr)
