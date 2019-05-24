@@ -2624,35 +2624,34 @@ class DataFrame(object):
     #
     # Stats
     #
-    def count(self):
-        return self._apply_support_method('count')
+    def count(self, **kwargs):
+        return self._apply_support_method('count', **kwargs)
 
-    def min(self):
-        return self._apply_support_method('min')
+    def min(self, **kwargs):
+        return self._apply_support_method('min', **kwargs)
 
-    def max(self):
-        return self._apply_support_method('max')
+    def max(self, **kwargs):
+        return self._apply_support_method('max', **kwargs)
 
-    def sum(self):
-        return self._apply_support_method('sum')
+    def sum(self, **kwargs):
+        return self._apply_support_method('sum', **kwargs)
 
-    def product(self):
-        return self._apply_support_method('product')
+    def product(self, **kwargs):
+        return self._apply_support_method('product', **kwargs)
 
-    def cummin(self):
-        return self._apply_support_method('cummin')
+    def cummin(self, **kwargs):
+        return self._apply_support_method('cummin', **kwargs)
 
-    def cummax(self):
-        return self._apply_support_method('cummax')
+    def cummax(self, **kwargs):
+        return self._apply_support_method('cummax', **kwargs)
 
-    def cumsum(self):
-        return self._apply_support_method('cumsum')
+    def cumsum(self, **kwargs):
+        return self._apply_support_method('cumsum', **kwargs)
 
-    def cumprod(self):
-        return self._apply_support_method('cumprod')
+    def cumprod(self, **kwargs):
+        return self._apply_support_method('cumprod', **kwargs)
 
-    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
-             **kwargs):
+    def mean(self, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2679,13 +2678,13 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method('mean')
+        return self._apply_support_method('mean', **kwargs)
 
-    def std(self, ddof=1):
-        return self._apply_support_method('std', ddof=ddof)
+    def std(self, **kwargs):
+        return self._apply_support_method('std', **kwargs)
 
-    def var(self, ddof=1):
-        return self._apply_support_method('var', ddof=ddof)
+    def var(self, **kwargs):
+        return self._apply_support_method('var', **kwargs)
 
     def _apply_support_method(self, method, **kwargs):
         result = [getattr(self[col], method)(**kwargs)
