@@ -39,11 +39,11 @@ struct BinopVerifyInputTest : public ::testing::Test {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{0};
+    auto vector_out = cudf::test::column_wrapper<int64_t>(0);
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
@@ -53,13 +53,13 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{0};
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(0);
 
-    auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
+    auto scalar = cudf::test::scalar_wrapper<int64_t>(100);
 
     auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
     ASSERT_TRUE(result == GDF_SUCCESS);
@@ -67,9 +67,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull) {
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
@@ -79,9 +79,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
@@ -91,13 +91,13 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, nullptr, GDF_ADD);
     ASSERT_TRUE(result == GDF_DATASET_EMPTY);
@@ -105,14 +105,14 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
     vector_out.get()->dtype = (gdf_dtype)100;
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
@@ -122,13 +122,13 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
     vector_lhs.get()->dtype = (gdf_dtype)100;
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
@@ -139,13 +139,13 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
     scalar.get()->dtype = (gdf_dtype)100;
@@ -156,15 +156,15 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{0};
+    auto vector_out = cudf::test::column_wrapper<int64_t>(0);
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_SUCCESS);
@@ -172,15 +172,15 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{0};
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(0);
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_SUCCESS);
@@ -188,15 +188,15 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{0};
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(0);
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_SUCCESS);
@@ -204,13 +204,13 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull) {
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(nullptr, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_DATASET_EMPTY);
@@ -218,13 +218,13 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, nullptr, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_DATASET_EMPTY);
@@ -232,13 +232,13 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, nullptr, GDF_ADD);
     ASSERT_TRUE(result == GDF_DATASET_EMPTY);
@@ -246,18 +246,18 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
     vector_out.get()->dtype = (gdf_dtype)100;
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
@@ -265,18 +265,18 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
     vector_lhs.get()->dtype = (gdf_dtype)100;
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
     ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
@@ -284,17 +284,17 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType) {
 
 
 TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorType) {
-    auto vector_out = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_out = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_lhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_lhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
 
-    auto vector_rhs = cudf::test::column_wrapper<int64_t>{10,
+    auto vector_rhs = cudf::test::column_wrapper<int64_t>(10,
         [](gdf_size_type row) {return row;},
-        [](gdf_size_type row) {return true;}};
+        [](gdf_size_type row) {return true;});
     vector_rhs.get()->dtype = (gdf_dtype)100;
 
     auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
