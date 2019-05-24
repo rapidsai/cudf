@@ -2682,14 +2682,13 @@ class DataFrame(object):
         return self._apply_support_method('mean')
 
     def std(self, ddof=1):
-        return self._apply_support_method('std', ddof)
+        return self._apply_support_method('std', ddof=ddof)
 
     def var(self, ddof=1):
-        return self._apply_support_method('var', ddof)
+        return self._apply_support_method('var', ddof=ddof)
 
-    def _apply_support_method(self, *args, **kwargs):
-        method = args[0]
-        result = [getattr(self[col], method)(*kwargs)
+    def _apply_support_method(self, method, **kwargs):
+        result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
         if isinstance(result[0], Series):
             support_result = result
