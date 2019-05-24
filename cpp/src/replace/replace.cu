@@ -228,12 +228,13 @@ namespace cudf {
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement_values)
 {
-  CUDF_EXPECTS(input.dtype == replacement_values.dtype, "Input data type does not match replacement values type");
-  CUDF_EXPECTS(replacement_values.size == 1 || replacement_values.size == input.size, "Replacement values must be column of size 1 or equal to size of input");
+  CUDF_EXPECTS(input.dtype == replacement_values.dtype, "Data type mismatch");
+  CUDF_EXPECTS(replacement_values.size == 1 || replacement_values.size == input.size, "Column size mismatch");
    
   CUDF_EXPECTS(nullptr != replacement_values.data, "Null replacement values");
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
-  CUDF_EXPECTS(nullptr == replacement_values.valid || 0 == replacement_values.null_count, "Replacement values cannot be null");
+  CUDF_EXPECTS(nullptr == replacement_values.valid || 0 == replacement_values.null_count,
+               "Replacement values must be all valid");
 
   gdf_column output = cudf::allocate_like(input);
 
