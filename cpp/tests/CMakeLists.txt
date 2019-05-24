@@ -89,6 +89,11 @@ set(GROUPBY_TEST_SRC
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
+set(HASH_GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/hash_groupby_test.cu")
+
+ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
+
 set(GROUPBY_WO_AGG_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
