@@ -34,3 +34,10 @@ struct GroupbyTest : public GdfTest {
 using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
                                       double, cudf::date32, cudf::date64,
                                       cudf::timestamp, cudf::category, cudf::bool8>;
+
+TYPED_TEST_CASE(GroupbyTest, TestingTypes);
+
+TYPED_TEST(GroupbyTest, FirstTest){
+    
+
+}

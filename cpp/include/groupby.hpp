@@ -42,6 +42,8 @@ namespace groupby {
 struct Options {
   Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
 
+  Options() = default;
+
   /**---------------------------------------------------------------------------*
    * Determines if key rows with null values are ignored.
    *
@@ -101,7 +103,7 @@ enum operators { SUM, MIN, MAX, COUNT };
 std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops,
-                                             Options options);
+                                             Options options = Options{});
 
 }  // namespace hash
 
