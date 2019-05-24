@@ -93,13 +93,16 @@ struct ColumnData<T, true>{
 template<typename T, bool nulls_present=true>
 struct ColumnDataSquare : public ColumnData<T, nulls_present>
 {
+    // constructor when nulls_present == false
+    __device__ __host__
+    ColumnDataSquare(T *_data)
+    : ColumnData<T, false>(_data){};
+
+    // constructor when nulls_present == true
     __device__ __host__
     ColumnDataSquare(T *_data, gdf_valid_type *_valid, T _identity)
     : ColumnData<T, true>(_data, _valid, _identity){};
 
-    __device__ __host__
-    ColumnDataSquare(T *_data)
-    : ColumnData<T, false>(_data){};
 
     __device__ __host__
     T at(gdf_index_type id) const {
@@ -108,17 +111,47 @@ struct ColumnDataSquare : public ColumnData<T, nulls_present>
     };
 };
 
+
 template<typename T_output>
-struct ColumnDataOutput
+struct ColumnDataOutputs
 {
     T_output value;
     T_output value_squared;
     gdf_index_type count;
 };
 
-// TBD. ColumnDataSquareNonNull
+
+// ---------------------------------------------------------------------------
+
+void gen_nullbitmap(std::vector<gdf_valid_type>& v, std::vector<bool>& host_bools)
+{
+    int length = host_bools.size();
+    auto n_bytes = gdf_valid_allocation_size(length);
+
+    v.resize(n_bytes);
+    // TODO: generic
+    for(int i=0; i<length; i++)
+    {
+        int pos = i/8;
+        int bit_index = i%8;
+        if( bit_index == 0)v[pos] = 0;
+        if( host_bools[i] )v[pos] += (1 << bit_index);
+    }
+}
+
+struct HostDeviceSum {
+    template<typename T>
+    __device__ __host__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs + rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
 
 
+// ---------------------------------------------------------------------------
 // column_input_iterator
 template<typename T_output, typename T_input, typename Iterator=thrust::counting_iterator<gdf_index_type> >
   class column_input_iterator
@@ -170,24 +203,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     }
 };
 
-// --------------------------------------------------------------------------------------------------------
-
-
-void gen_nullbitmap(std::vector<gdf_valid_type>& v, std::vector<bool>& host_bools)
-{
-    int length = host_bools.size();
-    auto n_bytes = gdf_valid_allocation_size(length);
-
-    v.resize(n_bytes);
-    // TODO: generic
-    for(int i=0; i<length; i++)
-    {
-        int pos = i/8;
-        int bit_index = i%8;
-        if( bit_index == 0)v[pos] = 0;
-        if( host_bools[i] )v[pos] += (1 << bit_index);
-    }
-}
+// ---------------------------------------------------------------------------
 
 
 template <typename T>
@@ -204,42 +220,39 @@ struct IteratorTest : public GdfTest
         size_t   temp_storage_bytes = 0;
 
         cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            cudf::DeviceSum{}, init);
+            HostDeviceSum{}, init);
         // Allocate temporary storage
         RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
 
         // Run reduction
         cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            cudf::DeviceSum{}, init);
+            HostDeviceSum{}, init);
 
         evaluate(expected, dev_result, "cub test");
     }
 
     // iterator test case which uses thrust
     template <typename InputIterator, typename T_output>
-    void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items, bool is_device=true)
+    void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
     {
         T init = T{0};
-
         InputIterator d_in_last =  d_in + num_items;
-
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
-
-        T result;
-        if( is_device){
-            result = thrust::reduce(thrust::device, d_in, d_in_last, init, cudf::DeviceSum{});
-        }else{
-            for(auto it = d_in; it != d_in_last; ++it){
-                std::cout << "V: " << *it << std::endl;
-            }
-
-            std::cout << "thrust test (host start)" << std::endl;
-            result = thrust::reduce(thrust::host, d_in, d_in_last, init, cudf::DeviceSum{});
-            std::cout << "thrust test (host end)" << std::endl;
-        }
-
+        T result = thrust::reduce(thrust::device, d_in, d_in_last, init, HostDeviceSum{});
         EXPECT_EQ(expected, result) << "thrust test";
+    }
+
+    // iterator test case which uses thrust
+    template <typename InputIterator, typename T_output>
+    void iterator_test_thrust_host(T_output expected, InputIterator d_in, int num_items)
+    {
+        T init = T{0};
+        InputIterator d_in_last =  d_in + num_items;
+        EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
+
+        T result = thrust::reduce(thrust::host, d_in, d_in_last, init, HostDeviceSum{});
+        EXPECT_EQ(expected, result) << "thrust host test";
     }
 
     void evaluate(T expected, thrust::device_vector<T> &dev_result, const char* msg=nullptr)
@@ -272,8 +285,9 @@ TYPED_TEST(IteratorTest, non_null_iterator)
     auto it_dev = dev_array.begin();
     this->iterator_test_cub(expected_value, it_dev, dev_array.size());
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
-}
 
+    this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
+}
 
 /* tests for null input iterator (column with null bitmap)
    Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
@@ -301,14 +315,8 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    if(1)
-    {  // check host side `IteratorWithNulls`.
-        ColumnData<T> col(hos_array.data(), host_nulls.data(), init);
 
-        column_input_iterator<T, ColumnData<T>> it_hos(col);
-//        this->iterator_test_thrust(expected_value, it_hos, dev_array.size(), false);
-    }
-
+    // device code test
     ColumnData<T> col(dev_array.data().get(), dev_nulls.data().get(), init);
     column_input_iterator<T, ColumnData<T>> it_dev(col);
 
@@ -316,6 +324,11 @@ TYPED_TEST(IteratorTest, null_iterator)
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
     // reduction using cub
     this->iterator_test_cub(expected_value, it_dev, dev_array.size());
+
+    // host reduction using thrust
+    ColumnData<T> col_hos(hos_array.data(), host_nulls.data(), init);
+    column_input_iterator<T, ColumnData<T>> it_hos(col_hos);
+    this->iterator_test_thrust_host(expected_value, it_hos, dev_array.size());
 
     std::cout << "test done." << std::endl;
 }
@@ -328,9 +341,11 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     T init = T{0};
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    thrust::device_vector<T> dev_array(hos_array);
-
     std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
+    EXPECT_EQ(hos_array.size(), host_bools.size());
+
+#if 1
+    thrust::device_vector<T> dev_array(hos_array);
     std::vector<gdf_valid_type> host_nulls;
     gen_nullbitmap(host_nulls, host_bools);
     thrust::device_vector<gdf_valid_type> dev_nulls(host_nulls);
@@ -348,7 +363,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     {
         ColumnDataSquare<T> col(hos_array.data(), host_nulls.data(), init);
         column_input_iterator<T, ColumnDataSquare<T>> it_hos(col);
-//        this->iterator_test_thrust(expected_value, it_hos, dev_array.size(), false);
+        this->iterator_test_thrust_host(expected_value, it_hos, dev_array.size());
     }
 
     ColumnDataSquare<T> col(dev_array.data().get(), dev_nulls.data().get(), init);
@@ -360,6 +375,30 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     this->iterator_test_cub(expected_value, it_dev, dev_array.size());
 
     std::cout << "test done." << std::endl;
+#else
+    // create a column with bool vector
+    cudf::test::column_wrapper<T> w_col(hos_array,
+        [&](gdf_index_type row) { return host_bools[row]; });
+
+    // calculate the expected value by CPU.
+    std::vector<T> replaced_array(hos_array.size());
+    std::transform(hos_array.begin(), hos_array.end(), host_bools.begin(),
+        replaced_array.begin(), [&](T x, bool b) { return (b)? x*x : init; } );
+    T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
+    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
+
+    ColumnDataSquare<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    column_input_iterator<T, ColumnDataSquare<T>> it_dev(col);
+
+    // reduction using thrust
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    // reduction using cub
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
+
+    std::cout << "test done." << std::endl;
+#endif
+
+
 }
 
 
@@ -398,6 +437,13 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
     // reduction using cub
     this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
+
+    // pass `dev_indices` as base iterator of `column_input_iterator`.
+    ColumnData<T, false> col_hos(hos_array.data());
+    column_input_iterator<T, ColumnData<T, false>, T_index*> it_host(col_hos, hos_indices.data());
+    this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
+
+
 }
 
 // tests for group_by iterator
@@ -409,3 +455,4 @@ TYPED_TEST(IteratorTest, group_by_iterator_null)
 
     // TBD. it should be possible.
 }
+
