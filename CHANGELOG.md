@@ -33,6 +33,7 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1846 C++ type-erased gdf_equal_columns util; fix gdf_equal_columns logic error
 
 ## Bug Fixes
 
