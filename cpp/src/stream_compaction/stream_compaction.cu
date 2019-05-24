@@ -18,6 +18,7 @@
 #include <table.hpp>
 #include "table/device_table.cuh"
 #include <table/device_table_row_operators.cuh>
+#include <rmm/thrust_rmm_allocator.h>
  
 namespace {
 
@@ -111,16 +112,16 @@ gdf_column drop_nulls(gdf_column const &input) {
   }
 }
 
-uint32_t gdf_get_unique_ordered_indices(const cudf::table &key_columns,
-                                        gdf_index_type* unique_indices,
-                                        const bool keep_first)
+rmm::device_vector<gdf_index_type>
+get_unique_ordered_indices(const cudf::table& key_columns,
+                           const bool keep_first)
 {
   gdf_size_type ncols = key_columns.num_columns();
   gdf_size_type nrows = key_columns.num_rows();
-  gdf_context context;
 
   // sort only indices
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  gdf_context context;
   gdf_column sorted_indices_col;
   CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
         nullptr, nrows, GDF_INT32));
@@ -131,39 +132,58 @@ uint32_t gdf_get_unique_ordered_indices(const cudf::table &key_columns,
         &context));
 
   // extract unique indices 
-  rmm::device_vector<void*> d_cols(ncols);
-  rmm::device_vector<int> d_types(ncols, 0);
-  void** d_col_data = d_cols.data().get();
-  int* d_col_types = d_types.data().get();
+  rmm::device_vector<gdf_index_type> unique_indices(nrows);
 
   cudaStream_t stream;
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
 
-  auto device_input_table = device_table::create(key_columns);
+  auto device_input_table = device_table::create(key_columns, stream);
   auto comp = row_equality_comparator<true>(*device_input_table, true);
 
   gdf_index_type* result_end;
-  if(keep_first)
-  result_end = thrust::unique_copy(exec, 
-      sorted_indices.begin(),
-      sorted_indices.end(),
-      unique_indices,
-      comp
-      );
-  else
-    result_end = thrust::unique_copy(exec, 
-      sorted_indices.rbegin(),
-      sorted_indices.rend(),
-      unique_indices,
-      comp
-      );
+  if (keep_first) {
+      result_end = thrust::unique_copy(exec, 
+              sorted_indices.begin(),
+              sorted_indices.end(),
+              unique_indices.data().get(),
+              comp
+              );
+  } else {
+      result_end = thrust::unique_copy(exec, 
+              sorted_indices.rbegin(),
+              sorted_indices.rend(),
+              unique_indices.data().get(),
+              comp
+              );
+  }
   // reorder unique indices
-  thrust::sort(exec, unique_indices, result_end);
+  thrust::sort(exec, unique_indices.data().get(), result_end);
+  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
 
-  return thrust::distance(unique_indices, result_end);
+  return unique_indices;
 }
 
+cudf::table drop_duplicates(const cudf::table& input_table,
+                            const cudf::table& key_columns,
+                            const bool keep_first)
+{
+  //CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
+  //CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
+
+  if (0 == input_table.num_rows() || 
+      0 == input_table.num_columns() ||
+      0 == key_columns.num_columns() 
+      ) {
+    return cudf::table();
+  }
+  rmm::device_vector<gdf_index_type> unique_indices = get_unique_ordered_indices(key_columns, keep_first);
+  // Allocate output columns
+  cudf::table destination_table(unique_indices.size(), cudf::column_dtypes(input_table), true);
+  // run gather operation to establish new order
+  cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
+  return destination_table;
+}
 }  // namespace cudf

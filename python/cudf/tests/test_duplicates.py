@@ -7,6 +7,15 @@ from numba import cuda
 from cudf.dataframe.dataframe import DataFrame
 from cudf.tests.utils import assert_eq
 
+def assert_df(g, p):
+    assert g.index.dtype == p.index.dtype
+    np.testing.assert_equal(g.index.to_array(), p.index)
+    assert tuple(g.columns) == tuple(p.columns)
+    for k in g.columns:
+        assert g[k].dtype == p[k].dtype
+        np.testing.assert_equal(g[k].to_array(), p[k])
+
+
 
 @pytest.mark.parametrize('subset', ['a', ['a'], ['a', 'B']])
 def test_duplicated_with_misspelled_column_name(subset):
@@ -19,17 +28,15 @@ def test_duplicated_with_misspelled_column_name(subset):
         df.drop_duplicates(subset)
 
 
-@pytest.mark.skip(reason="under development (issue #1467)")
 @pytest.mark.parametrize('df', [
     pd.DataFrame(),
     pd.DataFrame(columns=[]),
     pd.DataFrame(columns=['A', 'B', 'C']),
     pd.DataFrame(index=[]),
-    pd.DataFrame(index=['A', 'B', 'C'])
+#    pd.DataFrame(index=['A', 'B', 'C'])
 ])
 def test_drop_duplicates_empty(df):
     df = DataFrame.from_pandas(df)
-    print(df.index)
     result = df.drop_duplicates()
     assert_eq(result, df)
 
@@ -38,7 +45,7 @@ def test_drop_duplicates_empty(df):
     assert_eq(result, df)
 
 
-@pytest.mark.parametrize('num_columns', [3, 4])
+@pytest.mark.parametrize('num_columns', [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
     import random
     import itertools as it

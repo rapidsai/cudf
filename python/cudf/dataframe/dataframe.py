@@ -36,7 +36,7 @@ from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
-from cudf.bindings.stream_compaction import get_unique_indices as cpp_get_unique_indices 
+from cudf.bindings.stream_compaction import apply_drop_duplicates as cpp_drop_duplicates 
 
 
 class DataFrame(object):
@@ -1003,13 +1003,19 @@ class DataFrame(object):
             raise KeyError(diff)
         subset_cols = [series._column for name, series in self._cols.items()
                         if name in subset]
-        new_index = cpp_get_unique_indices([self.index.as_column()], in_cols, subset_cols, keep)
+        out_cols, new_index = cpp_drop_duplicates([self.index.as_column()], in_cols, subset_cols, keep)
+        new_index = as_index(new_index)
+        if self.index.equals(new_index):
+            new_index = self.index
         if inplace:
-            outdf = self.set_index(as_index(new_index))
-            self._cols =  outdf._cols
+            self = self.set_index(new_index)
+            for k, new_col in zip(self._cols, out_cols):
+                self[k]._column = new_col
         else:
-            outdf = self.take(new_index)
-            #outdf = self.set_index(as_index(new_index))
+            outdf = DataFrame()
+            for k, new_col in zip(self._cols, out_cols):
+                outdf[k] = new_col
+            outdf = outdf.set_index(new_index)
             return outdf
 
     def pop(self, item):

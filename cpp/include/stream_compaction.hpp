@@ -73,20 +73,29 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  */
 gdf_column drop_nulls(gdf_column const &input);
 
-
-
 /**
-* @brief Filter only unique row indices and return the unique indices count
+* @brief Filter only unique row indices in original order
 *
 * @param key_columns cudf::table containing key columns to check duplicates rows
-* @param unique_indices pointer to index column of input table length
 * @param keep_first keep first or last entry as unique if duplicate is found
 *
-* @return 
+* @return unique_indices in order
 */
-uint32_t gdf_get_unique_ordered_indices(const cudf::table& key_columns,
-                                        gdf_index_type* unique_indices,
-                                        const bool keep_first);
+//rmm::device_vector<gdf_index_type> get_unique_ordered_indices(const cudf::table& key_columns,
+//                           const bool keep_first);
+
+/**
+ * @brief Create a new table without duplicate rows 
+ *
+ * @param input_table input table to copy only unique rows
+ * @param key_columns columns to consider to identigfy duplicate rows
+* @param keep_first keep first or last entry as unique if duplicate is found
+ *
+ * @return out_table with only unique rows
+ */
+cudf::table drop_duplicates(const cudf::table& input_table,
+                            const cudf::table& key_columns,
+                            const bool keep_first);
 }  // namespace cudf
 
 #endif

@@ -12,6 +12,7 @@ cdef extern from "table.hpp" namespace "cudf" nogil:
     
     cdef cppclass table:
 
+        table() except +
         table(gdf_column* cols[], gdf_size_type num_cols) except +
 
 
