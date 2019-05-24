@@ -529,7 +529,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   */
   // no error for empty input, just return empty output
   if (0 == input.num_rows() || 0 == input.num_columns()) 
-    return table{column_dtypes(input)};
+    return empty_like(input);
   
   CUDF_EXPECTS(std::all_of(input.begin(), input.end(), 
                            [](gdf_column const* c) { return c->data != nullptr; }), 
@@ -651,7 +651,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
 
     return output;
   }
-  return table(column_dtypes(input));
+  return empty_like(input);
 }
 
 /*
