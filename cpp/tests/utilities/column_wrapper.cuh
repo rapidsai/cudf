@@ -30,8 +30,8 @@
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
-
 #include <string>
+#include <initializer_list>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -94,6 +94,7 @@ struct column_wrapper {
 
   operator gdf_column&() { return the_column; };
   operator const gdf_column&() const { return the_column; };
+
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
@@ -174,24 +175,31 @@ struct column_wrapper {
    *
    * @param host_data The vector of data to use for the column
    *---------------------------------------------------------------------------**/
-  column_wrapper(std::vector<ColumnType> const& host_data) {
+  explicit column_wrapper(std::vector<ColumnType> const& host_data) {
     initialize_with_host_data(host_data);
   }
+
+  explicit column_wrapper(std::initializer_list<ColumnType> list)
+      : column_wrapper{std::vector<ColumnType>(list)} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using an already existing gdf_column*
    *
-   * Constructs a column_wrapper using a gdf_column*. The data in gdf_column* is 
+   * Constructs a column_wrapper using a gdf_column*. The data in gdf_column* is
    * copied over. The allocations in the original gdf_column* are not managed,
    * and wont be freed by the destruction of this column wrapper
    *
    * @param column The gdf_column* that contains the originating data
    *---------------------------------------------------------------------------**/
-  column_wrapper(const gdf_column & column) : data(static_cast<ColumnType*>(column.data), static_cast<ColumnType*>(column.data) + column.size)  {
-    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype, "data types do not match");
+  column_wrapper(const gdf_column& column)
+      : data(static_cast<ColumnType*>(column.data),
+             static_cast<ColumnType*>(column.data) + column.size) {
+    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype,
+                 "data types do not match");
 
     if (column.valid != nullptr) {
-      bitmask.assign(column.valid, column.valid + gdf_valid_allocation_size(column.size));
+      bitmask.assign(column.valid,
+                     column.valid + gdf_valid_allocation_size(column.size));
     }
     the_column.data = data.data().get();
     the_column.size = data.size();
@@ -326,9 +334,7 @@ struct column_wrapper {
     print_gdf_column(&the_column);
   }
 
-  gdf_size_type size() const{
-      return the_column.size;
-  }
+  gdf_size_type size() const { return the_column.size; }
 
   /**---------------------------------------------------------------------------*
    * @brief Functor for comparing if two elements between two gdf_columns are
@@ -467,7 +473,8 @@ struct column_wrapper {
 
   // If the column's bitmask does not exist (doesn't contain null values), then
   // the size of this vector will be zero
-  rmm::device_vector<gdf_valid_type> bitmask;  ///< Container for the column's bitmask
+  rmm::device_vector<gdf_valid_type>
+      bitmask;  ///< Container for the column's bitmask
 
   gdf_column the_column;
 };
