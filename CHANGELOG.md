@@ -61,6 +61,7 @@
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
 - PR #1825 cuDF: Multiaggregation Groupby Failures
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1849 Allow DataFrame support methods to pass arguments to the methods
 
 # cudf 0.7.2 (16 May 2019)
 
