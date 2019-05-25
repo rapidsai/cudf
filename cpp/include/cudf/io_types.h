@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
 
 /*
  * @brief Enumeration of supported input types for cudf reader interfaces
@@ -223,15 +225,11 @@ namespace cudf{
  *---------------------------------------------------------------------------**/
 struct json_read_arg{
   gdf_input_type source_type;               ///< In: Type of data source
-  const char    *source;                    ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t        buffer_size;                ///< In: If source_type is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise.
+  std::string   source;                     ///< In: If source_type is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
 
-  int           num_cols;                   ///< Number of columns in the dtype array
-  const char    **dtype;                    ///< Ordered List of data types
-
-  char          *compression;               ///< Compression type ("none", "infer", "gzip", "zip"); set to nullptr for uncompressed input
-
-  bool          lines;                      ///< Read the file as a json object per line
+  std::vector<std::string>  dtype;          ///< Ordered List of data types
+  std::string               compression;    ///< Compression type ("none", "infer", "gzip", "zip"); set to nullptr for uncompressed input
+  bool                      lines;          ///< Read the file as a json object per line
 
   size_t        byte_range_offset;          ///< offset of the byte range to read.
   size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.

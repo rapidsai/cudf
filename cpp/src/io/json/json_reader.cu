@@ -55,10 +55,9 @@ namespace cudf {
 
 using string_pair = std::pair<const char *, size_t>;
 
-cudf::table *read_json(json_read_arg const *args) {
+table *read_json(json_read_arg const *args) {
   // Check if the passed arguments are valid
   CUDF_EXPECTS(args != nullptr, "The args parameter cannot be null.\n");
-  CUDF_EXPECTS(args->source != nullptr, "Input source cannot be null.\n");
 
   JsonReader reader(args);
 
@@ -100,7 +99,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-cudf::table *JsonReader::parse() {
+table *JsonReader::parse() {
   ingestRawInput();
   CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
   CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size.\n");
@@ -130,8 +129,7 @@ cudf::table *JsonReader::parse() {
     out_cols[i] = columns_[i].release();
   }
 
-  auto *out_table = new cudf::table(out_cols.data(), out_cols.size());
-  return out_table;
+  return new table(out_cols.data(), out_cols.size());
 }
 
 /**---------------------------------------------------------------------------*
@@ -148,7 +146,7 @@ cudf::table *JsonReader::parse() {
  * @return string representing the compression type
  *---------------------------------------------------------------------------**/
 std::string inferCompressionType(const char *compression_arg, const char *filepath) {
-  if (compression_arg == nullptr || 0 == strcasecmp(compression_arg, "none")) {
+  if (0 == strcmp(compression_arg, "") || 0 == strcasecmp(compression_arg, "none")) {
     return "none";
   }
   if (0 != strcasecmp(compression_arg, "infer")) {
@@ -171,7 +169,7 @@ std::string inferCompressionType(const char *compression_arg, const char *filepa
 
 void JsonReader::ingestRawInput() {
   if (args_->source_type == gdf_csv_input_form::FILE_PATH) {
-    map_file_ = std::make_unique<MappedFile>(args_->source, O_RDONLY);
+    map_file_ = std::make_unique<MappedFile>(args_->source.c_str(), O_RDONLY);
     CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
     CUDF_EXPECTS(args_->byte_range_offset < map_file_->size(), "byte_range offset is too big for the input size.\n");
 
@@ -188,7 +186,7 @@ void JsonReader::ingestRawInput() {
 
     if (args_->byte_range_size != 0 && padded_byte_range_size < map_size) {
       // Need to make sure that w/ padding we don't overshoot the end of file
-      map_size = min(padded_byte_range_size + calculateMaxRowSize(args_->num_cols), map_size);
+      map_size = min(padded_byte_range_size + calculateMaxRowSize(args_->dtype.size()), map_size);
     }
 
     map_file_->map(map_size, map_offset);
@@ -196,15 +194,15 @@ void JsonReader::ingestRawInput() {
     // Ignore page padding for parsing purposes
     input_size_ = map_size - page_padding;
   } else if (args_->source_type == gdf_csv_input_form::HOST_BUFFER) {
-    input_data_ = args_->source + args_->byte_range_offset;
-    input_size_ = args_->buffer_size - args_->byte_range_offset;
+    input_data_ = args_->source.c_str() + args_->byte_range_offset;
+    input_size_ = args_->source.size() - args_->byte_range_offset;
   } else {
     CUDF_FAIL("Invalid input type");
   }
 }
 
 void JsonReader::decompressInput() {
-  const std::string compression_type = inferCompressionType(args_->compression, args_->source);
+  const std::string compression_type = inferCompressionType(args_->compression.c_str(), args_->source.c_str());
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid copying the whole file to the heap
     uncomp_data_ = input_data_;
@@ -750,19 +748,14 @@ void JsonReader::detectDataTypes(ColumnInfo *column_infos) {
 }
 
 void JsonReader::setDataTypes() {
-  if (args_->dtype != nullptr) {
-    CUDF_EXPECTS(args_->num_cols != 0, "Number of columns must be greated than zero.\n");
-    CUDF_EXPECTS(args_->num_cols == (int)column_names_.size(), "Need to specify the type of each column.\n");
-    std::vector<std::string> typestrings(args_->num_cols);
-    for (int col = 0; col < args_->num_cols; ++col) {
-      typestrings[col] = std::string(args_->dtype[col]);
-    }
+  if (!args_->dtype.empty()) {
+    CUDF_EXPECTS(args_->dtype.size() == column_names_.size(), "Need to specify the type of each column.\n");
     // Assume that the dtype is in dictionary format only if all elements contain a colon
-    const bool is_dict = std::all_of(typestrings.begin(), typestrings.end(),
-                                     [](std::string &s) { return std::find(s.begin(), s.end(), ':') != s.end(); });
+    const bool is_dict = std::all_of(args_->dtype.begin(), args_->dtype.end(),
+                                     [](const std::string &s) { return std::find(s.begin(), s.end(), ':') != s.end(); });
     if (is_dict) {
       std::map<std::string, gdf_dtype> col_type_map;
-      for (const auto &ts : typestrings) {
+      for (const auto &ts : args_->dtype) {
         const size_t colon_idx = ts.find(":");
         const std::string col_name(ts.begin(), ts.begin() + colon_idx);
         const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
@@ -770,11 +763,11 @@ void JsonReader::setDataTypes() {
       }
 
       // Using the map here allows O(n log n) complexity
-      for (int col = 0; col < args_->num_cols; ++col) {
+      for (size_t col = 0; col < args_->dtype.size(); ++col) {
         dtypes_.push_back(col_type_map[column_names_[col]]);
       }
     } else {
-      for (int col = 0; col < args_->num_cols; ++col) {
+      for (size_t col = 0; col < args_->dtype.size(); ++col) {
         dtypes_.push_back(convertStringToDtype(args_->dtype[col]));
       }
     }

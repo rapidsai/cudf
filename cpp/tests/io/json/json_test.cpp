@@ -132,14 +132,11 @@ TEST_F(gdf_json_test, BracketsLevels) {
 }
 
 TEST_F(gdf_json_test, BasicJsonLines) {
-  const char *types[] = {"int", "float64"};
   json_read_arg args{};
   args.source = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
   args.source_type = HOST_BUFFER;
-  args.buffer_size = strlen(args.source);
   args.lines = true;
-  args.dtype = types;
-  args.num_cols = 2;
+  args.dtype = {"int", "float64"};
 
   try {
     const std::unique_ptr<cudf::table> df(read_json(&args));
@@ -163,14 +160,11 @@ TEST_F(gdf_json_test, BasicJsonLines) {
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
-  const char *types[] = {"2:str", "0:int", "1:float64"};
   json_read_arg args{};
   args.source = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
-  args.buffer_size = strlen(args.source);
   args.lines = true;
-  args.dtype = types;
-  args.num_cols = 3;
+  args.dtype = {"2:str", "0:int", "1:float64"};
 
   try {
     const std::unique_ptr<cudf::table> df(read_json(&args));
@@ -200,7 +194,6 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
   json_read_arg args{};
   args.source = "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]";
   args.source_type = HOST_BUFFER;
-  args.buffer_size = strlen(args.source);
   args.lines = true;
 
   try {
@@ -235,7 +228,7 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname.c_str();
+  args.source = fname;
   args.source_type = FILE_PATH;
   args.lines = true;
 
@@ -268,7 +261,7 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname.c_str();
+  args.source = fname;
   args.source_type = FILE_PATH;
   args.lines = true;
   args.byte_range_offset = 11;
@@ -298,7 +291,7 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
   ASSERT_TRUE(checkFile(fname));
 
   json_read_arg args{};
-  args.source = fname.c_str();
+  args.source = fname;
   args.source_type = FILE_PATH;
   args.lines = true;
 
@@ -328,7 +321,6 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   args.source = "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
                 "{\"col1\":200, \"col2\":2.2, \"col3\":\"bbb\"}\n";
   args.source_type = HOST_BUFFER;
-  args.buffer_size = strlen(args.source);
   args.lines = true;
 
   try {

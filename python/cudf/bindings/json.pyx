@@ -10,6 +10,7 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.json cimport *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
+from libcpp.string cimport string
 
 from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.dataframe import DataFrame
@@ -56,9 +57,6 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
             for dt in dtype:
                 arr_dtypes.append(dt.encode())
 
-    cdef vector[const char*] vector_dtypes
-    vector_dtypes = arr_dtypes
-
     # Setup arguments
     cdef json_read_arg args = json_read_arg()
 
@@ -68,15 +66,12 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         source = path_or_buf.read()
         # check if StringIO is used
         if hasattr(source, 'encode'):
-            source_as_bytes = source.encode()
+            args.source = source.encode()
         else:
-            source_as_bytes = source
+            args.source = source
     else:
         # file path or a string
-        source_as_bytes = str(path_or_buf).encode()
-
-    source_data_holder = <char*>source_as_bytes
-    args.source = source_data_holder
+        args.source = str(path_or_buf).encode()
 
     if not is_file_like(path_or_buf) and os.path.exists(path_or_buf):
         if not os.path.isfile(path_or_buf):
@@ -84,23 +79,16 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         args.source_type = FILE_PATH
     else:
         args.source_type = HOST_BUFFER
-        args.buffer_size = len(source_as_bytes)
 
     if compression is None or compression == 'infer':
-        compression_bytes = <char*>NULL
+        args.compression = b""
     else:
-        compression = compression.encode()
-        compression_bytes = <char*>compression
+        args.compression = compression.encode()
 
     args.lines = lines
-    args.compression = compression_bytes
 
     if dtype is not None:
-        args.dtype = vector_dtypes.data()
-        args.num_cols = vector_dtypes.size()
-    else:
-        args.dtype = NULL
-        args.num_cols = 0
+        args.dtype = arr_dtypes
 
     if byte_range is not None:
         args.byte_range_offset = byte_range[0]

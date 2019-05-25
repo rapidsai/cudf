@@ -168,7 +168,7 @@ public:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  cudf::table *parse();
+  table *parse();
 };
 
 } // namespace cudf
