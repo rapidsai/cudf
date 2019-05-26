@@ -247,12 +247,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
             np.asarray([self._encode(val) for val in value],
                        dtype=replaced.dtype)
         )
-        if replaced.mask is None and value_col.mask is not None:
-            replaced = replaced.allocate_mask(keep_mask=True)
 
-        cpp_replace.replace(replaced, to_replace_col, value_col)
+        output = cpp_replace.replace(replaced, to_replace_col, value_col)
 
-        return self.replace(data=replaced.data)
+        return self.replace(data=output.data)
 
     def fillna(self, fill_value, inplace=False):
         """

@@ -9,6 +9,8 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.replace cimport *
+from cudf.dataframe.column import Column
 
 import numpy as np
 import pandas as pd
@@ -28,12 +30,15 @@ cpdef replace(col, old_values, new_values):
     cdef gdf_column* c_old_values = column_view_from_column(old_values)
     cdef gdf_column* c_new_values = column_view_from_column(new_values)
 
-    gdf_find_and_replace_all(c_col, c_old_values, c_new_values)
+    cdef gdf_column output
 
-    cpdef nnz
-    if col._mask:
-        nnz = count_nonzero_mask(col._mask.mem, len(col))
-        col._null_count = len(col)-nnz
+    with nogil:
+        output = find_and_replace_all(c_col[0], c_old_values[0], c_new_values[0])
+
+    data, mask = gdf_column_to_column_mem(&output)
+
+    return Column.from_mem_views(data, mask)
+
 
 cpdef replace_nulls(col, fill_values):
     """

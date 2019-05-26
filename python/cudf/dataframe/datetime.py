@@ -25,21 +25,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # only after we move to arrow
     # we also need to support other formats besides Date64
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
-    """
-    Parameters
-    ----------
-    data : Buffer
-        The code values
-    mask : Buffer; optional
-        The validity mask
-    null_count : int; optional
-        The number of null values in the mask.
-    dtype : np.dtype
-        Data type
-    """
 
-    def __init__(self, **kwargs):
-        super(DatetimeColumn, self).__init__(**kwargs)
+    def __init__(self, data, mask=None, null_count=None, dtype=None):
+        super(DatetimeColumn, self).__init__(data=data,
+                                             mask=mask,
+                                             null_count=null_count,
+                                             dtype=dtype)
         self._precision = 1e-3
         self._inverse_precision = 1e3
         self._pandas_conversion_factor = 1e9 * self._precision

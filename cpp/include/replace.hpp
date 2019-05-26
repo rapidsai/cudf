@@ -35,9 +35,9 @@ namespace cudf {
  * @return output gdf_column with the modified data
  *
  */
-gdf_column find_and_replace_all(gdf_column const &input_col,
-                                    const gdf_column &values_to_replace,
-                                    const gdf_column &replacement_values);
+gdf_column find_and_replace_all(const gdf_column &input_col,
+                                const gdf_column &values_to_replace,
+                                const gdf_column &replacement_values);
 
 
 } // namespace cudf

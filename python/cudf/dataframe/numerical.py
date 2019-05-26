@@ -308,12 +308,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         value_dtype = self.dtype if all_nan else None
         value_col = columnops.as_column(value, dtype=value_dtype)
         replaced = self.copy()
-        if self.mask is None and value_col.mask is not None:
-            replaced = replaced.allocate_mask(keep_mask=True)
         to_replace_col, value_col, replaced = numeric_normalize_types(
                to_replace_col, value_col, replaced)
-        cpp_replace.replace(replaced, to_replace_col, value_col)
-        return replaced
+        output = cpp_replace.replace(replaced, to_replace_col, value_col)
+        return output
 
     def fillna(self, fill_value, inplace=False):
         """
