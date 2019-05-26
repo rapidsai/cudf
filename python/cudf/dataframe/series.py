@@ -1005,7 +1005,8 @@ class Series(object):
             raise ValueError(
                 "Replacement lists must be"
                 "of same length."
-                "Expected {}, got {}.".format(len(to_replace),len(replacement))
+                "Expected {}, got {}.".format(len(to_replace),
+                                              len(replacement))
             )
 
         if is_dict_like(to_replace) or is_dict_like(replacement):
@@ -1013,7 +1014,8 @@ class Series(object):
 
         if isinstance(replacement, list):
             all_nan = replacement.count(None) == len(replacement)
-        result = self._column.find_and_replace(to_replace,replacement,all_nan)
+        result = self._column.find_and_replace(to_replace,
+                                               replacement, all_nan)
 
         return self._copy_construct(data=result)
 

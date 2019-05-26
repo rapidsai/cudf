@@ -2121,7 +2121,7 @@ class DataFrame(object):
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
         if not is_dict_like(replacement):
-            value = dict.fromkeys(self.columns, replacement)
+            replacement = dict.fromkeys(self.columns, replacement)
 
         for k in to_replace:
             outdf[k] = self[k].replace(to_replace[k], replacement[k])
