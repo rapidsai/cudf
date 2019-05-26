@@ -30,7 +30,8 @@ class DatetimeColumn(columnops.TypedColumnBase):
         super(DatetimeColumn, self).__init__(data=data,
                                              mask=mask,
                                              null_count=null_count,
-                                             dtype=dtype)
+                                             dtype=dtype
+                                             )
         self._precision = 1e-3
         self._inverse_precision = 1e3
         self._pandas_conversion_factor = 1e9 * self._precision
