@@ -300,17 +300,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
 
-    def find_and_replace(self, to_replace, value, all_nan):
+    def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = columnops.as_column(to_replace)
-        value_dtype = self.dtype if all_nan else None
-        value_col = columnops.as_column(value, dtype=value_dtype)
+        replacement_dtype = self.dtype if all_nan else None
+        replacement_col = columnops.as_column(replacement,
+                                              dtype=replacement_dtype)
         replaced = self.copy()
-        to_replace_col, value_col, replaced = numeric_normalize_types(
-               to_replace_col, value_col, replaced)
-        output = cpp_replace.replace(replaced, to_replace_col, value_col)
+        to_replace_col, replacement_col, replaced = numeric_normalize_types(
+               to_replace_col, replacement_col, replaced)
+        output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
         return output
 
     def fillna(self, fill_value, inplace=False):

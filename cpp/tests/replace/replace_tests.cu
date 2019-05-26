@@ -158,8 +158,8 @@ void test_replace(std::vector<T> const &input_column,
     const bit_mask::bit_mask_t *typed_new_valid =
                     reinterpret_cast<const bit_mask::bit_mask_t*>(replacement_values_valid.data());
 
-    const bool col_is_nullable = (typed_expected_valid != nullptr);
-    const bool new_is_nullable = (typed_new_valid != nullptr);
+    const bool input_has_nulls = (typed_expected_valid != nullptr);
+    const bool replacement_has_nulls = (typed_new_valid != nullptr);
 
     for(size_t i = 0; i < values_to_replace_column.size(); i++)
     {
@@ -168,11 +168,11 @@ void test_replace(std::vector<T> const &input_column,
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
-        if((!col_is_nullable || bit_mask::is_valid(typed_expected_valid, k))
+        if(((!input_has_nulls) || bit_mask::is_valid(typed_expected_valid, k))
             && (element == values_to_replace_column[i])) {
           toBeReplaced = true;
           isReplaced[k] = toBeReplaced;
-          if(new_is_nullable && !bit_mask::is_valid(typed_new_valid, i)){
+          if(replacement_has_nulls && !bit_mask::is_valid(typed_new_valid, i)){
               if(print)std::cout << "clearing bit at: "<<k<<"\n";
               bit_mask::clear_bit_unsafe(typed_expected_valid, (int)k);
             }
