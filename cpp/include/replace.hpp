@@ -20,26 +20,24 @@
 #include "cudf.h"
 #include "types.hpp"
 
-// Forward declaration
-typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 
 /**
- * @brief Replace elements from `col` according to the mapping `old_values` to
+ * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col`
- *        with `new_values[i]` and return a new gdf_column `out_col`.
+ *        with `new_values[i]` and return a new gdf_column `output`.
  *
  * @param[in] col gdf_column with the data to be modified
- * @param[in] old_values gdf_column with the old values to be replaced
- * @param[in] new_values gdf_column with the new values
+ * @param[in] values_to_replace gdf_column with the old values to be replaced
+ * @param[in] replacement_values gdf_column with the new replacement values
  *
- * @return gdf_column upon successful completion
+ * @return output gdf_column with the modified data
  *
  */
-gdf_column gdf_find_and_replace_all(gdf_column const &input_col,
-                                    const gdf_column &old_values,
-                                    const gdf_column &new_values);
+gdf_column find_and_replace_all(gdf_column const &input_col,
+                                    const gdf_column &values_to_replace,
+                                    const gdf_column &replacement_values);
 
 
 } // namespace cudf
