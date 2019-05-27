@@ -2438,3 +2438,36 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
+
+template <typename T>
+struct gdf_logical_test : public GdfTest {};
+
+using type_list = ::testing::Types<
+	int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
+
+TYPED_TEST_CASE(gdf_logical_test, type_list);
+
+TYPED_TEST(gdf_logical_test, LogicalNot) {
+	const int colSize = 1000;
+
+	// init input vector
+	std::vector<TypeParam> h_input_v(colSize);
+	initialize_vector(h_input_v, colSize, 10, false);
+
+	auto inputCol = cudf::test::column_wrapper<TypeParam>{h_input_v}; 
+	auto outputCol = cudf::test::column_wrapper<cudf::bool8>{colSize};
+
+	std::vector<cudf::bool8> h_expect_v{colSize};
+
+	// compute NOT
+	for (gdf_size_type i = 0; i < colSize; ++i)
+		h_expect_v[i] = static_cast<cudf::bool8>( !h_input_v[i] );
+
+	// Use vector to build expected output
+	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
+
+	auto error = gdf_unary_math(inputCol, outputCol, GDF_NOT);
+	EXPECT_EQ(error, GDF_SUCCESS);
+
+	EXPECT_EQ(expectCol, outputCol);
+}
