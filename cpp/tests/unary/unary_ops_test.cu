@@ -112,7 +112,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to f32
 	{
 		// Output column
-		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize, true);
+		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize);
 		auto results = cudf::test::column_wrapper<float>(std::vector<float>{
 			-1528.0,
 			1.0,
@@ -127,7 +127,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
@@ -142,7 +142,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i64 - upcast
 	{
 		// Output column
-		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize, true);
+		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize);
 		auto results = cudf::test::column_wrapper<int64_t>(std::vector<int64_t>{
 			-1528,
 			1,
@@ -158,7 +158,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32 - downcast
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
@@ -174,7 +174,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			17716,
@@ -190,7 +190,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{-1528},
 			cudf::date32{1},
@@ -206,7 +206,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to timestamp
 	{
 		// Output column
-		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize, true);
+		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::timestamp>(std::vector<cudf::timestamp>{
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
 			cudf::timestamp{1528935599999000}, // '2018-06-14 00:19:59.999000'
@@ -224,7 +224,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{17696}, // '2018-06-14'
 			cudf::date32{17696}, // '2018-06-14'
