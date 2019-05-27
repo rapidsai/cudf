@@ -126,7 +126,7 @@ def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
     result = cubinop(sr1, sr2)
     expect = binop(arr1, arr2)
 
-    assert_eq(result, expect)
+    utils.assert_eq(result, expect)
 
 
 _cmpops = [
