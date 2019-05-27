@@ -36,7 +36,8 @@
 #include <numeric>
 #include <iterator>
 
-#include <utilities/cudf_utils.h> // need for CUDA_HOST_DEVICE_CALLABLE
+#include <bitmask/bit_mask.cuh>         // need for bitmask
+#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/device_atomics.cuh> // need for device operators.
 
 #include <tests/utilities/column_wrapper.cuh>
@@ -76,16 +77,20 @@ struct ColumnData<T, false>{
 template<typename T>
 struct ColumnData<T, true>{
     const T *data;
-    const gdf_valid_type *valid;
+    const bit_mask::bit_mask_t *valid;
     T identity;
 
     __device__ __host__
-    ColumnData(T *_data, gdf_valid_type *_valid, T _identity)
+    ColumnData(T *_data, bit_mask::bit_mask_t *_valid, T _identity)
     : data(_data), valid(_valid), identity(_identity){};
 
     __device__ __host__
+    ColumnData(T *_data, gdf_valid_type*_valid, T _identity)
+    : ColumnData(_data, reinterpret_cast<bit_mask::bit_mask_t*>(_valid), _identity) {};
+
+    __device__ __host__
     T at(gdf_index_type id) const {
-        return (gdf_is_valid(valid, id))? data[id] : identity;
+        return (bit_mask::is_valid(valid, id))? data[id] : identity;
     };
 };
 
@@ -100,9 +105,12 @@ struct ColumnDataSquare : public ColumnData<T, nulls_present>
 
     // constructor when nulls_present == true
     __device__ __host__
-    ColumnDataSquare(T *_data, gdf_valid_type *_valid, T _identity)
+    ColumnDataSquare(T *_data, bit_mask::bit_mask_t  *_valid, T _identity)
     : ColumnData<T, true>(_data, _valid, _identity){};
 
+    __device__ __host__
+    ColumnDataSquare(T *_data, gdf_valid_type*_valid, T _identity)
+    : ColumnDataSquare(_data, reinterpret_cast<bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     __device__ __host__
     T at(gdf_index_type id) const {
@@ -123,22 +131,7 @@ struct ColumnDataOutputs
 
 // ---------------------------------------------------------------------------
 
-void gen_nullbitmap(std::vector<gdf_valid_type>& v, std::vector<bool>& host_bools)
-{
-    int length = host_bools.size();
-    auto n_bytes = gdf_valid_allocation_size(length);
-
-    v.resize(n_bytes);
-    // TODO: generic
-    for(int i=0; i<length; i++)
-    {
-        int pos = i/8;
-        int bit_index = i%8;
-        if( bit_index == 0)v[pos] = 0;
-        if( host_bools[i] )v[pos] += (1 << bit_index);
-    }
-}
-
+// __host__ option is required for thrust::host operation
 struct HostDeviceSum {
     template<typename T>
     __device__ __host__
@@ -149,7 +142,6 @@ struct HostDeviceSum {
     template<typename T>
     static constexpr T identity() { return T{0}; }
 };
-
 
 // ---------------------------------------------------------------------------
 // column_input_iterator
@@ -297,38 +289,32 @@ TYPED_TEST(IteratorTest, null_iterator)
 {
     using T = int32_t;
     T init = T{0};
-
-    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
-    thrust::device_vector<T> dev_array(hos_array);
-
     std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
-    std::vector<gdf_valid_type> host_nulls;
-    gen_nullbitmap(host_nulls, host_bools);
-    thrust::device_vector<gdf_valid_type> dev_nulls(host_nulls);
 
-    EXPECT_EQ(hos_array.size(), host_bools.size());
+    // create a column with bool vector
+    cudf::test::column_wrapper<T> w_col({0, 6, 0, -14, 13, 64, -13, -20, 45},
+        [&](gdf_index_type row) { return host_bools[row]; });
+
+    // copy back data and valid arrays
+    auto hos = w_col.to_host();
 
     // calculate the expected value by CPU.
-    std::vector<T> replaced_array(hos_array.size());
-    std::transform(hos_array.begin(), hos_array.end(), host_bools.begin(),
+    std::vector<T> replaced_array(w_col.size());
+    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
+    // CPU test
+    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
-    // device code test
-    ColumnData<T> col(dev_array.data().get(), dev_nulls.data().get(), init);
+    // GPU test
+    ColumnData<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     column_input_iterator<T, ColumnData<T>> it_dev(col);
-
-    // reduction using thrust
-    this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
-    // reduction using cub
-    this->iterator_test_cub(expected_value, it_dev, dev_array.size());
-
-    // host reduction using thrust
-    ColumnData<T> col_hos(hos_array.data(), host_nulls.data(), init);
-    column_input_iterator<T, ColumnData<T>> it_hos(col_hos);
-    this->iterator_test_thrust_host(expected_value, it_hos, dev_array.size());
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
     std::cout << "test done." << std::endl;
 }
@@ -339,66 +325,32 @@ TYPED_TEST(IteratorTest, null_iterator_square)
 {
     using T = int32_t;
     T init = T{0};
-
-    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
-    EXPECT_EQ(hos_array.size(), host_bools.size());
 
-#if 1
-    thrust::device_vector<T> dev_array(hos_array);
-    std::vector<gdf_valid_type> host_nulls;
-    gen_nullbitmap(host_nulls, host_bools);
-    thrust::device_vector<gdf_valid_type> dev_nulls(host_nulls);
-
-    EXPECT_EQ(hos_array.size(), host_bools.size());
-
-    // calculate the expected value by CPU.
-    std::vector<T> replaced_array(hos_array.size());
-    std::transform(hos_array.begin(), hos_array.end(), host_bools.begin(),
-        replaced_array.begin(), [&](T x, bool b) { return (b)? x*x : init; } );
-    T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
-    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-    if(1)
-    {
-        ColumnDataSquare<T> col(hos_array.data(), host_nulls.data(), init);
-        column_input_iterator<T, ColumnDataSquare<T>> it_hos(col);
-        this->iterator_test_thrust_host(expected_value, it_hos, dev_array.size());
-    }
-
-    ColumnDataSquare<T> col(dev_array.data().get(), dev_nulls.data().get(), init);
-    column_input_iterator<T, ColumnDataSquare<T>> it_dev(col);
-
-    // reduction using thrust
-    this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
-    // reduction using cub
-    this->iterator_test_cub(expected_value, it_dev, dev_array.size());
-
-    std::cout << "test done." << std::endl;
-#else
     // create a column with bool vector
-    cudf::test::column_wrapper<T> w_col(hos_array,
+    cudf::test::column_wrapper<T> w_col({0, 6, 0, -14, 13, 64, -13, -20, 45},
         [&](gdf_index_type row) { return host_bools[row]; });
 
+    // copy back data and valid arrays
+    auto hos = w_col.to_host();
+
     // calculate the expected value by CPU.
-    std::vector<T> replaced_array(hos_array.size());
-    std::transform(hos_array.begin(), hos_array.end(), host_bools.begin(),
+    std::vector<T> replaced_array(w_col.size());
+    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x*x : init; } );
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
+    // CPU test
+    ColumnDataSquare<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnDataSquare<T>> it_hos(col_host);
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
+
+    // GPU test
     ColumnDataSquare<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     column_input_iterator<T, ColumnDataSquare<T>> it_dev(col);
-
-    // reduction using thrust
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
-    // reduction using cub
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-    std::cout << "test done." << std::endl;
-#endif
-
-
 }
 
 
@@ -456,3 +408,7 @@ TYPED_TEST(IteratorTest, group_by_iterator_null)
     // TBD. it should be possible.
 }
 
+TYPED_TEST(IteratorTest, large_size_reduction)
+{
+    // TBD.
+}
