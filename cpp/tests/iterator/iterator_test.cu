@@ -59,6 +59,16 @@
 
 
 // --------------------------------------------------------------------------------------------------------
+// structs of output for column_input_iterator
+
+template<typename T_output>
+struct ColumnDataOutputs
+{
+    T_output value;
+    T_output value_squared;
+    gdf_index_type count;
+};
+
 // structs for column_input_iterator
 template<typename T, bool nulls_present=true>
 struct ColumnData;
@@ -84,12 +94,12 @@ struct ColumnData<T, true>{
     T identity;
 
     __device__ __host__
-    ColumnData(T *_data, bit_mask::bit_mask_t *_valid, T _identity)
+    ColumnData(const T *_data, const bit_mask::bit_mask_t *_valid, T _identity)
     : data(_data), valid(_valid), identity(_identity){};
 
     __device__ __host__
-    ColumnData(T *_data, gdf_valid_type*_valid, T _identity)
-    : ColumnData(_data, reinterpret_cast<bit_mask::bit_mask_t*>(_valid), _identity) {};
+    ColumnData(const T *_data, const gdf_valid_type*_valid, T _identity)
+    : ColumnData(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     __device__ __host__
     T at(gdf_index_type id) const {
@@ -108,12 +118,12 @@ struct ColumnDataSquare : public ColumnData<T, nulls_present>
 
     // constructor when nulls_present == true
     __device__ __host__
-    ColumnDataSquare(T *_data, bit_mask::bit_mask_t  *_valid, T _identity)
+    ColumnDataSquare(const T *_data, const bit_mask::bit_mask_t  *_valid, T _identity)
     : ColumnData<T, true>(_data, _valid, _identity){};
 
     __device__ __host__
-    ColumnDataSquare(T *_data, gdf_valid_type*_valid, T _identity)
-    : ColumnDataSquare(_data, reinterpret_cast<bit_mask::bit_mask_t*>(_valid), _identity) {};
+    ColumnDataSquare(const T *_data, const gdf_valid_type*_valid, T _identity)
+    : ColumnDataSquare(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     __device__ __host__
     T at(gdf_index_type id) const {
@@ -122,29 +132,6 @@ struct ColumnDataSquare : public ColumnData<T, nulls_present>
     };
 };
 
-
-template<typename T_output>
-struct ColumnDataOutputs
-{
-    T_output value;
-    T_output value_squared;
-    gdf_index_type count;
-};
-
-
-// ---------------------------------------------------------------------------
-
-// __host__ option is required for thrust::host operation
-struct HostDeviceSum {
-    template<typename T>
-    __device__ __host__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
 
 // ---------------------------------------------------------------------------
 // column_input_iterator
@@ -198,8 +185,34 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     }
 };
 
+
+
 // ---------------------------------------------------------------------------
 
+// __host__ option is required for thrust::host operation
+struct HostDeviceSum {
+    template<typename T>
+    __device__ __host__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs + rhs;
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
+
+
+template <typename T>
+T random_int(T min, T max)
+{
+  static unsigned seed = 13377331;
+  static std::mt19937 engine{seed};
+  static std::uniform_int_distribution<T> uniform{min, max};
+
+  return uniform(engine);
+}
+
+// ---------------------------------------------------------------------------
 
 template <typename T>
 struct IteratorTest : public GdfTest
@@ -407,16 +420,6 @@ TYPED_TEST(IteratorTest, group_by_iterator_null)
 
 
     // TBD. it should be possible.
-}
-
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
 }
 
 TYPED_TEST(IteratorTest, large_size_reduction)
