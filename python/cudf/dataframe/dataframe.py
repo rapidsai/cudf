@@ -1565,8 +1565,6 @@ class DataFrame(object):
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
                                      how, method=method)
 
-        import pdb
-        pdb.set_trace()
         # Output conversion - take cols and valids from `cpp_join` and
         # combine into a DataFrame()
         df = DataFrame()
