@@ -80,6 +80,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
+    def unary_logic_op(self, unaryop):
+        return numeric_column_unaryop(self, op=unaryop,
+                                      out_dtype=np.bool_)
+
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
 

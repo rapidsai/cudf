@@ -24,6 +24,7 @@ cdef extern from "cudf.h" nogil:
         size_t buffer_size
         const char **use_cols
         int use_cols_len
+        int stripe
         int skip_rows
         int num_rows
 

@@ -20,25 +20,28 @@ _COMPILED_OPS = [
     'le', 'ge', 'and', 'or', 'xor'
 ]
 
-_BINARY_OP = {}
-_BINARY_OP['add'] = GDF_ADD
-_BINARY_OP['sub'] = GDF_SUB
-_BINARY_OP['mul'] = GDF_MUL
-_BINARY_OP['div'] = GDF_DIV
-_BINARY_OP['truediv'] = GDF_TRUE_DIV
-_BINARY_OP['floordiv'] = GDF_FLOOR_DIV
-_BINARY_OP['mod'] = GDF_MOD
-_BINARY_OP['pow'] = GDF_POW
-_BINARY_OP['eq'] = GDF_EQUAL
-_BINARY_OP['ne'] = GDF_NOT_EQUAL
-_BINARY_OP['lt'] = GDF_LESS
-_BINARY_OP['gt'] = GDF_GREATER
-_BINARY_OP['le'] = GDF_LESS_EQUAL
-_BINARY_OP['ge'] = GDF_GREATER_EQUAL
-_BINARY_OP['and'] = GDF_BITWISE_AND
-_BINARY_OP['or'] = GDF_BITWISE_OR
-_BINARY_OP['xor'] = GDF_BITWISE_XOR
-
+# TODO: convert to single declaration of dictionary
+_BINARY_OP = {
+    'add'       : GDF_ADD,
+    'sub'       : GDF_SUB,
+    'mul'       : GDF_MUL,
+    'div'       : GDF_DIV,
+    'truediv'   : GDF_TRUE_DIV,
+    'floordiv'  : GDF_FLOOR_DIV,
+    'mod'       : GDF_MOD,
+    'pow'       : GDF_POW,
+    'eq'        : GDF_EQUAL,
+    'ne'        : GDF_NOT_EQUAL,
+    'lt'        : GDF_LESS,
+    'gt'        : GDF_GREATER,
+    'le'        : GDF_LESS_EQUAL,
+    'ge'        : GDF_GREATER_EQUAL,
+    'and'       : GDF_BITWISE_AND,
+    'or'        : GDF_BITWISE_OR,
+    'xor'       : GDF_BITWISE_XOR,
+    'l_and'     : GDF_LOGICAL_AND,
+    'l_or'      : GDF_LOGICAL_OR,
+}
 
 cdef apply_jit_op_v_v(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
     """
