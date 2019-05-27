@@ -222,10 +222,6 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
 
-    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
-
-    cdef gdf_error get_column_byte_width(gdf_column * col, int * width) except +
-
     cdef gdf_error gdf_filter(size_t nrows,
                  gdf_column* cols,
                  size_t ncols,
