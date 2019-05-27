@@ -217,9 +217,10 @@ void BooleanMaskTableTest(cudf::table const &source,
   for (int c = 0; c < result.num_columns(); c++) {
     gdf_column *res = result.get_column(c);
     gdf_column *exp = result.get_column(c);
-    EXPECT_TRUE(gdf_equal_columns(res, exp));
+    bool columns_equal{false};
+    EXPECT_TRUE(columns_equal = gdf_equal_columns(*res, *exp));
     
-    if (!gdf_equal_columns(res, exp)) {
+    if (!columns_equal) {
       std::cout << "expected\n";
       print_gdf_column(exp);
       std::cout << exp->null_count << "\n";
