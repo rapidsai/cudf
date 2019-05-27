@@ -6,7 +6,6 @@ import inspect
 import random
 from collections import OrderedDict
 from collections.abc import Sequence, Mapping
-from copy import copy
 import logging
 import warnings
 import numbers
@@ -1511,8 +1510,9 @@ class DataFrame(object):
             if right_on == left_on:
                 on = right_on
             else:
-                raise NotImplementedError("left_on='x', right_on='y' not supported"
-                                          "in CUDF at this time.")
+                raise NotImplementedError(
+                    "left_on='x', right_on='y' not supported"
+                    "in CUDF at this time.")
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and \
@@ -1559,7 +1559,8 @@ class DataFrame(object):
                 col_cats[f_n] = rhs[name].cat.categories
 
         # Compute merge
-        cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how, method=method)
+        cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
+                                     method=method)
 
         # Output conversion - take cols and valids from `cpp_join` and
         # combine into a DataFrame()
