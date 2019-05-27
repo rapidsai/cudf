@@ -405,7 +405,7 @@ TYPED_TEST(PIPTest, ColinearPolygonWithColinearPoint)
 */
 TYPED_TEST(PIPTest, PolygonIntersectsWithItselfPassed)
 {
-    this->set_initialize( {10, -10, 10, -10, 10}, {-10, 10, 10, -10, -10}, {0, 0, 0}, {20, -8, 20} );
+    this->set_initialize( {10, -10, 10, -10, 10}, {-10, 10, 10, -10, -10}, {0, 0, 0}, {-20, -8, 20} );
 
     std::vector<int8_t> reference_pip_result{0, 1, 0};
     std::vector<int8_t> gdf_pip_result = this->compute_gdf_pip();
@@ -437,6 +437,14 @@ TYPED_TEST(PIPTest, PolygonIntersectsWithItselfPassed)
 ** For this more complex polygon threre is a problem with the algorithm
 ** The algorithm consider q3 as inside which es wrong.
 ** The real ouptut must be: [1, 1, 0, 1, 0]
+** 
+** This algorithm was designed to non convex polygon.
+** Also, support some degenerate cases as before TESTS.
+** Unfortunately the algorithm doesn't work well for polygons that
+** that intersects with itself as this TEST demonstrate.
+**
+** So for the point_in_polygon algorithm the polygon must not has intersections with itself.
+**
 */
 TYPED_TEST(PIPTest, PolygonIntersectsWithItselfNotPassed)
 {

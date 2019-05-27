@@ -23,7 +23,10 @@
 namespace cudf {
 
 /** 
- * @brief Determine whether or not coordinates (query points) are completely inside a static polygon.
+ * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
+ * 
+ * Note: The polygon must not have holes or intersect with itself, but it is not
+ * required to be convex.
  * 
  * The polygon is defined by a set of coordinates (latitudes and longitudes),
  * where the first and last coordinates must have the same value (closed).
@@ -33,9 +36,6 @@ namespace cudf {
  * If a query point is colinear with two contiguous polygon coordinates
  * then this query point isn't inside.
  * 
- * The polygon must not have holes or intersect with itself, but it is not
- * required to be convex.
- * 
  * polygon_latitudes and polygon_longitudes must have equal size.
  * 
  * point_latitudes and point_longitudes must have equal size.
@@ -44,15 +44,15 @@ namespace cudf {
  *
  * @param[in] polygon_latitudes: column with latitudes of a polygon
  * @param[in] polygon_longitudes: column with longitudes of a polygon
- * @param[in] point_latitudes: column with latitudes of query points
- * @param[in] point_longitudes: column with longitudes of query points
+ * @param[in] query_point_latitudes: column with latitudes of query points
+ * @param[in] query_point_longitudes: column with longitudes of query points
  *
  * @returns gdf_column of type GDF_BOOL8 indicating whether the i-th query point is inside (true) or not (false)
  */
 gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
                              gdf_column const & polygon_longitudes,
-                             gdf_column const & point_latitudes,
-                             gdf_column const & point_longitudes );
+                             gdf_column const & query_point_latitudes,
+                             gdf_column const & query_point_longitudes );
 
 }  // namespace cudf
 
