@@ -499,13 +499,8 @@ def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
-    if kwargs.get('left_on') and kwargs.get('right_on'):
-        with pytest.raises(NotImplementedError) as raises:
-            gd_merge = gleft.merge(gright, **kwargs)
-        raises.match("left_on='x', right_on='y' not supported")
-    else:
-        gd_merge = gleft.merge(gright, **kwargs)
-        assert_eq(pd_merge, gd_merge)
+    gd_merge = gleft.merge(gright, **kwargs)
+    assert_eq(pd_merge, gd_merge)
 
 
 @pytest.mark.parametrize('kwargs', [
@@ -521,13 +516,8 @@ def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
-    if kwargs.get('left_on') and kwargs.get('right_on'):
-        with pytest.raises(NotImplementedError) as raises:
-            gd_merge = gleft.merge(gright, **kwargs)
-        raises.match("left_on='x', right_on='y' not supported")
-    else:
-        gd_merge = gleft.merge(gright, **kwargs)
-        assert_eq(pd_merge, gd_merge)
+    gd_merge = gleft.merge(gright, **kwargs)
+    assert_eq(pd_merge, gd_merge)
 
 
 def test_indicator():

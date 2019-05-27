@@ -1477,6 +1477,8 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        tmp_columns = []  # Columns NOT to include in the final result
+
         # Let's find the column to do the merge on.
         # Since `cpp_join.join()` doesn't take indexes
         # we insert indexes as regular columns
@@ -1510,9 +1512,18 @@ class DataFrame(object):
             if right_on == left_on:
                 on = right_on
             else:
-                raise NotImplementedError(
-                    "left_on='x', right_on='y' not supported"
-                    "in CUDF at this time.")
+                on = []
+                # We create a temporary column with an unique name when
+                # the name of `left_on` and `right_on` does not match.
+                for i, (lname, rname) in enumerate(zip(left_on, right_on)):
+                    if lname != rname:
+                        tmp_name = lhs.LEFT_RIGHT_INDEX_NAME + str(i)
+                        lhs[tmp_name] = lhs[lname]
+                        rhs[tmp_name] = rhs[rname]
+                        on.append(tmp_name)
+                        tmp_columns.append(tmp_name)
+                    else:
+                        on.append(lname)
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and \
@@ -1576,7 +1587,8 @@ class DataFrame(object):
         for idc, name in enumerate(lhs.columns):
             if name in on:
                 # on columns returned first from `cpp_join`
-                for idx in range(len(on)):
+                for idx in [i for i in range(len(on)) if
+                            on[i] not in tmp_columns]:
                     if on[idx] == name:
                         on_idx = idx + gap
                         on_count = on_count + 1
