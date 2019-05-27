@@ -23,7 +23,7 @@ import nvstrings
 
 
 @cython.boundscheck(False)
-cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
+cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     """
       Call gdf join for full outer, inner and left joins.
     """
@@ -39,7 +39,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef vector[int] left_idx
     cdef vector[int] right_idx
 
-    on = list(set(left_on + right_on))
     num_cols_to_join = len(on)
     result_num_cols = len(col_lhs) + len(col_rhs) - num_cols_to_join
 
@@ -55,13 +54,13 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         if col.has_null_mask:
             mask_size = col.nullmask.size
 
-        if name not in left_on:
+        if name not in on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
             result_col_names.append(name)
 
-    for name in list(set(left_on + right_on)):
+    for name in on:
         # TODO: Need careful type promotion here between lhs and rhs
-        if name in left_on:
+        if name in on:
             dtype = col_lhs[name]._column.dtype
         else:
             dtype = col_rhs[name]._column.dtype
@@ -78,7 +77,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
         if col.has_null_mask:
             mask_size = col.nullmask.size
 
-        if name not in right_on:
+        if name not in on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
             result_col_names.append(name)
 

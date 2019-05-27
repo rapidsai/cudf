@@ -1225,7 +1225,6 @@ class DataFrame(object):
         # Perform out = data[index] for all columns
         for k in self.columns:
             df[k] = self[k].take(sorted_indices.to_gpu_array())
-        df.index = self.index.take(sorted_indices.to_gpu_array())
         return df
 
     def argsort(self, ascending=True, na_position='last'):
@@ -1451,20 +1450,6 @@ class DataFrame(object):
         else:
             lsuffix, rsuffix = suffixes
 
-        if left_on and right_on and left_on != right_on:
-            raise NotImplementedError("left_on='x', right_on='y' not supported"
-                                      "in CUDF at this time.")
-
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
-        if on:
-            on = copy(on)
-        if left_on:
-            left_on = copy(left_on)
-        if right_on:
-            right_on = copy(right_on)
-
-        # Early termination Error checking
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -1475,27 +1460,8 @@ class DataFrame(object):
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-        same_names = set(lhs.columns) & set(rhs.columns)
-        if same_names and not (lsuffix or rsuffix):
-            raise ValueError('there are overlapping columns but '
-                             'lsuffix and rsuffix are not defined')
 
-        def fix_name(name, suffix):
-            if name in same_names:
-                return "{}{}".format(name, suffix)
-            return name
-
-        if left_index and right_index:
-            on = lhs.LEFT_RIGHT_INDEX_NAME
-            lhs[on] = lhs.index
-            rhs[on] = rhs.index
-            self._original_left_index_name = lhs.index.name
-        if on is None and left_on is None and right_on is None:
-            on = list(same_names)
-            if len(on) == 0:
-                raise ValueError('No common columns to perform merge on')
-
-        # Essential parameters
+        # Making sure that the "on" arguments are list of column names
         if on:
             on = [on] if isinstance(on, str) else list(on)
         if left_on:
@@ -1504,8 +1470,52 @@ class DataFrame(object):
             right_on = ([right_on] if isinstance(right_on, str)
                         else list(right_on))
 
+        lhs = self.copy(deep=False)
+        rhs = right.copy(deep=False)
+
+        same_names = set(lhs.columns) & set(rhs.columns)
+        if same_names and not (lsuffix or rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        # Let's find the column to do the merge on.
+        # Since `cpp_join.join()` doesn't take indexes
+        # we insert indexes as regular columns
+        if left_index and right_index:
+            on = [lhs.LEFT_RIGHT_INDEX_NAME]
+            lhs[on[0]] = lhs.index
+            rhs[on[0]] = rhs.index
+            print(lhs)
+        elif on:
+            if left_on or right_on:
+                raise ValueError('Can only pass argument "on" OR "left_on" '
+                                 'and "right_on", not a combination of both.')
+        elif left_index and right_on:
+            if len(right_on) != 1:
+                raise ValueError('right_on should be a single column')
+            on = right_on
+            lhs[on[0]] = lhs.index
+        elif right_index and left_on:
+            if len(left_on) != 1:
+                raise ValueError('left_on should be a single column')
+            on = left_on
+            rhs[on[0]] = rhs.index
+        elif not (left_on or right_on):
+            on = list(same_names)
+            if len(on) == 0:
+                raise ValueError('No common columns to perform merge on')
+        else:
+            if len(right_on) != len(left_on):
+                raise ValueError('right_on and left_on must have same '
+                                 'number of columns')
+            if right_on == left_on:
+                on = right_on
+            else:
+                raise NotImplementedError("left_on='x', right_on='y' not supported"
+                                          "in CUDF at this time.")
+
         # Pandas inconsistency warning
-        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
+        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and \
                 set(rhs.columns).intersection(lhs.columns):
             logging.warning(
                     "Pandas and CUDF column ordering may not match for "
@@ -1514,24 +1524,8 @@ class DataFrame(object):
 
         # Column prep - this should be simplified
         col_cats = {}
-
-        for name in left_on or []:
+        for name in on or []:
             if pd.api.types.is_categorical_dtype(lhs[name]):
-                lcats = lhs[name].cat.categories
-                rcats = rhs[name].cat.categories
-                if how in ['inner', 'outer']:
-                    # Do the join using the union of categories from both side.
-                    # Adjust for inner joins afterwards
-                    cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    rhs[name] = rhs[name]._column.as_numerical
-                col_cats[name] = cats
-        for name in right_on or []:
-            if pd.api.types.is_categorical_dtype(rhs[name]):
                 lcats = lhs[name].cat.categories
                 rcats = rhs[name].cat.categories
                 if how == 'left':
@@ -1549,6 +1543,12 @@ class DataFrame(object):
                                  .fillna(-1))
                     rhs[name] = rhs[name]._column.as_numerical
                 col_cats[name] = cats
+
+        # Fix column names by appending `suffixes`
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, lsuffix)
@@ -1558,31 +1558,18 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = rhs[name].cat.categories
 
-        if left_index and right_on:
-            lhs[right_on[0]] = lhs.index
-            left_on = right_on
-        elif right_index and left_on:
-            rhs[left_on[0]] = rhs.index
-            right_on = left_on
-
-        if on:
-            left_on = on
-            right_on = on
-
         # Compute merge
-        cols, valids = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
-                                     how, method=method)
+        cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how, method=method)
 
         # Output conversion - take cols and valids from `cpp_join` and
         # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order on - left - rhs from libgdf
+        # Columns are returned in order on - lhs - rhs from libgdf
         # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`. The final order
         # is left columns, followed by non-join-key rhs columns.
         on_count = 0
-        on = list(set(right_on + left_on))
         # gap spaces between left and `on` for result from `cpp_join`
         gap = len(lhs.columns) - len(on)
         for idc, name in enumerate(lhs.columns):
@@ -1648,9 +1635,8 @@ class DataFrame(object):
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.set_index(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.sort_values(df.columns[0])
-            df.index.name = self._original_left_index_name
+            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
+            df = df.set_index(lhs.index[df.index.gpu_values])
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on[0]])))
