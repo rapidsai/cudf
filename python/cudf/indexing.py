@@ -259,7 +259,7 @@ def _is_single_value(val):
     return (
             isinstance(val, str)
             or isinstance(val, numbers.Number)
-            or is_datetime_or_timedelta_dtype(val)
+            or np.isscalar(val)
             or isinstance(val, pd.Timestamp)
             or isinstance(val, pd.Categorical)
     )

@@ -332,16 +332,20 @@ class NumericalColumn(columnops.TypedColumnBase):
         Fill null values with *fill_value*
         """
         if np.isscalar(fill_value):
-            fill_value = np.array(fill_value)
-            dtype = fill_value.dtype
-            fill_value = utils.scalar_broadcast_to(fill_value.item(), (len(self)),
-                                                   dtype)
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-        if is_integer_dtype(self.dtype):
-            fill_value_col = safe_cast_to_int(fill_value_col, self.dtype)
+            fill_value_casted = self.dtype.type(fill_value)
+            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+                raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
+                    type(fill_value).__name__,
+                    self.dtype.name)
+                )
+            fill_value = fill_value_casted
         else:
-            fill_value_col = fill_value_col.astype(self.dtype)
-        result = cpp_replace.apply_replace_nulls(self, fill_value_col)
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
+            if is_integer_dtype(self.dtype):
+                fill_value= safe_cast_to_int(fill_value, self.dtype)
+            else:
+                fill_value = fill_value.astype(self.dtype)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):

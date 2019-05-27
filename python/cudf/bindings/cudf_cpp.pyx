@@ -150,6 +150,10 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si16 = val
     elif val.dtype.type == np.int8:
         scalar.data.si08 = val
+    elif val.dtype.type == np.bool or val.dtype.type == np.bool_:
+        scalar.data.b08 = val
+    elif val.dtype.name == 'datetime64[ms]':
+        scalar.data.dt64 = np.datetime64(val, 'ms').astype(int)
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
                          "to gdf_calar".format(val.dtype.name))

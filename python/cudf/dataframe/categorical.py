@@ -256,31 +256,34 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
-
         if not self.has_null_mask:
             return self
 
         fill_is_scalar = np.isscalar(fill_value)
 
-        if fill_is_scalar and fill_value == self.default_na_value():
-            fill_value_col = columnops.as_column(
-                [fill_value], nan_as_null=False, dtype=self.data.dtype)
+        if fill_is_scalar:
+            if fill_value == self.default_na_value():
+                fill_value = self.data.dtype.type(fill_value)
+            else:
+                try:
+                    fill_value = self._encode(
+                        pd.Categorical(fill_value,
+                        categories=self.cat().categories)
+                    )
+                    fill_value = self.data.dtype.type(fill_value)
+                except(ValueError) as err:
+                    raise ValueError("Cannot safely cast non-equivalent {} from {}".format(
+                        type(fill_value).__name__,
+                        self.dtype.name)
+                    )
         else:
-            if fill_is_scalar:
-                if fill_value != self.default_na_value():
-                    if (fill_value not in self.cat().categories):
-                        raise ValueError("fill value must be in categories")
-                fill_value = pd.Categorical(fill_value,
-                                            categories=self.cat().categories)
-
-            fill_value_col = columnops.as_column(
-                fill_value, nan_as_null=False)
-
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
-            fill_value_col = fill_value_col.cat()._set_categories(
+            fill_value = fill_value.cat()._set_categories(
                 self.cat().categories)
+            fill_value = columnops.as_column(fill_value.data).astype(self.data.dtype)
 
-        result = cpp_replace.apply_replace_nulls(self, fill_value_col)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
 
         result = columnops.build_column(result.data, 'category', result.mask,
                                categories=self.cat().categories)
