@@ -346,7 +346,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32) {
     auto rhs = cudf::test::column_wrapper<float>(500,
         [](gdf_size_type row) {return (row % 3 > 0);},
         [](gdf_size_type row) {return (row % 4 > 0);});
-    auto out = cudf::test::column_wrapper<cudf::bool8>(lhs.get()->size, true);
+    auto out = cudf::test::column_wrapper<int8_t>(lhs.get()->size, true);
 
     auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_LOGICAL_OR);
     ASSERT_TRUE(result == GDF_SUCCESS);
