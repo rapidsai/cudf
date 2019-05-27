@@ -61,12 +61,21 @@
 // --------------------------------------------------------------------------------------------------------
 // structs of output for column_input_iterator
 
-template<typename T_output>
+template<typename T>
 struct ColumnDataOutputs
 {
-    T_output value;
-    T_output value_squared;
+    T value;
+    T value_squared;
     gdf_index_type count;
+
+    __device__ __host__
+    ColumnDataOutputs(T *_value, bool is_valid)
+    : value(_value), value_squared(_value*_value), count(is_valid? 1 :0)
+    {};
+
+    __device__ __host__
+    ColumnDataOutputs(){};
+
 };
 
 // structs for column_input_iterator
@@ -103,8 +112,21 @@ struct ColumnData<T, true>{
 
     __device__ __host__
     T at(gdf_index_type id) const {
-        return (bit_mask::is_valid(valid, id))? data[id] : identity;
+        return (is_valid(id))? data[id] : identity;
     };
+
+    __device__ __host__
+    bool is_valid(gdf_index_type id) const
+    {
+        return bit_mask::is_valid(valid, id);
+    }
+ 
+/* tbd.
+    __device__ __host__
+    ColumnDataOutputs<T> at(gdf_index_type id) const {
+        return ColumnDataOutputs<T>(at.(id), is_valid(id));
+    };
+*/
 };
 
 
@@ -211,6 +233,16 @@ T random_int(T min, T max)
 
   return uniform(engine);
 }
+
+bool random_bool()
+{
+  static unsigned seed = 13377331;
+  static std::mt19937 engine{seed};
+  static std::uniform_int_distribution<int> uniform{0, 1};
+
+  return static_cast<bool>( uniform(engine) );
+}
+
 
 // ---------------------------------------------------------------------------
 
@@ -431,7 +463,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
     std::vector<bool> host_bools(column_size);
     std::generate(host_bools.begin(), host_bools.end(),
-        []() { return static_cast<bool>( random_int(0, 1) ); } );
+        []() { return static_cast<bool>( random_bool() ); } );
 
     cudf::test::column_wrapper<TypeParam> w_col(
         column_size,
@@ -464,5 +496,52 @@ TYPED_TEST(IteratorTest, large_size_reduction)
         cudf::reduction(w_col, GDF_REDUCTION_SUM, GDF_INT32);
 
     EXPECT_EQ(expected_value, result.value());
+
+}
+
+// test for mixed output value using `ColumnDataOutputs`
+// it may be usuful for `var`, `std` operation
+TYPED_TEST(IteratorTest, mixed_output)
+{
+    using T = int32_t;
+
+    const int column_size{1000};
+    const T init{0};
+
+    std::vector<bool> host_bools(column_size);
+    std::generate(host_bools.begin(), host_bools.end(),
+        []() { return static_cast<bool>( random_bool() ); } );
+
+    cudf::test::column_wrapper<TypeParam> w_col(
+        column_size,
+        [](gdf_index_type row) { return T{random_int(-128, 128)}; },
+        [&](gdf_index_type row) { return host_bools[row]; } );
+
+    // copy back data and valid arrays
+    auto hos = w_col.to_host();
+
+    // calculate by cudf::reduction
+    ColumnDataOutputs<T> expected_value;
+
+    expected_value.count = w_col.get()->size - w_col.get()->null_count;
+
+    std::vector<T> replaced_array(w_col.size());
+    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
+        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
+
+        expected_value.value  = 0;
+    expected_value.value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
+    expected_value.value_squared = std::accumulate(replaced_array.begin(), replaced_array.end(), init,
+        [](T acc, T i) { return acc + i * i; });
+
+    std::cout << "expected <mixed_output> = " <<
+    expected_value.value << ", " <<
+    expected_value.value_squared << ", " <<
+    expected_value.count << std::endl;
+
+    // CPU test
+    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+//    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
 }
