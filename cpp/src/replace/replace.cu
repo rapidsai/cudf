@@ -241,6 +241,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                           static_cast<const col_type*>(d_replacement),
                                           static_cast<col_type*>(d_out_data)
                                           );
+    RMM_TRY(RMM_FREE(d_replacement, 0));
   }
 };
 
@@ -256,7 +257,6 @@ gdf_column replace_nulls(const gdf_column& input,
 {
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(replacement.size == 1 || replacement.size == input.size, "Column size mismatch");
-   
   CUDF_EXPECTS(nullptr != replacement.data, "Null replacement data");
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
   CUDF_EXPECTS(nullptr == replacement.valid || 0 == replacement.null_count,
@@ -270,6 +270,8 @@ gdf_column replace_nulls(const gdf_column& input,
                         input.valid,
                         replacement.data,
                         output.data);
+
+  RMM_TRY(RMM_FREE(output.valid, 0));
   output.valid = nullptr;
   return output;
 }
@@ -278,6 +280,11 @@ gdf_column replace_nulls(const gdf_column& input,
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_scalar& replacement)
 {
+  if (input.size == 0) {
+    return cudf::empty_like(input);
+  }
+
+
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
   CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
