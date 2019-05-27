@@ -320,14 +320,14 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
 }
 
 
-TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_B8) {
-    using AND = cudf::library::operation::LogicalAnd<int16_t, double, cudf::bool8>;
+TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) {
+    using AND = cudf::library::operation::LogicalAnd<int16_t, double, int8_t>;
 
     auto lhs = cudf::test::column_wrapper<double>(500,
         [](gdf_size_type row) {return (row % 5);},
         [](gdf_size_type row) {return (row % 6 > 0);});
-    auto rhs = cudf::test::column_wrapper<cudf::bool8>(500,
-        [](gdf_size_type row) {return cudf::bool8{row % 3 > 0};},
+    auto rhs = cudf::test::column_wrapper<int8_t>(500,
+        [](gdf_size_type row) {return (row % 3 > 0);},
         [](gdf_size_type row) {return (row % 4 > 0);});
     auto out = cudf::test::column_wrapper<int16_t>(lhs.get()->size, true);
 
