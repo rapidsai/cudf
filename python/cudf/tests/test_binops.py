@@ -355,3 +355,41 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
     # verify
     np.testing.assert_allclose(ps_result, gs_result)
+
+
+@pytest.mark.parametrize('binop', _binops)
+def test_different_shapes_and_columns(binop):
+    import cudf
+    import pandas as pd
+
+    # TODO: support `pow()` on NaN values. Particularly, the cases:
+    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
+    if binop is operator.pow:
+        return
+
+    # Empty frame on the right side
+    pd_frame = binop(pd.DataFrame({'x': [1, 2]}), pd.DataFrame({}))
+    cd_frame = binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({}))
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
+
+    # Empty frame on the left side
+    pd_frame = pd.DataFrame({}) + pd.DataFrame({'x': [1, 2]})
+    cd_frame = cudf.DataFrame({}) + cudf.DataFrame({'x': [1, 2]})
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
+
+    # More rows on the left side
+    pd_frame = pd.DataFrame({'y': [1, 2, 3]}) + pd.DataFrame({'x': [1, 2]})
+    cd_frame = cudf.DataFrame({'y': [1, 2, 3]}) + cudf.DataFrame({'x': [1, 2]})
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
+
+    # More rows on the right side
+    pd_frame = pd.DataFrame({'y': [1, 2]}) + pd.DataFrame({'x': [1, 2, 3]})
+    cd_frame = cudf.DataFrame({'y': [1, 2]}) + cudf.DataFrame({'x': [1, 2, 3]})
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
+
+
+@pytest.mark.parametrize('binop', _binops)
+def test_different_shapes_and_same_columns(binop):
+    import cudf
+    with pytest.raises(NotImplementedError):
+        binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
