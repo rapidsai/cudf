@@ -1593,6 +1593,8 @@ def gdf(pdf):
     lambda df: df.max(),
     lambda df: df.std(ddof=1),
     lambda df: df.var(ddof=1),
+    lambda df: df.std(ddof=2),
+    lambda df: df.var(ddof=2),
     ])
 def test_dataframe_reductions(func):
     pdf = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
