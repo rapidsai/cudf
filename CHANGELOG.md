@@ -13,6 +13,7 @@
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
 - PR #1813 ORC Reader: Add support for stripe selection
+- PR #1828 JSON Reader: add suport for bool8 columns
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -32,6 +33,7 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 
 ## Bug Fixes
 
@@ -57,7 +59,11 @@
 - PR #1786 Maintain the original series name in series.unique output
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
+- PR #1825 cuDF: Multiaggregation Groupby Failures
+- PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
+
 
 # cudf 0.7.2 (16 May 2019)
 
