@@ -40,8 +40,11 @@
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/device_atomics.cuh> // need for device operators.
 
-#include <tests/utilities/column_wrapper.cuh>
+#include <reduction.hpp>
+
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
 
 #include <cub/device/device_reduce.cuh>
 #include <thrust/device_vector.h>
@@ -394,8 +397,6 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     ColumnData<T, false> col_hos(hos_array.data());
     column_input_iterator<T, ColumnData<T, false>, T_index*> it_host(col_hos, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
-
-
 }
 
 // tests for group_by iterator
@@ -408,7 +409,57 @@ TYPED_TEST(IteratorTest, group_by_iterator_null)
     // TBD. it should be possible.
 }
 
+template <typename T>
+T random_int(T min, T max)
+{
+  static unsigned seed = 13377331;
+  static std::mt19937 engine{seed};
+  static std::uniform_int_distribution<T> uniform{min, max};
+
+  return uniform(engine);
+}
+
 TYPED_TEST(IteratorTest, large_size_reduction)
 {
-    // TBD.
+    using T = int32_t;
+
+    const int column_size{1000000};
+    const T init{0};
+
+    std::vector<bool> host_bools(column_size);
+    std::generate(host_bools.begin(), host_bools.end(),
+        []() { return static_cast<bool>( random_int(0, 1) ); } );
+
+    cudf::test::column_wrapper<TypeParam> w_col(
+        column_size,
+        [](gdf_index_type row) { return T{random_int(-128, 128)}; },
+        [&](gdf_index_type row) { return host_bools[row]; } );
+
+    // copy back data and valid arrays
+    auto hos = w_col.to_host();
+
+    // calculate by cudf::reduction
+    std::vector<T> replaced_array(w_col.size());
+    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
+        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
+    T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
+    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
+
+    // CPU test
+    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
+
+    // GPU test
+    ColumnData<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    column_input_iterator<T, ColumnData<T>> it_dev(col);
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
+
+    // compare with cudf::reduction
+    cudf::test::scalar_wrapper<T> result =
+        cudf::reduction(w_col, GDF_REDUCTION_SUM, GDF_INT32);
+
+    EXPECT_EQ(expected_value, result.value());
+
 }
