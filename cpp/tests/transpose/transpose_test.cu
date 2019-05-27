@@ -199,7 +199,7 @@ protected:
         for(size_t i = 0; i < _nrows; i++)
         {
             ASSERT_TRUE(
-                gdf_equal_columns<T>(ref_gdf_columns[i].get(), out_gdf_columns[i].get())
+                gdf_equal_columns(*ref_gdf_columns[i].get(), *out_gdf_columns[i].get())
             );
         }
     }
