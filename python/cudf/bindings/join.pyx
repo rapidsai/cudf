@@ -22,6 +22,7 @@ import nvcategory
 import nvstrings
 
 
+@cython.boundscheck(False)
 cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     """
       Call gdf join for full outer, inner and left joins.
