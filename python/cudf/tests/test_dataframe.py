@@ -2542,15 +2542,15 @@ def test_all(data):
         pdata = pd.DataFrame(data, columns=['a', 'b'])
         gdata = DataFrame.from_pandas(pdata)
 
+        # test bool_only
+        if pdata['b'].dtype == 'bool':
+            got = gdata.all(bool_only=True)
+            expected = pdata.all(bool_only=True)
+            assert_eq(got, expected)
+
     got = gdata.all()
     expected = pdata.all()
     assert_eq(got, expected)
-
-    # test bool_only
-    if pdata['b'].dtype == 'bool':
-        got = gdata.all(bool_only=True)
-        expected = pdata.all(bool_only=True)
-        assert_eq(got, expected)
 
 
 @pytest.mark.parametrize('data',
@@ -2581,12 +2581,12 @@ def test_any(data):
         pdata = pd.DataFrame(data, columns=['a', 'b'])
         gdata = DataFrame.from_pandas(pdata)
 
+        # test bool_only
+        if pdata['b'].dtype == 'bool':
+            got = gdata.all(bool_only=True)
+            expected = pdata.all(bool_only=True)
+            assert_eq(got, expected)
+
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
-
-    # test bool_only
-    if pdata['b'].dtype == 'bool':
-        got = gdata.all(bool_only=True)
-        expected = pdata.all(bool_only=True)
-        assert_eq(got, expected)
