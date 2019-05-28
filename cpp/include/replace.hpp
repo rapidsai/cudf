@@ -36,6 +36,7 @@ namespace cudf {
  *
  * @param[in] input A gdf_column containing null values
  * @param[in] replacement A gdf_column whose values will replace null values in input
+ * @param[in] stream Optional stream in which to perform allocations
  *
  * @returns gdf_column Column with nulls replaced
  */
@@ -53,6 +54,7 @@ gdf_column replace_nulls(const gdf_column& input,
   *
   * @param[in] input A gdf_column containing null values
   * @param[in] replacement A gdf_scalar whose value will replace null values in input
+  * @param[in] stream Optional stream in which to perform allocations
   *
   * @returns gdf_column Column with nulls replaced
   */

@@ -45,7 +45,7 @@ gdf_column empty_like(gdf_column const& input)
  * Allocates a new column of the same size and type as the input.
  * Does not copy data.
  */
-gdf_column allocate_like(gdf_column const& input, cudaStream_t stream)
+gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, cudaStream_t stream)
 {
   gdf_column output = empty_like(input);
   
@@ -55,7 +55,7 @@ gdf_column allocate_like(gdf_column const& input, cudaStream_t stream)
                           ? sizeof(std::pair<const char *, size_t>)
                           : gdf_dtype_size(input.dtype);
     RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
-    if (input.valid != nullptr) {
+    if ((input.valid != nullptr) && allocate_mask_if_exists) {
       size_t valid_size = gdf_valid_allocation_size(input.size);
       RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
     }
@@ -71,7 +71,7 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
 {
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
 
-  gdf_column output = allocate_like(input, stream);
+  gdf_column output = allocate_like(input, true, stream);
 
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
@@ -101,12 +101,12 @@ table empty_like(table const& t) {
   return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
 
-table allocate_like(table const& t, cudaStream_t stream) {
+table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-                 [stream](gdf_column* out_col, gdf_column const* in_col) {
+                 [allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
                    out_col = new gdf_column;
-                   *out_col = allocate_like(*in_col,stream);
+                   *out_col = allocate_like(*in_col,allocate_mask_if_exists,stream);
                    return out_col;
                  });
 
