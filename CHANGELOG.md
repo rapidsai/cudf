@@ -68,6 +68,7 @@
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 
 
 # cudf 0.7.2 (16 May 2019)
