@@ -12,6 +12,10 @@
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
+- PR #1819 Logical operators (AND, OR, NOT) for libcudf and cuDF
+- PR #1813 ORC Reader: Add support for stripe selection
+- PR #1828 JSON Reader: add suport for bool8 columns
+- PR #1665 Add the point-in-polygon GIS function
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -21,6 +25,7 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1759 Add an example showing simultaneous rolling averages to `apply_grouped` documentation
 - PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
 - PR #1767 Speed up Python unit tests
@@ -30,6 +35,9 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
+- PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 
 ## Bug Fixes
 
@@ -56,6 +64,9 @@
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
 - PR #1839 Raise an error instead of segfaulting when transposing a DataFrame with StringColumns
+- PR #1825 cuDF: Multiaggregation Groupby Failures
+- PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1849 Allow DataFrame support methods to pass arguments to the methods
 
 # cudf 0.7.2 (16 May 2019)
 

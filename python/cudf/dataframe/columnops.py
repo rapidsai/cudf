@@ -98,7 +98,7 @@ def column_empty_like(column, dtype, masked, newsize=None):
     """
     row_count = len(column) if newsize is None else newsize
     categories = None
-    if hasattr(column, 'cat'):
+    if pd.api.types.is_categorical_dtype(dtype):
         categories = column.cat().categories
         dtype = column.data.dtype
     return column_empty(row_count, dtype, masked, categories=categories)
