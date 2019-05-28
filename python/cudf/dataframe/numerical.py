@@ -95,8 +95,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype('int16'):
-                other_dtype = np.dtype('int32')
 
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
