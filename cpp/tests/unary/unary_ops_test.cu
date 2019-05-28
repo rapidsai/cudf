@@ -112,7 +112,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to f32
 	{
 		// Output column
-		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize, true);
+		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize);
 		auto results = cudf::test::column_wrapper<float>(std::vector<float>{
 			-1528.0,
 			1.0,
@@ -127,7 +127,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
@@ -142,7 +142,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i64 - upcast
 	{
 		// Output column
-		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize, true);
+		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize);
 		auto results = cudf::test::column_wrapper<int64_t>(std::vector<int64_t>{
 			-1528,
 			1,
@@ -158,7 +158,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32 - downcast
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
@@ -174,7 +174,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to i32
 	{
 		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize, true);
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			17716,
@@ -190,7 +190,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{-1528},
 			cudf::date32{1},
@@ -206,7 +206,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to timestamp
 	{
 		// Output column
-		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize, true);
+		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::timestamp>(std::vector<cudf::timestamp>{
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
 			cudf::timestamp{1528935599999000}, // '2018-06-14 00:19:59.999000'
@@ -224,7 +224,7 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_cast generic to date32
 	{
 		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize, true);
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{17696}, // '2018-06-14'
 			cudf::date32{17696}, // '2018-06-14'
@@ -2437,4 +2437,37 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol == expectOut );
 	}
+}
+
+template <typename T>
+struct gdf_logical_test : public GdfTest {};
+
+using type_list = ::testing::Types<
+	int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
+
+TYPED_TEST_CASE(gdf_logical_test, type_list);
+
+TYPED_TEST(gdf_logical_test, LogicalNot) {
+	const int colSize = 1000;
+
+	// init input vector
+	std::vector<TypeParam> h_input_v(colSize);
+	initialize_vector(h_input_v, colSize, 10, false);
+
+	auto inputCol = cudf::test::column_wrapper<TypeParam>{h_input_v}; 
+	auto outputCol = cudf::test::column_wrapper<cudf::bool8>{colSize};
+
+	std::vector<cudf::bool8> h_expect_v{colSize};
+
+	// compute NOT
+	for (gdf_size_type i = 0; i < colSize; ++i)
+		h_expect_v[i] = static_cast<cudf::bool8>( !h_input_v[i] );
+
+	// Use vector to build expected output
+	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
+
+	auto error = gdf_unary_math(inputCol, outputCol, GDF_NOT);
+	EXPECT_EQ(error, GDF_SUCCESS);
+
+	EXPECT_EQ(expectCol, outputCol);
 }

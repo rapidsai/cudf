@@ -259,10 +259,8 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                 g_dtype = dtypes[np.int8]
             else:
                 g_dtype = dtypes[data.dtype.type]
-        elif dtype != np.bool_:
-            g_dtype = dtypes[dtype.type]
         else:
-            g_dtype = dtypes[dtype]
+            g_dtype = dtypes[dtype.type]
     else:
         g_dtype = dtypes[data.dtype]
 
