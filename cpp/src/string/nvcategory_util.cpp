@@ -8,6 +8,8 @@
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
 
+#include <iostream>
+
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
     NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
@@ -87,23 +89,16 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     }
     GDF_REQUIRE(null_index == 0, GDF_INVALID_API_CALL);
-    gdf_column null_index_column;
+    gdf_scalar null_index_scalar;
 
-    //this GDF_INT32 could change if this changes in nvcategory
-    gdf_column_view(&null_index_column, nullptr, nullptr, 1, GDF_STRING_CATEGORY);
-    int col_width;
-    get_column_byte_width(&null_index_column, &col_width);
-    RMM_TRY( RMM_ALLOC(&(null_index_column.data), col_width, 0) ); // TODO: non-default stream?
-    CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
-    null_index_column.valid = nullptr;
-    null_index_column.null_count = 0;
-    null_index_column.dtype_info.category = nullptr; // we are using this column as a GDF_STRING_CATEGORY, but we are not actually using the category
+    null_index_scalar.data.si32 = null_index;
+    null_index_scalar.is_valid = true;
+    null_index_scalar.dtype = GDF_STRING_CATEGORY;
 
-    gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_column);
-    gdf_column_free(column);
-    column = &column_nulls_replaced;
-
-    gdf_column_free(&null_index_column);
+    gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_scalar);
+    std::swap(column->data, column_nulls_replaced.data);
+    std::swap(column->valid, column_nulls_replaced.valid);
+    gdf_column_free(&column_nulls_replaced);
   }
 
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
@@ -191,6 +186,7 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
     //TODO: becuase of how gather works we are making a copy to preserve dictionaries as the same
     //this has an overhead of having to store more than is necessary. remove when gather preserving dictionary is available for nvcategory
     output_columns[column_index]->dtype_info.category = combined_category->copy();
+
 
     current_column_start_position += column_size;
   }
