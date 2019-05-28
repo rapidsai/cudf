@@ -152,7 +152,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si08 = val
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
-                         "to gdf_calar".format(val.dtype.name))
+                         "to gdf_scalar".format(val.dtype.name))
 
 
 # gdf_column functions
