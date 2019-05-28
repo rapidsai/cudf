@@ -1486,7 +1486,6 @@ class DataFrame(object):
             on = [lhs.LEFT_RIGHT_INDEX_NAME]
             lhs[on[0]] = lhs.index
             rhs[on[0]] = rhs.index
-            print(lhs)
         elif on:
             if left_on or right_on:
                 raise ValueError('Can only pass argument "on" OR "left_on" '
