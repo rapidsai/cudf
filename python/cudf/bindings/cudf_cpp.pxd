@@ -292,10 +292,6 @@ cdef extern from "cudf.h" nogil:
                                    gdf_column* new_values) except +
 
 
-    cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
-                                     const gdf_column* col_in) except +
-
-
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
