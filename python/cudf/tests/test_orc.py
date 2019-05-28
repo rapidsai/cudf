@@ -132,6 +132,31 @@ def test_orc_reader_strings(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+def test_orc_read_stripe(datadir):
+    path = datadir / 'TestOrcFile.testDate1900.orc'
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+    pdf = orcfile.read().to_pandas(date_as_object=False)
+
+    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
+
+    gdf = [cudf.read_orc(path, stripe=i) for i in range(stripes)]
+    gdf = cudf.concat(gdf).reset_index(drop=True)
+
+    # cuDF DatetimeColumn currenly only supports millisecond units
+    # Convert to lesser precision for comparison
+    timedelta = np.timedelta64(1, 'ms').astype('timedelta64[ns]')
+    pdf['time'] = pdf['time'].astype(np.int64) // timedelta.astype(np.int64)
+    gdf['time'] = gdf['time'].astype(np.int64)
+
+    assert_eq(pdf, gdf, check_categorical=False)
+
+
 @pytest.mark.parametrize('num_rows', [1, 100, 3000])
 @pytest.mark.parametrize('skip_rows', [0, 1, 3000])
 def test_orc_read_rows(datadir, skip_rows, num_rows):
