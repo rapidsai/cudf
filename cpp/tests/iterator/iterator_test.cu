@@ -62,7 +62,7 @@
 // structs of output for column_input_iterator
 
 template<typename T>
-class ColumnOutputSingle
+struct ColumnOutputSingle
 {
 public:
     T value;
@@ -76,25 +76,29 @@ public:
     __device__ __host__
     ColumnOutputSingle(){};
 
+    __device__ __host__
+    operator T() const { return value; }
+};
+
+template<typename T>
+struct ColumnOutputSquared
+{
+public:
+    T value_squared;
+
+    template<typename T_input>
+    __device__ __host__
+    ColumnOutputSquared(T_input _value, bool is_valid=true)
+    {
+        T v = static_cast<T>(_value);
+        value_squared = v*v;
+    };
 
     __device__ __host__
-    ColumnOutputSingle<T> operator+(ColumnOutputSingle<T> const &rhs) const
-    {
-      return ColumnOutputSingle<T>(this->value + rhs.value);
-    }
+    ColumnOutputSquared(){};
 
     __device__ __host__
-    ColumnOutputSingle<T>& operator+=(ColumnOutputSingle<T> const& rhs)
-    {
-      this->value += rhs.value;
-      return *this;
-    }
-
-    __device__ __host__
-    bool operator==(ColumnOutputSingle<T> const& rhs) const
-    {
-      return (this->value == rhs.value );
-    }
+    operator T() const { return value_squared; }
 };
 
 
@@ -348,7 +352,7 @@ struct IteratorTest : public GdfTest
         thrust::host_vector<T_output>  hos_result(dev_result);
 
         EXPECT_EQ(expected, hos_result[0]) << msg ;
-//        std::cout << "Done: expected <" << msg << "> = " << T{hos_result[0]} << std::endl;
+        std::cout << "Done: expected <" << msg << "> = " << hos_result[0] << std::endl;
     }
 };
 
@@ -382,17 +386,19 @@ namespace cudf
     template <typename T_element, typename T_output = T_element>
     auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
     {
-        using T = T_element;
-        ColumnInput<ColumnOutputSingle<T>,T> col_host(_data, _valid, _identity);
-        column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it(col_host);
-        return it;
+        using T_input = ColumnInput<ColumnOutputSingle<T_output>, T_element>;
+        using T_iterator = column_input_iterator<T_output, T_input>;
+
+        return T_iterator(T_input(_data, _valid, _identity));
     }
 
     template <typename T_element, typename T_output = T_element>
     auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid, T_element _identity)
     {
-        return make_iterator_with_nulls(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
+        return make_iterator_with_nulls<T_element, T_output>
+            (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
     }
+
 }
 
 
@@ -421,27 +427,55 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-#if 0
     // CPU test
-    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
+    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    ColumnInput<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    column_input_iterator<T, ColumnInput<T>> it_dev(col);
+    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
-#else
-    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    this->iterator_test_thrust_host(ColumnOutputSingle<T>{expected_value}, it_hos, w_col.size());
+
+    std::cout << "test done." << std::endl;
+}
+
+/* tests up cast reduction with null iterator
+*/
+TYPED_TEST(IteratorTest, null_iterator_upcast)
+{
+    const int column_size{1000};
+    using T = int8_t;
+    using T_upcast = int64_t;
+    T init{0};
+
+    std::vector<bool> host_bools(column_size);
+    std::generate(host_bools.begin(), host_bools.end(),
+        []() { return static_cast<bool>( random_bool() ); } );
+
+    cudf::test::column_wrapper<T> w_col(
+        column_size,
+        [](gdf_index_type row) { return T{random_int<T>(-128, 127)}; },
+        [&](gdf_index_type row) { return host_bools[row]; } );
+
+
+    // copy back data and valid arrays
+    auto hos = w_col.to_host();
+
+    // calculate the expected value by CPU.
+    std::vector<T> replaced_array(w_col.size());
+    std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
+        replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
+    T_upcast expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0});
+    std::cout << "expected <null_iterator> = " << expected_value << std::endl;
+
+    // CPU test
+    auto it_hos = cudf::make_iterator_with_nulls<T, T_upcast>(std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    this->iterator_test_thrust(ColumnOutputSingle<T>{expected_value}, it_dev, w_col.size());
-    this->iterator_test_cub(ColumnOutputSingle<T>{expected_value}, it_dev, w_col.size());
-#endif
-
+    auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
     std::cout << "test done." << std::endl;
 }
