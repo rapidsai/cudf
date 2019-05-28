@@ -1495,11 +1495,13 @@ class DataFrame(object):
                 raise ValueError('right_on should be a single column')
             on = right_on
             lhs[on[0]] = lhs.index
+            rhs[rhs.LEFT_RIGHT_INDEX_NAME] = rhs.index
         elif right_index and left_on:
             if len(left_on) != 1:
                 raise ValueError('left_on should be a single column')
             on = left_on
             rhs[on[0]] = rhs.index
+            lhs[lhs.LEFT_RIGHT_INDEX_NAME] = lhs.index
         elif not (left_on or right_on):
             on = list(same_names)
             if len(on) == 0:
@@ -1646,21 +1648,11 @@ class DataFrame(object):
                     )
                 rhs_column_idx = rhs_column_idx + 1
 
-        if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
-        elif right_index and left_on:
-            new_index = Series(lhs.index,
-                               index=RangeIndex(0, len(lhs[left_on[0]])))
-            indexed = lhs[left_on[0]][df[left_on[0]]-1]
-            new_index = new_index[indexed-1]
-            df.index = new_index
-        elif left_index and right_on:
-            new_index = Series(rhs.index,
-                               index=RangeIndex(0, len(rhs[right_on[0]])))
-            indexed = rhs[right_on[0]][df[right_on[0]]-1]
-            new_index = new_index[indexed-1]
-            df.index = new_index
+        # Let's make the "index as column" back into an index
+        if df.LEFT_RIGHT_INDEX_NAME in df.columns:
+            df._index = df[rhs.LEFT_RIGHT_INDEX_NAME]
+            df._drop_column(rhs.LEFT_RIGHT_INDEX_NAME)
+            df.index.name = None
 
         nvtx_range_pop()
 
