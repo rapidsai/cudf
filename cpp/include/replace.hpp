@@ -23,32 +23,37 @@
 namespace cudf {
 
 /**
- * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
+ * @brief Replaces all null values in a column with corresponding values of another column
  *
- * This function is a binary function. It will take in two gdf_columns.
-
- * The first one is expected to be a regular gdf_column, the second one
- * has to be a column of the same type as the first, and it has to be of
- * size one or of the same size as the other column.
+ * The first column is expected to be a regular gdf_column. The second column
+ * must be of the same type and same size as the first.
  *
- * case 1: If the second column contains only one value, then this funciton will
- * replace all nulls in the first column with the value in the second
- * column.
+ * The function replaces all nulls of the first column with the
+ * corresponding elements of the second column
  *
- * case 2: If the second column is of the same size as the first, then the function will
- * replace all nulls of the first column with the corresponding elemetns of the
- * second column
- *
- * @param[in] input A gdf_column that is the output of this function with null values replaced
- * @param[in] replacement_values A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
+ * @param[in] input A gdf_column containing null values
+ * @param[in] replacement A gdf_column whose values will replace null values in input
  *
  * @returns gdf_column Column with nulls replaced
  */
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_column& replacement_values);
+                         const gdf_column& replacement);
 
+/**
+  * @brief Replaces all null values in a column with a scalar.
+  *
+  * The column is expected to be a regular gdf_column. The scalar is expected to be
+  * a gdf_scalar of the same data type.
+  *
+  * The function will replace all nulls of the column with the scalar value.
+  *
+  * @param[in] input A gdf_column containing null values
+  * @param[in] replacement A gdf_scalar whose value will replace null values in input
+  *
+  * @returns gdf_column Column with nulls replaced
+  */
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_scalar& replacement_value);
+                         const gdf_scalar& replacement);
 
 }  // namespace cudf
 

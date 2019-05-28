@@ -25,6 +25,7 @@
 #include <copying.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities//type_dispatcher.hpp"
+#include <utilities/cuda_utils.hpp>
 #include "utilities/cudf_utils.h"
 #include "bitmask/legacy_bitmask.hpp"
 
@@ -200,9 +201,9 @@ struct replace_nulls_column_kernel_forwarder {
                   const void*      d_replacement,
                   void*            d_out_data)
   {
-    const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
+    cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
-    replace_nulls_with_column<<<grid_size, BLOCK_SIZE>>>(nrows,
+    replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
                                           (d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
@@ -227,7 +228,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                   const void*      replacement,
                   void*            d_out_data)
   {
-    const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
+    cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement = static_cast<const col_type*>(replacement);
     void *d_replacement = NULL;
@@ -235,7 +236,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     CUDA_TRY(cudaMemcpy(d_replacement, t_replacement, sizeof(col_type),
                         cudaMemcpyHostToDevice));
 
-    replace_nulls_with_scalar<<<grid_size, BLOCK_SIZE>>>(nrows,
+    replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
                                           (d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
@@ -259,10 +260,15 @@ gdf_column replace_nulls(const gdf_column& input,
     return cudf::empty_like(input);
   }
 
+  CUDF_EXPECTS(nullptr != input.data, "Null input data");
+
+  if (input.null_count == 0) {
+    return cudf::copy(input);
+  }
+
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(replacement.size == 1 || replacement.size == input.size, "Column size mismatch");
   CUDF_EXPECTS(nullptr != replacement.data, "Null replacement data");
-  CUDF_EXPECTS(nullptr != input.data, "Null input data");
   CUDF_EXPECTS(nullptr == replacement.valid || 0 == replacement.null_count,
                "Invalid replacement data");
 
@@ -286,9 +292,13 @@ gdf_column replace_nulls(const gdf_column& input,
     return cudf::empty_like(input);
   }
 
+  CUDF_EXPECTS(nullptr != input.data, "Null input data");
+
+  if (input.null_count == 0) {
+    return cudf::copy(input);
+  }
 
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
-  CUDF_EXPECTS(nullptr != input.data, "Null input data");
   CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
 
   gdf_column output = cudf::allocate_like(input, false);
