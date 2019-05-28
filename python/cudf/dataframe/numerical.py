@@ -75,6 +75,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
 
+    def unary_logic_op(self, unaryop):
+        return numeric_column_unaryop(self, op=unaryop,
+                                      out_dtype=np.bool_)
+
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
 
@@ -229,6 +233,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def all(self):
         return bool(self.min())
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(self.max())
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)

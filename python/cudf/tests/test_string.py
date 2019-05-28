@@ -815,3 +815,9 @@ def test_string_unique(item):
     pres = pres.sort_values(na_position='first').reset_index(drop=True)
     gres = gs.unique()
     assert_eq(pres, gres)
+
+
+def test_string_slice():
+    df = DataFrame({'a': ['hello', 'world']})
+    a_slice = df.a.str.slice(0, 2)
+    assert isinstance(a_slice, Series)

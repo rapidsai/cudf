@@ -430,7 +430,9 @@ class Series(object):
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
-            return other._binaryop(self, fn)
+            # TODO: fn is not the same as arg expected by _apply_op
+            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
+            return other._apply_op(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
@@ -515,9 +517,22 @@ class Series(object):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (np.issubdtype(self.dtype.type, np.integer) and
-                np.issubdtype(other.dtype.type, np.integer)):
-            return self._binaryop(other, op)
+        if (
+            np.issubdtype(self.dtype, np.bool_)
+            or np.issubdtype(self.dtype, np.integer)
+        ) and (
+            np.issubdtype(other.dtype, np.bool_)
+            or np.issubdtype(other.dtype, np.integer)
+        ):
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
+            ser = self._binaryop(other, op)
+            if (
+                np.issubdtype(self.dtype, np.bool_)
+                or np.issubdtype(other.dtype, np.bool_)
+            ):
+                ser = ser.astype(np.bool_)
+            return ser
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
@@ -541,6 +556,18 @@ class Series(object):
         series.
         """
         return self._bitwise_binop(other, 'xor')
+
+    def logical_and(self, other):
+        ser = self._binaryop(other, 'l_and')
+        return ser.astype(np.bool_)
+
+    def logical_or(self, other):
+        ser = self._binaryop(other, 'l_or')
+        return ser.astype(np.bool_)
+
+    def logical_not(self):
+        outcol = self._column.unary_logic_op('not')
+        return self._copy_construct(data=outcol)
 
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
@@ -591,11 +618,14 @@ class Series(object):
         return self._ordered_compare(other, 'ge')
 
     def __invert__(self):
-        """Bitwise invert (~)/(not) for each element
+        """Bitwise invert (~) for each element.
+        Logical NOT if dtype is bool
 
         Returns a new Series.
         """
-        if np.issubdtype(self.dtype.type, np.integer):
+        if np.issubdtype(self.dtype, np.integer):
+            return self._unaryop('invert')
+        elif np.issubdtype(self.dtype, np.bool_):
             return self._unaryop('not')
         else:
             raise TypeError(
@@ -744,6 +774,18 @@ class Series(object):
 
         mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
         return Series(mask, name=self.name, index=self.index)
+
+    def all(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        return self._column.all()
+
+    def any(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        return self._column.any()
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
