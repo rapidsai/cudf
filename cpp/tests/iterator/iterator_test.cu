@@ -322,7 +322,7 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
     {
-        T_output init = T{0};
+        T_output init = T_output{0};
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
@@ -342,12 +342,13 @@ struct IteratorTest : public GdfTest
         EXPECT_EQ(expected, result) << "thrust host test";
     }
 
-    void evaluate(T expected, thrust::device_vector<T> &dev_result, const char* msg=nullptr)
+    template <typename T_output>
+    void evaluate(T_output expected, thrust::device_vector<T_output> &dev_result, const char* msg=nullptr)
     {
-        thrust::host_vector<T>  hos_result(dev_result);
+        thrust::host_vector<T_output>  hos_result(dev_result);
 
-        EXPECT_EQ(expected, dev_result[0]) << msg ;
-        std::cout << "Done: expected <" << msg << "> = " << dev_result[0] << std::endl;
+        EXPECT_EQ(expected, hos_result[0]) << msg ;
+//        std::cout << "Done: expected <" << msg << "> = " << T{hos_result[0]} << std::endl;
     }
 };
 
@@ -375,6 +376,26 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
     this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
 }
+
+namespace cudf
+{
+    template <typename T_element, typename T_output = T_element>
+    auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
+    {
+        using T = T_element;
+        ColumnInput<ColumnOutputSingle<T>,T> col_host(_data, _valid, _identity);
+        column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it(col_host);
+        return it;
+    }
+
+    template <typename T_element, typename T_output = T_element>
+    auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid, T_element _identity)
+    {
+        return make_iterator_with_nulls(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
+    }
+}
+
+
 
 /* tests for null input iterator (column with null bitmap)
    Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
@@ -412,18 +433,13 @@ TYPED_TEST(IteratorTest, null_iterator)
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 #else
-    // CPU test
-    ColumnInput<ColumnOutputSingle<T>,T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it_hos(col_host);
+    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
     this->iterator_test_thrust_host(ColumnOutputSingle<T>{expected_value}, it_hos, w_col.size());
 
- #if 0
     // GPU test
-    ColumnInput<ColumnOutputSingle<T>,T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it_dev(col);
-    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev, w_col.size());
-#endif
+    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    this->iterator_test_thrust(ColumnOutputSingle<T>{expected_value}, it_dev, w_col.size());
+    this->iterator_test_cub(ColumnOutputSingle<T>{expected_value}, it_dev, w_col.size());
 #endif
 
 
