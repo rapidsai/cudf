@@ -67,6 +67,7 @@
 - PR #1840 Retain index correctly during merge left_on right_on
 - PR #1825 cuDF: Multiaggregation Groupby Failures
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 
