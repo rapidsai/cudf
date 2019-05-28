@@ -35,6 +35,7 @@
 #include <iostream>
 #include <numeric>
 #include <iterator>
+#include <type_traits>
 
 #include <bitmask/bit_mask.cuh>         // need for bitmask
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
@@ -64,12 +65,11 @@
 template<typename T>
 struct ColumnOutputSingle
 {
-public:
     T value;
 
     template<typename T_input>
     __device__ __host__
-    ColumnOutputSingle(T_input _value, bool is_valid=true)
+    ColumnOutputSingle(T_input _value, bool is_valid=false)
     : value( static_cast<T>(_value) )
     {};
 
@@ -83,12 +83,11 @@ public:
 template<typename T>
 struct ColumnOutputSquared
 {
-public:
     T value_squared;
 
     template<typename T_input>
     __device__ __host__
-    ColumnOutputSquared(T_input _value, bool is_valid=true)
+    ColumnOutputSquared(T_input _value, bool is_valid=false)
     {
         T v = static_cast<T>(_value);
         value_squared = v*v;
@@ -101,10 +100,12 @@ public:
     operator T() const { return value_squared; }
 };
 
+template<typename T, bool update_count=true>
+struct ColumnOutputMixed;
 
 
 template<typename T>
-struct ColumnOutputMixed
+struct ColumnOutputMixed<T, true>
 {
     T value;
     T value_squared;
@@ -112,15 +113,100 @@ struct ColumnOutputMixed
 
     template<typename T_input>
     __device__ __host__
-    ColumnOutputMixed(T_input _value, bool is_valid=true)
-    : value( static_cast<T>(_value) ), count(is_valid? T{1} : T{0})
+    ColumnOutputMixed(T_input _value, bool is_valid)
+    : value( static_cast<T>(_value) ), count(is_valid? 1 : 0)
     {
         value_squared = value*value;
     };
 
     __device__ __host__
-    ColumnOutputMixed(){};
+    ColumnOutputMixed(T _value, T _value_squared=0, gdf_index_type _count=0)
+    : value(_value), value_squared(_value_squared), count(_count)
+    {};
 
+
+    __device__ __host__
+    ColumnOutputMixed()
+    : value(0), value_squared(0), count(0)
+    {};
+
+    using this_t = ColumnOutputMixed<T, true>;
+
+    __device__ __host__
+    this_t operator+(this_t const &rhs) const
+    {
+        return this_t(
+            (this->value + rhs.value),
+            (this->value_squared + rhs.value_squared),
+            (this->count + rhs.count)
+        );
+    }
+
+    __device__ __host__
+    bool operator==(this_t const &rhs) const
+    {
+        return (
+            (this->value == rhs.value) &&
+            (this->value_squared == rhs.value_squared) &&
+            (this->count == rhs.count)
+        );
+    }
+};
+
+template<typename T>
+struct ColumnOutputMixed<T, false>
+{
+    T value;
+    T value_squared;
+    gdf_index_type count;
+
+    template<typename T_input>
+    __device__ __host__
+    ColumnOutputMixed(T_input _value, bool is_valid)
+    : value( static_cast<T>(_value) )
+    {
+        value_squared = value*value;
+    };
+
+    __device__ __host__
+    ColumnOutputMixed(T _value, T _value_squared=0, gdf_index_type _count=0)
+    : value(_value), value_squared(_value_squared), count(_count)
+    {};
+
+    __device__ __host__
+    ColumnOutputMixed()
+    : value(0), value_squared(0), count(0)
+    {};
+
+    using this_t = ColumnOutputMixed<T, false>;
+
+    __device__ __host__
+    this_t operator+(this_t const &rhs) const
+    {
+        return this_t(
+            (this->value + rhs.value),
+            (this->value_squared + rhs.value_squared),
+            (this->count)
+        );
+    }
+
+    __device__ __host__
+    bool operator==(this_t const &rhs) const
+    {
+        return (
+            (this->value == rhs.value) &&
+            (this->value_squared == rhs.value_squared)
+        );
+    }
+};
+
+
+template<typename T, bool update_count=true>
+std::ostream& operator<<(std::ostream& os, ColumnOutputMixed<T, update_count> const& rhs)
+{
+  return os << "[" << rhs.value <<
+      ", " << rhs.value_squared <<
+      ", " << rhs.count << "] ";
 };
 
 // --------------------------------------------------------------------------------------------------------
@@ -226,10 +312,29 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     }
 };
 
-
-
 // ---------------------------------------------------------------------------
 
+namespace cudf
+{
+    template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
+    auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
+    {
+        using T_input = ColumnInput<T_output_helper, T_element>;
+        using T_iterator = column_input_iterator<T_output, T_input>;
+
+        return T_iterator(T_input(_data, _valid, _identity));
+    }
+
+    template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
+    auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid, T_element _identity)
+    {
+        return make_iterator_with_nulls<T_element, T_output, T_output_helper>
+            (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
+    }
+
+}
+
+// ---------------------------------------------------------------------------
 // __host__ option is required for thrust::host operation
 struct HostDeviceSum {
     template<typename T>
@@ -265,6 +370,7 @@ bool random_bool()
 
 // ---------------------------------------------------------------------------
 
+
 template <typename T>
 struct IteratorTest : public GdfTest
 {
@@ -272,8 +378,8 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
     {
-        T_output init = T_output{0};
-        thrust::device_vector<T_output> dev_result(1);
+        T_output init{0};
+        thrust::device_vector<T_output> dev_result(1, init);
 
         void     *d_temp_storage = NULL;
         size_t   temp_storage_bytes = 0;
@@ -294,7 +400,7 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
     {
-        T_output init = T_output{0};
+        T_output init{0};
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
@@ -306,7 +412,7 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_thrust_host(T_output expected, InputIterator d_in, int num_items)
     {
-        T_output init = T_output{0};
+        T_output init{0};
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
@@ -347,26 +453,6 @@ TYPED_TEST(IteratorTest, non_null_iterator)
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 
     this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
-}
-
-namespace cudf
-{
-    template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
-    auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
-    {
-        using T_input = ColumnInput<T_output_helper, T_element>;
-        using T_iterator = column_input_iterator<T_output, T_input>;
-
-        return T_iterator(T_input(_data, _valid, _identity));
-    }
-
-    template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
-    auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid, T_element _identity)
-    {
-        return make_iterator_with_nulls<T_element, T_output, T_output_helper>
-            (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
-    }
-
 }
 
 
@@ -584,15 +670,15 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
 }
 
-#if 0
 
 // test for mixed output value using `ColumnOutputMix`
-// it may be usuful for `var`, `std` operation
+// it wpuld be useful for `var`, `std` operation
 TYPED_TEST(IteratorTest, mixed_output)
 {
     using T = int32_t;
+    using T_upcast = int64_t;
 
-    const int column_size{1000};
+    const int column_size{5000};
     const T init{0};
 
     std::vector<bool> host_bools(column_size);
@@ -608,29 +694,50 @@ TYPED_TEST(IteratorTest, mixed_output)
     auto hos = w_col.to_host();
 
     // calculate expected values by CPU
-    ColumnOutputMixed<T> expected_value;
+    ColumnOutputMixed<T_upcast> expected_value;
 
-    expected_value.count = w_col.get()->size - w_col.get()->null_count;
+    expected_value.count = w_col.size() - w_col.null_count();
 
     std::vector<T> replaced_array(w_col.size());
     std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
 
-        expected_value.value  = 0;
-    expected_value.value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
-    expected_value.value_squared = std::accumulate(replaced_array.begin(), replaced_array.end(), init,
+    expected_value.count = w_col.size() - w_col.null_count();
+    expected_value.value = std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0});
+    expected_value.value_squared = std::accumulate(replaced_array.begin(), replaced_array.end(), T_upcast{0},
         [](T acc, T i) { return acc + i * i; });
 
-    std::cout << "expected <mixed_output> = " <<
-    expected_value.value << ", " <<
-    expected_value.value_squared << ", " <<
-    expected_value.count << std::endl;
+    std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
     // CPU test
-    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
-//    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
+    auto it_hos = cudf::make_iterator_with_nulls<T, ColumnOutputMixed<T_upcast>, ColumnOutputMixed<T_upcast>>
+        (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
+    // GPU test
+    auto it_dev = cudf::make_iterator_with_nulls<T, ColumnOutputMixed<T_upcast>, ColumnOutputMixed<T_upcast>>
+        (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
+
+    { // ColumnOutputMixedNoCount test
+        using T_helper = ColumnOutputMixed<T_upcast, false>;
+
+        T_helper expected_value_no_count;
+        expected_value_no_count.value = expected_value.value;
+        expected_value_no_count.value_squared = expected_value.value_squared;
+        expected_value_no_count.count = 0;
+
+
+        auto it_hos = cudf::make_iterator_with_nulls<T, T_helper, T_helper>
+            (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
+        this->iterator_test_thrust_host(expected_value_no_count, it_hos, w_col.size());
+
+        // GPU test
+        auto it_dev = cudf::make_iterator_with_nulls<T, T_helper, T_helper>
+            (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+        this->iterator_test_thrust(expected_value_no_count, it_dev, w_col.size());
+        this->iterator_test_cub(expected_value_no_count, it_dev, w_col.size());
+    }
 }
 
-#endif
