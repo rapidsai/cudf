@@ -267,26 +267,32 @@ class CategoricalColumn(columnops.TypedColumnBase):
             else:
                 try:
                     fill_value = self._encode(
-                        pd.Categorical(fill_value,
-                        categories=self.cat().categories)
+                        pd.Categorical(
+                            fill_value, categories=self.cat().categories
+                        )
                     )
                     fill_value = self.data.dtype.type(fill_value)
-                except(ValueError) as err:
-                    raise ValueError("Cannot safely cast non-equivalent {} from {}".format(
-                        type(fill_value).__name__,
-                        self.dtype.name)
-                    )
+                except (ValueError) as err:
+                    err_msg = "fill value must be in categories"
+                    raise ValueError(err_msg) from err
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
             fill_value = fill_value.cat()._set_categories(
-                self.cat().categories)
-            fill_value = columnops.as_column(fill_value.data).astype(self.data.dtype)
+                self.cat().categories
+            )
+            fill_value = columnops.as_column(fill_value.data).astype(
+                self.data.dtype
+            )
 
         result = cpp_replace.apply_replace_nulls(self, fill_value)
 
-        result = columnops.build_column(result.data, 'category', result.mask,
-                               categories=self.cat().categories)
+        result = columnops.build_column(
+            result.data,
+            "category",
+            result.mask,
+            categories=self.cat().categories,
+        )
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
 

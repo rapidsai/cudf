@@ -204,7 +204,6 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
 
 def is_single_value(val):
-    from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
     return (
             isinstance(val, str)
             or isinstance(val, numbers.Number)
