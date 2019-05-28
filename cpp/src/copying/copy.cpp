@@ -71,7 +71,7 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
 {
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
 
-  gdf_column output = allocate_like(input, stream);
+  gdf_column output = allocate_like(input, true, stream);
 
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
