@@ -2691,6 +2691,18 @@ class DataFrame(object):
     def var(self, **kwargs):
         return self._apply_support_method('var', **kwargs)
 
+    def all(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'all', **kwargs)
+        return self._apply_support_method('all', **kwargs)
+
+    def any(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'any', **kwargs)
+        return self._apply_support_method('any', **kwargs)
+
     def _apply_support_method(self, method, **kwargs):
         result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
