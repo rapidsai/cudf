@@ -62,58 +62,105 @@
 // structs of output for column_input_iterator
 
 template<typename T>
-struct ColumnDataOutputs
+class ColumnOutputSingle
+{
+public:
+    T value;
+
+    template<typename T_input>
+    __device__ __host__
+    ColumnOutputSingle(T_input _value, bool is_valid=true)
+    : value( static_cast<T>(_value) )
+    {};
+
+    __device__ __host__
+    ColumnOutputSingle(){};
+
+
+    __device__ __host__
+    ColumnOutputSingle<T> operator+(ColumnOutputSingle<T> const &rhs) const
+    {
+      return ColumnOutputSingle<T>(this->value + rhs.value);
+    }
+
+    __device__ __host__
+    ColumnOutputSingle<T>& operator+=(ColumnOutputSingle<T> const& rhs)
+    {
+      this->value += rhs.value;
+      return *this;
+    }
+
+    __device__ __host__
+    bool operator==(ColumnOutputSingle<T> const& rhs) const
+    {
+      return (this->value == rhs.value );
+    }
+};
+
+
+
+template<typename T>
+struct ColumnOutputMixed
 {
     T value;
     T value_squared;
     gdf_index_type count;
 
+    template<typename T_input>
     __device__ __host__
-    ColumnDataOutputs(T *_value, bool is_valid)
-    : value(_value), value_squared(_value*_value), count(is_valid? 1 :0)
-    {};
+    ColumnOutputMixed(T_input _value, bool is_valid=true)
+    : value( static_cast<T>(_value) ), count(is_valid? T{1} : T{0})
+    {
+        value_squared = value*value;
+    };
 
     __device__ __host__
-    ColumnDataOutputs(){};
+    ColumnOutputMixed(){};
 
 };
 
+// --------------------------------------------------------------------------------------------------------
 // structs for column_input_iterator
-template<typename T, bool nulls_present=true>
-struct ColumnData;
+template<typename T_output, typename T_element, bool nulls_present=true>
+struct ColumnInput;
 
-template<typename T>
-struct ColumnData<T, false>{
-    const T *data;
+template<typename T_output, typename T_element>
+struct ColumnInput<T_output, T_element, false>{
+    const T_element *data;
 
     __device__ __host__
-    ColumnData(T *_data)
+    ColumnInput(T_element *_data)
     : data(_data){};
 
     __device__ __host__
-    T at(gdf_index_type id) const {
-        return data[id];
+    T_output at(gdf_index_type id) const {
+        return T_output(data[id], true); ;
     };
 };
 
-template<typename T>
-struct ColumnData<T, true>{
-    const T *data;
+template<typename T_output, typename T_element>
+struct ColumnInput<T_output, T_element, true>{
+    const T_element *data;
     const bit_mask::bit_mask_t *valid;
-    T identity;
+    T_element identity;
 
     __device__ __host__
-    ColumnData(const T *_data, const bit_mask::bit_mask_t *_valid, T _identity)
+    ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
     : data(_data), valid(_valid), identity(_identity){};
 
     __device__ __host__
-    ColumnData(const T *_data, const gdf_valid_type*_valid, T _identity)
-    : ColumnData(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
+    ColumnInput(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
+    : ColumnInput(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     __device__ __host__
-    T at(gdf_index_type id) const {
-        return (is_valid(id))? data[id] : identity;
+    T_output at(gdf_index_type id) const {
+        return T_output(get_value(id), is_valid(id));
     };
+
+    __device__ __host__
+    T_element get_value(gdf_index_type id) const {
+        return (is_valid(id))? data[id] : identity;
+    }
 
     __device__ __host__
     bool is_valid(gdf_index_type id) const
@@ -123,25 +170,25 @@ struct ColumnData<T, true>{
  
 /* tbd.
     __device__ __host__
-    ColumnDataOutputs<T> at(gdf_index_type id) const {
-        return ColumnDataOutputs<T>(at.(id), is_valid(id));
+    ColumnOutputMix<T> at(gdf_index_type id) const {
+        return ColumnOutputMix<T>(at.(id), is_valid(id));
     };
 */
 };
 
-
+/*
 template<typename T, bool nulls_present=true>
-struct ColumnDataSquare : public ColumnData<T, nulls_present>
+struct ColumnDataSquare : public ColumnInput<T, nulls_present>
 {
     // constructor when nulls_present == false
     __device__ __host__
     ColumnDataSquare(T *_data)
-    : ColumnData<T, false>(_data){};
+    : ColumnInput<T, false>(_data){};
 
     // constructor when nulls_present == true
     __device__ __host__
     ColumnDataSquare(const T *_data, const bit_mask::bit_mask_t  *_valid, T _identity)
-    : ColumnData<T, true>(_data, _valid, _identity){};
+    : ColumnInput<T, true>(_data, _valid, _identity){};
 
     __device__ __host__
     ColumnDataSquare(const T *_data, const gdf_valid_type*_valid, T _identity)
@@ -149,11 +196,11 @@ struct ColumnDataSquare : public ColumnData<T, nulls_present>
 
     __device__ __host__
     T at(gdf_index_type id) const {
-        T val = ColumnData<T>::at(id);
+        T val = ColumnInput<T>::at(id);
         return (val * val);
     };
 };
-
+*/
 
 // ---------------------------------------------------------------------------
 // column_input_iterator
@@ -253,8 +300,8 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
     {
-        T init = T{0};
-        thrust::device_vector<T> dev_result(1);
+        T_output init = T_output{0};
+        thrust::device_vector<T_output> dev_result(1);
 
         void     *d_temp_storage = NULL;
         size_t   temp_storage_bytes = 0;
@@ -275,11 +322,11 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_thrust(T_output expected, InputIterator d_in, int num_items)
     {
-        T init = T{0};
+        T_output init = T{0};
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
-        T result = thrust::reduce(thrust::device, d_in, d_in_last, init, HostDeviceSum{});
+        T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, HostDeviceSum{});
         EXPECT_EQ(expected, result) << "thrust test";
     }
 
@@ -287,11 +334,11 @@ struct IteratorTest : public GdfTest
     template <typename InputIterator, typename T_output>
     void iterator_test_thrust_host(T_output expected, InputIterator d_in, int num_items)
     {
-        T init = T{0};
+        T_output init = T_output{0};
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
-        T result = thrust::reduce(thrust::host, d_in, d_in_last, init, HostDeviceSum{});
+        T_output result = thrust::reduce(thrust::host, d_in, d_in_last, init, HostDeviceSum{});
         EXPECT_EQ(expected, result) << "thrust host test";
     }
 
@@ -353,19 +400,37 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
+#if 0
     // CPU test
-    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    ColumnData<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    column_input_iterator<T, ColumnData<T>> it_dev(col);
+    ColumnInput<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    column_input_iterator<T, ColumnInput<T>> it_dev(col);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
+#else
+    // CPU test
+    ColumnInput<ColumnOutputSingle<T>,T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it_hos(col_host);
+    this->iterator_test_thrust_host(ColumnOutputSingle<T>{expected_value}, it_hos, w_col.size());
+
+ #if 0
+    // GPU test
+    ColumnInput<ColumnOutputSingle<T>,T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    column_input_iterator<ColumnOutputSingle<T>, ColumnInput<ColumnOutputSingle<T>,T> > it_dev(col);
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
+#endif
+#endif
+
 
     std::cout << "test done." << std::endl;
 }
+
+#if 0
 
 /* tests for square input iterator
 */
@@ -430,8 +495,8 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
-    ColumnData<T, false> col(dev_array.data().get());
-    column_input_iterator<T, ColumnData<T, false>, T_index*> it_dev(col, dev_indices.data().get());
+    ColumnInput<T, false> col(dev_array.data().get());
+    column_input_iterator<T, ColumnInput<T, false>, T_index*> it_dev(col, dev_indices.data().get());
 
     // reduction using thrust
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
@@ -439,8 +504,8 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
-    ColumnData<T, false> col_hos(hos_array.data());
-    column_input_iterator<T, ColumnData<T, false>, T_index*> it_host(col_hos, hos_indices.data());
+    ColumnInput<T, false> col_hos(hos_array.data());
+    column_input_iterator<T, ColumnInput<T, false>, T_index*> it_host(col_hos, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 }
 
@@ -481,13 +546,13 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    ColumnData<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    column_input_iterator<T, ColumnData<T>> it_dev(col);
+    ColumnInput<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    column_input_iterator<T, ColumnInput<T>> it_dev(col);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
@@ -499,7 +564,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
 }
 
-// test for mixed output value using `ColumnDataOutputs`
+// test for mixed output value using `ColumnOutputMix`
 // it may be usuful for `var`, `std` operation
 TYPED_TEST(IteratorTest, mixed_output)
 {
@@ -520,8 +585,8 @@ TYPED_TEST(IteratorTest, mixed_output)
     // copy back data and valid arrays
     auto hos = w_col.to_host();
 
-    // calculate by cudf::reduction
-    ColumnDataOutputs<T> expected_value;
+    // calculate expected values by CPU
+    ColumnOutputMixed<T> expected_value;
 
     expected_value.count = w_col.get()->size - w_col.get()->null_count;
 
@@ -540,8 +605,10 @@ TYPED_TEST(IteratorTest, mixed_output)
     expected_value.count << std::endl;
 
     // CPU test
-    ColumnData<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnData<T>> it_hos(col_host);
+    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
 //    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
 }
+
+#endif
