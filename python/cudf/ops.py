@@ -68,3 +68,24 @@ def sqrt(arbitrary):
         return np.sqrt(arbitrary)
     else:
         return getattr(arbitrary, 'sqrt')()
+
+
+def logical_not(arbitrary):
+    if isinstance(arbitrary, Number):
+        return np.logical_not(arbitrary)
+    else:
+        return getattr(arbitrary, 'logical_not')()
+
+
+def logical_and(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.logical_and(lhs, rhs)
+    else:
+        return getattr(lhs, 'logical_and')(rhs)
+
+
+def logical_or(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.logical_or(lhs, rhs)
+    else:
+        return getattr(lhs, 'logical_or')(rhs)

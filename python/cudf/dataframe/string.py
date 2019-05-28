@@ -32,12 +32,13 @@ class StringMethods(object):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
                 def wrapper(*args, **kwargs):
-                    return getattr(self._parent._data, attr)(*args, **kwargs)
-                if isinstance(wrapper, nvstrings.nvstrings):
-                    wrapper = Series(
-                        columnops.as_column(wrapper),
-                        index=self._index
-                    )
+                    ret = getattr(self._parent._data, attr)(*args, **kwargs)
+                    if isinstance(ret, nvstrings.nvstrings):
+                        ret = Series(
+                            columnops.as_column(ret),
+                            index=self._index
+                        )
+                    return ret
                 return wrapper
             else:
                 return passed_attr

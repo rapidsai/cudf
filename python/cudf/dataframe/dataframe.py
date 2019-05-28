@@ -459,17 +459,22 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
+                    if self.shape[0] != other.shape[0]:
+                        raise NotImplementedError(
+                                "%s on columns with different "
+                                "length is not supported", fn)
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
         elif isinstance(other, Series):
@@ -2627,35 +2632,34 @@ class DataFrame(object):
     #
     # Stats
     #
-    def count(self):
-        return self._apply_support_method('count')
+    def count(self, **kwargs):
+        return self._apply_support_method('count', **kwargs)
 
-    def min(self):
-        return self._apply_support_method('min')
+    def min(self, **kwargs):
+        return self._apply_support_method('min', **kwargs)
 
-    def max(self):
-        return self._apply_support_method('max')
+    def max(self, **kwargs):
+        return self._apply_support_method('max', **kwargs)
 
-    def sum(self):
-        return self._apply_support_method('sum')
+    def sum(self, **kwargs):
+        return self._apply_support_method('sum', **kwargs)
 
-    def product(self):
-        return self._apply_support_method('product')
+    def product(self, **kwargs):
+        return self._apply_support_method('product', **kwargs)
 
-    def cummin(self):
-        return self._apply_support_method('cummin')
+    def cummin(self, **kwargs):
+        return self._apply_support_method('cummin', **kwargs)
 
-    def cummax(self):
-        return self._apply_support_method('cummax')
+    def cummax(self, **kwargs):
+        return self._apply_support_method('cummax', **kwargs)
 
-    def cumsum(self):
-        return self._apply_support_method('cumsum')
+    def cumsum(self, **kwargs):
+        return self._apply_support_method('cumsum', **kwargs)
 
-    def cumprod(self):
-        return self._apply_support_method('cumprod')
+    def cumprod(self, **kwargs):
+        return self._apply_support_method('cumprod', **kwargs)
 
-    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
-             **kwargs):
+    def mean(self, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2682,17 +2686,16 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method('mean')
+        return self._apply_support_method('mean', **kwargs)
 
-    def std(self, ddof=1):
-        return self._apply_support_method('std', ddof)
+    def std(self, **kwargs):
+        return self._apply_support_method('std', **kwargs)
 
-    def var(self, ddof=1):
-        return self._apply_support_method('var', ddof)
+    def var(self, **kwargs):
+        return self._apply_support_method('var', **kwargs)
 
-    def _apply_support_method(self, *args, **kwargs):
-        method = args[0]
-        result = [getattr(self[col], method)(*kwargs)
+    def _apply_support_method(self, method, **kwargs):
+        result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
         if isinstance(result[0], Series):
             support_result = result

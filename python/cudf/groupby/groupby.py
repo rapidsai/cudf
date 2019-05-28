@@ -270,13 +270,22 @@ class Groupby(object):
         return result
 
     def apply_multicolumn_mapped(self, result, aggs):
-        if len(set(aggs.keys())) == len(aggs.keys()) and\
-                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+        # if all of the aggregations in the mapping set are only
+        # length 1, we can assign the columns directly as keys.
+        can_map_directly = True
+        for values in aggs.values():
+            value = [values] if isinstance(values, str) else list(values)
+            if len(value) != 1:
+                can_map_directly = False
+                break
+        if can_map_directly:
             result.columns = aggs.keys()
         else:
             tuples = []
             for k in aggs.keys():
-                for v in aggs[k]:
+                value = [aggs[k]] if isinstance(aggs[k], str) else list(
+                        aggs[k])
+                for v in value:
                     tuples.append((k, v))
             multiindex = MultiIndex.from_tuples(tuples)
             result.columns = multiindex
