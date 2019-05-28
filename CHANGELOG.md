@@ -39,6 +39,7 @@
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1868 ORC reader: supports row index to speed up decoding of small/medium datasets
 
 ## Bug Fixes
 
