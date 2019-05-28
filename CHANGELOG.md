@@ -15,6 +15,7 @@
 - PR #1819 Logical operators (AND, OR, NOT) for libcudf and cuDF
 - PR #1813 ORC Reader: Add support for stripe selection
 - PR #1828 JSON Reader: add suport for bool8 columns
+- PR #1665 Add the point-in-polygon GIS function
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
