@@ -16,6 +16,7 @@
 - PR #1813 ORC Reader: Add support for stripe selection
 - PR #1828 JSON Reader: add suport for bool8 columns
 - PR #1665 Add the point-in-polygon GIS function
+- PR #1863 Series and Dataframe methods for all and any
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -64,9 +65,13 @@
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
 - PR #1839 Raise an error instead of segfaulting when transposing a DataFrame with StringColumns
+- PR #1840 Retain index correctly during merge left_on right_on
 - PR #1825 cuDF: Multiaggregation Groupby Failures
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
+- PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
+
 
 # cudf 0.7.2 (16 May 2019)
 

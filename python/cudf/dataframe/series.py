@@ -775,6 +775,18 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
         return Series(mask, name=self.name, index=self.index)
 
+    def all(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        return self._column.all()
+
+    def any(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        return self._column.any()
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 

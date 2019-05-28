@@ -2512,3 +2512,81 @@ def test_round(decimal):
     np.testing.assert_array_almost_equal(result.to_pandas(), expected,
                                          decimal=10)
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
+@pytest.mark.parametrize('data',
+                         [
+                             [0, 1, 2, 3],
+                             [-2, -1, 2, 3, 5],
+                             [True, False, False],
+                             [True],
+                             [False],
+                             [],
+                             [True, None, False],
+                             [True, True, None],
+                             [None, None],
+                             [[0, 5],
+                              [1, 6],
+                              [2, 7],
+                              [3, 8],
+                              [4, 9]],
+                             [[1, True],
+                              [2, False],
+                              [3, False]],
+                         ])
+def test_all(data):
+    if np.array(data).ndim <= 1:
+        pdata = pd.Series(data)
+        gdata = Series.from_pandas(pdata)
+    else:
+        pdata = pd.DataFrame(data, columns=['a', 'b'])
+        gdata = DataFrame.from_pandas(pdata)
+
+        # test bool_only
+        if pdata['b'].dtype == 'bool':
+            got = gdata.all(bool_only=True)
+            expected = pdata.all(bool_only=True)
+            assert_eq(got, expected)
+
+    got = gdata.all()
+    expected = pdata.all()
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('data',
+                         [
+                             [0, 1, 2, 3],
+                             [-2, -1, 2, 3, 5],
+                             [True, False, False],
+                             [True],
+                             [False],
+                             [],
+                             [True, None, False],
+                             [True, True, None],
+                             [None, None],
+                             [[0, 5],
+                              [1, 6],
+                              [2, 7],
+                              [3, 8],
+                              [4, 9]],
+                             [[1, True],
+                              [2, False],
+                              [3, False]],
+                         ])
+def test_any(data):
+    if np.array(data).ndim <= 1:
+        pdata = pd.Series(data)
+        gdata = Series.from_pandas(pdata)
+    else:
+        pdata = pd.DataFrame(data, columns=['a', 'b'])
+        gdata = DataFrame.from_pandas(pdata)
+
+        # test bool_only
+        if pdata['b'].dtype == 'bool':
+            got = gdata.all(bool_only=True)
+            expected = pdata.all(bool_only=True)
+            assert_eq(got, expected)
+
+    got = gdata.any()
+    expected = pdata.any()
+    assert_eq(got, expected)
