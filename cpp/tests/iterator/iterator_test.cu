@@ -540,9 +540,6 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 }
 
-
-#if 0
-
 TYPED_TEST(IteratorTest, large_size_reduction)
 {
     using T = int32_t;
@@ -570,15 +567,14 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    ColumnInput<T> col_host(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    column_input_iterator<T, ColumnInput<T>> it_hos(col_host);
+    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    ColumnInput<T> col(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
-    column_input_iterator<T, ColumnInput<T>> it_dev(col);
+    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
+
 
     // compare with cudf::reduction
     cudf::test::scalar_wrapper<T> result =
@@ -587,6 +583,8 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     EXPECT_EQ(expected_value, result.value());
 
 }
+
+#if 0
 
 // test for mixed output value using `ColumnOutputMix`
 // it may be usuful for `var`, `std` operation
