@@ -255,6 +255,10 @@ namespace cudf {
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement)
 {
+  if (input.size == 0) {
+    return cudf::empty_like(input);
+  }
+
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(replacement.size == 1 || replacement.size == input.size, "Column size mismatch");
   CUDF_EXPECTS(nullptr != replacement.data, "Null replacement data");
@@ -262,7 +266,7 @@ gdf_column replace_nulls(const gdf_column& input,
   CUDF_EXPECTS(nullptr == replacement.valid || 0 == replacement.null_count,
                "Invalid replacement data");
 
-  gdf_column output = cudf::allocate_like(input);
+  gdf_column output = cudf::allocate_like(input, false);
 
   cudf::type_dispatcher(input.dtype, replace_nulls_column_kernel_forwarder{},
                         input.size,
@@ -271,8 +275,6 @@ gdf_column replace_nulls(const gdf_column& input,
                         replacement.data,
                         output.data);
 
-  RMM_TRY(RMM_FREE(output.valid, 0));
-  output.valid = nullptr;
   return output;
 }
 
@@ -289,7 +291,7 @@ gdf_column replace_nulls(const gdf_column& input,
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
   CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
 
-  gdf_column output = cudf::allocate_like(input);
+  gdf_column output = cudf::allocate_like(input, false);
 
   cudf::type_dispatcher(input.dtype, replace_nulls_scalar_kernel_forwarder{},
                         input.size,
@@ -297,7 +299,7 @@ gdf_column replace_nulls(const gdf_column& input,
                         input.valid,
                         &(replacement.data),
                         output.data);
-  output.valid = nullptr;
+
   return output;
 }
 
