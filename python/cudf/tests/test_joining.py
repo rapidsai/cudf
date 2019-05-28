@@ -573,3 +573,18 @@ def test_merge_on_index_retained():
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how='left')
     gdm['a2'] = gdm['a2'].astype('float64')
     assert_eq(gdm, pdm)
+
+pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+])
+def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3]}, index=[10, 20, 30])
+    right = pd.DataFrame({'y': [10, 20, 30]}, index=[1, 2, 30])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    gd_merge = gleft.merge(gright, **kwargs)
+    pd_merge = left.merge(right, **kwargs)
+    if pd_merge.empty:
+        assert(gd_merge.empty)
