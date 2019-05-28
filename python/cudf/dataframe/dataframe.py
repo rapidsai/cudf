@@ -100,7 +100,7 @@ class DataFrame(object):
     def __init__(self, name_series=None, index=None):
         if index is None:
             index = RangeIndex(start=0)
-        self._index = index
+        self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
