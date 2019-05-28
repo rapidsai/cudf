@@ -2512,3 +2512,62 @@ def test_round(decimal):
     np.testing.assert_array_almost_equal(result.to_pandas(), expected,
                                          decimal=10)
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
+@pytest.mark.parametrize('data',
+                         [
+                             np.array([0, 1, 2, 3]),
+                             np.array([-2, -1, 2, 3, 5]),
+                             np.array([True, False, False]),
+                             np.array([True]),
+                             np.array([False]),
+                             np.array([]),
+                             np.array([True, None, False]),
+                             np.array([True, True, None]),
+                             np.array([None, None]),
+                             np.array([range(5), range(5, 10)]),
+                             np.array([[1, 2, 3], [True, False, False]]),
+                         ])
+def test_all(data):
+    if data.ndim <= 1:
+        pdata = pd.Series(data)
+        gdata = Series.from_pandas(pdata)
+    else:
+        ncols = data.shape[1]
+        cols = np.random.choice(['a', 'bb', 'ccc', 'dddd', 'eeee'], ncols,
+                                replace=False).tolist()
+        pdata = pd.DataFrame(data, columns=cols)
+        gdata = DataFrame.from_pandas(pdata)
+    got = gdata.all()
+    expected = pdata.all()
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('data',
+                         [
+                             np.array([0, 1, 2, 3]),
+                             np.array([-2, -1, 2, 3, 5]),
+                             np.array([True, False, False]),
+                             np.array([True]),
+                             np.array([False]),
+                             np.array([]),
+                             np.array([True, None, False]),
+                             np.array([True, True, None]),
+                             np.array([None, None]),
+                             np.array([range(5), range(5, 10)]),
+                             np.array([[1, 2, 3], [True, False, False]]),
+                         ])
+def test_any(data):
+    if data.ndim <= 1:
+        pdata = pd.Series(data)
+        gdata = Series.from_pandas(pdata)
+    else:
+        ncols = data.shape[1]
+        cols = np.random.choice(['a', 'bb', 'ccc', 'dddd', 'eeee'], ncols,
+                                replace=False).tolist()
+        pdata = pd.DataFrame(data, columns=cols)
+        gdata = DataFrame.from_pandas(pdata)
+
+    got = gdata.any()
+    expected = pdata.any()
+    assert_eq(got, expected)
