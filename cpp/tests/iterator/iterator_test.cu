@@ -138,7 +138,7 @@ struct ColumnInput<T_output, T_element, false>{
 
     __device__ __host__
     T_output at(gdf_index_type id) const {
-        return T_output(data[id], true); ;
+        return T_output(data[id], true);
     };
 };
 
@@ -492,10 +492,11 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     std::cout << "test done." << std::endl;
 }
 
-#if 0
+
 
 /*
-    tests for group_by iterator
+    tests for indexed access
+
     this was used by old implementation of group_by.
 
     This won't be used with the newer implementation
@@ -505,7 +506,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     For group_by.cumsum() (scan base group_by) may not be single pass scan.
     There is a possiblity that this process may be used for group_by.cumsum().
 */
-TYPED_TEST(IteratorTest, group_by_iterator)
+TYPED_TEST(IteratorTest, indexed_iterator)
 {
     using T = int32_t;
     using T_index = gdf_index_type;
@@ -521,9 +522,12 @@ TYPED_TEST(IteratorTest, group_by_iterator)
         [&](T acc, T_index id){ return (acc + hos_array[id]); } );
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
+
+    using T_input = ColumnInput<ColumnOutputSingle<T>, T, false>;
+
     // pass `dev_indices` as base iterator of `column_input_iterator`.
-    ColumnInput<T, false> col(dev_array.data().get());
-    column_input_iterator<T, ColumnInput<T, false>, T_index*> it_dev(col, dev_indices.data().get());
+    T_input col(dev_array.data().get());
+    column_input_iterator<T, T_input, T_index*> it_dev(col, dev_indices.data().get());
 
     // reduction using thrust
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
@@ -531,20 +535,13 @@ TYPED_TEST(IteratorTest, group_by_iterator)
     this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
-    ColumnInput<T, false> col_hos(hos_array.data());
-    column_input_iterator<T, ColumnInput<T, false>, T_index*> it_host(col_hos, hos_indices.data());
+    T_input col_hos(hos_array.data());
+    column_input_iterator<T, T_input, T_index*> it_host(col_hos, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 }
 
-// tests for group_by iterator
-TYPED_TEST(IteratorTest, group_by_iterator_null)
-{
-    // Discussion: how to do if all of values are nulls ?
-    // maybe need to exclude null values first ? (it also gives `count` of a column value in the group)
 
-
-    // TBD. it should be possible.
-}
+#if 0
 
 TYPED_TEST(IteratorTest, large_size_reduction)
 {
