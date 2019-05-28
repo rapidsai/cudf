@@ -1,5 +1,6 @@
 /*
  * Copyright 2018 BlazingDB, Inc.
+
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
  *
@@ -23,11 +24,15 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include <copying.hpp>
+#include <types.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities//type_dispatcher.hpp"
 #include <utilities/cuda_utils.hpp>
 #include "utilities/cudf_utils.h"
+#include "bitmask/bit_mask.cuh"
 #include "bitmask/legacy_bitmask.hpp"
+
+using bit_mask::bit_mask_t;
 
 namespace{ //anonymous
 
@@ -147,7 +152,7 @@ template <typename Type>
 __global__
   void replace_nulls_with_scalar(gdf_size_type size,
                                  const Type* in_data,
-                                 gdf_valid_type* in_valid,
+                                 bit_mask_t const *in_valid,
                                  const Type* replacement,
                                  Type* out_data) 
 {
@@ -160,7 +165,7 @@ __global__
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : *replacement;
+    out_data[i] = bit_mask::is_valid(in_valid, i)? in_data[i] : *replacement;
   }
 }
 
@@ -169,7 +174,7 @@ template <typename Type>
 __global__
 void replace_nulls_with_column(gdf_size_type size,
                                const Type* in_data,
-                               gdf_valid_type* in_valid,
+                               bit_mask_t const *in_valid,
                                const Type* replacement,
                                Type* out_data) 
 {
@@ -182,7 +187,7 @@ void replace_nulls_with_column(gdf_size_type size,
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    out_data[i] = gdf_is_valid(in_valid, i)? in_data[i] : replacement[i];
+    out_data[i] = bit_mask::is_valid(in_valid, i)? in_data[i] : replacement[i];
   }
 }
 
@@ -205,7 +210,7 @@ struct replace_nulls_column_kernel_forwarder {
 
     replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
-                                          (d_in_valid),
+                                          reinterpret_cast<bit_mask_t*>(d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
                                           static_cast<col_type*>(d_out_data)
                                           );
@@ -238,7 +243,7 @@ struct replace_nulls_scalar_kernel_forwarder {
 
     replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
-                                          (d_in_valid),
+                                          reinterpret_cast<bit_mask_t*>(d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
                                           static_cast<col_type*>(d_out_data)
                                           );
@@ -262,7 +267,7 @@ gdf_column replace_nulls(const gdf_column& input,
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
 
-  if (input.null_count == 0) {
+  if (input.null_count == 0 || input.valid == nullptr) {
     return cudf::copy(input);
   }
 
@@ -294,7 +299,7 @@ gdf_column replace_nulls(const gdf_column& input,
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
 
-  if (input.null_count == 0) {
+  if (input.null_count == 0 || input.valid == nullptr) {
     return cudf::copy(input);
   }
 
