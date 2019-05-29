@@ -463,6 +463,7 @@ def test_multiindex_copy():
     mi2 = mi1.copy(deep=True)
     assert_eq(mi1, mi2)
 
+
 def test_multiindex_iloc(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)

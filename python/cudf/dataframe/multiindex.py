@@ -244,7 +244,7 @@ class MultiIndex(Index):
             out_index.name = result.index.names[len(result.index.names)-1]
             result.index = out_index
         else:
-            if len(result) == 1 and size == 0 and slice_access == False:
+            if len(result) == 1 and size == 0 and slice_access is False:
                 # If the final result is one row and it was not mapped into
                 # directly
                 result = result.T
