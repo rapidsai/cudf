@@ -2533,6 +2533,13 @@ def test_round(decimal):
                              [[1, True],
                               [2, False],
                               [3, False]],
+                             pytest.param([
+                                 ['a', True],
+                                 ['b', False],
+                                 ['c', False]
+                             ], marks=[pytest.mark.xfail(
+                                 reason='NotImplementedError: any does not '
+                                 'support columns of object dtype.')])
                          ])
 def test_all(data):
     if np.array(data).ndim <= 1:
@@ -2572,6 +2579,13 @@ def test_all(data):
                              [[1, True],
                               [2, False],
                               [3, False]],
+                             pytest.param([
+                                 ['a', True],
+                                 ['b', False],
+                                 ['c', False]
+                             ], marks=[pytest.mark.xfail(
+                                 reason='NotImplementedError: any does not '
+                                 'support columns of object dtype.')])
                          ])
 def test_any(data):
     if np.array(data).ndim <= 1:
