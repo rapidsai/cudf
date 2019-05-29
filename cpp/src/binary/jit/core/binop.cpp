@@ -24,6 +24,8 @@
 #include "utilities/cudf_utils.h"
 #include "cudf.h"
 #include "bitmask/legacy_bitmask.hpp"
+#include "string/nvcategory_util.hpp"
+#include <copying.hpp>
 
 namespace cudf {
 namespace binops {
@@ -226,5 +228,24 @@ gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar*
 }
 
 gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+    if (lhs->dtype == GDF_STRING_CATEGORY && rhs->dtype == GDF_STRING_CATEGORY) {
+        // if the columns are string types then we need to combine categories
+        // before checking for equality because the same category values can mean
+        // different things for different columns
+
+        // make temporary columns which will have synced memory
+        auto temp_lhs = cudf::allocate_like(*lhs);
+        auto temp_rhs = cudf::allocate_like(*rhs);
+        gdf_column* input_cols[2]   = {lhs, rhs};
+        gdf_column* temp_cols[2]    = {&temp_lhs, &temp_rhs};
+
+        // sync categories
+        sync_column_categories(input_cols, temp_cols, 2);
+
+        // now it's ok to directly compare the column data
+        return cudf::binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+
+        // TODO: who deallocates temp_lh, temp_rhs?
+    }
     return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
 }
