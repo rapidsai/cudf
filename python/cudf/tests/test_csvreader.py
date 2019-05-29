@@ -374,8 +374,8 @@ def test_csv_reader_NaN_values():
     # for data type detection, cells need to be completely empty,
     # but some cells in empty_cells contain blank characters and quotes
     df_obj = read_csv(StringIO(all_cells),
-                       header=None,
-                       na_values=custom_na_values)
+                      header=None,
+                      na_values=custom_na_values)
     assert(df_obj.dtypes[0] == np.dtype('object'))
 
 
