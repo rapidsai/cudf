@@ -11,7 +11,7 @@ from cudf.bindings.binops cimport *
 from cudf.bindings.GDFError import GDFError
 from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 

@@ -99,8 +99,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype('int16'):
-                other_dtype = np.dtype('int32')
 
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
@@ -248,6 +246,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def all(self):
         return bool(self.min())
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(self.max())
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)

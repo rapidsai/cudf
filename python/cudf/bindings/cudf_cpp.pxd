@@ -173,7 +173,7 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_VA
 
     ctypedef union gdf_data:
-        char          si08
+        signed char   si08
         short         si16
         int           si32
         long          si64

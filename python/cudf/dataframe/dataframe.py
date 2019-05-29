@@ -1225,6 +1225,7 @@ class DataFrame(object):
         # Perform out = data[index] for all columns
         for k in self.columns:
             df[k] = self[k].take(sorted_indices.to_gpu_array())
+        df.index = self.index.take(sorted_indices.to_gpu_array())
         return df
 
     def argsort(self, ascending=True, na_position='last'):
@@ -1483,6 +1484,7 @@ class DataFrame(object):
             on = lhs.LEFT_RIGHT_INDEX_NAME
             lhs[on] = lhs.index
             rhs[on] = rhs.index
+            self._original_left_index_name = lhs.index.name
         if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
@@ -1645,8 +1647,9 @@ class DataFrame(object):
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
+            df = df.set_index(lhs.LEFT_RIGHT_INDEX_NAME)
+            df = df.sort_values(df.columns[0])
+            df.index.name = self._original_left_index_name
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on[0]])))
@@ -2690,6 +2693,18 @@ class DataFrame(object):
 
     def var(self, **kwargs):
         return self._apply_support_method('var', **kwargs)
+
+    def all(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'all', **kwargs)
+        return self._apply_support_method('all', **kwargs)
+
+    def any(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'any', **kwargs)
+        return self._apply_support_method('any', **kwargs)
 
     def _apply_support_method(self, method, **kwargs):
         result = [getattr(self[col], method)(**kwargs)

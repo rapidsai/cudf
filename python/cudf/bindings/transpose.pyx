@@ -10,6 +10,7 @@ from cudf.bindings.cudf_cpp import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
+from cudf.dataframe.columnops import column_empty
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
@@ -30,6 +31,10 @@ def transpose(df):
     if pd.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError('Categorical columns are not yet '
                                   'supported for function')
+    elif np.dtype(dtype).kind in 'OU':
+        raise NotImplementedError('String columns are not yet '
+                                  'supported for function')
+
     if any(t != dtype for t in df.dtypes):
         raise ValueError('all columns must have the same dtype')
     has_null = any(c.null_count for c in df._cols.values())
@@ -44,19 +49,11 @@ def transpose(df):
     new_nrow = ncols
     new_ncol = len(df)
 
-    if has_null:
-        new_col_series = [
-            Series.from_masked_array(
-                data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                mask=cudautils.make_empty_mask(size=new_nrow),
-            )
-            for i in range(0, new_ncol)]
-    else:
-        new_col_series = [
-            Series(
-                data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-            )
-            for i in range(0, new_ncol)]
+    new_col_series = [
+        Series(column_empty(new_nrow, dtype=dtype, masked=has_null))
+        for i in range(0, new_ncol)
+    ]
+
     cdef vector[gdf_column*] new_cols
     for i in range(0, new_ncol):
         new_cols.push_back(column_view_from_column(new_col_series[i]._column))

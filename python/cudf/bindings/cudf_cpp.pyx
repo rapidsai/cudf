@@ -156,7 +156,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.dt64 = np.datetime64(val, 'ms').astype(int)
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
-                         "to gdf_calar".format(val.dtype.name))
+                         "to gdf_scalar".format(val.dtype.name))
 
 
 # gdf_column functions
@@ -263,10 +263,8 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                 g_dtype = dtypes[np.int8]
             else:
                 g_dtype = dtypes[data.dtype.type]
-        elif dtype != np.bool_:
-            g_dtype = dtypes[dtype.type]
         else:
-            g_dtype = dtypes[dtype]
+            g_dtype = dtypes[dtype.type]
     else:
         g_dtype = dtypes[data.dtype]
 
