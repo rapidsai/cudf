@@ -35,8 +35,6 @@ build/
 cpp/build/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
-cpp/python/libgdf_cffi/libgdf_cffi.py
-cpp/python/librmm_cffi/librmm_cffi.py
 
 ## Eclipse IDE
 .project

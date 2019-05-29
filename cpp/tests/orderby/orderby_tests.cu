@@ -24,6 +24,7 @@
 #include <tests/utilities/tuple_vectors.h>
 
 #include <utilities/bit_util.cuh>
+#include <utilities/wrapper_types.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cudf.h>
 
@@ -327,11 +328,17 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
+    gdf_context ctxt;
+    if (nulls_are_smallest)
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_SMALLEST;
+    else
+      ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+
     result_error = gdf_order_by(columns_to_sort,
                                 (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),
                                 num_columns,
                                 sorted_indices_output,
-                                nulls_are_smallest);
+                                &ctxt);
 
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
@@ -387,7 +394,7 @@ typedef ::testing::Types<
                           // Single column Order by Tests for some types
                           TestParameters< VTuple<int32_t>, false >,
                           TestParameters< VTuple<uint64_t>, false >,
-						              TestParameters< VTuple<float>, false >,
+                          TestParameters< VTuple<float>, false >,
                           TestParameters< VTuple<int64_t>, true >,
                           TestParameters< VTuple<uint32_t>, true >,
                           TestParameters< VTuple<double>, true >,
@@ -396,11 +403,17 @@ typedef ::testing::Types<
                           TestParameters< VTuple<int64_t, uint32_t>, false >,
                           TestParameters< VTuple<uint32_t, double>, false >,
                           TestParameters< VTuple<float, float>, true >,
-						              TestParameters< VTuple<uint64_t, float>, true >,
+                          TestParameters< VTuple<uint64_t, float>, true >,
                           TestParameters< VTuple<double, int32_t>, true >,
                           // Three Column Order by Tests for some combination of types
                           TestParameters< VTuple<int32_t, double, uint32_t>, false >,
                           TestParameters< VTuple<float, int32_t, float>, true >
+
+                          // TODO: enable and fix sorting tests for GDF_BOOL8
+                          //TestParameters< VTuple<cudf::bool8>, true >,
+                          //TestParameters< VTuple<int32_t, cudf::bool8>, false >,
+                          //TestParameters< VTuple<double, cudf::bool8>, true >,
+                          //TestParameters< VTuple<float, int32_t, cudf::bool8>, true >
                           > Implementations;
 
 TYPED_TEST_CASE(OrderByTest, Implementations);

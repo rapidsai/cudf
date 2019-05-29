@@ -1,16 +1,15 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-# Usage:
-#   conda build -c nvidia -c rapidsai -c conda-forge -c defaults .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '9.2').split('.')[:2]) %}
+
 package:
   name: libcudf
   version: {{ version }}
 
 source:
-  # git_url: ../../..
   path: ../../..
 
 build:
@@ -21,21 +20,18 @@ build:
     - CXX
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
-    - BUILD_ABI
+  run_exports:
+    - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
 requirements:
-  # use channel:
-  #   - nvidia
-  #   - rapidsai
-  #   - rapidsai-nightly
-  #   - conda-forge
-  #   - defaults
   build:
     - cmake >=3.12.4
-    - nvstrings 0.3*
+  host:
+    - librmm {{ minor_version }}.*
+    - libnvstrings {{ minor_version }}.*
+    - cudatoolkit {{ cuda_version }}.*
   run:
-    - pyarrow 0.12.1
-    - nvstrings 0.3*
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   commands:
@@ -52,5 +48,6 @@ test:
 about:
   home: http://rapids.ai/
   license: Apache-2.0
-  # license_file: LICENSE
+  license_family: Apache
+  license_file: LICENSE
   summary: libcudf library

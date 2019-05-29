@@ -8,11 +8,13 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical
+from cudf.dataframe import columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
+import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
+from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
 
 
@@ -30,12 +32,13 @@ class StringMethods(object):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
                 def wrapper(*args, **kwargs):
-                    return getattr(self._parent._data, attr)(*args, **kwargs)
-                if isinstance(wrapper, nvstrings.nvstrings):
-                    wrapper = Series(
-                        columnops.as_column(wrapper),
-                        index=self._index
-                    )
+                    ret = getattr(self._parent._data, attr)(*args, **kwargs)
+                    if isinstance(ret, nvstrings.nvstrings):
+                        ret = Series(
+                            columnops.as_column(ret),
+                            index=self._index
+                        )
+                    return ret
                 return wrapper
             else:
                 return passed_attr
@@ -335,6 +338,9 @@ class StringColumn(columnops.TypedColumnBase):
         null_count : int; optional
             The number of null values in the mask.
         """
+        from collections.abc import Sequence
+        if isinstance(data, Sequence):
+            data = nvstrings.to_device(data)
         assert isinstance(data, nvstrings.nvstrings)
         self._data = data
         self._dtype = np.dtype("object")
@@ -404,7 +410,9 @@ class StringColumn(columnops.TypedColumnBase):
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
-            if arg > (len(self) - 1) or arg < 0:
+            if arg < 0:
+                arg = len(self) + arg
+            if arg > (len(self) - 1):
                 raise IndexError
             out = self._data[arg]
         elif isinstance(arg, slice):
@@ -514,6 +522,7 @@ class StringColumn(columnops.TypedColumnBase):
     def _replace_defaults(self):
         params = {
             'data': self.data,
+            'mask': self.mask,
             'null_count': self.null_count,
         }
         return params
@@ -521,3 +530,74 @@ class StringColumn(columnops.TypedColumnBase):
     def copy(self, deep=True):
         params = self._replace_defaults()
         return type(self)(**params)
+
+    def unordered_compare(self, cmpop, rhs):
+        return string_column_binop(self, rhs, op=cmpop)
+
+    def normalize_binop_value(self, other):
+        col = utils.scalar_broadcast_to(other, shape=len(self),
+                                        dtype="object")
+        return self.replace(data=col.data)
+
+    def fillna(self, fill_value, inplace=False):
+        """
+        Fill null values with * fill_value *
+        """
+
+        if not isinstance(fill_value, str) and \
+            not(
+                isinstance(fill_value, series.Series) and
+                isinstance(fill_value._column, StringColumn)
+                ):
+            raise TypeError("fill_value must be a string or a string series")
+
+        # replace fill_value with nvstrings
+        # if it is a column
+
+        if isinstance(fill_value, series.Series):
+            if len(fill_value) < len(self):
+                raise ValueError("fill value series must be of same or "
+                                 "greater length than the series to be filled")
+
+            fill_value = fill_value[: len(self)]._column._data
+
+        filled_data = self._data.fillna(fill_value)
+        result = StringColumn(filled_data)
+        result = result.replace(mask=None)
+        return self._mimic_inplace(result, inplace)
+
+    def _find_first_and_last(self, value):
+        found_indices = self.str().contains(f"^{value}$").data.mem
+        found_indices = cudautils.astype(found_indices, "int32")
+        first = columnops.as_column(found_indices).find_first_value(1)
+        last = columnops.as_column(found_indices).find_last_value(1)
+        return first, last
+
+    def find_first_value(self, value):
+        return self._find_first_and_last(value)[0]
+
+    def find_last_value(self, value):
+        return self._find_first_and_last(value)[1]
+
+    def unique(self, method='sort'):
+        """
+        Get unique strings in the data
+        """
+        result = StringColumn(self.nvcategory.keys())
+        return result
+
+    def take(self, indices):
+        return self.element_indexing(indices)
+
+
+def string_column_binop(lhs, rhs, op):
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
+    # Allocate output
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
+    # Call and fix null_count
+    null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+
+    result = out.replace(null_count=null_count)
+    nvtx_range_pop()
+    return result

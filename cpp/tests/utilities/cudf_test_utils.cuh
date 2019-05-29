@@ -28,7 +28,7 @@
 
 #include <rmm/rmm.h>
 
-#include <thrust/equal.h>
+#include <thrust/logical.h>
 
 #include <bitset>
 #include <numeric> // for std::accumulate
@@ -40,6 +40,41 @@ constexpr const char null_representative = '@';
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+
+#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
+#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
+
+#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
+#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
+
+#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression)                           \
+do {                                                                          \
+    gdf_error _assert_cudf_success_eval_result;                               \
+    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
+    const char* _assertion_failure_message = #gdf_error_expression;           \
+    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) <<               \
+      "Failing expression: " << _assertion_failure_message;                   \
+} while (0)
+
+// Utility for testing the expectation that an expression x throws the specified
+// exception whose what() message ends with the msg
+#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
+do { \
+  EXPECT_THROW({                                                     \
+    try { x; }                                                       \
+    catch (const exception &e) {                                     \
+    ASSERT_NE(nullptr, e.what());                                    \
+    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
+    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
+    throw;                                                           \
+  }}, exception);                                                    \
+} while (0)
+
+#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
+
+#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
+EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
 
 /**---------------------------------------------------------------------------*
  * @brief test macro to be expected as no exception.
@@ -201,6 +236,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+  the_column->col_name = nullptr;
 
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector
@@ -311,42 +347,18 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
   return initialize_gdf_columns(columns,
                                 [](size_t row, size_t col) { return true; });
 }
+
 /**
  * ---------------------------------------------------------------------------*
  * @brief Compare two gdf_columns on all fields, including pairwise comparison
- * of data and valid arrays
+ * of data and valid arrays. 
+ * 
+ * Uses type_dispatcher to dispatch the data comparison
  *
- * @tparam T The type of columns to compare
  * @param left The left column
  * @param right The right column
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
-template <typename T>
-bool gdf_equal_columns(gdf_column* left, gdf_column* right)
-{
-  if (left->size != right->size) return false;
-  if (left->dtype != right->dtype) return false;
-  if (left->null_count != right->null_count) return false;
-  if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
+bool gdf_equal_columns(gdf_column const& left, gdf_column const &right);
 
-  if (!(left->data && right->data))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
-                     reinterpret_cast<T*>(left->data) + left->size,
-                     reinterpret_cast<T*>(right->data)))
-    return false;
-
-  if (!(left->valid && right->valid))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, left->valid,
-                     left->valid + gdf_num_bitmask_elements(left->size),
-                     right->valid))
-    return false;
-  
-  return true;
-}
-
-
-#endif
+#endif // CUDF_TEST_UTILS_CUH_

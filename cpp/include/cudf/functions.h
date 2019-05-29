@@ -41,21 +41,6 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  */
 gdf_error gdf_nvtx_range_pop();
 
-/**
- * @brief  Counts the number of valid bits for the specified number of rows
- * in a validity bitmask.
- *
- * If the bitmask is null, returns a count equal to the number of rows.
- *
- * @param[in] masks The validity bitmask buffer in device memory
- * @param[in] num_rows The number of bits to count
- * @param[out] count The number of valid bits in the buffer from [0, num_rows)
- *
- * @returns  GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
-                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
@@ -168,15 +153,20 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
 /**
  * @brief  Constructor for the gdf_context struct
  *
- * @param[out] gdf_context being constructed
- * @param[in] Indicates if the input data is sorted. 0 = No, 1 = yes
- * @param[in] the method to be used for the operation (e.g., sort vs hash)
- * @param[in] for COUNT: DISTINCT = 1, else = 0
+ * @param[out] context gdf_context being constructed
+ * @param[in] flag_sorted Indicates if the input data is sorted. 0 = No, 1 = yes
+ * @param[in] flag_method The method to be used for the operation (e.g., sort vs hash)
+ * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
+ * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+ * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
+ *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace);
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           gdf_null_sort_behavior flag_null_sort_behavior);
 
 
 /* error handling */
@@ -314,61 +304,6 @@ const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
 const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
 
 
-/* sorting */
-
-/**
- * @brief  Constructor for the gdf_radixsort_plan_type object
- *
- * @param[in] Number of items to sort
- * @param[in] Indicates if sort should be ascending or descending. 1 = Descending, 0 = Ascending
- * @param[in] The least-significant bit index (inclusive) needed for key comparison
- * @param[in] The most-significant bit index (exclusive) needed for key comparison (e.g., sizeof(unsigned int) * 8)
- *
- * @returns  gdf_radixsort_plan_type object pointer
- */
-gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
-                                        unsigned begin_bit, unsigned end_bit);
-
-/**
- * @brief  Allocates device memory for the radixsort
- *
- * @param[in] Radix sort plan
- * @param[in] sizeof data type of key
- * @param[in] sizeof data type of val
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
-                                   size_t sizeof_key, size_t sizeof_val);
-
-/**
- * @brief  Frees device memory used for the radixsort
- *
- * @param[in] Radix sort plan
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
-
-
-/**
- * @brief  Performs a radixsort on the key and value columns
- * 
- * The null_count of the keycol and valcol columns are expected to be 0
- * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
-                        gdf_column *keycol,
-                        gdf_column *valcol);
-
-
-
 /* segmented sorting */
 
 /**
@@ -429,8 +364,6 @@ gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
                                   unsigned num_segments,
                                   unsigned *d_begin_offsets,
                                   unsigned *d_end_offsets);
-
-
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
@@ -887,36 +820,6 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-
-/**
- * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
- *
- * @param[in] gdf_column of input of any type
- * @param[in] gdf_column holding the stencil
- * @param[out] output gdf_column of same type as input. The output memory needs to be preallocated to be the same size as input
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
-
-
-/*
- * Hashing
- */
-
-/**
- * @brief  Creates a hash of multiple gdf_columns
- *
- * @param[in] an array of gdf_columns to be hashes together
- * @param[in] the number of columns in the array of gdf_columns to be hashes together
- * @param[out] output gdf_column of type GDF_INT64. The output memory needs to be preallocated
- * @param[in] A pointer to a cudaStream_t. If nullptr, the function will create a stream to use.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
-
-
 /*
  * gdf introspection utlities
  */
@@ -930,7 +833,6 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 gdf_size_type gdf_dtype_size(gdf_dtype dtype);
 
 /**
- * @brief  returns the size in bytes of the data type of the gdf_column
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
@@ -947,29 +849,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    ORDER-BY
    GROUP-BY
  */
-
-/**
- * @brief  Performs SQL like WHERE (Filtering)
- *
- * @param[in] # rows
- * @param[in] host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
- * @param[in] # cols
- * @param[out] pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
- * @param[out] pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
- * @param[in] device-side array of values to filter against (type-erased)
- * @param[out] device-side array of row indices that remain after filtering
- * @param[out] host-side # rows that remain after filtering
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_filter(size_t nrows,
-                    gdf_column* cols,
-                    size_t ncols,
-                    void** d_cols,
-                    int* d_types, 
-                    void** d_vals,
-                    size_t* d_indx,
-                    size_t* new_sz);
 
 /**
  * @brief  Performs SQL like GROUP BY with SUM aggregation
@@ -1077,12 +956,13 @@ gdf_error gdf_group_by_count(int ncols,
                              gdf_context* ctxt);
 
 /**
- * @brief  Calculates exact quantiles
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] precision: type of quantile method calculation
  * @param[in] requested quantile in [0,1]
- * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
+ * @param[out] result the result as double. The type can be changed in future
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
@@ -1090,22 +970,24 @@ gdf_error gdf_group_by_count(int ncols,
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
-                            void* t_erased_res,                            
+                            gdf_scalar*  result,
                             gdf_context* ctxt);
 
 /**
- * @brief  Calculates approximate quantiles
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with arithmetic colum.
  *
  * @param[in] input column
  * @param[in] requested quantile in [0,1]
- * @param[out] result; type-erased result of same type as column;
+ * @param[out] result quantile, with the same type as @p col_in
  * @param[in] struct with additional info
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
-                              void* t_erased_res,
+                              gdf_scalar*  result,
                               gdf_context* ctxt);
 
 /** 
@@ -1127,15 +1009,16 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 /** 
  * @brief Sorts an array of gdf_column.
  * 
- * @param[in] input_columns Array of gdf_columns
- * @param[in] asc_desc Device array of sort order types for each column
+ * @param[in]  input_columns Array of gdf_columns
+ * @param[in]  asc_desc Device array of sort order types for each column
  *                     (0 is ascending order and 1 is descending). If NULL
  *                     is provided defaults to ascending order for evey column.
- * @param[in] num_inputs # columns
- * @param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- *                                    smaller than non-nulls or viceversa
- * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted
- *                            indices
+ * @param[in]  num_inputs # columns
+ * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted indices
+ * @param[in]  context  The options for controlling treatment of nulls
+ *             context->flag_null_sort_behavior
+ *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
+ *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
@@ -1143,7 +1026,8 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
-                       int          flag_nulls_are_smallest);
+                       gdf_context * context);
+
 
 /**
  * @brief Replaces all null values in a column with either a specific value or corresponding values of another column

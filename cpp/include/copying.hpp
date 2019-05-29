@@ -19,8 +19,84 @@
 
 #include "cudf.h"
 #include "types.hpp"
+#include <vector>
+
+// Forward declaration
+typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
+
+/*
+ * Initializes and returns gdf_column of the same type as the input.
+ * 
+ * @param input The input column to emulate
+ * @return gdf_column An unallocated column of same type as input
+ */
+gdf_column empty_like(gdf_column const& input);
+
+/**
+ * @brief Allocates a new column of the same size and type as the input.
+ *
+ * @param input The input column to emulate
+ * @param stream Optional stream in which to perform copies
+ * @return gdf_column An allocated column of same size and type of input
+ */
+gdf_column allocate_like(gdf_column const& input, cudaStream_t stream = 0);
+
+/**
+ * @brief Creates a new column that is a copy of input
+ * 
+ * @param input The input column to copy
+ * @param stream Optional stream in which to perform copies
+ * @return gdf_column A copy of input
+ */
+gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of empty columns with the same types as the inputs
+ *
+ * Creates the `gdf_column` objects, but does not allocate any underlying device
+ * memory for the column's data or bitmask.
+ *
+ * @note It is the caller's responsibility to delete the `gdf_column` object for
+ * every column in the new table.
+ *
+ * @param t The input table to emulate
+ * @return table A table of empty columns of same type as input
+ *---------------------------------------------------------------------------**/
+table empty_like(table const& t);
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of columns with the same type and allocation size as
+ * the input.
+ *
+ * Creates the `gdf_column` objects, and allocates underlying device memory for
+ * each column matching the input columns
+ *
+ * @note It is the caller's responsibility to free each column's device memory
+ * allocation in addition to deleting the `gdf_column` object for every column
+ * in the new table.
+ *
+ * @param t The table to emulate
+ * @param stream Optional stream in which to perform allocations
+ * @return table A table of columns with same type and allocation size as input
+ *---------------------------------------------------------------------------**/
+table allocate_like(table const& t, cudaStream_t stream = 0);
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a table of columns and deep copies the data from an input
+ * table.
+ *
+ * @note It is the caller's responsibility to free each column's device memory
+ * allocation in addition to deleting the `gdf_column` object for every column
+ * in the new table.
+ *
+ * @param t
+ * @param stream
+ * @return table
+ *---------------------------------------------------------------------------**/
+table copy(table const& t, cudaStream_t stream = 0);
+
 /**
  * @brief Scatters the rows (including null values) of a set of source columns
  * into a set of destination columns.
@@ -88,6 +164,97 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
+
+/**
+ * @brief Slices a column (including null values) into a set of columns
+ * according to a set of indices.
+ *
+ * The "slice" function divides part of the input column into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * columns. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
+ *
+ * The pairs of indices in the array are required to comply with the following
+ * conditions:
+ * a, b belongs to Range[0, input column size]
+ * a <= b, where the position of a is less or equal to the position of b.
+  *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function returns an empty column.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, input column
+ * size), the outcome is undefined.
+ * When the indices array is empty, an empty vector of columns is returned.
+ *
+ * The output columns will be allocated by the function.
+ *
+ * Example:
+ * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+ * indices: {1, 3, 5, 9, 2, 4, 8, 8}
+ * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
+ *
+ * @param[in] input_column  The input column whose rows will be sliced.
+ * @param[in] indices       An device array of indices that are used to take 'slices'
+ * of the input column.
+ * @return  A std::vector of gdf_column*, each of which may have a different number of rows.
+ * a different number of rows that are equal to the difference of two
+ * consecutive indices in the indices array.
+ */
+std::vector<gdf_column*> slice(gdf_column const &          input_column,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
+
+/**
+ * @brief Splits a column (including null values) into a set of columns
+ * according to a set of indices.
+ *
+ * The "split" function divides the input column into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * columns. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
+ *
+ * The indices array ('indices') is require to be a monotonic non-decreasing set.
+ * The indices in the array are required to comply with the following conditions:
+ * a, b belongs to Range[0, input column size]
+ * a <= b, where the position of a is less or equal to the position of b.
+ *
+ * The split function will take a pair of indices from the indices array
+ * ('indices') in a consecutive manner. For the first pair, the function will
+ * take the value 0 and the first element of the indices array. For the last pair,
+ * the function will take the last element of the indices array and the size of
+ * the input column.
+ *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function return an empty column.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, input column
+ * size), the outcome is undefined.
+ * When the indices array is empty, an empty vector of columns is returned.
+ *
+ * It is required that the output columns will be preallocated. The size of each
+ * of the columns can be of different value. The number of columns must be equal
+ * to the number of indices in the array plus one. The datatypes of the input
+ * column and the output columns must be the same.
+ *
+ * Example:
+ * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+ * indices: {2, 5, 9}
+ * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+ *
+ * @param[in] input_column  The input column whose rows will be split.
+ * @param[in] indices       An device array of indices that are used to divide the input
+ * column into multiple columns.
+ * @return A std::vector of gdf_column*, each of which may have a different size
+ * a different number of rows.
+ */
+std::vector<gdf_column*> split(gdf_column const &          input_column,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
+
 }  // namespace cudf
 
 #endif  // COPYING_H

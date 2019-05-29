@@ -9,7 +9,9 @@ from copy import deepcopy, copy
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
+import cudf
 from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -19,6 +21,8 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
+
+import cudf.bindings.copying as cpp_copying
 
 
 class Index(object):
@@ -70,9 +74,11 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            index = cudautils.gather(data=self.gpu_values, index=indices)
-            col = self.as_column().replace(data=Buffer(index))
-            return as_index(col)
+            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
+            col = self.as_column().replace(data=index.data)
+            new_index = as_index(col)
+            new_index.name = self.name
+            return new_index
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
@@ -205,7 +211,18 @@ class Index(object):
     def equals(self, other):
         if len(self) != len(other):
             return False
-        return (self == other)._values.all()
+        elif len(self) == 1:
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
+        else:
+            result = (self == other)
+            if isinstance(result, bool):
+                return result
+            else:
+                return result._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
@@ -240,6 +257,42 @@ class Index(object):
         out.name = name
 
         return out.copy(deep=True)
+
+    def astype(self, dtype):
+        """Convert to the given ``dtype``.
+
+        Returns
+        -------
+        If the dtype changed, a new ``Index`` is returned by casting each
+        values to the given dtype.
+        If the dtype is not changed, ``self`` is returned.
+        """
+        if dtype == self.dtype:
+            return self
+
+        return as_index(self._values.astype(dtype), name=self.name)
+
+    def to_array(self, fillna=None):
+        """Get a dense numpy array for the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            Defaults to None, which will skip null values.
+            If it equals "pandas", null values are filled with NaNs.
+            Non integral dtype is promoted to np.float64.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
+        """
+        return self._values.to_array(fillna=fillna)
+
+    def to_series(self):
+        from cudf.dataframe.series import Series
+        return Series(self._values)
 
 
 class RangeIndex(Index):
@@ -312,10 +365,10 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        return super(RangeIndex, self).__eq__(other)
+        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, cudf.dataframe.index.RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return (self == other)._values.all()
@@ -394,6 +447,11 @@ class GenericIndex(Index):
         elif isinstance(values, columnops.TypedColumnBase):
             values = values
         else:
+            if isinstance(values, (list, tuple)):
+                if len(values) == 0:
+                    values = np.asarray([], dtype="int64")
+                else:
+                    values = np.asarray(values)
             values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
@@ -486,7 +544,11 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
             values = DatetimeColumn.from_numpy(values.values)
-
+        elif isinstance(values, (list, tuple)):
+            values = DatetimeColumn.from_numpy(
+                np.array(values, dtype='<M8[ms]')
+            )
+        assert values.null_count == 0
         self._values = values
         self.name = name
 
@@ -550,7 +612,12 @@ class CategoricalIndex(GenericIndex):
                 categories=values.categories.tolist(),
                 ordered=values.ordered
             )
+        elif isinstance(values, (list, tuple)):
+            values = columnops.as_column(
+                pd.Categorical(values, categories=values)
+            )
 
+        assert values.null_count == 0
         self._values = values
         self.name = name
         self.names = [name]
@@ -562,6 +629,48 @@ class CategoricalIndex(GenericIndex):
     @property
     def categories(self):
         return self._values.categories
+
+
+class StringIndex(GenericIndex):
+    """String defined indices into another Column
+
+    Attributes
+    ---
+    _values: A StringColumn object or NDArray of strings
+    name: A string
+    """
+
+    def __init__(self, values, name=None):
+        if isinstance(values, StringColumn):
+            self._values = values.copy()
+        elif isinstance(values, StringIndex):
+            if name is None:
+                name = values.name
+            self._values = values.values.copy()
+        else:
+            self._values = columnops.build_column(nvstrings.to_device(values),
+                                                  dtype='object')
+        assert self._values.null_count == 0
+        self.name = name
+
+    @property
+    def codes(self):
+        return self._values.codes
+
+    @property
+    def categories(self):
+        return self._values.categories
+
+    def to_pandas(self):
+        result = pd.Index(self.values, name=self.name)
+        return result
+
+    def take(self, indices):
+        return columnops.as_column(self._values).element_indexing(indices)
+
+    def __repr__(self):
+        return "{}({}, dtype='object', name={})".format(
+                self.__class__.__name__, self._values.to_array(), self.name)
 
 
 def as_index(arbitrary, name=None):
@@ -590,19 +699,15 @@ def as_index(arbitrary, name=None):
         return arbitrary
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, StringColumn):
+        return StringIndex(arbitrary, name=name)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
-    elif isinstance(arbitrary, StringColumn):
-        raise NotImplementedError(
-            "Strings are not yet supported in the index"
-        )
     else:
         if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
-        if len(arbitrary) == 0:
-            return RangeIndex(0, 0, name=name)
         return as_index(columnops.as_column(arbitrary), name=name)
 
 

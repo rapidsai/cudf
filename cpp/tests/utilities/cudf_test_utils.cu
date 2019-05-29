@@ -19,6 +19,8 @@
 
 #include "cudf_test_utils.cuh"
 #include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
+#include <utilities/type_dispatcher.hpp>
 
 namespace {
 
@@ -96,11 +98,119 @@ struct column_printer {
         }
     }
 };
-} // namespace
+
+/**---------------------------------------------------------------------------*
+ * @brief Functor for comparing if two elements between two gdf_columns are
+ * equal.
+ *
+ *---------------------------------------------------------------------------**/
+template <typename T, bool has_nulls>
+struct elements_equal {
+  gdf_column lhs_col;
+  gdf_column rhs_col;
+  bool nulls_are_equivalent;
+
+  using bit_mask_t = bit_mask::bit_mask_t;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructs functor for comparing elements between two gdf_column's
+   *
+   * @param lhs The left column for comparison
+   * @param rhs The right column for comparison
+   * @param nulls_are_equal Desired behavior for whether or not nulls are
+   * treated as equal to other nulls. Defaults to true.
+   *---------------------------------------------------------------------------**/
+  __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs,
+                                     bool nulls_are_equal = true)
+      : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
+
+  __device__ bool operator()(gdf_index_type row) {    
+    bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
+    bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
+
+    if (lhs_is_valid and rhs_is_valid) {
+      return static_cast<T const*>(lhs_col.data)[row] ==
+             static_cast<T const*>(rhs_col.data)[row];
+    }
+
+    // If one value is valid but the other is not
+    if (lhs_is_valid != rhs_is_valid) {
+      return false;
+    }
+
+    return nulls_are_equivalent;
+  }
+};
+
+} // namespace anonymous
+
+/**
+ * ---------------------------------------------------------------------------*
+ * @brief Compare two gdf_columns on all fields, including pairwise comparison
+ * of data and valid arrays
+ *
+ * @tparam T The type of columns to compare
+ * @param left The left column
+ * @param right The right column
+ * @return bool Whether or not the columns are equal
+ * ---------------------------------------------------------------------------**/
+template <typename T>
+bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
+{
+  if (left.size != right.size) return false;
+  if (left.dtype != right.dtype) return false;
+  if (left.null_count != right.null_count) return false;
+  if (left.dtype_info.time_unit != right.dtype_info.time_unit) return false;
+
+  if ((left.data == nullptr) != (right.data == nullptr))
+    return false;  // if one is null but not both
+  
+  if ((left.valid == nullptr) != (right.valid == nullptr))
+    return false;  // if one is null but not both
+
+  if (left.data == nullptr)
+      return true;  // logically, both are null
+
+  // both are non-null...
+  bool const has_nulls {(left.valid != nullptr) && (left.null_count > 0)};
+
+  bool equal_data = (has_nulls) ?
+    thrust::all_of(rmm::exec_policy()->on(0),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(left.size),
+                   elements_equal<T, true>{left, right}) :
+    thrust::all_of(rmm::exec_policy()->on(0),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(left.size),
+                   elements_equal<T, false>{left, right});
+  
+  CHECK_STREAM(0);
+
+  return equal_data;
+}
+
+namespace {
+
+struct columns_equal
+{
+  template <typename T>
+  bool operator()(gdf_column const& left, gdf_column const& right) {
+    return gdf_equal_columns<T>(left, right);
+  }
+};
+
+}; // namespace anonymous
+
+// Type-erased version of gdf_equal_columns
+bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
+{
+  return cudf::type_dispatcher(left.dtype, columns_equal{}, left, right);
+}
 
 void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width)
 {
-    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column, min_printing_width);
+  cudf::type_dispatcher(the_column->dtype, column_printer{}, 
+                        the_column, min_printing_width);
 }
 
 void print_valid_data(const gdf_valid_type *validity_mask,
@@ -113,7 +223,8 @@ void print_valid_data(const gdf_valid_type *validity_mask,
 
   std::vector<gdf_valid_type> h_mask(gdf_valid_allocation_size(num_rows));
   if (error != cudaErrorInvalidValue && isDeviceType(attrib))
-    cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows),
+               cudaMemcpyDeviceToHost);
   else
     memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
 
