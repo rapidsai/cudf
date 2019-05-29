@@ -776,7 +776,7 @@ class Series(object):
         assert axis in (None, 0) and skipna is True and level in (None,)
         if self.dtype.kind not in 'biuf':
             raise NotImplementedError(
-                "all does not currently support columns of {} dtype.".format(
+                "All does not currently support columns of {} dtype.".format(
                     self.dtype))
         return self._column.all()
 
@@ -786,7 +786,7 @@ class Series(object):
         assert axis in (None, 0) and skipna is True and level in (None,)
         if self.dtype.kind not in 'biuf':
             raise NotImplementedError(
-                "any does not currently support columns of {} dtype.".format(
+                "Any does not currently support columns of {} dtype.".format(
                     self.dtype))
         return self._column.any()
 
