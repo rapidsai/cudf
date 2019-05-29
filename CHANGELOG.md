@@ -37,6 +37,7 @@
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 
@@ -72,8 +73,8 @@
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 - PR #1875 CSV reader: take NaN values into account in dtype detection
-
 
 # cudf 0.7.2 (16 May 2019)
 
