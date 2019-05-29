@@ -39,8 +39,6 @@ void ReplaceNullsColumn(cudf::test::column_wrapper<T> input,
 {
   gdf_column result;
   EXPECT_NO_THROW(result = cudf::replace_nulls(input, replacement_values));
-  print_gdf_column(expected.get());
-  print_gdf_column(&result);
   EXPECT_TRUE(expected == result);
 }
 
