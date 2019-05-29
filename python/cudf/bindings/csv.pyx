@@ -336,15 +336,25 @@ cpdef cpp_write_csv(
                                 .format(col_name))
             check_gdf_compatibility(cols[col_name])
             col_names_encoded.append(col_name.encode())
-            c_col = column_view_from_column(cols[col_name]._column,
-                                            col_names_encoded[idx])
+            #Workaround for string columns
+            if cols[col_name]._column.dtype.type == np.object_:
+                c_col = column_view_from_string_column(cols[col_name]._column,
+                                                       col_names_encoded[idx])
+            else:
+                c_col = column_view_from_column(cols[col_name]._column,
+                                                col_names_encoded[idx])
             list_cols.push_back(c_col)
     else:
         for idx, (col_name, col) in enumerate(cols.items()):
             check_gdf_compatibility(col)
             col_names_encoded.append(col_name.encode())
-            c_col = column_view_from_column(col._column,
-                                            col_names_encoded[idx])
+            #Workaround for string columns
+            if col._column.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col._column,
+                                                       col_names_encoded[idx])
+            else:
+                c_col = column_view_from_column(col._column,
+                                                       col_names_encoded[idx])
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()
