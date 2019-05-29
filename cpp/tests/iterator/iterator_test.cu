@@ -210,8 +210,6 @@ TYPED_TEST(IteratorTest, null_iterator)
     auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-    std::cout << "test done." << std::endl;
 }
 
 /* tests up cast reduction with null iterator
@@ -251,8 +249,6 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
     auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-    std::cout << "test done." << std::endl;
 }
 
 
@@ -295,11 +291,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
-
-    std::cout << "test done." << std::endl;
 }
-
-
 
 /*
     tests for indexed access
@@ -317,6 +309,8 @@ TYPED_TEST(IteratorTest, indexed_iterator)
 {
     using T = int32_t;
     using T_index = gdf_index_type;
+    using T_output = T;
+    using T_helper = cudf::ColumnOutputSingle<T_output>;
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     thrust::device_vector<T> dev_array(hos_array);
@@ -329,22 +323,16 @@ TYPED_TEST(IteratorTest, indexed_iterator)
         [&](T acc, T_index id){ return (acc + hos_array[id]); } );
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
-
-    using T_input = cudf::ColumnInput<cudf::ColumnOutputSingle<T>, T, false>;
-
-    // pass `dev_indices` as base iterator of `column_input_iterator`.
-    T_input col(dev_array.data().get());
-    cudf::column_input_iterator<T, T_input, T_index*> it_dev(col, dev_indices.data().get());
-
-    // reduction using thrust
-    this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
-    // reduction using cub
-    this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
-
-    // pass `dev_indices` as base iterator of `column_input_iterator`.
-    T_input col_hos(hos_array.data());
-    cudf::column_input_iterator<T, T_input, T_index*> it_host(col_hos, hos_indices.data());
+    // CPU test
+    auto it_host = cudf::make_iterator_without_nulls<T, T_output, T_helper, T_index*>
+        (hos_array.data(), hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
+
+    // GPU test
+    auto it_dev = cudf::make_iterator_without_nulls<T, T_output, T_helper, T_index*>
+        (dev_array.data().get(), dev_indices.data().get());
+    this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
+    this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
 }
 
 TYPED_TEST(IteratorTest, large_size_reduction)
@@ -388,7 +376,6 @@ TYPED_TEST(IteratorTest, large_size_reduction)
         cudf::reduction(w_col, GDF_REDUCTION_SUM, GDF_INT32);
 
     EXPECT_EQ(expected_value, result.value());
-
 }
 
 

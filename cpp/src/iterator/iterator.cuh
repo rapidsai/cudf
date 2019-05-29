@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
+#ifndef CUDF_ITERATOR_CUH
+#define CUDF_ITERATOR_CUH
 
 #include <bitset>
 #include <cstdint>
@@ -185,7 +185,7 @@ struct ColumnInput<T_output, T_element, false>{
     const T_element *data;
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(T_element *_data)
+    ColumnInput(const T_element *_data)
     : data(_data){};
 
     CUDA_HOST_DEVICE_CALLABLE
@@ -281,20 +281,39 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
 // ---------------------------------------------------------------------------
 
 
-template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
-auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
+template <typename T_element, typename T_output = T_element,
+    typename T_output_helper = ColumnOutputSingle<T_output>,
+    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid,
+    T_element _identity, Iterator_Index const _it = Iterator_Index(0))
 {
     using T_input = ColumnInput<T_output_helper, T_element>;
-    using T_iterator = column_input_iterator<T_output, T_input>;
+    using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
 
-    return T_iterator(T_input(_data, _valid, _identity));
+    return T_iterator(T_input(_data, _valid, _identity), _it);
 }
 
-template <typename T_element, typename T_output = T_element, typename T_output_helper = ColumnOutputSingle<T_output> >
-auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid, T_element _identity)
+template <typename T_element, typename T_output = T_element,
+    typename T_output_helper = ColumnOutputSingle<T_output>,
+    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid,
+    T_element _identity, Iterator_Index const _it = Iterator_Index(0))
 {
-    return make_iterator_with_nulls<T_element, T_output, T_output_helper>
-        (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity);
+    return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
+        (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity, _it);
+}
+
+template <typename T_element, typename T_output = T_element,
+    typename T_output_helper = ColumnOutputSingle<T_output>,
+    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+auto make_iterator_without_nulls(const T_element *_data, const Iterator_Index _it = Iterator_Index(0))
+{
+    using T_input = ColumnInput<T_output_helper, T_element, false>;
+    using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
+
+    return T_iterator(T_input(_data), _it);
 }
 
 } // namespace cudf
+
+#endif
