@@ -346,6 +346,44 @@ cdef update_nvstrings_col(col, uintptr_t category_ptr):
     col._data = nvstr_obj
     col._nvcategory = nvcat_obj
 
+cdef gdf_column* column_view_from_string_column(col, col_name=None):
+    if not isinstance(col.data,nvstrings.nvstrings):
+        raise ValueError("Column should be a cudf string column")
+
+    cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
+    cdef uintptr_t data_ptr = col.data.get_cpointer()
+    cdef uintptr_t category = 0
+    cdef gdf_dtype c_dtype = GDF_STRING
+    cdef uintptr_t valid_ptr
+
+    if col._mask is not None and col.null_count > 0:
+        valid_ptr = get_column_valid_ptr(col)
+    else:
+        valid_ptr = 0
+
+    cdef gdf_size_type len_col = len(col)
+    cdef gdf_size_type c_null_count = col.null_count
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
+        time_unit = TIME_UNIT_NONE,
+        category = <void*> category
+    )
+
+    if col_name is None:
+        c_col.col_name = NULL
+    else:
+        c_col.col_name = col_name
+
+    with nogil:
+        gdf_column_view_augmented(<gdf_column*>c_col,
+                                <void*> data_ptr,
+                                <gdf_valid_type*> valid_ptr,
+                                len_col,
+                                c_dtype,
+                                c_null_count,
+                                c_extra_dtype_info)
+
+    return c_col
+
 # gdf_context functions
 
 _join_method_api = {

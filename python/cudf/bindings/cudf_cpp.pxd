@@ -25,6 +25,7 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
+cdef gdf_column* column_view_from_string_column(col, col_name=*)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace,
