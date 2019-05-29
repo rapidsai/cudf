@@ -43,8 +43,8 @@ namespace{ //anonymous
    *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
    *
    * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
-   * @tparam replacement_has_null `true` if replacement_values column has valid mask, `false` otherwise
-   * The input_has_nulls and replacement_has_null template parameters allows us to specialize
+   * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false` otherwise
+   * The input_has_nulls and replacement_has_nulls template parameters allows us to specialize
    * this kernel for the different scenario for performance without writing different kernel.
    *
    * @param[in] input_data Device array with the data to be modified
@@ -63,57 +63,82 @@ namespace{ //anonymous
    */
   /* ----------------------------------------------------------------------------*/
   template <class T,
-            bool input_has_nulls, bool replacement_has_null>
+            bool input_has_nulls, bool replacement_has_nulls>
   __global__
   void replace_kernel(const T* __restrict__           input_data,
                       bit_mask_t const * __restrict__ input_valid,
                       T * __restrict__          output_data,
                       bit_mask_t * __restrict__ output_valid,
+                      gdf_size_type *           output_null_count,
                       gdf_size_type             nrows,
                       thrust::device_ptr<const T> values_to_replace_begin,
                       thrust::device_ptr<const T> values_to_replace_end,
                       const T* __restrict__           d_replacement_values,
                       bit_mask_t const * __restrict__ replacement_valid)
   {
+  gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
-    while(i < nrows)
-    {
-      if ( !input_has_nulls){
-          auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[i]);
+  uint32_t active_mask = 0xffffffff;
+  active_mask = __ballot_sync(active_mask, i < nrows);
 
-          if (found_ptr != values_to_replace_end) {
-              auto d = thrust::distance(values_to_replace_begin, found_ptr);
-              if (replacement_has_null && bit_mask::is_valid(replacement_valid, d)){
-                  bit_mask::set_bit_safe(output_valid, i);
-              }
-              output_data[i] = d_replacement_values[d];
-          } else {
-              output_data[i] = input_data[i];
-              if (replacement_has_null) bit_mask::set_bit_safe(output_valid, i);
+  while (i < nrows) {
+    if (input_has_nulls) {
+      bool const input_is_valid{bit_mask::is_valid(input_valid, i)};
+
+      uint32_t bitmask = __ballot_sync(active_mask, input_is_valid);
+
+      if (input_is_valid) {
+        auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
+                                      values_to_replace_end, input_data[i]);
+        T new_value{0};
+        if (found_ptr != values_to_replace_end) {
+          auto d = thrust::distance(values_to_replace_begin, found_ptr);
+          new_value = d_replacement_values[d];
+          if (replacement_has_nulls) {
+            bitmask &= __ballot_sync(active_mask,
+                                 bit_mask::is_valid(replacement_valid, d));
           }
+        } else {
+          new_value = input_data[i];
+        }
+        output_data[i] = new_value;
       }
-      if (input_has_nulls && bit_mask::is_valid(input_valid, i)){
-          auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[i]);
 
-          if (found_ptr != values_to_replace_end) {
-              auto d = thrust::distance(values_to_replace_begin, found_ptr);
-              if (replacement_has_null && bit_mask::is_valid(replacement_valid, d)){
-                  bit_mask::set_bit_safe(output_valid, i);
-              }
-              if (!replacement_has_null) bit_mask::set_bit_safe(output_valid, i);
-              output_data[i] = d_replacement_values[d];
-          } else {
-              output_data[i] = input_data[i];
-              bit_mask::set_bit_safe(output_valid, i);
-          }
+      output_valid[bit_mask::bit_container_index(i)] = bitmask;
+      if (threadIdx.x % 32 == 0) {
+        atomicAdd(output_null_count, __popc(bitmask));
       }
-      i += blockDim.x * gridDim.x;
+    } else {
+      uint32_t bitmask = active_mask;
+      auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
+                                    values_to_replace_end, input_data[i]);
+      T new_value{0};
+      if (found_ptr != values_to_replace_end) {
+        auto d = thrust::distance(values_to_replace_begin, found_ptr);
+        new_value = d_replacement_values[d];
+        if (replacement_has_nulls) {
+          bitmask =__ballot_sync(
+            active_mask, bit_mask::is_valid(replacement_valid, d));
+        }
+      } else {
+        new_value = input_data[i];
+      }
+      output_data[i] = new_value;
+      if (replacement_has_nulls){
+        output_valid[bit_mask::bit_container_index(i)] = bitmask;
+        if (threadIdx.x % 32 == 0) {
+          atomicAdd(output_null_count, __popc(bitmask));
+        }
+      }
     }
+
+    i += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, i < nrows);
   }
+}
 
   /* --------------------------------------------------------------------------*/
-  /** 
+  /**
    * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
    *        `replace_kernel` with the appropriate data types.
    */
@@ -127,7 +152,7 @@ namespace{ //anonymous
                     cudaStream_t     stream = 0)
     {
       const bool input_has_nulls = (input_col.valid != nullptr && input_col.null_count > 0);
-      const bool replacement_has_null =
+      const bool replacement_has_nulls =
                     (replacement_values.valid != nullptr && replacement_values.null_count > 0);
 
       const bit_mask_t* __restrict__ typed_input_valid =
@@ -136,6 +161,11 @@ namespace{ //anonymous
                                         reinterpret_cast<bit_mask_t*>(replacement_values.valid);
       bit_mask_t* __restrict__ typed_out_valid =
                                         reinterpret_cast<bit_mask_t*>(output.valid);
+      gdf_size_type *null_count = nullptr;
+      if (typed_out_valid != nullptr) {
+        RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
+        CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(gdf_size_type), stream));
+      }
 
       thrust::device_ptr<const col_type> values_to_replace_begin =
                 thrust::device_pointer_cast(static_cast<const col_type*>(values_to_replace.data));
@@ -145,13 +175,13 @@ namespace{ //anonymous
       auto replace = replace_kernel<col_type, true, true>;
 
       if (input_has_nulls){
-        if (replacement_has_null){
+        if (replacement_has_nulls){
           replace = replace_kernel<col_type, true, true>;
         }else{
           replace = replace_kernel<col_type, true, false>;
         }
       }else{
-        if (replacement_has_null){
+        if (replacement_has_nulls){
           replace = replace_kernel<col_type, false, true>;
         }else{
           replace = replace_kernel<col_type, false, false>;
@@ -162,18 +192,19 @@ namespace{ //anonymous
                                              typed_input_valid,
                                              static_cast<col_type*>(output.data),
                                              typed_out_valid,
+                                             null_count,
                                              output.size,
                                              values_to_replace_begin,
                                              values_to_replace_begin + replacement_values.size,
                                              static_cast<const col_type*>(replacement_values.data),
                                              typed_replacement_valid);
+
       if(typed_out_valid != nullptr){
-        gdf_size_type nnz=0;
-        gdf_error ret = gdf_count_nonzero_mask(output.valid,
-                                 output.size, &nnz);
-        CUDF_EXPECTS(GDF_SUCCESS == ret, "Error in counting valid bits from output mask");
-        output.null_count = output.size - nnz;
+        CUDA_TRY(cudaMemcpyAsync(&output.null_count, null_count,
+                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+        RMM_FREE(null_count, stream);
       }
+      printf("null_count %d\n", output.null_count);
     }
   };
  } //end anonymous namespace
