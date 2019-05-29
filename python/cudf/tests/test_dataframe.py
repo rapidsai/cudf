@@ -2538,7 +2538,7 @@ def test_round(decimal):
                                  ['b', False],
                                  ['c', False]
                              ], marks=[pytest.mark.xfail(
-                                 reason='NotImplementedError: any does not '
+                                 reason='NotImplementedError: all does not '
                                  'support columns of object dtype.')])
                          ])
 def test_all(data):
