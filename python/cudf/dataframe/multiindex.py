@@ -202,7 +202,6 @@ class MultiIndex(Index):
         return validity_mask
 
     def _get_row_major(self, df, row_tuple):
-        print(row_tuple)
         slice_access = False
         if isinstance(row_tuple[0], numbers.Number):
             valid_indices = row_tuple[0]
