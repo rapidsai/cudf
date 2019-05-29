@@ -50,10 +50,6 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
         check_gdf_compatibility(col)
         list_lhs.push_back(column_view_from_column(col._column))
 
-        mask_size = 0
-        if col.has_null_mask:
-            mask_size = col.nullmask.size
-
         if name not in on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
             result_col_names.append(name)
@@ -72,10 +68,6 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
         list_rhs.push_back(column_view_from_column(col._column))
-
-        mask_size = 0
-        if col.has_null_mask:
-            mask_size = col.nullmask.size
 
         if name not in on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
