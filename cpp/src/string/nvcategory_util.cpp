@@ -8,8 +8,6 @@
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
 
-#include <iostream>
-
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
     NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);

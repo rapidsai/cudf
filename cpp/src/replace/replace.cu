@@ -16,7 +16,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iostream>
 #include <thrust/device_ptr.h>
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
@@ -154,7 +153,7 @@ __global__
                                  const Type* in_data,
                                  bit_mask_t const *in_valid,
                                  const Type* replacement,
-                                 Type* out_data) 
+                                 Type* out_data)
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -204,7 +203,8 @@ struct replace_nulls_column_kernel_forwarder {
                   void*            d_in_data,
                   gdf_valid_type*  d_in_valid,
                   const void*      d_replacement,
-                  void*            d_out_data)
+                  void*            d_out_data,
+                  cudaStream_t     stream = 0)
   {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
@@ -231,15 +231,16 @@ struct replace_nulls_scalar_kernel_forwarder {
                   void*            d_in_data,
                   gdf_valid_type*  d_in_valid,
                   const void*      replacement,
-                  void*            d_out_data)
+                  void*            d_out_data,
+                  cudaStream_t     stream = 0)
   {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement = static_cast<const col_type*>(replacement);
     void *d_replacement = NULL;
-    RMM_TRY(RMM_ALLOC(&d_replacement, sizeof(col_type), 0));
-    CUDA_TRY(cudaMemcpy(d_replacement, t_replacement, sizeof(col_type),
-                        cudaMemcpyHostToDevice));
+    RMM_TRY(RMM_ALLOC(&d_replacement, sizeof(col_type), stream));
+    CUDA_TRY(cudaMemcpyAsync(d_replacement, t_replacement, sizeof(col_type),
+                             cudaMemcpyHostToDevice, stream));
 
     replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
@@ -247,7 +248,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                           static_cast<const col_type*>(d_replacement),
                                           static_cast<col_type*>(d_out_data)
                                           );
-    RMM_TRY(RMM_FREE(d_replacement, 0));
+    RMM_TRY(RMM_FREE(d_replacement, stream));
   }
 };
 
@@ -259,7 +260,8 @@ struct replace_nulls_scalar_kernel_forwarder {
 namespace cudf {
 
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_column& replacement)
+                         const gdf_column& replacement,
+                         cudaStream_t stream)
 {
   if (input.size == 0) {
     return cudf::empty_like(input);
@@ -283,7 +285,7 @@ gdf_column replace_nulls(const gdf_column& input,
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
                           : gdf_dtype_size(input.dtype);
-    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, 0));
+    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
   }
 
   cudf::type_dispatcher(input.dtype, replace_nulls_column_kernel_forwarder{},
@@ -291,15 +293,17 @@ gdf_column replace_nulls(const gdf_column& input,
                         input.data,
                         input.valid,
                         replacement.data,
-                        output.data);
+                        output.data,
+                        stream);
 
-  RMM_TRY(RMM_FREE(output.valid, 0));
+  RMM_TRY(RMM_FREE(output.valid, stream));
   return output;
 }
 
 
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_scalar& replacement)
+                         const gdf_scalar& replacement,
+                         cudaStream_t stream)
 {
   if (input.size == 0) {
     return cudf::empty_like(input);
@@ -320,7 +324,7 @@ gdf_column replace_nulls(const gdf_column& input,
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
                           : gdf_dtype_size(input.dtype);
-    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, 0));
+    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
   }
 
   cudf::type_dispatcher(input.dtype, replace_nulls_scalar_kernel_forwarder{},

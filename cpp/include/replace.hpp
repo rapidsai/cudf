@@ -20,6 +20,9 @@
 #include <cudf.h>
 #include <types.hpp>
 
+// Forward declaration
+typedef struct CUstream_st* cudaStream_t;
+
 namespace cudf {
 
 /**
@@ -37,7 +40,8 @@ namespace cudf {
  * @returns gdf_column Column with nulls replaced
  */
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_column& replacement);
+                         const gdf_column& replacement,
+                         cudaStream_t stream = 0);
 
 /**
   * @brief Replaces all null values in a column with a scalar.
@@ -53,7 +57,8 @@ gdf_column replace_nulls(const gdf_column& input,
   * @returns gdf_column Column with nulls replaced
   */
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_scalar& replacement);
+                         const gdf_scalar& replacement,
+                         cudaStream_t stream = 0);
 
 }  // namespace cudf
 
