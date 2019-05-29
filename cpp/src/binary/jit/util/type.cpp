@@ -115,6 +115,10 @@ namespace jit {
                 return "BitwiseOr";
             case GDF_BITWISE_XOR:
                 return "BitwiseXor";
+            case GDF_LOGICAL_AND:
+                return "LogicalAnd";
+            case GDF_LOGICAL_OR:
+                return "LogicalOr";
             default:
                 return "None";
         }

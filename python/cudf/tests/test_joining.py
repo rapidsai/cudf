@@ -564,3 +564,22 @@ def test_merge_left_on_right_on():
 
     assert_eq(left.merge(right, left_on='xx', right_on='xx'),
               gleft.merge(gright, left_on='xx', right_on='xx'))
+
+
+def test_merge_on_index_retained():
+    df = cudf.DataFrame()
+    df['a'] = [1, 2, 3, 4, 5]
+    df['b'] = ['a', 'b', 'c', 'd', 'e']
+    df.index = [5, 3, 4, 2, 1]
+
+    df2 = cudf.DataFrame()
+    df2['a2'] = [1, 2, 3, 4, 5]
+    df2['res'] = ['a', 'b', 'c', 'd', 'e']
+
+    pdf = df.to_pandas()
+    pdf2 = df2.to_pandas()
+
+    gdm = df.merge(df2, left_index=True, right_index=True, how='left')
+    pdm = pdf.merge(pdf2, left_index=True, right_index=True, how='left')
+    gdm['a2'] = gdm['a2'].astype('float64')
+    assert_eq(gdm, pdm)
