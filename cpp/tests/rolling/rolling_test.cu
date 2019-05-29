@@ -335,6 +335,17 @@ using ArithmeticTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, doub
 
 TYPED_TEST_CASE(RollingTest, ArithmeticTypes);
 
+TYPED_TEST(RollingTest, EmptyInput)
+{
+  cudf::test::column_wrapper<TypeParam> input(0);
+  this->run_test_col(input,
+		     2, 2, 2,
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     GDF_SUM);
+}
+
 TYPED_TEST(RollingTest, SimpleStatic)
 {
   // simple example from Pandas docs:
