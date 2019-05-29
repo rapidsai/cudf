@@ -17,16 +17,9 @@
 #ifndef CUDF_ITERATOR_CUH
 #define CUDF_ITERATOR_CUH
 
-#include <bitset>
-#include <cstdint>
-#include <iostream>
-#include <numeric>
-#include <iterator>
-#include <type_traits>
-
+#include <cudf.h>
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
-#include <utilities/device_atomics.cuh> // need for device operators.
 
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -279,7 +272,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
 };
 
 // ---------------------------------------------------------------------------
-
+// helper functions to make iterator
 
 template <typename T_element, typename T_output = T_element,
     typename T_output_helper = ColumnOutputSingle<T_output>,

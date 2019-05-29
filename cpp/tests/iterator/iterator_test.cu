@@ -27,6 +27,8 @@
     Thrust iterators: https://thrust.github.io/doc/group__fancyiterator.html
 */
 
+#include <iterator/iterator.cuh>    // include iterator header
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -38,8 +40,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
-
-#include <iterator/iterator.cuh>    // include iterator header
+#include <utilities/device_operators.cuh>
 
 #include <thrust/transform.h>
 
@@ -435,7 +436,6 @@ TYPED_TEST(IteratorTest, mixed_output)
         expected_value_no_count.value = expected_value.value;
         expected_value_no_count.value_squared = expected_value.value_squared;
         expected_value_no_count.count = 0;
-
 
         auto it_hos = cudf::make_iterator_with_nulls<T, T_helper, T_helper>
             (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
