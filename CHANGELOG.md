@@ -37,6 +37,7 @@
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 
@@ -64,11 +65,15 @@
 - PR #1786 Maintain the original series name in series.unique output
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
+- PR #1839 Raise an error instead of segfaulting when transposing a DataFrame with StringColumns
+- PR #1840 Retain index correctly during merge left_on right_on
 - PR #1825 cuDF: Multiaggregation Groupby Failures
 - PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
-
+- PR #1864 Fixing cudf reduction for POWER platform
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 
 # cudf 0.7.2 (16 May 2019)
 
