@@ -208,7 +208,7 @@ struct replace_nulls_column_kernel_forwarder {
   {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
-    replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
+    replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
                                           reinterpret_cast<bit_mask_t*>(d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
@@ -237,12 +237,12 @@ struct replace_nulls_scalar_kernel_forwarder {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement = static_cast<const col_type*>(replacement);
-    col_type*d_replacement = nullptr;
+    col_type* d_replacement = nullptr;
     RMM_TRY(RMM_ALLOC(&d_replacement, sizeof(col_type), stream));
     CUDA_TRY(cudaMemcpyAsync(d_replacement, t_replacement, sizeof(col_type),
                              cudaMemcpyHostToDevice, stream));
 
-    replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE>>>(nrows,
+    replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
                                           static_cast<const col_type*>(d_in_data),
                                           reinterpret_cast<bit_mask_t*>(d_in_valid),
                                           static_cast<const col_type*>(d_replacement),
@@ -279,7 +279,7 @@ gdf_column replace_nulls(const gdf_column& input,
   CUDF_EXPECTS(nullptr == replacement.valid || 0 == replacement.null_count,
                "Invalid replacement data");
 
-  gdf_column output = cudf::allocate_like(input, false);
+  gdf_column output = cudf::allocate_like(input, false, stream);
 
   cudf::type_dispatcher(input.dtype, replace_nulls_column_kernel_forwarder{},
                         input.size,
@@ -309,7 +309,7 @@ gdf_column replace_nulls(const gdf_column& input,
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
 
-  gdf_column output = cudf::allocate_like(input, false);
+  gdf_column output = cudf::allocate_like(input, false, stream);
 
   cudf::type_dispatcher(input.dtype, replace_nulls_scalar_kernel_forwarder{},
                         input.size,
