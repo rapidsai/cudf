@@ -22,7 +22,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
-
+#include <tests/utilities/cudf_test_utils.cuh>
 
 template <typename T>
 struct ReplaceNullsTest : GdfTest {};
@@ -39,6 +39,8 @@ void ReplaceNullsColumn(cudf::test::column_wrapper<T> input,
 {
   gdf_column result;
   EXPECT_NO_THROW(result = cudf::replace_nulls(input, replacement_values));
+  print_gdf_column(expected.get());
+  print_gdf_column(&result);
   EXPECT_TRUE(expected == result);
 }
 
@@ -54,7 +56,7 @@ void ReplaceNullsScalar(cudf::test::column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  constexpr gdf_size_type column_size{1000};
+  constexpr gdf_size_type column_size{10};
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
@@ -62,16 +64,16 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
       [](gdf_index_type row) { return (row < column_size/2) ? false : true; }},
     cudf::test::column_wrapper<TypeParam> {column_size,
       [](gdf_index_type row) { return 1; },
-      [](gdf_index_type row) { return true; }},
+      false},
     cudf::test::column_wrapper<TypeParam> {column_size,
       [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
-      [](gdf_index_type row) { return true; }});
+      false});
 }
 
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  constexpr gdf_size_type column_size{1000};
+  constexpr gdf_size_type column_size{10};
 
   ReplaceNullsScalar<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
@@ -80,5 +82,5 @@ TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
     cudf::test::scalar_wrapper<TypeParam> {1, true},
     cudf::test::column_wrapper<TypeParam> {column_size,
       [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
-      [](gdf_index_type row) { return true; }});
+      false});
 }
