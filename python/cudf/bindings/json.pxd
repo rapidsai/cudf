@@ -25,4 +25,4 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         size_t          byte_range_offset;
         size_t          byte_range_size;
 
-    cdef cudf_table* read_json(json_read_arg *args) except +
+    cdef cudf_table read_json(json_read_arg &args) except +

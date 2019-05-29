@@ -97,9 +97,9 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         args.byte_range_offset = 0
         args.byte_range_size = 0
 
-    cdef cudf_table* table
+    cdef cudf_table table
     with nogil:
-        table = read_json(&args)
+        table = read_json(args)
 
     # Extract parsed columns
     outcols = []
@@ -110,8 +110,6 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
         new_names.append(table.get_column(i).col_name.decode())
         free(table.get_column(i).col_name)
         free(table.get_column(i))
-
-    free(table)
 
     # Construct dataframe from columns
     df = DataFrame()

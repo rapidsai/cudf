@@ -44,7 +44,7 @@ public:
   };
 
 private:
-  const json_read_arg *args_ = nullptr;
+  const json_read_arg args_{};
 
   std::unique_ptr<MappedFile> map_file_;
   const char *input_data_ = nullptr;
@@ -159,7 +159,7 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief JsonReader constructor; throws if the arguments are not supported
    *---------------------------------------------------------------------------**/
-  explicit JsonReader(json_read_arg const *args);
+  explicit JsonReader(json_read_arg const &args);
 
   /**---------------------------------------------------------------------------*
    * @brief Parse the input JSON file as specified with the args_ data member
@@ -168,7 +168,7 @@ public:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  table *parse();
+  table parse();
 };
 
 } // namespace cudf

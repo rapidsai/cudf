@@ -69,9 +69,9 @@ namespace cudf {
 /*
  * @brief Reads JSON-structured data and returns an array of gdf_columns.
  *
- * @param[in,out] args Structure containing input and output arguments
+ * @param[in] args Structure containing the input arguments
  *
- * @return gdf_error GDF_SUCCESS if successful, otherwise an error code.
+ * @return cudf::table Object that contains the array of gdf_columns
  */
-cudf::table *read_json(json_read_arg const *args);
+cudf::table read_json(json_read_arg const &args);
 } // namespace cudf
