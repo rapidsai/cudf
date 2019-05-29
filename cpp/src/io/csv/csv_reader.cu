@@ -1250,7 +1250,7 @@ void dataTypeDetection(char *raw_csv,
 
 			// Checking if the record is NULL
 			if(start > tempPos ||
-				serializedTrieContains(opts.naValuesTrie, raw_csv + start, tempPos - start + 1)){
+				serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start)){
 				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
 				pos++;
 				start=pos;
