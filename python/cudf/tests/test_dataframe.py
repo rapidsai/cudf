@@ -2518,6 +2518,7 @@ def test_round(decimal):
                          [
                              [0, 1, 2, 3],
                              [-2, -1, 2, 3, 5],
+                             [-2, -1, 0, 3, 5],
                              [True, False, False],
                              [True],
                              [False],
@@ -2564,6 +2565,7 @@ def test_all(data):
                          [
                              [0, 1, 2, 3],
                              [-2, -1, 2, 3, 5],
+                             [-2, -1, 0, 3, 5],
                              [True, False, False],
                              [True],
                              [False],
