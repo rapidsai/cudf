@@ -16,7 +16,7 @@ from libcpp.vector cimport vector
 cdef extern from "cudf.h" namespace "cudf" nogil:
 
     # See cpp/include/cudf/io_types.h:222
-    ctypedef struct json_read_arg:
+    cdef struct json_read_arg:
         gdf_input_type  source_type;
         string          source;
         vector[string]  dtype;
@@ -24,5 +24,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         bool            lines;
         size_t          byte_range_offset;
         size_t          byte_range_size;
+
+        json_read_arg() except +
 
     cdef cudf_table read_json(json_read_arg &args) except +
