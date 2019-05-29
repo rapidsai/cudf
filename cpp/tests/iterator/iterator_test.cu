@@ -35,25 +35,18 @@
 #include <iostream>
 #include <numeric>
 
-#include <reduction.hpp>
-
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
 
 #include <iterator/iterator.cuh>    // include iterator header
 
-#include <cub/device/device_reduce.cuh>
-#include <thrust/device_vector.h>
 #include <thrust/transform.h>
 
-#include <thrust/tuple.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/iterator_adaptor.h>
-
+// for reduction tests
+#include <cub/device/device_reduce.cuh>
+#include <thrust/device_vector.h>
+#include <reduction.hpp>
 
 // ---------------------------------------------------------------------------
 // __host__ option is required for thrust::host operation
@@ -88,6 +81,13 @@ bool random_bool()
   return static_cast<bool>( uniform(engine) );
 }
 
+template<typename T, bool update_count>
+std::ostream& operator<<(std::ostream& os, cudf::ColumnOutputMixed<T, update_count> const& rhs)
+{
+  return os << "[" << rhs.value <<
+      ", " << rhs.value_squared <<
+      ", " << rhs.count << "] ";
+};
 
 // ---------------------------------------------------------------------------
 
@@ -286,12 +286,12 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, T_upcast, ColumnOutputSquared<T_upcast>>
+    auto it_hos = cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast, ColumnOutputSquared<T_upcast>>
+    auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
@@ -330,11 +330,11 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
 
-    using T_input = ColumnInput<ColumnOutputSingle<T>, T, false>;
+    using T_input = cudf::ColumnInput<cudf::ColumnOutputSingle<T>, T, false>;
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
     T_input col(dev_array.data().get());
-    column_input_iterator<T, T_input, T_index*> it_dev(col, dev_indices.data().get());
+    cudf::column_input_iterator<T, T_input, T_index*> it_dev(col, dev_indices.data().get());
 
     // reduction using thrust
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
@@ -343,7 +343,7 @@ TYPED_TEST(IteratorTest, indexed_iterator)
 
     // pass `dev_indices` as base iterator of `column_input_iterator`.
     T_input col_hos(hos_array.data());
-    column_input_iterator<T, T_input, T_index*> it_host(col_hos, hos_indices.data());
+    cudf::column_input_iterator<T, T_input, T_index*> it_host(col_hos, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 }
 
@@ -415,7 +415,7 @@ TYPED_TEST(IteratorTest, mixed_output)
     auto hos = w_col.to_host();
 
     // calculate expected values by CPU
-    ColumnOutputMixed<T_upcast> expected_value;
+    cudf::ColumnOutputMixed<T_upcast> expected_value;
 
     expected_value.count = w_col.size() - w_col.null_count();
 
@@ -431,18 +431,18 @@ TYPED_TEST(IteratorTest, mixed_output)
     std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, ColumnOutputMixed<T_upcast>, ColumnOutputMixed<T_upcast>>
+    auto it_hos = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMixed<T_upcast>, cudf::ColumnOutputMixed<T_upcast>>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, ColumnOutputMixed<T_upcast>, ColumnOutputMixed<T_upcast>>
+    auto it_dev = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMixed<T_upcast>, cudf::ColumnOutputMixed<T_upcast>>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
     { // ColumnOutputMixedNoCount test
-        using T_helper = ColumnOutputMixed<T_upcast, false>;
+        using T_helper = cudf::ColumnOutputMixed<T_upcast, false>;
 
         T_helper expected_value_no_count;
         expected_value_no_count.value = expected_value.value;
