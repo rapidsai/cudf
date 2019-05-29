@@ -24,8 +24,6 @@
 #include <utilities/cudf_utils.h>
 #include "tests/utilities/column_wrapper.cuh"
 
-#include <groupby/aggregation_operations.hpp>
-
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -99,7 +97,9 @@ protected:
       in_gdf_col = std::make_unique<cudf::test::column_wrapper<T>>(in_col);
   }
 
-  template<template <typename AggType> class agg_op, bool average>
+  // use SFINAE to only instantiate for supported combinations
+  template<template <typename AggType> class agg_op, bool average,
+	   typename std::enable_if_t<cudf::rolling::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
   void create_reference_output(gdf_size_type window,
 			       gdf_size_type min_periods,
 			       gdf_size_type forward_window,
@@ -132,12 +132,21 @@ protected:
       }
       ref_data_valid[i] = (count >= min_periods);
       if (ref_data_valid[i]) {
-        if (average)
-          ref_data[i] = val / count;
-        else
-          ref_data[i] = val;
+	cudf::rolling::store_output_functor<T, average>{}(ref_data[i], val, count);
       }
     }
+  }
+
+  template<template <typename AggType> class agg_op, bool average,
+	   typename std::enable_if_t<!cudf::rolling::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+  void create_reference_output(gdf_size_type window,
+			       gdf_size_type min_periods,
+			       gdf_size_type forward_window,
+			       const std::vector<gdf_size_type> &window_col,
+			       const std::vector<gdf_size_type> &min_periods_col,
+			       const std::vector<gdf_size_type> &forward_window_col)
+  {
+    CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
   void create_reference_output(gdf_agg_op agg,
@@ -195,10 +204,18 @@ protected:
     ASSERT_TRUE(out == ref);
   }
 
+  // TODO: consolidate this function with `run_test_col`
   void run_test(gdf_size_type w, gdf_size_type m, gdf_size_type f,
 		std::vector<gdf_size_type> &window, std::vector<gdf_size_type> &min_periods, std::vector<gdf_size_type> &forward_window,
 		gdf_agg_op agg)
   {
+    // it's not possible to check sizes in the rolling window API since we pass raw pointers for window/periods
+    // so we check here that the tests are setup correctly
+    CUDF_EXPECTS(in_col_valid.size() == 0 || in_col_valid.size() == in_col.size(), "Validity mask size is incorrect");
+    CUDF_EXPECTS(window.size() == 0 || window.size() == in_col.size(), "Window array size != input column size");
+    CUDF_EXPECTS(min_periods.size() == 0 || min_periods.size() == in_col.size(), "Min periods array size != input column size");
+    CUDF_EXPECTS(forward_window.size() == 0 || forward_window.size() == in_col.size(), "Forward window array size != input column size");
+
     create_gdf_input_buffers();
 
     gdf_size_type *d_window = NULL;
@@ -231,6 +248,54 @@ protected:
     if (d_forward_window != NULL) EXPECT_EQ(RMM_FREE(d_forward_window, 0), RMM_SUCCESS);
   }
 
+  // specify all the params, including the input column
+  void run_test_col(const cudf::test::column_wrapper<T> &input,
+		gdf_size_type w, gdf_size_type m, gdf_size_type f,
+                const std::vector<gdf_size_type> &window, const std::vector<gdf_size_type> &min_periods, const std::vector<gdf_size_type> &forward_window,
+                gdf_agg_op agg)
+  {
+    // it's not possible to check sizes in the rolling window API since we pass raw pointers for window/periods
+    // so we check here that the tests are setup correctly
+    CUDF_EXPECTS(window.size() == 0 || window.size() == (size_t)input.size(), "Window array size != input column size");
+    CUDF_EXPECTS(min_periods.size() == 0 || min_periods.size() == (size_t)input.size(), "Min periods array size != input column size");
+    CUDF_EXPECTS(forward_window.size() == 0 || forward_window.size() == (size_t)input.size(), "Forward window array size != input column size");
+
+    // copy the input to host
+    std::tie(in_col, in_col_valid2) = input.to_host();
+    in_col_valid.resize(in_col.size());
+    for (size_t row = 0; row < in_col.size(); row++)
+      in_col_valid[row] = gdf_is_valid(in_col_valid2.data(), row);
+
+    gdf_size_type *d_window = NULL;
+    gdf_size_type *d_min_periods = NULL;
+    gdf_size_type *d_forward_window = NULL;
+
+    // copy sizes to the gpu
+    if (window.size() > 0) {
+      EXPECT_EQ(RMM_ALLOC(&d_window, window.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_window, window.data(), window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
+    }
+    if (min_periods.size() > 0) {
+      EXPECT_EQ(RMM_ALLOC(&d_min_periods, min_periods.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_min_periods, min_periods.data(), min_periods.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
+    }
+    if (forward_window.size() > 0) {
+      EXPECT_EQ(RMM_ALLOC(&d_forward_window, forward_window.size() * sizeof(gdf_size_type), 0), RMM_SUCCESS);
+      CUDA_TRY(cudaMemcpy(d_forward_window, forward_window.data(), forward_window.size() * sizeof(gdf_size_type), cudaMemcpyDefault));
+    }
+
+    out_gdf_col = { cudf::rolling_window(*input.get(), w, m, f, agg, d_window, d_min_periods, d_forward_window), deleter };
+
+    create_reference_output(agg, w, m, f, window, min_periods, forward_window);
+
+    compare_gdf_result();
+
+    // free GPU memory 
+    if (d_window != NULL) EXPECT_EQ(RMM_FREE(d_window, 0), RMM_SUCCESS);
+    if (d_min_periods != NULL) EXPECT_EQ(RMM_FREE(d_min_periods, 0), RMM_SUCCESS);
+    if (d_forward_window != NULL) EXPECT_EQ(RMM_FREE(d_forward_window, 0), RMM_SUCCESS);
+  }
+
   template<class... TArgs>
   void run_test_all_agg(TArgs... FArgs)
   {
@@ -247,6 +312,7 @@ protected:
 
   // input
   std::vector<T> in_col;
+  std::vector<gdf_valid_type> in_col_valid2;
   std::vector<bool> in_col_valid;
   std::unique_ptr<cudf::test::column_wrapper<T>> in_gdf_col;
 
@@ -265,9 +331,9 @@ protected:
   };
 };
 
-using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, double>;
+using ArithmeticTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, double>;
 
-TYPED_TEST_CASE(RollingTest, TestTypes);
+TYPED_TEST_CASE(RollingTest, ArithmeticTypes);
 
 TYPED_TEST(RollingTest, SimpleStatic)
 {
@@ -502,6 +568,7 @@ TEST_F(RollingTestInt, NegativeSizes)
 {
   this->in_col 	     = {0, 1, 2, 0, 4};
   this->in_col_valid = {1, 1, 1, 0, 1};
+
   EXPECT_THROW(this->run_test_all_agg(-2, 2, 2,
 			 std::vector<gdf_size_type>(),
 			 std::vector<gdf_size_type>(),
@@ -516,10 +583,106 @@ TEST_F(RollingTestInt, NegativeSizes)
 			 std::vector<gdf_size_type>()), cudf::logic_error);
 }
 
-/* TODO: test the following failures
-   - window array size < input col size
-   - min periods array size < input col size
-   - sum of non-arithmetic types
-   - average for non-arithmetic types
- */
+// size mismatch
+TEST_F(RollingTestInt, ArraySizeMismatch)
+{
+  this->in_col 	     = {0, 1, 2, 0, 4};
+ 
+  // validity mask size mismatch
+  this->in_col_valid = {1, 1, 1, 0};
+  EXPECT_THROW(this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 2, 3 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1, 4 }),
+			 std::vector<gdf_size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
+
+  // valitidy mask is ok
+  this->in_col_valid = {1, 1, 1, 0, 1};
+  this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 2, 3 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1, 4 }),
+			 std::vector<gdf_size_type>({ 1, 0, 1, 0, 4 }));
+
+
+  // mismatch for the window array
+  EXPECT_THROW(this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 2 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1, 4 }),
+			 std::vector<gdf_size_type>({ 1, 0, 1, 0, 4 })), cudf::logic_error);
+
+  // mismatch for the periods array
+  EXPECT_THROW(this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 4, 3 }),
+			 std::vector<gdf_size_type>({ 1, 2, 3, 4 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1, 4 })), cudf::logic_error);
+
+  // mismatch for the forward window array
+  EXPECT_THROW(this->run_test_all_agg(0, 0, 0,
+			 std::vector<gdf_size_type>({ 1, 2, 3, 4, 3 }),
+			 std::vector<gdf_size_type>({ 1, 2, 3, 4, 6 }),
+			 std::vector<gdf_size_type>({ 2, 1, 2, 1 })), cudf::logic_error);
+}
+
+using NonArithmeticTypes = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
+                                  	    cudf::date64, cudf::bool8>;
+
+template<typename T>
+using RollingTestNonArithmetic = RollingTest<T>;
+
+TYPED_TEST_CASE(RollingTestNonArithmetic, NonArithmeticTypes);
+
+// incorrect type/aggregation combo: sum or avg for non-arithmetic types
+TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic)
+{
+  constexpr gdf_size_type size{1000};
+  cudf::test::column_wrapper<TypeParam> input{
+	size,
+	[](gdf_index_type row) { return static_cast<TypeParam>(row); },
+	[](gdf_index_type row) { return row % 2; }
+  };
+  EXPECT_THROW(this->run_test_col(
+			 input,
+			 2, 2, 0,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 GDF_SUM),
+	       cudf::logic_error);
+  EXPECT_THROW(this->run_test_col(
+			 input,
+			 2, 2, 0,
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 std::vector<gdf_size_type>(),
+			 GDF_AVG),
+	       cudf::logic_error);
+}
+
+// min/max/count should work for non-arithmetic types
+TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
+{
+  constexpr gdf_size_type size{1000};
+  cudf::test::column_wrapper<TypeParam> input{
+	size,
+	[](gdf_index_type row) { return static_cast<TypeParam>(row); },
+	[](gdf_index_type row) { return row % 2; }
+  };
+  this->run_test_col(input,
+		     2, 2, 0,
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     GDF_MIN);
+  this->run_test_col(input,
+		     2, 2, 0,
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     GDF_MAX);
+  this->run_test_col(input,
+		     2, 2, 0,
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     std::vector<gdf_size_type>(),
+		     GDF_COUNT);
+}
 
