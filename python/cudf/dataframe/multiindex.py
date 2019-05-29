@@ -13,7 +13,7 @@ from cudf.dataframe.series import Series
 from cudf.dataframe.index import as_index
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.index import Index, StringIndex
-from cudf.utils import utils
+from cudf.utils import cudautils, utils
 
 
 class MultiIndex(Index):
@@ -214,7 +214,7 @@ class MultiIndex(Index):
                 start = row_tuple[0].start or 0
                 stop = row_tuple[0].stop or len(df)
                 step = row_tuple[0].step or 1
-                valid_indices = np.array(range(start, stop, step))
+                valid_indices = cudautils.arange(start, stop, step)
         else:
             valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import Series
@@ -327,7 +327,7 @@ class MultiIndex(Index):
         elif isinstance(indices, slice):
             start, stop, step, sln = utils.standard_python_slice(len(self),
                                                                  indices)
-            indices = np.arange(start, stop, step)
+            indices = cudautils.arange(start, stop, step)
         if hasattr(self, '_source_data'):
             result = MultiIndex(source_data=self._source_data.take(indices))
         else:
