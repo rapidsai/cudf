@@ -76,7 +76,6 @@
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 
-
 # cudf 0.7.2 (16 May 2019)
 
 ## New Features
