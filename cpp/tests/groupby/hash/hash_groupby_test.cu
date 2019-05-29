@@ -33,12 +33,12 @@ struct GroupbyTest : public GdfTest {
 };
 
 using TestingTypes =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                     cudf::date32, cudf::date64, cudf::category, cudf::bool8>;
+    ::testing::Types<int32_t/*int8_t, int16_t, int32_t, int64_t, float, double,
+                     cudf::date32, cudf::date64, cudf::category, cudf::bool8*/>;
 
 TYPED_TEST_CASE(GroupbyTest, TestingTypes);
 
-TYPED_TEST(GroupbyTest, OneGroup) {
+TYPED_TEST(GroupbyTest, OneGroupCount) {
   using namespace cudf::groupby::hash;
   using T = TypeParam;
   cudf::test::column_wrapper<TypeParam> keys{T(1), T(1), T(1), T(1)};
@@ -60,5 +60,14 @@ TYPED_TEST(GroupbyTest, OneGroup) {
   EXPECT_TRUE(std::equal(input_key_types.begin(), input_key_types.end(),
                          cudf::column_dtypes(output_keys).begin()));
 
+  cudf::test::column_wrapper<TypeParam> output_keys_column(
+      *output_keys.get_column(0));
+  cudf::test::column_wrapper<TypeParam> output_values_column(
+      *output_values.get_column(0));
 
+  auto output_keys_host = output_keys_column.to_host();
+  auto output_values_host = output_values_column.to_host();
+
+  EXPECT_EQ(T(1), std::get<0>(output_keys_host)[0]);
+  EXPECT_EQ(T(4), std::get<0>(output_values_host)[0]);
 }
