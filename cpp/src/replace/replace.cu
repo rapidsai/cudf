@@ -151,7 +151,7 @@ template <typename Type>
 __global__
   void replace_nulls_with_scalar(gdf_size_type size,
                                  const Type* in_data,
-                                 bit_mask_t const *in_valid,
+                                 const bit_mask_t* in_valid,
                                  const Type* replacement,
                                  Type* out_data)
 {
@@ -173,7 +173,7 @@ template <typename Type>
 __global__
 void replace_nulls_with_column(gdf_size_type size,
                                const Type* in_data,
-                               bit_mask_t const *in_valid,
+                               const bit_mask_t* in_valid,
                                const Type* replacement,
                                Type* out_data) 
 {
@@ -237,7 +237,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement = static_cast<const col_type*>(replacement);
-    void *d_replacement = NULL;
+    col_type*d_replacement = nullptr;
     RMM_TRY(RMM_ALLOC(&d_replacement, sizeof(col_type), stream));
     CUDA_TRY(cudaMemcpyAsync(d_replacement, t_replacement, sizeof(col_type),
                              cudaMemcpyHostToDevice, stream));
