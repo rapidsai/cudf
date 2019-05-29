@@ -71,7 +71,7 @@
 - PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
-- PR #1864 Fixing cudf reduction for POWER platform 
+- PR #1864 Fixing cudf reduction for POWER platform
 - PR #1875 CSV reader: take NaN values into account in dtype detection
 
 
