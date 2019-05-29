@@ -82,4 +82,5 @@ def test_groupby_2keys_agg(nelem, func):
         .groupby(['x', 'y']).agg(func)
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(['x', 'y'], method="hash").agg(func)
-    assert_eq(got_df, expect_df)
+    check_dtype = False if func == 'count' else True
+    assert_eq(got_df, expect_df, check_dtype=check_dtype)

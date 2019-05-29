@@ -32,6 +32,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
+from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
@@ -458,17 +459,22 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
+                    if self.shape[0] != other.shape[0]:
+                        raise NotImplementedError(
+                                "%s on columns with different "
+                                "length is not supported", fn)
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
         elif isinstance(other, Series):
@@ -641,7 +647,7 @@ class DataFrame(object):
         5   5    5
         8   8    8
         """
-        return Loc(self)
+        return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
@@ -670,7 +676,7 @@ class DataFrame(object):
         7    7    7    7
         9    9    9    9
         """
-        return Iloc(self)
+        return _DataFrameIlocIndexer(self)
 
     @property
     def columns(self):
@@ -1051,6 +1057,9 @@ class DataFrame(object):
         objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
+        elif isinstance(objs[0].index, cudf.dataframe.multiindex.MultiIndex):
+            index = cudf.dataframe.multiindex.MultiIndex._concat(
+                    [o.index for o in objs])
         else:
             index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))
@@ -1216,6 +1225,7 @@ class DataFrame(object):
         # Perform out = data[index] for all columns
         for k in self.columns:
             df[k] = self[k].take(sorted_indices.to_gpu_array())
+        df.index = self.index.take(sorted_indices.to_gpu_array())
         return df
 
     def argsort(self, ascending=True, na_position='last'):
@@ -1322,7 +1332,10 @@ class DataFrame(object):
         Not supporting *copy* because default and only behaviour is copy=True
         """
         from cudf.bindings.transpose import transpose as cpp_tranpose
-        return cpp_tranpose(self)
+        result = cpp_tranpose(self)
+        result = result.rename(dict(zip(result.columns, self.index)))
+        result = result.set_index(self.columns)
+        return result
 
     @property
     def T(self):
@@ -1471,6 +1484,7 @@ class DataFrame(object):
             on = lhs.LEFT_RIGHT_INDEX_NAME
             lhs[on] = lhs.index
             rhs[on] = rhs.index
+            self._original_left_index_name = lhs.index.name
         if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
@@ -1633,8 +1647,9 @@ class DataFrame(object):
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
+            df = df.set_index(lhs.LEFT_RIGHT_INDEX_NAME)
+            df = df.sort_values(df.columns[0])
+            df.index.name = self._original_left_index_name
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on[0]])))
@@ -2617,35 +2632,34 @@ class DataFrame(object):
     #
     # Stats
     #
-    def count(self):
-        return self._apply_support_method('count')
+    def count(self, **kwargs):
+        return self._apply_support_method('count', **kwargs)
 
-    def min(self):
-        return self._apply_support_method('min')
+    def min(self, **kwargs):
+        return self._apply_support_method('min', **kwargs)
 
-    def max(self):
-        return self._apply_support_method('max')
+    def max(self, **kwargs):
+        return self._apply_support_method('max', **kwargs)
 
-    def sum(self):
-        return self._apply_support_method('sum')
+    def sum(self, **kwargs):
+        return self._apply_support_method('sum', **kwargs)
 
-    def product(self):
-        return self._apply_support_method('product')
+    def product(self, **kwargs):
+        return self._apply_support_method('product', **kwargs)
 
-    def cummin(self):
-        return self._apply_support_method('cummin')
+    def cummin(self, **kwargs):
+        return self._apply_support_method('cummin', **kwargs)
 
-    def cummax(self):
-        return self._apply_support_method('cummax')
+    def cummax(self, **kwargs):
+        return self._apply_support_method('cummax', **kwargs)
 
-    def cumsum(self):
-        return self._apply_support_method('cumsum')
+    def cumsum(self, **kwargs):
+        return self._apply_support_method('cumsum', **kwargs)
 
-    def cumprod(self):
-        return self._apply_support_method('cumprod')
+    def cumprod(self, **kwargs):
+        return self._apply_support_method('cumprod', **kwargs)
 
-    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
-             **kwargs):
+    def mean(self, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2672,17 +2686,28 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method('mean')
+        return self._apply_support_method('mean', **kwargs)
 
-    def std(self, ddof=1):
-        return self._apply_support_method('std', ddof)
+    def std(self, **kwargs):
+        return self._apply_support_method('std', **kwargs)
 
-    def var(self, ddof=1):
-        return self._apply_support_method('var', ddof)
+    def var(self, **kwargs):
+        return self._apply_support_method('var', **kwargs)
 
-    def _apply_support_method(self, *args, **kwargs):
-        method = args[0]
-        result = [getattr(self[col], method)(*kwargs)
+    def all(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'all', **kwargs)
+        return self._apply_support_method('all', **kwargs)
+
+    def any(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'any', **kwargs)
+        return self._apply_support_method('any', **kwargs)
+
+    def _apply_support_method(self, method, **kwargs):
+        result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
         if isinstance(result[0], Series):
             support_result = result
@@ -2805,114 +2830,6 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
-
-
-class Loc(object):
-    """
-    For selection by label.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        row_slice = None
-        row_label = None
-
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)\
-                and isinstance(arg, tuple):  # noqa: E501
-            # Explicitly ONLY support tuple indexes into MultiIndex.
-            # Pandas allows non tuple indices and warns "results may be
-            # undefined."
-            return self._df._index._get_row_major(self._df, arg)
-
-        if isinstance(arg, int):
-            if arg < 0 or arg >= len(self._df):
-                raise IndexError("label scalar %s is out of bound" % arg)
-            row_label = arg
-            col_slice = self._df.columns
-
-        elif isinstance(arg, tuple):
-            arg_1, arg_2 = arg
-            if isinstance(arg_1, int):
-                row_label = arg_1
-            elif isinstance(arg_1, slice):
-                row_slice = arg_1
-            else:
-                raise TypeError(type(arg_1))
-            col_slice = arg_2
-            if isinstance(arg_2, str):
-                col_slice = [arg_2]
-
-        elif isinstance(arg, slice):
-            row_slice = arg
-            col_slice = self._df.columns
-        else:
-            raise TypeError(type(arg))
-
-        if row_label is not None:
-            ret_list = []
-            col_list = pd.Categorical(list(col_slice))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                        self._df[col][row_label].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in loc"
-                    )
-                ret_list.append(self._df[col][row_label])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
-
-        df = DataFrame()
-        begin, end = self._df.index.find_label_range(row_slice.start,
-                                                     row_slice.stop)
-        row_step = row_slice.step if row_slice.step is not None else 1
-        for col in col_slice:
-            sr = self._df[col]
-            df.add_column(col, sr[begin:end:row_step], forceindex=True)
-
-        return df
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        if isinstance(arg, (tuple)):
-            if len(arg) == 1:
-                arg = list(arg)
-            elif len(arg) == 2:
-                return self[arg[0]][arg[1]]
-            else:
-                return pd.core.indexing.IndexingError(
-                    "Too many indexers"
-                )
-
-        if isinstance(arg, numbers.Integral):
-            rows = []
-            for col in self._df.columns:
-                rows.append(self._df[col][arg])
-            return Series(np.array(rows), name=arg)
-        else:
-            df = DataFrame()
-            for col in self._df.columns:
-                df[col] = self._df[col][arg]
-            df.index = self._df.index[arg]
-
-            return df
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)
 
 
 def from_pandas(obj):

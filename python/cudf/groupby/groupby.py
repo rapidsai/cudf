@@ -34,11 +34,19 @@ class SeriesGroupBy(object):
     def __getattr__(self, attr):
         df = DataFrame()
         df[self.source_name] = self.source_series
+        by = []
         if self.level is not None:
-            df[self.group_name] = self.source_series.index
+            if isinstance(self.source_series.index, MultiIndex):
+                # Add index columns specified by multiindex into _df
+                # Record the index column names for the groupby
+                for col in self.source_series.index.codes:
+                    df[self.group_name + col] = self.source_series.index.codes[
+                            col]
+                    by.append(self.group_name + col)
         else:
             df[self.group_name] = self.group_series
-        groupby = df.groupby(self.group_name,
+            by = self.group_name
+        groupby = df.groupby(by,
                              level=self.level,
                              sort=self.sort)
         result_df = getattr(groupby, attr)()
@@ -262,13 +270,22 @@ class Groupby(object):
         return result
 
     def apply_multicolumn_mapped(self, result, aggs):
-        if len(set(aggs.keys())) == len(aggs.keys()) and\
-                isinstance(aggs[list(aggs.keys())[0]], (str, Number)):
+        # if all of the aggregations in the mapping set are only
+        # length 1, we can assign the columns directly as keys.
+        can_map_directly = True
+        for values in aggs.values():
+            value = [values] if isinstance(values, str) else list(values)
+            if len(value) != 1:
+                can_map_directly = False
+                break
+        if can_map_directly:
             result.columns = aggs.keys()
         else:
             tuples = []
             for k in aggs.keys():
-                for v in aggs[k]:
+                value = [aggs[k]] if isinstance(aggs[k], str) else list(
+                        aggs[k])
+                for v in value:
                     tuples.append((k, v))
             multiindex = MultiIndex.from_tuples(tuples)
             result.columns = multiindex
