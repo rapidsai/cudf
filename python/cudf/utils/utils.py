@@ -226,7 +226,7 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtyle, default 'float64'
+        output dtype, default 'float64'
     """
     from cudf.multi import concat
 
