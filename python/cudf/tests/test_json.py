@@ -210,6 +210,7 @@ def test_json_lines_dtypes(json_input, dtype):
     df = cudf.read_json(json_input, lines=True, dtype=dtype)
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
+
 @pytest.mark.parametrize('compression_arg', ['gzip', 'infer'])
 def test_json_lines_compression(tmpdir, compression_arg):
     fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
