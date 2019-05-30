@@ -202,7 +202,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
     return infer_dtype_from_object(dtype)
 
 
-def get_dummies(df, prefix, prefix_sep='_', cats={}, dtype='float64'):
+def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
+                dtype='float64'):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
 
@@ -219,9 +220,12 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, dtype='float64'):
         dictionary mapping column names to sequences of integers representing
         that column's category. See `cudf.DataFrame.one_hot_encoding` for more
         information. if not supplied, it will be computed
+    columns : sequence of str, optional
+        Names of columns to encode. If not provided, will attempt to encode all
+        columns. Note this is different from pandas default behavior, which
+        encodes all columns with dtype object or categorical
     dtype : str, optional
         output dtyle, default 'float64'
-
     """
     from cudf.multi import concat
 
@@ -230,12 +234,15 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, dtype='float64'):
     else:
         prefix_map = prefix
 
+    if columns is None:
+        columns = df.columns
+
     return concat([
         df.one_hot_encoding(
             name,
             prefix=prefix_map.get(name, prefix),
-            cats=cats.get(name, col.unique()),
+            cats=cats.get(name, df[name].unique()),
             prefix_sep=prefix_sep,
             dtype=dtype)
-        for name, col in df.iteritems()
+        for name in columns
     ], axis=1)
