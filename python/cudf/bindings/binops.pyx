@@ -48,18 +48,15 @@ cdef apply_jit_op_v_v(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, o
     Call JITified gdf binary ops between two columns.
     """
 
-    cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        result = gdf_binary_operation_v_v(
+        binary_operation_v_v(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
             <gdf_column*>c_rhs,
             c_op)
 
     cdef int nullct = c_out[0].null_count
-
-    check_gdf_error(result)
 
     return nullct
 
@@ -69,18 +66,15 @@ cdef apply_jit_op_v_s(gdf_column* c_lhs, gdf_scalar* c_rhs, gdf_column* c_out, o
     Call JITified gdf binary ops between a column and a scalar.
     """
 
-    cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        result = gdf_binary_operation_v_s(
+        binary_operation_v_s(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
             <gdf_scalar*>c_rhs,
             c_op)
 
     cdef int nullct = c_out[0].null_count
-
-    check_gdf_error(result)
 
     return nullct
 
@@ -90,18 +84,15 @@ cdef apply_jit_op_s_v(gdf_scalar* c_lhs, gdf_column* c_rhs, gdf_column* c_out, o
     Call JITified gdf binary ops between a scalar and a column.
     """
 
-    cdef gdf_error result
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        result = gdf_binary_operation_s_v(
+        binary_operation_s_v(
             <gdf_column*>c_out,
             <gdf_scalar*>c_lhs,
             <gdf_column*>c_rhs,
             c_op)
 
     cdef int nullct = c_out[0].null_count
-
-    check_gdf_error(result)
 
     return nullct
 

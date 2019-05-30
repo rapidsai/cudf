@@ -7,8 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
-
-cdef extern from "cudf.h" nogil:
+cdef extern from "binaryop.hpp" nogil:
 
     ctypedef enum gdf_binary_operator:
         GDF_ADD,
@@ -32,9 +31,13 @@ cdef extern from "cudf.h" nogil:
         GDF_LOGICAL_OR,
         GDF_INVALID_BINARY
 
-    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
-    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +
-    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+cdef extern from "binaryop.hpp" namespace "cudf" nogil:
+
+    cdef void binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+    cdef void binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +
+    cdef void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+
+cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
     cdef gdf_error gdf_sub_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +

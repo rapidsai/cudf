@@ -17,25 +17,15 @@
  * limitations under the License.
  */
 
+#include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/scalar_wrapper.cuh"
-#include "gtest/gtest.h"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <binaryop.hpp>
 #include <vector>
 #include <numeric>
 
-struct BinopVerifyInputTest : public ::testing::Test {
-    BinopVerifyInputTest() {
-    }
-
-    virtual ~BinopVerifyInputTest() {
-    }
-
-    virtual void SetUp() {
-    }
-
-    virtual void TearDown() {
-    }
-};
+struct BinopVerifyInputTest : public GdfTest {};
 
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
@@ -47,8 +37,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_SUCCESS);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD),
+        "Column sizes don't match");
 }
 
 
@@ -61,8 +52,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_SUCCESS);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD),
+        "Column sizes don't match");
 }
 
 
@@ -73,8 +65,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(nullptr, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(nullptr, vector_lhs, scalar, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -85,8 +78,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(vector_out, nullptr, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, nullptr, scalar, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -99,8 +93,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, nullptr, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, nullptr, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -116,8 +111,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
 
 
@@ -133,8 +129,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType) {
 
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
 
 
@@ -150,8 +147,9 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType) {
     auto scalar = cudf::test::scalar_wrapper<int64_t>{100};
     scalar.get()->dtype = (gdf_dtype)100;
 
-    auto result = gdf_binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_s(vector_out, vector_lhs, scalar, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
 
 
@@ -166,8 +164,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_SUCCESS);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Column sizes don't match");
 }
 
 
@@ -182,8 +181,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_SUCCESS);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Column sizes don't match");
 }
 
 
@@ -198,8 +198,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
 
     auto vector_rhs = cudf::test::column_wrapper<int64_t>{0};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_SUCCESS);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Column sizes don't match");
 }
 
 
@@ -212,8 +213,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(nullptr, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(nullptr, vector_lhs, vector_rhs, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -226,8 +228,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, nullptr, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, nullptr, vector_rhs, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -240,8 +243,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, nullptr, GDF_ADD);
-    ASSERT_TRUE(result == GDF_DATASET_EMPTY);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, nullptr, GDF_ADD),
+        "Input pointers are null");
 }
 
 
@@ -259,8 +263,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
 
 
@@ -278,8 +283,9 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType) {
         [](gdf_size_type row) {return row;},
         [](gdf_size_type row) {return true;}};
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
 
 
@@ -297,6 +303,7 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorType) {
         [](gdf_size_type row) {return true;}};
     vector_rhs.get()->dtype = (gdf_dtype)100;
 
-    auto result = gdf_binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD);
-    ASSERT_TRUE(result == GDF_UNSUPPORTED_DTYPE);
+    CUDF_EXPECT_THROW_MESSAGE(
+        cudf::binary_operation_v_v(vector_out, vector_lhs, vector_rhs, GDF_ADD),
+        "Invalid/Unsupported datatype");
 }
