@@ -1,81 +1,28 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <algorithm>
 
-#include "cudf.h"
+#include "launcher.cuh"
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "bitmask/legacy_bitmask.hpp"
+#include <binaryop.hpp>
 
-
-template<typename T, typename Tout, typename F>
-__global__
-void gpu_binary_op(const T *lhs_data, const gdf_valid_type *lhs_valid,
-                   const T *rhs_data, const gdf_valid_type *rhs_valid,
-                   gdf_size_type size, Tout *results, F functor) {
-    int tid = threadIdx.x;
-    int blkid = blockIdx.x;
-    int blksz = blockDim.x;
-    int gridsz = gridDim.x;
-
-    int start = tid + blkid * blksz;
-    int step = blksz * gridsz;
-    if ( lhs_valid || rhs_valid ) {  // has valid mask
-        for (int i=start; i<size; i+=step) {
-            if (gdf_is_valid(lhs_valid, i) && gdf_is_valid(rhs_valid, i))
-                results[i] = functor.apply(lhs_data[i], rhs_data[i]);
-        }
-    } else {                         // no valid mask
-        for (int i=start; i<size; i+=step) {
-            results[i] = functor.apply(lhs_data[i], rhs_data[i]);
-        }
-    }
-}
-
-template<typename T, typename Tout, typename F>
-struct BinaryOp {
-    static
-    gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
-
-        // Return successully right away for empty inputs
-        if((0 == lhs->size) || (0 == rhs->size)){
-          return GDF_SUCCESS;
-        }
-
-        GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
-        GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-        GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
-
-        PUSH_RANGE("LIBGDF_BINARY_OP", BINARY_OP_COLOR);
-        // find optimal blocksize
-        int mingridsize, blocksize;
-        CUDA_TRY(
-            cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
-                                               gpu_binary_op<T, Tout, F>)
-        );
-        // find needed gridsize
-        int neededgridsize = (lhs->size + blocksize - 1) / blocksize;
-        int gridsize = std::min(mingridsize, neededgridsize);
-
-        F functor;
-        gpu_binary_op<<<gridsize, blocksize>>>(
-            // inputs
-            (const T*)lhs->data, lhs->valid,
-            (const T*)rhs->data, rhs->valid,
-            lhs->size,
-            // output
-            (Tout*)output->data,
-            // action
-            functor
-        );
-
-        cudaDeviceSynchronize();
-
-        POP_RANGE();
-
-        CUDA_CHECK_LAST();
-        return GDF_SUCCESS;
-    }
-};
+namespace cudf {
+namespace binops {
+namespace compiled {
 
 template<typename T, typename F>
 struct ArithOp {
@@ -94,27 +41,6 @@ struct LogicalOp {
         return BinaryOp<T, int8_t, F>::launch(lhs, rhs, output);
     }
 };
-
-
-#define DEF_ARITH_OP_REAL(F)                                                  \
-gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
-    switch ( lhs->dtype ) {                                                   \
-    case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
-    case GDF_FLOAT64: return F##_f64(lhs, rhs, output);                       \
-    default: return GDF_UNSUPPORTED_DTYPE;                                    \
-    }                                                                         \
-}
-
-#define DEF_ARITH_OP_NUM(F)                                                   \
-gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
-    switch ( lhs->dtype ) {                                                   \
-    case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
-    case GDF_INT64:   return F##_i64(lhs, rhs, output);                       \
-    case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
-    case GDF_FLOAT64: return F##_f64(lhs, rhs, output);                       \
-    default: return GDF_UNSUPPORTED_DTYPE;                                    \
-    }                                                                         \
-}
 
 // Arithmeitc
 
@@ -166,7 +92,6 @@ struct DeviceDiv {
     }
 };
 
-DEF_ARITH_OP_NUM(gdf_add)
 
 gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<int32_t, DeviceAdd<int32_t> >::launch(lhs, rhs, output);
@@ -184,7 +109,6 @@ gdf_error gdf_add_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<double, DeviceAdd<double> >::launch(lhs, rhs, output);
 }
 
-DEF_ARITH_OP_NUM(gdf_sub)
 
 gdf_error gdf_sub_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<int32_t, DeviceSub<int32_t> >::launch(lhs, rhs, output);
@@ -202,7 +126,6 @@ gdf_error gdf_sub_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<double, DeviceSub<double> >::launch(lhs, rhs, output);
 }
 
-DEF_ARITH_OP_NUM(gdf_mul)
 
 gdf_error gdf_mul_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<int32_t, DeviceMul<int32_t> >::launch(lhs, rhs, output);
@@ -220,7 +143,6 @@ gdf_error gdf_mul_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<double, DeviceMul<double> >::launch(lhs, rhs, output);
 }
 
-DEF_ARITH_OP_NUM(gdf_floordiv)
 
 gdf_error gdf_floordiv_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<int32_t, DeviceFloorDivInt<int32_t> >::launch(lhs, rhs, output);
@@ -238,7 +160,6 @@ gdf_error gdf_floordiv_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     return ArithOp<double, DeviceFloorDivReal<double> >::launch(lhs, rhs, output);
 }
 
-DEF_ARITH_OP_REAL(gdf_div)
 
 gdf_error gdf_div_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return ArithOp<float, DeviceDiv<float> >::launch(lhs, rhs, output);
@@ -249,24 +170,33 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 
-// logical
-
-
-#define DEF_LOGICAL_OP_NUM(F)                                                 \
+#define DEF_ARITH_OP_REAL(F)                                                  \
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
     switch ( lhs->dtype ) {                                                   \
-    case GDF_INT8:      return F##_i8(lhs, rhs, output);                      \
-    case GDF_STRING_CATEGORY:                                                 \
-    case GDF_INT32:     return F##_i32(lhs, rhs, output);                     \
-    case GDF_INT64:     return F##_i64(lhs, rhs, output);                     \
-    case GDF_FLOAT32:   return F##_f32(lhs, rhs, output);                     \
-    case GDF_FLOAT64:   return F##_f64(lhs, rhs, output);                     \
-    case GDF_DATE32:    return F##_i32(lhs, rhs, output);                     \
-    case GDF_DATE64:    return F##_i64(lhs, rhs, output);                     \
-    case GDF_TIMESTAMP: return F##_i64(lhs, rhs, output);                     \
+    case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
+    case GDF_FLOAT64: return F##_f64(lhs, rhs, output);                       \
     default: return GDF_UNSUPPORTED_DTYPE;                                    \
     }                                                                         \
 }
+
+#define DEF_ARITH_OP_NUM(F)                                                   \
+gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
+    switch ( lhs->dtype ) {                                                   \
+    case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
+    case GDF_INT64:   return F##_i64(lhs, rhs, output);                       \
+    case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
+    case GDF_FLOAT64: return F##_f64(lhs, rhs, output);                       \
+    default: return GDF_UNSUPPORTED_DTYPE;                                    \
+    }                                                                         \
+}
+
+DEF_ARITH_OP_NUM(gdf_add)
+DEF_ARITH_OP_NUM(gdf_sub)
+DEF_ARITH_OP_NUM(gdf_mul)
+DEF_ARITH_OP_NUM(gdf_floordiv)
+DEF_ARITH_OP_REAL(gdf_div)
+
+// logical
 
 template<typename T>
 struct DeviceGt {
@@ -317,7 +247,7 @@ struct DeviceNe {
     }
 };
 
-DEF_LOGICAL_OP_NUM(gdf_gt)
+
 
 gdf_error gdf_gt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceGt<int8_t> >::launch(lhs, rhs, output);
@@ -339,7 +269,7 @@ gdf_error gdf_gt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<double, DeviceGt<double> >::launch(lhs, rhs, output);
 }
 
-DEF_LOGICAL_OP_NUM(gdf_ge)
+
 
 gdf_error gdf_ge_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceGe<int8_t> >::launch(lhs, rhs, output);
@@ -362,7 +292,7 @@ gdf_error gdf_ge_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 
-DEF_LOGICAL_OP_NUM(gdf_lt)
+
 
 gdf_error gdf_lt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceLt<int8_t> >::launch(lhs, rhs, output);
@@ -384,7 +314,7 @@ gdf_error gdf_lt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<double, DeviceLt<double> >::launch(lhs, rhs, output);
 }
 
-DEF_LOGICAL_OP_NUM(gdf_le)
+
 
 gdf_error gdf_le_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceLe<int8_t> >::launch(lhs, rhs, output);
@@ -406,7 +336,7 @@ gdf_error gdf_le_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<double, DeviceLe<double> >::launch(lhs, rhs, output);
 }
 
-DEF_LOGICAL_OP_NUM(gdf_eq)
+
 
 gdf_error gdf_eq_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceEq<int8_t> >::launch(lhs, rhs, output);
@@ -428,7 +358,7 @@ gdf_error gdf_eq_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<double, DeviceEq<double> >::launch(lhs, rhs, output);
 }
 
-DEF_LOGICAL_OP_NUM(gdf_ne)
+
 
 gdf_error gdf_ne_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int8_t, DeviceNe<int8_t> >::launch(lhs, rhs, output);
@@ -451,6 +381,30 @@ gdf_error gdf_ne_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 
+#define DEF_LOGICAL_OP_NUM(F)                                                 \
+gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
+    switch ( lhs->dtype ) {                                                   \
+    case GDF_INT8:      return F##_i8(lhs, rhs, output);                      \
+    case GDF_STRING_CATEGORY:                                                 \
+    case GDF_INT32:     return F##_i32(lhs, rhs, output);                     \
+    case GDF_INT64:     return F##_i64(lhs, rhs, output);                     \
+    case GDF_FLOAT32:   return F##_f32(lhs, rhs, output);                     \
+    case GDF_FLOAT64:   return F##_f64(lhs, rhs, output);                     \
+    case GDF_DATE32:    return F##_i32(lhs, rhs, output);                     \
+    case GDF_DATE64:    return F##_i64(lhs, rhs, output);                     \
+    case GDF_TIMESTAMP: return F##_i64(lhs, rhs, output);                     \
+    default: return GDF_UNSUPPORTED_DTYPE;                                    \
+    }                                                                         \
+}
+
+DEF_LOGICAL_OP_NUM(gdf_gt)
+DEF_LOGICAL_OP_NUM(gdf_ge)
+DEF_LOGICAL_OP_NUM(gdf_lt)
+DEF_LOGICAL_OP_NUM(gdf_le)
+DEF_LOGICAL_OP_NUM(gdf_eq)
+DEF_LOGICAL_OP_NUM(gdf_ne)
+
+
 // bitwise
 
 
@@ -470,10 +424,10 @@ gdf_error gdf_bitwise_##POSTFIX(gdf_column *lhs, gdf_column *rhs, gdf_column *ou
 }
 
 #define DEF_BITWISE_IMPL_GROUP(NAME, TEMPLATE)      \
-DEF_BITWISE_OP(gdf_bitwise_##NAME)                  \
 DEF_BITWISE_IMPL(NAME##_i8, int8_t, TEMPLATE)       \
 DEF_BITWISE_IMPL(NAME##_i32, int32_t, TEMPLATE)     \
-DEF_BITWISE_IMPL(NAME##_i64, int64_t, TEMPLATE)
+DEF_BITWISE_IMPL(NAME##_i64, int64_t, TEMPLATE)     \
+DEF_BITWISE_OP(gdf_bitwise_##NAME)
 
 
 template<typename T>
@@ -507,38 +461,47 @@ DEF_BITWISE_IMPL_GROUP(or, DeviceBitwiseOr)
 DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
 
 
-// validity
-
-gdf_column gdf_validity_column(const gdf_column &col) {
-    gdf_column ret;
-    ret.data = col.valid;
-    // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
-    ret.dtype = GDF_INT8;
-    ret.valid = nullptr;
-    ret.size = (col.size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-    return ret;
-}
-
-gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
-    GDF_REQUIRE ( output->valid, GDF_VALIDITY_MISSING);
-    gdf_column x = gdf_validity_column(*lhs);
-    gdf_column y = gdf_validity_column(*rhs);
-    gdf_column z = gdf_validity_column(*output);
+gdf_error binary_operation(gdf_column* out,
+                           gdf_column* lhs,
+                           gdf_column* rhs,
+                           gdf_binary_operator ope)
+{
+    switch (ope)
+    {
+    case GDF_ADD:
+        return gdf_add_generic(lhs, rhs, out);
+    case GDF_SUB:
+        return gdf_sub_generic(lhs, rhs, out);
+    case GDF_MUL:
+        return gdf_mul_generic(lhs, rhs, out);
+    case GDF_DIV:
+        return gdf_floordiv_generic(lhs, rhs, out);
+    case GDF_FLOOR_DIV:
+        return gdf_div_generic(lhs, rhs, out);
+    case GDF_EQUAL:
+        return gdf_gt_generic(lhs, rhs, out);
+    case GDF_NOT_EQUAL:
+        return gdf_ge_generic(lhs, rhs, out);
+    case GDF_LESS:
+        return gdf_lt_generic(lhs, rhs, out);
+    case GDF_GREATER:
+        return gdf_le_generic(lhs, rhs, out);
+    case GDF_LESS_EQUAL:
+        return gdf_eq_generic(lhs, rhs, out);
+    case GDF_GREATER_EQUAL:
+        return gdf_ne_generic(lhs, rhs, out);
+    case GDF_BITWISE_AND:
+        return gdf_bitwise_and_generic(lhs, rhs, out);
+    case GDF_BITWISE_OR:
+        return gdf_bitwise_or_generic(lhs, rhs, out);
+    case GDF_BITWISE_XOR:
+        return gdf_bitwise_xor_generic(lhs, rhs, out);
     
-    // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
-    if ( x.data == nullptr && y.data != nullptr ) {
-        CUDA_TRY( cudaMemcpy(z.data, y.data, y.size, cudaMemcpyDeviceToDevice) );
-        return GDF_SUCCESS;
-    } 
-    else if ( x.data != nullptr && y.data == nullptr ) {
-        CUDA_TRY( cudaMemcpy(z.data, x.data, x.size, cudaMemcpyDeviceToDevice) );
-        return GDF_SUCCESS;
-    } 
-    else if ( x.data == nullptr && y.data == nullptr ) {
-        CUDA_TRY( cudaMemset(z.data, 0xff, x.size) );
-        return GDF_SUCCESS;
+    default:
+        return GDF_INVALID_API_CALL;
     }
-    
-    gdf_bitwise_and_i8(&x, &y, &z);
-    return GDF_SUCCESS;
 }
+
+} // namespace compiled
+} // namespace binops
+} // namespace cudf

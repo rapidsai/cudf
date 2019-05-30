@@ -241,7 +241,7 @@ void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf
         // before checking for equality because the same category values can mean
         // different things for different columns
 
-        // make temporary columns which will have synced memory
+        // make temporary columns which will have synced categories
         auto temp_lhs = cudf::allocate_like(*lhs);
         auto temp_rhs = cudf::allocate_like(*rhs);
         gdf_column* input_cols[2]   = {lhs, rhs};
@@ -251,12 +251,16 @@ void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf
         sync_column_categories(input_cols, temp_cols, 2);
 
         // now it's ok to directly compare the column data
-        binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+        auto err = binops::compiled::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+        if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
+            binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
 
-        // TODO: who deallocates temp_lh, temp_rhs?
+        // TODO: who deallocates temp_lhs, temp_rhs?
         return;
     }
-    binops::jit::binary_operation(out, lhs, rhs, ope);
+    auto err = binops::compiled::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+    if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
+        binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
 } // namespace cudf
