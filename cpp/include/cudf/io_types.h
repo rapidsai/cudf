@@ -224,18 +224,29 @@ namespace cudf{
  * @brief Arguments to the read_json interface.
  *---------------------------------------------------------------------------**/
 struct json_read_arg{
-  gdf_input_type  source_type = HOST_BUFFER;///< Type of the data source;
-  std::string     source;                   ///< If source_type is FILE_PATH, contains the filepath. If source_type is HOST_BUFFER, contains the input JSON data
+  gdf_input_type  source_type = HOST_BUFFER;      ///< Type of the data source.
+  std::string     source;                         ///< If source_type is FILE_PATH, contains the filepath. If source_type is HOST_BUFFER, contains the input JSON data.
 
-  std::vector<std::string>  dtype;          ///< Ordered list of data types; pass an empty vector to use data type deduction
-  std::string               compression;    ///< Compression type ("none", "infer", "gzip", "zip"); pass an empty string for uncompressed input
-  bool                      lines = false;  ///< Read the file as a json object per line
+  std::vector<std::string>  dtype;                ///< Ordered list of data types; pass an empty vector to use data type deduction.
+  std::string               compression = "infer";///< Compression type ("none", "infer", "gzip", "zip"); default is "infer".
+  bool                      lines = false;        ///< Read the file as a json object per line; default is false.
 
-  size_t        byte_range_offset = 0;      ///< Offset of the byte range to read.
-  size_t        byte_range_size = 0;        /**< Size of the byte range to read. pass a zero to read all data after byte_range_offset.
-                                            Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
+  size_t        byte_range_offset = 0;            ///< Offset of the byte range to read; default is zero.
+  size_t        byte_range_size = 0;              /**< Size of the byte range to read. If set to zero, all data after byte_range_offset is read. Reads the row
+                                                  that starts before or at the end of the range, even if it ends after the end of the range. Default is zero.*/
 
+  /**---------------------------------------------------------------------------*
+   * @brief json_read_arg default constructor.
+   *---------------------------------------------------------------------------**/
   json_read_arg() = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief json_read_arg constructor that sets the source data members.
+   * 
+   * @param[in] source_type Enum describing the type of the data source.
+   * @param[in] source If source_type is FILE_PATH, contains the filepath.
+   * If source_type is HOST_BUFFER, contains the input JSON data.
+   *---------------------------------------------------------------------------**/
   json_read_arg(gdf_input_type src_type, const std::string &src) : source_type(src_type), source(src) {}
 };
 }

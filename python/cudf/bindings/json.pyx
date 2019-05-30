@@ -61,8 +61,6 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     cdef json_read_arg args = json_read_arg()
 
     if is_file_like(path_or_buf):
-        if compression == 'infer':
-            compression = None
         source = path_or_buf.read()
         # check if StringIO is used
         if hasattr(source, 'encode'):
@@ -80,8 +78,8 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     else:
         args.source_type = HOST_BUFFER
 
-    if compression is None or compression == 'infer':
-        args.compression = b""
+    if compression is None:
+        args.compression = b'none'
     else:
         args.compression = compression.encode()
 
