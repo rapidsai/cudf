@@ -825,7 +825,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
 
 #if PARQUET_GPU_USEC_TO_MSEC
 /**
- * @brief Convert an microsecond 64-bit timestamp to milliseconds
+ * @brief Convert a microsecond 64-bit timestamp to milliseconds
  *
  * @param[in,out] s Page state input/output
  * @param[in] src_pos Source position
