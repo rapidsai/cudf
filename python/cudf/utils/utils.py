@@ -211,9 +211,10 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
     ----------
     df : cudf.DataFrame
         dataframe to encode
-    prefix : str or dict
-        prefix to append. Either a str (to apply a constant prefix) or a
-        mapping of column names to prefixes
+    prefix : str, dict, or sequence
+        prefix to append. Either a str (to apply a constant prefix), dict
+        mapping column names to prefixes, or sequence of prefixes to apply with
+        the same length as the number of columns
     prefix_sep : str, optional
         separator to use when appending prefixes
     cats : dict, optional
@@ -229,13 +230,15 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
     """
     from cudf.multi import concat
 
-    if isinstance(prefix, str):
-        prefix_map = {}
-    else:
-        prefix_map = prefix
-
     if columns is None:
         columns = df.columns
+
+    if isinstance(prefix, str):
+        prefix_map = {}
+    elif isinstance(prefix, dict):
+        prefix_map = prefix
+    else:
+        prefix_map = dict(zip(columns, prefix))
 
     return concat([
         df.one_hot_encoding(
