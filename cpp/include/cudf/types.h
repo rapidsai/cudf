@@ -107,7 +107,7 @@ typedef struct {
  */
 // TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
-  char          si08;  /**< GDF_INT8      */
+  signed char   si08;  /**< GDF_INT8      */
   short         si16;  /**< GDF_INT16     */
   int           si32;  /**< GDF_INT32     */
   long          si64;  /**< GDF_INT64     */
