@@ -74,6 +74,7 @@
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
 
 # cudf 0.7.2 (16 May 2019)
 
