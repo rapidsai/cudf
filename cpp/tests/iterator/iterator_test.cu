@@ -50,18 +50,6 @@
 #include <reduction.hpp>
 
 // ---------------------------------------------------------------------------
-// __host__ option is required for thrust::host operation
-struct HostDeviceSum {
-    template<typename T>
-    __device__ __host__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
 
 template <typename T>
 T random_int(T min, T max)
@@ -107,13 +95,13 @@ struct IteratorTest : public GdfTest
         size_t   temp_storage_bytes = 0;
 
         cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            HostDeviceSum{}, init);
+            cudf::DeviceSum{}, init);
         // Allocate temporary storage
         RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
 
         // Run reduction
         cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result.begin(), num_items,
-            HostDeviceSum{}, init);
+            cudf::DeviceSum{}, init);
 
         evaluate(expected, dev_result, "cub test");
     }
@@ -126,7 +114,7 @@ struct IteratorTest : public GdfTest
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
-        T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, HostDeviceSum{});
+        T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, cudf::DeviceSum{});
         EXPECT_EQ(expected, result) << "thrust test";
     }
 
@@ -138,7 +126,7 @@ struct IteratorTest : public GdfTest
         InputIterator d_in_last =  d_in + num_items;
         EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
 
-        T_output result = thrust::reduce(thrust::host, d_in, d_in_last, init, HostDeviceSum{});
+        T_output result = thrust::reduce(thrust::host, d_in, d_in_last, init, cudf::DeviceSum{});
         EXPECT_EQ(expected, result) << "thrust host test";
     }
 
@@ -380,8 +368,9 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 }
 
 
-// test for mixed output value using `ColumnOutputMix`
-// it wpuld be useful for `var`, `std` operation
+// Test for mixed output value using `ColumnOutputMix`
+// It computes `count`, `sum`, `sum_of_squares` at a single reduction call.
+// It wpuld be useful for `var`, `std` operation
 TYPED_TEST(IteratorTest, mixed_output)
 {
     using T = int32_t;

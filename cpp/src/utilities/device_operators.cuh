@@ -24,7 +24,7 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/wrapper_types.hpp>
 #include <utilities/error_utils.hpp>
 
@@ -35,7 +35,7 @@ namespace cudf {
 /* @brief binary `sum` operator */
 struct DeviceSum {
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return lhs + rhs;
     }
@@ -47,7 +47,7 @@ struct DeviceSum {
 /* @brief binary `min` operator */
 struct DeviceMin{
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return lhs <= rhs? lhs: rhs;
     }
@@ -59,7 +59,7 @@ struct DeviceMin{
 /* @brief binary `max` operator */
 struct DeviceMax{
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return lhs >= rhs? lhs: rhs;
     }
@@ -71,7 +71,7 @@ struct DeviceMax{
 /* @brief binary `product` operator */
 struct DeviceProduct {
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return lhs * rhs;
     }
@@ -84,7 +84,7 @@ struct DeviceProduct {
 /* @brief binary `and` operator */
 struct DeviceAnd{
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return (lhs & rhs );
     }
@@ -93,7 +93,7 @@ struct DeviceAnd{
 /* @brief binary `or` operator */
 struct DeviceOr{
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return (lhs | rhs );
     }
@@ -102,7 +102,7 @@ struct DeviceOr{
 /* @brief binary `xor` operator */
 struct DeviceXor{
     template<typename T>
-    __device__
+    CUDA_HOST_DEVICE_CALLABLE
     T operator() (const T &lhs, const T &rhs) {
         return (lhs ^ rhs );
     }

@@ -250,15 +250,6 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     // befriend thrust::iterator_core_access to allow it access to the private interface below
     friend class thrust::iterator_core_access;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_iterator &operator=(const column_input_iterator &other)
-    {
-        super_t::operator=(other);
-
-        colData = other.colData;
-        return *this;
-    }
-
   private:
     const T_input colData;
 
