@@ -167,10 +167,9 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
 
 
-/* tests for null input iterator (column with null bitmap)
-   Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
-   we may accelarate the reduction for a column using cub
-*/
+// Tests for null input iterator (column with null bitmap)
+// Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
+// We may accelarate the reduction for a column using cub
 TYPED_TEST(IteratorTest, null_iterator)
 {
     using T = int32_t;
@@ -201,8 +200,8 @@ TYPED_TEST(IteratorTest, null_iterator)
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 }
 
-/* tests up cast reduction with null iterator
-*/
+// Tests up cast reduction with null iterator.
+// The up cast iterator will be created by `cudf::make_iterator_with_nulls<T, T_upcast>(...)`
 TYPED_TEST(IteratorTest, null_iterator_upcast)
 {
     const int column_size{1000};
@@ -242,8 +241,9 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
 
 
 
-/* tests for square input iterator
-*/
+// Tests for square input iterator using helper strcut `cudf::ColumnOutputSquared<T_upcast>`
+// The up cast iterator will be created by
+//  `cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>(...)`
 TYPED_TEST(IteratorTest, null_iterator_square)
 {
     const int column_size{1000};
@@ -282,18 +282,16 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 }
 
-/*
-    tests for indexed access
 
-    this was used by old implementation of group_by.
-
-    This won't be used with the newer implementation
-     (a.k.a. Single pass, distributive groupby https://github.com/rapidsai/cudf/pull/1478)
-    distributive groupby uses atomic operation to accumulate.
-
-    For group_by.cumsum() (scan base group_by) may not be single pass scan.
-    There is a possiblity that this process may be used for group_by.cumsum().
-*/
+//    tests for indexed access
+//    this was used by old implementation of group_by.
+//
+//    This won't be used with the newer implementation
+//     (a.k.a. Single pass, distributive groupby https://github.com/rapidsai/cudf/pull/1478)
+//    distributive groupby uses atomic operation to accumulate.
+//
+//    For group_by.cumsum() (scan base group_by) may not be single pass scan.
+//    There is a possiblity that this process may be used for group_by.cumsum().
 TYPED_TEST(IteratorTest, indexed_iterator)
 {
     using T = int32_t;

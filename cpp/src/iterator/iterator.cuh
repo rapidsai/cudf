@@ -28,12 +28,21 @@ namespace cudf
 {
 
 // --------------------------------------------------------------------------------------------------------
-// structs of output for column_input_iterator
+// helper structs of output for column_input_iterator
 
+/** -------------------------------------------------------------------------*
+ * @brief helper struct to output a scalar value
+ * A helper output struct for `column_input_iterator`
+ * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
+ * This struct computes the output value as `static_cast<T>(_value)`.
+ *
+ * @tparam  T a scalar data type to be output
+ * @tparam  T_input a scalar data type to be input
+ * -------------------------------------------------------------------------**/
 template<typename T>
 struct ColumnOutputSingle
 {
-    T value;
+    T value;    // the value to output
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
@@ -48,10 +57,20 @@ struct ColumnOutputSingle
     operator T() const { return value; }
 };
 
+/** -------------------------------------------------------------------------*
+ * @brief helper struct to output a  squared scalar value
+ * A helper output struct for `column_input_iterator`
+ * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
+ * This struct computes the output value as
+ * `static_cast<T>(_value)*static_cast<T>(_value)`.
+ *
+ * @tparam  T a scalar data type to be output
+ * @tparam  T_input a scalar data type to be input
+ * -------------------------------------------------------------------------**/
 template<typename T>
 struct ColumnOutputSquared
 {
-    T value_squared;
+    T value_squared;    /// the value of squared
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
@@ -68,16 +87,28 @@ struct ColumnOutputSquared
     operator T() const { return value_squared; }
 };
 
+
+/** -------------------------------------------------------------------------*
+ * @brief helper struct to output a  squared scalar value
+ * A helper output struct for `column_input_iterator`
+ * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
+ * This struct computes the value and the squared value and
+ * the count if is_valid = true.
+ *
+ * @tparam  T a scalar data type to be output
+ * @tparam  update_count if true, `count` is updated. else, count` is not updated
+ * @tparam  T_input a scalar data type to be input
+ * -------------------------------------------------------------------------**/
 template<typename T, bool update_count=true>
 struct ColumnOutputMixed;
 
-
+// @overload ColumnOutputMixed<T, true>
 template<typename T>
 struct ColumnOutputMixed<T, true>
 {
-    T value;
-    T value_squared;
-    gdf_index_type count;
+    T value;                /// the value
+    T value_squared;        /// the value of squared
+    gdf_index_type count;   /// the count
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
@@ -121,6 +152,7 @@ struct ColumnOutputMixed<T, true>
     }
 };
 
+// @overload ColumnOutputMixed<T, false>
 template<typename T>
 struct ColumnOutputMixed<T, false>
 {
@@ -169,10 +201,26 @@ struct ColumnOutputMixed<T, false>
 };
 
 // --------------------------------------------------------------------------------------------------------
-// structs for column_input_iterator
+/** -------------------------------------------------------------------------*
+ * @brief input struct with/without null bitmask
+ * A helper struct struct for `column_input_iterator`
+ * `ColumnInput.at(gdf_index_type id)` computes
+ * `data` value and valid flag at `id` and construct and return
+ * `T_output(data, valid flag)`.
+ * If nulls_present = true, the valid flag is always true.
+ * If nulls_present = false, the valid flag corresponds to null bitmask flag
+ * at `id`, and the data value = (is_valid(id))? data[id] : identity;
+ *
+ * @tparam  T_output a scalar data type to be output
+ * @tparam  T_element a native element type (cudf dta type) of input element array
+ *           and `identity` value which is used when null bitmaps flag is false.
+ * @tparam  nulls_present if true, this struct holds only data array.
+ *            else, this struct holds data array and bitmask array and identity value
+ * -------------------------------------------------------------------------**/
 template<typename T_output, typename T_element, bool nulls_present=true>
 struct ColumnInput;
 
+// @overload ColumnInput<T_output, T_element, false>
 template<typename T_output, typename T_element>
 struct ColumnInput<T_output, T_element, false>{
     const T_element *data;
@@ -187,6 +235,7 @@ struct ColumnInput<T_output, T_element, false>{
     };
 };
 
+// @overload ColumnInput<T_output, T_element, true>
 template<typename T_output, typename T_element>
 struct ColumnInput<T_output, T_element, true>{
     const T_element *data;
@@ -218,14 +267,24 @@ struct ColumnInput<T_output, T_element, true>{
     }
 };
 
-
-// ---------------------------------------------------------------------------
-// column_input_iterator
+/** -------------------------------------------------------------------------*
+ * @brief input iterator to support null bitmask
+ * Input iterator which can be used for cub and thrust.
+ * This is derived from `thrust::iterator_adaptor`
+ * `T_input = ColumnInput` will provide the value at index `id`
+ *  with/without null bitmask.
+ *
+ * @tparam  T_output The output helper struct type, usually `ColumnOutputSingle`,
+ *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ * @tparam  T_input  The input struct type of `ColumnInput`
+ * @tparam  Iterator The base iterator which gives the index of array.
+ *                   The default is `thrust::counting_iterator`
+ * -------------------------------------------------------------------------**/
 template<typename T_output, typename T_input, typename Iterator=thrust::counting_iterator<gdf_index_type> >
   class column_input_iterator
     : public thrust::iterator_adaptor<
-        column_input_iterator<T_output, T_input, Iterator>, // the first template parameter is the name of the iterator we're creating
-        Iterator,                   // the second template parameter is the name of the iterator we're adapting
+        column_input_iterator<T_output, T_input, Iterator>, // the name of the iterator we're creating
+        Iterator,                   // the name of the iterator we're adapting
         thrust::use_default, thrust::use_default, thrust::use_default,
         T_output,                   // set `super_t::reference` to `T_output`
         thrust::use_default
@@ -245,7 +304,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     column_input_iterator(const T_input col) : super_t(Iterator{0}), colData(col){}
 
     CUDA_HOST_DEVICE_CALLABLE
-    column_input_iterator(const column_input_iterator &it) : super_t(it.base()), colData(it.colData){}
+    column_input_iterator(const column_input_iterator &other) : super_t(other.base()), colData(other.colData){}
 
     // befriend thrust::iterator_core_access to allow it access to the private interface below
     friend class thrust::iterator_core_access;
@@ -257,7 +316,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     CUDA_HOST_DEVICE_CALLABLE
     typename super_t::reference dereference() const
     {
-      int id = *(this->base());
+      gdf_index_type id = *(this->base()); // base() returns base iterator: `Iterator`
       return colData.at(id);
     }
 };
@@ -265,28 +324,68 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
 // ---------------------------------------------------------------------------
 // helper functions to make iterator
 
+/** -------------------------------------------------------------------------*
+ * @brief helper function to make iterator with nulls
+ * Input iterator which can be used for cub and thrust.
+ *
+ * @tparam T_element The cudf data type of input array
+ * @tparam T_output  The cudf data type of output data or array
+ * @tparam T_output_helper
+ *                   The output helper struct type, usually `ColumnOutputSingle`,
+ *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ * @tparam Iterator_Index
+ *                  The base iterator which gives the index of array.
+ *                  The default is `thrust::counting_iterator`
+ *
+ * @param[in] data     The pointer of column data array
+ * @param[in] valid    The pointer of null bitmask of column
+ * @param[in] identity The identity value used when the mask value is false
+ * @param[in] it       The index iterator, `thrust::counting_iterator` by default
+ * -------------------------------------------------------------------------**/
 template <typename T_element, typename T_output = T_element,
     typename T_output_helper = ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_with_nulls(const T_element *_data, const bit_mask::bit_mask_t *_valid,
-    T_element _identity, Iterator_Index const _it = Iterator_Index(0))
+auto make_iterator_with_nulls(const T_element *data, const bit_mask::bit_mask_t *valid,
+    T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
     using T_input = ColumnInput<T_output_helper, T_element>;
     using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
 
-    return T_iterator(T_input(_data, _valid, _identity), _it);
+    return T_iterator(T_input(data, valid, identity), it);
 }
 
+/** -------------------------------------------------------------------------*
+ *  @overload auto make_iterator_with_nulls(const T_element *data,
+ *                     const gdf_valid_type *valid, T_element identity,
+ *                     Iterator_Index const it = Iterator_Index(0))
+ * -------------------------------------------------------------------------**/
 template <typename T_element, typename T_output = T_element,
     typename T_output_helper = ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_with_nulls(const T_element *_data, const gdf_valid_type *_valid,
-    T_element _identity, Iterator_Index const _it = Iterator_Index(0))
+auto make_iterator_with_nulls(const T_element *data, const gdf_valid_type *valid,
+    T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
     return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
-        (_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity, _it);
+        (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
+
+/** -------------------------------------------------------------------------*
+ * @brief helper function to make iterator without nulls
+ * Input iterator which can be used for cub and thrust.
+ *
+ * @tparam T_element The cudf data type of input array
+ * @tparam T_output  The cudf data type of output data or array
+ * @tparam T_output_helper
+ *                   The output helper struct type, usually `ColumnOutputSingle`,
+ *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ * @tparam Iterator_Index
+ *                  The base iterator which gives the index of array.
+ *                  The default is `thrust::counting_iterator`
+ *
+ * @param[in] data     The pointer of column data array
+ * @param[in] it       The index iterator, `thrust::counting_iterator` by default
+ * -------------------------------------------------------------------------**/
 template <typename T_element, typename T_output = T_element,
     typename T_output_helper = ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
