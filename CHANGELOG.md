@@ -40,6 +40,7 @@
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1884 Rolling windows: general enhancements and better coverage for unit tests
 
 ## Bug Fixes
