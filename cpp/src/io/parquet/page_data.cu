@@ -70,7 +70,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
-    int int64_us2ms;                // divide int64 types by this value
+    int int64_us2ms;                // if 1, convert microseconds to milliseconds for int64 types
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
