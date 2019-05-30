@@ -166,7 +166,7 @@ public:
    *
    * Stores the parsed gdf columns in an internal data member
    *
-   * @return void
+   * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table parse();
 };
