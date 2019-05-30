@@ -139,7 +139,7 @@ table JsonReader::parse() {
  * @return string representing the compression type
  *---------------------------------------------------------------------------**/
 std::string inferCompressionType(const char *compression_arg, const char *filepath) {
-  if (0 == strcmp(compression_arg, "") || 0 == strcasecmp(compression_arg, "none")) {
+  if (strlen(compression_arg) == 0 || 0 == strcasecmp(compression_arg, "none")) {
     return "none";
   }
   if (0 != strcasecmp(compression_arg, "infer")) {
