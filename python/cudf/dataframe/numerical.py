@@ -62,11 +62,16 @@ class NumericalColumn(columnops.TypedColumnBase):
                   dtype=deserialize(*header['dtype']))
         return col
 
-    def binary_operator(self, binop, rhs):
-        if isinstance(rhs, NumericalColumn):
+    def binary_operator(self, binop, rhs, reflect=False):
+        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
-            return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
-                                        out_dtype=out_dtype)
+            return numeric_column_binop(
+                lhs=self,
+                rhs=rhs,
+                op=binop,
+                out_dtype=out_dtype,
+                reflect=reflect
+            )
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -94,9 +99,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            ary = utils.scalar_broadcast_to(other, shape=len(self),
-                                            dtype=other_dtype)
-            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+
+            if np.isscalar(other):
+                other = np.dtype(other_dtype).type(other)
+                return other
+            else:
+                ary = utils.scalar_broadcast_to(
+                    other,
+                    shape=len(self),
+                    dtype=other_dtype
+                )
+                return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 
@@ -232,12 +245,12 @@ class NumericalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def all(self):
-        return bool(self.min())
+        return bool(self.min(dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(self.max())
+        return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)
@@ -358,11 +371,23 @@ class NumericalColumn(columnops.TypedColumnBase):
         return found
 
 
-def numeric_column_binop(lhs, rhs, op, out_dtype):
+def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
+    if reflect:
+        lhs, rhs = rhs, lhs
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    masked = False
+    if np.isscalar(lhs):
+        masked = rhs.has_null_mask
+        row_count = len(rhs)
+    elif np.isscalar(rhs):
+        masked = lhs.has_null_mask
+        row_count = len(lhs)
+    else:
+        masked = lhs.has_null_mask or rhs.has_null_mask
+        row_count = len(lhs)
+
+    out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
