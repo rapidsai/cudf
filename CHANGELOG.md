@@ -73,7 +73,8 @@
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
-
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1884 Rolling windows: added tests for non-arithmetic types, minor doc changes, fixed issue with `count` op
 
 # cudf 0.7.2 (16 May 2019)
 

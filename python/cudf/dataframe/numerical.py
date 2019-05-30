@@ -245,12 +245,12 @@ class NumericalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def all(self):
-        return bool(self.min())
+        return bool(self.min(dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(self.max())
+        return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)
