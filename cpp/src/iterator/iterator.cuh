@@ -20,6 +20,8 @@
 #include <cudf.h>
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -244,7 +246,12 @@ struct ColumnInput<T_output, T_element, true>{
 
     CUDA_HOST_DEVICE_CALLABLE
     ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
-    : data(_data), valid(_valid), identity(_identity){};
+    : data(_data), valid(_valid), identity(_identity){
+#if  !defined(__CUDA_ARCH__)
+        // check valid has value since valid
+        CUDF_EXPECTS(valid != nullptr, "the valid mask is required");
+#endif
+    };
 
     CUDA_HOST_DEVICE_CALLABLE
     ColumnInput(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
@@ -263,6 +270,8 @@ struct ColumnInput<T_output, T_element, true>{
     CUDA_HOST_DEVICE_CALLABLE
     bool is_valid(gdf_index_type id) const
     {
+        // `bit_mask::is_valid` never check if valid is nullptr,
+        // while `gdf_is_valid` checks if valid is nullptr
         return bit_mask::is_valid(valid, id);
     }
 };
@@ -351,6 +360,7 @@ auto make_iterator_with_nulls(const T_element *data, const bit_mask::bit_mask_t 
     using T_input = ColumnInput<T_output_helper, T_element>;
     using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
 
+    // T_input constructor checks if valid is not nullptr
     return T_iterator(T_input(data, valid, identity), it);
 }
 
@@ -369,6 +379,22 @@ auto make_iterator_with_nulls(const T_element *data, const gdf_valid_type *valid
         (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
+/** -------------------------------------------------------------------------*
+ *  @overload auto make_iterator_with_nulls(const gdf_column& column,
+ *                     T_element identity, Iterator_Index const it)
+ * -------------------------------------------------------------------------**/
+template <typename T_element, typename T_output = T_element,
+    typename T_output_helper = ColumnOutputSingle<T_output>,
+    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+auto make_iterator_with_nulls(const gdf_column& column,
+    T_element identity, Iterator_Index const it = Iterator_Index(0))
+{
+    // check the data type
+    CUDF_EXPECTS(gdf_dtype_of<T_element> == column.dtype, "the data type mismatch");
+
+    return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
+        (column.data, reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
+}
 
 /** -------------------------------------------------------------------------*
  * @brief helper function to make iterator without nulls
@@ -389,12 +415,27 @@ auto make_iterator_with_nulls(const T_element *data, const gdf_valid_type *valid
 template <typename T_element, typename T_output = T_element,
     typename T_output_helper = ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_without_nulls(const T_element *_data, const Iterator_Index _it = Iterator_Index(0))
+auto make_iterator_without_nulls(const T_element *data, const Iterator_Index it = Iterator_Index(0))
 {
     using T_input = ColumnInput<T_output_helper, T_element, false>;
     using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
 
-    return T_iterator(T_input(_data), _it);
+    return T_iterator(T_input(data), it);
+}
+
+/** -------------------------------------------------------------------------*
+ *  @overload auto make_iterator_without_nulls(const gdf_column& column,
+ *                       const Iterator_Index it)
+ * -------------------------------------------------------------------------**/
+template <typename T_element, typename T_output = T_element,
+    typename T_output_helper = ColumnOutputSingle<T_output>,
+    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
+auto make_iterator_without_nulls(const gdf_column& column, const Iterator_Index it = Iterator_Index(0))
+{
+    // check the data type
+    CUDF_EXPECTS(gdf_dtype_of<T_element> == column.dtype, "the data type mismatch");
+
+    return make_iterator_without_nulls(column.data, it);
 }
 
 } // namespace cudf
