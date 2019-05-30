@@ -200,3 +200,38 @@ def cudf_dtype_from_pydata_dtype(dtype):
         dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
+
+
+def get_dummies(df, prefix, prefix_sep='_', cats=None, dtype='float64'):
+    """ Returns a dataframe whose columns are the one hot encodings of all
+    columns in `df`
+
+    Parameters
+    ----------
+    df : cudf.DataFrame
+        dataframe to encode
+    prefix : str
+        prefix to append
+    prefix_sep : str, optional
+        separator to use when appending prefixes
+    cats : dict, optional
+        dictionary mapping column names to sequences of integers representing
+        that column's category. See `cudf.DataFrame.one_hot_encoding` for more
+        information. if None, it will be computed
+    dtype : str, optional
+        output dtyle, default 'float64'
+
+    """
+    from cudf.multi import concat
+    dummies= []
+    for name, col in df.iteritems():
+        if cats is None or name not in cats:
+            col_uniques = col.unique()
+        else:
+            col_uniques = cats[name]
+        dummies.append(df.one_hot_encoding(name,
+                                           prefix=prefix,
+                                           cats=col_uniques,
+                                           prefix_sep=prefix_sep,
+                                           dtype=dtype)
+    return concat(dummies)
