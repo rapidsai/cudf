@@ -88,7 +88,7 @@ struct ColumnConcatTest : public testing::Test
 
     EXPECT_EQ(ref_null_count, ref_gdf_col->null_count);
 
-    EXPECT_TRUE(gdf_equal_columns<ColumnType>(ref_gdf_col.get(), output_gdf_col.get()));
+    EXPECT_TRUE(gdf_equal_columns(*ref_gdf_col.get(), *output_gdf_col.get()));
 
   }
 

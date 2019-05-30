@@ -123,7 +123,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return CategoricalAccessor(self, categories=self._categories,
                                    ordered=self._ordered)
 
-    def binary_operator(self, binop, rhs):
+    def binary_operator(self, binop, rhs, reflect=False):
         msg = 'Series of dtype `category` cannot perform the operation: {}'\
             .format(binop)
         raise TypeError(msg)
@@ -285,6 +285,22 @@ class CategoricalColumn(columnops.TypedColumnBase):
         cpp_replace.replace_nulls(result, fill_value_col)
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.Categorical(value, categories=self.cat().categories)
+        value = value.codes[0].astype("int32")
+        return self.as_numerical.astype("int32").find_first_value(value)
+
+    def find_last_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.Categorical(value, categories=self.cat().categories)
+        value = value.codes[0].astype("int32")
+        return self.as_numerical.astype("int32").find_first_value(value)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

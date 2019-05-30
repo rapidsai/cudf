@@ -17,6 +17,7 @@
 #include <cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cassert>
+#include <copying.hpp>
 #include <table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/column_utils.hpp>
@@ -25,8 +26,7 @@
 
 namespace cudf {
 
-table::table(gdf_column* cols[], gdf_size_type num_cols)
-    : _columns(cols, cols + num_cols) {
+table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
   CUDF_EXPECTS(nullptr != cols[0], "Null input column");
   this->_num_rows = cols[0]->size;
 
@@ -35,6 +35,12 @@ table::table(gdf_column* cols[], gdf_size_type num_cols)
     CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
   });
 }
+
+table::table(std::initializer_list<gdf_column*> list)
+    : table{std::vector<gdf_column*>(list)} {}
+
+table::table(gdf_column* cols[], gdf_size_type num_cols)
+    : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
 
 table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)

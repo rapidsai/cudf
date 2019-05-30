@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.7.1 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -229,7 +229,6 @@ add_library(cudf SHARED
             src/orderby/orderby.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
-            src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
@@ -284,7 +283,8 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp)
+            src/bitmask/legacy_bitmask.cpp
+            src/gis/point_in_polygon.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

@@ -125,10 +125,13 @@ class device_table {
 
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
+  __host__ __device__ bool has_nulls() const { return _has_nulls; }
+  
 
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
   gdf_size_type _num_rows{0};  ///< The number of rows in the table
+  bool _has_nulls;
   gdf_column* device_columns{
       nullptr};  ///< Array of `gdf_column`s in device memory
   cudaStream_t
@@ -151,6 +154,7 @@ class device_table {
     CUDF_EXPECTS(nullptr != columns,
                  "Attempt to create table with a null column.");
     _num_rows = columns[0]->size;
+    _has_nulls = false;
 
     std::vector<gdf_column> temp_columns(num_cols);
 
@@ -159,6 +163,8 @@ class device_table {
       CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != columns[i]->data, "Column missing data.");
+        if (columns[i]->null_count > 0)
+          _has_nulls = true;
       }
       temp_columns[i] = *columns[i];
     }
@@ -173,31 +179,6 @@ class device_table {
 };
 
 namespace {
-template <bool nullable>
-struct elements_are_equal {
-  template <typename ColumnType>
-  __device__ __forceinline__ bool operator()(gdf_column const& lhs,
-                                             gdf_size_type lhs_index,
-                                             gdf_column const& rhs,
-                                             gdf_size_type rhs_index,
-                                             bool nulls_are_equal = false) {
-    if (nullable) {
-      bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
-      bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
-      // If both values are null
-      if (not lhs_is_valid and not rhs_is_valid) {
-        return nulls_are_equal;
-      }
-      // If only one value is null, they can never be equal
-      if (lhs_is_valid != rhs_is_valid) {
-        return false;
-      }
-    }
-
-    return static_cast<ColumnType const*>(lhs.data)[lhs_index] ==
-           static_cast<ColumnType const*>(rhs.data)[rhs_index];
-  }
-};
 
 template <bool nullable, template <typename> typename hash_function>
 struct hash_element {
@@ -263,57 +244,6 @@ struct copy_element {
   }
 };
 }  // namespace
-
-/**
- * @brief  Checks for equality between two rows between two tables.
- *
- * @param lhs The left table
- * @param lhs_index The index of the row in the rhs table to compare
- * @param rhs The right table
- * @param rhs_index The index of the row within rhs table to compare
- * @param nulls_are_equal Flag indicating whether two null values are considered
- * equal
- * @tparam nullable Flag indicating the possibility of null values
- *
- * @returns true If the two rows are element-wise equal
- * @returns false If any element differs between the two rows
- */
-template <bool nullable = true>
-__device__ inline bool rows_equal(device_table const& lhs,
-                                  const gdf_size_type lhs_index,
-                                  device_table const& rhs,
-                                  const gdf_size_type rhs_index,
-                                  bool nulls_are_equal = false) {
-  auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
-                            gdf_column const& l, gdf_column const& r) {
-    return cudf::type_dispatcher(l.dtype, elements_are_equal<nullable>{}, l,
-                                 lhs_index, r, rhs_index, nulls_are_equal);
-  };
-
-  return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
-                       equal_elements);
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Functor to compute if two rows are equal.
- *
- * @tparam nullable Flag indicating the possibility of null values
- *---------------------------------------------------------------------------**/
-template <bool nullable = true>
-struct row_equality_comparator {
-  device_table lhs;
-  device_table rhs;
-  bool nulls_are_equal;
-  row_equality_comparator(device_table const& l, device_table const& r,
-                          bool nulls_equal = false)
-      : lhs{l}, rhs{r}, nulls_are_equal{nulls_equal} {}
-
-  __device__ bool operator()(gdf_size_type lhs_index,
-                             gdf_size_type rhs_index) const {
-    return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index,
-                                nulls_are_equal);
-  }
-};
 
 /**
  * --------------------------------------------------------------------------*

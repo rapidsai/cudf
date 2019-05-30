@@ -16,8 +16,6 @@ import gzip
 import shutil
 import os
 
-from cudf.bindings.GDFError import GDFError
-
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
@@ -49,11 +47,11 @@ def make_numpy_mixed_dataframe():
 def make_all_numeric_dtypes_dataframe():
     df = pd.DataFrame()
 
-    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
-                  "int32", "int64", "long"]
+    gdf_dtypes = ["float", "float32", "double", "float64", "int8",
+                  "short", "int16", "int", "int32", "long", "int64"]
 
-    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
-                 np.int32, np.int32, np.int64, np.int64]
+    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int8,
+                 np.int16, np.int16, np.int32, np.int32, np.int64, np.int64]
 
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
@@ -465,6 +463,8 @@ def test_csv_reader_gzip_compression(tmpdir):
 
 
 @pytest.mark.parametrize('names, dtypes, data, trues, falses', [
+    (['A', 'B'], ['bool', 'bool'], 'True,True\nFalse,False\nTrue,False',
+        None, None),
     (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
     (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
         ["yes", "Yes", "YES"], ["no", "NO", "No"]),
@@ -670,10 +670,12 @@ def test_csv_reader_empty_dataframe():
     # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['float64', 'int64']))
 
-    # should raise an error without dtypes
-    with pytest.raises(GDFError):
-        read_csv(StringIO(buffer))
+    # should default to string columns without dtypes
+    df = read_csv(StringIO(buffer))
+    assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['object', 'object']))
 
 
 def test_csv_reader_filenotfound(tmpdir):
@@ -1022,3 +1024,17 @@ def test_csv_empty_input(tmpdir):
     df = read_csv(StringIO(''), dtype=in_dtypes, names=col_names)
     assert(all(df.columns == col_names))
     assert((list(df.dtypes) == out_dtypes))
+
+
+@pytest.mark.parametrize('dtype', [
+        ['short', 'float', 'int'],
+        {'A': 'short', 'C': 'int'}
+    ])
+def test_csv_reader_partial_dtype(dtype):
+    names_df = read_csv(StringIO('0,1,2'), names=['A', 'B', 'C'],
+                        dtype=dtype, usecols=['A', 'C'])
+    header_df = read_csv(StringIO('"A","B","C"\n0,1,2'),
+                         dtype=dtype, usecols=['A', 'C'])
+
+    assert(names_df == header_df)
+    assert(all(names_df.dtypes == ['int16', 'int32']))

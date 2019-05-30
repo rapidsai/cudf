@@ -40,12 +40,6 @@ def test_orc_reader_basic(datadir, inputfile, columns, engine):
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(path, engine=engine, columns=columns)
 
-    # cuDF's default currently handles some types differently
-    if engine == 'cudf':
-        # cuDF doesn't support bool so convert to int8
-        if 'boolean1' in expect.columns:
-            expect['boolean1'] = expect['boolean1'].astype('int8')
-
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -136,6 +130,31 @@ def test_orc_reader_strings(datadir):
     got = cudf.read_orc(path, engine='cudf', columns=['string1'])
 
     assert_eq(expect, got, check_categorical=False)
+
+
+def test_orc_read_stripe(datadir):
+    path = datadir / 'TestOrcFile.testDate1900.orc'
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == 'ArrowIOError':
+            pytest.skip('.orc file is not found')
+        else:
+            print(type(excpr).__name__)
+    pdf = orcfile.read().to_pandas(date_as_object=False)
+
+    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
+
+    gdf = [cudf.read_orc(path, stripe=i) for i in range(stripes)]
+    gdf = cudf.concat(gdf).reset_index(drop=True)
+
+    # cuDF DatetimeColumn currenly only supports millisecond units
+    # Convert to lesser precision for comparison
+    timedelta = np.timedelta64(1, 'ms').astype('timedelta64[ns]')
+    pdf['time'] = pdf['time'].astype(np.int64) // timedelta.astype(np.int64)
+    gdf['time'] = gdf['time'].astype(np.int64)
+
+    assert_eq(pdf, gdf, check_categorical=False)
 
 
 @pytest.mark.parametrize('num_rows', [1, 100, 3000])
