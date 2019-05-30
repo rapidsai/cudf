@@ -19,6 +19,9 @@
 #include "table/device_table.cuh"
 #include <table/device_table_row_operators.cuh>
 #include <rmm/thrust_rmm_allocator.h>
+#include <string/nvcategory_util.hpp>
+#include <nvstrings/NVCategory.h>
+#include <thrust/detail/range/tail_flags.h>
  
 namespace {
 
@@ -112,9 +115,39 @@ gdf_column drop_nulls(gdf_column const &input) {
   }
 }
 
+
+namespace detail {
+struct tuple_reduced_and
+{
+    __host__ __device__ bool operator()(const thrust::tuple<bool,bool> &x) const {
+        return thrust::get<0>(x) && thrust::get<1>(x); }
+}; 
+
+template<typename DerivedPolicy,
+         typename InputIterator,
+         typename OutputIterator,
+         typename BinaryPredicate>
+__host__ __device__
+  OutputIterator non_duplicates_copy(thrust::execution_policy<DerivedPolicy> &exec,
+                             InputIterator first,
+                             InputIterator last,
+                             OutputIterator output,
+                             BinaryPredicate binary_pred)
+{
+  thrust::detail::head_flags<InputIterator, BinaryPredicate> stencil1(first, last, binary_pred);
+  thrust::detail::tail_flags<InputIterator, BinaryPredicate> stencil2(first, last, binary_pred);
+  auto combined_stencil = thrust::make_transform_iterator(
+          thrust::make_zip_iterator(thrust::make_tuple(stencil1.begin(), stencil2.begin())),
+          tuple_reduced_and());
+  
+  using namespace thrust::placeholders;
+  
+  return thrust::copy_if(exec, first, last, combined_stencil, output, _1);
+} 
+
 rmm::device_vector<gdf_index_type>
 get_unique_ordered_indices(const cudf::table& key_columns,
-                           const bool keep_first)
+                           const duplicate_keep_option keep)
 {
   gdf_size_type ncols = key_columns.num_columns();
   gdf_size_type nrows = key_columns.num_rows();
@@ -142,20 +175,28 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   auto comp = row_equality_comparator<true>(*device_input_table, true);
 
   gdf_index_type* result_end;
-  if (keep_first) {
+  if (keep == duplicate_keep_option::KEEP_FIRST ) {
       result_end = thrust::unique_copy(exec, 
               sorted_indices.begin(),
               sorted_indices.end(),
               unique_indices.data().get(),
               comp
               );
-  } else {
+  } else if (keep == duplicate_keep_option::KEEP_LAST) {
       result_end = thrust::unique_copy(exec, 
               sorted_indices.rbegin(),
               sorted_indices.rend(),
               unique_indices.data().get(),
               comp
               );
+  } else {
+      result_end = non_duplicates_copy(exec, 
+              sorted_indices.begin(),
+              sorted_indices.end(),
+              unique_indices.data().get(),
+              comp
+              );
+
   }
   // reorder unique indices
   thrust::sort(exec, unique_indices.data().get(), result_end);
@@ -165,10 +206,11 @@ get_unique_ordered_indices(const cudf::table& key_columns,
 
   return unique_indices;
 }
+} //namespace detail
 
 cudf::table drop_duplicates(const cudf::table& input_table,
                             const cudf::table& key_columns,
-                            const bool keep_first)
+                            const duplicate_keep_option keep)
 {
   //CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   //CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
@@ -179,11 +221,12 @@ cudf::table drop_duplicates(const cudf::table& input_table,
       ) {
     return cudf::table();
   }
-  rmm::device_vector<gdf_index_type> unique_indices = get_unique_ordered_indices(key_columns, keep_first);
+  rmm::device_vector<gdf_index_type> unique_indices = detail::get_unique_ordered_indices(key_columns, keep);
   // Allocate output columns
   cudf::table destination_table(unique_indices.size(), cudf::column_dtypes(input_table), true);
   // run gather operation to establish new order
   cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
+  nvcategory_gather_table(input_table, destination_table);
   return destination_table;
 }
 }  // namespace cudf

@@ -10,6 +10,12 @@ from cudf.bindings.types cimport table as cudf_table
 
 cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
+    #defined in cpp/include/stream_compaction.hpp
+    ctypedef enum duplicate_keep_option:
+        KEEP_FIRST
+        KEEP_LAST
+        KEEP_FALSE
+
     cdef gdf_column apply_boolean_mask(const gdf_column &input,
                                        const gdf_column &boolean_mask) except +
 
@@ -17,5 +23,5 @@ cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
     cdef cudf_table drop_duplicates(const cudf_table& input_table,
                                const cudf_table& key_columns,
-                               const bool keep_first) except +
+                               const duplicate_keep_option keep) except +
 

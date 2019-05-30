@@ -1000,17 +1000,17 @@ class DataFrame(object):
             subset = subset,
         diff = set(subset)-set(self._cols)
         if len(diff) != 0:
-            raise KeyError(diff)
+            raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [series._column for name, series in self._cols.items()
                         if name in subset]
         out_cols, new_index = cpp_drop_duplicates([self.index.as_column()], in_cols, subset_cols, keep)
         new_index = as_index(new_index)
-        if self.index.equals(new_index):
+        if len(self.index) == len(new_index) and self.index.equals(new_index):
             new_index = self.index
         if inplace:
-            self = self.set_index(new_index)
+            self._index = new_index
             for k, new_col in zip(self._cols, out_cols):
-                self[k]._column = new_col
+                self[k] = Series(new_col, new_index)
         else:
             outdf = DataFrame()
             for k, new_col in zip(self._cols, out_cols):

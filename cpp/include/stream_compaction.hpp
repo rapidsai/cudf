@@ -84,6 +84,16 @@ gdf_column drop_nulls(gdf_column const &input);
 //rmm::device_vector<gdf_index_type> get_unique_ordered_indices(const cudf::table& key_columns,
 //                           const bool keep_first);
 
+
+/**
+ * @brief Choices for drop_duplicates API for retainment of duplicate rows
+ */
+typedef enum {
+  KEEP_FIRST = 0,   ///< Keeps first duplicate row
+  KEEP_LAST,        ///< Keeps last  duplicate row 
+  KEEP_FALSE        ///< Don't keep any duplicate rows
+} duplicate_keep_option;
+
 /**
  * @brief Create a new table without duplicate rows 
  *
@@ -95,7 +105,7 @@ gdf_column drop_nulls(gdf_column const &input);
  */
 cudf::table drop_duplicates(const cudf::table& input_table,
                             const cudf::table& key_columns,
-                            const bool keep_first);
+                            const duplicate_keep_option keep);
 }  // namespace cudf
 
 #endif

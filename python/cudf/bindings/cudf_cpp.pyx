@@ -270,7 +270,10 @@ cdef gdf_column_to_column_mem(gdf_column* input_col):
         )
         nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
         nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-        data = nvcat_obj.to_strings()
+        if nvcat_obj:
+            data = nvcat_obj.to_strings()
+        else:
+            data = nvstrings.to_device([])
     else:
         data = rmm.device_array_from_ptr(
             data_ptr,
