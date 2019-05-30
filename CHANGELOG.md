@@ -40,6 +40,7 @@
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1884 Rolling windows: general enhancements and better coverage for unit tests
 
 ## Bug Fixes
 
@@ -74,7 +75,6 @@
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
-- PR #1884 Rolling windows: added tests for non-arithmetic types, minor doc changes, fixed issue with `count` op
 
 # cudf 0.7.2 (16 May 2019)
 
