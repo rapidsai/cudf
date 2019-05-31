@@ -572,7 +572,7 @@ def test_merge_on_index_retained():
     gdm = df.merge(df2, left_index=True, right_index=True, how='left')
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how='left')
     gdm['a2'] = gdm['a2'].astype('float64')
-    assert_eq(gdm, pdm)
+    assert_eq(gdm.sort_index(), pdm.sort_index())
 
 
 @pytest.mark.parametrize('kwargs', [
