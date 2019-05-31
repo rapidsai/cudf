@@ -228,8 +228,12 @@ struct ColumnInput<T_output, T_element, false>{
     const T_element *data;
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(const T_element *_data)
+    ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid=nullptr, T_element _identity=T_element{0})
     : data(_data){};
+
+    CUDA_HOST_DEVICE_CALLABLE
+    ColumnInput(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
+    : ColumnInput(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     CUDA_HOST_DEVICE_CALLABLE
     T_output at(gdf_index_type id) const {
@@ -248,8 +252,8 @@ struct ColumnInput<T_output, T_element, true>{
     ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
     : data(_data), valid(_valid), identity(_identity){
 #if  !defined(__CUDA_ARCH__)
-        // check valid has value since valid
-        CUDF_EXPECTS(valid != nullptr, "the valid mask is required");
+        // verify valid is non-null, otherwise, is_valid() will crash
+        CUDF_EXPECTS(valid != nullptr, "non-null bit mask is required");
 #endif
     };
 
@@ -262,6 +266,7 @@ struct ColumnInput<T_output, T_element, true>{
         return T_output(get_value(id), is_valid(id));
     };
 
+private:
     CUDA_HOST_DEVICE_CALLABLE
     T_element get_value(gdf_index_type id) const {
         return (is_valid(id))? data[id] : identity;
