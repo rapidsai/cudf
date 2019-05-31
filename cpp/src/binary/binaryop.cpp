@@ -27,6 +27,7 @@
 #include "bitmask/legacy_bitmask.hpp"
 #include "string/nvcategory_util.hpp"
 #include <copying.hpp>
+#include <nvstrings/NVCategory.h>
 
 namespace cudf {
 namespace binops {
@@ -256,7 +257,17 @@ void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf
         if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
             binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
 
-        // TODO: who deallocates temp_lhs, temp_rhs?
+        // TODO: Need a better way to deallocate temporary columns
+        RMM_TRY(RMM_FREE(temp_lhs.data, 0));
+        RMM_TRY(RMM_FREE(temp_rhs.data, 0));
+        if (temp_lhs.valid != nullptr)
+            RMM_TRY(RMM_FREE(temp_lhs.valid, 0));
+        if (temp_rhs.valid != nullptr)
+            RMM_TRY(RMM_FREE(temp_rhs.valid, 0));
+        NVCategory::destroy(
+            reinterpret_cast<NVCategory*>(temp_lhs.dtype_info.category));
+        NVCategory::destroy(
+            reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
         return;
     }
     auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
