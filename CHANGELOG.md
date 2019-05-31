@@ -77,7 +77,7 @@
 - PR #1869 Parquet reader: fix Dask timestamps not matching with Pandas (convert to milliseconds)
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 - PR #1873 Add column dtype checking for the all/any methods
-
+- PR #1901 Bug with string iteration in _apply_basic_agg
 
 
 # cudf 0.7.2 (16 May 2019)
