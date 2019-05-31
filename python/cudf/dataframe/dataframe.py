@@ -1569,7 +1569,7 @@ class DataFrame(object):
         # Let's sort the columns of the GDF result
         result = []
         if sort or how == 'outer':
-            result = sorted(gdf_result, key=lambda x: x[2])
+            result = sorted(gdf_result, key=lambda x: str(x[2]))
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
