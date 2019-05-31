@@ -1542,12 +1542,9 @@ class DataFrame(object):
         # We save the original categories for the reconstruction of the
         # final data frame
         col_with_categories = {}
-        for name, col in lhs._cols.items():
+        for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
             if pd.api.types.is_categorical_dtype(col):
-                col_with_categories[name] = lhs[name].cat.categories
-        for name, col in rhs._cols.items():
-            if pd.api.types.is_categorical_dtype(col):
-                col_with_categories[name] = rhs[name].cat.categories
+                col_with_categories[name] = col.cat.categories
 
         # Save the order of the original column names for preservation later
         org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
