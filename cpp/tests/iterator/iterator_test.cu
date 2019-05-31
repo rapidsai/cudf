@@ -156,6 +156,7 @@ struct IteratorTest : public GdfTest
 
 };
 
+
 using TestingTypes = ::testing::Types<
     int32_t
 >;
@@ -458,3 +459,23 @@ TYPED_TEST(IteratorTest, mean_var_output)
     }
 }
 
+
+TYPED_TEST(IteratorTest, error_handling)
+{
+    using T = int32_t;
+    std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
+
+    cudf::test::column_wrapper<T> w_col_nonnull(hos_array);
+    cudf::test::column_wrapper<T> w_col_null(hos_array,
+        [&](gdf_index_type row) { return true; });
+
+    // expects error: data type mismatch
+    EXPECT_ANY_THROW( cudf::make_iterator_without_nulls<double>( *w_col_nonnull.get() ) );
+
+    // expects error: data type mismatch
+    EXPECT_ANY_THROW( cudf::make_iterator_with_nulls<float>( *w_col_null.get(), float{0}) );
+
+    // expects error: valid == nullptr
+    EXPECT_ANY_THROW( cudf::make_iterator_with_nulls<T>( *w_col_nonnull.get(), T{0}) );
+
+}
