@@ -243,7 +243,7 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
     return concat([
         df.one_hot_encoding(
             name,
-            prefix=prefix_map.get(name, prefix),
+            prefix=name + prefix_sep + prefix_map.get(name, prefix),
             cats=cats.get(name, df[name].unique()),
             prefix_sep=prefix_sep,
             dtype=dtype)
