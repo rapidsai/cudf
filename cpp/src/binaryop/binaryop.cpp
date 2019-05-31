@@ -17,9 +17,9 @@
  * limitations under the License.
  */
 
-#include "binary/jit/core/launcher.h"
-#include "binary/jit/util/operator.h"
-#include "binary/compiled/binary_ops.hpp"
+#include "jit/core/launcher.h"
+#include "jit/util/operator.h"
+#include "compiled/binary_ops.hpp"
 #include <bitmask/bitmask_ops.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
