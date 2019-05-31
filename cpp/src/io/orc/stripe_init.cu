@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "orc_common.h"
 #include "orc_gpu.h"
 
 #if (__CUDACC_VER_MAJOR__ >= 9)
@@ -326,6 +326,10 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s, const
         case STORE_INDEX2:
             if (ci_id < CI_PRESENT)
                 s->row_index_entry[2][ci_id] = v;
+            // Boolean columns have an extra byte to indicate the position of the bit within the byte
+            // TODO: Currently assuming rowIndexStride is a multiple of 8 and ignoring this value
+            if (ci_id == CI_PRESENT || s->chunk.type_kind == BOOLEAN)
+                cur++;
             if (cur >= start + pos_end)
                 return length;
             state = STORE_INDEX0;
