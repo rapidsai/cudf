@@ -222,15 +222,6 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
 
-    cdef gdf_error gdf_filter(size_t nrows,
-                 gdf_column* cols,
-                 size_t ncols,
-                 void** d_cols,
-                 int* d_types,
-                 void** d_vals,
-                 size_t* d_indx,
-                 size_t* new_sz) except +
-
     cdef gdf_error gdf_group_by_sum(int ncols,
                                gdf_column** cols,
                                gdf_column* col_agg,
