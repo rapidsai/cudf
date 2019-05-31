@@ -7,9 +7,10 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
+from cudf.bindings.types cimport table as cudf_table
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf.h" namespace "cudf" nogil:
 
     # See cpp/include/cudf/io_types.h:33
     ctypedef gdf_input_type gdf_csv_input_form
@@ -22,13 +23,7 @@ cdef extern from "cudf.h" nogil:
         QUOTE_NONE,
 
     # See cpp/include/cudf/io_types.h:62
-    ctypedef struct csv_read_arg:
-        # Output Arguments - Allocated in reader
-        int                 num_cols_out
-        int                 num_rows_out
-        gdf_column          **data
-
-        # Input Arguments - All data is in the host memory
+    cdef struct csv_read_arg:
         gdf_csv_input_form  input_data_form
         const char          *filepath_or_buffer
         size_t              buffer_size
@@ -93,4 +88,4 @@ cdef extern from "cudf.h" nogil:
         size_t              byte_range_offset
         size_t              byte_range_size
 
-    cdef gdf_error read_csv(csv_read_arg *args) except +
+    cdef cudf_table read_csv(csv_read_arg *args) except +

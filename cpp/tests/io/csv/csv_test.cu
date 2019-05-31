@@ -31,6 +31,12 @@
 
 #include <sys/stat.h>
 
+using cudf::read_csv;
+using cudf::table;
+using cudf::csv_read_arg;
+using cudf::gdf_csv_input_form;
+using cudf::gdf_csv_quote_style;
+
 TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
@@ -74,7 +80,7 @@ class gdf_host_column
 {
 public:
     gdf_host_column() = delete;
-    explicit gdf_host_column(gdf_column* const col)
+    explicit gdf_host_column(const gdf_column* col)
     {
         m_hostdata = std::vector<T>(col->size);
         cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
@@ -127,13 +133,13 @@ TEST(gdf_csv_test, DetectColumns)
         args.nrows = -1;
         args.use_cols_char = use_cols;
         args.use_cols_char_len = 2;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
         // cudf auto detect type code uses INT64
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT64 );
-        ASSERT_EQ( args.data[1]->dtype, GDF_INT64 );
-        auto ACol = gdf_host_column<int64_t>(args.data[0]);
-        auto BCol = gdf_host_column<int64_t>(args.data[1]);
+        ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
+        ASSERT_EQ(df.get_column(1)->dtype, GDF_INT64);
+        auto ACol = gdf_host_column<int64_t>(df.get_column(0));
+        auto BCol = gdf_host_column<int64_t>(df.get_column(1));
         EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int64_t>(20, -21, 22, -23) );
         EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int64_t>(100, 101, 102, 103) );
     }
@@ -170,12 +176,12 @@ TEST(gdf_csv_test, UseColumns)
         args.nrows = -1;
         args.use_cols_char = use_cols;
         args.use_cols_char_len = 2;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
-        ASSERT_EQ( args.data[1]->dtype, GDF_INT32 );
-        auto ACol = gdf_host_column<int32_t>(args.data[0]);
-        auto BCol = gdf_host_column<int32_t>(args.data[1]);
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
+        ASSERT_EQ( df.get_column(1)->dtype, GDF_INT32 );
+        auto ACol = gdf_host_column<int32_t>(df.get_column(0));
+        auto BCol = gdf_host_column<int32_t>(df.get_column(1));
         EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
         EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(100, 101, 102, 103) );
     }
@@ -223,27 +229,25 @@ TEST(gdf_csv_test, Numbers) {
     args.skip_blank_lines = true;
     args.header = -1;
     args.nrows = -1;
-    ASSERT_EQ(read_csv(&args), GDF_SUCCESS);
+    const table df = read_csv(&args);
 
-    EXPECT_THAT(gdf_host_column<int8_t>(args.data[0]).hostdata(),
+    EXPECT_THAT(gdf_host_column<int8_t>(df.get_column(0)).hostdata(),
                 ::testing::ElementsAreArray(int8_values));
-    EXPECT_THAT(gdf_host_column<int16_t>(args.data[2]).hostdata(),
+    EXPECT_THAT(gdf_host_column<int16_t>(df.get_column(2)).hostdata(),
                 ::testing::ElementsAreArray(int16_values));
-    EXPECT_THAT(gdf_host_column<int32_t>(args.data[4]).hostdata(),
+    EXPECT_THAT(gdf_host_column<int32_t>(df.get_column(4)).hostdata(),
                 ::testing::ElementsAreArray(int32_values));
-    EXPECT_THAT(gdf_host_column<int64_t>(args.data[6]).hostdata(),
+    EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(6)).hostdata(),
                 ::testing::ElementsAreArray(int64_values));
-    EXPECT_THAT(gdf_host_column<float>(args.data[8]).hostdata(),
+    EXPECT_THAT(gdf_host_column<float>(df.get_column(8)).hostdata(),
                 ::testing::Pointwise(FloatNearPointwise(1e-5), float32_values));
-    EXPECT_THAT(gdf_host_column<double>(args.data[10]).hostdata(),
+    EXPECT_THAT(gdf_host_column<double>(df.get_column(10)).hostdata(),
                 ::testing::Pointwise(FloatNearPointwise(1e-5), float64_values));
   }
 }
 
 TEST(gdf_csv_test, MortPerf)
 {
-    gdf_error error = GDF_SUCCESS;
-
     csv_read_arg	args{};
     const int num_cols = 31;
 
@@ -335,7 +339,6 @@ TEST(gdf_csv_test, MortPerf)
         args.skipfooter 	= 0;
         args.dayfirst 		= 0;
         args.mangle_dupe_cols=true;
-        args.num_cols_out=0;
 
         args.use_cols_int       = NULL;
         args.use_cols_char      = NULL;
@@ -347,10 +350,8 @@ TEST(gdf_csv_test, MortPerf)
         args.dtype = NULL;
 
 
-        error = read_csv(&args);
+        read_csv(&args);
     }
-
-    EXPECT_TRUE( error == GDF_SUCCESS );
 }
 
 TEST(gdf_csv_test, Strings)
@@ -380,14 +381,14 @@ TEST(gdf_csv_test, Strings)
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_names );
+        EXPECT_EQ( df.num_columns(), args.num_names );
 
         // Check the parsed string column metadata
-        ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(args.data[1]->data);
+        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
+        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
 
         ASSERT_NE( stringList, nullptr );
         auto stringCount = stringList->size();
@@ -438,19 +439,19 @@ TEST(gdf_csv_test, QuotedStrings)
         args.delimiter = ',';
         args.lineterminator = '\n';
         args.quotechar = '`';
-        args.quoting = QUOTE_ALL;     // enable quoting
-        args.doublequote = true;      // replace double quotechar with single
+        args.quoting = gdf_csv_quote_style::QUOTE_ALL; // enable quoting
+        args.doublequote = true; // replace double quotechar with single
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_names );
+        EXPECT_EQ( df.num_columns(), args.num_names );
 
         // Check the parsed string column metadata
-        ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(args.data[1]->data);
+        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
+        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
 
         ASSERT_NE( stringList, nullptr );
         auto stringCount = stringList->size();
@@ -500,19 +501,19 @@ TEST(gdf_csv_test, IgnoreQuotes)
         args.delimiter = ',';
         args.lineterminator = '\n';
         args.quotechar = '\"';
-        args.quoting = QUOTE_NONE;    // disable quoting
-        args.doublequote = false;     // do not replace double quotechar with single
+        args.quoting = gdf_csv_quote_style::QUOTE_NONE; // disable quoting
+        args.doublequote = false; // do not replace double quotechar with single
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
         // No filtering of any columns
-        EXPECT_EQ( args.num_cols_out, args.num_names );
+        EXPECT_EQ( df.num_columns(), args.num_names );
 
         // Check the parsed string column metadata
-        ASSERT_EQ( args.data[1]->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(args.data[1]->data);
+        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
+        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
 
         ASSERT_NE( stringList, nullptr );
         auto stringCount = stringList->size();
@@ -568,19 +569,19 @@ TEST(gdf_csv_test, Booleans)
         args.num_false_values = std::extent<decltype(falseValues)>::value;
         args.header = -1;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
         // Booleans are the same (integer) data type, but valued at 0 or 1
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
-        ASSERT_EQ( args.data[2]->dtype, GDF_INT16 );
-        ASSERT_EQ( args.data[3]->dtype, GDF_BOOL8 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
+        ASSERT_EQ( df.get_column(2)->dtype, GDF_INT16 );
+        ASSERT_EQ( df.get_column(3)->dtype, GDF_BOOL8 );
 
-        auto firstCol = gdf_host_column<int32_t>(args.data[0]);
+        auto firstCol = gdf_host_column<int32_t>(df.get_column(0));
         EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
-        auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
+        auto thirdCol = gdf_host_column<int16_t>(df.get_column(2));
         EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
-        auto fourthCol = gdf_host_column<cudf::bool8>(args.data[3]);
+        auto fourthCol = gdf_host_column<cudf::bool8>(df.get_column(3));
         EXPECT_THAT(
             fourthCol.hostdata(),
             ::testing::ElementsAre(cudf::true_v, cudf::true_v, cudf::false_v,
@@ -615,12 +616,12 @@ TEST(gdf_csv_test, Dates)
         args.skip_blank_lines = true;
         args.header = -1;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_DATE64 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_DATE64 );
 
-        auto ACol = gdf_host_column<uint64_t>(args.data[0]);
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(),
           ::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
                        656208000000, 0, 798163200000, 774144000000,
@@ -653,12 +654,12 @@ TEST(gdf_csv_test, FloatingPoint)
         args.skip_blank_lines = true;
         args.header = -1;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_FLOAT32 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_FLOAT32 );
 
-        auto ACol = gdf_host_column<float>(args.data[0]);
+        auto ACol = gdf_host_column<float>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(),
             ::testing::Pointwise(FloatNearPointwise(1e-6),
                 std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31, -73.98007199999998 }) );
@@ -688,12 +689,12 @@ TEST(gdf_csv_test, Category)
         args.lineterminator = ';';
         args.header = -1;
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_CATEGORY );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_CATEGORY );
 
-        auto ACol = gdf_host_column<int32_t>(args.data[0]);
+        auto ACol = gdf_host_column<int32_t>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(),
             ::testing::ElementsAre(2022314536, -189888986, 1512937027, 397836265) );
     }
@@ -724,12 +725,12 @@ TEST(gdf_csv_test, SkiprowsNrows)
         args.header = 1;
         args.skiprows = 2;
         args.nrows = 2;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
 
-        auto ACol = gdf_host_column<int32_t>(args.data[0]);
+        auto ACol = gdf_host_column<int32_t>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre(5, 6) );
     }
 }
@@ -760,12 +761,12 @@ TEST(gdf_csv_test, ByteRange)
         args.nrows = -1;
         args.byte_range_offset = 11;
         args.byte_range_size = 15;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
 
-        auto ACol = gdf_host_column<int32_t>(args.data[0]);
+        auto ACol = gdf_host_column<int32_t>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre(4000, 5000, 6000) );
     }
 }
@@ -795,12 +796,12 @@ TEST(gdf_csv_test, BlanksAndComments)
         args.header = -1;
         args.comment = '#';
         args.nrows = -1;
-        EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+        const table df = read_csv(&args);
 
-        EXPECT_EQ( args.num_cols_out, args.num_names );
-        ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
+        EXPECT_EQ( df.num_columns(), args.num_names );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
 
-        auto ACol = gdf_host_column<int32_t>(args.data[0]);
+        auto ACol = gdf_host_column<int32_t>(df.get_column(0));
         EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre(1, 3, 4, 5, 8, 9) );
     }
 }
@@ -832,13 +833,13 @@ TEST(gdf_csv_test, Writer)
     rargs.skip_blank_lines = true;
     rargs.header = -1;
     rargs.nrows = -1;
-    EXPECT_EQ( read_csv(&rargs), GDF_SUCCESS );
+    const table df = read_csv(&rargs);
 
     const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
     csv_write_arg wargs{};
-    wargs.columns = rargs.data;  // columns from reader above
+    wargs.columns = &(*df.begin());  // columns from reader above
     wargs.filepath = ofname.c_str();
-    wargs.num_cols = rargs.num_cols_out;
+    wargs.num_cols = df.num_columns();
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
 

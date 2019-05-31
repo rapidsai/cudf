@@ -19,11 +19,6 @@
 #include <table.hpp>
 
 /*
- * @brief Interface to parse CSV data to GDF columns
- */
-gdf_error read_csv(csv_read_arg *args);
-
-/*
  * @brief Interface to output GDF columns to CSV format
  *
  * This function accepts an array of gdf_columns and creates a CSV
@@ -66,6 +61,16 @@ gdf_error read_parquet(pq_read_arg *args);
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
 
 namespace cudf {
+
+/*
+ * @brief Interface to parse CSV data to GDF columns
+ *
+ * @param[in] args Structure containing the input arguments
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
+ */
+table read_csv(csv_read_arg *args);
+
 /*
  * @brief Reads JSON-structured data and returns an array of gdf_columns.
  *
@@ -73,5 +78,6 @@ namespace cudf {
  *
  * @return cudf::table Object that contains the array of gdf_columns
  */
-cudf::table read_json(json_read_arg const &args);
+table read_json(json_read_arg const &args);
+
 } // namespace cudf

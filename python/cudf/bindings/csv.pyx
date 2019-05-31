@@ -12,6 +12,7 @@ from libc.stdlib cimport malloc, free
 from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
 
+from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
@@ -253,17 +254,16 @@ cpdef cpp_read_csv(
     csv_reader.na_filter = na_filter
     csv_reader.prefix = prefix_bytes
 
-    # Call read_csv
+    cdef cudf_table table
     with nogil:
-        result = read_csv(&csv_reader)
-
-    check_gdf_error(result)
+        table = read_csv(&csv_reader)
 
     # Extract parsed columns
     outcols = []
     new_names = []
-    for i in range(csv_reader.num_cols_out):
-        column = csv_reader.data[i]
+    cdef gdf_column* column
+    for i in range(table.num_columns()):
+        column = table.get_column(i)
         data_mem, mask_mem = gdf_column_to_column_mem(column)
         outcols.append(Column.from_mem_views(data_mem, mask_mem))
         if names is not None and isinstance(names[0], (int)):
