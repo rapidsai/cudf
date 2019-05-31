@@ -574,7 +574,8 @@ def test_merge_on_index_retained():
     gdm['a2'] = gdm['a2'].astype('float64')
     assert_eq(gdm, pdm)
 
-pytest.mark.parametrize('kwargs', [
+
+@pytest.mark.parametrize('kwargs', [
     {'left_index': True, 'right_on': 'y'},
     {'right_index': True, 'left_on': 'x'},
     {'left_on': 'x', 'right_on': 'y'},
