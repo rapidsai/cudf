@@ -41,6 +41,7 @@
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1882 Add iloc functionality to MultiIndex dataframes
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
 
 ## Bug Fixes
 
@@ -79,6 +80,7 @@
 - PR #1875 CSV reader: take NaN values into account in dtype detection
 - PR #1873 Add column dtype checking for the all/any methods
 - PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 
 
 # cudf 0.7.2 (16 May 2019)
