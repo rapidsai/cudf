@@ -43,6 +43,7 @@ class MultiIndex(Index):
             self._source_data = kwargs['source_data']
             self._codes = codes
             self._levels = levels
+            self.names = self._source_data.columns
             return
 
         # name setup
@@ -105,7 +106,7 @@ class MultiIndex(Index):
                 mi._codes = self._codes.copy(deep)
         else:
             mi = MultiIndex(self.levels.copy(), self.codes.copy(deep))
-        if self.names:
+        if self.names is not None:
             mi.names = self.names.copy()
         return mi
 
