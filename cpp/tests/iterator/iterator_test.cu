@@ -72,7 +72,7 @@ bool random_bool()
 }
 
 template<typename T, bool update_count>
-std::ostream& operator<<(std::ostream& os, cudf::ColumnOutputMixed<T, update_count> const& rhs)
+std::ostream& operator<<(std::ostream& os, cudf::ColumnOutputMeanVar<T, update_count> const& rhs)
 {
   return os << "[" << rhs.value <<
       ", " << rhs.value_squared <<
@@ -370,7 +370,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 // Test for mixed output value using `ColumnOutputMix`
 // It computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It wpuld be useful for `var`, `std` operation
-TYPED_TEST(IteratorTest, mixed_output)
+TYPED_TEST(IteratorTest, mean_var_output)
 {
     using T = int32_t;
     using T_upcast = int64_t;
@@ -391,7 +391,7 @@ TYPED_TEST(IteratorTest, mixed_output)
     auto hos = w_col.to_host();
 
     // calculate expected values by CPU
-    cudf::ColumnOutputMixed<T_upcast> expected_value;
+    cudf::ColumnOutputMeanVar<T_upcast> expected_value;
 
     expected_value.count = w_col.size() - w_col.null_count();
 
@@ -407,18 +407,18 @@ TYPED_TEST(IteratorTest, mixed_output)
     std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMixed<T_upcast>, cudf::ColumnOutputMixed<T_upcast>>
+    auto it_hos = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMeanVar<T_upcast>, cudf::ColumnOutputMeanVar<T_upcast>>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMixed<T_upcast>, cudf::ColumnOutputMixed<T_upcast>>
+    auto it_dev = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMeanVar<T_upcast>, cudf::ColumnOutputMeanVar<T_upcast>>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
-    { // ColumnOutputMixedNoCount test
-        using T_helper = cudf::ColumnOutputMixed<T_upcast, false>;
+    { // ColumnOutputMeanVarNoCount test
+        using T_helper = cudf::ColumnOutputMeanVar<T_upcast, false>;
 
         T_helper expected_value_no_count;
         expected_value_no_count.value = expected_value.value;

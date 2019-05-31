@@ -36,6 +36,7 @@ namespace cudf
  * @brief helper struct to output a scalar value
  * A helper output struct for `column_input_iterator`
  * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
+ *
  * This struct computes the output value as `static_cast<T>(_value)`.
  *
  * @tparam  T a scalar data type to be output
@@ -60,11 +61,14 @@ struct ColumnOutputSingle
 };
 
 /** -------------------------------------------------------------------------*
- * @brief helper struct to output a  squared scalar value
+ * @brief helper struct to output a squared scalar value
  * A helper output struct for `column_input_iterator`
  * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
+ *
  * This struct computes the output value as
  * `static_cast<T>(_value)*static_cast<T>(_value)`.
+ *
+ * This will be used to compute "sum of squares".
  *
  * @tparam  T a scalar data type to be output
  * @tparam  T_input a scalar data type to be input
@@ -94,19 +98,25 @@ struct ColumnOutputSquared
  * @brief helper struct to output a  squared scalar value
  * A helper output struct for `column_input_iterator`
  * `column_input_iterator` creates this struct with parameter `_value`, `is_valid`
- * This struct computes the value and the squared value and
- * the count if is_valid = true.
+ *
+ * This struct computes the value and the squared value and the count at once
+ * where the count is updated only if update_count = true.
+ *
+ * This is an example case to output a struct from column input.
+ * The result of this will be used to compute mean (= sum / count)
+ * and variance (= sum of squares / count - mean^2).
+ * `update_count=false` will be used when the count is known before computation.
  *
  * @tparam  T a scalar data type to be output
  * @tparam  update_count if true, `count` is updated. else, count` is not updated
  * @tparam  T_input a scalar data type to be input
  * -------------------------------------------------------------------------**/
 template<typename T, bool update_count=true>
-struct ColumnOutputMixed;
+struct ColumnOutputMeanVar;
 
-// @overload ColumnOutputMixed<T, true>
+// @overload ColumnOutputMeanVar<T, true>
 template<typename T>
-struct ColumnOutputMixed<T, true>
+struct ColumnOutputMeanVar<T, true>
 {
     T value;                /// the value
     T value_squared;        /// the value of squared
@@ -114,24 +124,24 @@ struct ColumnOutputMixed<T, true>
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed(T_input _value, bool is_valid)
+    ColumnOutputMeanVar(T_input _value, bool is_valid)
     : value( static_cast<T>(_value) ), count(is_valid? 1 : 0)
     {
         value_squared = value*value;
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed(T _value, T _value_squared=0, gdf_index_type _count=0)
+    ColumnOutputMeanVar(T _value, T _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed()
+    ColumnOutputMeanVar()
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = ColumnOutputMixed<T, true>;
+    using this_t = ColumnOutputMeanVar<T, true>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -154,9 +164,9 @@ struct ColumnOutputMixed<T, true>
     }
 };
 
-// @overload ColumnOutputMixed<T, false>
+// @overload ColumnOutputMeanVar<T, false>
 template<typename T>
-struct ColumnOutputMixed<T, false>
+struct ColumnOutputMeanVar<T, false>
 {
     T value;
     T value_squared;
@@ -164,27 +174,28 @@ struct ColumnOutputMixed<T, false>
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed(T_input _value, bool is_valid)
+    ColumnOutputMeanVar(T_input _value, bool is_valid)
     : value( static_cast<T>(_value) )
     {
         value_squared = value*value;
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed(T _value, T _value_squared=0, gdf_index_type _count=0)
+    ColumnOutputMeanVar(T _value, T _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMixed()
+    ColumnOutputMeanVar()
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = ColumnOutputMixed<T, false>;
+    using this_t = ColumnOutputMeanVar<T, false>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
     {
+        // count won't be updated.
         return this_t(
             (this->value + rhs.value),
             (this->value_squared + rhs.value_squared),
@@ -195,6 +206,7 @@ struct ColumnOutputMixed<T, false>
     CUDA_HOST_DEVICE_CALLABLE
     bool operator==(this_t const &rhs) const
     {
+        // count won't be compared.
         return (
             (this->value == rhs.value) &&
             (this->value_squared == rhs.value_squared)
@@ -289,7 +301,7 @@ private:
  *  with/without null bitmask.
  *
  * @tparam  T_output The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
  * @tparam  T_input  The input struct type of `ColumnInput`
  * @tparam  Iterator The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
@@ -346,7 +358,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
  * @tparam T_output  The cudf data type of output data or array
  * @tparam T_output_helper
  *                   The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
  * @tparam Iterator_Index
  *                  The base iterator which gives the index of array.
  *                  The default is `thrust::counting_iterator`
@@ -409,7 +421,7 @@ auto make_iterator_with_nulls(const gdf_column& column,
  * @tparam T_output  The cudf data type of output data or array
  * @tparam T_output_helper
  *                   The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMixed`.
+ *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
  * @tparam Iterator_Index
  *                  The base iterator which gives the index of array.
  *                  The default is `thrust::counting_iterator`
