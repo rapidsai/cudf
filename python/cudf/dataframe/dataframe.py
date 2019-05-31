@@ -1600,10 +1600,13 @@ class DataFrame(object):
         # Let's make the "index as column" back into an index
         if left_index and right_index:
             df._index = df[merge_index_name]
-            df.index.name = None
+            df.index.name = lhs.index.name
         elif result_index_name in df.columns:
             df._index = df[result_index_name]
-            df.index.name = None
+            if left_index:
+                df.index.name = rhs.index.name
+            elif right_index:
+                df.index.name = lhs.index.name
 
         # Remove all of the "index as column" columns
         if merge_index_name in df.columns:
