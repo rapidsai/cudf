@@ -407,10 +407,11 @@ auto make_iterator_with_nulls(const gdf_column& column,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
     // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<T_element> == column.dtype, "the data type mismatch");
+    CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
 
     return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
-        (column.data, reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
+        (static_cast<const T_element*>(column.data),
+        reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
@@ -450,9 +451,10 @@ template <typename T_element, typename T_output = T_element,
 auto make_iterator_without_nulls(const gdf_column& column, const Iterator_Index it = Iterator_Index(0))
 {
     // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<T_element> == column.dtype, "the data type mismatch");
+    CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
 
-    return make_iterator_without_nulls(column.data, it);
+    return make_iterator_without_nulls<T_element, T_output, T_output_helper, Iterator_Index>
+        (static_cast<const T_element*>(column.data), it);
 }
 
 } // namespace cudf

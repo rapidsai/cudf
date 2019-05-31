@@ -139,6 +139,21 @@ struct IteratorTest : public GdfTest
         EXPECT_EQ(expected, hos_result[0]) << msg ;
         std::cout << "Done: expected <" << msg << "> = " << hos_result[0] << std::endl;
     }
+
+
+    template <typename T_output>
+    void column_sum_test(T_output& expected, const gdf_column& col)
+    {
+        // have to separate the call since the returned iterator type is different if col.valid == nullptr or not
+        if( col.valid == nullptr){
+            auto it_dev = cudf::make_iterator_without_nulls<T_output>(col);
+            iterator_test_cub(expected, it_dev, col.size);
+        }else{
+            auto it_dev = cudf::make_iterator_with_nulls<T_output>(col, T{0});
+            iterator_test_cub(expected, it_dev, col.size);
+        }
+    }
+
 };
 
 using TestingTypes = ::testing::Types<
@@ -164,6 +179,10 @@ TYPED_TEST(IteratorTest, non_null_iterator)
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 
     this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
+
+    // test column input 
+    cudf::test::column_wrapper<T> w_col(hos_array);
+    this->column_sum_test(expected_value, w_col);
 }
 
 
@@ -199,6 +218,8 @@ TYPED_TEST(IteratorTest, null_iterator)
     auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
+
+    this->column_sum_test(expected_value, w_col);
 }
 
 // Tests up cast reduction with null iterator.
