@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <iostream>
 #include <numeric>
+#include <random>
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
