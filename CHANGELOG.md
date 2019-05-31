@@ -79,7 +79,7 @@
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 - PR #1875 CSV reader: take NaN values into account in dtype detection
 - PR #1873 Add column dtype checking for the all/any methods
-
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 
 # cudf 0.7.2 (16 May 2019)
 
