@@ -41,6 +41,7 @@
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1882 Add iloc functionality to MultiIndex dataframes
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
 
 ## Bug Fixes
 
