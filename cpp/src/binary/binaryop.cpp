@@ -19,6 +19,7 @@
 
 #include "binary/jit/core/launcher.h"
 #include "binary/jit/util/operator.h"
+#include "binary/compiled/binary_ops.hpp"
 #include <bitmask/bitmask_ops.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities/cudf_utils.h"
@@ -258,7 +259,7 @@ void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf
         // TODO: who deallocates temp_lhs, temp_rhs?
         return;
     }
-    auto err = binops::compiled::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+    auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
     if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
         binops::jit::binary_operation(out, lhs, rhs, ope);
 }

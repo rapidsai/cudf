@@ -232,11 +232,11 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
+            src/binary/binaryop.cpp
             src/binary/compiled/binary_ops.cu
             src/binary/jit/code/kernel.cpp
             src/binary/jit/code/operation.cpp
             src/binary/jit/code/traits.cpp
-            src/binary/jit/core/binop.cpp
             src/binary/jit/core/launcher.cpp
             src/binary/jit/util/operator.cpp
             src/binary/jit/util/type.cpp
