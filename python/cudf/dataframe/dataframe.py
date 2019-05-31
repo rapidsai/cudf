@@ -1556,7 +1556,7 @@ class DataFrame(object):
         gdf_result = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
                                    how, method)
 
-        # cpp_join.join() always removes the "right_on" columns from the result
+        # GDF always removes the "right_on" columns from the result
         # whereas Pandas keeps the "right_on" columns if its name differ
         # from the one in the "left_on". Thus, here we duplicate the column if
         # the name differ.
