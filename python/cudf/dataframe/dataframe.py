@@ -1566,10 +1566,36 @@ class DataFrame(object):
                 else:
                     assert False
 
-        # Let's sort the columns of the GDF result
+        # Let's sort the columns of the GDF result. NB: Pandas doc says
+        # that it sorts when how='outer' but this is NOT the case.
         result = []
-        if sort or how == 'outer':
-            result = sorted(gdf_result, key=lambda x: str(x[2]))
+        if sort:
+            # Pandas lexicographically sort is NOT a sort of all columns.
+            # Instead, it sorts columns in lhs, then in "on", and then rhs.
+            left_of_on = []
+            for name in lhs._cols.keys():
+                if name not in left_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            left_of_on.append(gdf_result.pop(i))
+                            break
+            in_on = []
+            for name in itertools.chain(lhs._cols.keys(), rhs._cols.keys()):
+                if name in left_on or name in right_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            in_on.append(gdf_result.pop(i))
+                            break
+            right_of_on = []
+            for name in rhs._cols.keys():
+                if name not in right_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            right_of_on.append(gdf_result.pop(i))
+                            break
+            result = sorted(left_of_on, key=lambda x: str(x[2])) + \
+                     sorted(in_on, key=lambda x: str(x[2])) + \
+                     sorted(right_of_on, key=lambda x: str(x[2]))
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
