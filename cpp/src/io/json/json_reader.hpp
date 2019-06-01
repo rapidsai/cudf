@@ -61,8 +61,9 @@ private:
   // parsing options
   const bool allow_newlines_in_strings_ = false;
   ParseOptions opts_{',', '\n', '\"', '.'};
-  rmm::device_vector<SerialTrieNode>	d_true_trie_;
-  rmm::device_vector<SerialTrieNode>	d_false_trie_;
+  rmm::device_vector<SerialTrieNode> d_true_trie_;
+  rmm::device_vector<SerialTrieNode> d_false_trie_;
+  rmm::device_vector<SerialTrieNode> d_na_trie_;
 
   /**---------------------------------------------------------------------------*
    * @brief Ingest input JSON file/buffer, without decompression
