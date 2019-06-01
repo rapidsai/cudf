@@ -64,6 +64,11 @@ constexpr inline bool is_integral(const gdf_column* column) noexcept{ return is_
 
 constexpr inline bool is_nullable(const gdf_column& column) noexcept { return column.valid != nullptr; }
 
+constexpr inline bool has_nulls(const gdf_column& column) noexcept
+{
+    return is_nullable(column) and column.null_count > 0;
+}
+
 namespace detail {
 
 struct size_of_helper {
