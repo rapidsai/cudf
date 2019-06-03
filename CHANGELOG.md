@@ -82,6 +82,7 @@
 - PR #1902 Bug with string iteration in _apply_basic_agg
 - PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1909 Support of `to_pandas()` of boolean series with null values
 
 
 # cudf 0.7.2 (16 May 2019)
