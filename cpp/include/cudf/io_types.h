@@ -243,8 +243,8 @@ struct json_read_arg{
   /**---------------------------------------------------------------------------*
    * @brief json_read_arg constructor that sets the source data members.
    * 
-   * @param[in] source_type Enum describing the type of the data source.
-   * @param[in] source If source_type is FILE_PATH, contains the filepath.
+   * @param[in] src_type Enum describing the type of the data source.
+   * @param[in] src If src_type is FILE_PATH, contains the filepath.
    * If source_type is HOST_BUFFER, contains the input JSON data.
    *---------------------------------------------------------------------------**/
   json_read_arg(gdf_input_type src_type, const std::string &src) : source_type(src_type), source(src) {}
