@@ -31,7 +31,7 @@ namespace cudf
 gdf_column empty_like(gdf_column const& input)
 {
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-  gdf_column output;
+  gdf_column output{};
 
   CUDF_EXPECTS(GDF_SUCCESS == 
                gdf_column_view_augmented(&output, nullptr, nullptr, 0,
