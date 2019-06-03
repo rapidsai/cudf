@@ -227,9 +227,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if isinstance(arg[0], slice):
             df = DataFrame()
             for col in columns:
-                df.add_column(name= col, data=self._df[col].iloc[arg[0]])
+                df.add_column(name=col, data=self._df[col].iloc[arg[0]])
         else:
-            df = self._df[columns].take(arg[0])
+            df = self._df._columns_view(columns).take(arg[0])
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
@@ -254,7 +254,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return [cols[arg]]
         else:
             return cols[arg]
-
 
 def _normalize_dtypes(df):
     dtypes = df.dtypes.values.tolist()
