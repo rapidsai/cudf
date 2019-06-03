@@ -127,4 +127,3 @@ def test_onehot_get_dummies_multicol(n_cols):
 
 if __name__ == '__main__':
     test_onehot_random()
-
