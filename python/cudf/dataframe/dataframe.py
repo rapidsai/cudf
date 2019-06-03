@@ -911,7 +911,7 @@ class DataFrame(object):
         if not self._cols:
             self._size = len(series)
 
-        if forceindex or empty_index:
+        if forceindex or empty_index or self.index is series.index:
             if empty_index:
                 self._index = series.index
             return series
