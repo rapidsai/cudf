@@ -19,7 +19,7 @@ def test_to_pandas():
     assert df['a'].dtype == pdf['a'].dtype
     assert df['b'].dtype == pdf['b'].dtype
 
-    # Notice, that the dtype differ when the Pandas and cudf boolean series
+    # Notice, the dtype differ when Pandas and cudf boolean series
     # contains None/NaN
     assert df['c'].dtype == np.bool
     assert pdf['c'].dtype == np.object
