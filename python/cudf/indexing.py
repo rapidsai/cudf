@@ -255,6 +255,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             return cols[arg]
 
+
 def _normalize_dtypes(df):
     dtypes = df.dtypes.values.tolist()
     normalized_dtype = np.result_type(*dtypes)
