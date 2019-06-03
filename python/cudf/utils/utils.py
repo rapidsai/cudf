@@ -202,7 +202,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
     return infer_dtype_from_object(dtype)
 
 
-def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
+def get_dummies(df, prefix='', prefix_sep='_', cats={}, columns=None,
                 dtype='float64'):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -211,10 +211,11 @@ def get_dummies(df, prefix, prefix_sep='_', cats={}, columns=None,
     ----------
     df : cudf.DataFrame
         dataframe to encode
-    prefix : str, dict, or sequence
+    prefix : str, dict, or sequence, optional
         prefix to append. Either a str (to apply a constant prefix), dict
         mapping column names to prefixes, or sequence of prefixes to apply with
-        the same length as the number of columns
+        the same length as the number of columns. If not supplied, defaults
+        to the empty string
     prefix_sep : str, optional
         separator to use when appending prefixes
     cats : dict, optional
