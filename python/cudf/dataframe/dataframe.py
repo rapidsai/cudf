@@ -907,10 +907,13 @@ class DataFrame(object):
         series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        if forceindex or empty_index or self._index.equals(series.index):
+
+        if not self._cols:
+            self._size = len(series)
+
+        if forceindex or empty_index:
             if empty_index:
                 self._index = series.index
-            self._size = len(series)
             return series
         else:
             return series.set_index(self._index)
@@ -2730,6 +2733,16 @@ class DataFrame(object):
             result = Series(result)
             result = result.set_index(self._cols.keys())
         return result
+
+    def _columns_view(self, columns):
+        """
+        Return a subset of the DataFrame's columns as a view.
+        """
+        columns = as_index(columns)
+        result_columns = OrderedDict({})
+        for col in columns:
+            result_columns[col] = self[col]
+        return DataFrame(result_columns)
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
