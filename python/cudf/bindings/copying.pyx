@@ -96,8 +96,11 @@ def apply_gather(in_cols, maps, out_cols=None):
     cdef uintptr_t c_maps_ptr
     cdef gdf_index_type* c_maps
     if gather_count != 0 :
-        # size check, cudf::gather requires same length for maps and out table.
-        assert gather_count == out_cols[0].data.size
+        if out_cols[0].dtype == np.dtype("object"):
+            out_size = out_cols[0].data.size()
+        else:
+            out_size = out_cols[0].data.size
+        assert gather_count == out_size
 
         c_maps_ptr = get_ctype_ptr(maps)
         c_maps = <gdf_index_type*>c_maps_ptr
@@ -105,11 +108,17 @@ def apply_gather(in_cols, maps, out_cols=None):
         with nogil:
             gather(c_in_table, c_maps, c_out_table)
 
-    if is_same_input == False :
+    for i, col in enumerate(out_cols):
+        if col.dtype == np.dtype("object") and len(col) > 0:
+            update_nvstrings_col(
+                out_cols[i],
+                <uintptr_t>c_out_cols[i].dtype_info.category)
+
+    if is_same_input == False:
         free_table(c_out_table, c_out_cols)
-    
+
     free_table(c_in_table, c_in_cols)
-    
+
     return out_cols
 
 
@@ -184,7 +193,11 @@ def apply_scatter(in_cols, maps, out_cols=None):
     cdef gdf_index_type* c_maps
     if gather_count != 0 :
         # size check, cudf::gather requires same length for maps and in table.
-        assert gather_count == in_cols[0].data.size
+        if out_cols[0].dtype == np.dtype("object"):
+            in_size = in_cols[0].data.size()
+        else:
+            in_size = in_cols[0].data.size
+        assert gather_count == in_size
 
         c_maps_ptr = get_ctype_ptr(maps)
         c_maps = <gdf_index_type*>c_maps_ptr
@@ -194,9 +207,9 @@ def apply_scatter(in_cols, maps, out_cols=None):
 
     if is_same_input == False :
         free_table(c_out_table, c_out_cols)
-    
+
     free_table(c_in_table, c_in_cols)
-    
+
     return out_cols
 
 
@@ -233,4 +246,3 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
-
