@@ -204,6 +204,15 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_microsecond_timestamps(datadir):
+    fname = datadir / 'usec_timestamp.parquet'
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_filenotfound(tmpdir):
     with pytest.raises(FileNotFoundError):
         cudf.read_parquet('TestMissingFile.parquet')

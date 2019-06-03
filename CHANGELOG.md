@@ -40,8 +40,9 @@
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
-- PR #1390 Added some basic utility functions for `gdf_column`'s
+- PR #1390 Added some basic utility functions for `gdf_column`s
 - PR #1882 Add iloc functionality to MultiIndex dataframes
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
 
 ## Bug Fixes
 
@@ -65,6 +66,24 @@
 - PR #1782 Update libcudf doc version
 - PR #1783 Update conda dependencies
 - PR #1786 Maintain the original series name in series.unique output
+- PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
+- PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
+- PR #1839 Raise an error instead of segfaulting when transposing a DataFrame with StringColumns
+- PR #1840 Retain index correctly during merge left_on right_on
+- PR #1825 cuDF: Multiaggregation Groupby Failures
+- PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
+- PR #1849 Allow DataFrame support methods to pass arguments to the methods
+- PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
+- PR #1864 Fixing cudf reduction for POWER platform
+- PR #1869 Parquet reader: fix Dask timestamps not matching with Pandas (convert to milliseconds)
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1875 CSV reader: take NaN values into account in dtype detection
+- PR #1873 Add column dtype checking for the all/any methods
+- PR #1902 Bug with string iteration in _apply_basic_agg
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+
 
 # cudf 0.7.2 (16 May 2019)
 
