@@ -80,6 +80,10 @@
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
 - PR #1875 CSV reader: take NaN values into account in dtype detection
 - PR #1873 Add column dtype checking for the all/any methods
+- PR #1902 Bug with string iteration in _apply_basic_agg
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1909 Support of `to_pandas()` of boolean series with null values
 
 
 # cudf 0.7.2 (16 May 2019)

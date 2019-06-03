@@ -171,7 +171,9 @@ class Groupby(object):
         if agg_type in ['mean', 'sum']:
             agg_groupby._df = agg_groupby._df._get_numeric_data()
             agg_groupby._val_columns = []
-            for val in self._val_columns:
+            columns = [self._val_columns] if isinstance(self._val_columns, (
+                  str, Number)) else list(self._val_columns)
+            for val in columns:
                 if val in agg_groupby._df.columns:
                     agg_groupby._val_columns.append(val)
             # _get_numeric_data might have removed the by column
