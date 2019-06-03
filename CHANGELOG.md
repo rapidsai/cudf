@@ -54,6 +54,7 @@
 - PR #1786 Maintain the original series name in series.unique output
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
+- PR #1914 Zero initialize gdf_column local variables
 
 # cudf 0.7.2 (16 May 2019)
 
