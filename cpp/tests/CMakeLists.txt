@@ -326,12 +326,21 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 
 ###################################################################################################
-# - point in polygon test -----------------------------------------------------------------------------------
+# - point in polygon test --------------------------------------------------------------------------
 
 set(GIS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
 
 ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
+
+###################################################################################################
+# - filling test --------------------------------------------------------------------------
+
+set(FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cpp")
+
+ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+
 
 
 ###################################################################################################
