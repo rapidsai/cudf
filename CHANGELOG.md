@@ -13,6 +13,7 @@
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
 - PR #1665 Add the point-in-polygon GIS function
+- PR #1912 Add Perimeter of spherical polygons function
 
 
 ## Improvements
