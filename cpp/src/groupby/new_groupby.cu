@@ -293,7 +293,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   cudf::table key_col_table(key_cols_vect.data(), key_cols_vect.size());
 
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
-  gdf_column sorted_indices_col;
+  gdf_column sorted_indices_col{};
   CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
                           nullptr, nrows, GDF_INT32));
 
@@ -315,7 +315,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
     
     auto key_cols_bitmask = row_bitmask(key_col_table);
 
-    gdf_column modified_fist_key_col; 
+    gdf_column modified_fist_key_col{}; 
     modified_fist_key_col.data = key_cols_vect[0]->data;
     modified_fist_key_col.size = key_cols_vect[0]->size;
     modified_fist_key_col.dtype = key_cols_vect[0]->dtype;

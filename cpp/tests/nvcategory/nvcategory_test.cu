@@ -751,8 +751,8 @@ struct NVCategoryJoinTest : public GdfTest
     EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
     EXPECT_EQ(left_join_idx.size(), right_join_idx.size()) << "Mismatch join indexes size";
 
-    gdf_column left_result;
-    gdf_column right_result;
+    gdf_column left_result{};
+    gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
 
@@ -1079,4 +1079,3 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
   }
 
 }
-

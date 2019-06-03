@@ -410,8 +410,8 @@ struct JoinTest : public GdfTest
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    gdf_column left_result;
-    gdf_column right_result;
+    gdf_column left_result{};
+    gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
 
@@ -833,4 +833,3 @@ TEST(HashTableSizeTest, OverflowTest){
     ASSERT_TRUE(hash_table_size > num_insertions);
     EXPECT_EQ(expected_size, hash_table_size);
 }
-

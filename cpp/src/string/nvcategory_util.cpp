@@ -86,7 +86,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     }
     GDF_REQUIRE(null_index == 0, GDF_INVALID_API_CALL);
-    gdf_column null_index_column;
+    gdf_column null_index_column{};
 
     //this GDF_INT32 could change if this changes in nvcategory
     gdf_column_view(&null_index_column, nullptr, nullptr, 1, GDF_STRING_CATEGORY);
@@ -196,4 +196,3 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
   return GDF_SUCCESS;
 }
-

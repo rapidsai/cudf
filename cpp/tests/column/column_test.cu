@@ -152,18 +152,18 @@ TYPED_TEST(ColumnConcatTest, NegativeColumns){
 }
 
 TYPED_TEST(ColumnConcatTest, NullOutput){
-  gdf_column input;
+  gdf_column input{};
   gdf_column * input_p = &input;
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(nullptr, &input_p, 1));
 }
 
 TYPED_TEST(ColumnConcatTest, NullInput){
-  gdf_column output;
+  gdf_column output{};
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, nullptr, 1));
 }
 
 TYPED_TEST(ColumnConcatTest, NullFirstInputColumn){
-  gdf_column output;
+  gdf_column output{};
   gdf_column * input_p = nullptr;
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, &input_p, 1));
 }
@@ -339,7 +339,7 @@ TEST(ColumnByteWidth, TestByteWidth)
   for(auto const& pair : enum_to_type_size)
   {
     int byte_width{0};
-    gdf_column col;
+    gdf_column col{};
     col.dtype = pair.first;
     ASSERT_EQ(GDF_SUCCESS, get_column_byte_width(&col, &byte_width));
     EXPECT_EQ(pair.second, byte_width);
