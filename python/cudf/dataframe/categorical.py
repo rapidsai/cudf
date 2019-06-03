@@ -123,7 +123,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return CategoricalAccessor(self, categories=self._categories,
                                    ordered=self._ordered)
 
-    def binary_operator(self, binop, rhs):
+    def binary_operator(self, binop, rhs, reflect=False):
         msg = 'Series of dtype `category` cannot perform the operation: {}'\
             .format(binop)
         raise TypeError(msg)

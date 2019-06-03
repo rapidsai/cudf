@@ -28,6 +28,9 @@ cdef extern from "cudf.h" nogil:
         GDF_BITWISE_AND,
         GDF_BITWISE_OR,
         GDF_BITWISE_XOR,
+        GDF_LOGICAL_AND,
+        GDF_LOGICAL_OR,
+        GDF_INVALID_BINARY
 
     cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
     cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +

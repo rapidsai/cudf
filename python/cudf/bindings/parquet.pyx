@@ -50,14 +50,16 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     pq_reader.source = source_ptr
 
     usecols = columns
+    arr_cols = []
+    pq_reader.use_cols_len = 0
     cdef vector[const char*] vector_use_cols
     if usecols is not None:
-        arr_cols = []
         for col in usecols:
             arr_cols.append(str(col).encode())
-        vector_use_cols = arr_cols
-        pq_reader.use_cols = vector_use_cols.data()
         pq_reader.use_cols_len = len(usecols)
+
+    vector_use_cols = arr_cols
+    pq_reader.use_cols = vector_use_cols.data()
 
     if row_group is not None:
         pq_reader.row_group = row_group
@@ -66,6 +68,9 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
 
     if skip_rows is not None:
         pq_reader.skip_rows = skip_rows
+    else:
+        pq_reader.skip_rows = 0
+
     if num_rows is not None:
         pq_reader.num_rows = num_rows
     else:
