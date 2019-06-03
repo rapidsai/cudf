@@ -14,6 +14,48 @@
  * limitations under the License.
  */
 
+/** --------------------------------------------------------------------------*
+ * @brief provide column input iterator with/without nulls
+ * @file iterator.cuh
+ *
+ * This column input iterator is designed to be able to be used as input
+ * iterator for thrust and cub.
+ *
+ * The input iterator is implemented using thrust::iterator_adaptor
+ * and thrust::counting_iterator. When creating a null supported input iterator,
+ * the iterator requires pointer of data and null bitmap and an identity value
+ * like below.
+ *
+ * auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( column->data ),
+ *                                              column->valid, T{0});
+ *
+ * (it_dev +id) returns static_cast<T*>( column->data )[id] if column->valid
+ * at id is true, and T{0} if column->valid at id = false.
+ *
+ * The identity value depends on the data type and the aggregation type.
+ * e.g.
+ * T = int32_t and aggregation is a kind of `sum`:
+ *     identity = int32_t{0}
+ * T = cudf::date32  and aggregation is a kind of `max`:
+ *     identity = std::numeric_limits<cudf::date32>::lowest()
+ *
+ * Examples of template parameter:
+ * 1. template parameter for upcasting input iterator
+ *     make_iterator_xxx<T, T_upcast>(...)
+ *
+ * 2. template parameter for upcasting + squared input iterator
+ *     make_iterator_xxx<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>(...)
+ *
+ * 3. template parameter for using `ColumnOutputMeanVar`
+ *     using T_output = cudf::ColumnOutputMeanVar<T_upcast>
+ *     make_iterator_xxx<T, T_output, T_output>(...)
+ *
+ * 4. template parameter for custom indexed iterator
+ *     using out_helper = cudf::ColumnOutput<T>;
+ *     using T_index = gdf_index_type;
+ *     make_iterator_xxx<T, T, out_helper, T_index*>(...)
+ * -------------------------------------------------------------------------**/
+
 #ifndef CUDF_ITERATOR_CUH
 #define CUDF_ITERATOR_CUH
 
