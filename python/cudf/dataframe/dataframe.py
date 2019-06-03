@@ -30,6 +30,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
@@ -791,9 +792,20 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
+        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        for col in self.columns:
-            out[col] = self[col].take(positions, ignore_index=ignore_index)
+        cols = [s._column for s in self._cols.values()]
+
+        result_cols = cpp_copying.apply_gather(cols, positions)
+
+        out = DataFrame()
+        for i, col_name in enumerate(self._cols):
+            out[col_name] = result_cols[i]
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        else:
+            out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):

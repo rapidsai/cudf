@@ -9,7 +9,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.types cimport table as cudf_table
 from cudf.bindings.types import *
-from cudf.utils.cudautils import astype
+from cudf.utils.cudautils import astype, modulo
 from librmm_cffi import librmm as rmm
 
 import numpy as np
@@ -71,10 +71,17 @@ def apply_gather(in_cols, maps, out_cols=None):
 
      * returns out_cols
     """
+    if in_cols[0].dtype == np.dtype("object"):
+        in_size = in_cols[0].data.size()
+    else:
+        in_size = in_cols[0].data.size
+
     maps = astype(maps, 'int32')
+    maps = modulo(maps, in_size)
 
     col_count=len(in_cols)
     gather_count = len(maps)
+
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
 
