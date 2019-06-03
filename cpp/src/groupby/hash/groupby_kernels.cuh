@@ -91,9 +91,10 @@ struct update_target_element<
 
     using FunctorType = corresponding_functor_t<op>;
 
-    cudf::genericAtomicOperation(&target_data[target_index],
-                                 static_cast<TargetType>(source_element),
-                                 FunctorType{});
+cudf::genericAtomicOperation(
+        &target_data[target_index], static_cast<TargetType>(source_element),
+        FunctorType{});
+
 
     bit_mask::bit_mask_t* const __restrict__ target_mask{
         reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
@@ -271,10 +272,13 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
     gdf_size_type source_key_row_index;
     gdf_size_type source_value_row_index;
 
+    // The way the aggregation map is built, these two indices will always be
+    // equal, but lets be generic just in case that ever changes.
     thrust::tie(source_key_row_index, source_value_row_index) = table_pairs[i];
 
     if (source_key_row_index != map->get_unused_key()) {
       auto output_index = atomicAdd(output_write_index, 1);
+
 
       copy_row<keys_have_nulls>(output_keys, output_index, input_keys,
                                 source_key_row_index);

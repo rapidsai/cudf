@@ -19,6 +19,7 @@
 
 #include <groupby.hpp>
 #include <utilities/device_atomics.cuh>
+#include <utilities/device_operators.cuh>
 
 #include <algorithm>
 

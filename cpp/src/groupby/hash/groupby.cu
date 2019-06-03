@@ -205,7 +205,8 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
 
   initialize_with_identity(sparse_output_values, ops, stream);
 
-  auto d_sparse_output_values = device_table::create(sparse_output_values);
+  auto d_sparse_output_values =
+      device_table::create(sparse_output_values, stream);
   rmm::device_vector<operators> d_ops(ops);
 
   // If we ignore null keys, then nulls are not equivalent
@@ -242,17 +243,19 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   }
   CHECK_STREAM(stream);
 
-  return std::make_tuple(std::move(map), std::move(d_sparse_output_values));
+  return std::make_tuple(std::move(map), sparse_output_values);
 }
 
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
 auto extract_results(table const& input_keys, table const& input_values,
                      device_table const& d_input_keys,
-                     device_table const& d_input_values,
-                     device_table const& d_sparse_output_values, Map* map,
+                     table const& sparse_output_values, Map* map,
                      cudaStream_t stream) {
   cudf::table output_keys{cudf::allocate_like(input_keys, stream)};
-  cudf::table output_values{cudf::allocate_like(input_values, stream)};
+  cudf::table output_values{cudf::allocate_like(sparse_output_values, stream)};
+
+  auto d_sparse_output_values =
+      device_table::create(sparse_output_values, stream);
 
   auto d_output_keys = device_table::create(output_keys, stream);
   auto d_output_values = device_table::create(output_values, stream);
@@ -265,7 +268,7 @@ auto extract_results(table const& input_keys, table const& input_values,
 
   extract_groupby_result<keys_have_nulls, values_have_nulls>
       <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
-         stream>>>(map, d_input_keys, *d_output_keys, d_sparse_output_values,
+         stream>>>(map, d_input_keys, *d_output_keys, *d_sparse_output_values,
                    *d_output_values, d_result_size);
 
   CHECK_STREAM(stream);
@@ -273,7 +276,6 @@ auto extract_results(table const& input_keys, table const& input_values,
   gdf_size_type result_size{-1};
   CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(gdf_size_type),
                            cudaMemcpyDeviceToHost, stream));
-
 
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
@@ -286,7 +288,6 @@ auto extract_results(table const& input_keys, table const& input_values,
                  update_column);
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
-
 
   return std::make_tuple(output_keys, output_values);
 }
@@ -340,11 +341,10 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
       keys, values, *d_input_keys, *d_input_values, ops, options, stream);
 
   auto const map{std::move(std::get<0>(result))};
-  auto const d_sparse_output_values{std::move(std::get<1>(result))};
+  cudf::table const sparse_output_values{std::get<1>(result)};
 
   return extract_results<keys_have_nulls, values_have_nulls>(
-      keys, values, *d_input_keys, *d_input_values, *d_sparse_output_values,
-      map.get(), stream);
+      keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
 }
 
 /**---------------------------------------------------------------------------*

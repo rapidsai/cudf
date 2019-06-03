@@ -174,7 +174,7 @@ struct column_wrapper {
    *
    * @param host_data The vector of data to use for the column
    *---------------------------------------------------------------------------**/
-  explicit column_wrapper(std::vector<ColumnType> const& host_data) {
+  column_wrapper(std::vector<ColumnType> const& host_data) {
     initialize_with_host_data(host_data);
   }
 
@@ -186,7 +186,7 @@ struct column_wrapper {
    *
    * @param list initializer_list to use for column's data
    *---------------------------------------------------------------------------**/
-  explicit column_wrapper(std::initializer_list<ColumnType> list)
+  column_wrapper(std::initializer_list<ColumnType> list)
       : column_wrapper{std::vector<ColumnType>(list)} {}
 
   /**---------------------------------------------------------------------------*
@@ -202,7 +202,7 @@ struct column_wrapper {
       : data(static_cast<ColumnType*>(column.data),
              static_cast<ColumnType*>(column.data) + column.size) {
     CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype,
-                 "data types do not match");
+                 "Type mismatch between column_wrapper and gdf_column");
 
     if (column.valid != nullptr) {
       bitmask.assign(column.valid,
@@ -445,6 +445,16 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   bool operator==(column_wrapper<ColumnType> const& rhs) const {
     return *this == *rhs.get();
+  }
+
+  rmm::device_vector<ColumnType>& get_data() { return data; }
+
+  rmm::device_vector<ColumnType> const& get_data() const { return data; }
+
+  rmm::device_vector<gdf_valid_type>& get_bitmask() { return bitmask; }
+
+  rmm::device_vector<gdf_valid_type> const& get_bitmask() const {
+    return bitmask;
   }
 
  private:

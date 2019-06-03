@@ -56,7 +56,7 @@ gdf_error typed_groupby(cudf::table const & input_keys,
 
   // Cast the void* data to the appropriate type
   aggregation_type * in_agg_col = static_cast<aggregation_type *>(in_aggregation_column->data);
-  // TODO Need to allow for the aggregation output type to be different from the aggregation input type
+  // TODO Need to allow fort the aggregation output type to be different from the aggregation input type
   aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
   gdf_size_type output_size{0};
