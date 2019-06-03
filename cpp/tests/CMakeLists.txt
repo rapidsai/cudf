@@ -326,13 +326,13 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 
 ###################################################################################################
-# - point in polygon test -----------------------------------------------------------------------------------
+# - GIS test -----------------------------------------------------------------------------------
 
 set(GIS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/gis/perimeter_test.cu")
 
-ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
-
+ConfigureTest(GIS_TEST "${GIS_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

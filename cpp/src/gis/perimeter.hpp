@@ -15,44 +15,13 @@
  * limitations under the License.
  */
 
-#ifndef GIS_HPP
-#define GIS_HPP
+#ifndef PERIMETER_HPP
+#define PERIMETER_HPP
 
 #include "cudf.h"
 
 namespace cudf {
-
-/** 
- * @brief Determine whether or not coordinates (query points) are completely inside a static polygon
- * 
- * Note: The polygon must not have holes or intersect with itself, but it is not
- * required to be convex.
- * 
- * The polygon is defined by a set of coordinates (latitudes and longitudes),
- * where the first and last coordinates must have the same value (closed).
- * 
- * This function supports clockwise and counter-clockwise polygons.
- * 
- * If a query point is colinear with two contiguous polygon coordinates
- * then this query point isn't inside.
- * 
- * polygon_latitudes and polygon_longitudes must have equal size.
- * 
- * point_latitudes and point_longitudes must have equal size.
- * 
- * All input params must have equal datatypes (for numeric operations).
- *
- * @param[in] polygon_latitudes: column with latitudes of a polygon
- * @param[in] polygon_longitudes: column with longitudes of a polygon
- * @param[in] query_point_latitudes: column with latitudes of query points
- * @param[in] query_point_longitudes: column with longitudes of query points
- *
- * @returns gdf_column of type GDF_BOOL8 indicating whether the i-th query point is inside (true) or not (false)
- */
-gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
-                             gdf_column const & polygon_longitudes,
-                             gdf_column const & query_point_latitudes,
-                             gdf_column const & query_point_longitudes );
+namespace gis {
 
 /**
  * @brief Compute the perimeter of polygons on the Earth surface using Haversine formula.
@@ -74,8 +43,9 @@ gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
  */
 gdf_column perimeter( gdf_column* polygons_latitudes[],
 					  gdf_column* polygons_longitudes[],
-					  gdf_size_type const & num_polygons );
-
+					  gdf_size_type const & num_polygons,
+					  cudaStream_t stream = 0 );
+}  // namespace gis
 }  // namespace cudf
 
-#endif  // GIS_H
+#endif
