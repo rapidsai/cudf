@@ -8,8 +8,9 @@ from cudf.dataframe import DataFrame
 
 def test_to_pandas():
     df = DataFrame()
-    df['a'] = np.arange(10, dtype=np.int32)
-    df['b'] = np.arange(10, 20, dtype=np.float64)
+    df['a'] = np.arange(5, dtype=np.int32)
+    df['b'] = np.arange(10, 15, dtype=np.float64)
+    df['c'] = np.array([True, False, None, True, True])
 
     pdf = df.to_pandas()
 
