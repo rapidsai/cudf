@@ -58,7 +58,7 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
                 arr_dtypes.append(dt.encode())
 
     # Setup arguments
-    cdef json_read_arg args = json_read_arg()
+    cdef json_reader_args args = json_reader_args()
 
     if is_file_like(path_or_buf):
         source = path_or_buf.read()
@@ -88,16 +88,15 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     if dtype is not None:
         args.dtype = arr_dtypes
 
-    if byte_range is not None:
-        args.byte_range_offset = byte_range[0]
-        args.byte_range_size = byte_range[1]
-    else:
-        args.byte_range_offset = 0
-        args.byte_range_size = 0
-
     cdef cudf_table table
+    cdef JsonReader reader
     with nogil:
-        table = read_json(args)
+        reader = JsonReader(args)
+    
+    if byte_range is None:
+        table = reader.read()
+    else:
+        table = reader.read_byte_range(byte_range[0], byte_range[1])
 
     # Extract parsed columns
     outcols = []

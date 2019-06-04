@@ -10,16 +10,16 @@
 #include "io/utilities/file_utils.hpp"
 #include "io/utilities/wrapper_utils.hpp"
 
-namespace cudf{
+namespace cudf {
 
-  struct ColumnInfo {
-    gdf_size_type float_count;
-    gdf_size_type datetime_count;
-    gdf_size_type string_count;
-    gdf_size_type int_count;
-    gdf_size_type bool_count;
-    gdf_size_type null_count;
-  };
+struct ColumnInfo {
+  gdf_size_type float_count;
+  gdf_size_type datetime_count;
+  gdf_size_type string_count;
+  gdf_size_type int_count;
+  gdf_size_type bool_count;
+  gdf_size_type null_count;
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns
@@ -27,8 +27,6 @@ namespace cudf{
  *---------------------------------------------------------------------------**/
 class JsonReader::Impl {
 public:
-
-
 private:
   const json_reader_args args_{};
 
@@ -165,11 +163,14 @@ public:
    *
    * Stores the parsed gdf columns in an internal data member
    * @param[in] byte_range_offset ///< Offset of the byte range to read.
-   * @param[in] byte_range_size   ///< Size of the byte range to read. If set to zero, all data after byte_range_offset is read.
+   * @param[in] byte_range_size   ///< Size of the byte range to read. If set to zero, all data after byte_range_offset
+   *is read.
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_byte_range(size_t byte_range_offset, size_t byte_range_size);
+
+  auto getArgs() const { return args_; }
 };
 
 } // namespace cudf

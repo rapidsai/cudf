@@ -20,12 +20,17 @@ struct json_reader_args{
   bool                      lines = false;        ///< Read the file as a json object per line; default is false.
 
   /**---------------------------------------------------------------------------*
-   * @brief json_read_arg default constructor.
+   * @brief json_reader_args default constructor.
    *---------------------------------------------------------------------------**/
   json_reader_args() = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief json_read_arg constructor that sets the source data members.
+   * @brief json_reader_args copy constructor.
+   *---------------------------------------------------------------------------**/
+  json_reader_args(json_reader_args const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief json_reader_args constructor that sets the source data members.
    * 
    * @param[in] src_type Enum describing the type of the data source.
    * @param[in] src If src_type is FILE_PATH, contains the filepath.
@@ -44,6 +49,19 @@ private:
   std::unique_ptr<Impl> impl_;
 
 public:
+  /**---------------------------------------------------------------------------*
+   * @brief JsonReader defult constructor;
+   * 
+   * Calling read_XYZ() on a default-constructed object yields an empty table.
+   *---------------------------------------------------------------------------**/
+  JsonReader() noexcept;
+
+  JsonReader(JsonReader const &rhs);
+  JsonReader& operator=(JsonReader const &rhs);
+
+  JsonReader(JsonReader &&rhs);
+  JsonReader& operator=(JsonReader &&rhs);
+
   /**---------------------------------------------------------------------------*
    * @brief JsonReader constructor; throws if the arguments are not supported
    *---------------------------------------------------------------------------**/
