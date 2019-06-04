@@ -235,9 +235,10 @@ def test_string_numeric_astype(dtype):
         ]
     if dtype.startswith('datetime64'):
         ps = pd.Series(data, dtype='datetime64[ns]')
+        gs = Series.from_pandas(ps)
     else:
         ps = pd.Series(data, dtype=dtype)
-    gs = Series(data, dtype=dtype)
+        gs = Series(data, dtype=dtype)
 
     # Pandas datetime64 --> str typecasting returns arbitrary format depending
     # on the data, so making it consistent unless we choose to match the

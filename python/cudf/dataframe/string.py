@@ -474,6 +474,8 @@ class StringColumn(columnops.TypedColumnBase):
         kwargs = {
             'devptr': out_ptr
         }
+        if dtype == np.dtype('datetime64[ms]'):
+            kwargs['units'] = 'ms'
         _str_to_numeric_typecast_functions[
             np.dtype(dtype)
         ](self.str(), **kwargs)
