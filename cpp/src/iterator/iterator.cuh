@@ -261,7 +261,7 @@ struct mutator_meanvar<T, false>
 /** -------------------------------------------------------------------------*
  * @brief input struct with/without null bitmask
  * A helper struct struct for `column_input_iterator`
- * `ColumnInput.at(gdf_index_type id)` computes
+ * `column_input.at(gdf_index_type id)` computes
  * `data` value and valid flag at `id` and construct and return
  * `T_output(data, valid flag)`.
  * If nulls_present = true, the valid flag is always true.
@@ -275,20 +275,20 @@ struct mutator_meanvar<T, false>
  *            else, this struct holds data array and bitmask array and identity value
  * -------------------------------------------------------------------------**/
 template<typename T_output, typename T_element, bool nulls_present=true>
-struct ColumnInput;
+struct column_input;
 
-// @overload ColumnInput<T_output, T_element, false>
+// @overload column_input<T_output, T_element, false>
 template<typename T_output, typename T_element>
-struct ColumnInput<T_output, T_element, false>{
+struct column_input<T_output, T_element, false>{
     const T_element *data;
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid=nullptr, T_element _identity=T_element{0})
+    column_input(const T_element *_data, const bit_mask::bit_mask_t *_valid=nullptr, T_element _identity=T_element{0})
     : data(_data){};
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
-    : ColumnInput(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
+    column_input(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
+    : column_input(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     CUDA_HOST_DEVICE_CALLABLE
     T_output at(gdf_index_type id) const {
@@ -296,15 +296,15 @@ struct ColumnInput<T_output, T_element, false>{
     };
 };
 
-// @overload ColumnInput<T_output, T_element, true>
+// @overload column_input<T_output, T_element, true>
 template<typename T_output, typename T_element>
-struct ColumnInput<T_output, T_element, true>{
+struct column_input<T_output, T_element, true>{
     const T_element *data;
     const bit_mask::bit_mask_t *valid;
     T_element identity;
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
+    column_input(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
     : data(_data), valid(_valid), identity(_identity){
 #if  !defined(__CUDA_ARCH__)
         // verify valid is non-null, otherwise, is_valid() will crash
@@ -313,8 +313,8 @@ struct ColumnInput<T_output, T_element, true>{
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnInput(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
-    : ColumnInput(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
+    column_input(const T_element *_data, const gdf_valid_type*_valid, T_element _identity)
+    : column_input(_data, reinterpret_cast<const bit_mask::bit_mask_t*>(_valid), _identity) {};
 
     CUDA_HOST_DEVICE_CALLABLE
     T_output at(gdf_index_type id) const {
@@ -340,12 +340,12 @@ private:
  * @brief input iterator to support null bitmask
  * Input iterator which can be used for cub and thrust.
  * This is derived from `thrust::iterator_adaptor`
- * `T_input = ColumnInput` will provide the value at index `id`
+ * `T_input = column_input` will provide the value at index `id`
  *  with/without null bitmask.
  *
  * @tparam  T_output The output helper struct type, usually `mutator_single`,
  *                   `mutator_squared`, or `mutator_meanvar`.
- * @tparam  T_input  The input struct type of `ColumnInput`
+ * @tparam  T_input  The input struct type of `column_input`
  * @tparam  Iterator The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
  * -------------------------------------------------------------------------**/
@@ -419,7 +419,7 @@ template <bool has_nulls, typename T_element, typename T_output = T_element,
 auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
-    using T_input = cudf::detail::ColumnInput<T_output_helper, T_element, has_nulls>;
+    using T_input = cudf::detail::column_input<T_output_helper, T_element, has_nulls>;
     using T_iterator = cudf::detail::column_input_iterator<T_output, T_input, Iterator_Index>;
 
     // T_input constructor checks if valid is not nullptr
