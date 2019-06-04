@@ -19,6 +19,7 @@
 - PR #1863 Series and Dataframe methods for all and any
 
 ## Improvements
+
 - PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
@@ -87,6 +88,7 @@
 - PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 - PR #1909 Support of `to_pandas()` of boolean series with null values
+- PR #XXXX Install `.hpp` headers correctly when installing libcudf
 
 
 # cudf 0.7.2 (16 May 2019)
