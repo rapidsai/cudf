@@ -37,6 +37,7 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
+- PR #1890 Add utils.get_dummies- a pandas-like wrapper around one_hot-encoding
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
@@ -83,6 +84,7 @@
 - PR #1902 Bug with string iteration in _apply_basic_agg
 - PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1909 Support of `to_pandas()` of boolean series with null values
 
 
 # cudf 0.7.2 (16 May 2019)
