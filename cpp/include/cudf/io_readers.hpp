@@ -7,7 +7,8 @@
 #include <cudf.h>
 #include <table.hpp>
 
-namespace cudf{
+namespace cudf {
+ 
  /**---------------------------------------------------------------------------*
  * @brief Arguments to the read_json interface.
  *---------------------------------------------------------------------------**/
@@ -19,14 +20,8 @@ struct json_reader_args{
   std::string               compression = "infer";///< Compression type ("none", "infer", "gzip", "zip"); default is "infer".
   bool                      lines = false;        ///< Read the file as a json object per line; default is false.
 
-  /**---------------------------------------------------------------------------*
-   * @brief json_reader_args default constructor.
-   *---------------------------------------------------------------------------**/
   json_reader_args() = default;
-
-  /**---------------------------------------------------------------------------*
-   * @brief json_reader_args copy constructor.
-   *---------------------------------------------------------------------------**/
+ 
   json_reader_args(json_reader_args const &) = default;
 
   /**---------------------------------------------------------------------------*
@@ -36,11 +31,11 @@ struct json_reader_args{
    * @param[in] src If src_type is FILE_PATH, contains the filepath.
    * If source_type is HOST_BUFFER, contains the input JSON data.
    *---------------------------------------------------------------------------**/
-  json_reader_args(gdf_input_type src_type, const std::string &src) : source_type(src_type), source(src) {}
+  json_reader_args(gdf_input_type src_type, std::string const &src) : source_type(src_type), source(src) {}
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Class used to parse Json input and convert it into gdf columns
+ * @brief Class used to parse Json input and convert it into gdf columns.
  *
  *---------------------------------------------------------------------------**/
 class JsonReader {
@@ -63,31 +58,31 @@ public:
   JsonReader& operator=(JsonReader &&rhs);
 
   /**---------------------------------------------------------------------------*
-   * @brief JsonReader constructor; throws if the arguments are not supported
+   * @brief JsonReader constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
   explicit JsonReader(json_reader_args const &args);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the args_ data member
+   * @brief Parse the input JSON file as specified with the json_reader_args
+   * constuctor parameter.
    *
-   * Stores the parsed gdf columns in an internal data member
-   *
-   * @return cudf::table object that contains the array of gdf_columns
+   * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
   table read();
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the args_ data member
+   * @brief Parse the input JSON file as specified with the args_ data member.
    *
-   * Stores the parsed gdf columns in an internal data member
-   * @param[in] byte_range_offset ///< Offset of the byte range to read.
-   * @param[in] byte_range_size   ///< Size of the byte range to read. If set to zero, all data after byte_range_offset is read.
+   * Stores the parsed gdf columns in an internal data member.
+   * @param[in] offset ///< Offset of the byte range to read.
+   * @param[in] size   ///< Size of the byte range to read. If set to zero,
+   * all data after byte_range_offset is read.
    *
-   * @return cudf::table object that contains the array of gdf_columns
+   * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
-  table read_byte_range(size_t byte_range_offset, size_t byte_range_size);
+  table read_byte_range(size_t offset, size_t size);
 
   ~JsonReader();
 };
 
-}
+} // namespace cudf
