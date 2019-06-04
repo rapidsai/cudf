@@ -20,6 +20,7 @@
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
 
+#include "replace.hpp"
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include <copying.hpp>
@@ -31,26 +32,24 @@
 #include "bitmask/bit_mask.cuh"
 #include "bitmask/legacy_bitmask.hpp"
 
-using bit_mask::bit_mask_t;
-
 namespace{ //anonymous
 
   constexpr int BLOCK_SIZE = 256;
 
   /* --------------------------------------------------------------------------*/
-  /** 
+  /**
    * @brief Kernel that replaces elements from `d_col_data` given the following
    *        rule: replace all `old_values[i]` in [old_values_begin`, `old_values_end`)
    *        present in `d_col_data` with `d_new_values[i]`.
-   * 
+   *
    * @param[in,out] d_col_data Device array with the data to be modified
    * @param[in] nrows # rows in `d_col_data`
-   * @param[in] old_values_begin Device pointer to the beginning of the sequence 
+   * @param[in] old_values_begin Device pointer to the beginning of the sequence
    * of old values to be replaced
-   * @param[in] old_values_end  Device pointer to the end of the sequence 
+   * @param[in] old_values_end  Device pointer to the end of the sequence
    * of old values to be replaced
    * @param[in] d_new_values Device array with the new values
-   * 
+   *
    * @returns
    */
   /* ----------------------------------------------------------------------------*/
@@ -77,7 +76,7 @@ namespace{ //anonymous
   }
 
   /* --------------------------------------------------------------------------*/
-  /** 
+  /**
    * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
    *        `replace_kernel` with the apropiate data types.
    */
@@ -112,13 +111,13 @@ namespace{ //anonymous
     GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
     GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
 
-    
+
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,
                           col->size,
                           old_values->data,
                           new_values->data,
-                          new_values->size); 
+                          new_values->size);
 
     return GDF_SUCCESS;
   }
@@ -126,15 +125,15 @@ namespace{ //anonymous
 } //end anonymous namespace
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col` 
+ *        `new_values`, that is, replace all `old_values[i]` present in `col`
  *        with `new_values[i]`.
- * 
+ *
  * @param[in,out] col gdf_column with the data to be modified
  * @param[in] old_values gdf_column with the old values to be replaced
  * @param[in] new_values gdf_column with the new values
- * 
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -192,7 +191,7 @@ void replace_nulls_with_column(gdf_size_type size,
 
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
  *        `replace_nulls` with the apropiate data types.
  */
@@ -220,7 +219,7 @@ struct replace_nulls_column_kernel_forwarder {
 
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
  *        `replace_nulls` with the apropiate data types.
  */
@@ -258,6 +257,7 @@ struct replace_nulls_scalar_kernel_forwarder {
 
 
 namespace cudf {
+namespace detail {
 
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement,
@@ -320,5 +320,19 @@ gdf_column replace_nulls(const gdf_column& input,
   return output;
 }
 
-}  // namespace cudf
+}  // namespace detail
 
+gdf_column replace_nulls(const gdf_column& input,
+                         const gdf_column& replacement)
+{
+  return detail::replace_nulls(input, replacement, 0);
+}
+
+
+gdf_column replace_nulls(const gdf_column& input,
+                         const gdf_scalar& replacement)
+{
+  return detail::replace_nulls(input, replacement, 0);
+}
+
+}  // namespace cudf
