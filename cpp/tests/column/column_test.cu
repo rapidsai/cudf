@@ -1,6 +1,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <utilities/cudf_utils.h>
+#include <utilities/column_utils.hpp>
 #include <cudf.h>
 
 #include <thrust/device_vector.h>
@@ -341,7 +342,7 @@ TEST(ColumnByteWidth, TestByteWidth)
     int byte_width{0};
     gdf_column col;
     col.dtype = pair.first;
-    ASSERT_EQ(GDF_SUCCESS, get_column_byte_width(&col, &byte_width));
+    ASSERT_NO_THROW(byte_width = cudf::byte_width(col));
     EXPECT_EQ(pair.second, byte_width);
   }
 }
@@ -362,6 +363,6 @@ TEST(ColumnByteWidth, TestGdfTypeSize)
                                                 };
   for(auto const& pair : enum_to_type_size)
   {
-    EXPECT_EQ(pair.second, gdf_dtype_size(pair.first));
+    EXPECT_EQ(pair.second, (int) cudf::size_of(pair.first));
   }
 }

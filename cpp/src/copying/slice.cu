@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+#include <utilities/column_utils.hpp>
 #include "types.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include "utilities/error_utils.hpp"
@@ -154,8 +155,7 @@ public:
 
       // Allocate Column
       gdf_column* output_column = output_columns_[index];
-      int col_width;
-      get_column_byte_width(output_column, &col_width);
+      auto col_width { cudf::byte_width(*output_column) };
       RMM_TRY( RMM_ALLOC(&(output_column->data), col_width * output_column->size, stream) );
       if(input_column_.valid != nullptr){
         RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
