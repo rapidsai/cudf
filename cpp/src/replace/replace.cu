@@ -82,10 +82,14 @@ namespace{ //anonymous
   active_mask = __ballot_sync(active_mask, i < nrows);
 
   while (i < nrows) {
+    bool output_is_valid = true;
+    uint32_t bitmask = 0xffffffff;
+
     if (input_has_nulls) {
       bool const input_is_valid{bit_mask::is_valid(input_valid, i)};
+      output_is_valid = input_is_valid;
 
-      uint32_t bitmask = __ballot_sync(active_mask, input_is_valid);
+      bitmask = __ballot_sync(active_mask, input_is_valid);
 
       if (input_is_valid) {
         auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
@@ -95,8 +99,7 @@ namespace{ //anonymous
           auto d = thrust::distance(values_to_replace_begin, found_ptr);
           new_value = d_replacement_values[d];
           if (replacement_has_nulls) {
-            bitmask &= __ballot_sync(active_mask,
-                                 bit_mask::is_valid(replacement_valid, d));
+            output_is_valid = bit_mask::is_valid(replacement_valid, d);
           }
         } else {
           new_value = input_data[i];
@@ -104,12 +107,7 @@ namespace{ //anonymous
         output_data[i] = new_value;
       }
 
-      output_valid[bit_mask::bit_container_index(i)] = bitmask;
-      if (threadIdx.x % 32 == 0) {
-        atomicAdd(output_null_count, __popc(bitmask));
-      }
     } else {
-      uint32_t bitmask = active_mask;
       auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
                                     values_to_replace_end, input_data[i]);
       T new_value{0};
@@ -117,19 +115,21 @@ namespace{ //anonymous
         auto d = thrust::distance(values_to_replace_begin, found_ptr);
         new_value = d_replacement_values[d];
         if (replacement_has_nulls) {
-          bitmask =__ballot_sync(
-            active_mask, bit_mask::is_valid(replacement_valid, d));
+          output_is_valid = bit_mask::is_valid(replacement_valid, d);
         }
       } else {
         new_value = input_data[i];
       }
       output_data[i] = new_value;
-      if (replacement_has_nulls){
-        output_valid[bit_mask::bit_container_index(i)] = bitmask;
-        if (threadIdx.x % 32 == 0) {
+    }
+
+    bitmask &= __ballot_sync(active_mask, output_is_valid);
+
+    if (input_has_nulls || replacement_has_nulls){
+      if (threadIdx.x % 32 == 0) {
+          output_valid[bit_mask::bit_container_index(i)] = bitmask;
           atomicAdd(output_null_count, __popc(bitmask));
         }
-      }
     }
 
     i += blockDim.x * gridDim.x;
@@ -200,11 +200,12 @@ namespace{ //anonymous
                                              typed_replacement_valid);
 
       if(typed_out_valid != nullptr){
-        CUDA_TRY(cudaMemcpyAsync(&output.null_count, null_count,
+        gdf_size_type valid_cnt {0};
+        CUDA_TRY(cudaMemcpyAsync(&valid_cnt, null_count,
                                sizeof(gdf_size_type), cudaMemcpyDefault, stream));
         RMM_FREE(null_count, stream);
+        output.null_count = output.size - valid_cnt;
       }
-      printf("null_count %d\n", output.null_count);
     }
   };
  } //end anonymous namespace
