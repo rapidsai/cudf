@@ -19,10 +19,6 @@
 
 #include "cudf.h"
 
-// basic aggregation classes from groupby
-// TODO: once #1478 is merged we need to update to use device_atomics.cuh instead
-#include <groupby/aggregation_operations.hpp>
-
 namespace cudf {
 /* --------------------------------------------------------------------------*
  * @brief  Computes the rolling window function of the values in a column.

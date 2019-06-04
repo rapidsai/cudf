@@ -132,7 +132,7 @@ protected:
 
 private:
   // use SFINAE to only instantiate for supported combinations
-  template<template <typename AggType> class agg_op, bool average,
+  template<class agg_op, bool average,
 	   typename std::enable_if_t<cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
   void create_reference_output(gdf_size_type window,
 			       gdf_size_type min_periods,
@@ -145,9 +145,9 @@ private:
     gdf_size_type nrows = in_col.size();
     ref_data.resize(nrows);
     ref_data_valid.resize(nrows);
-    agg_op<T> op;
+    agg_op op;
     for(gdf_size_type i = 0; i < nrows; i++) {
-      T val = agg_op<T>::IDENTITY;
+      T val = agg_op::template identity<T>();
       gdf_size_type count = 0;
       // load sizes
       if (window_col.size() > 0) window = window_col[i];
@@ -171,7 +171,7 @@ private:
     }
   }
 
-  template<template <typename AggType> class agg_op, bool average,
+  template<class agg_op, bool average,
 	   typename std::enable_if_t<!cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
   void create_reference_output(gdf_size_type window,
 			       gdf_size_type min_periods,
@@ -194,19 +194,19 @@ private:
     // unroll aggregation types
     switch(agg) {
     case GDF_SUM:
-      create_reference_output<sum_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      create_reference_output<cudf::DeviceSum, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
-      create_reference_output<min_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      create_reference_output<cudf::DeviceMin, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
-      create_reference_output<max_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      create_reference_output<cudf::DeviceMax, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
-      create_reference_output<count_op, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      create_reference_output<cudf::DeviceCount, false>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
-      create_reference_output<sum_op, true>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
+      create_reference_output<cudf::DeviceSum, true>(window, min_periods, forward_window, window_col, min_periods_col, forward_window_col);
       break;
     default:
       FAIL() << "aggregation type not supported";

@@ -17,6 +17,8 @@
 #ifndef ROLLING_DETAIL_HPP
 #define ROLLING_DETAIL_HPP
 
+#include <utilities/device_operators.cuh>
+
 namespace cudf
 {
 
@@ -25,13 +27,13 @@ namespace detail
 {
   // return true if ColumnType is arithmetic type or
   // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
-  template <typename ColumnType, template <typename AggType> class AggOp>
+  template <typename ColumnType, class AggOp>
   static constexpr bool is_supported()
   {
     return std::is_arithmetic<ColumnType>::value ||
-           std::is_same<AggOp<ColumnType>, min_op<ColumnType>>::value ||
-           std::is_same<AggOp<ColumnType>, max_op<ColumnType>>::value ||
-           std::is_same<AggOp<ColumnType>, count_op<ColumnType>>::value;
+           std::is_same<AggOp, DeviceMin>::value ||
+           std::is_same<AggOp, DeviceMax>::value ||
+           std::is_same<AggOp, DeviceCount>::value;
   }
 
   // store functor

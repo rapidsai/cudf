@@ -65,8 +65,7 @@ namespace
  *                static forward window size for all elements
 
  */
-template <typename ColumnType, template <typename AggType> class agg_op,
-          bool average>
+template <typename ColumnType, class agg_op, bool average>
 __global__
 void gpu_rolling(gdf_size_type nrows,
                  ColumnType * const __restrict__ out_col, 
@@ -87,12 +86,12 @@ void gpu_rolling(gdf_size_type nrows,
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
 
-  agg_op<ColumnType> op;
+  agg_op op;
 
   auto active_threads = __ballot_sync(0xffffffff, i < nrows);
   while(i < nrows)
   {
-    ColumnType val = agg_op<ColumnType>::IDENTITY;
+    ColumnType val = agg_op::template identity<ColumnType>();
     volatile gdf_size_type count = 0;	// declare this as volatile to avoid some compiler optimizations that lead to incorrect results for CUDA 10.0 and below (fixed in CUDA 10.1)
 
     // dynamic window handling
@@ -141,7 +140,7 @@ struct rolling_window_launcher
   /**
    * @brief Uses SFINAE to instantiate only for supported type combos
    */
-  template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
+  template<typename ColumnType, class agg_op, bool average, class... TArgs,
      typename std::enable_if_t<cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
@@ -161,7 +160,7 @@ struct rolling_window_launcher
   /**
    * @brief If we cannot perform aggregation on this type then throw an error
    */
-  template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
+  template<typename ColumnType, class agg_op, bool average, class... TArgs,
      typename std::enable_if_t<!cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
@@ -196,35 +195,35 @@ struct rolling_window_launcher
     //       aggregate_dispatcher that works like type_dispatcher.
     switch (agg_type) {
     case GDF_SUM:
-      dispatch_aggregation_type<ColumnType, sum_op, false>(nrows, stream,
+      dispatch_aggregation_type<ColumnType, cudf::DeviceSum, false>(nrows, stream,
                 typed_out_data, typed_out_valid,
                 typed_in_data, typed_in_valid,
                 window, min_periods, forward_window,
                 window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
-      dispatch_aggregation_type<ColumnType, min_op, false>(nrows, stream,
+      dispatch_aggregation_type<ColumnType, cudf::DeviceMin, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
                  typed_in_data, typed_in_valid,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
-      dispatch_aggregation_type<ColumnType, max_op, false>(nrows, stream,
+      dispatch_aggregation_type<ColumnType, cudf::DeviceMax, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
                  typed_in_data, typed_in_valid,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
-      dispatch_aggregation_type<ColumnType, count_op, false>(nrows, stream,
+      dispatch_aggregation_type<ColumnType, cudf::DeviceCount, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
                  typed_in_data, typed_in_valid,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
-      dispatch_aggregation_type<ColumnType, sum_op, true>(nrows, stream,
+      dispatch_aggregation_type<ColumnType, cudf::DeviceSum, true>(nrows, stream,
                  typed_out_data, typed_out_valid,
                  typed_in_data, typed_in_valid,
                  window, min_periods, forward_window,
