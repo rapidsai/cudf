@@ -43,7 +43,7 @@ using namespace cudf::test;
 using namespace cudf::groupby::hash;
 
 template <typename ColType, operators op,
-          typename ResultType = expected_result_t<ColType, op> >
+          typename ResultType = expected_result_t<ColType, op>>
 struct compute_reference_solution {
   compute_reference_solution(column_wrapper<ColType>& _keys,
                              column_wrapper<ColType>& _values)
@@ -70,84 +70,53 @@ struct compute_reference_solution {
   column_wrapper<ColType>& values;
 };
 
-template <typename ColType, operators op>
+template <typename ColType, operators op, typename ResultType>
 void single_column_groupby_test(column_wrapper<ColType> keys,
-                                column_wrapper<ColType> values) {
+                                column_wrapper<ColType> values,
+                                column_wrapper<ColType> expected_keys,
+                                column_wrapper<ResultType> expected_values) {
+  static_assert(std::is_same<ResultType, expected_result_t<ColType, op>>::value,
+                "Incorrect type for expected_values.");
+
   ASSERT_EQ(keys.size(), values.size())
-      << "Number of keys must be equal to number of values for this test";
+      << "Number of keys must be equal to number of values.";
 
   cudf::table input_keys{keys.get()};
   cudf::table input_values{values.get()};
 
-  cudf::table output_keys;
-  cudf::table output_values;
-  std::tie(output_keys, output_values) =
+  cudf::table output_keys_table;
+  cudf::table output_values_table;
+  std::tie(output_keys_table, output_values_table) =
       groupby(input_keys, input_values, {op});
 
-  // Sort by key to prepare for computing reference solution
-  thrust::stable_sort_by_key(thrust::device, keys.get_data().begin(),
-                             keys.get_data().end(), values.get_data().begin());
+  ASSERT_EQ(cudf::gdf_dtype_of<ColType>(),
+            output_keys_table.get_column(0)->dtype);
+  ASSERT_EQ(cudf::gdf_dtype_of<ResultType>(),
+            output_values_table.get_column(0)->dtype);
 
-  // Get the number of unique keys
-  rmm::device_vector<ColType> unique_keys(keys.size());
-  auto last = thrust::unique_copy(thrust::device, keys.get_data().begin(),
-                                  keys.get_data().end(), unique_keys.begin());
-  unique_keys.erase(last, unique_keys.end());
-  gdf_size_type const num_groups = unique_keys.size();
+  column_wrapper<ColType> output_keys(*output_keys_table.get_column(0));
+  column_wrapper<ResultType> output_values(*output_values_table.get_column(0));
 
-  // Verify output size is correct
-  EXPECT_EQ(num_groups, output_keys.num_rows());
-  EXPECT_EQ(num_groups, output_values.num_rows());
+  // Sort-by-key the expected and actual data to make them directly comparable
+  thrust::stable_sort_by_key(thrust::device, expected_keys.get_data().begin(),
+                             expected_keys.get_data().end(),
+                             expected_values.get_data().begin());
+  thrust::stable_sort_by_key(thrust::device, output_keys.get_data().begin(),
+                             output_keys.get_data().end(),
+                             output_values.get_data().begin());
 
-  // Verify output types are correct
-  using expected_output_type = expected_result_t<ColType, op>;
-  //static_assert(not std::is_same<expected_output_type, void>::value,
-  //              "Invalid ColType and Op combination.");
-  gdf_dtype expected_dtype = cudf::gdf_dtype_of<expected_output_type>();
-  EXPECT_EQ(input_keys.get_column(0)->dtype, output_keys.get_column(0)->dtype);
-  EXPECT_EQ(expected_dtype, output_values.get_column(0)->dtype);
-
-  column_wrapper<ColType> output_keys_column(*output_keys.get_column(0));
-
- //column_wrapper<expected_output_type> output_values_column(
- //    *output_values.get_column(0));
-
-  // Sort by key on output values to make them comparable to reference
-  // solution
-  /*
-  thrust::stable_sort_by_key(thrust::device,
-                             output_keys_column.get_data().begin(),
-                             output_keys_column.get_data().end(),
-                             output_values_column.get_data().begin());
-
-  EXPECT_TRUE(thrust::equal(unique_keys.begin(), last,
-                            output_keys_column.get_data().begin()));
-
-  // compute reference solution
-  rmm::device_vector<ColType> expected_keys;
-  rmm::device_vector<expected_output_type> expected_values;
-
-  std::tie(expected_keys, expected_values) =
-      compute_reference_solution<ColType, op>(keys, values)();
-
-  // Sort by key to make them comparable to computed solution
-  thrust::stable_sort_by_key(thrust::device, expected_keys.begin(),
-                             expected_keys.end(), expected_values.begin());
-
-  EXPECT_TRUE(thrust::equal(thrust::device, expected_keys.begin(),
-                            expected_keys.end(),
-                            output_keys_column.get_data().begin()));
-
-  EXPECT_TRUE(thrust::equal(thrust::device, expected_values.begin(),
-                            expected_values.end(),
-                            output_values_column.get_data().begin()));
-                            */
+  EXPECT_TRUE(expected_keys == output_keys);
+  EXPECT_TRUE(expected_values == output_values);
 }
 
-TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsSum) {
+TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsCount) {
   constexpr int size{10};
-  single_column_groupby_test<TypeParam, SUM>(
+  constexpr operators op{COUNT};
+  using ResultType = expected_result_t<TypeParam, op>;
+  single_column_groupby_test<TypeParam, op>(
       column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); }),
       column_wrapper<TypeParam>(size,
-                                [](auto index) { return TypeParam(index); }));
+                                [](auto index) { return TypeParam(index); }),
+      column_wrapper<TypeParam>{TypeParam(42)},
+      column_wrapper<ResultType>{size});
 }
