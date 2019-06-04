@@ -320,15 +320,10 @@ struct column_input<T_mutator, T_element, true>{
 
     CUDA_HOST_DEVICE_CALLABLE
     T_mutator at(gdf_index_type id) const {
-        return T_mutator(get_value(id), is_valid(id));
+        return is_valid(id) ? T_mutator(data[id], true) : T_mutator(identity, false);
     };
 
 private:
-    CUDA_HOST_DEVICE_CALLABLE
-    T_element get_value(gdf_index_type id) const {
-        return (is_valid(id))? data[id] : identity;
-    }
-
     CUDA_HOST_DEVICE_CALLABLE
     bool is_valid(gdf_index_type id) const
     {
