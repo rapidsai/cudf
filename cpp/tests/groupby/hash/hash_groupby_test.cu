@@ -42,40 +42,12 @@ TYPED_TEST_CASE(SingleColumnGroupbyTest, TestingTypes);
 using namespace cudf::test;
 using namespace cudf::groupby::hash;
 
-template <typename ColType, operators op,
-          typename ResultType = expected_result_t<ColType, op>>
-struct compute_reference_solution {
-  compute_reference_solution(column_wrapper<ColType>& _keys,
-                             column_wrapper<ColType>& _values)
-      : keys{_keys}, values{_values} {}
-
-  auto operator()() {
-    rmm::device_vector<ColType> output_keys(keys.size());
-    rmm::device_vector<ResultType> output_values(values.size());
-
-    // This wont work because corresponding_functor_t needs lhs and rhs types to
-    // be identical
-    // auto end = thrust::reduce_by_key(
-    //    keys.get_data().begin(), keys.get_data().end(),
-    //    values.get_data().begin(), output_keys.begin(), output_values.begin(),
-    //    thrust::equal_to<ColType>{}, corresponding_functor_t<op>{});
-
-    // output_keys.erase(end.first, output_keys.end());
-    // output_values.erase(end.second, output_values.end());
-
-    return std::make_tuple(output_keys, output_values);
-  }
-
-  column_wrapper<ColType>& keys;
-  column_wrapper<ColType>& values;
-};
-
-template <typename ColType, operators op, typename ResultType>
-void single_column_groupby_test(column_wrapper<ColType> keys,
-                                column_wrapper<ColType> values,
-                                column_wrapper<ColType> expected_keys,
+template <operators op, typename Key, typename Value, typename ResultType>
+void single_column_groupby_test(column_wrapper<Key> keys,
+                                column_wrapper<Value> values,
+                                column_wrapper<Key> expected_keys,
                                 column_wrapper<ResultType> expected_values) {
-  static_assert(std::is_same<ResultType, expected_result_t<ColType, op>>::value,
+  static_assert(std::is_same<ResultType, expected_result_t<Value, op>>::value,
                 "Incorrect type for expected_values.");
 
   ASSERT_EQ(keys.size(), values.size())
@@ -89,12 +61,11 @@ void single_column_groupby_test(column_wrapper<ColType> keys,
   std::tie(output_keys_table, output_values_table) =
       groupby(input_keys, input_values, {op});
 
-  ASSERT_EQ(cudf::gdf_dtype_of<ColType>(),
-            output_keys_table.get_column(0)->dtype);
+  ASSERT_EQ(cudf::gdf_dtype_of<Key>(), output_keys_table.get_column(0)->dtype);
   ASSERT_EQ(cudf::gdf_dtype_of<ResultType>(),
             output_values_table.get_column(0)->dtype);
 
-  column_wrapper<ColType> output_keys(*output_keys_table.get_column(0));
+  column_wrapper<Key> output_keys(*output_keys_table.get_column(0));
   column_wrapper<ResultType> output_values(*output_values_table.get_column(0));
 
   // Sort-by-key the expected and actual data to make them directly comparable
@@ -112,11 +83,24 @@ void single_column_groupby_test(column_wrapper<ColType> keys,
 TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsCount) {
   constexpr int size{10};
   constexpr operators op{COUNT};
-  using ResultType = expected_result_t<TypeParam, op>;
-  single_column_groupby_test<TypeParam, op>(
+  using ResultType = expected_result_t<int, op>;
+  single_column_groupby_test<op>(
       column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); }),
-      column_wrapper<TypeParam>(size,
-                                [](auto index) { return TypeParam(index); }),
+      column_wrapper<int>(size, [](auto index) { return int(index); }),
       column_wrapper<TypeParam>{TypeParam(42)},
       column_wrapper<ResultType>{size});
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, FourGroupsNoNullsCount) {
+  constexpr int size{10};
+  constexpr operators op{COUNT};
+  using ResultType = expected_result_t<int, op>;
+  using T = TypeParam;
+  using R = ResultType;
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4), T(4),
+                                T(4), T(4)},
+      column_wrapper<int>(size, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
+      column_wrapper<ResultType>{R(1), R(2), R(3), R(4)});
 }
