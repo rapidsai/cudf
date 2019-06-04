@@ -185,6 +185,8 @@ typedef struct {
   int           skip_rows;                  ///< In: Number of rows to skip from the start
   int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
 
+  bool          use_index;                  ///< In: Use row index if available for faster position seeking
+
 } orc_read_arg;
 
 /**---------------------------------------------------------------------------*

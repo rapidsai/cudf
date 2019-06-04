@@ -696,7 +696,7 @@ gdf_error read_orc(orc_read_arg *args) {
          !(md.get_row_index_stride() & 7) && md.get_row_index_stride() > 0 &&
          num_columns * selected_stripes.size() < 8 * 128);
     // TODO: Currently, first row must align to a stripe boundary
-    use_index = (use_index && skip_rows == 0);
+    use_index = (use_index && skip_rows == 0 && args->use_index);
 
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;

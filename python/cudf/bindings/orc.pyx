@@ -35,7 +35,7 @@ def is_file_like(obj):
 
 
 cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
-                   num_rows=None):
+                   num_rows=None, use_index=True):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -77,6 +77,8 @@ cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
         orc_reader.num_rows = num_rows
     else:
         orc_reader.num_rows = -1
+
+    orc_reader.use_index = use_index
 
     # Call read_orc
     with nogil:
