@@ -36,13 +36,25 @@ TYPED_TEST_CASE(FillingTest, test_types);
 constexpr gdf_size_type column_size{1000};
 
 template <typename T>
-void FillTest(column_wrapper<T> source,
-              column_wrapper<T> const& expected,
-              gdf_index_type begin,
-              gdf_index_type end,
+void FillTest(gdf_index_type begin, gdf_index_type end,
               T value, bool value_is_valid = true)
 {
-  scalar_wrapper<T> val(value);
+  column_wrapper<T> source(column_size, 
+    [](gdf_index_type row) { return static_cast<T>(row); },
+    [](gdf_index_type row) { return true; });
+
+  scalar_wrapper<T> val(value, value_is_valid);
+
+  column_wrapper<T> expected(column_size,
+    [&](gdf_index_type row) { 
+      return (row >= begin && row < end) ? 
+        value : static_cast<T>(row);
+    },
+    [&](gdf_index_type row) { 
+      return (row >= begin && row < end) ? 
+        value_is_valid : true; 
+    });
+
   EXPECT_NO_THROW(cudf::fill(source.get(), *val.get(), begin, end));
 
   EXPECT_TRUE(expected == source);
@@ -57,21 +69,25 @@ void FillTest(column_wrapper<T> source,
   }
 }
 
-TYPED_TEST(FillingTest, SetSingleValue)
+TYPED_TEST(FillingTest, SetSingle)
 {
   gdf_index_type index = 9;
   TypeParam val = TypeParam{1};
+  
+  // First set it as valid
+  FillTest(index, index+1, val, true);
+  // next set it as invalid
+  //FillTest(index, index+1, val, false);
+}
 
-  FillTest(column_wrapper<TypeParam>(column_size, 
-    [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-    [](gdf_index_type row) { return true; }),
-  column_wrapper<TypeParam>(column_size,
-    [&](gdf_index_type row)->TypeParam { 
-      return (row == index) ? 
-        val : static_cast<TypeParam>(row);
-    },
-    [](gdf_index_type row) { return true; }),
-  index, index+1, val);
+TYPED_TEST(FillingTest, SetAll)
+{
+  TypeParam val = TypeParam{1};
+
+  // First set it as valid
+  FillTest(0, column_size, val, true);
+  // next set it as invalid
+  //FillTest(0, column_size, val, false);
 }
 
 TYPED_TEST(FillingTest, SetRange)
@@ -80,15 +96,8 @@ TYPED_TEST(FillingTest, SetRange)
   gdf_index_type end   = 299;
   TypeParam val = TypeParam{1};
 
-  FillTest(
-    column_wrapper<TypeParam>(column_size, 
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }),
-    column_wrapper<TypeParam>(column_size,
-      [&](gdf_index_type row)->TypeParam { 
-        return (row >= begin && row < end) ? 
-          val : static_cast<TypeParam>(row);
-      },
-      [](gdf_index_type row) { return true; }),
-    begin, end, val);
+  // First set it as valid
+  FillTest(begin, end, val, true);
+  // Next set it as invalid
+  //FillTest(begin, end, val, false);
 }
