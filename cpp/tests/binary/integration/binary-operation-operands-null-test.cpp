@@ -41,7 +41,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNull
     auto rhs = cudf::test::scalar_wrapper<int64_t>{500, false};
     auto out = cudf::test::column_wrapper<int64_t>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_s(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }
@@ -56,7 +56,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNotN
     auto rhs = cudf::test::scalar_wrapper<int64_t>{500, true};
     auto out = cudf::test::column_wrapper<int64_t>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_s(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }
@@ -74,7 +74,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNull
     auto rhs = cudf::test::scalar_wrapper<double>{500, false};
     auto out = cudf::test::column_wrapper<double>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_s(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }
@@ -89,7 +89,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNotN
     auto rhs = cudf::test::scalar_wrapper<double>{500, true};
     auto out = cudf::test::column_wrapper<double>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_s(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }
@@ -109,7 +109,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_int64_t) {
         [](gdf_size_type row) {return (row % 4 > 0);}};
     auto out = cudf::test::column_wrapper<int64_t>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }
@@ -129,7 +129,7 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64) {
         [](gdf_size_type row) {return (row % 4 > 0);}};
     auto out = cudf::test::column_wrapper<double>{lhs.get()->size, true};
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_ADD));
+    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), GDF_ADD));
 
     ASSERT_BINOP(out, lhs, rhs, ADD());
 }

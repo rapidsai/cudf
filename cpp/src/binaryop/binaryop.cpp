@@ -166,7 +166,7 @@ namespace jit {
 } // namespace jit
 } // namespace binops
 
-void binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
         "Input pointers are null");
@@ -190,7 +190,7 @@ void binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf
     binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
-void binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
         "Input pointers are null");
@@ -214,7 +214,7 @@ void binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf
     binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
-void binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
         "Input pointers are null");

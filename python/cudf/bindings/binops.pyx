@@ -44,7 +44,7 @@ cdef apply_op_v_v(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
 
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        binary_operation_v_v(
+        binary_operation(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
             <gdf_column*>c_rhs,
@@ -62,7 +62,7 @@ cdef apply_op_v_s(gdf_column* c_lhs, gdf_scalar* c_rhs, gdf_column* c_out, op):
 
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        binary_operation_v_s(
+        binary_operation(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
             <gdf_scalar*>c_rhs,
@@ -80,7 +80,7 @@ cdef apply_op_s_v(gdf_scalar* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
 
     cdef gdf_binary_operator c_op = _BINARY_OP[op]
     with nogil:
-        binary_operation_s_v(
+        binary_operation(
             <gdf_column*>c_out,
             <gdf_scalar*>c_lhs,
             <gdf_column*>c_rhs,

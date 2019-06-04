@@ -64,10 +64,10 @@ namespace cudf
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation_s_v(gdf_column*           out,
-                          gdf_scalar*           lhs,
-                          gdf_column*           rhs,
-                          gdf_binary_operator   ope);
+void binary_operation(gdf_column*           out,
+                      gdf_scalar*           lhs,
+                      gdf_column*           rhs,
+                      gdf_binary_operator   ope);
 
 /**
  * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
@@ -83,10 +83,10 @@ void binary_operation_s_v(gdf_column*           out,
  * @param rhs (gdf_scalar) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation_v_s(gdf_column*           out,
-                          gdf_column*           lhs,
-                          gdf_scalar*           rhs,
-                          gdf_binary_operator   ope);
+void binary_operation(gdf_column*           out,
+                      gdf_column*           lhs,
+                      gdf_scalar*           rhs,
+                      gdf_binary_operator   ope);
 
 /**
  * @brief Performs a binary operation between two gdf_columns.
@@ -101,10 +101,10 @@ void binary_operation_v_s(gdf_column*           out,
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation_v_v(gdf_column*           out,
-                          gdf_column*           lhs,
-                          gdf_column*           rhs,
-                          gdf_binary_operator   ope);
+void binary_operation(gdf_column*           out,
+                      gdf_column*           lhs,
+                      gdf_column*           rhs,
+                      gdf_binary_operator   ope);
 
 
 } // namespace cudf

@@ -510,7 +510,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	CUDF_EXPECT_NO_THROW(cudf::binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL));
+	CUDF_EXPECT_NO_THROW(cudf::binary_operation(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL));
 
 	int8_t * data = new int8_t[rows_size];
 	CUDA_TRY( cudaMemcpy(data, output_column->data, sizeof(int8_t) * rows_size, cudaMemcpyDeviceToHost) );
