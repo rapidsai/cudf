@@ -27,7 +27,7 @@ def make_numeric_dataframe(nrows, dtype):
 def make_datetime_dataframe():
     df = pd.DataFrame()
     df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
-                          '18/10/1990', '1/1/1970', '2016-04-30T01:02:03.400'])
+                          '18/10/1990', '1/1/1970', '2016-04-30T01:02:03.000'])
     df['col2'] = np.array(['18/04/1995', '14 / 07 / 1994', '07/06/2006',
                           '16/09/2005', '2/2/1970', '2007-4-30 1:6:40.000PM'])
     return df
@@ -1038,6 +1038,8 @@ def test_csv_reader_partial_dtype(dtype):
 
     assert(names_df == header_df)
     assert(all(names_df.dtypes == ['int16', 'int32']))
+
+
 @pytest.mark.parametrize('dtype', dtypes)
 @pytest.mark.parametrize('nelem', nelem)
 def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
@@ -1059,20 +1061,22 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
 
 def test_csv_writer_datetime_data(tmpdir):
+    import csv
     pdf_df_fname = tmpdir.join("pdf_df_2.csv")
     gdf_df_fname = tmpdir.join("gdf_df_2.csv")
 
     df = make_datetime_dataframe()
-    df = df.astype('datetime64')
+    df = df.astype('datetime64[ms]')
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n',
+            quoting=csv.QUOTE_NONNUMERIC)
     gdf.to_csv(path=gdf_df_fname)
 
     assert(os.path.exists(pdf_df_fname))
     assert(os.path.exists(gdf_df_fname))
 
-    expect = pd.read_csv(pdf_df_fname)
-    got = pd.read_csv(gdf_df_fname)
+    expect = pd.read_csv(pdf_df_fname).astype('datetime64[ms]')
+    got = pd.read_csv(gdf_df_fname).astype('datetime64[ms]')
     assert_eq(expect, got)
 
 
@@ -1112,6 +1116,7 @@ def test_csv_writer_datetime_data(tmpdir):
     ]
 )
 def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
+    import csv
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
@@ -1119,7 +1124,8 @@ def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
     df['Date'] = df['Date'].astype('datetime64')
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, sep=sep, columns=columns,
-              header=header, line_terminator=line_terminator)
+            header=header, line_terminator=line_terminator,
+            date_format="%Y-%m-%dT%H:%M:%SZ", quoting=csv.QUOTE_NONNUMERIC)
     gdf.to_csv(path=gdf_df_fname, sep=sep, columns=columns,
                header=header, line_terminator=line_terminator)
 

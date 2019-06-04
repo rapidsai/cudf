@@ -8,14 +8,11 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.csv cimport *
-from libc.stdlib cimport malloc, free
-from libc.stdint cimport uintptr_t
+from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
 from cudf.dataframe.column import Column
-from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.datetime import DatetimeColumn
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
 
