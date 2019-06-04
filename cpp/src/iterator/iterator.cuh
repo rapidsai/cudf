@@ -70,7 +70,8 @@
 
 namespace cudf
 {
-
+namespace detail
+{
 // --------------------------------------------------------------------------------------------------------
 // helper structs of output for column_input_iterator
 
@@ -183,7 +184,7 @@ struct ColumnOutputMeanVar<T, true>
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = ColumnOutputMeanVar<T, true>;
+    using this_t = cudf::detail::ColumnOutputMeanVar<T, true>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -232,7 +233,7 @@ struct ColumnOutputMeanVar<T, false>
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = ColumnOutputMeanVar<T, false>;
+    using this_t = cudf::detail::ColumnOutputMeanVar<T, false>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -389,6 +390,8 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     }
 };
 
+} // namespace detail
+
 // ---------------------------------------------------------------------------
 // helper functions to make iterator
 
@@ -410,94 +413,72 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
  * @param[in] identity The identity value used when the mask value is false
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output = T_element,
-    typename T_output_helper = ColumnOutputSingle<T_output>,
+template <bool has_nulls, typename T_element, typename T_output = T_element,
+    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_with_nulls(const T_element *data, const bit_mask::bit_mask_t *valid,
+auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
-    using T_input = ColumnInput<T_output_helper, T_element>;
-    using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
+    using T_input = cudf::detail::ColumnInput<T_output_helper, T_element, has_nulls>;
+    using T_iterator = cudf::detail::column_input_iterator<T_output, T_input, Iterator_Index>;
 
     // T_input constructor checks if valid is not nullptr
     return T_iterator(T_input(data, valid, identity), it);
 }
 
 /** -------------------------------------------------------------------------*
- *  @overload auto make_iterator_with_nulls(const T_element *data,
+ *  @overload auto make_iterator(const T_element *data,
  *                     const gdf_valid_type *valid, T_element identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output = T_element,
-    typename T_output_helper = ColumnOutputSingle<T_output>,
+template <bool has_nulls, typename T_element, typename T_output = T_element,
+    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_with_nulls(const T_element *data, const gdf_valid_type *valid,
+auto make_iterator(const T_element *data, const gdf_valid_type *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
-    return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
+    return make_iterator<has_nulls, T_element, T_output, T_output_helper, Iterator_Index>
         (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
-/** -------------------------------------------------------------------------*
- *  @overload auto make_iterator_with_nulls(const gdf_column& column,
- *                     T_element identity, Iterator_Index const it)
- * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output = T_element,
-    typename T_output_helper = ColumnOutputSingle<T_output>,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_with_nulls(const gdf_column& column,
-    T_element identity, Iterator_Index const it = Iterator_Index(0))
-{
-    // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
-
-    return make_iterator_with_nulls<T_element, T_output, T_output_helper, Iterator_Index>
-        (static_cast<const T_element*>(column.data),
-        reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
-}
 
 /** -------------------------------------------------------------------------*
  * @brief helper function to make iterator without nulls
  * Input iterator which can be used for cub and thrust.
  *
+ * @tparam has_nulls a boolean flag to determine if the input column has nulls
  * @tparam T_element The cudf data type of input array
  * @tparam T_output  The cudf data type of output data or array
  * @tparam T_output_helper
  *                   The output helper struct type, usually `ColumnOutputSingle`,
  *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
  * @tparam Iterator_Index
- *                  The base iterator which gives the index of array.
- *                  The default is `thrust::counting_iterator`
+ *                   The base iterator which gives the index of array.
+ *                   The default is `thrust::counting_iterator`
  *
- * @param[in] data     The pointer of column data array
+ * @param[in] column   The input column
+ * @param[in] identity The identity value used when the value is null.
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output = T_element,
-    typename T_output_helper = ColumnOutputSingle<T_output>,
+template <bool has_nulls, typename T_element, typename T_output = T_element,
+    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_without_nulls(const T_element *data, const Iterator_Index it = Iterator_Index(0))
-{
-    using T_input = ColumnInput<T_output_helper, T_element, false>;
-    using T_iterator = column_input_iterator<T_output, T_input, Iterator_Index>;
-
-    return T_iterator(T_input(data), it);
-}
-
-/** -------------------------------------------------------------------------*
- *  @overload auto make_iterator_without_nulls(const gdf_column& column,
- *                       const Iterator_Index it)
- * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output = T_element,
-    typename T_output_helper = ColumnOutputSingle<T_output>,
-    typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator_without_nulls(const gdf_column& column, const Iterator_Index it = Iterator_Index(0))
+auto make_iterator(const gdf_column& column,
+    T_element identity, const Iterator_Index it = Iterator_Index(0))
 {
     // check the data type
     CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
 
-    return make_iterator_without_nulls<T_element, T_output, T_output_helper, Iterator_Index>
-        (static_cast<const T_element*>(column.data), it);
+    using T_input = cudf::detail::ColumnInput<T_output_helper, T_element, has_nulls>;
+    using T_iterator = cudf::detail::column_input_iterator<T_output, T_input, Iterator_Index>;
+
+    return T_iterator(T_input(static_cast<const T_element*>(column.data),
+            reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity), it);
+
 }
+
+
+
 
 } // namespace cudf
 

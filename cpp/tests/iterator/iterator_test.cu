@@ -14,18 +14,6 @@
  * limitations under the License.
  */
 
-/* Proof the concept of iterator driven aggregations to reuse the logic
-
-   The concepts:
-   1. computes the aggregation by given iterators
-   2. computes by using cub and thrust with same function parameters
-   3. accepts nulls and group_by with same function parameters
-
-    CUB reduction:  https://nvlabs.github.io/cub/structcub_1_1_device_reduce.html#aa4adabeb841b852a7a5ecf4f99a2daeb
-    Thrust reduction: https://thrust.github.io/doc/group__reductions.html#ga43eea9a000f912716189687306884fc7
-
-    Thrust iterators: https://thrust.github.io/doc/group__fancyiterator.html
-*/
 
 #include <iterator/iterator.cuh>    // include iterator header
 
@@ -72,7 +60,7 @@ bool random_bool()
 }
 
 template<typename T, bool update_count>
-std::ostream& operator<<(std::ostream& os, cudf::ColumnOutputMeanVar<T, update_count> const& rhs)
+std::ostream& operator<<(std::ostream& os, cudf::detail::ColumnOutputMeanVar<T, update_count> const& rhs)
 {
   return os << "[" << rhs.value <<
       ", " << rhs.value_squared <<
@@ -140,20 +128,22 @@ struct IteratorTest : public GdfTest
         std::cout << "Done: expected <" << msg << "> = " << hos_result[0] << std::endl;
     }
 
-
     template <typename T_output>
     void column_sum_test(T_output& expected, const gdf_column& col)
     {
-        // have to separate the call since the returned iterator type is different if col.valid == nullptr or not
         if( col.valid == nullptr){
-            auto it_dev = cudf::make_iterator_without_nulls<T_output>(col);
-            iterator_test_cub(expected, it_dev, col.size);
+            column_sum_test<false, T_output>(expected, col);
         }else{
-            auto it_dev = cudf::make_iterator_with_nulls<T_output>(col, T{0});
-            iterator_test_cub(expected, it_dev, col.size);
+            column_sum_test<true, T_output>(expected, col);
         }
     }
 
+    template <bool has_nulls, typename T_output>
+    void column_sum_test(T_output& expected, const gdf_column& col)
+    {
+        auto it_dev = cudf::make_iterator<has_nulls, T_output>(col,  T{0});
+        iterator_test_cub(expected, it_dev, col.size);
+    }
 };
 
 
@@ -163,6 +153,8 @@ using TestingTypes = ::testing::Types<
 
 TYPED_TEST_CASE(IteratorTest, TestingTypes);
 
+
+#if 1
 
 // tests for non-null iterator (pointer of device array)
 TYPED_TEST(IteratorTest, non_null_iterator)
@@ -181,7 +173,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
     this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
 
-    // test column input 
+    // test column input
     cudf::test::column_wrapper<T> w_col(hos_array);
     this->column_sum_test(expected_value, w_col);
 }
@@ -212,11 +204,11 @@ TYPED_TEST(IteratorTest, null_iterator)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    auto it_hos = cudf::make_iterator<true>(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    auto it_dev = cudf::make_iterator<true>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
@@ -224,7 +216,7 @@ TYPED_TEST(IteratorTest, null_iterator)
 }
 
 // Tests up cast reduction with null iterator.
-// The up cast iterator will be created by `cudf::make_iterator_with_nulls<T, T_upcast>(...)`
+// The up cast iterator will be created by `cudf::make_iterator<true, T, T_upcast>(...)`
 TYPED_TEST(IteratorTest, null_iterator_upcast)
 {
     const int column_size{1000};
@@ -253,11 +245,11 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, T_upcast>(std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
+    auto it_hos = cudf::make_iterator<true, T, T_upcast>(std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
+    auto it_dev = cudf::make_iterator<true, T, T_upcast>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 }
@@ -266,7 +258,7 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
 
 // Tests for square input iterator using helper strcut `cudf::ColumnOutputSquared<T_upcast>`
 // The up cast iterator will be created by
-//  `cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>(...)`
+//  `cudf::make_iterator<true, T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>(...)`
 TYPED_TEST(IteratorTest, null_iterator_square)
 {
     const int column_size{1000};
@@ -294,12 +286,12 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>
+    auto it_hos = cudf::make_iterator<true, T, T_upcast, cudf::detail::ColumnOutputSquared<T_upcast>>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>
+    auto it_dev = cudf::make_iterator<true, T, T_upcast, cudf::detail::ColumnOutputSquared<T_upcast>>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
@@ -320,7 +312,7 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     using T = int32_t;
     using T_index = gdf_index_type;
     using T_output = T;
-    using T_helper = cudf::ColumnOutputSingle<T_output>;
+    using T_helper = cudf::detail::ColumnOutputSingle<T_output>;
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     thrust::device_vector<T> dev_array(hos_array);
@@ -333,14 +325,15 @@ TYPED_TEST(IteratorTest, indexed_iterator)
         [&](T acc, T_index id){ return (acc + hos_array[id]); } );
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
+    const bit_mask::bit_mask_t *dummy = nullptr;
     // CPU test
-    auto it_host = cudf::make_iterator_without_nulls<T, T_output, T_helper, T_index*>
-        (hos_array.data(), hos_indices.data());
+    auto it_host = cudf::make_iterator<false, T, T_output, T_helper, T_index*>
+        (hos_array.data(), dummy, T{0}, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_without_nulls<T, T_output, T_helper, T_index*>
-        (dev_array.data().get(), dev_indices.data().get());
+    auto it_dev = cudf::make_iterator<false, T, T_output, T_helper, T_index*>
+        (dev_array.data().get(), dummy, T{0}, dev_indices.data().get());
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
     this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
 }
@@ -372,11 +365,11 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
+    auto it_hos = cudf::make_iterator<true>(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
+    auto it_dev = cudf::make_iterator<true>(static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
@@ -413,7 +406,8 @@ TYPED_TEST(IteratorTest, mean_var_output)
     auto hos = w_col.to_host();
 
     // calculate expected values by CPU
-    cudf::ColumnOutputMeanVar<T_upcast> expected_value;
+    using T_Mutator = cudf::detail::ColumnOutputMeanVar<T_upcast, true>;
+    T_Mutator expected_value;
 
     expected_value.count = w_col.size() - w_col.null_count();
 
@@ -429,35 +423,53 @@ TYPED_TEST(IteratorTest, mean_var_output)
     std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMeanVar<T_upcast>, cudf::ColumnOutputMeanVar<T_upcast>>
+    auto it_hos = cudf::make_iterator<true, T, T_Mutator, T_Mutator>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator_with_nulls<T, cudf::ColumnOutputMeanVar<T_upcast>, cudf::ColumnOutputMeanVar<T_upcast>>
+    auto it_dev = cudf::make_iterator<true, T, T_Mutator, T_Mutator>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
     { // ColumnOutputMeanVarNoCount test
-        using T_helper = cudf::ColumnOutputMeanVar<T_upcast, false>;
+        using T_helper = cudf::detail::ColumnOutputMeanVar<T_upcast, false>;
 
         T_helper expected_value_no_count;
         expected_value_no_count.value = expected_value.value;
         expected_value_no_count.value_squared = expected_value.value_squared;
         expected_value_no_count.count = 0;
 
-        auto it_hos = cudf::make_iterator_with_nulls<T, T_helper, T_helper>
+        auto it_hos = cudf::make_iterator<true, T, T_helper, T_helper>
             (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
         this->iterator_test_thrust_host(expected_value_no_count, it_hos, w_col.size());
 
         // GPU test
-        auto it_dev = cudf::make_iterator_with_nulls<T, T_helper, T_helper>
+        auto it_dev = cudf::make_iterator<true, T, T_helper, T_helper>
             (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, init);
         this->iterator_test_thrust(expected_value_no_count, it_dev, w_col.size());
         this->iterator_test_cub(expected_value_no_count, it_dev, w_col.size());
     }
 }
+
+#endif
+
+
+/**---------------------------------------------------------------------------*
+ * @brief test macro to be expected as no exception.
+ * The testing is same with EXPECT_ANY_THROW() in gtest.
+ * It also outputs captured error message, useful for debugging.
+ *
+ * @param statement The statement to be tested
+ *---------------------------------------------------------------------------**/
+ #define CUDF_EXPECT_ANY_THROW(statement)        \
+ try{ statement; \
+      FAIL() << "No exception thrown at"         \
+      << "statement:" << #statement << std::endl; \
+    } catch (std::exception& e)                  \
+     { std::cout << "Caught expected exception. " \
+              << "reason: " << e.what() << std::endl; }
 
 
 TYPED_TEST(IteratorTest, error_handling)
@@ -465,17 +477,19 @@ TYPED_TEST(IteratorTest, error_handling)
     using T = int32_t;
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
 
-    cudf::test::column_wrapper<T> w_col_nonnull(hos_array);
+    cudf::test::column_wrapper<T> w_col_no_null(hos_array);
     cudf::test::column_wrapper<T> w_col_null(hos_array,
         [&](gdf_index_type row) { return true; });
 
     // expects error: data type mismatch
-    EXPECT_ANY_THROW( cudf::make_iterator_without_nulls<double>( *w_col_nonnull.get() ) );
+    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<false, double>( *w_col_null.get(), double{0}) ) );
 
     // expects error: data type mismatch
-    EXPECT_ANY_THROW( cudf::make_iterator_with_nulls<float>( *w_col_null.get(), float{0}) );
+    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<true, float>( *w_col_null.get(), float{0}) ) );
 
     // expects error: valid == nullptr
-    EXPECT_ANY_THROW( cudf::make_iterator_with_nulls<T>( *w_col_nonnull.get(), T{0}) );
+    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<true, T>( *w_col_no_null.get(), T{0}) ) );
 
+    // expects no error: treat no null iterator with column has nulls
+    CUDF_EXPECT_NO_THROW( (cudf::make_iterator<false, T>( *w_col_null.get(), T{0}) ) );
 }
