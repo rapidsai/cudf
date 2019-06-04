@@ -16,7 +16,7 @@ JsonReader &JsonReader::operator=(JsonReader const &rhs) {
 JsonReader::JsonReader(JsonReader &&rhs) : impl_(std::move(rhs.impl_)) {}
 
 JsonReader &JsonReader::operator=(JsonReader &&rhs) {
-  impl_ = rhs.impl_;
+  impl_ = std::move(rhs.impl_);
   return *this;
 }
 
@@ -30,9 +30,9 @@ table JsonReader::read() {
   }
 }
 
-table JsonReader::read_byte_range(size_t byte_range_offset, size_t byte_range_size) {
+table JsonReader::read_byte_range(size_t offset, size_t size) {
   if (impl_) {
-    return impl_->read_byte_range(byte_range_offset, byte_range_size);
+    return impl_->read_byte_range(offset, size);
   } else {
     return table();
   }

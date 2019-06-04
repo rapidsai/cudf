@@ -152,8 +152,6 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief Parse the input JSON file as specified with the args_ data member
    *
-   * Stores the parsed gdf columns in an internal data member
-   *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read();
@@ -162,13 +160,13 @@ public:
    * @brief Parse the input JSON file as specified with the args_ data member
    *
    * Stores the parsed gdf columns in an internal data member
-   * @param[in] byte_range_offset ///< Offset of the byte range to read.
-   * @param[in] byte_range_size   ///< Size of the byte range to read. If set to zero, all data after byte_range_offset
-   *is read.
+   * @param[in] offset ///< Offset of the byte range to read.
+   * @param[in] size   ///< Size of the byte range to read. If set to zero,
+   * all data after byte_range_offset is read.
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_byte_range(size_t byte_range_offset, size_t byte_range_size);
+  table read_byte_range(size_t offset, size_t size);
 
   auto getArgs() const { return args_; }
 };

@@ -126,9 +126,9 @@ table JsonReader::Impl::read() {
   return table(out_cols.data(), out_cols.size());
 }
 
-table JsonReader::Impl::read_byte_range(size_t byte_range_offset, size_t byte_range_size){
-  byte_range_offset_ = byte_range_offset;
-  byte_range_size_ = byte_range_size;
+table JsonReader::Impl::read_byte_range(size_t offset, size_t size){
+  byte_range_offset_ = offset;
+  byte_range_size_ = size;
   return read();
 }
 

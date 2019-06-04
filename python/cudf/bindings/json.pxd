@@ -33,4 +33,4 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
 
         cudf_table read() except +
 
-        cudf_table read_byte_range(size_t byte_range_offset, size_t byte_range_size) except +
+        cudf_table read_byte_range(size_t offset, size_t size) except +
