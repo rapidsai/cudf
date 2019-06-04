@@ -15,7 +15,7 @@ from libcpp.vector cimport vector
 
 cdef extern from "cudf.h" namespace "cudf" nogil:
 
-    # See cpp/include/cudf/io_types.h:222
+    # See TODO
     cdef struct json_read_arg:
         gdf_input_type  source_type;
         string          source;
