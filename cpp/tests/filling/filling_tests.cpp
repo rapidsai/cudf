@@ -77,7 +77,7 @@ TYPED_TEST(FillingTest, SetSingle)
   // First set it as valid
   FillTest(index, index+1, val, true);
   // next set it as invalid
-  //FillTest(index, index+1, val, false);
+  FillTest(index, index+1, val, false);
 }
 
 TYPED_TEST(FillingTest, SetAll)
@@ -87,7 +87,7 @@ TYPED_TEST(FillingTest, SetAll)
   // First set it as valid
   FillTest(0, column_size, val, true);
   // next set it as invalid
-  //FillTest(0, column_size, val, false);
+  FillTest(0, column_size, val, false);
 }
 
 TYPED_TEST(FillingTest, SetRange)
@@ -99,5 +99,5 @@ TYPED_TEST(FillingTest, SetRange)
   // First set it as valid
   FillTest(begin, end, val, true);
   // Next set it as invalid
-  //FillTest(begin, end, val, false);
+  FillTest(begin, end, val, false);
 }

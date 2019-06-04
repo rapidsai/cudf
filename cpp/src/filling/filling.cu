@@ -23,6 +23,36 @@
 
 namespace {
 
+template <typename T>
+__global__ 
+void fill_kernel(T *data, bit_mask::bit_mask_t *bitmask, 
+                 gdf_size_type *null_count,
+                 gdf_index_type begin, gdf_index_type end,
+                 T value, bool value_is_valid)
+{
+  gdf_index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+  int index = tid + begin;
+
+  while (index < end) {
+    data[index] = value;
+
+    // bitmask cases:
+    // 1. If only a single value in this word is set
+    //    read old value, set new value, null_count += (int{new_is_null}-int{old_is_null})
+    // 2. If range completely covers this bitmask word
+    //    read old word, count nulls. new_null_count = value_is_valid ? 32 : 0
+    //    Set new bitmask word to all 0 or all 1
+    //    null_count += (int{new_null_count}-int{old_null_count})
+    // 3. If range partially covers this bitmask word
+    //    read old word, mask it. count nulls. 
+    //    set new bitmask word to all 0 or all 1 masked by range. Count bits.
+    //    null_count += (int{new_null_count}-int{old_null_count});
+
+    index += blockDim.x * gridDim.x;
+  }
+}
+
 struct fill_dispatch {
   template <typename T>
   void operator()(gdf_column *column, gdf_scalar const& value, 
@@ -34,6 +64,8 @@ struct fill_dispatch {
     thrust::fill(rmm::exec_policy(stream)->on(stream),
                  data + begin, data + end, val);
     CHECK_STREAM(stream);
+
+    // now set nulls
   }
 };
 
