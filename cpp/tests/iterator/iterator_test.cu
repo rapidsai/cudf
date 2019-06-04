@@ -450,23 +450,6 @@ TYPED_TEST(IteratorTest, mean_var_output)
     }
 }
 
-
-/**---------------------------------------------------------------------------*
- * @brief test macro to be expected as throwing an exception.
- * The testing is same with EXPECT_ANY_THROW() in gtest.
- * It also outputs captured error message to ensure the error message
- *
- * @param statement The statement to be tested
- *---------------------------------------------------------------------------**/
- #define CUDF_EXPECT_ANY_THROW(statement)         \
- try{ statement;                                  \
-      FAIL() << "No exception thrown at"          \
-      << "statement:" << #statement << std::endl; \
-    } catch (std::exception& e)                   \
-     { std::cout << "Caught expected exception. " \
-              << "reason: " << e.what() << std::endl; }
-
-
 TYPED_TEST(IteratorTest, error_handling)
 {
     using T = int32_t;
@@ -477,13 +460,14 @@ TYPED_TEST(IteratorTest, error_handling)
         [&](gdf_index_type row) { return true; });
 
     // expects error: data type mismatch
-    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<false, double>( *w_col_null.get(), double{0}) ) );
+    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<false, double>( *w_col_null.get(), double{0}) ),
+        "the data type mismatch");
+    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<true, float>( *w_col_null.get(), float{0}) ),
+        "the data type mismatch");
 
-    // expects error: data type mismatch
-    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<true, float>( *w_col_null.get(), float{0}) ) );
+    CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<true, T>( *w_col_no_null.get(), T{0}) ),
+        "non-null bit mask is required");
 
-    // expects error: valid == nullptr
-    CUDF_EXPECT_ANY_THROW( (cudf::make_iterator<true, T>( *w_col_no_null.get(), T{0}) ) );
 
     // expects no error: treat no null iterator with column has nulls
     CUDF_EXPECT_NO_THROW( (cudf::make_iterator<false, T>( *w_col_null.get(), T{0}) ) );
