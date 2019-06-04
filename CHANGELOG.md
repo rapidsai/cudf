@@ -43,6 +43,7 @@
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1896 Improve performance of groupby with levels specified in dask-cudf
+- PR #1919 Rename libcudf namespace gdf to namespace cudf.
 
 ## Bug Fixes
 
