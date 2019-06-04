@@ -1880,7 +1880,11 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 {
                     vals_skipped = min(numvals, run_pos);
                     numvals -= vals_skipped;
-                    s->top.data.index.run_pos[CI_DATA] = 0;
+                    __syncthreads();
+                    if (t == 0)
+                    {
+                        s->top.data.index.run_pos[CI_DATA] = 0;
+                    }
                 }
             }
             if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals)
