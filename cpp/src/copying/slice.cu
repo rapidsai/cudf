@@ -81,8 +81,8 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
   gdf_index_type input_index_begin = indices[indices_position * 2];
   gdf_index_type input_index_end = indices[indices_position * 2 + 1];
 
-  gdf_index_type input_offset = gdf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
-  gdf_index_type rotate_input = gdf::util::detail::intra_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
+  gdf_index_type input_offset = cudf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
+  gdf_index_type rotate_input = cudf::util::detail::intra_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
   bit_mask_t mask_last = (bit_mask_t{1} << ((input_index_end - input_index_begin) % bit_mask::bits_per_element)) - bit_mask_t{1};
 
   gdf_size_type input_block_length = bit_mask::num_elements(input_size);

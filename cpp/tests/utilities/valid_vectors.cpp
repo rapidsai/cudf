@@ -24,9 +24,9 @@ host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
   auto valid_bits = new gdf_valid_type[n_bytes];
    for (size_t i = 0; i < length; ++i) {
     if ((float)std::rand()/(RAND_MAX + 1u) >= (float)null_count/(length-i)) {
-      gdf::util::turn_bit_on(valid_bits, i);
+      cudf::util::turn_bit_on(valid_bits, i);
     } else {
-      gdf::util::turn_bit_off(valid_bits, i);
+      cudf::util::turn_bit_off(valid_bits, i);
       --null_count;
     }
   }
