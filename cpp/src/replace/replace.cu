@@ -146,13 +146,15 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 
 namespace{ //anonymous
 
+using bit_mask::bit_mask_t;
+
 template <typename Type>
 __global__
   void replace_nulls_with_scalar(gdf_size_type size,
-                                 const Type* in_data,
-                                 const bit_mask_t* in_valid,
-                                 const Type* replacement,
-                                 Type* out_data)
+                                 const Type* __restrict__ in_data,
+                                 const bit_mask_t* __restrict__ in_valid,
+                                 const Type* __restrict__ replacement,
+                                 Type* __restrict__ out_data)
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -171,10 +173,10 @@ __global__
 template <typename Type>
 __global__
 void replace_nulls_with_column(gdf_size_type size,
-                               const Type* in_data,
-                               const bit_mask_t* in_valid,
-                               const Type* replacement,
-                               Type* out_data) 
+                               const Type* __restrict__ in_data,
+                               const bit_mask_t* __restrict__ in_valid,
+                               const Type* __restrict__ replacement,
+                               Type* __restrict__ out_data)
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
