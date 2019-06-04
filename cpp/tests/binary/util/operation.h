@@ -129,6 +129,20 @@ namespace operation {
         }
     };
 
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogicalAnd {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs && rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogicalOr {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs || rhs);
+        }
+    };
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf

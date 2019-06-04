@@ -276,6 +276,7 @@ add_library(cudf SHARED
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
+            src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
@@ -283,7 +284,8 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp)
+            src/bitmask/legacy_bitmask.cpp
+            src/gis/point_in_polygon.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

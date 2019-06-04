@@ -109,7 +109,7 @@ class Groupby(object):
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
         elif level is not None:
-            if level == 0 and not hasattr(self._df.index, 'levels'):
+            if level == 0:
                 self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
                 self._original_index_name = self._df.index.name
                 self._by = [self._LEVEL_0_INDEX_NAME]
@@ -120,7 +120,7 @@ class Groupby(object):
                 # guard against missing MI names
                 if self._df.index.names is None or sum(
                         x is None for x in self._df.index.names) > 1:
-                    self._df_index_names = list(
+                    self._df.index.names = list(
                             range(len(self._df.index._source_data.columns)))
                 for which_level in level:
                     # find the index of the level in the MultiIndex
@@ -130,21 +130,12 @@ class Groupby(object):
                                 which_level = idx
                                 break
                     try:
-                        level_values = self._df.index.levels[which_level]
+                        level_values = self._df.index._source_data[
+                                self._df.index._source_data.columns[
+                                    which_level]]
                     except IndexError:
                         raise IndexError("Too many levels: Index has only %d levels, not %d" % (len(self._df.index._source_data.columns), which_level+1))  # noqa: E501
-                    # protected by the above guard
-                    code = self._df.index.codes[
-                            self._df.index.names[which_level]]
-                    # Replace the codes in this column with the levels
-                    # that the codes encode.
-                    result = code.copy()
-                    for idx, value in enumerate(level_values):
-                        level_mask = code == idx
-                        result = result.masked_assign(value, level_mask)
-                    # Add this new "decoded" column to the dataframe and add
-                    # the key to "by"
-                    self._df[self._df.index.names[which_level]] = result
+                    self._df[self._df.index.names[which_level]] = level_values
                     self._by.append(self._df.index.names[which_level])
         else:
             self._by = [by] if isinstance(by, (str, Number)) else list(by)
@@ -180,7 +171,9 @@ class Groupby(object):
         if agg_type in ['mean', 'sum']:
             agg_groupby._df = agg_groupby._df._get_numeric_data()
             agg_groupby._val_columns = []
-            for val in self._val_columns:
+            columns = [self._val_columns] if isinstance(self._val_columns, (
+                  str, Number)) else list(self._val_columns)
+            for val in columns:
                 if val in agg_groupby._df.columns:
                     agg_groupby._val_columns.append(val)
             # _get_numeric_data might have removed the by column
