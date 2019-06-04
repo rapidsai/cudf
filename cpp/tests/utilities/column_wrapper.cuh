@@ -225,7 +225,7 @@ struct column_wrapper {
     std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
     for (gdf_index_type row = 0; row < num_rows; ++row) {
       if (true == bit_initializer(row)) {
-        gdf::util::turn_bit_on(host_bitmask.data(), row);
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
@@ -264,7 +264,7 @@ struct column_wrapper {
       host_data[row] = value_initalizer(row);
 
       if (true == bit_initializer(row)) {
-        gdf::util::turn_bit_on(host_bitmask.data(), row);
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
