@@ -249,3 +249,32 @@ def test_json_engine_selection():
     # should raise an exception
     with pytest.raises(ValueError):
         df = cudf.read_json(json, lines=False, engine='cudf')
+
+
+def test_json_bool_values():
+    buffer = '[true,1]\n[false,false]\n[true,true]'
+    cu_df = cudf.read_json(buffer, lines=True)
+    pd_df = pd.read_json(buffer, lines=True)
+
+    # types should be ['bool', 'int64']
+    np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
+    np.testing.assert_array_equal(pd_df[0], cu_df['0'])
+    # boolean values should be converted to 0/1
+    np.testing.assert_array_equal(pd_df[1], cu_df['1'])
+
+    cu_df = cudf.read_json(buffer, lines=True, dtype=['bool', 'long'])
+    np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
+
+
+@pytest.mark.parametrize('buffer', [
+        '[null,]\n[1.0, ]',
+        '{"0":null,"1":}\n{"0":1.0,"1": }'
+    ])
+def test_json_null_literal(buffer):
+    df = cudf.read_json(buffer, lines=True)
+
+    # first column contains a null field, type sould be set to float
+    # second column contains only empty fields, type should be set to int8
+    np.testing.assert_array_equal(df.dtypes, ['float64', 'int8'])
+    np.testing.assert_array_equal(df['0'], [None, 1.0])
+    np.testing.assert_array_equal(df['1'], [None, None])

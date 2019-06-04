@@ -210,18 +210,3 @@ namespace{
   };
 }
 
-// returns the size in bytes of the specified gdf_dtype
-gdf_size_type gdf_dtype_size(gdf_dtype dtype)
-{
-  return cudf::size_of(dtype);
-}
-
-// Returns the size in bytes of the data type of the gdf_column
-gdf_error get_column_byte_width(gdf_column * col, 
-                                int * width)
-{
-  CUDF_EXPECTS(col != nullptr, "Null column pointer");
-  CUDF_EXPECTS(width != nullptr, "Null return value location pointer");
-  *width = cudf::byte_width(*col);
-  return GDF_SUCCESS;
-}

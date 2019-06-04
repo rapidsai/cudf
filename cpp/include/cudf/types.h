@@ -107,7 +107,7 @@ typedef struct {
  */
 // TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
-  char          si08;  /**< GDF_INT8      */
+  signed char   si08;  /**< GDF_INT8      */
   short         si16;  /**< GDF_INT16     */
   int           si32;  /**< GDF_INT32     */
   long          si64;  /**< GDF_INT64     */
@@ -223,6 +223,8 @@ typedef enum {
   GDF_BITWISE_AND,    ///< operator &
   GDF_BITWISE_OR,     ///< operator |
   GDF_BITWISE_XOR,    ///< operator ^
+  GDF_LOGICAL_AND,    ///< operator &&
+  GDF_LOGICAL_OR,     ///< operator ||
   GDF_COALESCE,       ///< operator x,y  x is null ? y : x
   GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
@@ -245,6 +247,8 @@ typedef enum {
   GDF_FLOOR,        ///< largest integer value not greater than arg
   GDF_ABS,          ///< Absolute value
   GDF_BIT_INVERT,   ///< Bitwise Not (~)
+  GDF_NOT,          ///< Logical Not (!)
+  GDF_INVALID_UNARY ///< invalid operation
 } gdf_unary_math_op;
 
 
@@ -253,9 +257,7 @@ typedef enum {
  */
 typedef enum {
   GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
-  GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
-  GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< In multicolumn sorting, a row with NULL in any column is
-                                          treated as the largest number in comparisons */
+  GDF_NULL_AS_SMALLEST               ///< NULLS are treated as the smallest number in comparisons  
 } gdf_null_sort_behavior;
 
 
@@ -285,6 +287,6 @@ struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 typedef enum{
-  GDF_ORDER_ASC,
+  GDF_ORDER_ASC=0,
   GDF_ORDER_DESC
 } order_by_type;

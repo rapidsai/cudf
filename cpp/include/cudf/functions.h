@@ -161,7 +161,6 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
@@ -825,54 +824,12 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
  * gdf introspection utlities
  */
 
-/**
- * @brief returns the size in bytes of the specified gdf_dtype
- * 
- * @param dtype the data type for which to return the size
- * @return gdf_size_type size in bytes
- */
-gdf_size_type gdf_dtype_size(gdf_dtype dtype);
-
-/**
- *
- * @param[in] gdf_column whose data type's byte width will be determined
- * @param[out] the byte width of the data type
- *
- * @return gdf_error GDF_SUCCESS, or GDF_UNSUPPORTED_DTYPE if col has an invalid
- *         datatype
- */
-gdf_error get_column_byte_width(gdf_column * col, int * width);
-
-
 /* 
  Multi-Column SQL ops:
    WHERE (Filtering)
    ORDER-BY
    GROUP-BY
  */
-
-/**
- * @brief  Performs SQL like WHERE (Filtering)
- *
- * @param[in] # rows
- * @param[in] host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
- * @param[in] # cols
- * @param[out] pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
- * @param[out] pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
- * @param[in] device-side array of values to filter against (type-erased)
- * @param[out] device-side array of row indices that remain after filtering
- * @param[out] host-side # rows that remain after filtering
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_filter(size_t nrows,
-                    gdf_column* cols,
-                    size_t ncols,
-                    void** d_cols,
-                    int* d_types, 
-                    void** d_vals,
-                    size_t* d_indx,
-                    size_t* new_sz);
 
 /**
  * @brief  Performs SQL like GROUP BY with SUM aggregation
@@ -1043,7 +1000,6 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  *             context->flag_null_sort_behavior
  *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
  *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                        GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  * 
  * @returns GDF_SUCCESS upon successful completion
  */

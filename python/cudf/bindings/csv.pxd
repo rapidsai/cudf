@@ -42,8 +42,9 @@ cdef extern from "cudf.h" nogil:
         gdf_size_type       nrows
         gdf_size_type       header
 
-        int                 num_cols
+        int                 num_names
         const char          **names
+        int                 num_dtype
         const char          **dtype
 
         int                 *index_col

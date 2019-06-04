@@ -28,9 +28,6 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-#include <thrust/equal.h>
-#include <thrust/logical.h>
-
 #include <string>
 
 #ifndef CUDA_RT_CALL
@@ -228,7 +225,7 @@ struct column_wrapper {
     std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
     for (gdf_index_type row = 0; row < num_rows; ++row) {
       if (true == bit_initializer(row)) {
-        gdf::util::turn_bit_on(host_bitmask.data(), row);
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
@@ -267,7 +264,7 @@ struct column_wrapper {
       host_data[row] = value_initalizer(row);
 
       if (true == bit_initializer(row)) {
-        gdf::util::turn_bit_on(host_bitmask.data(), row);
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
@@ -331,46 +328,6 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Functor for comparing if two elements between two gdf_columns are
-   * equal.
-   *
-   *---------------------------------------------------------------------------**/
-  struct elements_equal {
-    gdf_column lhs_col;
-    gdf_column rhs_col;
-    bool nulls_are_equivalent;
-
-    /**---------------------------------------------------------------------------*
-     * @brief Constructs functor for comparing elements between two gdf_column's
-     *
-     * @param lhs The left column for comparison
-     * @param rhs The right column for comparison
-     * @param nulls_are_equal Desired behavior for whether or not nulls are
-     * treated as equal to other nulls. Defaults to true.
-     *---------------------------------------------------------------------------**/
-    __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs,
-                                       bool nulls_are_equal = true)
-        : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
-
-    __device__ bool operator()(gdf_index_type row) {
-      bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
-      bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
-
-      if (lhs_is_valid and rhs_is_valid) {
-        return static_cast<ColumnType const*>(lhs_col.data)[row] ==
-               static_cast<ColumnType const*>(rhs_col.data)[row];
-      }
-
-      // If one value is valid but the other is not
-      if (lhs_is_valid != rhs_is_valid) {
-        return false;
-      }
-
-      return nulls_are_equivalent;
-    }
-  };
-
-  /**---------------------------------------------------------------------------*
    * @brief Compares this wrapper to a gdf_column for equality.
    *
    * Treats NULL == NULL
@@ -380,28 +337,7 @@ struct column_wrapper {
    * @return false The two columns are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(gdf_column const& rhs) const {
-    if (the_column.size != rhs.size) return false;
-    if (the_column.dtype != rhs.dtype) return false;
-    if (the_column.null_count != rhs.null_count) return false;
-    if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
-      return false;
-
-    if ((the_column.data == nullptr) != (rhs.data == nullptr))
-      return false;  // if one is null but not both
-    else if (rhs.data == nullptr)
-      return true;  // logically, both are null
-    // both are non-null...
-
-    if (not thrust::all_of(rmm::exec_policy()->on(0),
-                           thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(the_column.size),
-                           elements_equal{the_column, rhs})) {
-      return false;
-    }
-
-    CUDA_RT_CALL(cudaPeekAtLastError());
-
-    return true;
+    return gdf_equal_columns(the_column, rhs);
   }
 
   /**---------------------------------------------------------------------------*

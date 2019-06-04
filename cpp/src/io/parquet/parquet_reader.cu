@@ -57,10 +57,12 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(GDF_INT16, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::DATE:
       return std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
+    case parquet::TIMESTAMP_MICROS:
+    #if !PARQUET_GPU_USEC_TO_MSEC
+      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_us});
+    #endif
     case parquet::TIMESTAMP_MILLIS:
       return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
-    case parquet::TIMESTAMP_MICROS:
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_us});
     default:
       break;
   }
@@ -69,7 +71,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   // format in combination with the encoding type.
   switch (physical) {
     case parquet::BOOLEAN:
-      return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT32:
       return std::make_pair(GDF_INT32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT64:
@@ -670,7 +672,7 @@ gdf_error read_parquet_arrow(
           col_schema.type, type_width, row_group_start, row_group_rows,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
-          required_bits(col_schema.max_repetition_level), col_meta.codec));
+          required_bits(col_schema.max_repetition_level), col_meta.codec, col_schema.converted_type));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "

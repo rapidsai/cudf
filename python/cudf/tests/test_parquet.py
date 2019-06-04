@@ -78,12 +78,8 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if 'col_category' in expect.columns:
             expect['col_category'] = expect['col_category'].astype('category')
 
-    # cuDF's default currently handles bools and categories differently
-    # For bool, cuDF doesn't support it so convert it to int8
-    # For categories, PANDAS originally returns as object whereas cuDF hashes
+    # PANDAS returns category objects whereas cuDF returns hashes
     if engine == 'cudf':
-        if 'col_bool' in expect.columns:
-            expect['col_bool'] = expect['col_bool'].astype('int8')
         if 'col_category' in expect.columns:
             expect = expect.drop(columns=['col_category'])
         if 'col_category' in got.columns:
@@ -171,8 +167,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
     gdf = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
     gdf = cudf.concat(gdf).reset_index(drop=True)
 
-    if 'col_bool' in pdf.columns:
-        pdf['col_bool'] = pdf['col_bool'].astype('int8')
     if 'col_category' in pdf.columns:
         pdf = pdf.drop(columns=['col_category'])
     if 'col_category' in gdf.columns:
@@ -192,8 +186,6 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     skip_rows = (total_rows - num_rows) // 2
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
 
-    if 'col_bool' in pdf.columns:
-        pdf['col_bool'] = pdf['col_bool'].astype('int8')
     if 'col_category' in pdf.columns:
         pdf = pdf.drop(columns=['col_category'])
     if 'col_category' in gdf.columns:
@@ -205,6 +197,15 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
 def test_parquet_reader_spark_timestamps(datadir):
     fname = datadir / 'spark_timestamp.snappy.parquet'
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_microsecond_timestamps(datadir):
+    fname = datadir / 'usec_timestamp.parquet'
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)

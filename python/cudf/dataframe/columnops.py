@@ -93,52 +93,53 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
 
-def make_null_like(other, size=None, dtype=None):
-    if size is None:
-        size = other.size
-    if dtype is None:
-        dtype = other.dtype
-    mask = utils.make_mask(size)
-
+def column_empty_like(column, dtype, masked, newsize=None):
+    """Allocate a new column like the given *column*
+    """
+    row_count = len(column) if newsize is None else newsize
+    categories = None
     if pd.api.types.is_categorical_dtype(dtype):
-        mem = rmm.device_array((size,), dtype=other.data.dtype)
+        categories = column.cat().categories
+        dtype = column.data.dtype
+    return column_empty(row_count, dtype, masked, categories=categories)
+
+
+def column_empty(row_count, dtype, masked, categories=None):
+    """Allocate a new column like the given row_count and dtype.
+    """
+    dtype = np.dtype(dtype)
+
+    if masked:
+        mask = cudautils.make_mask(row_count)
+        cudautils.fill_value(mask, 0)
+    else:
+        mask = None
+
+    if (
+        categories is not None
+        or pd.api.types.is_categorical_dtype(dtype)
+    ):
+        mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
+        dtype = 'category'
     elif dtype.kind in 'OU':
-        mem = rmm.device_array((size,), dtype='float64')
+        mem = rmm.device_array((row_count,), dtype='float64')
         data = nvstrings.dtos(mem,
                               len(mem),
                               nulls=mask,
                               bdevmem=True)
     else:
-        mem = rmm.device_array((size,), dtype=dtype)
+        mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
-    mask = Buffer(mask)
-    categories = None
-    if hasattr(other, 'cat'):
-        categories = other.cat().categories
+
+    if mask is not None:
+        mask = Buffer(mask)
+
     from cudf.dataframe.columnops import build_column
     return build_column(data,
                         dtype,
                         mask,
                         categories)
-
-
-def column_empty_like(column, dtype, masked):
-    """Allocate a new column like the given *column*
-    """
-    return column_empty(len(column), dtype, masked)
-
-
-def column_empty(row_count, dtype, masked):
-    """Allocate a new column like the given row_count and dtype.
-    """
-    data = rmm.device_array(shape=row_count, dtype=dtype)
-    params = dict(data=Buffer(data))
-    if masked:
-        mask = utils.make_mask(row_count)
-        cudautils.fill_value(mask, 0)
-        params.update(dict(mask=Buffer(mask), null_count=data.size))
-    return Column(**params)
 
 
 def column_empty_like_same_mask(column, dtype):
@@ -422,6 +423,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
+        arbitrary = arbitrary.ceil('ms')
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
