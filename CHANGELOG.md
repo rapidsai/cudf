@@ -20,6 +20,7 @@
 - PR #1921 Add additional formats for typecasting to/from strings
 
 ## Improvements
+
 - PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
