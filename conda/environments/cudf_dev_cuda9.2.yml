@@ -5,7 +5,7 @@ channels:
 - rapidsai-nightly/label/cuda9.2
 - conda-forge
 dependencies:
-- nvstrings=0.7.*
+- nvstrings=0.8.*
 - rmm=0.7.*
 - cmake>=3.12
 - python>=3.6,<3.8
