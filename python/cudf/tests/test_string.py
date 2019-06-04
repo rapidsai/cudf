@@ -835,4 +835,4 @@ def test_string_equality():
     expect = (ps1 == ps2)
     got = (gs1 == gs2)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got.fillna(False))
