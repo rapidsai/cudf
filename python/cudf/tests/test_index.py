@@ -123,6 +123,24 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf2.index)
 
 
+@pytest.mark.parametrize('index_name', [
+    'num_idx',
+    'cat_idx',
+])
+def test_hashing_index(index_name):
+    pdf = pd.DataFrame()
+    pdf['num_idx'] = [1, 2, 3, 1]
+    pdf['cat_idx'] = pd.Categorical(['a', 'b', 'c', 'a'])
+    gdf = DataFrame.from_pandas(pdf)
+    sr = gdf.set_index(index_name).index.hash_index()
+
+    # values are always positive for modulo calculation
+    assert_eq(sr, sr[sr > 0])
+    assert len(sr) == len(pdf[index_name])
+    assert sr.iloc[0] == sr.iloc[-1]
+    assert len(sr.unique()) == len(sr) - 1
+
+
 def test_pandas_as_index():
     # Define Pandas Indexes
     pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])

@@ -23,6 +23,7 @@ from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 import cudf.bindings.copying as cpp_copying
+import cudf.bindings.hash as cpp_hash
 
 
 class Index(object):
@@ -529,6 +530,31 @@ class GenericIndex(Index):
             end = col.find_last_value(last)
             end += 1
         return begin, end
+
+    def hash_index(self):
+        """Hash the given index and return a new Series
+
+        Returns
+        -------
+        Series :
+            Sequence of column names. If columns is *None* (unspecified),
+            all columns in the frame are used.
+        """
+        from cudf.dataframe.series import Series
+
+        initial_hash_values = None
+        buf = Buffer(rmm.device_array(len(self), dtype=np.int32))
+        result = NumericalColumn(data=buf, dtype=buf.dtype)
+
+        _hash = cpp_hash.hash_columns([self.as_column()],
+                                      result, initial_hash_values)
+
+        sr = Series(_hash)
+
+        # hash_columns produces negative valuesg
+        # probably can switch to np.uint32
+        # when supported by libcud
+        return abs(sr)
 
 
 class DatetimeIndex(GenericIndex):
