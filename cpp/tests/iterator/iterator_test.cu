@@ -60,7 +60,7 @@ bool random_bool()
 }
 
 template<typename T, bool update_count>
-std::ostream& operator<<(std::ostream& os, cudf::detail::ColumnOutputMeanVar<T, update_count> const& rhs)
+std::ostream& operator<<(std::ostream& os, cudf::detail::mutator_meanvar<T, update_count> const& rhs)
 {
   return os << "[" << rhs.value <<
       ", " << rhs.value_squared <<
@@ -264,6 +264,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     const int column_size{1000};
     using T = int8_t;
     using T_upcast = int64_t;
+    using T_mutator = cudf::detail::mutator_squared<T_upcast>;
     T init{0};
 
     std::vector<bool> host_bools(column_size);
@@ -286,12 +287,12 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator<true, T, T_upcast, cudf::detail::ColumnOutputSquared<T_upcast>>
+    auto it_hos = cudf::make_iterator<true, T, T_upcast, T_mutator>
         (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator<true, T, T_upcast, cudf::detail::ColumnOutputSquared<T_upcast>>
+    auto it_dev = cudf::make_iterator<true, T, T_upcast, T_mutator>
         (static_cast<T*>( w_col.get()->data ), w_col.get()->valid, T{0});
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
@@ -312,7 +313,7 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     using T = int32_t;
     using T_index = gdf_index_type;
     using T_output = T;
-    using T_helper = cudf::detail::ColumnOutputSingle<T_output>;
+    using T_helper = cudf::detail::mutator_single<T_output>;
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     thrust::device_vector<T> dev_array(hos_array);
@@ -406,7 +407,7 @@ TYPED_TEST(IteratorTest, mean_var_output)
     auto hos = w_col.to_host();
 
     // calculate expected values by CPU
-    using T_Mutator = cudf::detail::ColumnOutputMeanVar<T_upcast, true>;
+    using T_Mutator = cudf::detail::mutator_meanvar<T_upcast, true>;
     T_Mutator expected_value;
 
     expected_value.count = w_col.size() - w_col.null_count();
@@ -433,8 +434,8 @@ TYPED_TEST(IteratorTest, mean_var_output)
     this->iterator_test_thrust(expected_value, it_dev, w_col.size());
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
-    { // ColumnOutputMeanVarNoCount test
-        using T_helper = cudf::detail::ColumnOutputMeanVar<T_upcast, false>;
+    { // mutator_meanvarNoCount test
+        using T_helper = cudf::detail::mutator_meanvar<T_upcast, false>;
 
         T_helper expected_value_no_count;
         expected_value_no_count.value = expected_value.value;

@@ -44,10 +44,10 @@
  *     make_iterator_xxx<T, T_upcast>(...)
  *
  * 2. template parameter for upcasting + squared input iterator
- *     make_iterator_xxx<T, T_upcast, cudf::ColumnOutputSquared<T_upcast>>(...)
+ *     make_iterator_xxx<T, T_upcast, cudf::mutator_squared<T_upcast>>(...)
  *
- * 3. template parameter for using `ColumnOutputMeanVar`
- *     using T_output = cudf::ColumnOutputMeanVar<T_upcast>
+ * 3. template parameter for using `mutator_meanvar`
+ *     using T_output = cudf::mutator_meanvar<T_upcast>
  *     make_iterator_xxx<T, T_output, T_output>(...)
  *
  * 4. template parameter for custom indexed iterator
@@ -86,18 +86,18 @@ namespace detail
  * @tparam  T_input a scalar data type to be input
  * -------------------------------------------------------------------------**/
 template<typename T>
-struct ColumnOutputSingle
+struct mutator_single
 {
     T value;    // the value to output
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputSingle(T_input _value, bool is_valid=false)
+    mutator_single(T_input _value, bool is_valid=false)
     : value( static_cast<T>(_value) )
     {};
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputSingle(){};
+    mutator_single(){};
 
     CUDA_HOST_DEVICE_CALLABLE
     operator T() const { return value; }
@@ -117,20 +117,20 @@ struct ColumnOutputSingle
  * @tparam  T_input a scalar data type to be input
  * -------------------------------------------------------------------------**/
 template<typename T>
-struct ColumnOutputSquared
+struct mutator_squared
 {
     T value_squared;    /// the value of squared
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputSquared(T_input _value, bool is_valid=false)
+    mutator_squared(T_input _value, bool is_valid=false)
     {
         T v = static_cast<T>(_value);
         value_squared = v*v;
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputSquared(){};
+    mutator_squared(){};
 
     CUDA_HOST_DEVICE_CALLABLE
     operator T() const { return value_squared; }
@@ -155,11 +155,11 @@ struct ColumnOutputSquared
  * @tparam  T_input a scalar data type to be input
  * -------------------------------------------------------------------------**/
 template<typename T, bool update_count=true>
-struct ColumnOutputMeanVar;
+struct mutator_meanvar;
 
-// @overload ColumnOutputMeanVar<T, true>
+// @overload mutator_meanvar<T, true>
 template<typename T>
-struct ColumnOutputMeanVar<T, true>
+struct mutator_meanvar<T, true>
 {
     T value;                /// the value
     T value_squared;        /// the value of squared
@@ -167,24 +167,24 @@ struct ColumnOutputMeanVar<T, true>
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar(T_input _value, bool is_valid)
+    mutator_meanvar(T_input _value, bool is_valid)
     : value( static_cast<T>(_value) ), count(is_valid? 1 : 0)
     {
         value_squared = value*value;
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar(T _value, T _value_squared=0, gdf_index_type _count=0)
+    mutator_meanvar(T _value, T _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar()
+    mutator_meanvar()
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = cudf::detail::ColumnOutputMeanVar<T, true>;
+    using this_t = cudf::detail::mutator_meanvar<T, true>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -207,9 +207,9 @@ struct ColumnOutputMeanVar<T, true>
     }
 };
 
-// @overload ColumnOutputMeanVar<T, false>
+// @overload mutator_meanvar<T, false>
 template<typename T>
-struct ColumnOutputMeanVar<T, false>
+struct mutator_meanvar<T, false>
 {
     T value;
     T value_squared;
@@ -217,23 +217,23 @@ struct ColumnOutputMeanVar<T, false>
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar(T_input _value, bool is_valid)
+    mutator_meanvar(T_input _value, bool is_valid)
     : value( static_cast<T>(_value) )
     {
         value_squared = value*value;
     };
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar(T _value, T _value_squared=0, gdf_index_type _count=0)
+    mutator_meanvar(T _value, T _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 
     CUDA_HOST_DEVICE_CALLABLE
-    ColumnOutputMeanVar()
+    mutator_meanvar()
     : value(0), value_squared(0), count(0)
     {};
 
-    using this_t = cudf::detail::ColumnOutputMeanVar<T, false>;
+    using this_t = cudf::detail::mutator_meanvar<T, false>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -343,8 +343,8 @@ private:
  * `T_input = ColumnInput` will provide the value at index `id`
  *  with/without null bitmask.
  *
- * @tparam  T_output The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
+ * @tparam  T_output The output helper struct type, usually `mutator_single`,
+ *                   `mutator_squared`, or `mutator_meanvar`.
  * @tparam  T_input  The input struct type of `ColumnInput`
  * @tparam  Iterator The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
@@ -402,8 +402,8 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
  * @tparam T_element The cudf data type of input array
  * @tparam T_output  The cudf data type of output data or array
  * @tparam T_output_helper
- *                   The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
+ *                   The output helper struct type, usually `mutator_single`,
+ *                   `mutator_squared`, or `mutator_meanvar`.
  * @tparam Iterator_Index
  *                  The base iterator which gives the index of array.
  *                  The default is `thrust::counting_iterator`
@@ -414,7 +414,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
+    typename T_output_helper = cudf::detail::mutator_single<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
@@ -432,7 +432,7 @@ auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
+    typename T_output_helper = cudf::detail::mutator_single<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const gdf_valid_type *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
@@ -443,25 +443,11 @@ auto make_iterator(const T_element *data, const gdf_valid_type *valid,
 
 
 /** -------------------------------------------------------------------------*
- * @brief helper function to make iterator without nulls
- * Input iterator which can be used for cub and thrust.
- *
- * @tparam has_nulls a boolean flag to determine if the input column has nulls
- * @tparam T_element The cudf data type of input array
- * @tparam T_output  The cudf data type of output data or array
- * @tparam T_output_helper
- *                   The output helper struct type, usually `ColumnOutputSingle`,
- *                   `ColumnOutputSquared`, or `ColumnOutputMeanVar`.
- * @tparam Iterator_Index
- *                   The base iterator which gives the index of array.
- *                   The default is `thrust::counting_iterator`
- *
- * @param[in] column   The input column
- * @param[in] identity The identity value used when the value is null.
- * @param[in] it       The index iterator, `thrust::counting_iterator` by default
+ *  @overload auto make_iterator(const gdf_column& column, T_element identity,
+ *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename T_output_helper = cudf::detail::ColumnOutputSingle<T_output>,
+    typename T_output_helper = cudf::detail::mutator_single<T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const gdf_column& column,
     T_element identity, const Iterator_Index it = Iterator_Index(0))
@@ -469,16 +455,10 @@ auto make_iterator(const gdf_column& column,
     // check the data type
     CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
 
-    using T_input = cudf::detail::ColumnInput<T_output_helper, T_element, has_nulls>;
-    using T_iterator = cudf::detail::column_input_iterator<T_output, T_input, Iterator_Index>;
-
-    return T_iterator(T_input(static_cast<const T_element*>(column.data),
-            reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity), it);
-
+    return make_iterator<has_nulls, T_element, T_output, T_output_helper, Iterator_Index>
+        (static_cast<const T_element*>(column.data),
+        reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
 }
-
-
-
 
 } // namespace cudf
 
