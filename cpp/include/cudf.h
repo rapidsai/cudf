@@ -15,5 +15,4 @@ extern "C" {
 #include "cudf/io_functions.h"
 }
 
-
 #endif /* GDF_GDF_H */
