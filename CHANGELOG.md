@@ -36,12 +36,17 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
+- PR #1890 Add utils.get_dummies- a pandas-like wrapper around one_hot-encoding
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1390 Added some basic utility functions for `gdf_column`s
 - PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1884 Rolling windows: general enhancements and better coverage for unit tests
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
+- PR #1919 Rename libcudf namespace gdf to namespace cudf.
+- PR #1850 Support left_on and right_on for DataFrame merge operator  
 
 ## Bug Fixes
 
@@ -75,7 +80,16 @@
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
+- PR #1869 Parquet reader: fix Dask timestamps not matching with Pandas (convert to milliseconds)
 - PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1875 CSV reader: take NaN values into account in dtype detection
+- PR #1873 Add column dtype checking for the all/any methods
+- PR #1902 Bug with string iteration in _apply_basic_agg
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1909 Support of `to_pandas()` of boolean series with null values
+- PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
+
 
 # cudf 0.7.2 (16 May 2019)
 

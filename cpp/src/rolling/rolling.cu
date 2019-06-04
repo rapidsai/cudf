@@ -120,7 +120,7 @@ void gpu_rolling(gdf_size_type nrows,
 
     // set the mask
     bit_mask_t const result_mask{__ballot_sync(active_threads, output_is_valid)};
-    gdf_index_type const out_mask_location = gdf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(i);
+    gdf_index_type const out_mask_location = cudf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(i);
 
     // only one thread writes the mask
     if (0 == threadIdx.x % warpSize)

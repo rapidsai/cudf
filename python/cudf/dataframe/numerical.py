@@ -180,7 +180,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        return pd.Series(self.to_array(fillna='pandas'), index=index)
+        if self.null_count > 0 and self.dtype == np.bool:
+            # Boolean series in Pandas that contains None/NaN is of dtype
+            # `np.object`, which is not natively supported in GDF.
+            ret = self.astype(np.int8).to_array(fillna=-1)
+            ret = pd.Series(ret, index=index)
+            ret = ret.where(ret >= 0, other=None)
+            ret.replace(to_replace=1, value=True, inplace=True)
+            ret.replace(to_replace=0, value=False, inplace=True)
+            return ret
+        else:
+            return pd.Series(self.to_array(fillna='pandas'), index=index)
 
     def to_arrow(self):
         mask = None
