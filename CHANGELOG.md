@@ -45,6 +45,7 @@
 - PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1896 Improve performance of groupby with levels specified in dask-cudf
 - PR #1919 Rename libcudf namespace gdf to namespace cudf.
+- PR #1850 Support left_on and right_on for DataFrame merge operator  
 
 ## Bug Fixes
 
