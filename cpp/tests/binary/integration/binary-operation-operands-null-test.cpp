@@ -151,4 +151,4 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64) {
 
 } // namespace binop
 } // namespace test
-} // namespace gdf
+} // namespace cudf
