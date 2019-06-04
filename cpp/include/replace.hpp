@@ -66,29 +66,29 @@ gdf_column replace_nulls(const gdf_column& input,
 }  // namespace detail
 
 /**
-  * @brief Replaces all null values in a column with corresponding values of another column
+  * @brief Replaces all null values in a column with corresponding values of another column.
   *
-  * The first column is expected to be a regular gdf_column. The second column
-  * must be of the same type and same size as the first.
+  * Returns a column `output` such that if `input[i]` is valid, its value will be copied to
+  * `output[i]`. Otherwise, `replacements[i]` will be copied to `output[i]`.
   *
-  * The function replaces all nulls of the first column with the
-  * corresponding elements of the second column
+  * The `input` and `replacement` columns must be of same size and have the same
+  * data type.
   *
   * @param[in] input A gdf_column containing null values
   * @param[in] replacement A gdf_column whose values will replace null values in input
   *
   * @returns gdf_column Column with nulls replaced
   */
-
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement);
+
 /**
   * @brief Replaces all null values in a column with a scalar.
   *
-  * The column is expected to be a regular gdf_column. The scalar is expected to be
-  * a gdf_scalar of the same data type.
+  * Returns a column `output` such that if `input[i]` is valid, its value will be copied to
+  * `output[i]`. Otherise, `replacement` will be coped to `output[i]`.
   *
-  * The function will replace all nulls of the column with the scalar value.
+  * `replacement` must have the same data type as `input`.
   *
   * @param[in] input A gdf_column containing null values
   * @param[in] replacement A gdf_scalar whose value will replace null values in input
