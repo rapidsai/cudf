@@ -18,6 +18,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <rolling.hpp>
+#include "src/rolling/rolling_detail.hpp"
 #include <cudf.h>
 
 #include <utilities/error_utils.hpp>
@@ -132,7 +133,7 @@ protected:
 private:
   // use SFINAE to only instantiate for supported combinations
   template<template <typename AggType> class agg_op, bool average,
-	   typename std::enable_if_t<cudf::rolling::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+	   typename std::enable_if_t<cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
   void create_reference_output(gdf_size_type window,
 			       gdf_size_type min_periods,
 			       gdf_size_type forward_window,
@@ -165,13 +166,13 @@ private:
       }
       ref_data_valid[i] = (count >= min_periods);
       if (ref_data_valid[i]) {
-	cudf::rolling::store_output_functor<T, average>{}(ref_data[i], val, count);
+	cudf::detail::store_output_functor<T, average>{}(ref_data[i], val, count);
       }
     }
   }
 
   template<template <typename AggType> class agg_op, bool average,
-	   typename std::enable_if_t<!cudf::rolling::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
+	   typename std::enable_if_t<!cudf::detail::is_supported<T, agg_op>(), std::nullptr_t> = nullptr>
   void create_reference_output(gdf_size_type window,
 			       gdf_size_type min_periods,
 			       gdf_size_type forward_window,

@@ -42,9 +42,7 @@ namespace cudf {
  * - support for dynamic rolling windows, i.e. window size or number of
  *   observations can be specified for each element using an additional array.
  * This function is asynchronous with respect to the CPU, i.e. the call will
- * return before the operation is completed on the GPU. If the stream is
- * specified then the operation is asynchronous with respect to other CUDA
- * streams.
+ * return before the operation is completed on the GPU (unless built in debug).
  *
  * @param[in] input_col The input column
  * @param[in] window The static rolling window size. If window_col = NULL, 
@@ -69,7 +67,6 @@ namespace cudf {
  *                forward_window_col[i] specifies forward window size for element i.
  *                If forward_window_col = NULL, then forward_window is used as the
  *                static forward window size for aill elements
- * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @returns   gdf_column The output column
  *
@@ -81,42 +78,7 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            gdf_agg_op agg_type,
                            const gdf_size_type *window_col,
                            const gdf_size_type *min_periods_col,
-                           const gdf_size_type *forward_window_col,
-			   cudaStream_t stream = 0);
-
-// helper funcitons - used in the implementation and tests
-namespace rolling {
-  // return true if ColumnType is arithmetic type or
-  // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
-  template <typename ColumnType, template <typename AggType> class AggOp>
-  static constexpr bool is_supported()
-  {
-    return std::is_arithmetic<ColumnType>::value ||
-           std::is_same<AggOp<ColumnType>, min_op<ColumnType>>::value ||
-           std::is_same<AggOp<ColumnType>, max_op<ColumnType>>::value ||
-           std::is_same<AggOp<ColumnType>, count_op<ColumnType>>::value;
-  }
-
-  // store functor
-  template <typename ColumnType, bool average>
-  struct store_output_functor
-  {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, gdf_size_type count)
-    {
-      out = val;
-    }
-  };
-
-  // partial specialization for AVG
-  template <typename ColumnType>
-  struct store_output_functor<ColumnType, true>
-  {
-    CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, gdf_size_type count)
-    {
-      out = val / count;
-    }
-  };
-}  // namespace cudf::rolling
+                           const gdf_size_type *forward_window_col);
 
 }  // namespace cudf
 

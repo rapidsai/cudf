@@ -26,6 +26,7 @@
 #include <algorithm>
 
 #include <rolling.hpp>
+#include "rolling_detail.hpp"
 
 // allocate column
 #include <io/utilities/wrapper_utils.hpp>
@@ -127,7 +128,7 @@ void gpu_rolling(gdf_size_type nrows,
 
     // store the output value, one per thread
     if (output_is_valid)
-      cudf::rolling::store_output_functor<ColumnType, average>{}(out_col[i], val, count);
+      cudf::detail::store_output_functor<ColumnType, average>{}(out_col[i], val, count);
 
     // process next element 
     i += stride;
@@ -141,7 +142,7 @@ struct rolling_window_launcher
    * @brief Uses SFINAE to instantiate only for supported type combos
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-     typename std::enable_if_t<cudf::rolling::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
+     typename std::enable_if_t<cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
     PUSH_RANGE("CUDF_ROLLING", GDF_ORANGE);
@@ -150,7 +151,9 @@ struct rolling_window_launcher
     gdf_size_type grid = (nrows + block-1) / block;
 
     gpu_rolling<ColumnType, agg_op, average><<<grid, block, 0, stream>>>(nrows, FArgs...);
-    CUDA_CHECK_LAST();
+
+    // check the stream for debugging
+    CHECK_STREAM(stream);
 
     POP_RANGE();
   }
@@ -159,7 +162,7 @@ struct rolling_window_launcher
    * @brief If we cannot perform aggregation on this type then throw an error
    */
   template<typename ColumnType, template <typename AggType> class agg_op, bool average, class... TArgs,
-     typename std::enable_if_t<!cudf::rolling::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
+     typename std::enable_if_t<!cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
   void dispatch_aggregation_type(gdf_size_type nrows, cudaStream_t stream, TArgs... FArgs)
   {
     CUDF_FAIL("Unsupported column type/operation combo. Only `min` and `max` are supported for non-arithmetic types for aggregations.");
@@ -246,8 +249,7 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            gdf_agg_op agg_type,
                            const gdf_size_type *window_col,
                            const gdf_size_type *min_periods_col,
-                           const gdf_size_type *forward_window_col,
-                           cudaStream_t stream)
+                           const gdf_size_type *forward_window_col)
 {
   CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
 
@@ -266,6 +268,9 @@ gdf_column* rolling_window(const gdf_column &input_col,
 
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
+
+  // always use the default stream for now
+  cudaStream_t stream = NULL;
 
   // Launch type dispatcher
   cudf::type_dispatcher(input_col.dtype,
