@@ -133,10 +133,9 @@ class NumericalColumn(columnops.TypedColumnBase):
                     'nulls': null_ptr,
                     'bdevmem': True
                 }
-                data = string._numeric_to_str_typecast_functions[dtype](
-                    dev_ptr,
-                    **kwargs
-                )
+                data = string._numeric_to_str_typecast_functions[
+                    np.dtype(self.dtype)
+                ](dev_ptr, **kwargs)
 
             else:
                 data = []

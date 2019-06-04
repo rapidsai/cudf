@@ -239,6 +239,9 @@ def test_string_numeric_astype(dtype):
         ps = pd.Series(data, dtype=dtype)
     gs = Series(data, dtype=dtype)
 
+    # Pandas datetime64 --> str typecasting returns arbitrary format depending
+    # on the data, so making it consistent unless we choose to match the
+    # behavior
     if dtype.startswith('datetime64'):
         expect = ps.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
     else:
@@ -254,7 +257,10 @@ def test_string_numeric_astype(dtype):
 def test_string_empty_numeric_astype(dtype):
     data = []
 
-    ps = pd.Series(data, dtype=dtype)
+    if dtype.startswith('datetime64'):
+        ps = pd.Series(data, dtype='datetime64[ns]')
+    else:
+        ps = pd.Series(data, dtype=dtype)
     gs = Series(data, dtype=dtype)
 
     expect = ps.astype('str')

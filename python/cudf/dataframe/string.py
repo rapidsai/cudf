@@ -474,7 +474,9 @@ class StringColumn(columnops.TypedColumnBase):
         kwargs = {
             'devptr': out_ptr
         }
-        _str_to_numeric_typecast_functions[dtype](self.str(), **kwargs)
+        _str_to_numeric_typecast_functions[
+            np.dtype(dtype)
+        ](self.str(), **kwargs)
 
         out_col = columnops.as_column(out_arr)
         return out_col.astype(out_dtype)
