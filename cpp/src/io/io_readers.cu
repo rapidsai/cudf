@@ -9,7 +9,6 @@ JsonReader::JsonReader() noexcept = default;
 JsonReader::JsonReader(JsonReader const &rhs) : impl_(std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs())) {}
 
 JsonReader &JsonReader::operator=(JsonReader const &rhs) {
-  impl_.reset();
   impl_ = std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs());
   return *this;
 }
@@ -17,7 +16,7 @@ JsonReader &JsonReader::operator=(JsonReader const &rhs) {
 JsonReader::JsonReader(JsonReader &&rhs) : impl_(std::move(rhs.impl_)) {}
 
 JsonReader &JsonReader::operator=(JsonReader &&rhs) {
-  impl_ = std::move(rhs.impl_);
+  impl_ = rhs.impl_;
   return *this;
 }
 
