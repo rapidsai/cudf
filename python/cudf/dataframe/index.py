@@ -553,7 +553,7 @@ class GenericIndex(Index):
 
         # hash_columns produces negative valuesg
         # probably can switch to np.uint32
-        # when supported by libcud
+        # when supported by libcudf
         return abs(sr)
 
 
