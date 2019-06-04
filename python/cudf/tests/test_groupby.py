@@ -542,3 +542,15 @@ def test_groupby_single_var_two_aggs():
     gdg = gdf.groupby('a', as_index=True).agg({'b': ['min', 'max']})
     pdg = pdf.groupby('a', as_index=True).agg({'b': ['min', 'max']})
     assert_eq(pdg, gdg)
+
+
+def test_groupby_apply_basic_agg_single_column():
+    gdf = DataFrame()
+    gdf['key'] = [0, 0, 1, 1, 2, 2, 0]
+    gdf['val'] = [0, 1, 2, 3, 4, 5, 6]
+    gdf['mult'] = gdf['key'] * gdf['val']
+    pdf = gdf.to_pandas()
+
+    gdg = gdf.groupby(['key', 'val']).mult.sum()
+    pdg = pdf.groupby(['key', 'val']).mult.sum()
+    assert_eq(pdg, gdg)

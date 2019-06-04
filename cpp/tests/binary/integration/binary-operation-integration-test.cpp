@@ -319,6 +319,41 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
     ASSERT_BINOP(out, lhs, rhs, XOR());
 }
 
+
+TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) {
+    using AND = cudf::library::operation::LogicalAnd<int16_t, double, int8_t>;
+
+    auto lhs = cudf::test::column_wrapper<double>(500,
+        [](gdf_size_type row) {return (row % 5);},
+        [](gdf_size_type row) {return (row % 6 > 0);});
+    auto rhs = cudf::test::column_wrapper<int8_t>(500,
+        [](gdf_size_type row) {return (row % 3 > 0);},
+        [](gdf_size_type row) {return (row % 4 > 0);});
+    auto out = cudf::test::column_wrapper<int16_t>(lhs.get()->size, true);
+
+    auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_LOGICAL_AND);
+    ASSERT_TRUE(result == GDF_SUCCESS);
+
+    ASSERT_BINOP(out, lhs, rhs, AND());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32) {
+    using OR = cudf::library::operation::LogicalOr<cudf::bool8, int16_t, float>;
+
+    auto lhs = cudf::test::column_wrapper<int16_t>(500,
+        [](gdf_size_type row) {return (row % 5);},
+        [](gdf_size_type row) {return (row % 6 > 0);});
+    auto rhs = cudf::test::column_wrapper<float>(500,
+        [](gdf_size_type row) {return (row % 3 > 0);},
+        [](gdf_size_type row) {return (row % 4 > 0);});
+    auto out = cudf::test::column_wrapper<int8_t>(lhs.get()->size, true);
+
+    auto result = gdf_binary_operation_v_v(out.get(), lhs.get(), rhs.get(), GDF_LOGICAL_OR);
+    ASSERT_TRUE(result == GDF_SUCCESS);
+
+    ASSERT_BINOP(out, lhs, rhs, OR());
+}
+
 } // namespace binop
 } // namespace test
 } // namespace cudf

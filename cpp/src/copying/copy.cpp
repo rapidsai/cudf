@@ -15,12 +15,13 @@
  */
 
 #include <copying.hpp>
+#include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
+#include <cudf.h>
 #include <table.hpp>
 
-#include <algorithm>
-#include <cudf.h>
 #include <cuda_runtime.h>
+#include <algorithm>
 
 namespace cudf
 {
@@ -53,7 +54,7 @@ gdf_column allocate_like(gdf_column const& input, cudaStream_t stream)
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
-                          : gdf_dtype_size(input.dtype);
+                          : cudf::size_of(input.dtype);
     RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
     if (input.valid != nullptr) {
       size_t valid_size = gdf_valid_allocation_size(input.size);
@@ -76,7 +77,7 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
-                          : gdf_dtype_size(input.dtype);
+                          : cudf::size_of(input.dtype);
     CUDA_TRY(cudaMemcpyAsync(output.data, input.data, input.size * byte_width,
                              cudaMemcpyDefault, stream));
     if (input.valid != nullptr) {

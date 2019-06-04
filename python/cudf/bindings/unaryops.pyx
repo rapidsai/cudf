@@ -26,7 +26,8 @@ _MATH_OP = {
     'ceil'  : GDF_CEIL,
     'floor' : GDF_FLOOR,
     'abs'   : GDF_ABS,
-    'not'   : GDF_BIT_INVERT,
+    'invert': GDF_BIT_INVERT,
+    'not'   : GDF_NOT,
 }
 
 def apply_math_op(incol, outcol, op):
