@@ -52,6 +52,7 @@
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1930 Specialize constructor for `cudf::bol8` to cast argument to `bool`
 
 
 ## Bug Fixes

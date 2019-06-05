@@ -211,7 +211,6 @@ TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
 // Ensure bool8 constructor is correctly casting the input type to a bool
 TEST_F(WrappersTestBool8, BooleanConstructor) {
   using UnderlyingType = cudf::bool8::value_type;
-  cudf::bool8 const w{t};
   for (int i = 0; i < NUM_TRIALS; ++i) {
     UnderlyingType t{this->rand()};
     cudf::bool8 const w{t};
