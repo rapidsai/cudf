@@ -584,8 +584,7 @@ class StringColumn(columnops.TypedColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
-        elif hasattr(other, '__str__'):
-            other = str(other)
+        elif isinstance(other, str) or other is None:
             col = utils.scalar_broadcast_to(other,
                                             shape=len(self),
                                             dtype="object")

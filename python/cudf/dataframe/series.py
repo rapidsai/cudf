@@ -707,7 +707,7 @@ class Series(object):
         if self.null_count == 0:
             return self
         data = self._column.dropna()
-        index = self.index.loc[(self != self._column.default_na_value()).fillna(False)]
+        index = self.index.loc[~self.isna()]
         return self._copy_construct(data=data, index=index)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
@@ -733,6 +733,7 @@ class Series(object):
             raise NotImplementedError("The axis keyword is not supported")
 
         data = self._column.fillna(value, inplace=inplace)
+
 
         if not inplace:
             return self._copy_construct(data=data)
