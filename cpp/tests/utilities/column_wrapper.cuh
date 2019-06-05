@@ -386,6 +386,11 @@ struct column_wrapper {
     if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
       return false;
 
+    if ((the_column.col_name == nullptr) != (rhs.col_name == nullptr))
+      return false; // if one is null but not both
+    else if (rhs.col_name != nullptr && std::strcmp(the_column.col_name, rhs.col_name) != 0)
+      return false;
+
     if ((the_column.data == nullptr) != (rhs.data == nullptr))
       return false;  // if one is null but not both
     else if (rhs.data == nullptr)
@@ -469,7 +474,7 @@ struct column_wrapper {
   // the size of this vector will be zero
   rmm::device_vector<gdf_valid_type> bitmask;  ///< Container for the column's bitmask
 
-  gdf_column the_column;
+  gdf_column the_column{};
 };
 
 }  // namespace test
