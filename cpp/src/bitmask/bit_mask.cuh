@@ -99,6 +99,27 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
   return GDF_SUCCESS;
 }
 
+namespace detail {
+
+template <typename T>
+constexpr inline T gcd(T u, T v) noexcept
+{
+    while (v != 0) {
+        auto remainder = u % v;
+        u = v;
+        v = remainder;
+    }
+    return u;
+}
+
+template <typename T>
+constexpr inline T lcm(T u, T v) noexcept
+{
+        return (u / gcd(u,v)) * v;
+}
+
+} // namespace detail
+
 /**
  *  @brief Allocate device space for the valid bit mask.
  *
@@ -122,7 +143,7 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
   //
   // TODO: The assumption may not be valid
 
-  padding_boundary = std::lcm<gdf_size_type>(sizeof(bit_mask_t), padding_boundary);
+  padding_boundary = detail::lcm<gdf_size_type>(sizeof(bit_mask_t), padding_boundary);
   gdf_size_type num_quanta_to_allocate =
       cudf::util::div_rounding_up_safe<gdf_size_type>(
           number_of_bits, CHAR_BIT * padding_boundary);
