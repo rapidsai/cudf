@@ -393,3 +393,62 @@ def test_different_shapes_and_same_columns(binop):
     import cudf
     with pytest.raises(NotImplementedError):
         binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
+
+
+_operator_funcs = [
+    'add',
+    'radd',
+    'sub',
+    'rsub',
+    'mul',
+    'rmul',
+    # 'mod', << Coming Later
+    # 'rmod', << Coming Later
+    'pow',
+    'floordiv',
+    'rfloordiv',
+    'truediv',
+    'rtruediv',
+    'eq',
+    'ne',
+    'lt',
+    'le',
+    'gt',
+    'ge'
+]
+
+
+@pytest.mark.parametrize('func', _operator_funcs)
+@pytest.mark.parametrize('has_nulls', _nulls)
+@pytest.mark.parametrize('fill_value', [None, 27])
+@pytest.mark.parametrize('dtype', ['float32', 'float64'])
+def test_operator_functions(dtype, func, has_nulls, fill_value):
+    nelem = 1000
+    arr1 = utils.gen_rand(dtype, nelem, low=0, high=32)
+    arr2 = utils.gen_rand(dtype, nelem, low=1, high=32)
+
+    if has_nulls == 'some':
+        nulls1 = utils.random_bitmask(nelem)
+        nulls2 = utils.random_bitmask(nelem)
+        sr1 = Series.from_masked_array(arr1, nulls1)
+        sr2 = Series.from_masked_array(arr2, nulls2)
+    else:
+        sr1 = Series(arr1)
+        sr2 = Series(arr2)
+
+    psr1 = sr1.to_pandas()
+    psr2 = sr2.to_pandas()
+
+    expect = getattr(psr1, func)(psr2, fill_value=fill_value)
+    got = getattr(sr1, func)(sr2, fill_value=fill_value)
+
+    # This is being done because of the various gymnastics required to support
+    # equality for null values. cudf.Series().to_pandas() replaces nulls with
+    # None and so a bool Series becomes object Series. Which does not match the
+    # output of equality op in pandas which remains a bool. Furthermore, NaN
+    # values are treated as not comparable and always return False in a bool op
+    # except in not-equal op where bool(Nan != Nan) gives True.
+    if got.dtype == np.bool:
+        got = got.fillna(True) if func == 'ne' else got.fillna(False)
+
+    utils.assert_eq(expect, got)

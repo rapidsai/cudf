@@ -465,17 +465,22 @@ class Series(object):
         def func(lhs, rhs):
             return fn(rhs, lhs) if reflect else fn(lhs, rhs)
 
-        if fill_value is not None and isinstance(other, Series):
-            lmask = Series(data=self.nullmask)
-            rmask = Series(data=other.nullmask)
-            out_mask = (lmask | rmask).data
-            temp_lhs = self.fillna(fill_value)
-            temp_rhs = other.fillna(fill_value)
-            out = func(temp_lhs, temp_rhs)
-            col = self._column.replace(data=out.data, mask=out_mask)
-            return self._copy_construct(data=col)
-        elif fill_value is not None:
-            return func(self.fillna(fill_value), other)
+        if fill_value is not None:
+            if isinstance(other, Series):
+                if self.has_null_mask and other.has_null_mask:
+                    lmask = Series(data=self.nullmask)
+                    rmask = Series(data=other.nullmask)
+                    out_mask = (lmask | rmask).data
+                    temp_lhs = self.fillna(fill_value)
+                    temp_rhs = other.fillna(fill_value)
+                    out = func(temp_lhs, temp_rhs)
+                    col = self._column.replace(data=out.data, mask=out_mask)
+                    return self._copy_construct(data=col)
+                else:
+                    return func(self.fillna(fill_value),
+                                other.fillna(fill_value))
+            elif is_scalar(other):
+                return func(self.fillna(fill_value), other)
         else:
             return func(self, other)
 
