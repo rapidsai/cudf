@@ -8,8 +8,9 @@ from cudf.dataframe import DataFrame
 
 def test_to_pandas():
     df = DataFrame()
-    df['a'] = np.arange(10, dtype=np.int32)
-    df['b'] = np.arange(10, 20, dtype=np.float64)
+    df['a'] = np.arange(5, dtype=np.int32)
+    df['b'] = np.arange(10, 15, dtype=np.float64)
+    df['c'] = np.array([True, False, None, True, True])
 
     pdf = df.to_pandas()
 
@@ -18,8 +19,14 @@ def test_to_pandas():
     assert df['a'].dtype == pdf['a'].dtype
     assert df['b'].dtype == pdf['b'].dtype
 
+    # Notice, the dtype differ when Pandas and cudf boolean series
+    # contains None/NaN
+    assert df['c'].dtype == np.bool
+    assert pdf['c'].dtype == np.object
+
     assert len(df['a']) == len(pdf['a'])
     assert len(df['b']) == len(pdf['b'])
+    assert len(df['c']) == len(pdf['c'])
 
 
 def test_from_pandas():

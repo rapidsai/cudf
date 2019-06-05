@@ -1,4 +1,5 @@
 
+#include <utilities/column_utils.hpp>
 #include "nvcategory_util.hpp"
 #include <types.hpp>
 #include <table.hpp>
@@ -90,8 +91,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     //this GDF_INT32 could change if this changes in nvcategory
     gdf_column_view(&null_index_column, nullptr, nullptr, 1, GDF_STRING_CATEGORY);
-    int col_width;
-    get_column_byte_width(&null_index_column, &col_width);
+    auto col_width { cudf::byte_width(null_index_column) };
     RMM_TRY( RMM_ALLOC(&(null_index_column.data), col_width, 0) ); // TODO: non-default stream?
     CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
     null_index_column.valid = nullptr;

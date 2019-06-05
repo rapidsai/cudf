@@ -28,7 +28,7 @@
 
 #include <rmm/rmm.h>
 
-#include <thrust/equal.h>
+#include <thrust/logical.h>
 
 #include <bitset>
 #include <numeric> // for std::accumulate
@@ -268,7 +268,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
-      gdf::util::turn_bit_on(valid_masks.data(), row);
+      cudf::util::turn_bit_on(valid_masks.data(), row);
     }
   }
 
@@ -347,42 +347,18 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
   return initialize_gdf_columns(columns,
                                 [](size_t row, size_t col) { return true; });
 }
+
 /**
  * ---------------------------------------------------------------------------*
  * @brief Compare two gdf_columns on all fields, including pairwise comparison
- * of data and valid arrays
+ * of data and valid arrays. 
+ * 
+ * Uses type_dispatcher to dispatch the data comparison
  *
- * @tparam T The type of columns to compare
  * @param left The left column
  * @param right The right column
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
-template <typename T>
-bool gdf_equal_columns(gdf_column* left, gdf_column* right)
-{
-  if (left->size != right->size) return false;
-  if (left->dtype != right->dtype) return false;
-  if (left->null_count != right->null_count) return false;
-  if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
+bool gdf_equal_columns(gdf_column const& left, gdf_column const &right);
 
-  if (!(left->data && right->data))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
-                     reinterpret_cast<T*>(left->data) + left->size,
-                     reinterpret_cast<T*>(right->data)))
-    return false;
-
-  if (!(left->valid && right->valid))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, left->valid,
-                     left->valid + gdf_num_bitmask_elements(left->size),
-                     right->valid))
-    return false;
-  
-  return true;
-}
-
-
-#endif
+#endif // CUDF_TEST_UTILS_CUH_
