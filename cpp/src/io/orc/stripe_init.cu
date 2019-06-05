@@ -305,7 +305,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s, const
             {
                 if (ci_id < CI_PRESENT)
                     s->row_index_entry[0][ci_id] = v;
-                if (cur >= start + length)
+                if (cur >= start + pos_end)
                     return length;
                 state = STORE_INDEX1;
                 break;
@@ -319,7 +319,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s, const
         case STORE_INDEX1:
             if (ci_id < CI_PRESENT)
                 s->row_index_entry[1][ci_id] = v;
-            if (cur >= start + length)
+            if (cur >= start + pos_end)
                 return length;
             state = STORE_INDEX2;
             break;
