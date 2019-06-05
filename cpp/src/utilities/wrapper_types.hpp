@@ -82,10 +82,17 @@ struct wrapper
   CUDA_HOST_DEVICE_CALLABLE
   constexpr explicit wrapper(T v) : value{v} {}
 
+  // Constructing a bool8 from any value should be the same as first casting the
+  // value to a `bool`
   template <gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(T v)
       : value{static_cast<bool>(v)} {}
+
+  // It should be possible to construct a `bool8` from a `bool`
+  template <gdf_dtype dtype = type_id,
+            std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(bool v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
     return this->value;
@@ -93,13 +100,10 @@ struct wrapper
 
   // enable conversion to arithmetic types *only* for the cudf::bool8 wrapper
   // (defined later in this file as wrapper<gdf_bool8, GDF_BOOL8>)
-  template <gdf_dtype the_type = type_id,
-            typename T_out,
-            typename std::enable_if<(the_type == GDF_BOOL8) &&
-                                     std::is_arithmetic<T_out>::value,
-                                     int>::type* = nullptr >
-  CUDA_HOST_DEVICE_CALLABLE
-  explicit operator T_out() const { 
+  template <gdf_dtype the_type = type_id, typename T_out,
+            std::enable_if_t<(the_type == GDF_BOOL8) &&
+                             std::is_arithmetic<T_out>::value> * = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit operator T_out() const {
     // Casting a cudf::bool8 to arithmetic type should always be the same as
     // casting a bool to arithmetic type, and not the same as casting the
     // underlying type to arithmetic type. Therefore we cast the value to bool
@@ -412,29 +416,28 @@ bool operator>(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator+(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(static_cast<bool>(lhs) +
-                                  static_cast<bool>(rhs));
+   // since the result of an arithmetic operation between two `bool`s is an `int`
+   // we need to cast back to a bool in order to prevent ambiguity in 
+   // constructing a `bool8`
+   return cudf::bool8{static_cast<bool>(bool(lhs) + bool(rhs))};
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator-(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(static_cast<bool>(lhs) -
-                                  static_cast<bool>(rhs));
+  return cudf::bool8{static_cast<bool>(bool(lhs) - bool(rhs))};
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator*(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(static_cast<bool>(lhs) *
-                                  static_cast<bool>(rhs));
+  return cudf::bool8{static_cast<bool>(bool(lhs) * bool(rhs))};
 }
 
 CUDA_HOST_DEVICE_CALLABLE
 cudf::bool8 operator/(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
 {
-  return static_cast<cudf::bool8>(static_cast<bool>(lhs) /
-                                  static_cast<bool>(rhs));
+  return cudf::bool8{static_cast<bool>(bool(lhs) / bool(rhs))};
 }
 
 CUDA_HOST_DEVICE_CALLABLE
