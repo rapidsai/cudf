@@ -268,6 +268,24 @@ R"***(
 
     using RBitwiseXor = BitwiseXor;
 
+    struct LogicalAnd {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x && y);
+        }
+    };
+
+    using RLogicalAnd = LogicalAnd;
+
+    struct LogicalOr {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x || y);
+        }
+    };
+
+    using RLogicalOr = LogicalOr;
+
 )***";
 
 } // namespace code

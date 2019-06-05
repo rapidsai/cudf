@@ -67,7 +67,6 @@ class _SeriesIlocIndexer(object):
 class _DataFrameIndexer(object):
 
     def __getitem__(self, arg):
-
         if type(arg) is not tuple:
             arg = (arg, slice(None, None))
 
@@ -236,6 +235,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_scalar(self, arg):
         col = self._df.columns[arg[1]]
         return self._df[col].iloc[arg[0]]
+
+    def _getitem_multiindex_arg(self, arg):
+        # Explicitly ONLY support tuple indexes into MultiIndex.
+        # Pandas allows non tuple indices and warns "results may be
+        # undefined."
+        return self._df._index._get_row_major(self._df, arg)
 
     def _get_column_selection(self, arg):
         cols = self._df.columns

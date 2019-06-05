@@ -77,7 +77,9 @@ class Index(object):
             # Gather
             index = cpp_copying.apply_gather_array(self.gpu_values, indices)
             col = self.as_column().replace(data=index.data)
-            return as_index(col)
+            new_index = as_index(col)
+            new_index.name = self.name
+            return new_index
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
