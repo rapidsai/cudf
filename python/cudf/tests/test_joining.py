@@ -499,13 +499,8 @@ def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
-    if kwargs.get('left_on') and kwargs.get('right_on'):
-        with pytest.raises(NotImplementedError) as raises:
-            gd_merge = gleft.merge(gright, **kwargs)
-        raises.match("left_on='x', right_on='y' not supported")
-    else:
-        gd_merge = gleft.merge(gright, **kwargs)
-        assert_eq(pd_merge, gd_merge)
+    gd_merge = gleft.merge(gright, **kwargs)
+    assert_eq(pd_merge, gd_merge)
 
 
 @pytest.mark.parametrize('kwargs', [
@@ -521,13 +516,8 @@ def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
-    if kwargs.get('left_on') and kwargs.get('right_on'):
-        with pytest.raises(NotImplementedError) as raises:
-            gd_merge = gleft.merge(gright, **kwargs)
-        raises.match("left_on='x', right_on='y' not supported")
-    else:
-        gd_merge = gleft.merge(gright, **kwargs)
-        assert_eq(pd_merge, gd_merge)
+    gd_merge = gleft.merge(gright, **kwargs)
+    assert_eq(pd_merge, gd_merge)
 
 
 def test_indicator():
@@ -582,4 +572,46 @@ def test_merge_on_index_retained():
     gdm = df.merge(df2, left_index=True, right_index=True, how='left')
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how='left')
     gdm['a2'] = gdm['a2'].astype('float64')
-    assert_eq(gdm, pdm)
+    assert_eq(gdm.sort_index(), pdm.sort_index())
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'left_index': True, 'right_on': 'y'},
+    {'right_index': True, 'left_on': 'x'},
+    {'left_on': 'x', 'right_on': 'y'},
+])
+def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
+    left = pd.DataFrame({'x': [1, 2, 3]}, index=[10, 20, 30])
+    right = pd.DataFrame({'y': [10, 20, 30]}, index=[1, 2, 30])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    gd_merge = gleft.merge(gright, **kwargs)
+    pd_merge = left.merge(right, **kwargs)
+    if pd_merge.empty:
+        assert(gd_merge.empty)
+
+
+@pytest.mark.parametrize('hows', [
+    {'how': 'inner'},
+    {'how': 'left'},
+    {'how': 'outer'},
+])
+@pytest.mark.parametrize('kwargs', [
+    {'on': 'k1'},
+    {'on': 'k2'},
+    {'on': 'k3'},
+    {'on': 'k4'},
+    {'on': 'k5'},
+])
+def test_merge_sort(kwargs, hows):
+    kwargs.update(hows)
+    kwargs['sort'] = True
+    d = range(3)
+    left = pd.DataFrame({'k2': d, 'k1': d, 'k4': d, 'k3': d, 'k5': d})
+    right = pd.DataFrame({'k1': d, 'k4': d, 'k2': d, 'k3': d, 'k5': d})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    gd_merge = gleft.merge(gright, **kwargs)
+    pd_merge = left.merge(right, **kwargs)
+    if pd_merge.empty:
+        assert(gd_merge.empty)
