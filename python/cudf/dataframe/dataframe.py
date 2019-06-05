@@ -456,7 +456,7 @@ class DataFrame(object):
         )
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other=None):
+    def _apply_op(self, fn, other=None, fill_value=None):
         result = DataFrame()
         result.set_index(self.index)
         if other is None:
@@ -468,23 +468,34 @@ class DataFrame(object):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             max_num_rows = max(self.shape[0], other.shape[0])
+   
+            def fallback(col):
+                if fill_value is None:
+                    return Series(cudautils.full(max_num_rows,
+                                  np.dtype('float64').type(np.nan),
+                                  'float64'), nan_as_null=False)
+                else:
+                    return getattr(col, fn)(fill_value)
+
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = fallback(self._cols[col])
+
+            def op(lhs, rhs):
+                if fill_value is None:
+                    return getattr(lhs, fn)(rhs)
+                else:
+                    return getattr(lhs, fn)(rhs, fill_value)
+
             for col in other._cols:
                 if col in self._cols:
                     if self.shape[0] != other.shape[0]:
                         raise NotImplementedError(
                                 "%s on columns with different "
                                 "length is not supported", fn)
-                    result[col] = getattr(self._cols[col], fn)(
-                                          other._cols[col])
+                    result[col] = op(self._cols[col], other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
-            for col in self._cols:
-                if col not in other._cols:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
+                    result[col] = fallback(other._cols[col])
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -499,41 +510,80 @@ class DataFrame(object):
                     "supported at this time.")
         return result
 
+    def add(self, other, fill_value=None):
+        return self._apply_op('add', other, fill_value)
+
     def __add__(self, other):
         return self._apply_op('__add__', other)
+
+    def radd(self, other, fill_value=None):
+        return self._apply_op('radd', other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op('__radd__', other)
 
+    def sub(self, other, fill_value=None):
+        return self._apply_op('sub', other, fill_value)
+
     def __sub__(self, other):
         return self._apply_op('__sub__', other)
+
+    def rsub(self, other, fill_value=None):
+        return self._apply_op('rsub', other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op('__rsub__', other)
 
+    def mul(self, other, fill_value=None):
+        return self._apply_op('mul', other, fill_value)
+
     def __mul__(self, other):
         return self._apply_op('__mul__', other)
+
+    def rmul(self, other, fill_value=None):
+        return self._apply_op('rmul', other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def mod(self, other, fill_value=None):
+        return self._apply_op('mod', other, fill_value)
+
     def __mod__(self, other):
         return self._apply_op('__mod__', other)
+
+    def rmod(self, other, fill_value=None):
+        return self._apply_op('rmod', other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op('__rmod__', other)
 
+    def pow(self, other, fill_value=None):
+        return self._apply_op('pow', other, fill_value)
+
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
+
+    def floordiv(self, other, fill_value=None):
+        return self._apply_op('floordiv', other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
 
+    def rfloordiv(self, other, fill_value=None):
+        return self._apply_op('rfloordiv', other, fill_value)
+
     def __rfloordiv__(self, other):
         return self._apply_op('__rfloordiv__', other)
 
+    def truediv(self, other, fill_value=None):
+        return self._apply_op('truediv', other, fill_value)
+
     def __truediv__(self, other):
         return self._apply_op('__truediv__', other)
+
+    def rtruediv(self, other, fill_value=None):
+        return self._apply_op('rtruediv', other, fill_value)
 
     def __rtruediv__(self, other):
         return self._apply_op('__rtruediv__', other)
@@ -549,20 +599,38 @@ class DataFrame(object):
     def __xor__(self, other):
         return self._apply_op('__xor__', other)
 
+    def eq(self, other, fill_value=None):
+        return self._apply_op('eq', other, fill_value)
+
     def __eq__(self, other):
         return self._apply_op('__eq__', other)
+
+    def ne(self, other, fill_value=None):
+        return self._apply_op('ne', other, fill_value)
 
     def __ne__(self, other):
         return self._apply_op('__ne__', other)
 
+    def lt(self, other, fill_value=None):
+        return self._apply_op('lt', other, fill_value)
+
     def __lt__(self, other):
         return self._apply_op('__lt__', other)
+
+    def le(self, other, fill_value=None):
+        return self._apply_op('le', other, fill_value)
 
     def __le__(self, other):
         return self._apply_op('__le__', other)
 
+    def gt(self, other, fill_value=None):
+        return self._apply_op('gt', other, fill_value)
+
     def __gt__(self, other):
         return self._apply_op('__gt__', other)
+
+    def ge(self, other, fill_value=None):
+        return self._apply_op('ge', other, fill_value)
 
     def __ge__(self, other):
         return self._apply_op('__ge__', other)
