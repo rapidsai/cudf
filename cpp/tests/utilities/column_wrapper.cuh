@@ -28,6 +28,9 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <thrust/equal.h>
+#include <thrust/logical.h>
+#include <initializer_list>
 #include <string>
 
 #ifndef CUDA_RT_CALL
@@ -51,9 +54,64 @@ namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_column used for unit testing.
  *
- * An abstraction on top of a gdf_column that provides functionality for
- * allocating, initializing, and otherwise managing gdf_columns for passing to
- * libcudf APIs in unit testing.
+ *
+ * The `column_wrapper<T>` class template is designed to simplify the creation
+ * and management of `gdf_column`s for the purposes of unit testing.
+ *
+ * `column_wrapper<T>` provides a number of constructors that allow easily
+ * constructing a `gdf_column` with the appropriate `gdf_dtype` enum set based
+ * on mapping `T` to an enum, e.g., `column_wrapper<int>` will correspond to a
+ * `gdf_column` whose `gdf_dtype` is set to `GDF_INT32`.
+ *
+ * The simplest constructor creates an unitilized `gdf_column` of a specified
+ * type with a specified size:
+ *
+ * ```
+ * cudf::test::column_wrapper<T>  col(size);
+ * ```
+ *
+ * You can also construct a `gdf_column` that uses a `std::vector` to initialize
+ * the `data` and `valid` bitmask of the `gdf_column`.
+ *
+ * ```
+ *  std::vector<T> values(size);
+ *
+ *  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
+ *
+ *  cudf::test::column_wrapper<T> const col(values, bitmask);
+ * ```
+ *
+ * Another constructor allows passing in an initializer function that accepts a
+ * row index that will be invoked for every index `[0, size)` in the column:
+ *
+ * ```
+ *   // This creates a gdf_column with data elements {0, 1, ..., size-1} with a
+ * valid bitmask
+ *   // that indicates all of the values are non-null
+ *   cudf::test::column_wrapper<T> col(size,
+ *       [](auto row) { return row; },
+ *       [](auto row) { return true; });
+ * ```
+ *
+ * You can also construct a `column_wrapper<T>` using an initializer_list:
+ *
+ * ```
+ * // Constructs a column with elements {1,2,3,4} and no bitmask
+ * column_wrapper<T>{1,2,3,4};
+ *
+ * // Constructs a column with elements {1,2,3,4} and a bitmask
+ * // where all elements are valid
+ * column_wrapper<T>({1,2,3,4},[](auto row) { return true; })
+ * ```
+ *
+ * To access the underlying `gdf_column` for passing into a libcudf function,
+ * the `column_wrapper::get` function can be used to provide a pointer to the
+ * underlying `gdf_column`.
+ *
+ * ```
+ * column_wrapper<T> col(size);
+ * gdf_column* gdf_col = col.get();
+ * some_libcudf_function(gdf_col...);
  *
  * @tparam ColumnType The underlying data type of the column
  *---------------------------------------------------------------------------**/
@@ -171,24 +229,39 @@ struct column_wrapper {
    *
    * @param host_data The vector of data to use for the column
    *---------------------------------------------------------------------------**/
-  column_wrapper(std::vector<ColumnType> const& host_data) {
+  explicit column_wrapper(std::vector<ColumnType> const& host_data) {
     initialize_with_host_data(host_data);
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an initializer list for the
+   *column's data.
+   *
+   * The bitmask is not allocated.
+   *
+   * @param list initializer_list to use for column's data
+   *---------------------------------------------------------------------------**/
+  explicit column_wrapper(std::initializer_list<ColumnType> list)
+      : column_wrapper{std::vector<ColumnType>(list)} {}
+
+  /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using an already existing gdf_column*
    *
-   * Constructs a column_wrapper using a gdf_column*. The data in gdf_column* is 
+   * Constructs a column_wrapper using a gdf_column*. The data in gdf_column* is
    * copied over. The allocations in the original gdf_column* are not managed,
    * and wont be freed by the destruction of this column wrapper
    *
    * @param column The gdf_column* that contains the originating data
    *---------------------------------------------------------------------------**/
-  column_wrapper(const gdf_column & column) : data(static_cast<ColumnType*>(column.data), static_cast<ColumnType*>(column.data) + column.size)  {
-    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype, "data types do not match");
+  column_wrapper(const gdf_column& column)
+      : data(static_cast<ColumnType*>(column.data),
+             static_cast<ColumnType*>(column.data) + column.size) {
+    CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype,
+                 "data types do not match");
 
     if (column.valid != nullptr) {
-      bitmask.assign(column.valid, column.valid + gdf_valid_allocation_size(column.size));
+      bitmask.assign(column.valid,
+                     column.valid + gdf_valid_allocation_size(column.size));
     }
     the_column.data = data.data().get();
     the_column.size = data.size();
@@ -210,10 +283,11 @@ struct column_wrapper {
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
-   * The valid bitmask is initialized using the specified bit_initializer unary
-   * lambda that returns a bool. Bit `i` in the bitmask will be equal to
-   *
-   * bitmask
+   * Allocates and initializes the column's bitmask using the specified
+   * bit_initializer unary callable. Bit `i` in the column's bitmask will be
+   * equal to `bit_initializer(i)`.
+   * @param host_data The vector of data to use for the column
+   * @param bit_initializer The unary callable to initialize the bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
   column_wrapper(std::vector<ColumnType> const& host_data,
@@ -230,6 +304,22 @@ struct column_wrapper {
     }
     initialize_with_host_data(host_data, host_bitmask);
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an initializer list for the
+   * column's data and a lambda initializer for the bitmask.
+   *
+   * Allocates and initializes the column's bitmask using the specified
+   * bit_initializer unary callable. Bit `i` in the column's bitmask will be
+   * equal to `bit_initializer(i)`.
+   *
+   * @param list initializer_list to use for column's data
+   * @param bit_initializer The unary callable to initialize the bitmask
+   *---------------------------------------------------------------------------**/
+  template <typename BitInitializerType>
+  column_wrapper(std::initializer_list<ColumnType> list,
+                 BitInitializerType bit_initializer)
+      : column_wrapper{std::vector<ColumnType>(list), bit_initializer} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using lambda initializers for both
@@ -323,9 +413,7 @@ struct column_wrapper {
     print_gdf_column(&the_column);
   }
 
-  gdf_size_type size() const{
-      return the_column.size;
-  }
+  gdf_size_type size() const { return the_column.size; }
 
   /**---------------------------------------------------------------------------*
    * @brief Compares this wrapper to a gdf_column for equality.
@@ -403,7 +491,8 @@ struct column_wrapper {
 
   // If the column's bitmask does not exist (doesn't contain null values), then
   // the size of this vector will be zero
-  rmm::device_vector<gdf_valid_type> bitmask;  ///< Container for the column's bitmask
+  rmm::device_vector<gdf_valid_type>
+      bitmask;  ///< Container for the column's bitmask
 
   gdf_column the_column;
 };
