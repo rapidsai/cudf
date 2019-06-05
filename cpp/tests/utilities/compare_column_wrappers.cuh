@@ -37,11 +37,12 @@
 namespace detail {
 
 template <typename T>
-std::string to_string(T val) { return std::to_string(val); }
+std::string to_string(T val) {
+  return std::to_string(cudf::detail::unwrap(val));
+}
 
-template <> std::string to_string<cudf::bool8>(cudf::bool8 val)
-{
-    return {unwrap(val) ? "true" : "false"};
+std::string to_string(cudf::bool8 val) {
+  return {cudf::detail::unwrap(val) ? "true" : "false"};
 }
 
 // TODO: Implement for cudf::category, cudf::nvstring_category, cudf::timestamp, cudf::date32, cudf::date64
@@ -67,8 +68,8 @@ void expect_column_values_are_equal(
     auto max_name_length = std::max(lhs_name.length(), rhs_name.length());
 
     for(gdf_size_type i = 0; i < common_size; i++) {
-        auto lhs_element_is_valid = lhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(lhs_validity_on_host, i);
-        auto rhs_element_is_valid = rhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(rhs_validity_on_host, i);
+        auto lhs_element_is_valid = lhs_non_nullable or cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(lhs_validity_on_host, i);
+        auto rhs_element_is_valid = rhs_non_nullable or cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(rhs_validity_on_host, i);
         auto elements_are_equal =
             (not lhs_element_is_valid and not rhs_element_is_valid) or
             (lhs_element_is_valid == rhs_element_is_valid and lhs_data_on_host[i] == rhs_data_on_host[i]);

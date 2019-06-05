@@ -18,6 +18,7 @@
 #include <groupby.hpp>
 #include <table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/compare_column_wrappers.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include "type_info.hpp"
 
@@ -76,8 +77,11 @@ void single_column_groupby_test(column_wrapper<Key> keys,
                              output_keys.get_data().end(),
                              output_values.get_data().begin());
 
-  EXPECT_TRUE(expected_keys == output_keys);
-  EXPECT_TRUE(expected_values == output_values);
+  bool const print_all_unequal_pairs{true};
+  expect_columns_are_equal(output_keys, "Actual Keys", expected_keys,
+                           "Expected Keys", print_all_unequal_pairs);
+  expect_columns_are_equal(output_values, "Actual Values", expected_values,
+                           "Expected Values", print_all_unequal_pairs);
 }
 
 TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsCount) {
@@ -97,10 +101,20 @@ TYPED_TEST(SingleColumnGroupbyTest, FourGroupsNoNullsCount) {
   using ResultType = expected_result_t<int, op>;
   using T = TypeParam;
   using R = ResultType;
-  single_column_groupby_test<op>(
-      column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4), T(4),
-                                T(4), T(4)},
-      column_wrapper<int>(size, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultType>{R(1), R(2), R(3), R(4)});
+
+  // For boolean types, there are only two possible groups `true` and `false`
+  if (std::is_same<TypeParam, cudf::bool8>::value) {
+    single_column_groupby_test<op>(
+        column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4),
+                                  T(4), T(4), T(4)},
+        column_wrapper<int>(size, [](auto index) { return int(index); }),
+        column_wrapper<TypeParam>{T(1)}, column_wrapper<ResultType>{R(10)});
+  } else {
+    single_column_groupby_test<op>(
+        column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4),
+                                  T(4), T(4), T(4)},
+        column_wrapper<int>(size, [](auto index) { return int(index); }),
+        column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
+        column_wrapper<ResultType>{R(1), R(2), R(3), R(4)});
+  }
 }
