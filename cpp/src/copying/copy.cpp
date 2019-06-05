@@ -15,12 +15,14 @@
  */
 
 #include <copying.hpp>
+#include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <table.hpp>
-
-#include <algorithm>
 #include <cudf.h>
+#include <table.hpp>
+#include <nvstrings/NVCategory.h>
+
 #include <cuda_runtime.h>
+#include <algorithm>
 
 namespace cudf
 {
@@ -33,9 +35,12 @@ gdf_column empty_like(gdf_column const& input)
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
   gdf_column output;
 
+  gdf_dtype_extra_info info = input.dtype_info;
+  info.category = nullptr;
+
   CUDF_EXPECTS(GDF_SUCCESS == 
                gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, input.dtype_info),
+                                         input.dtype, 0, info),
                "Invalid column parameters");
 
   return output;
@@ -53,7 +58,7 @@ gdf_column allocate_like(gdf_column const& input, cudaStream_t stream)
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
-                          : gdf_dtype_size(input.dtype);
+                          : cudf::size_of(input.dtype);
     RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
     if (input.valid != nullptr) {
       size_t valid_size = gdf_valid_allocation_size(input.size);
@@ -76,7 +81,7 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)
-                          : gdf_dtype_size(input.dtype);
+                          : cudf::size_of(input.dtype);
     CUDA_TRY(cudaMemcpyAsync(output.data, input.data, input.size * byte_width,
                              cudaMemcpyDefault, stream));
     if (input.valid != nullptr) {
@@ -86,6 +91,12 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
     }
   }
 
+  if (input.dtype == GDF_STRING_CATEGORY) {
+    if (input.dtype_info.category != nullptr) {
+      NVCategory *cat = static_cast<NVCategory*>(input.dtype_info.category);
+      output.dtype_info.category = cat->copy();
+    }
+  }
   return output;
 }
 

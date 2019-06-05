@@ -23,60 +23,50 @@ import nvstrings
 
 
 @cython.boundscheck(False)
-cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
+cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     """
       Call gdf join for full outer, inner and left joins.
+      Returns a list of tuples [(column, valid, name), ...]
     """
 
-    cdef gdf_context* context = create_context_view(0, method, 0, 0, 0, 'null_as_largest')
+    #TODO: `context` leaks if exiting this function prematurely
+    cdef gdf_context* context = create_context_view(0, method, 0, 0, 0,
+                                                    'null_as_largest')
 
     if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
-    result_col_names = []
-
     cdef vector[int] left_idx
     cdef vector[int] right_idx
 
-    on = list(set(left_on + right_on))
-    num_cols_to_join = len(on)
-    result_num_cols = len(col_lhs) + len(col_rhs) - num_cols_to_join
+    assert(len(left_on) == len(right_on))
 
     cdef vector[gdf_column*] list_lhs
     cdef vector[gdf_column*] list_rhs
     cdef vector[gdf_column*] result_cols
 
+    result_col_names = []  # Preserve the order of the column names
+
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs.push_back(column_view_from_column(col._column))
-
-        mask_size = 0
-        if col.has_null_mask:
-            mask_size = col.nullmask.size
 
         if name not in left_on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
             result_col_names.append(name)
 
-    for name in list(set(left_on + right_on)):
-        # TODO: Need careful type promotion here between lhs and rhs
-        if name in left_on:
-            dtype = col_lhs[name]._column.dtype
-        else:
-            dtype = col_rhs[name]._column.dtype
-        result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=dtype, null_count=0))
+    for name in left_on:
+        result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0))
         result_col_names.append(name)
         left_idx.push_back(list(col_lhs.keys()).index(name))
+
+    for name in right_on:
         right_idx.push_back(list(col_rhs.keys()).index(name))
 
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
         list_rhs.push_back(column_view_from_column(col._column))
-
-        mask_size = 0
-        if col.has_null_mask:
-            mask_size = col.nullmask.size
 
         if name not in right_on:
             result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
@@ -85,8 +75,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef gdf_error result = GDF_CUDA_ERROR
     cdef gdf_size_type col_lhs_len = len(col_lhs)
     cdef gdf_size_type col_rhs_len = len(col_rhs)
-    cdef int c_num_cols_to_join = num_cols_to_join
-    cdef int c_result_num_cols = result_num_cols
+    cdef int c_num_cols_to_join = len(left_on)
+    cdef int c_result_num_cols = result_cols.size()
 
     with nogil:
         if how == 'left':
@@ -139,7 +129,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
 
-    for idx in range(result_num_cols):
+    for idx in range(result_cols.size()):
         col_dtype = gdf_to_np_dtype(result_cols[idx].dtype)
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
@@ -209,4 +199,4 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method='sort'):
     for c_col in result_cols:
         free(c_col)
 
-    return res, valids
+    return list(zip(res, valids, result_col_names))

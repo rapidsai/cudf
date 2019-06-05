@@ -21,6 +21,7 @@
 #include <limits>
 
 #include "cudf.h"
+#include <utilities/column_utils.hpp>
 #include "utilities/error_utils.hpp"
 #include "utilities/type_dispatcher.hpp"
 #include "dlpack/dlpack.h"
@@ -133,7 +134,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   *columns = new gdf_column[*num_columns];
   GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
 
-  gdf_size_type byte_width = gdf_dtype_size(dtype);
+  gdf_size_type byte_width = cudf::size_of(dtype);
   gdf_size_type num_rows = tensor->dl_tensor.shape[0];
   size_t bytes = num_rows * byte_width;
 

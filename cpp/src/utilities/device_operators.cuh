@@ -44,6 +44,18 @@ struct DeviceSum {
     static constexpr T identity() { return T{0}; }
 };
 
+/* @brief `count` operator - used in rolling windows */
+struct DeviceCount {
+    template<typename T>
+    CUDA_HOST_DEVICE_CALLABLE
+    T operator() (const T &, const T &rhs) {
+        return rhs + T{1};
+    }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
+
 /* @brief binary `min` operator */
 struct DeviceMin{
     template<typename T>
