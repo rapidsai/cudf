@@ -106,38 +106,38 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
  *  @param[in]  num_elements          number of elements in the bit mask
  *  @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All other
  *                                    values indicate un-initialized.  Default is uninitialized
- *  @param[in]  padding_bytes         optional, specifies byte boundary the data should be padded to.
- *                                    Defaults to 64 bytes, meaning the space allocated will be rounded
- *                                    up to the next multiple of 64 bytes.
+ *  @param[in]  padding_boundary      optional, specifies the quantum, in bytes, of the amount of memory
+ *                                    allocated (i.e. the actually-required allocation size is "padded" to
+ *                                    a multiple of this value).
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
 inline gdf_error create_bit_mask(bit_mask_t **mask,
                                  gdf_size_type number_of_bits,
                                  int fill_value = -1,
-                                 gdf_size_type allocation_quantum = 64) 
+                                 gdf_size_type padding_boundary = 64)
 {
   // We assume RMM_ALLOC satisfies the allocation alignment for the beginning
   // of the allocated space; we ensure its end also has that allocation.
   //
   // TODO: The assumption may not be valid
 
-  allocation_quantum = std::max<gdf_size_type>(sizeof(bit_mask_t), allocation_quantum);
+  padding_boundary = std::lcm<gdf_size_type>(sizeof(bit_mask_t), padding_boundary);
   gdf_size_type num_quanta_to_allocate =
       cudf::util::div_rounding_up_safe<gdf_size_type>(
-          number_of_bits, CHAR_BIT * allocation_quantum);
+          number_of_bits, CHAR_BIT * padding_boundary);
 
-  RMM_TRY(RMM_ALLOC(mask, allocation_quantum * num_quanta_to_allocate, 0));
+  RMM_TRY(RMM_ALLOC(mask, padding_boundary * num_quanta_to_allocate, 0));
 
   if (fill_value == 0) {
-    CUDA_TRY(cudaMemset(*mask, 0, allocation_quantum * num_quanta_to_allocate));
+    CUDA_TRY(cudaMemset(*mask, 0, padding_boundary * num_quanta_to_allocate));
   } else if (fill_value == 1) {
     //
     //  Value outside range of [0, num_rows) is undefined, so we will
     //  initialize in the simplest manner... we'll initialize all
     //  elements to 1.
     //
-    CUDA_TRY(cudaMemset(*mask, 0xff, allocation_quantum * num_quanta_to_allocate));
+    CUDA_TRY(cudaMemset(*mask, 0xff, padding_boundary * num_quanta_to_allocate));
   }
 
   return GDF_SUCCESS;
