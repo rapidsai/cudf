@@ -38,8 +38,8 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
   gdf_column_view(&bad_mask,  0, 0, 0, GDF_BOOL8);
 
-  column_wrapper<int32_t> source{column_size};
-  column_wrapper<cudf::bool8> mask{column_size};
+  column_wrapper<int32_t> source(column_size);
+  column_wrapper<cudf::bool8> mask(column_size);
 
   CUDF_EXPECT_NO_THROW(cudf::apply_boolean_mask(bad_input, mask));
 
@@ -59,8 +59,8 @@ TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)
   constexpr gdf_size_type column_size{1000};
   constexpr gdf_size_type mask_size{500};
 
-  column_wrapper<int32_t> source{column_size};
-  column_wrapper<cudf::bool8> mask{mask_size};
+  column_wrapper<int32_t> source(column_size);
+  column_wrapper<cudf::bool8> mask(mask_size);
              
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, mask), 
                             "Column size mismatch");
@@ -70,13 +70,13 @@ TEST_F(ApplyBooleanMaskErrorTest, NonBooleanMask)
 {
   constexpr gdf_size_type column_size{1000};
 
-  column_wrapper<int32_t> source{column_size};
-  column_wrapper<float> nonbool_mask{column_size};
-             
+  column_wrapper<int32_t> source(column_size);
+  column_wrapper<float> nonbool_mask(column_size);
+
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, nonbool_mask), 
                             "Mask must be Boolean type");
 
-  column_wrapper<cudf::bool8> bool_mask{column_size, true};
+  column_wrapper<cudf::bool8> bool_mask(column_size, true);
   EXPECT_NO_THROW(cudf::apply_boolean_mask(source, bool_mask));
 }
 
@@ -186,9 +186,9 @@ TYPED_TEST(ApplyBooleanMaskTest, Identity)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return true; }},
+      [](gdf_index_type row) { return true; }),
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }));
@@ -200,10 +200,10 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{false}; },
-      [](gdf_index_type row) { return true; }},
-    column_wrapper<TypeParam>{0, false});
+      [](gdf_index_type row) { return true; }),
+    column_wrapper<TypeParam>(0, false));
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
@@ -212,10 +212,10 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>{column_size, 
+    column_wrapper<cudf::bool8>(column_size, 
       [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return false; }},
-    column_wrapper<TypeParam>{0, false});
+      [](gdf_index_type row) { return false; }),
+    column_wrapper<TypeParam>(0, false));
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
@@ -224,9 +224,9 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{row % 2 == 1}; },
-      [](gdf_index_type row) { return true; }},
+      [](gdf_index_type row) { return true; }),
     make_input<TypeParam>{}(column_size / 2,
       [](gdf_index_type row) { return static_cast<TypeParam>(2 * row + 1); },
       [](gdf_index_type row) { return true; }));
@@ -242,9 +242,9 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return row % 2 == 0; }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return row % 2 == 1; }},
+      [](gdf_index_type row) { return row % 2 == 1; }),
     make_input<TypeParam>{}(column_size / 2,
       [](gdf_index_type row) { return static_cast<TypeParam>(2 * row + 1); },
       [](gdf_index_type row) { return false; }));
@@ -258,9 +258,9 @@ TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{(row < start) || (row >= end)}; },
-      [](gdf_index_type row) { return true; }},
+      [](gdf_index_type row) { return true; }),
     make_input<TypeParam>{}(column_size - (end - start),
       [](gdf_index_type row) { 
         return static_cast<TypeParam>((row < start) ? row : row + end - start); 
@@ -273,9 +273,9 @@ TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
   BooleanMaskTest<TypeParam>(
     make_input<TypeParam>{}(column_size, 
       [](gdf_index_type row) { return static_cast<TypeParam>(row); }),
-    column_wrapper<cudf::bool8>{column_size,
+    column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return row % 2 == 1; }},
+      [](gdf_index_type row) { return row % 2 == 1; }),
      make_input<TypeParam>{}(column_size / 2,
       [](gdf_index_type row) { return static_cast<TypeParam>(2 * row + 1); }));
 }
@@ -346,7 +346,7 @@ TYPED_TEST(DropNullsTest, AllNull)
     make_input<TypeParam>{}(column_size,
       [](gdf_index_type row) { return static_cast<TypeParam>(row); },
       [](gdf_index_type row) { return false; }),
-    column_wrapper<TypeParam>{0, false});
+    column_wrapper<TypeParam>(0, false));
 }
 
 TYPED_TEST(DropNullsTest, EvensNull)
