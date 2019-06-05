@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import numpy as np
-
 from numbers import Number
 
 from cudf.dataframe.dataframe import DataFrame
@@ -70,9 +68,15 @@ class SeriesGroupBy(object):
             df['y'] = self.group_series
         groupby = df.groupby('y').agg(agg_types)
         idx = groupby.index
-        idx.name = self.group_name
-        groupby.set_index(idx)
-        return groupby
+        if len(groupby.columns) == 1:
+            result = groupby['x']
+            result.name = None
+            idx.name = None
+            result = result.set_index(idx)
+        else:
+            idx.name = self.group_name
+            result = groupby.set_index(idx)
+        return result
 
 
 class Groupby(object):
@@ -108,6 +112,7 @@ class Groupby(object):
             self._df[self._LEVEL_0_INDEX_NAME] = by
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
+            setattr(self, "_gotattr", True)
         elif level is not None:
             if level == 0:
                 self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
@@ -248,6 +253,18 @@ class Groupby(object):
                 new_cols.append(new_col)
             result.columns = new_cols
         else:
+            # reorder our columns to match pandas
+            if len(self._val_columns) > 1:
+                col_dfs = [DataFrame() for col in self._val_columns]
+                for agg in aggs:
+                    for idx, col in enumerate(self._val_columns):
+                        col_dfs[idx][agg + '_' + col] = result[agg + '_' + col]
+                idx = result.index
+                result = DataFrame(index=idx)
+                for idx, col in enumerate(self._val_columns):
+                    for agg in aggs:
+                        result[agg + '_' + col] = col_dfs[idx][agg + '_' + col]
+
             levels = []
             codes = []
             levels.append(self._val_columns)
@@ -259,9 +276,10 @@ class Groupby(object):
             # increase by 1 for every n values where n is the number of aggs
             # [['x,', 'z'], ['sum', 'min']]
             # codes == [[0, 1], [0, 1]]
-            code_size = max(len(aggs), len(self._val_columns))
-            codes.append(list(np.zeros(code_size, dtype='int64')))
-            codes.append(list(range(code_size)))
+            first_codes = [len(aggs) * [d*1] for d in range(len(
+                    self._val_columns))]
+            codes.append([item for sublist in first_codes for item in sublist])
+            codes.append(len(self._val_columns) * [0, 1])
             result.columns = MultiIndex(levels, codes)
         return result
 

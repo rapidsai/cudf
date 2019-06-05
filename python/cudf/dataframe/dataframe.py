@@ -2290,7 +2290,7 @@ class DataFrame(object):
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
         if isinstance(self.columns, Index):
-            out.columns = self.columns
+            out.columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out.columns.names = self.columns.names
