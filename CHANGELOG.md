@@ -45,9 +45,10 @@
 - PR #1390 Added some basic utility functions for `gdf_column`s
 - PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1884 Rolling windows: general enhancements and better coverage for unit tests
+- PR #1886 support GDF_STRING_CATEGORY columns in apply_boolean_mask, drop_nulls and other libcudf functions
 - PR #1896 Improve performance of groupby with levels specified in dask-cudf
 - PR #1859 Convert read_json into a C++ API
-- PR #1919 Rename libcudf namespace gdf to namespace cudf.
+- PR #1919 Rename libcudf namespace gdf to namespace cudf
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
 
 

@@ -28,8 +28,8 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-#include <thrust/equal.h>
-#include <thrust/logical.h>
+#include <nvstrings/NVCategory.h>
+
 #include <initializer_list>
 #include <string>
 
@@ -47,6 +47,23 @@
     }                                                                         \
   } while (0)
 #endif
+
+namespace {
+
+gdf_dtype_extra_info copy_extra_info(gdf_column const& column) {
+  gdf_dtype_extra_info extra_info;
+  extra_info.time_unit = column.dtype_info.time_unit;
+  extra_info.category = column.dtype_info.category;
+
+  // make a copy of the category if there is one
+  if (column.dtype_info.category != nullptr) {
+    extra_info.category =
+      static_cast<NVCategory*>(column.dtype_info.category)->copy();
+  }
+  return extra_info;
+}
+
+}; // namespace
 
 namespace cudf {
 namespace test {
@@ -127,11 +144,20 @@ struct column_wrapper {
       : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column} {
     the_column.data = data.data().get();
     the_column.valid = bitmask.data().get();
+    the_column.dtype_info = copy_extra_info(other);
   }
 
   column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
 
-  ~column_wrapper() = default;
+  // column data and bitmask destroyed by device_vector dtor
+  ~column_wrapper() {
+    if (nullptr != the_column.dtype_info.category) {
+      NVCategory::destroy(
+        reinterpret_cast<NVCategory*>(the_column.dtype_info.category)
+      );
+      the_column.dtype_info.category = 0;
+    }
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to a gdf_column pointer.
@@ -266,9 +292,9 @@ struct column_wrapper {
     the_column.data = data.data().get();
     the_column.size = data.size();
     the_column.dtype = column.dtype;
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = column.dtype_info.time_unit;
-    the_column.dtype_info = extra_info;
+
+    the_column.dtype_info = copy_extra_info(column);
+
     if (bitmask.size() > 0) {
       the_column.valid = bitmask.data().get();
     } else {
@@ -358,6 +384,81 @@ struct column_wrapper {
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper using an array of strings for data
+   * with unallocated bitmask.
+   *
+   * Constructs a column wrapper of type nvstring_category from an array of
+   * string host data.
+   *
+   * The valid bitmask is not allocated nor initialized.
+   *
+   * @param column_size The desired size of the column
+   * @param string_values The array of strings to initialize column category
+   * values
+   *---------------------------------------------------------------------------**/
+  column_wrapper(gdf_size_type column_size,
+                 char const ** string_values) {
+    // Initialize the values and bitmask using the initializers
+    std::vector<ColumnType> host_data(column_size);
+    
+    NVCategory* category = NVCategory::create_from_array(string_values,
+                                                         column_size);
+    gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
+    category->get_values(category_data, false);
+
+    for (gdf_index_type row = 0; row < column_size; ++row) {
+      host_data[row] = ColumnType{category_data[row]};
+    }
+    initialize_with_host_data(host_data);
+    the_column.dtype_info.category = category;
+    delete [] category_data;
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper from an array of strings and a
+   * lambda initializer for the column's bitmask.
+   *
+   * Constructs a column wrapper of type nvstring_category from a std::vector of
+   * string host data using a unary lambda to initialize the column's validity
+   * bitmask.
+   *
+   * Bit `i` in the column's bitmask will be equal to `bit_initializer(i)`.
+   *
+   * @tparam BitInitializerType The type of the bit_initializer lambda
+   * @param string_values The array of strings to initialize column category
+   * values
+   * @param column_size The desired size of the column
+   * @param bit_initializer The unary lambda to initialize each bit in the
+   * column's bitmask
+   *---------------------------------------------------------------------------**/
+  template <typename BitInitializerType>
+  column_wrapper(gdf_size_type column_size,
+                 char const ** string_values,
+                 BitInitializerType bit_initializer) {
+    const size_t num_masks = gdf_valid_allocation_size(column_size);
+
+    // Initialize the values and bitmask using the initializers
+    std::vector<ColumnType> host_data(column_size);
+    std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
+
+    NVCategory* category = NVCategory::create_from_array(string_values,
+                                                         column_size);
+    gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
+    category->get_values(category_data, false);
+
+    for (gdf_index_type row = 0; row < column_size; ++row) {
+      host_data[row] = ColumnType{category_data[row]};
+
+      if (true == bit_initializer(row)) {
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
+      }
+    }
+    initialize_with_host_data(host_data, host_bitmask);
+    the_column.dtype_info.category = category;
+    delete [] category_data;
   }
 
   /**---------------------------------------------------------------------------*
@@ -467,6 +568,7 @@ struct column_wrapper {
     the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = TIME_UNIT_NONE;
+    extra_info.category = nullptr;
     the_column.dtype_info = extra_info;
 
     // If a validity bitmask vector was passed in, allocate device storage
