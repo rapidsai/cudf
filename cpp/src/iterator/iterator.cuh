@@ -68,6 +68,7 @@
 
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 
 namespace cudf
 {
@@ -95,6 +96,12 @@ struct mutator_single
     CUDA_HOST_DEVICE_CALLABLE
     mutator_single(T_input _value, bool is_valid=false)
     : value( static_cast<T>(_value) )
+    {};
+
+    template<typename T_input>
+    CUDA_HOST_DEVICE_CALLABLE
+    mutator_single(thrust::pair<T_input, bool> const& pair )
+    : value( static_cast<T>(pair.first) )
     {};
 
     CUDA_HOST_DEVICE_CALLABLE
@@ -127,6 +134,14 @@ struct mutator_squared
     mutator_squared(T_input _value, bool is_valid=false)
     {
         T v = static_cast<T>(_value);
+        value_squared = v*v;
+    };
+
+    template<typename T_input>
+    CUDA_HOST_DEVICE_CALLABLE
+    mutator_squared(thrust::pair<T_input, bool> const& pair )
+    {
+        T v = static_cast<T>(pair.first);
         value_squared = v*v;
     };
 
@@ -174,6 +189,15 @@ struct mutator_meanvar<T, true>
         value_squared = value*value;
     };
 
+    template<typename T_input>
+    CUDA_HOST_DEVICE_CALLABLE
+    mutator_meanvar(thrust::pair<T_input, bool> const & pair )
+    : value( static_cast<T>(pair.first) ), count(pair.second? 1 : 0)
+    {
+        value_squared = value*value;
+    };
+
+
     CUDA_HOST_DEVICE_CALLABLE
     mutator_meanvar(T _value, T _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
@@ -220,6 +244,14 @@ struct mutator_meanvar<T, false>
     CUDA_HOST_DEVICE_CALLABLE
     mutator_meanvar(T_input _value, bool is_valid)
     : value( static_cast<T>(_value) )
+    {
+        value_squared = value*value;
+    };
+
+    template<typename T_input>
+    CUDA_HOST_DEVICE_CALLABLE
+    mutator_meanvar(thrust::pair<T_input, bool> const & pair )
+    : value( static_cast<T>(pair.first) )
     {
         value_squared = value*value;
     };
@@ -294,7 +326,8 @@ struct column_input<T_mutator, T_element, false>{
 
     CUDA_HOST_DEVICE_CALLABLE
     T_mutator at(gdf_index_type id) const {
-        return T_mutator(data[id], true);
+//        return T_mutator(data[id], true);
+        return T_mutator(thrust::make_pair(data[id], true) );
     };
 };
 
@@ -320,7 +353,10 @@ struct column_input<T_mutator, T_element, true>{
 
     CUDA_HOST_DEVICE_CALLABLE
     T_mutator at(gdf_index_type id) const {
-        return is_valid(id) ? T_mutator(data[id], true) : T_mutator(identity, false);
+//        return is_valid(id) ? T_mutator(data[id], true) : T_mutator(identity, false);
+        return is_valid(id) ?
+            T_mutator(thrust::make_pair(data[id], true)) :
+            T_mutator(thrust::make_pair(identity, false));
     };
 
 private:
@@ -382,7 +418,7 @@ template<typename T_output, typename T_input, typename Iterator=thrust::counting
     typename super_t::reference dereference() const
     {
       gdf_index_type id = *(this->base()); // base() returns base iterator: `Iterator`
-      return colData.at(id);
+      return T_output(colData.at(id));
     }
 };
 
