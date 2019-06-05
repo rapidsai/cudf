@@ -80,7 +80,7 @@ struct wrapper
   template <gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE
-  constexpr explicit wrapper(T v) : value{v} {}
+  constexpr explicit wrapper(value_type v) : value{v} {}
 
   // Constructing a bool8 from any value should be the same as first casting the
   // value to a `bool`
