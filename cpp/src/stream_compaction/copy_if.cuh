@@ -26,6 +26,7 @@
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>
+#include <utilities/column_utils.hpp>
 #include <cub/cub.cuh>
 #include <string/nvcategory_util.hpp>
 
@@ -331,14 +332,14 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
 
   if (output_size > 0) {    
     // Allocate/initialize output column
-    gdf_size_type column_byte_width{gdf_dtype_size(input.dtype)};
+    auto column_byte_width { cudf::byte_width(input) };
 
     void *data = nullptr;
     gdf_valid_type *valid = nullptr;
     RMM_ALLOC(&data, output_size * column_byte_width, stream);
 
     if (input.valid != nullptr) {
-      gdf_size_type bytes = gdf_valid_allocation_size(output_size);
+      auto bytes = gdf_valid_allocation_size(output_size);
       RMM_ALLOC(&valid, bytes, stream);
       CUDA_TRY(cudaMemsetAsync(valid, 0, bytes, stream));
     }

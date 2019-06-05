@@ -76,6 +76,9 @@ JsonReader::JsonReader(json_read_arg *args) : args_(args) {
 
   d_false_trie_ = createSerializedTrie({"false"});
   opts_.falseValuesTrie = d_false_trie_.data().get();
+
+  d_na_trie_ = createSerializedTrie({"null"});
+  opts_.naValuesTrie = d_na_trie_.data().get();
 }
 
 /**---------------------------------------------------------------------------*
@@ -574,7 +577,8 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
     // Modify start & end to ignore whitespace and quotechars
     adjustForWhitespaceAndQuotes(data, &start, &field_data_last, opts.quotechar);
     // Empty fields are not legal values
-    if (start <= field_data_last) {
+    if (start <= field_data_last &&
+      !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
       // Type dispatcher does not handle GDF_STRINGS
       if (dtypes[col] == gdf_dtype::GDF_STRING) {
         auto str_list = static_cast<string_pair *>(gdf_columns[col]);
@@ -649,9 +653,11 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
     const long field_end = seekFieldEnd(data, opts, start, stop);
     long field_data_last = field_end - 1;
     adjustForWhitespaceAndQuotes(data, &start, &field_data_last);
+    const int field_len = field_data_last - start + 1;
 
     // Checking if the field is empty
-    if (start > field_data_last) {
+    if (start > field_data_last ||
+      serializedTrieContains(opts.naValuesTrie, data + start, field_len)) {
       atomicAdd(&column_infos[col].null_count, 1);
       start = field_end + 1;
       continue;
@@ -665,7 +671,6 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
     int exponent_count = 0;
     int other_count = 0;
 
-    const int field_len = field_data_last - start + 1;
     const bool maybe_hex = ((field_len > 2 && data[start] == '0' && data[start + 1] == 'x') ||
                             (field_len > 3 && data[start] == '-' && data[start + 1] == '0' && data[start + 2] == 'x'));
     for (long pos = start; pos <= field_data_last; pos++) {
@@ -791,13 +796,15 @@ void JsonReader::setDataTypes() {
     thrust::host_vector<ColumnInfo> h_column_infos = d_column_infos;
 
     for (const auto &cinfo : h_column_infos) {
-      CUDF_EXPECTS(cinfo.null_count == 0, "All fields must contain valid objects.\n");
-
-      if (cinfo.string_count > 0) {
+      if (cinfo.null_count == static_cast<int>(rec_starts_.size())){
+        // Entire column is NULL; allocate the smallest amount of memory
+        dtypes_.push_back(GDF_INT8);
+      } else if (cinfo.string_count > 0) {
         dtypes_.push_back(GDF_STRING);
       } else if (cinfo.datetime_count > 0) {
         dtypes_.push_back(GDF_DATE64);
-      } else if (cinfo.float_count > 0) {
+      } else if (cinfo.float_count > 0 ||
+        (cinfo.int_count > 0 && cinfo.null_count > 0)) {
         dtypes_.push_back(GDF_FLOAT64);
       } else if (cinfo.int_count > 0) {
         dtypes_.push_back(GDF_INT64);
