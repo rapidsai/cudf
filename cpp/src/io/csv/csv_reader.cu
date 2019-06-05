@@ -390,9 +390,8 @@ table read_csv(csv_read_arg const &args)
 	// Done first to validate data types
 	raw_csv_t raw_csv{};
 	// error = parseArguments(args, raw_csv);
-	raw_csv.num_actual_cols	= args.num_names;
-	raw_csv.num_active_cols	= args.num_names;
-	raw_csv.num_records		= 0;
+	raw_csv.num_actual_cols = args.names.size();
+	raw_csv.num_active_cols = args.names.size();
 
 	raw_csv.header_row = args.header;
 	raw_csv.skiprows = args.skiprows;
@@ -443,20 +442,13 @@ table read_csv(csv_read_arg const &args)
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1
 	vector<string> true_values{"True", "TRUE", "true"};
-	if (args.true_values != nullptr && args.num_true_values > 0) {
-		for (int i = 0; i < args.num_true_values; ++i) {
-			true_values.emplace_back(args.true_values[i]);
-		}
-	}
+	true_values.insert(true_values.end(), args.true_values.begin(), args.true_values.end());
+
 	raw_csv.d_trueTrie = createSerializedTrie(true_values);
 	raw_csv.opts.trueValuesTrie = raw_csv.d_trueTrie.data().get();
 
 	vector<string> false_values{"False", "FALSE", "false"};
-	if (args.false_values != nullptr && args.num_false_values > 0) {
-		for (int i = 0; i < args.num_false_values; ++i) {
-			false_values.emplace_back(args.false_values[i]);
-		}
-	}
+	false_values.insert(false_values.end(), args.false_values.begin(), args.false_values.end());
 	raw_csv.d_falseTrie = createSerializedTrie(false_values);
 	raw_csv.opts.falseValuesTrie = raw_csv.d_falseTrie.data().get();
 
@@ -516,7 +508,7 @@ table read_csv(csv_read_arg const &args)
 
 			if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
 				// Need to make sure that w/ padding we don't overshoot the end of file
-				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args.num_names, args.num_dtype)), map_size);
+				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args.names.size(), args.dtype.size())), map_size);
 			}
 
 			// Ignore page padding for parsing purposes
@@ -534,7 +526,7 @@ table read_csv(csv_read_arg const &args)
 	else { CUDF_FAIL("invalid input type"); }
 
 	// Return an empty dataframe if the input is empty and user did not specify the column names and types
-	if (raw_csv.num_bytes == 0 && (args.names == nullptr || args.dtype == nullptr)){
+	if (raw_csv.num_bytes == 0 && (args.names.empty() || args.dtype.empty())){
 		return table();
 	}
 
@@ -578,7 +570,7 @@ table read_csv(csv_read_arg const &args)
 	//-- Populate the header
 
 	// Check if the user gave us a list of column names
-	if(args.names == nullptr) {
+	if(args.names.empty()) {
 		setColumnNamesFromCsv(&raw_csv);
 
 		raw_csv.num_actual_cols = raw_csv.num_active_cols = raw_csv.col_names.size();
@@ -616,47 +608,34 @@ table read_csv(csv_read_arg const &args)
 		}
 	}
 	else {
-		raw_csv.h_parseCol = thrust::host_vector<bool>(args.num_names, true);
+		raw_csv.h_parseCol = thrust::host_vector<bool>(args.names.size(), true);
+		raw_csv.col_names = args.names;
+	}
 
-		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			raw_csv.col_names.emplace_back(args.names[i]);
+	// User can specify which columns should be parsed
+	if (!args.use_cols_indexes.empty() || !args.use_cols_names.empty()){
+		thrust::fill(raw_csv.h_parseCol.begin(), raw_csv.h_parseCol.end(), false);
+		for(int col: args.use_cols_indexes){
+			raw_csv.h_parseCol[col]=true;
+		}
+		raw_csv.num_active_cols = args.use_cols_indexes.size();
+
+		std::set<string> use_cols_set(args.use_cols_names.begin(), args.use_cols_names.end());
+		for(const std::string &col: raw_csv.col_names) {
+			if(use_cols_set.find(col) != use_cols_set.end()){
+				const auto pos = &col - raw_csv.col_names.data();
+				raw_csv.h_parseCol[pos] = true;
+				raw_csv.num_active_cols++;
+			}
 		}
 	}
 
-	// User can give
-	if (args.use_cols_int!=NULL || args.use_cols_char!=NULL){
-		if(args.use_cols_int!=NULL){
-			for (int i = 0; i<raw_csv.num_actual_cols; i++)
-				raw_csv.h_parseCol[i]=false;
-			for(int i=0; i < args.use_cols_int_len; i++){
-				int pos = args.use_cols_int[i];
-				raw_csv.h_parseCol[pos]=true;
-			}
-			raw_csv.num_active_cols = args.use_cols_int_len;
-		}else{
-			for (int i = 0; i<raw_csv.num_actual_cols; i++)
-				raw_csv.h_parseCol[i]=false;
-			int countFound=0;
-			for(int i=0; i < args.use_cols_char_len; i++){
-				std::string colName(args.use_cols_char[i]);
-				for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
-					if(colName==*it){
-						countFound++;
-						int pos=std::distance(raw_csv.col_names.begin(), it);
-						raw_csv.h_parseCol[pos]=true;
-						break;
-					}
-				}
-			}
-			raw_csv.num_active_cols = countFound;
-		}
-	}
 	raw_csv.d_parseCol = raw_csv.h_parseCol;
 
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-  if(args.dtype == NULL){
+  if(args.dtype.empty()){
     if (raw_csv.num_records == 0) {
       raw_csv.dtypes = vector<gdf_dtype>(raw_csv.num_active_cols, GDF_STRING);
     } else {
@@ -699,10 +678,11 @@ table read_csv(csv_read_arg const &args)
     }
   }
   else {
-    const bool is_dict = std::all_of(args.dtype, args.dtype + args.num_dtype,
-                                     [](const auto& s) { return strchr(s, ':') != nullptr; });
+    const bool is_dict = std::all_of(args.dtype.begin(), args.dtype.end(),
+                                     [](const auto& s) { return s.find(':') != std::string::npos; });
     if (!is_dict) {
-      CUDF_EXPECTS(args.num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
+      CUDF_EXPECTS(static_cast<int>(args.dtype.size()) >= raw_csv.num_actual_cols,
+                   "Must specify data types for all columns");
       for (int col = 0; col < raw_csv.num_actual_cols; col++) {
         if (raw_csv.h_parseCol[col]) {
           // dtype is an array of types, assign types to active columns in the given order
@@ -713,11 +693,11 @@ table read_csv(csv_read_arg const &args)
     } else {
       // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
       std::unordered_map<std::string, gdf_dtype> col_type_map;
-      for (int dtype_idx = 0; dtype_idx < args.num_dtype; dtype_idx++) {
+      for (const std::string & dtype: args.dtype) {
         // Split the dtype elements around the last ':' character
-        const char* colon = strrchr(args.dtype[dtype_idx], ':');
-        const std::string col(args.dtype[dtype_idx], colon);
-        const std::string type(colon + 1);
+        const size_t colon_idx = dtype.find_last_of(':');
+        const std::string col(dtype, 0, colon_idx);
+        const std::string type(dtype, colon_idx + 1);
 
         col_type_map[col] = convertStringToDtype(type);
         CUDF_EXPECTS(col_type_map[col] != GDF_invalid, "Unsupported data type");

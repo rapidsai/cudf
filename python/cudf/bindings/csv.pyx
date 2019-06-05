@@ -73,16 +73,6 @@ cpdef cpp_read_csv(
     if delimiter is None:
         delimiter = sep
 
-    dtype_dict = False
-    if dtype is not None:
-        if isinstance(dtype, collections.abc.Mapping):
-            dtype_dict = True
-        elif isinstance(dtype, collections.abc.Iterable):
-            dtype_dict = False
-        else:
-            msg = '''dtype must be 'list like' or 'dict' '''
-            raise TypeError(msg)
-
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
     cdef csv_read_arg csv_reader = csv_read_arg()
@@ -115,65 +105,41 @@ cpdef cpp_read_csv(
     if header == 'infer':
         header = -1
     header_infer = header
-    arr_names = []
-    cdef vector[const char*] vector_names
-    arr_dtypes = []
-    cdef vector[const char*] vector_dtypes
+
     if names is None:
         if header is -1:
             header_infer = 0
         if header is None:
             header_infer = -1
-        csv_reader.names = NULL
-        csv_reader.num_names = 0
     else:
         if header is None:
             header_infer = -1
-        csv_reader.num_names = len(names)
         for col_name in names:
-            arr_names.append(str(col_name).encode())
-        vector_names = arr_names
-        csv_reader.names = vector_names.data()
+            csv_reader.names.push_back(str(col_name).encode())
 
-    if dtype is None:
-        csv_reader.dtype = NULL
-        csv_reader.num_dtype = 0
-    else:
-        csv_reader.num_dtype = len(dtype)
-        if dtype_dict:
+    if dtype is not None:
+        if isinstance(dtype, collections.abc.Mapping):
             for k, v in dtype.items():
-                arr_dtypes.append(str(str(k)+":"+str(v)).encode())
-        else:
+                csv_reader.dtype.push_back(str(str(k)+":"+str(v)).encode())
+        elif isinstance(dtype, collections.abc.Iterable):
             for col_dtype in dtype:
-                arr_dtypes.append(str(col_dtype).encode())
+                csv_reader.dtype.push_back(str(col_dtype).encode())
+        else:
+            msg = '''dtype must be 'list like' or 'dict' '''
+            raise TypeError(msg)
 
-        vector_dtypes = arr_dtypes
-        csv_reader.dtype = vector_dtypes.data()
-
-    csv_reader.use_cols_int = NULL
-    csv_reader.use_cols_int_len = 0
-    csv_reader.use_cols_char = NULL
-    csv_reader.use_cols_char_len = 0
-
-    cdef vector[int] use_cols_int
-    cdef vector[const char*] use_cols_char
     if usecols is not None:
-        arr_col_names = []
         all_int = True
+        # TODO all_of
         for col in usecols:
             if not isinstance(col, int):
                 all_int = False
                 break
         if all_int:
-            use_cols_int = usecols
-            csv_reader.use_cols_int = use_cols_int.data()
-            csv_reader.use_cols_int_len = len(usecols)
+            csv_reader.use_cols_indexes = usecols
         else:
             for col_name in usecols:
-                arr_col_names.append(str(col_name).encode())
-            use_cols_char = arr_col_names
-            csv_reader.use_cols_char = use_cols_char.data()
-            csv_reader.use_cols_char_len = len(usecols)
+                csv_reader.use_cols_names.push_back(str(col_name).encode())
 
     if decimal == delimiter:
         raise ValueError("decimal cannot be the same as delimiter")
@@ -189,21 +155,10 @@ cpdef cpp_read_csv(
             raise ValueError("""cannot manually limit rows to be read when
                                 using the byte range parameter""")
 
-    arr_true_values = []
-    cdef vector[const char*] vector_true_values
     for value in true_values or []:
-        arr_true_values.append(str(value).encode())
-    vector_true_values = arr_true_values
-    csv_reader.true_values = vector_true_values.data()
-    csv_reader.num_true_values = len(arr_true_values)
-
-    arr_false_values = []
-    cdef vector[const char*] vector_false_values
+        csv_reader.true_values.push_back(str(value).encode())
     for value in false_values or []:
-        arr_false_values.append(str(value).encode())
-    vector_false_values = arr_false_values
-    csv_reader.false_values = vector_false_values.data()
-    csv_reader.num_false_values = len(arr_false_values)
+        csv_reader.false_values.push_back(str(value).encode())
 
     arr_na_values = []
     cdef vector[const char*] vector_na_values

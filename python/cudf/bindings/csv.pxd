@@ -9,6 +9,8 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
 from cudf.bindings.types cimport table as cudf_table
 
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cdef extern from "cudf.h" namespace "cudf" nogil:
 
@@ -37,26 +39,20 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         gdf_size_type       nrows
         gdf_size_type       header
 
-        int                 num_names
-        const char          **names
-        int                 num_dtype
-        const char          **dtype
+        vector[string]      names
+        vector[string]      dtype
 
         int                 *index_col
-        int                 *use_cols_int
-        int                 use_cols_int_len
-        const char          **use_cols_char
-        int                 use_cols_char_len
+        vector[int]         use_cols_indexes
+        vector[string]      use_cols_names
 
         gdf_size_type       skiprows
         gdf_size_type       skipfooter
 
         bool                skip_blank_lines
 
-        const char          **true_values
-        int                 num_true_values
-        const char          **false_values
-        int                 num_false_values
+        vector[string]      true_values
+        vector[string]      false_values
 
         const char          **na_values
         int                 num_na_values
@@ -88,4 +84,4 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         size_t              byte_range_offset
         size_t              byte_range_size
 
-    cdef cudf_table read_csv(csv_read_arg const &args) except +
+    cdef cudf_table read_csv(const csv_read_arg &args) except +

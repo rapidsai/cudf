@@ -103,6 +103,9 @@ typedef struct {
 
 } pq_read_arg;
 
+#include <vector>
+#include <string>
+
 namespace cudf{
 
 /*
@@ -151,25 +154,19 @@ struct csv_read_arg{
   gdf_size_type nrows;                      ///< Number of rows to read, -1 indicates all
   gdf_size_type header;                     ///< Row of the header data, zero based counting. Default states that header should not be read from file.
 
-  int           num_names;                  ///< Number of elements in the names array
-  const char    **names;                    ///< Ordered List of column names
-  int           num_dtype;                  ///< Number of elements in the dtype array
-  const char    **dtype;                    ///< Ordered List of data types
+  std::vector<std::string> names;           ///< Ordered List of column names
+  std::vector<std::string> dtype;           ///< Ordered List of data types
 
-  int           *use_cols_int;              ///< Indexes of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
-  int           use_cols_int_len;           ///< Number of elements in use_cols_int
-  const char    **use_cols_char;            ///< Names of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
-  int           use_cols_char_len;          ///< Number of elements in use_cols_char_len
+  std::vector<int> use_cols_indexes;        ///< Indexes of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
+  std::vector<std::string> use_cols_names;  ///< Names of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
 
   gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
   gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
 
   bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
 
-  const char    **true_values;              ///< List of values to recognize as boolean True
-  int           num_true_values;            ///< Number of values in the true_values list
-  const char    **false_values;             ///< List of values to recognize as boolean False
-  int           num_false_values;           ///< Number of values in the true_values list
+  std::vector<std::string> true_values;     ///< List of values to recognize as boolean True
+  std::vector<std::string> false_values;    ///< List of values to recognize as boolean False
 
   const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
