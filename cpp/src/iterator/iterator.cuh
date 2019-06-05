@@ -131,14 +131,6 @@ struct mutator_squared
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
-    mutator_squared(T_input _value, bool is_valid=false)
-    {
-        T v = static_cast<T>(_value);
-        value_squared = v*v;
-    };
-
-    template<typename T_input>
-    CUDA_HOST_DEVICE_CALLABLE
     mutator_squared(thrust::pair<T_input, bool> const& pair )
     {
         T v = static_cast<T>(pair.first);
@@ -180,14 +172,6 @@ struct mutator_meanvar<T, true>
     T value;                /// the value
     T value_squared;        /// the value of squared
     gdf_index_type count;   /// the count
-
-    template<typename T_input>
-    CUDA_HOST_DEVICE_CALLABLE
-    mutator_meanvar(T_input _value, bool is_valid)
-    : value( static_cast<T>(_value) ), count(is_valid? 1 : 0)
-    {
-        value_squared = value*value;
-    };
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
@@ -239,14 +223,6 @@ struct mutator_meanvar<T, false>
     T value;
     T value_squared;
     gdf_index_type count;
-
-    template<typename T_input>
-    CUDA_HOST_DEVICE_CALLABLE
-    mutator_meanvar(T_input _value, bool is_valid)
-    : value( static_cast<T>(_value) )
-    {
-        value_squared = value*value;
-    };
 
     template<typename T_input>
     CUDA_HOST_DEVICE_CALLABLE
@@ -326,7 +302,6 @@ struct column_input<T_mutator, T_element, false>{
 
     CUDA_HOST_DEVICE_CALLABLE
     T_mutator at(gdf_index_type id) const {
-//        return T_mutator(data[id], true);
         return T_mutator(thrust::make_pair(data[id], true) );
     };
 };
@@ -353,7 +328,6 @@ struct column_input<T_mutator, T_element, true>{
 
     CUDA_HOST_DEVICE_CALLABLE
     T_mutator at(gdf_index_type id) const {
-//        return is_valid(id) ? T_mutator(data[id], true) : T_mutator(identity, false);
         return is_valid(id) ?
             T_mutator(thrust::make_pair(data[id], true)) :
             T_mutator(thrust::make_pair(identity, false));
