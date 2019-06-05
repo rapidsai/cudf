@@ -37,16 +37,29 @@
 namespace detail {
 
 template <typename T>
-std::string to_string(T val) { return std::to_string(val); }
+std::string to_string(T val) 
+{
+    return std::to_string(cudf::detail::unwrap(val)); 
+}
 
 template <> std::string to_string<cudf::bool8>(cudf::bool8 val)
 {
-    return {unwrap(val) ? "true" : "false"};
+    return cudf::detail::unwrap(val) ? "true" : "false";
 }
 
-// TODO: Implement for cudf::category, cudf::nvstring_category, cudf::timestamp, cudf::date32, cudf::date64
+// TODO: Make sure the above function does something reasonable for all wrapped types
 
 } // namespace detail
+
+enum : bool {
+    distinct_nulls_are_equal = true,
+    distinct_nulls_are_unequal = false,
+};
+
+enum : bool {
+    do_print_unequal_pairs = true,
+    dont_print_unequal_pairs = false,
+};
 
 /**
  * @note Currently ignoring the extra type info, i.e. assuming it's the same for both columns, or can be ignored
@@ -60,7 +73,8 @@ void expect_column_values_are_equal(
     const E*               rhs_data_on_host,
     const gdf_valid_type*  rhs_validity_on_host,
     const std::string&     rhs_name,
-    bool                   print_all_unequal_pairs = false)
+    bool                   treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
+    bool                   print_all_unequal_pairs = dont_print_unequal_pairs)
 {
     auto lhs_non_nullable = (lhs_validity_on_host == nullptr);
     auto rhs_non_nullable = (rhs_validity_on_host == nullptr);
@@ -70,7 +84,7 @@ void expect_column_values_are_equal(
         auto lhs_element_is_valid = lhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(lhs_validity_on_host, i);
         auto rhs_element_is_valid = rhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(rhs_validity_on_host, i);
         auto elements_are_equal =
-            (not lhs_element_is_valid and not rhs_element_is_valid) or
+            (treat_distinct_nulls_as_equal and not lhs_element_is_valid and not rhs_element_is_valid) or
             (lhs_element_is_valid == rhs_element_is_valid and lhs_data_on_host[i] == rhs_data_on_host[i]);
         EXPECT_TRUE(elements_are_equal)
             << std::left << std::setw(max_name_length) << lhs_name << std::right << '[' << i << "] = " << (lhs_element_is_valid ? detail::to_string(lhs_data_on_host[i]) : "@") << '\n'
@@ -86,7 +100,8 @@ void expect_columns_are_equal(
     const std::string&                    lhs_name,
     cudf::test::column_wrapper<E> const&  rhs,
     const std::string&                    rhs_name,
-    bool                                  print_all_unequal_pairs = false)
+    bool                                  treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
+    bool                                  print_all_unequal_pairs = dont_print_unequal_pairs)
 {
     const gdf_column& lhs_gdf_column = *(lhs.get());
     const gdf_column& rhs_gdf_column = *(rhs.get());
@@ -95,10 +110,11 @@ void expect_columns_are_equal(
     EXPECT_TRUE(cudf::have_same_type(lhs_gdf_column, rhs_gdf_column));
     if (not cudf::have_same_type(lhs_gdf_column, rhs_gdf_column)) { return; }
     EXPECT_EQ(lhs_gdf_column.size, rhs_gdf_column.size);
+    EXPECT_EQ(cudf::is_nullable(lhs), cudf::is_nullable(rhs));
+    auto both_non_nullable = cudf::is_nullable(lhs);
     EXPECT_EQ(lhs_gdf_column.null_count, rhs_gdf_column.null_count);
     auto common_size = lhs_gdf_column.size;
     if (common_size == 0) { return; }
-    auto non_nullable = (lhs_gdf_column.null_count == 0);
 
     auto lhs_on_host = lhs.to_host();
     auto rhs_on_host = rhs.to_host();
@@ -106,13 +122,14 @@ void expect_columns_are_equal(
     const E* lhs_data_on_host  = std::get<0>(lhs_on_host).data();
     const E* rhs_data_on_host  = std::get<0>(rhs_on_host).data();
 
-    const gdf_valid_type * lhs_validity_on_host = non_nullable ? nullptr : std::get<1>(lhs_on_host).data();
-    const gdf_valid_type * rhs_validity_on_host = non_nullable ? nullptr : std::get<1>(rhs_on_host).data();
+    const gdf_valid_type * lhs_validity_on_host = cudf::is_nullable(lhs) ? nullptr : std::get<1>(lhs_on_host).data();
+    const gdf_valid_type * rhs_validity_on_host = cudf::is_nullable(rhs) ? nullptr : std::get<1>(rhs_on_host).data();
 
     return expect_column_values_are_equal(
         common_size,
         lhs_data_on_host, lhs_validity_on_host, lhs_name,
         rhs_data_on_host, rhs_validity_on_host, rhs_name,
+        treat_distinct_nulls_as_equal,
         print_all_unequal_pairs);
 }
 
@@ -120,7 +137,8 @@ template<typename E>
 void expect_columns_are_equal(
     cudf::test::column_wrapper<E> const&  actual,
     cudf::test::column_wrapper<E> const&  expected,
-    bool                                  print_all_unequal_pairs = false)
+    bool                                  treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
+    bool                                  print_all_unequal_pairs = dont_print_unequal_pairs)
 {
     return expect_columns_are_equal<E>(expected, "Expected", actual, "Actual", print_all_unequal_pairs);
 }
