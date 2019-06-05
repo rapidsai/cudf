@@ -365,7 +365,7 @@ struct column_wrapper {
       host_data[row] = ColumnType{category_data[row]};
 
       if (true == bit_initializer(row)) {
-        gdf::util::turn_bit_on(host_bitmask.data(), row);
+        cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
     }
     initialize_with_host_data(host_data, host_bitmask);
