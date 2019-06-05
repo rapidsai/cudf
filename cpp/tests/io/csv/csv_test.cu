@@ -133,7 +133,7 @@ TEST(gdf_csv_test, DetectColumns)
         args.nrows = -1;
         args.use_cols_char = use_cols;
         args.use_cols_char_len = 2;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         // cudf auto detect type code uses INT64
         ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
@@ -176,7 +176,7 @@ TEST(gdf_csv_test, UseColumns)
         args.nrows = -1;
         args.use_cols_char = use_cols;
         args.use_cols_char_len = 2;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
         ASSERT_EQ( df.get_column(1)->dtype, GDF_INT32 );
@@ -229,7 +229,7 @@ TEST(gdf_csv_test, Numbers) {
     args.skip_blank_lines = true;
     args.header = -1;
     args.nrows = -1;
-    const table df = read_csv(&args);
+    const table df = read_csv(args);
 
     EXPECT_THAT(gdf_host_column<int8_t>(df.get_column(0)).hostdata(),
                 ::testing::ElementsAreArray(int8_values));
@@ -350,7 +350,7 @@ TEST(gdf_csv_test, MortPerf)
         args.dtype = NULL;
 
 
-        read_csv(&args);
+        read_csv(args);
     }
 }
 
@@ -381,7 +381,7 @@ TEST(gdf_csv_test, Strings)
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), args.num_names );
@@ -444,7 +444,7 @@ TEST(gdf_csv_test, QuotedStrings)
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), args.num_names );
@@ -506,7 +506,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
         args.skip_blank_lines = true;
         args.header = 0;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), args.num_names );
@@ -569,7 +569,7 @@ TEST(gdf_csv_test, Booleans)
         args.num_false_values = std::extent<decltype(falseValues)>::value;
         args.header = -1;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         // Booleans are the same (integer) data type, but valued at 0 or 1
         EXPECT_EQ( df.num_columns(), args.num_names );
@@ -616,7 +616,7 @@ TEST(gdf_csv_test, Dates)
         args.skip_blank_lines = true;
         args.header = -1;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_DATE64 );
@@ -654,7 +654,7 @@ TEST(gdf_csv_test, FloatingPoint)
         args.skip_blank_lines = true;
         args.header = -1;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_FLOAT32 );
@@ -689,7 +689,7 @@ TEST(gdf_csv_test, Category)
         args.lineterminator = ';';
         args.header = -1;
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_CATEGORY );
@@ -725,7 +725,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
         args.header = 1;
         args.skiprows = 2;
         args.nrows = 2;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -761,7 +761,7 @@ TEST(gdf_csv_test, ByteRange)
         args.nrows = -1;
         args.byte_range_offset = 11;
         args.byte_range_size = 15;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -796,7 +796,7 @@ TEST(gdf_csv_test, BlanksAndComments)
         args.header = -1;
         args.comment = '#';
         args.nrows = -1;
-        const table df = read_csv(&args);
+        const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), args.num_names );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -833,7 +833,7 @@ TEST(gdf_csv_test, Writer)
     rargs.skip_blank_lines = true;
     rargs.header = -1;
     rargs.nrows = -1;
-    const table df = read_csv(&rargs);
+    const table df = read_csv(rargs);
 
     const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
     csv_write_arg wargs{};

@@ -383,56 +383,56 @@ void setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv) {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-table read_csv(csv_read_arg *args)
+table read_csv(csv_read_arg const &args)
 {
 	//-----------------------------------------------------------------------------
 	// create the CSV data structure - this will be filled in as the CSV data is processed.
 	// Done first to validate data types
 	raw_csv_t raw_csv{};
 	// error = parseArguments(args, raw_csv);
-	raw_csv.num_actual_cols	= args->num_names;
-	raw_csv.num_active_cols	= args->num_names;
+	raw_csv.num_actual_cols	= args.num_names;
+	raw_csv.num_active_cols	= args.num_names;
 	raw_csv.num_records		= 0;
 
-	raw_csv.header_row = args->header;
-	raw_csv.skiprows = args->skiprows;
-	raw_csv.skipfooter = args->skipfooter;
-	raw_csv.nrows = args->nrows;
-	raw_csv.prefix = args->prefix == nullptr ? "" : string(args->prefix);
+	raw_csv.header_row = args.header;
+	raw_csv.skiprows = args.skiprows;
+	raw_csv.skipfooter = args.skipfooter;
+	raw_csv.nrows = args.nrows;
+	raw_csv.prefix = args.prefix == nullptr ? "" : string(args.prefix);
 
-	if (args->delim_whitespace) {
+	if (args.delim_whitespace) {
 		raw_csv.opts.delimiter = ' ';
 		raw_csv.opts.multi_delimiter = true;
 	} else {
-		raw_csv.opts.delimiter = args->delimiter;
+		raw_csv.opts.delimiter = args.delimiter;
 		raw_csv.opts.multi_delimiter = false;
 	}
-	if (args->windowslinetermination) {
+	if (args.windowslinetermination) {
 		raw_csv.opts.terminator = '\n';
 	} else {
-		raw_csv.opts.terminator = args->lineterminator;
+		raw_csv.opts.terminator = args.lineterminator;
 	}
-	if (args->quotechar != '\0' && args->quoting != QUOTE_NONE) {
-		raw_csv.opts.quotechar = args->quotechar;
+	if (args.quotechar != '\0' && args.quoting != QUOTE_NONE) {
+		raw_csv.opts.quotechar = args.quotechar;
 		raw_csv.opts.keepquotes = false;
-		raw_csv.opts.doublequote = args->doublequote;
+		raw_csv.opts.doublequote = args.doublequote;
 	} else {
 		raw_csv.opts.quotechar = '\0';
 		raw_csv.opts.keepquotes = true;
 		raw_csv.opts.doublequote = false;
 	}
-	raw_csv.opts.skipblanklines = args->skip_blank_lines;
-	raw_csv.opts.comment = args->comment;
-	raw_csv.opts.dayfirst = args->dayfirst;
-	raw_csv.opts.decimal = args->decimal;
-	raw_csv.opts.thousands = args->thousands;
+	raw_csv.opts.skipblanklines = args.skip_blank_lines;
+	raw_csv.opts.comment = args.comment;
+	raw_csv.opts.dayfirst = args.dayfirst;
+	raw_csv.opts.decimal = args.decimal;
+	raw_csv.opts.thousands = args.thousands;
 	CUDF_EXPECTS(raw_csv.opts.decimal != raw_csv.opts.delimiter, "Decimal point cannot be the same as the delimiter");
 	CUDF_EXPECTS(raw_csv.opts.thousands != raw_csv.opts.delimiter, "Thousands separator cannot be the same as the delimiter");
 
-	const string compression_type = inferCompressionType(args->compression, args->filepath_or_buffer);
+	const string compression_type = inferCompressionType(args.compression, args.filepath_or_buffer);
 
-	raw_csv.byte_range_offset = args->byte_range_offset;
-	raw_csv.byte_range_size = args->byte_range_size;
+	raw_csv.byte_range_offset = args.byte_range_offset;
+	raw_csv.byte_range_size = args.byte_range_size;
 	if (raw_csv.byte_range_offset > 0 || raw_csv.byte_range_size > 0) {
 		CUDF_EXPECTS(raw_csv.nrows < 0 && raw_csv.skiprows == 0 || raw_csv.skipfooter == 0,
 			"Cannot manually limit rows to be read when using the byte range parameter");
@@ -443,37 +443,37 @@ table read_csv(csv_read_arg *args)
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1
 	vector<string> true_values{"True", "TRUE", "true"};
-	if (args->true_values != nullptr && args->num_true_values > 0) {
-		for (int i = 0; i < args->num_true_values; ++i) {
-			true_values.emplace_back(args->true_values[i]);
+	if (args.true_values != nullptr && args.num_true_values > 0) {
+		for (int i = 0; i < args.num_true_values; ++i) {
+			true_values.emplace_back(args.true_values[i]);
 		}
 	}
 	raw_csv.d_trueTrie = createSerializedTrie(true_values);
 	raw_csv.opts.trueValuesTrie = raw_csv.d_trueTrie.data().get();
 
 	vector<string> false_values{"False", "FALSE", "false"};
-	if (args->false_values != nullptr && args->num_false_values > 0) {
-		for (int i = 0; i < args->num_false_values; ++i) {
-			false_values.emplace_back(args->false_values[i]);
+	if (args.false_values != nullptr && args.num_false_values > 0) {
+		for (int i = 0; i < args.num_false_values; ++i) {
+			false_values.emplace_back(args.false_values[i]);
 		}
 	}
 	raw_csv.d_falseTrie = createSerializedTrie(false_values);
 	raw_csv.opts.falseValuesTrie = raw_csv.d_falseTrie.data().get();
 
-	if (args->na_filter && 
-		(args->keep_default_na || (args->na_values != nullptr && args->num_na_values > 0))) {
+	if (args.na_filter && 
+		(args.keep_default_na || (args.na_values != nullptr && args.num_na_values > 0))) {
 		vector<string> na_values{
 			"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
 			"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
 			"1.#QNAN", "N/A", "NA", "NULL", 
 			"NaN", "n/a", "nan", "null"};
-		if(!args->keep_default_na){
+		if(!args.keep_default_na){
 			na_values.clear();
 		}
 
-		if (args->na_values != nullptr && args->num_na_values > 0) {
-			for (int i = 0; i < args->num_na_values; ++i) {
-				na_values.emplace_back(args->na_values[i]);
+		if (args.na_values != nullptr && args.num_na_values > 0) {
+			for (int i = 0; i < args.num_na_values; ++i) {
+				na_values.emplace_back(args.na_values[i]);
 			}
 		}
 
@@ -487,16 +487,16 @@ table read_csv(csv_read_arg *args)
 	size_t	map_size = 0;
 	size_t	map_offset = 0;
 	int fd = 0;
-	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	if (args.input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
-		fd = open(args->filepath_or_buffer, O_RDONLY );
+		fd = open(args.filepath_or_buffer, O_RDONLY );
 		if (fd < 0) { close(fd); CUDF_FAIL("Error opening file"); }
 
 		struct stat st{};
 		if (fstat(fd, &st)) { close(fd); CUDF_FAIL("cannot stat file"); }
 	
 		const auto file_size = st.st_size;
-		if (args->byte_range_offset > (size_t)file_size) {
+		if (args.byte_range_offset > (size_t)file_size) {
 			close(fd);
 			CUDF_FAIL("The byte_range offset is larger than the file size");
 		}
@@ -505,18 +505,18 @@ table read_csv(csv_read_arg *args)
 		if (file_size != 0) {
 			// Have to align map offset to page size
 			const auto page_size = sysconf(_SC_PAGESIZE);
-			map_offset = (args->byte_range_offset/page_size)*page_size;
+			map_offset = (args.byte_range_offset/page_size)*page_size;
 
 			// Set to rest-of-the-file size, will reduce based on the byte range size
 			raw_csv.num_bytes = map_size = file_size - map_offset;
 
 			// Include the page padding in the mapped size
-			const size_t page_padding = args->byte_range_offset - map_offset;
+			const size_t page_padding = args.byte_range_offset - map_offset;
 			const size_t padded_byte_range_size = raw_csv.byte_range_size + page_padding;
 
 			if (raw_csv.byte_range_size != 0 && padded_byte_range_size < map_size) {
 				// Need to make sure that w/ padding we don't overshoot the end of file
-				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args->num_names, args->num_dtype)), map_size);
+				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args.num_names, args.num_dtype)), map_size);
 			}
 
 			// Ignore page padding for parsing purposes
@@ -526,15 +526,15 @@ table read_csv(csv_read_arg *args)
 			if (map_data == MAP_FAILED || map_size==0) { close(fd); CUDF_FAIL("Error mapping file"); }
 		}
 	}
-	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
+	else if (args.input_data_form == gdf_csv_input_form::HOST_BUFFER)
 	{
-		map_data = (void *)args->filepath_or_buffer;
-		raw_csv.num_bytes = map_size = args->buffer_size;
+		map_data = (void *)args.filepath_or_buffer;
+		raw_csv.num_bytes = map_size = args.buffer_size;
 	}
 	else { CUDF_FAIL("invalid input type"); }
 
 	// Return an empty dataframe if the input is empty and user did not specify the column names and types
-	if (raw_csv.num_bytes == 0 && (args->names == nullptr || args->dtype == nullptr)){
+	if (raw_csv.num_bytes == 0 && (args.names == nullptr || args.dtype == nullptr)){
 		return table();
 	}
 
@@ -546,7 +546,7 @@ table read_csv(csv_read_arg *args)
 	if(raw_csv.num_bytes != 0) {
 		if (compression_type == "none") {
 			// Do not use the owner vector here to avoid copying the whole file to the heap
-			h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
+			h_uncomp_data = (const char*)map_data + (args.byte_range_offset - map_offset);
 			h_uncomp_size = raw_csv.num_bytes;
 		}
 		else {
@@ -566,7 +566,7 @@ table read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	if (args.input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		close(fd);
 		if (map_data != nullptr) {
@@ -578,7 +578,7 @@ table read_csv(csv_read_arg *args)
 	//-- Populate the header
 
 	// Check if the user gave us a list of column names
-	if(args->names == nullptr) {
+	if(args.names == nullptr) {
 		setColumnNamesFromCsv(&raw_csv);
 
 		raw_csv.num_actual_cols = raw_csv.num_active_cols = raw_csv.col_names.size();
@@ -598,7 +598,7 @@ table read_csv(csv_read_arg *args)
 		for (auto& col_name: raw_csv.col_names){
 			// Operator [] inserts a default-initialized value if the given key is not present
 			if (++col_names_histogram[col_name] > 1){
-				if (args->mangle_dupe_cols) {
+				if (args.mangle_dupe_cols) {
 					// Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
 					col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
 				}
@@ -611,34 +611,34 @@ table read_csv(csv_read_arg *args)
 		}
 
 		// Update the number of columns to be processed, if some might have been removed
-		if (!args->mangle_dupe_cols) {
+		if (!args.mangle_dupe_cols) {
 			raw_csv.num_active_cols = col_names_histogram.size();
 		}
 	}
 	else {
-		raw_csv.h_parseCol = thrust::host_vector<bool>(args->num_names, true);
+		raw_csv.h_parseCol = thrust::host_vector<bool>(args.num_names, true);
 
 		for (int i = 0; i<raw_csv.num_actual_cols; i++){
-			raw_csv.col_names.emplace_back(args->names[i]);
+			raw_csv.col_names.emplace_back(args.names[i]);
 		}
 	}
 
 	// User can give
-	if (args->use_cols_int!=NULL || args->use_cols_char!=NULL){
-		if(args->use_cols_int!=NULL){
+	if (args.use_cols_int!=NULL || args.use_cols_char!=NULL){
+		if(args.use_cols_int!=NULL){
 			for (int i = 0; i<raw_csv.num_actual_cols; i++)
 				raw_csv.h_parseCol[i]=false;
-			for(int i=0; i < args->use_cols_int_len; i++){
-				int pos = args->use_cols_int[i];
+			for(int i=0; i < args.use_cols_int_len; i++){
+				int pos = args.use_cols_int[i];
 				raw_csv.h_parseCol[pos]=true;
 			}
-			raw_csv.num_active_cols = args->use_cols_int_len;
+			raw_csv.num_active_cols = args.use_cols_int_len;
 		}else{
 			for (int i = 0; i<raw_csv.num_actual_cols; i++)
 				raw_csv.h_parseCol[i]=false;
 			int countFound=0;
-			for(int i=0; i < args->use_cols_char_len; i++){
-				std::string colName(args->use_cols_char[i]);
+			for(int i=0; i < args.use_cols_char_len; i++){
+				std::string colName(args.use_cols_char[i]);
 				for (auto it = raw_csv.col_names.begin(); it != raw_csv.col_names.end(); it++){
 					if(colName==*it){
 						countFound++;
@@ -656,7 +656,7 @@ table read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-  if(args->dtype == NULL){
+  if(args.dtype == NULL){
     if (raw_csv.num_records == 0) {
       raw_csv.dtypes = vector<gdf_dtype>(raw_csv.num_active_cols, GDF_STRING);
     } else {
@@ -699,24 +699,24 @@ table read_csv(csv_read_arg *args)
     }
   }
   else {
-    const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
+    const bool is_dict = std::all_of(args.dtype, args.dtype + args.num_dtype,
                                      [](const auto& s) { return strchr(s, ':') != nullptr; });
     if (!is_dict) {
-      CUDF_EXPECTS(args->num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
+      CUDF_EXPECTS(args.num_dtype >= raw_csv.num_actual_cols, "Must specify data types for all columns");
       for (int col = 0; col < raw_csv.num_actual_cols; col++) {
         if (raw_csv.h_parseCol[col]) {
           // dtype is an array of types, assign types to active columns in the given order
-          raw_csv.dtypes.push_back(convertStringToDtype(args->dtype[col]));
+          raw_csv.dtypes.push_back(convertStringToDtype(args.dtype[col]));
           CUDF_EXPECTS(raw_csv.dtypes.back() != GDF_invalid, "Unsupported data type");
         }
       }
     } else {
       // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
       std::unordered_map<std::string, gdf_dtype> col_type_map;
-      for (int dtype_idx = 0; dtype_idx < args->num_dtype; dtype_idx++) {
+      for (int dtype_idx = 0; dtype_idx < args.num_dtype; dtype_idx++) {
         // Split the dtype elements around the last ':' character
-        const char* colon = strrchr(args->dtype[dtype_idx], ':');
-        const std::string col(args->dtype[dtype_idx], colon);
+        const char* colon = strrchr(args.dtype[dtype_idx], ':');
+        const std::string col(args.dtype[dtype_idx], colon);
         const std::string type(colon + 1);
 
         col_type_map[col] = convertStringToDtype(type);

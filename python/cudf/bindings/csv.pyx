@@ -256,7 +256,7 @@ cpdef cpp_read_csv(
 
     cdef cudf_table table
     with nogil:
-        table = read_csv(&csv_reader)
+        table = read_csv(csv_reader)
 
     # Extract parsed columns
     outcols = []
