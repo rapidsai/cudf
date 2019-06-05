@@ -477,7 +477,7 @@ gpuParseRowGroupIndex(RowGroup *row_groups, CompressedStreamInfo *strm_info, Col
     while (s->rowgroup_start < s->rowgroup_end)
     {
         int num_rowgroups = min(s->rowgroup_end - s->rowgroup_start, 128);
-        int rowgroups_size4;
+        int rowgroup_size4, t4, t32;
 
         s->rowgroups[t].chunk_id = chunk_id;
         if (t == 0)
@@ -498,11 +498,17 @@ gpuParseRowGroupIndex(RowGroup *row_groups, CompressedStreamInfo *strm_info, Col
             }
             __syncthreads();
         }
-        rowgroups_size4 = num_rowgroups * sizeof(RowGroup) / sizeof(uint32_t);
-        for (int i = t; i < rowgroups_size4; i += 128)
+        rowgroup_size4 = sizeof(RowGroup) / sizeof(uint32_t);
+        t4 = t & 3;
+        t32 = t >> 2;
+        for (int i = t32; i < num_rowgroups; i += 32)
         {
-            ((uint32_t *)&row_groups[s->rowgroup_start])[i] = ((volatile uint32_t *)&s->rowgroups[0])[i];
+            for (int j = t4; j < rowgroup_size4; j += 4)
+            {
+                ((uint32_t *)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] = ((volatile uint32_t *)&s->rowgroups[i])[j];
+            }
         }
+        __syncthreads();
         if (t == 0)
         {
             s->rowgroup_start += num_rowgroups;
