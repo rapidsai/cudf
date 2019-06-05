@@ -149,7 +149,7 @@ struct JoinTest : public GdfTest
       RMM_FREE(col->data, 0); 
       RMM_FREE(col->valid, 0); 
     };
-    gdf_col_pointer the_column{new gdf_column, deleter};
+    gdf_col_pointer the_column{new gdf_column{}, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
