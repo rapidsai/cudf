@@ -34,21 +34,22 @@ struct SingleColumnGroupbyTest : public GdfTest {
   int random_size() { return distribution(generator); }
 };
 
+// TODO: tests for cudf::bool8
 using TestingTypes =
     ::testing::Types<int32_t, int8_t, int16_t, int32_t, int64_t, float, double,
-                     cudf::date32, cudf::date64, cudf::category, cudf::bool8>;
+                     cudf::date32, cudf::date64, cudf::category>;
 
 TYPED_TEST_CASE(SingleColumnGroupbyTest, TestingTypes);
 
 using namespace cudf::test;
 using namespace cudf::groupby::hash;
 
-template <operators op, typename Key, typename Value, typename ResultType>
+template <operators op, typename Key, typename Value, typename ResultValue>
 void single_column_groupby_test(column_wrapper<Key> keys,
                                 column_wrapper<Value> values,
                                 column_wrapper<Key> expected_keys,
-                                column_wrapper<ResultType> expected_values) {
-  static_assert(std::is_same<ResultType, expected_result_t<Value, op>>::value,
+                                column_wrapper<ResultValue> expected_values) {
+  static_assert(std::is_same<ResultValue, expected_result_t<Value, op>>::value,
                 "Incorrect type for expected_values.");
 
   ASSERT_EQ(keys.size(), values.size())
@@ -63,11 +64,18 @@ void single_column_groupby_test(column_wrapper<Key> keys,
       groupby(input_keys, input_values, {op});
 
   ASSERT_EQ(cudf::gdf_dtype_of<Key>(), output_keys_table.get_column(0)->dtype);
-  ASSERT_EQ(cudf::gdf_dtype_of<ResultType>(),
+  ASSERT_EQ(cudf::gdf_dtype_of<ResultValue>(),
             output_values_table.get_column(0)->dtype);
 
+  // TODO Is there a better way to test that these don't throw other than
+  // doing the construction twice?
+  CUDF_EXPECT_NO_THROW(
+      column_wrapper<Key> output_keys(*output_keys_table.get_column(0)));
+  CUDF_EXPECT_NO_THROW(column_wrapper<ResultValue> output_values(
+      *output_values_table.get_column(0)));
+
   column_wrapper<Key> output_keys(*output_keys_table.get_column(0));
-  column_wrapper<ResultType> output_values(*output_values_table.get_column(0));
+  column_wrapper<ResultValue> output_values(*output_values_table.get_column(0));
 
   // Sort-by-key the expected and actual data to make them directly comparable
   thrust::stable_sort_by_key(thrust::device, expected_keys.get_data().begin(),
@@ -78,43 +86,49 @@ void single_column_groupby_test(column_wrapper<Key> keys,
                              output_values.get_data().begin());
 
   bool const print_all_unequal_pairs{true};
-  expect_columns_are_equal(output_keys, "Actual Keys", expected_keys,
-                           "Expected Keys", print_all_unequal_pairs);
-  expect_columns_are_equal(output_values, "Actual Values", expected_values,
-                           "Expected Values", print_all_unequal_pairs);
+  CUDF_EXPECT_NO_THROW(expect_columns_are_equal(output_keys, "Actual Keys",
+                                                expected_keys, "Expected Keys",
+                                                print_all_unequal_pairs));
+  CUDF_EXPECT_NO_THROW(
+      expect_columns_are_equal(output_values, "Actual Values", expected_values,
+                               "Expected Values", print_all_unequal_pairs));
 }
 
 TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsCount) {
   constexpr int size{10};
   constexpr operators op{COUNT};
-  using ResultType = expected_result_t<int, op>;
+  using ResultValue = expected_result_t<int, op>;
   single_column_groupby_test<op>(
       column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); }),
       column_wrapper<int>(size, [](auto index) { return int(index); }),
       column_wrapper<TypeParam>{TypeParam(42)},
-      column_wrapper<ResultType>{size});
+      column_wrapper<ResultValue>{size});
 }
 
 TYPED_TEST(SingleColumnGroupbyTest, FourGroupsNoNullsCount) {
   constexpr int size{10};
   constexpr operators op{COUNT};
-  using ResultType = expected_result_t<int, op>;
+  using ResultValue = expected_result_t<int, op>;
   using T = TypeParam;
-  using R = ResultType;
+  using R = ResultValue;
 
-  // For boolean types, there are only two possible groups `true` and `false`
-  if (std::is_same<TypeParam, cudf::bool8>::value) {
-    single_column_groupby_test<op>(
-        column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4),
-                                  T(4), T(4), T(4)},
-        column_wrapper<int>(size, [](auto index) { return int(index); }),
-        column_wrapper<TypeParam>{T(1)}, column_wrapper<ResultType>{R(10)});
-  } else {
-    single_column_groupby_test<op>(
-        column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4),
-                                  T(4), T(4), T(4)},
-        column_wrapper<int>(size, [](auto index) { return int(index); }),
-        column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
-        column_wrapper<ResultType>{R(1), R(2), R(3), R(4)});
-  }
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4), T(4),
+                                T(4), T(4)},
+      column_wrapper<int>(size, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
+      column_wrapper<ResultValue>{R(1), R(2), R(3), R(4)});
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, OneGroupAllNullKeysCount) {
+  constexpr int size{10};
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+
+  // If all keys are null, then there should be no output
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); },
+                                [](auto index) { return false; }),
+      column_wrapper<int>(size, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>{}, column_wrapper<ResultValue>{});
 }
