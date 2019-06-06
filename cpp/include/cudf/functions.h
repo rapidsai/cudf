@@ -824,25 +824,6 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
  * gdf introspection utlities
  */
 
-/**
- * @brief returns the size in bytes of the specified gdf_dtype
- * 
- * @param dtype the data type for which to return the size
- * @return gdf_size_type size in bytes
- */
-gdf_size_type gdf_dtype_size(gdf_dtype dtype);
-
-/**
- *
- * @param[in] gdf_column whose data type's byte width will be determined
- * @param[out] the byte width of the data type
- *
- * @return gdf_error GDF_SUCCESS, or GDF_UNSUPPORTED_DTYPE if col has an invalid
- *         datatype
- */
-gdf_error get_column_byte_width(gdf_column * col, int * width);
-
-
 /* 
  Multi-Column SQL ops:
    WHERE (Filtering)

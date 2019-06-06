@@ -37,6 +37,8 @@ namespace cudf {
  *   to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size or number of
  *   observations can be specified for each element using an additional array.
+ * This function is asynchronous with respect to the CPU, i.e. the call will
+ * return before the operation is completed on the GPU (unless built in debug).
  *
  * @param[in] input_col The input column
  * @param[in] window The static rolling window size. If window_col = NULL, 
@@ -61,7 +63,6 @@ namespace cudf {
  *                forward_window_col[i] specifies forward window size for element i.
  *                If forward_window_col = NULL, then forward_window is used as the
  *                static forward window size for aill elements
- * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @returns   gdf_column The output column
  *
@@ -73,8 +74,8 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            gdf_agg_op agg_type,
                            const gdf_size_type *window_col,
                            const gdf_size_type *min_periods_col,
-                           const gdf_size_type *forward_window_col,
-			   cudaStream_t stream = 0);
+                           const gdf_size_type *forward_window_col);
+
 }  // namespace cudf
 
 #endif  // ROLLING_HPP
