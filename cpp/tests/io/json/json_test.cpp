@@ -32,6 +32,7 @@
 
 #include <nvstrings/NVStrings.h>
 
+#include "tests/io/io_test_utils.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 
@@ -43,45 +44,6 @@ using std::vector;
 TempDirTestEnvironment *const temp_env =
     static_cast<TempDirTestEnvironment *>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct gdf_json_test : GdfTest {};
-
-bool checkFile(std::string fname) {
-  struct stat st;
-  return (stat(fname.c_str(), &st) ? 0 : 1);
-}
-
-template <typename T> std::vector<T> gdf_column_to_host(gdf_column const *col) {
-  std::vector<T> m_hostdata(col->size);
-  cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
-  return m_hostdata;
-}
-
-void checkStrColumn(gdf_column const *col, vector<string> refs) {
-  ASSERT_EQ(col->dtype, GDF_STRING);
-
-  const auto stringList = reinterpret_cast<NVStrings *>(col->data);
-  ASSERT_NE(stringList, nullptr);
-
-  const auto count = stringList->size();
-  ASSERT_EQ(count, refs.size());
-
-  std::vector<int> lengths(count);
-  ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
-
-  // Check the actual strings themselves
-  std::vector<char *> strings(count);
-  for (size_t i = 0; i < count; ++i) {
-    strings[i] = new char[lengths[i] + 1];
-    strings[i][lengths[i]] = 0;
-  }
-  EXPECT_EQ(stringList->to_host(strings.data(), 0, count), 0);
-
-  for (size_t i = 0; i < count; ++i) {
-    EXPECT_STREQ(strings[i], refs[i].c_str());
-  }
-  for (size_t i = 0; i < count; ++i) {
-    delete[] strings[i];
-  }
-}
 
 TEST_F(gdf_json_test, SquareBrackets) {
   const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
@@ -146,10 +108,8 @@ TEST_F(gdf_json_test, BasicJsonLines) {
   ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
 
-  const auto firstCol = gdf_column_to_host<int32_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2, 3));
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2, 3.3));
+  EXPECT_THAT(gdf_host_column<int32_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(1, 2, 3));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2, 3.3));
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
@@ -169,10 +129,8 @@ TEST_F(gdf_json_test, JsonLinesStrings) {
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
   ASSERT_EQ(std::string(df.get_column(2)->col_name), "2");
 
-  const auto firstCol = gdf_column_to_host<int32_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1, 2));
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+  EXPECT_THAT(gdf_host_column<int32_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(1, 2));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 
   checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
 }
@@ -193,10 +151,8 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
   ASSERT_EQ(std::string(df.get_column(2)->col_name), "2");
 
-  const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+  EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(100, 200));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 
   checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
 }
@@ -222,10 +178,8 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
   ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "1");
 
-  const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(11, 22));
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+  EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(11, 22));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 }
 
 TEST_F(gdf_json_test, JsonLinesByteRange) {
@@ -246,8 +200,7 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
   ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
   ASSERT_EQ(std::string(df.get_column(0)->col_name), "0");
 
-  const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(3000, 4000, 5000));
+  EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(3000, 4000, 5000));
 }
 
 TEST_F(gdf_json_test, JsonLinesObjects) {
@@ -270,11 +223,8 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
   ASSERT_EQ(df.get_column(1)->dtype, GDF_FLOAT64);
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "col2");
 
-  const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(1));
-
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(2.0));
+  EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(1));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(2.0));
 }
 
 TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
@@ -294,10 +244,8 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   ASSERT_EQ(std::string(df.get_column(1)->col_name), "col2");
   ASSERT_EQ(std::string(df.get_column(2)->col_name), "col3");
 
-  const auto firstCol = gdf_column_to_host<int64_t>(df.get_column(0));
-  EXPECT_THAT(firstCol, ::testing::ElementsAre(100, 200));
-  const auto secondCol = gdf_column_to_host<double>(df.get_column(1));
-  EXPECT_THAT(secondCol, ::testing::ElementsAre(1.1, 2.2));
+  EXPECT_THAT(gdf_host_column<int64_t>(df.get_column(0)).hostdata(), ::testing::ElementsAre(100, 200));
+  EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 
   checkStrColumn(df.get_column(2), {"aaa", "bbb"});
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,20 @@
  * limitations under the License.
  */
 
+ #include <cstdlib>
+ #include <fstream>
+ #include <iostream>
+ #include <vector>
+ #include <string>
+
 #include "cudf.h"
-#include "tests/utilities/cudf_test_fixtures.h"
 
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <random>
-#include <sstream>
-#include <vector>
-#include <string>
-
-#include <sys/stat.h>
+#include "tests/io/io_test_utils.hpp"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 using cudf::read_csv;
 using cudf::table;
@@ -49,88 +46,9 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 
 namespace {
 
-bool checkFile(const std::string fname)
-{
-    struct stat st;
-    return (stat(fname.c_str(), &st) ? 0 : 1);
-}
 
-template <typename T>
-auto random_values(size_t size) {
-  std::vector<T> values(size);
-
-  using uniform_distribution =
-      typename std::conditional<std::is_integral<T>::value,
-                                std::uniform_int_distribution<T>,
-                                std::uniform_real_distribution<T>>::type;
-
-  static constexpr auto seed = 0xf00d;
-  static std::mt19937 engine{seed};
-  static uniform_distribution dist{};
-  std::generate_n(values.begin(), size, [&]() { return dist(engine); });
-
-  return values;
-}
-
-void checkStrColumn(gdf_column const *col, std::vector<std::string> refs) {
-  ASSERT_EQ(col->dtype, GDF_STRING);
-
-  const auto stringList = reinterpret_cast<NVStrings *>(col->data);
-  ASSERT_NE(stringList, nullptr);
-
-  const auto count = stringList->size();
-  ASSERT_EQ(count, refs.size());
-
-  std::vector<int> lengths(count);
-  ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
-
-  // Check the actual strings themselves
-  std::vector<char *> strings(count);
-  for (size_t i = 0; i < count; ++i) {
-    strings[i] = new char[lengths[i] + 1];
-    strings[i][lengths[i]] = 0;
-  }
-  EXPECT_EQ(stringList->to_host(strings.data(), 0, count), 0);
-
-  for (size_t i = 0; i < count; ++i) {
-    EXPECT_STREQ(strings[i], refs[i].c_str());
-  }
-  for (size_t i = 0; i < count; ++i) {
-    delete[] strings[i];
-  }
-}
 
 }  // namespace
-
-// DESCRIPTION: Simple test internal helper class to transfer cudf column data
-// from device to host for test comparisons and debugging/development
-template <typename T>
-class gdf_host_column
-{
-public:
-    gdf_host_column() = delete;
-    explicit gdf_host_column(const gdf_column* col)
-    {
-        m_hostdata = std::vector<T>(col->size);
-        cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
-    }
-
-    auto hostdata() const -> const auto&
-    {
-        return m_hostdata;
-    }
-    void print() const
-    {
-        for (size_t i = 0; i < m_hostdata.size(); ++i)
-        {
-            std::cout.precision(17);
-            std::cout << "[" << i << "]: value=" << m_hostdata[i] << "\n";
-        }
-    }
-
-private:
-    std::vector<T> m_hostdata;
-};
 
 TEST(gdf_csv_test, DetectColumns)
 {
