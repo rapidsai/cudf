@@ -17,7 +17,7 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
-from cudf.bindings.stream_compaction import cpp_drop_nulls
+from cudf.bindings.stream_compaction import cpp_drop_nulls, cpp_apply_boolean_mask
 
 import warnings
 import cudf.bindings.copying as cpp_copying
@@ -94,6 +94,11 @@ class TypedColumnBase(Column):
         dropped_col = cpp_drop_nulls(self)
         return self.replace(data=dropped_col.data, mask=None, null_count=0)
 
+    def apply_boolean_mask(self, mask):
+        mask = as_column(mask, dtype="bool")
+        data = cpp_apply_boolean_mask(self, mask)
+        return self.replace(data=data.data, mask=data.mask)
+
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
@@ -128,11 +133,14 @@ def column_empty(row_count, dtype, masked, categories=None):
         data = Buffer(mem)
         dtype = 'category'
     elif dtype.kind in 'OU':
-        mem = rmm.device_array((row_count,), dtype='float64')
-        data = nvstrings.dtos(mem,
-                              len(mem),
-                              nulls=mask,
-                              bdevmem=True)
+        if row_count == 0:
+            data = nvstrings.to_device([])
+        else:
+            mem = rmm.device_array((row_count,), dtype='float64')
+            data = nvstrings.dtos(mem,
+                                len(mem),
+                                nulls=mask,
+                                bdevmem=True)
     else:
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
