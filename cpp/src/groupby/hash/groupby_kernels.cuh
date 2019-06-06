@@ -49,10 +49,12 @@ struct update_target_element {
  *
  * @tparam SourceType Type of the source element
  * @tparam op The operation to perform
+ * @tparama values_have_nulls Indicates the potential for null values in the
+ * source
  *---------------------------------------------------------------------------**/
-template <typename SourceType, operators op, bool values_have_nulls>
+template <typename SourceType, operators op, bool source_has_nulls>
 struct update_target_element<
-    SourceType, op, values_have_nulls,
+    SourceType, op, source_has_nulls,
     std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Performs in-place update of a target element via a binary operation
@@ -61,8 +63,7 @@ struct update_target_element<
    * @note It is assumed the source element is not NULL, i.e., a NULL source
    * element should be detected before calling this function.
    *
-   * @note It is assumed the target column is always nullable, i.e., has a valid
-   * bitmask allocation.
+   * @note If `source_has_nulls==true`, it is assumed that `target` is nullable
    *
    * If the target element is NULL, it is assumed that the target element was
    * initialized with the identity of the aggregation operation. The target is
@@ -91,15 +92,14 @@ struct update_target_element<
 
     using FunctorType = corresponding_functor_t<op>;
 
-cudf::genericAtomicOperation(
-        &target_data[target_index], static_cast<TargetType>(source_element),
-        FunctorType{});
-
+    cudf::genericAtomicOperation(&target_data[target_index],
+                                 static_cast<TargetType>(source_element),
+                                 FunctorType{});
 
     bit_mask::bit_mask_t* const __restrict__ target_mask{
         reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
 
-    if (values_have_nulls) {
+    if (source_has_nulls) {
       if (not bit_mask::is_valid(target_mask, target_index)) {
         bit_mask::set_bit_safe(target_mask, target_index);
       }
@@ -110,8 +110,8 @@ cudf::genericAtomicOperation(
 /**---------------------------------------------------------------------------*
  * @brief Specialization for COUNT.
  *---------------------------------------------------------------------------**/
-template <typename SourceType, bool values_have_nulls>
-struct update_target_element<SourceType, COUNT, values_have_nulls,
+template <typename SourceType, bool source_has_nulls>
+struct update_target_element<SourceType, COUNT, source_has_nulls,
                              std::enable_if_t<not std::is_void<
                                  target_type_t<SourceType, COUNT>>::value>> {
   /**---------------------------------------------------------------------------*
@@ -136,7 +136,7 @@ struct update_target_element<SourceType, COUNT, values_have_nulls,
   }
 };
 
-template <bool values_have_nulls>
+template <bool source_has_nulls>
 struct elementwise_aggregator {
   template <typename SourceType>
   __device__ inline void operator()(gdf_column const& target,
@@ -145,22 +145,22 @@ struct elementwise_aggregator {
                                     gdf_size_type source_index, operators op) {
     switch (op) {
       case MIN: {
-        update_target_element<SourceType, MIN, values_have_nulls>{}(
+        update_target_element<SourceType, MIN, source_has_nulls>{}(
             target, target_index, source, source_index);
         break;
       }
       case MAX: {
-        update_target_element<SourceType, MAX, values_have_nulls>{}(
+        update_target_element<SourceType, MAX, source_has_nulls>{}(
             target, target_index, source, source_index);
         break;
       }
       case SUM: {
-        update_target_element<SourceType, SUM, values_have_nulls>{}(
+        update_target_element<SourceType, SUM, source_has_nulls>{}(
             target, target_index, source, source_index);
         break;
       }
       case COUNT: {
-        update_target_element<SourceType, COUNT, values_have_nulls>{}(
+        update_target_element<SourceType, COUNT, source_has_nulls>{}(
             target, target_index, source, source_index);
       }
       default:
@@ -278,7 +278,6 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
 
     if (source_key_row_index != map->get_unused_key()) {
       auto output_index = atomicAdd(output_write_index, 1);
-
 
       copy_row<keys_have_nulls>(output_keys, output_index, input_keys,
                                 source_key_row_index);
