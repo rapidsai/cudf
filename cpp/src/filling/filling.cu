@@ -22,18 +22,21 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
+#include <cub/cub.cuh>
 
 namespace {
 
 using bit_mask::bit_mask_t;
 static constexpr gdf_size_type warp_size{32};
 
-template <typename T, bool has_nulls>
-__global__ 
-void fill_kernel(T *data, bit_mask_t *bitmask, 
-                 gdf_size_type *null_count,
-                 gdf_index_type begin, gdf_index_type end,
-                 T value, bool value_is_valid)
+template <typename T, typename InputFunctor, bool has_validity>
+__global__
+void copy_range_kernel(T * __restrict__ const data,
+                       bit_mask_t * __restrict__ const bitmask,
+                       gdf_size_type * __restrict__ const null_count,
+                       gdf_index_type begin,
+                       gdf_index_type end,
+                       InputFunctor input)
 {
   const gdf_index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   constexpr size_t mask_size = warp_size;
@@ -48,6 +51,15 @@ void fill_kernel(T *data, bit_mask_t *bitmask,
       cudf::util::detail::bit_container_index<bit_mask_t>(end);
 
   gdf_index_type mask_idx = begin_mask_idx + warp_id;
+  gdf_index_type input_idx = tid;
+
+  // each warp shares its total change in null count to shared memory to ease
+  // computing the total changed to null_count.
+  // note maximum block size is limited to 1024 by this, but that's OK
+  __shared__ uint32_t warp_null_change[has_validity ? warp_size : 1];
+  if (has_validity && threadIdx.x < warp_size) warp_null_change[threadIdx.x] = 0;
+
+  __syncthreads(); // wait for shared data and validity mask to be complete
 
   while (mask_idx <= end_mask_idx)
   {
@@ -55,24 +67,59 @@ void fill_kernel(T *data, bit_mask_t *bitmask,
     bool in_range = (index >= begin && index < end);
 
     // write data
-    if (in_range) data[index] = value;
+    if (in_range) data[index] = input.data(input_idx);
 
-    if (has_nulls) { // update bitmask
+    if (has_validity) { // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
+
+      bool valid = (in_range) ? input.valid(input_idx) : false;
+      int warp_mask = __ballot_sync(active_mask, valid);
+
       bit_mask_t old_mask = bitmask[mask_idx];
 
       if (lane_id == 0) {
-        bit_mask_t new_mask = (old_mask & ~active_mask) |
-                              ((value_is_valid ? 0xFFFFFFFF : 0) & active_mask);
+        bit_mask_t new_mask = (old_mask & ~active_mask) | 
+                              (warp_mask & active_mask);
         bitmask[mask_idx] = new_mask;
         // null_diff = (mask_size - __popc(new_mask)) - (mask_size - __popc(old_mask))
-        atomicAdd(null_count, __popc(old_mask) - __popc(new_mask));
+        warp_null_change[warp_id] += __popc(active_mask & old_mask) -
+                                     __popc(active_mask & new_mask);
       }
     }
 
+    input_idx += blockDim.x * gridDim.x;
     mask_idx += masks_per_grid;
   }
+
+  __syncthreads(); // wait for shared null counts to be ready
+  
+  // Compute total null_count change for this block and add it to global count
+  if (threadIdx.x < warp_size) {
+    uint32_t my_null_change = warp_null_change[threadIdx.x];
+
+    __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
+        
+    uint32_t block_null_change =
+      cub::WarpReduce<uint32_t>(temp_storage).Sum(my_null_change);
+        
+    if (lane_id == 0) { // one thread computes and adds to null count
+      atomicAdd(null_count, block_null_change);
+    }
+  }
 }
+
+template <typename T>
+struct scalar_functor {
+  T value;
+  bool is_valid;
+
+  __device__
+  T data(gdf_index_type index)     { return value; }
+
+  __device__
+  bool valid(gdf_index_type index) { return is_valid; }
+};
+
 
 struct fill_dispatch {
   template <typename T>
@@ -83,17 +130,17 @@ struct fill_dispatch {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
       "fill_kernel assumes bitmask element size in bits == warp size");
 
-    auto fill = fill_kernel<T, false>;
+    auto fill = copy_range_kernel<T, scalar_functor<T>, false>;
     gdf_size_type *null_count = nullptr;
 
     if (column->valid != nullptr) {
       RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
       CUDA_TRY(cudaMemsetAsync(null_count, column->null_count, 
                                sizeof(gdf_size_type), stream));
-      fill = fill_kernel<T, true>;
+      fill = copy_range_kernel<T, scalar_functor<T>, true>;
     }
 
-    // This one results in a compiler internal error! TODO: file bug
+    // This one results in a compiler internal error! TODO: file NVIDIA bug
     //gdf_size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
     // number threads to cover range, rounded to nearest warp
     gdf_size_type num_items =
@@ -106,19 +153,19 @@ struct fill_dispatch {
     T * __restrict__ data = static_cast<T*>(column->data);
     bit_mask_t * __restrict__ bitmask =
       reinterpret_cast<bit_mask_t*>(column->valid);
-    T const val = *reinterpret_cast<T const*>(&value.data);
+    T val{}; // Safe type pun, compiler should optimize away the memcpy
+    memcpy(&val, &value.data, sizeof(T));
+    scalar_functor<T> scalar{val, value.is_valid};
 
     fill<<<grid.num_blocks, block_size, 0, stream>>>(data, bitmask, null_count,
-                                                     begin, end,
-                                                     val, value.is_valid);
+                                                     begin, end, scalar);
 
     if (column->valid != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
                                sizeof(gdf_size_type), cudaMemcpyDefault, stream));
       RMM_FREE(null_count, stream);
     }
-    //thrust::fill(rmm::exec_policy(stream)->on(stream),
-    //             data + begin, data + end, val);
+
     CHECK_STREAM(stream);
   }
 };
@@ -133,6 +180,8 @@ void fill(gdf_column *column, gdf_scalar const& value,
   CUDF_EXPECTS(column != nullptr, "Column is null");
   CUDF_EXPECTS(column->data != nullptr, "Data pointer is null");
   CUDF_EXPECTS(column->dtype == value.dtype, "Data type mismatch");
+  CUDF_EXPECTS( (begin >= 0) and (end <= column->size), "Fill range is out of bounds");
+  CUDF_EXPECTS( begin < end, "Fill range is empty or reversed"); 
 
   cudf::type_dispatcher(column->dtype,
                         fill_dispatch{},
