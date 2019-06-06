@@ -15,10 +15,12 @@
  */
 
 #include <filling.hpp>
+#include <bitmask/bit_mask.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
+#include <utilities/column_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
@@ -108,40 +110,30 @@ void copy_range_kernel(T * __restrict__ const data,
   }
 }
 
-template <typename T>
-struct scalar_functor {
-  T value;
-  bool is_valid;
+template <typename InputFactory>
+struct copy_range_dispatch {
+  InputFactory make_input;
 
-  __device__
-  T data(gdf_index_type index)     { return value; }
-
-  __device__
-  bool valid(gdf_index_type index) { return is_valid; }
-};
-
-
-struct fill_dispatch {
   template <typename T>
-  void operator()(gdf_column *column, gdf_scalar const& value, 
+  void operator()(gdf_column *column,
                   gdf_index_type begin, gdf_index_type end,
                   cudaStream_t stream = 0)
   {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
       "fill_kernel assumes bitmask element size in bits == warp size");
 
-    auto fill = copy_range_kernel<T, scalar_functor<T>, false>;
+    //auto fill = copy_range_kernel<T, scalar_functor<T>, false>;
     gdf_size_type *null_count = nullptr;
 
     if (column->valid != nullptr) {
       RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
       CUDA_TRY(cudaMemsetAsync(null_count, column->null_count, 
                                sizeof(gdf_size_type), stream));
-      fill = copy_range_kernel<T, scalar_functor<T>, true>;
+      //fill = copy_range_kernel<T, scalar_functor<T>, true>;
     }
 
     // This one results in a compiler internal error! TODO: file NVIDIA bug
-    //gdf_size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
+    // gdf_size_type num_items = cudf::util::round_up_safe(end - begin, warp_size);
     // number threads to cover range, rounded to nearest warp
     gdf_size_type num_items =
       warp_size * cudf::util::div_rounding_up_safe(end - begin, warp_size);
@@ -153,12 +145,17 @@ struct fill_dispatch {
     T * __restrict__ data = static_cast<T*>(column->data);
     bit_mask_t * __restrict__ bitmask =
       reinterpret_cast<bit_mask_t*>(column->valid);
-    T val{}; // Safe type pun, compiler should optimize away the memcpy
-    memcpy(&val, &value.data, sizeof(T));
-    scalar_functor<T> scalar{val, value.is_valid};
+  
+    auto input = make_input.template operator()<T>();
 
-    fill<<<grid.num_blocks, block_size, 0, stream>>>(data, bitmask, null_count,
-                                                     begin, end, scalar);
+    if (cudf::is_nullable(*column))
+      copy_range_kernel<T, decltype(input), true>
+        <<<grid.num_blocks, block_size, 0, stream>>>
+        (data, bitmask, null_count, begin, end, input);
+    else
+      copy_range_kernel<T, decltype(input), false>
+        <<<grid.num_blocks, block_size, 0, stream>>>
+        (data, bitmask, null_count, begin, end, input);
 
     if (column->valid != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
@@ -174,18 +171,92 @@ struct fill_dispatch {
 
 namespace cudf {
 
+namespace detail {
+
+template <typename InputFunctor>
+void copy_range(gdf_column *out_column, InputFunctor input,
+                gdf_index_type begin, gdf_index_type end)
+{
+  validate(out_column);
+  CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed0");
+  CUDF_EXPECTS((begin >= 0) and (end <= out_column->size), "Range is out of bounds");
+  
+  cudf::type_dispatcher(out_column->dtype,
+                        copy_range_dispatch<InputFunctor>{input},
+                        out_column, begin, end);
+}
+
+struct scalar_factory {
+  gdf_scalar value;
+
+  template <typename T>
+  struct scalar_functor {
+    T value;
+    bool is_valid;
+
+    __device__
+    T data(gdf_index_type index) { return value; }
+
+    __device__
+    bool valid(gdf_index_type index) { return is_valid; }
+  };
+
+  template <typename T>
+  scalar_functor<T> operator()() {
+    T val{}; // Safe type pun, compiler should optimize away the memcpy
+    memcpy(&val, &value.data, sizeof(T));
+    return scalar_functor<T>{val, value.is_valid};
+  }
+};
+
+struct column_range_factory {
+  gdf_column column;
+  gdf_index_type begin;
+
+  template <typename T>
+  struct column_range_functor {
+    T const * column_data;
+    bit_mask_t const * bitmask;
+    gdf_index_type begin;
+
+    __device__
+    T data(gdf_index_type index) { return column_data[begin + index]; }
+
+    __device__
+    bool valid(gdf_index_type index) {
+      return bit_mask::is_valid(bitmask, index);
+    }
+  };
+
+  template <typename T>
+  column_range_functor<T> operator()() {
+    return column_range_functor<T>{
+      static_cast<T*>(column.data),
+      reinterpret_cast<bit_mask_t*>(column.valid),
+      begin
+    };
+  }
+};
+
+}; // namespace detail
+
+void copy_range(gdf_column *out_column, gdf_column const &in_column,
+                gdf_index_type out_begin, gdf_index_type out_end, 
+                gdf_index_type in_begin)
+{
+  validate(in_column);
+  CUDF_EXPECTS(out_column->dtype == in_column.dtype, "Data type mismatch");
+  gdf_size_type num_elements = out_end - out_begin;
+  CUDF_EXPECTS( in_begin + num_elements <= in_column.size, "Range is out of bounds");
+
+  detail::copy_range(out_column, detail::column_range_factory{in_column, in_begin},
+                     out_begin, out_end);
+}
+
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end)
-{
-  CUDF_EXPECTS(column != nullptr, "Column is null");
-  CUDF_EXPECTS(column->data != nullptr, "Data pointer is null");
-  CUDF_EXPECTS(column->dtype == value.dtype, "Data type mismatch");
-  CUDF_EXPECTS( (begin >= 0) and (end <= column->size), "Fill range is out of bounds");
-  CUDF_EXPECTS( begin < end, "Fill range is empty or reversed"); 
-
-  cudf::type_dispatcher(column->dtype,
-                        fill_dispatch{},
-                        column, value, begin, end);
+{ 
+  detail::copy_range(column, detail::scalar_factory{value}, begin, end);
 }
 
 }; // namespace cudf
