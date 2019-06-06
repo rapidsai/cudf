@@ -401,6 +401,7 @@ _operator_funcs = [
     # 'mod', << Coming Later
     # 'rmod', << Coming Later
     'pow',
+    'rpow',
     'floordiv',
     'rfloordiv',
     'truediv',

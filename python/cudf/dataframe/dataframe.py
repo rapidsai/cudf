@@ -583,6 +583,12 @@ class DataFrame(object):
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
 
+    def rpow(self, other, fill_value=None):
+        return self._apply_op('rpow', other, fill_value)
+
+    def __rpow__(self, other):
+        return self._apply_op('__pow__', other)
+
     def floordiv(self, other, fill_value=None):
         return self._apply_op('floordiv', other, fill_value)
 

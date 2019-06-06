@@ -628,6 +628,22 @@ class Series(object):
     def __pow__(self, other):
         return self._binaryop(other, 'pow')
 
+    def rpow(self, other, fill_value=None):
+        """Exponential power of series and other, element-wise
+        (binary operator rpow).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.pow, fill_value, True)
+
+    def __rpow__(self, other):
+        return self._rbinaryop(other, 'pow')
+
     def floordiv(self, other, fill_value=None):
         """Integer division of series and other, element-wise
         (binary operator floordiv).
