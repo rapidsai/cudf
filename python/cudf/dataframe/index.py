@@ -299,6 +299,7 @@ class Index(object):
     def loc(self):
         return _IndexLocIndexer(self)
 
+
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
     Can be sliced and indexed arbitrarily without allocating memory for the

@@ -6,6 +6,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 
+
 class _SeriesLocIndexer(object):
     """
     Label-based selection

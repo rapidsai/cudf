@@ -734,7 +734,6 @@ class Series(object):
 
         data = self._column.fillna(value, inplace=inplace)
 
-
         if not inplace:
             return self._copy_construct(data=data)
 
