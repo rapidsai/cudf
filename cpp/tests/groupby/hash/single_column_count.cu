@@ -36,6 +36,8 @@ struct SingleColumnCount : public GdfTest {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution{1000, 10000};
   int random_size() { return distribution(generator); }
+  using KeyType = T;
+  using ValueType = int;
 };
 
 template <typename T>
@@ -50,151 +52,169 @@ TYPED_TEST_CASE(SingleColumnCount, TestingTypes);
 
 TYPED_TEST(SingleColumnCount, OneGroupNoNulls) {
   constexpr int size{10};
-  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); }),
-      column_wrapper<int>(size, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>{TypeParam(42)},
-      column_wrapper<ResultValue>{size});
+      column_wrapper<Key>(size, [](auto index) { return Key(42); }),
+      column_wrapper<Value>(size, [](auto index) { return Value(index); }),
+      column_wrapper<Key>{TypeParam(42)}, column_wrapper<ResultValue>{size});
 }
 
 TYPED_TEST(SingleColumnCount, OneGroupAllNullKeys) {
   constexpr int size{10};
-  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
 
   // If all keys are null, then there should be no output
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(size, [](auto index) { return TypeParam(42); },
-                                [](auto index) { return false; }),
-      column_wrapper<int>(size, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>{}, column_wrapper<ResultValue>{});
+      column_wrapper<Key>(size, [](auto index) { return TypeParam(42); },
+                          [](auto index) { return false; }),
+      column_wrapper<Value>(size, [](auto index) { return int(index); }),
+      column_wrapper<Key>{}, column_wrapper<ResultValue>{});
 }
 
 TYPED_TEST(SingleColumnCount, OneGroupAllNullValues) {
   constexpr int size{10};
-  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
   TypeParam key{42};
   // If all values are null, then the output count should be a non-null zero
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(size, [key](auto index) { return key; }),
-      column_wrapper<int>(size, [](auto index) { return int(index); },
-                          [](auto index) { return false; }),
-      column_wrapper<TypeParam>({key}),
+      column_wrapper<Key>(size, [key](auto index) { return key; }),
+      column_wrapper<Value>(size, [](auto index) { return int(index); },
+                            [](auto index) { return false; }),
+      column_wrapper<Key>({key}),
       column_wrapper<ResultValue>({0}, [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnCount, OneGroupOddNullKeys) {
   constexpr int size{10};
-  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
 
   EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
   TypeParam key{42};
   // Odd index keys are null, means COUNT should be size/2
   // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(size, [key](auto index) { return key; },
-                                [](auto index) { return index % 2; }),
-      column_wrapper<int>(size, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>({key}, [](auto index) { return true; }),
+      column_wrapper<Key>(size, [key](auto index) { return key; },
+                          [](auto index) { return index % 2; }),
+      column_wrapper<Value>(size, [](auto index) { return int(index); }),
+      column_wrapper<Key>({key}, [](auto index) { return true; }),
       column_wrapper<ResultValue>({size / 2}));
 }
 
 TYPED_TEST(SingleColumnCount, OneGroupOddNullValues) {
   constexpr int size{10};
-  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
 
   EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
   TypeParam key{42};
   // Odd index values are null, means COUNT should be size/2
   // Output values should be nullable
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(size, [key](auto index) { return key; }),
-      column_wrapper<int>(size, [](auto index) { return int(index); },
-                          [](auto index) { return index % 2; }),
-      column_wrapper<TypeParam>({key}),
+      column_wrapper<Key>(size, [key](auto index) { return key; }),
+      column_wrapper<Value>(size, [](auto index) { return int(index); },
+                            [](auto index) { return index % 2; }),
+      column_wrapper<Key>({key}),
       column_wrapper<ResultValue>({size / 2}, [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnCount, FourGroupsNoNulls) {
-  using ResultValue = cudf::test::expected_result_t<int, op>;
-  using T = TypeParam;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
   using R = ResultValue;
 
+  // Each value needs to be casted to avoid a narrowing conversion warning for
+  // the wrapper types
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
-      column_wrapper<int>(8, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
+      column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+      column_wrapper<Value>(8, [](auto index) { return int(index); }),
+      column_wrapper<Key>{T(1), T(2), T(3), T(4)},
       column_wrapper<ResultValue>{R(2), R(2), R(2), R(2)});
 }
 
 TYPED_TEST(SingleColumnCount, FourGroupsOddNullKeys) {
-  using ResultValue = cudf::test::expected_result_t<int, op>;
-  using T = TypeParam;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
   using R = ResultValue;
 
   // Odd index keys are null, COUNT should be the count of each key / 2
   // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(
-          {T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
-          [](auto index) { return index % 2; }),
-      column_wrapper<int>(8, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)},
-                                [](auto index) { return true; }),
+      column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+                          [](auto index) { return index % 2; }),
+      column_wrapper<Value>(8, [](auto index) { return int(index); }),
+      column_wrapper<Key>({T(1), T(2), T(3), T(4)},
+                          [](auto index) { return true; }),
       column_wrapper<ResultValue>{R(1), R(1), R(1), R(1)});
 }
 
 TYPED_TEST(SingleColumnCount, FourGroupsOddNullValues) {
-  using ResultValue = cudf::test::expected_result_t<int, op>;
-  using T = TypeParam;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
   using R = ResultValue;
 
   // Odd index values are null, COUNT should be the count of each key / 2
   // Output values should be nullable
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
-      column_wrapper<int>(8, [](auto index) { return int(index); },
-                          [](auto index) { return index % 2; }),
-      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)}),
+      column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+      column_wrapper<Value>(8, [](auto index) { return int(index); },
+                            [](auto index) { return index % 2; }),
+      column_wrapper<Key>({T(1), T(2), T(3), T(4)}),
       column_wrapper<ResultValue>({R(1), R(1), R(1), R(1)},
                                   [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesKeys) {
-  using ResultValue = cudf::test::expected_result_t<int, op>;
-  using T = TypeParam;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
   using R = ResultValue;
 
   // Odd index keys and values are null,
   //  COUNT should be the count of each key / 2 Output keys and values should be
   //  nullable
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(
-          {T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
-          [](auto index) { return index % 2; }),
-      column_wrapper<int>(8, [](auto index) { return int(index); },
+      column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return index % 2; }),
-      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)},
-                                [](auto index) { return true; }),
+      column_wrapper<Value>(8, [](auto index) { return int(index); },
+                            [](auto index) { return index % 2; }),
+      column_wrapper<Key>({T(1), T(2), T(3), T(4)},
+                          [](auto index) { return true; }),
       column_wrapper<ResultValue>({R(1), R(1), R(1), R(1)},
                                   [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesEvenNullKeys) {
-  using ResultValue = cudf::test::expected_result_t<int, op>;
-  using T = TypeParam;
+  using Key = typename SingleColumnCount<TypeParam>::KeyType;
+  using Value = typename SingleColumnCount<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
   using R = ResultValue;
 
   // Even keys are null & Odd values are null
   // Count for each key should thefore be 0
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<TypeParam>(
-          {T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
-          [](auto index) { return not (index % 2); }),
-      column_wrapper<int>(8, [](auto index) { return int(index); },
-                          [](auto index) { return index % 2; }),
-      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)},
-                                [](auto index) { return true; }),
+      column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+                          [](auto index) { return not(index % 2); }),
+      column_wrapper<Value>(8, [](auto index) { return int(index); },
+                            [](auto index) { return index % 2; }),
+      column_wrapper<Key>({T(1), T(2), T(3), T(4)},
+                          [](auto index) { return true; }),
       column_wrapper<ResultValue>({R(0), R(0), R(0), R(0)},
                                   [](auto index) { return true; }));
 }
