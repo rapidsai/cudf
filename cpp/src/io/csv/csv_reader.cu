@@ -126,7 +126,6 @@ using string_pair = std::pair<const char*,size_t>;
 //---------------create and process ---------------------------------------------
 //
 void parseArguments(csv_read_arg *args, raw_csv_t *csv);
-string inferCompressionType(const char* compression_arg, const char* filepath);
 void uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
 
 //
@@ -397,7 +396,7 @@ table read_csv(csv_read_arg const &args)
 	raw_csv.skiprows = args.skiprows;
 	raw_csv.skipfooter = args.skipfooter;
 	raw_csv.nrows = args.nrows;
-	raw_csv.prefix = args.prefix == nullptr ? "" : string(args.prefix);
+	raw_csv.prefix = args.prefix;
 
 	if (args.delim_whitespace) {
 		raw_csv.opts.delimiter = ' ';
@@ -406,11 +405,7 @@ table read_csv(csv_read_arg const &args)
 		raw_csv.opts.delimiter = args.delimiter;
 		raw_csv.opts.multi_delimiter = false;
 	}
-	if (args.windowslinetermination) {
-		raw_csv.opts.terminator = '\n';
-	} else {
-		raw_csv.opts.terminator = args.lineterminator;
-	}
+	raw_csv.opts.terminator = args.lineterminator;
 	if (args.quotechar != '\0' && args.quoting != QUOTE_NONE) {
 		raw_csv.opts.quotechar = args.quotechar;
 		raw_csv.opts.keepquotes = false;
@@ -428,9 +423,11 @@ table read_csv(csv_read_arg const &args)
 	CUDF_EXPECTS(raw_csv.opts.decimal != raw_csv.opts.delimiter, "Decimal point cannot be the same as the delimiter");
 	CUDF_EXPECTS(raw_csv.opts.thousands != raw_csv.opts.delimiter, "Thousands separator cannot be the same as the delimiter");
 
-	const string compression_type = inferCompressionType(args.compression, args.filepath_or_buffer);
+  const string compression_type =
+      inferCompressionType(args.compression, args.input_data_form, string(args.filepath_or_buffer),
+                           {{"csv", "none"}, {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
-	raw_csv.byte_range_offset = args.byte_range_offset;
+        raw_csv.byte_range_offset = args.byte_range_offset;
 	raw_csv.byte_range_size = args.byte_range_size;
 	if (raw_csv.byte_range_offset > 0 || raw_csv.byte_range_size > 0) {
 		CUDF_EXPECTS(raw_csv.nrows < 0 && raw_csv.skiprows == 0 || raw_csv.skipfooter == 0,
@@ -452,8 +449,7 @@ table read_csv(csv_read_arg const &args)
 	raw_csv.d_falseTrie = createSerializedTrie(false_values);
 	raw_csv.opts.falseValuesTrie = raw_csv.d_falseTrie.data().get();
 
-	if (args.na_filter && 
-		(args.keep_default_na || (args.na_values != nullptr && args.num_na_values > 0))) {
+	if (args.na_filter && (args.keep_default_na || !args.na_values.empty())) {
 		vector<string> na_values{
 			"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
 			"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
@@ -462,12 +458,7 @@ table read_csv(csv_read_arg const &args)
 		if(!args.keep_default_na){
 			na_values.clear();
 		}
-
-		if (args.na_values != nullptr && args.num_na_values > 0) {
-			for (int i = 0; i < args.num_na_values; ++i) {
-				na_values.emplace_back(args.na_values[i]);
-			}
-		}
+		na_values.insert(na_values.end(), args.na_values.begin(), args.na_values.end());
 
 		raw_csv.d_naTrie = createSerializedTrie(na_values);
 		raw_csv.opts.naValuesTrie = raw_csv.d_naTrie.data().get();
@@ -781,42 +772,6 @@ table read_csv(csv_read_arg const &args)
   return table(out_cols.data(), out_cols.size());
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Infer the compression type from the compression parameter and 
- * the input file name
- * 
- * Returns "none" if the input is not compressed.
- * 
- * @param[in] compression_arg Input string that is potentially describing 
- * the compression type. Can also be nullptr, "none", or "infer"
- * @param[in] filepath path + name of the input file
- * 
- * @return String representing the compression type
- *---------------------------------------------------------------------------**/
-string inferCompressionType(const char* compression_arg, const char* filepath)
-{
-	if (compression_arg == nullptr || 0 == strcasecmp(compression_arg, "none")){
-		return "none";
-	}
-	if (0 != strcasecmp(compression_arg, "infer")){
-		return string(compression_arg);
-	}
-	const char *file_ext = strrchr(filepath, '.');
-	if (file_ext)
-	{
-		if (!strcasecmp(file_ext, ".csv"))
-			return "none";
-		if (!strcasecmp(file_ext, ".gz"))
-			return "gzip";
-		if (!strcasecmp(file_ext, ".zip"))
-			return "zip";
-		if (!strcasecmp(file_ext, ".bz2"))
-			return "bz2";
-		if (!strcasecmp(file_ext, ".xz"))
-			return "xz";
-	}
-	CUDF_FAIL("Unsupported compressed file extension");
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Uploads the relevant segment of the input csv data onto the GPU.

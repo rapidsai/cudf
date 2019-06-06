@@ -139,67 +139,68 @@ enum gdf_csv_quote_style{
  *   date_parser      - there is only this parser
  *   float_precision  - there is only one converter that will cover all specified values
  *   dialect          - not used
+ *   encoding         - always use UTF-8
+ *   escapechar       - always use '\'
+ *   parse_dates      - infer date data types and always parse as such
+ *   infer_datetime_format - inference not supported
+
  *---------------------------------------------------------------------------**/
 struct csv_read_arg{
-  gdf_csv_input_form  input_data_form;    ///< Type of source of CSV data
-  const char          *filepath_or_buffer;///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t              buffer_size;        ///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
+  gdf_csv_input_form  input_data_form;      ///< Type of source of CSV data
+  const char          *filepath_or_buffer;  ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  size_t              buffer_size;          ///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
 
-  bool          windowslinetermination;     ///< States if we should \r\n as our line termination
-  char          lineterminator;             ///< define the line terminator character. Default is  '\n'
-  char          delimiter;                  ///< define the field separator, default is ',' This argument is also called 'sep' 
-  bool          delim_whitespace;           ///< Use white space as the delimiter - default is false. This overrides the delimiter argument
-  bool          skipinitialspace;           ///< Skip white spaces after the delimiter - default is false
+  char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
+  char          delimiter = ',';            ///< Define the field separator; Default is ','.
+  bool          delim_whitespace = false;   ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
+  bool          skipinitialspace = false;   ///< Skip white spaces after the delimiter; default is false.
 
-  gdf_size_type nrows;                      ///< Number of rows to read, -1 indicates all
-  gdf_size_type header;                     ///< Row of the header data, zero based counting. Default states that header should not be read from file.
+  gdf_size_type nrows = -1;                 ///< Number of rows to read; default value, -1, indicates all rows.
+  gdf_size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
 
-  std::vector<std::string> names;           ///< Ordered List of column names
-  std::vector<std::string> dtype;           ///< Ordered List of data types
+  std::vector<std::string> names;           ///< Ordered List of column names; Empty by default.
+  std::vector<std::string> dtype;           ///< Ordered List of data types; Empty by default.
 
-  std::vector<int> use_cols_indexes;        ///< Indexes of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
-  std::vector<std::string> use_cols_names;  ///< Names of columns to be returned. CSV reader will only process those columns, another read is needed to get full data
+  std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
+  std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
 
-  gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
-  gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
+  gdf_size_type skiprows = 0;               ///< Number of rows at the start of the files to skip; default is zero.
+  gdf_size_type skipfooter = 0;             ///< Number of rows at the bottom of the file to skip; default is zero.
 
-  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
+  bool skip_blank_lines = true;             ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
 
-  std::vector<std::string> true_values;     ///< List of values to recognize as boolean True
-  std::vector<std::string> false_values;    ///< List of values to recognize as boolean False
+  std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
+  std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
 
-  const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
+  std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
                                             'NaN', 'n/a', 'nan', 'null'. */
-  int           num_na_values;              ///< Number of values in the na_values list
-  bool          keep_default_na;            ///< Keep the default NA values
-  bool          na_filter;                  ///< Detect missing values (empty strings and the values in na_values). Passing false can improve performance.
+  bool          keep_default_na = true;     ///< Keep the default NA values; true by default.
+  bool          na_filter = true;           ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
 
-  char          *prefix;                    ///< If there is no header or names, prepend this to the column ID as the name
-  bool          mangle_dupe_cols;           ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names
+  std::string   prefix;                     ///< If there is no header or names, prepend this to the column ID as the name; Default value is an empty string.
+  bool          mangle_dupe_cols = true;    ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
 
-  bool          parse_dates;                // Parse date field into date32 or date64.  If false then date fields are saved as a string. Specifying a date dtype overrides this
-  bool          infer_datetime_format;      // Try and determine the date format
-  bool          dayfirst;                   ///< Is the first value in the date formatthe day?  DD/MM  versus MM/DD
+  bool          dayfirst = false;           ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
 
-  char          *compression;               ///< Specify the type of compression (nullptr,"none","infer","gzip","zip"), "infer" infers the compression from the file extension, default(nullptr) is uncompressed
-  char          thousands;                  ///< Single character that separates thousands in numeric data. If this matches the delimiter then system will return GDF_INVALID_API_CALL
+  std::string   compression = "infer";      ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
+  char          thousands = '\0';           ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
 
-  char          decimal;                    ///< The decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL
+  char          decimal = '.';              ///< The decimal point character; default is '.'. Should not match the delimiter.
 
-  char          quotechar;                  ///< Define the character used to denote start and end of a quoted item
-  gdf_csv_quote_style quoting;              ///< Treat string fields as quoted item and remove the first and last quotechar
-  bool          doublequote;                ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar
+  char          quotechar = '\"';           ///< Define the character used to denote start and end of a quoted item; default is '\"'.
+  gdf_csv_quote_style quoting = QUOTE_MINIMAL; ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
+  bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
-  char          escapechar;                 // Single character used as the escape character
 
-  char          comment;                    ///< The character used to denote start of a comment line. The rest of the line will not be parsed.
+  char          comment = '\0';             ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
 
-  char          *encoding;                  // the data encoding, NULL = UTF-8
 
-  size_t        byte_range_offset;          ///< offset of the byte range to read. 
-  size_t        byte_range_size;            /**< size of the byte range to read. Set to zero to read all data after byte_range_offset.
-                                            Reads the row that starts before or at the end of the range, even if it ends after the end of the range. */
+  size_t        byte_range_offset = 0;      ///< Offset of the byte range to read; default is zero.
+  size_t        byte_range_size = 0;        /**< Size of the byte range to read. Set to zero to read to the end of the file (default behavior).
+                                            Reads the row that starts before or at the end of the range, even if it ends after the end of the range.*/
+  csv_read_arg() = default;
+
 };
 
 }

@@ -79,8 +79,6 @@ cpdef cpp_read_csv(
 
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
-        if compression == 'infer':
-            compression = None
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
@@ -159,26 +157,8 @@ cpdef cpp_read_csv(
         csv_reader.true_values.push_back(str(value).encode())
     for value in false_values or []:
         csv_reader.false_values.push_back(str(value).encode())
-
-    arr_na_values = []
-    cdef vector[const char*] vector_na_values
     for value in na_values or []:
-        arr_na_values.append(str(value).encode())
-    vector_na_values = arr_na_values
-    csv_reader.na_values = vector_na_values.data()
-    csv_reader.num_na_values = len(arr_na_values)
-
-    if compression is None:
-        compression_bytes = <char*>NULL
-    else:
-        compression = compression.encode()
-        compression_bytes = <char*>compression
-
-    if prefix is None:
-        prefix_bytes = <char*>NULL
-    else:
-        prefix = prefix.encode()
-        prefix_bytes = <char*>prefix
+        csv_reader.na_values.push_back(str(value).encode())
 
     csv_reader.delimiter = delimiter.encode()[0]
     csv_reader.lineterminator = lineterminator.encode()[0]
@@ -192,8 +172,8 @@ cpdef cpp_read_csv(
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.mangle_dupe_cols = mangle_dupe_cols
-    csv_reader.windowslinetermination = False
-    csv_reader.compression = compression_bytes
+    if compression is not None:
+        csv_reader.compression = compression.encode()
     csv_reader.decimal = decimal.encode()[0]
     csv_reader.thousands = (thousands.encode() if thousands else b'\0')[0]
     csv_reader.nrows = nrows if nrows is not None else -1
@@ -207,7 +187,8 @@ cpdef cpp_read_csv(
     csv_reader.comment = (comment.encode() if comment else b'\0')[0]
     csv_reader.keep_default_na = keep_default_na
     csv_reader.na_filter = na_filter
-    csv_reader.prefix = prefix_bytes
+    if prefix is not None:
+        csv_reader.prefix = prefix.encode()
 
     cdef cudf_table table
     with nogil:

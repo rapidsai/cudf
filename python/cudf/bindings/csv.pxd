@@ -30,7 +30,6 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         const char          *filepath_or_buffer
         size_t              buffer_size
 
-        bool                windowslinetermination
         char                lineterminator
         char                delimiter
         bool                delim_whitespace
@@ -54,19 +53,16 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         vector[string]      true_values
         vector[string]      false_values
 
-        const char          **na_values
-        int                 num_na_values
+        vector[string]      na_values
         bool                keep_default_na
         bool                na_filter
 
-        char                *prefix
+        string              prefix
         bool                mangle_dupe_cols
 
-        bool                parse_dates
-        bool                infer_datetime_format
         bool                dayfirst
 
-        char                *compression
+        string              compression
         char                thousands
 
         char                decimal
@@ -75,11 +71,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         gdf_csv_quote_style quoting
         bool                doublequote
 
-        char                escapechar
-
         char                comment
-
-        char                *encoding
 
         size_t              byte_range_offset
         size_t              byte_range_size

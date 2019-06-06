@@ -16,6 +16,12 @@
 
 #include "cuio_common.hpp"
 
+#include <algorithm>
+
+#include "utilities/error_utils.hpp"
+
+namespace cudf {
+
 gdf_dtype convertStringToDtype(const std::string &dtype) {
   if (dtype == "str") return GDF_STRING;
   if (dtype == "timestamp") return GDF_TIMESTAMP;
@@ -32,3 +38,44 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
 
   return GDF_invalid;
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Infer the compression type from the compression parameter and
+ * the input data.
+ *
+ * Returns "none" if the input is not compressed.
+ * Throws if the input is not not valid.
+ *
+ * @param[in] compression_arg Input string that is potentially describing
+ * the compression type. Can also be "none" or "infer".
+ * @param[in] source_type Enum describing the type of the data source
+ * @param[in] source If source_type is FILE_PATH, contains the filepath.
+ * If source_type is HOST_BUFFER, contains the input JSON data.
+ *
+ * @return string representing the compression type.
+ *---------------------------------------------------------------------------**/
+std::string inferCompressionType(const std::string &compression_arg, gdf_input_type source_type,
+                                        const std::string &source,
+                                        const std::map<std::string, std::string> ext_to_compression) {
+  auto str_tolower = [](const auto &begin, const auto &end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+  const std::string comp_arg_lower = str_tolower(compression_arg.begin(), compression_arg.end());
+  if (comp_arg_lower != "infer")
+    return comp_arg_lower;
+  // Cannot infer compression type from a buffer, assume the input is uncompressed
+  if (source_type == gdf_csv_input_form::HOST_BUFFER)
+    return "none";
+
+  // Need to infer compression from the file extension
+  const auto ext_start = std::find(source.rbegin(), source.rend(), '.').base();
+  const std::string file_ext = str_tolower(ext_start, source.end());
+  if (ext_to_compression.find(file_ext) != ext_to_compression.end())
+    return ext_to_compression.find(file_ext)->second;
+  // None of the supported compression types match
+  CUDF_FAIL("Invalid compression argument");
+}
+
+} //namespace cudf
