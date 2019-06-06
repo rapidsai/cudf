@@ -353,9 +353,10 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
                           scatter_functor<Filter, block_size, per_thread>{},
                           output, input, block_offsets, filter,
                           input.valid != nullptr, stream);
+
     CHECK_STREAM(stream);
   }
-
+  
   // synchronize nvcategory after filtering
   if (output.dtype == GDF_STRING_CATEGORY) {
     CUDF_EXPECTS(
