@@ -213,7 +213,7 @@ struct rowindex_state_s
     uint32_t row_index_entry[3][CI_PRESENT]; // NOTE: Assumes CI_PRESENT follows CI_DATA and CI_DATA2
     CompressedStreamInfo strm_info[2];
     RowGroup rowgroups[128];
-    uint32_t compressed_block_id[128][2];
+    uint32_t compressed_offset[128][2];
 };
 
 enum {
@@ -367,7 +367,7 @@ static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_
             {
                 s->rowgroups[i].strm_offset[j] = s->row_index_entry[1][j];
                 s->rowgroups[i].run_pos[j] = s->row_index_entry[2][j];
-                s->compressed_block_id[i][j] = s->row_index_entry[0][j];
+                s->compressed_offset[i][j] = s->row_index_entry[0][j];
             }
         }
     }
@@ -390,18 +390,19 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s *s, int ci_
     int32_t strm_len = s->chunk.strm_len[ci_id];
     if (strm_len > 0)
     {
-        int32_t compressed_block_id = (t < num_rowgroups) ? s->compressed_block_id[t][ci_id] : 0;
-        if (compressed_block_id > 0)
+        int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
+        if (compressed_offset > 0)
         {
-            const uint8_t *cur = s->strm_info[ci_id].compressed_data;
+            const uint8_t *start = s->strm_info[ci_id].compressed_data;
+            const uint8_t *cur = start;
             const uint8_t *end = cur + s->strm_info[ci_id].compressed_data_size;
             gpu_inflate_status_s *decstatus = s->strm_info[ci_id].decstatus;
             uint32_t uncomp_offset = 0;
-            do
+            for (;;)
             {
                 uint32_t block_len, is_uncompressed;
 
-                if (cur + 3 > end)
+                if (cur + 3 > end || cur + 3 >= start + compressed_offset)
                 {
                     break;
                 }
@@ -423,7 +424,7 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s *s, int ci_
                     uncomp_offset += decstatus->bytes_written;
                     decstatus++;
                 }
-            } while (--compressed_block_id);
+            }
             s->rowgroups[t].strm_offset[ci_id] += uncomp_offset;
         }
     }
