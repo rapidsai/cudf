@@ -9,4 +9,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
+    cdef gdf_column apply_boolean_mask(const gdf_column &input,
+                                       const gdf_column &boolean_mask) except +
+
     cdef gdf_column drop_nulls(const gdf_column &input) except +
