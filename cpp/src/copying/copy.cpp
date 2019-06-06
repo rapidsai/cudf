@@ -19,6 +19,7 @@
 #include <utilities/error_utils.hpp>
 #include <cudf.h>
 #include <table.hpp>
+#include <nvstrings/NVCategory.h>
 
 #include <cuda_runtime.h>
 #include <algorithm>
@@ -34,9 +35,12 @@ gdf_column empty_like(gdf_column const& input)
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
   gdf_column output{};
 
+  gdf_dtype_extra_info info = input.dtype_info;
+  info.category = nullptr;
+
   CUDF_EXPECTS(GDF_SUCCESS == 
                gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, input.dtype_info),
+                                         input.dtype, 0, info),
                "Invalid column parameters");
 
   return output;
@@ -87,6 +91,12 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
     }
   }
 
+  if (input.dtype == GDF_STRING_CATEGORY) {
+    if (input.dtype_info.category != nullptr) {
+      NVCategory *cat = static_cast<NVCategory*>(input.dtype_info.category);
+      output.dtype_info.category = cat->copy();
+    }
+  }
   return output;
 }
 
