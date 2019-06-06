@@ -25,7 +25,7 @@
 #include <utilities/integer_utils.hpp>
 
 namespace bit_mask {
-enum { bits_per_element = gdf::util::size_in_bits<bit_mask_t>() };
+enum { bits_per_element = cudf::util::size_in_bits<bit_mask_t>() };
 
 /**
  * @brief determine the number of bit_mask_t elements required for @p size bits
@@ -182,7 +182,7 @@ CUDA_HOST_DEVICE_CALLABLE bool is_valid(bit_mask_t const * valid, T bit_index) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  return gdf::util::bit_is_set<bit_mask_t, T>(valid, bit_index);
+  return cudf::util::bit_is_set<bit_mask_t, T>(valid, bit_index);
 }
 
 /**
@@ -203,7 +203,7 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bit_mask_t *valid, T bit_index) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  gdf::util::turn_bit_on(valid, bit_index);
+  cudf::util::turn_bit_on(valid, bit_idx);
 }
 
 /**
@@ -225,7 +225,7 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bit_mask_t *valid,
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  return gdf::util::turn_bit_off(valid, bit_index);
+  return cudf::util::turn_bit_off(valid, bit_index);
 }
 
 /**
@@ -245,9 +245,9 @@ CUDA_DEVICE_CALLABLE void set_bit_safe(bit_mask_t *valid, T bit_index) {
                 "Record index must be of an integral type");
 
   const gdf_size_type rec{
-      gdf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
+      cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
   const gdf_size_type bit{
-      gdf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
+      cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicOr(&valid[rec], (bit_mask_t{1} << bit));
 }
@@ -269,9 +269,9 @@ CUDA_DEVICE_CALLABLE void clear_bit_safe(bit_mask_t *valid, T bit_index) {
                 "Record index must be of an integral type");
 
   const gdf_size_type rec{
-      gdf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
+      cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
   const gdf_size_type bit{
-      gdf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
+      cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicAnd(&valid[rec], ~(bit_mask_t{1} << bit));
 }
