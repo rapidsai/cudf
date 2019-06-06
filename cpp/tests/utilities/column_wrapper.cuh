@@ -58,12 +58,12 @@ gdf_dtype_extra_info copy_extra_info(gdf_column const& column) {
   // make a copy of the category if there is one
   if (column.dtype_info.category != nullptr) {
     extra_info.category =
-      static_cast<NVCategory*>(column.dtype_info.category)->copy();
+        static_cast<NVCategory*>(column.dtype_info.category)->copy();
   }
   return extra_info;
 }
 
-}; // namespace
+};  // namespace
 
 namespace cudf {
 namespace test {
@@ -134,6 +134,15 @@ namespace test {
  *---------------------------------------------------------------------------**/
 template <typename ColumnType>
 struct column_wrapper {
+  /**---------------------------------------------------------------------------*
+   * @brief Default constructor initializes an empty gdf_column with proper
+   * dtype
+   *
+   *---------------------------------------------------------------------------**/
+  column_wrapper() : the_column{} {
+    the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Copy constructor copies from another column_wrapper of the same
    * type.
@@ -403,7 +412,7 @@ struct column_wrapper {
                  char const ** string_values) {
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
-    
+
     NVCategory* category = NVCategory::create_from_array(string_values,
                                                          column_size);
     gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
@@ -414,7 +423,7 @@ struct column_wrapper {
     }
     initialize_with_host_data(host_data);
     the_column.dtype_info.category = category;
-    delete [] category_data;
+    delete[] category_data;
   }
 
   /**---------------------------------------------------------------------------*
@@ -458,7 +467,7 @@ struct column_wrapper {
     }
     initialize_with_host_data(host_data, host_bitmask);
     the_column.dtype_info.category = category;
-    delete [] category_data;
+    delete[] category_data;
   }
 
   /**---------------------------------------------------------------------------*
@@ -596,7 +605,7 @@ struct column_wrapper {
   rmm::device_vector<gdf_valid_type>
       bitmask;  ///< Container for the column's bitmask
 
-  gdf_column the_column;
+  gdf_column the_column{};
 };
 
 }  // namespace test
