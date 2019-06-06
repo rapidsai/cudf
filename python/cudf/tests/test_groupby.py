@@ -457,6 +457,7 @@ def test_advanced_groupby_levels():
     lambda df: df.groupby(['x']).sum(),
     lambda df: df.groupby(['x']).agg('sum'),
     lambda df: df.groupby(['x', 'y']).z.sum(),
+    lambda df: df.groupby(['x', 'y']).z.agg('sum'),
 ])
 def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
