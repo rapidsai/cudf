@@ -159,3 +159,23 @@ TYPED_TEST(SingleColumnCount, FourGroupsOddNullValues) {
       column_wrapper<ResultValue>({R(1), R(1), R(1), R(1)},
                                   [](auto index) { return true; }));
 }
+
+TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesKeys) {
+  using ResultValue = cudf::test::expected_result_t<int, op>;
+  using T = TypeParam;
+  using R = ResultValue;
+
+  // Even index keys and values are null,
+  //  COUNT should be the count of each key / 2 Output keys and values should be
+  //  nullable
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(
+          {T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+          [](auto index) { return index % 2; }),
+      column_wrapper<int>(8, [](auto index) { return int(index); },
+                          [](auto index) { return index % 2; }),
+      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)},
+                                [](auto index) { return true; }),
+      column_wrapper<ResultValue>({R(1), R(1), R(1), R(1)},
+                                  [](auto index) { return true; }));
+}
