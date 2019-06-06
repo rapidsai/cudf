@@ -93,8 +93,15 @@ void expect_columns_are_equal(
     const gdf_column& rhs_gdf_column = *(rhs.get());
     cudf::validate(lhs_gdf_column);
     cudf::validate(rhs_gdf_column);
-    EXPECT_TRUE(cudf::have_same_type(lhs_gdf_column, rhs_gdf_column));
-    if (not cudf::have_same_type(lhs_gdf_column, rhs_gdf_column)) { return; }
+
+    EXPECT_EQ(lhs_gdf_column.dtype, rhs_gdf_column.dtype);
+    EXPECT_EQ(cudf::is_nullable(lhs_gdf_column),
+              cudf::is_nullable(rhs_gdf_column));
+
+    if (lhs_gdf_column.dtype == GDF_TIMESTAMP) {
+      EXPECT_EQ(lhs_gdf_column.dtype_info.time_unit,
+                lhs_gdf_column.dtype_info.time_unit);
+    }
     EXPECT_EQ(lhs_gdf_column.size, rhs_gdf_column.size);
     EXPECT_EQ(lhs_gdf_column.null_count, rhs_gdf_column.null_count);
     auto common_size = lhs_gdf_column.size;
