@@ -37,6 +37,26 @@ def test_series_replace():
     sr8 = sr1.replace(sr1[:3], 5)
     np.testing.assert_equal(sr8.to_array(), a8)
 
+    # large input containing null
+    sr9 = Series(list(range(4000000)) + [None])
+    sr10 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], None)
+    assert sr10.null_count == 8
+    assert len(sr10.to_array()) == (4000001-8)
+
+    sr11 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], -1)
+    assert sr11.null_count == 1
+    assert len(sr11.to_array()) == (4000001 - 1)
+
+    # large input not containing nulls
+    sr9 = sr9.fillna(-11)
+    sr12 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], None)
+    assert sr10.null_count == 7
+    assert len(sr10.to_array()) == (4000001 - 7)
+
+    sr11 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], -1)
+    assert sr11.null_count == 0
+    assert len(sr11.to_array()) == 4000001
+
 
 def test_series_replace_with_nulls():
     a1 = np.array([0, 1, 2, 3, 4])
