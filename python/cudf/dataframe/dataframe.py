@@ -6,10 +6,10 @@ import inspect
 import random
 from collections import OrderedDict
 from collections.abc import Sequence, Mapping
-from copy import copy
 import logging
 import warnings
 import numbers
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -32,9 +32,19 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
+from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
+
+
+def _unique_name(existing_names, suffix="_unique_name"):
+    ret = suffix
+    i = 1
+    while ret in existing_names:
+        ret = "%s_%d" % (suffix, i)
+        i += 1
+    return ret
 
 
 class DataFrame(object):
@@ -95,12 +105,11 @@ class DataFrame(object):
     2 2 nan
     3 3 0.3
     """
-    LEFT_RIGHT_INDEX_NAME = 'cudf_left_right_index_key'
 
     def __init__(self, name_series=None, index=None):
         if index is None:
             index = RangeIndex(start=0)
-        self._index = index
+        self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
@@ -458,17 +467,22 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
+                    if self.shape[0] != other.shape[0]:
+                        raise NotImplementedError(
+                                "%s on columns with different "
+                                "length is not supported", fn)
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
         elif isinstance(other, Series):
@@ -641,7 +655,7 @@ class DataFrame(object):
         5   5    5
         8   8    8
         """
-        return Loc(self)
+        return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
@@ -670,7 +684,7 @@ class DataFrame(object):
         7    7    7    7
         9    9    9    9
         """
-        return Iloc(self)
+        return _DataFrameIlocIndexer(self)
 
     @property
     def columns(self):
@@ -1007,7 +1021,7 @@ class DataFrame(object):
         copy : boolean, default True
             Also copy underlying data
         inplace: boolean, default False
-            Retrun new DataFrame.  If True, assign columns without copy
+            Return new DataFrame.  If True, assign columns without copy
 
         Returns
         -------
@@ -1051,6 +1065,9 @@ class DataFrame(object):
         objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
+        elif isinstance(objs[0].index, cudf.dataframe.multiindex.MultiIndex):
+            index = cudf.dataframe.multiindex.MultiIndex._concat(
+                    [o.index for o in objs])
         else:
             index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))
@@ -1322,7 +1339,10 @@ class DataFrame(object):
         Not supporting *copy* because default and only behaviour is copy=True
         """
         from cudf.bindings.transpose import transpose as cpp_tranpose
-        return cpp_tranpose(self)
+        result = cpp_tranpose(self)
+        result = result.rename(dict(zip(result.columns, self.index)))
+        result = result.set_index(self.columns)
+        return result
 
     @property
     def T(self):
@@ -1357,8 +1377,9 @@ class DataFrame(object):
         return melt(self, **kwargs)
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
-              left_index=False, right_index=False, lsuffix=None, rsuffix=None,
-              type="", method='hash', indicator=False, suffixes=('_x', '_y')):
+              left_index=False, right_index=False, sort=False, lsuffix=None,
+              rsuffix=None, type="", method='hash', indicator=False,
+              suffixes=('_x', '_y')):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
 
@@ -1372,6 +1393,15 @@ class DataFrame(object):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
+        how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
+            Type of merge to be performed.
+                left: use only keys from left frame, similar to a SQL left
+                      outer join; preserve key order.
+                right: not supported.
+                outer: use union of keys from both frames, similar to a SQL
+                       full outer join; sort keys lexicographically.
+                inner: use intersection of keys from both frames, similar to
+                       a SQL inner join; preserve the order of the left keys.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -1384,14 +1414,15 @@ class DataFrame(object):
             Use the index from the left DataFrame as the join key(s).
         right_index : bool, default False
             Use the index from the right DataFrame as the join key.
-        how : str, defaults to 'left'
-            Only accepts 'left'
-            left: use only keys from left frame, similar to
-            a SQL left outer join; preserve key order
+        sort : bool, default False
+            Sort the join keys lexicographically in the result DataFrame.
+            If False, the order of the join keys depends on the join type
+            (see the `how` keyword).
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        type : str, defaults to 'hash'
+        method : {‘hash’, ‘sort’}, default ‘hash’
+            The implementation method to be used for the operation.
 
         Returns
         -------
@@ -1433,20 +1464,6 @@ class DataFrame(object):
         else:
             lsuffix, rsuffix = suffixes
 
-        if left_on and right_on and left_on != right_on:
-            raise NotImplementedError("left_on='x', right_on='y' not supported"
-                                      "in CUDF at this time.")
-
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
-        if on:
-            on = copy(on)
-        if left_on:
-            left_on = copy(left_on)
-        if right_on:
-            right_on = copy(right_on)
-
-        # Early termination Error checking
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -1457,26 +1474,8 @@ class DataFrame(object):
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-        same_names = set(lhs.columns) & set(rhs.columns)
-        if same_names and not (lsuffix or rsuffix):
-            raise ValueError('there are overlapping columns but '
-                             'lsuffix and rsuffix are not defined')
 
-        def fix_name(name, suffix):
-            if name in same_names:
-                return "{}{}".format(name, suffix)
-            return name
-
-        if left_index and right_index:
-            on = lhs.LEFT_RIGHT_INDEX_NAME
-            lhs[on] = lhs.index
-            rhs[on] = rhs.index
-        if on is None and left_on is None and right_on is None:
-            on = list(same_names)
-            if len(on) == 0:
-                raise ValueError('No common columns to perform merge on')
-
-        # Essential parameters
+        # Making sure that the "on" arguments are list of column names
         if on:
             on = [on] if isinstance(on, str) else list(on)
         if left_on:
@@ -1485,168 +1484,158 @@ class DataFrame(object):
             right_on = ([right_on] if isinstance(right_on, str)
                         else list(right_on))
 
-        # Pandas inconsistency warning
-        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
-                set(rhs.columns).intersection(lhs.columns):
-            logging.warning(
-                    "Pandas and CUDF column ordering may not match for "
-                    "DataFrames with 0 rows."
-                    )
+        lhs = self.copy(deep=False)
+        rhs = right.copy(deep=False)
 
-        # Column prep - this should be simplified
-        col_cats = {}
+        same_named_columns = set(lhs.columns) & set(rhs.columns)
 
-        for name in left_on or []:
-            if pd.api.types.is_categorical_dtype(lhs[name]):
-                lcats = lhs[name].cat.categories
-                rcats = rhs[name].cat.categories
-                if how == 'rhs':
-                    cats = rcats
-                    lhs[name] = (lhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                elif how in ['inner', 'outer']:
-                    # Do the join using the union of categories from both side.
-                    # Adjust for inner joins afterwards
-                    cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    rhs[name] = rhs[name]._column.as_numerical
-                col_cats[name] = cats
-        for name in right_on or []:
-            if pd.api.types.is_categorical_dtype(rhs[name]):
-                lcats = lhs[name].cat.categories
-                rcats = rhs[name].cat.categories
-                if how == 'left':
-                    cats = lcats
-                    rhs[name] = (rhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                elif how in ['inner', 'outer']:
-                    # Do the join using the union of categories from both side.
-                    # Adjust for inner joins afterwards
-                    cats = sorted(set(lcats) | set(rcats))
-                    lhs[name] = (lhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    lhs[name] = lhs[name]._column.as_numerical
-                    rhs[name] = (rhs[name].cat._set_categories(cats)
-                                 .fillna(-1))
-                    rhs[name] = rhs[name]._column.as_numerical
-                col_cats[name] = cats
-        for name, col in lhs._cols.items():
-            if pd.api.types.is_categorical_dtype(col) and name not in on:
-                f_n = fix_name(name, lsuffix)
-                col_cats[f_n] = lhs[name].cat.categories
-        for name, col in rhs._cols.items():
-            if pd.api.types.is_categorical_dtype(col) and name not in on:
-                f_n = fix_name(name, rsuffix)
-                col_cats[f_n] = rhs[name].cat.categories
+        # Since GDF doesn't take indexes, we insert indexes as regular columns.
+        # In order to do that we need some unique column names
+        result_index_name = _unique_name(
+            itertools.chain(lhs.columns, rhs.columns),
+            suffix="_result_index")
+        merge_index_name = _unique_name(
+            itertools.chain(lhs.columns, rhs.columns),
+            suffix="_merge_index")
 
-        if left_index and right_on:
-            lhs[right_on[0]] = lhs.index
-            left_on = right_on
+        # Let's find the columns to do the merge on.
+        if left_index and right_index:
+            lhs[merge_index_name] = lhs.index
+            rhs[merge_index_name] = rhs.index
+            left_on = right_on = [merge_index_name]
+        elif on:
+            if left_on or right_on:
+                raise ValueError('Can only pass argument "on" OR "left_on" '
+                                 'and "right_on", not a combination of both.')
+            left_on = right_on = on
+        elif left_index and right_on:
+            if len(right_on) != 1:  # TODO: support multi-index
+                raise ValueError('right_on should be a single column')
+            lhs[merge_index_name] = lhs.index
+            left_on = [merge_index_name]
+            rhs[result_index_name] = rhs.index
         elif right_index and left_on:
-            rhs[left_on[0]] = rhs.index
-            right_on = left_on
+            if len(left_on) != 1:  # TODO: support multi-index
+                raise ValueError('left_on should be a single column')
+            rhs[merge_index_name] = rhs.index
+            right_on = [merge_index_name]
+            lhs[result_index_name] = lhs.index
+        elif not (left_on or right_on):
+            left_on = right_on = list(same_named_columns)
+            if len(left_on) == 0:
+                raise ValueError('No common columns to perform merge on')
+        else:
+            if len(right_on) != len(left_on):
+                raise ValueError('right_on and left_on must have same '
+                                 'number of columns')
 
-        if on:
-            left_on = on
-            right_on = on
+        # Fix column names by appending `suffixes`
+        for name in same_named_columns:
+            if name not in left_on and name not in right_on:
+                if not (lsuffix or rsuffix):
+                    raise ValueError('there are overlapping columns but '
+                                     'lsuffix and rsuffix are not defined')
+                else:
+                    lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
+                    rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
+
+        # We save the original categories for the reconstruction of the
+        # final data frame
+        col_with_categories = {}
+        for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
+            if pd.api.types.is_categorical_dtype(col):
+                col_with_categories[name] = col.cat.categories
+
+        # Save the order of the original column names for preservation later
+        org_names = list(itertools.chain(lhs._cols.keys(), rhs._cols.keys()))
 
         # Compute merge
-        cols, valids = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
-                                     how, method=method)
+        gdf_result = cpp_join.join(lhs._cols, rhs._cols, left_on, right_on,
+                                   how, method)
 
-        # Output conversion - take cols and valids from `cpp_join` and
-        # combine into a DataFrame()
+        # GDF always removes the "right_on" columns from the result
+        # whereas Pandas keeps the "right_on" columns if its name differ
+        # from the one in the "left_on". Thus, here we duplicate the column if
+        # the name differ.
+        for left, right in zip(left_on, right_on):
+            if left != right:
+                for col, valid, name in gdf_result:
+                    if name == left:
+                        gdf_result.append((col, valid, right))
+                        break
+                else:
+                    assert False
+
+        # Let's sort the columns of the GDF result. NB: Pandas doc says
+        # that it sorts when how='outer' but this is NOT the case.
+        result = []
+        if sort:
+            # Pandas lexicographically sort is NOT a sort of all columns.
+            # Instead, it sorts columns in lhs, then in "on", and then rhs.
+            left_of_on = []
+            for name in lhs._cols.keys():
+                if name not in left_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            left_of_on.append(gdf_result.pop(i))
+                            break
+            in_on = []
+            for name in itertools.chain(lhs._cols.keys(), rhs._cols.keys()):
+                if name in left_on or name in right_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            in_on.append(gdf_result.pop(i))
+                            break
+            right_of_on = []
+            for name in rhs._cols.keys():
+                if name not in right_on:
+                    for i in range(len(gdf_result)):
+                        if gdf_result[i][2] == name:
+                            right_of_on.append(gdf_result.pop(i))
+                            break
+            result = sorted(left_of_on, key=lambda x: str(x[2])) + \
+                sorted(in_on, key=lambda x: str(x[2])) + \
+                sorted(right_of_on, key=lambda x: str(x[2]))
+        else:
+            for org_name in org_names:
+                for i in range(len(gdf_result)):
+                    if gdf_result[i][2] == org_name:
+                        result.append(gdf_result.pop(i))
+                        break
+            assert(len(gdf_result) == 0)
+
+        # Build a new data frame based on the merged columns from GDF
         df = DataFrame()
+        for col, valid, name in result:
+            if isinstance(col, nvstrings.nvstrings):
+                df[name] = col
+            else:
+                mask = None
+                if valid is not None:
+                    mask = Buffer(valid)
+                df[name] = columnops.build_column(
+                    Buffer(col),
+                    dtype=col.dtype,
+                    mask=mask,
+                    categories=col_with_categories.get(name, None),
+                )
 
-        # Columns are returned in order on - left - rhs from libgdf
-        # In order to mirror pandas, reconstruct our df using the
-        # columns from `left` and the data from `cpp_join`. The final order
-        # is left columns, followed by non-join-key rhs columns.
-        on_count = 0
-        on = list(set(right_on + left_on))
-        # gap spaces between left and `on` for result from `cpp_join`
-        gap = len(lhs.columns) - len(on)
-        for idc, name in enumerate(lhs.columns):
-            if name in on:
-                # on columns returned first from `cpp_join`
-                for idx in range(len(on)):
-                    if on[idx] == name:
-                        on_idx = idx + gap
-                        on_count = on_count + 1
-                        key = on[idx]
-                        categories = col_cats[key] if key in col_cats.keys()\
-                            else None
-                        if isinstance(cols[on_idx], nvstrings.nvstrings):
-                            df[key] = cols[on_idx]
-                        else:
-                            mask = None
-                            if valids[on_idx] is not None:
-                                mask = Buffer(valids[on_idx])
-                            df[key] = columnops.build_column(
-                                    Buffer(cols[on_idx]),
-                                    dtype=cols[on_idx].dtype,
-                                    mask=mask,
-                                    categories=categories,
-                            )
-            else:  # not an `on`-column, `cpp_join` returns these after `on`
-                # but they need to be added to the result before `on` columns.
-                # on_count corrects gap for non-`on` columns
-                left_column_idx = idc - on_count
-                left_name = fix_name(name, lsuffix)
-                categories = col_cats[left_name] if left_name in\
-                    col_cats.keys() else None
-                if isinstance(cols[left_column_idx], nvstrings.nvstrings):
-                    df[left_name] = cols[left_column_idx]
-                else:
-                    mask = None
-                    if valids[left_column_idx] is not None:
-                        mask = Buffer(valids[left_column_idx])
-                    df[left_name] = columnops.build_column(
-                            Buffer(cols[left_column_idx]),
-                            dtype=cols[left_column_idx].dtype,
-                            mask=mask,
-                            categories=categories,
-                    )
-        rhs_column_idx = len(lhs.columns)
-        for name in rhs.columns:
-            if name not in on:
-                # now copy the columns from `rhs` that were not in `on`
-                rhs_name = fix_name(name, rsuffix)
-                categories = col_cats[rhs_name] if rhs_name in\
-                    col_cats.keys() else None
-                if isinstance(cols[rhs_column_idx], nvstrings.nvstrings):
-                    df[rhs_name] = cols[rhs_column_idx]
-                else:
-                    mask = None
-                    if valids[rhs_column_idx] is not None:
-                        mask = Buffer(valids[rhs_column_idx])
-                    df[rhs_name] = columnops.build_column(
-                            Buffer(cols[rhs_column_idx]),
-                            dtype=cols[rhs_column_idx].dtype,
-                            mask=mask,
-                            categories=categories,
-                    )
-                rhs_column_idx = rhs_column_idx + 1
-
+        # Let's make the "index as column" back into an index
         if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
-        elif right_index and left_on:
-            new_index = Series(lhs.index,
-                               index=RangeIndex(0, len(lhs[left_on[0]])))
-            indexed = lhs[left_on[0]][df[left_on[0]]-1]
-            new_index = new_index[indexed-1]
-            df.index = new_index
-        elif left_index and right_on:
-            new_index = Series(rhs.index,
-                               index=RangeIndex(0, len(rhs[right_on[0]])))
-            indexed = rhs[right_on[0]][df[right_on[0]]-1]
-            new_index = new_index[indexed-1]
-            df.index = new_index
+            df.index = df[merge_index_name]
+            df.index.name = lhs.index.name
+        elif result_index_name in df.columns:
+            df.index = df[result_index_name]
+            if left_index:
+                df.index.name = rhs.index.name
+            elif right_index:
+                df.index.name = lhs.index.name
+
+        # Remove all of the "index as column" columns
+        if merge_index_name in df.columns:
+            df._drop_column(merge_index_name)
+        if result_index_name in df.columns:
+            df._drop_column(result_index_name)
 
         nvtx_range_pop()
 
@@ -2617,35 +2606,34 @@ class DataFrame(object):
     #
     # Stats
     #
-    def count(self):
-        return self._apply_support_method('count')
+    def count(self, **kwargs):
+        return self._apply_support_method('count', **kwargs)
 
-    def min(self):
-        return self._apply_support_method('min')
+    def min(self, **kwargs):
+        return self._apply_support_method('min', **kwargs)
 
-    def max(self):
-        return self._apply_support_method('max')
+    def max(self, **kwargs):
+        return self._apply_support_method('max', **kwargs)
 
-    def sum(self):
-        return self._apply_support_method('sum')
+    def sum(self, **kwargs):
+        return self._apply_support_method('sum', **kwargs)
 
-    def product(self):
-        return self._apply_support_method('product')
+    def product(self, **kwargs):
+        return self._apply_support_method('product', **kwargs)
 
-    def cummin(self):
-        return self._apply_support_method('cummin')
+    def cummin(self, **kwargs):
+        return self._apply_support_method('cummin', **kwargs)
 
-    def cummax(self):
-        return self._apply_support_method('cummax')
+    def cummax(self, **kwargs):
+        return self._apply_support_method('cummax', **kwargs)
 
-    def cumsum(self):
-        return self._apply_support_method('cumsum')
+    def cumsum(self, **kwargs):
+        return self._apply_support_method('cumsum', **kwargs)
 
-    def cumprod(self):
-        return self._apply_support_method('cumprod')
+    def cumprod(self, **kwargs):
+        return self._apply_support_method('cumprod', **kwargs)
 
-    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
-             **kwargs):
+    def mean(self, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2672,17 +2660,28 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method('mean')
+        return self._apply_support_method('mean', **kwargs)
 
-    def std(self, ddof=1):
-        return self._apply_support_method('std', ddof)
+    def std(self, **kwargs):
+        return self._apply_support_method('std', **kwargs)
 
-    def var(self, ddof=1):
-        return self._apply_support_method('var', ddof)
+    def var(self, **kwargs):
+        return self._apply_support_method('var', **kwargs)
 
-    def _apply_support_method(self, *args, **kwargs):
-        method = args[0]
-        result = [getattr(self[col], method)(*kwargs)
+    def all(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'all', **kwargs)
+        return self._apply_support_method('all', **kwargs)
+
+    def any(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'any', **kwargs)
+        return self._apply_support_method('any', **kwargs)
+
+    def _apply_support_method(self, method, **kwargs):
+        result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
         if isinstance(result[0], Series):
             support_result = result
@@ -2805,114 +2804,6 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
-
-
-class Loc(object):
-    """
-    For selection by label.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        row_slice = None
-        row_label = None
-
-        if isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)\
-                and isinstance(arg, tuple):  # noqa: E501
-            # Explicitly ONLY support tuple indexes into MultiIndex.
-            # Pandas allows non tuple indices and warns "results may be
-            # undefined."
-            return self._df._index._get_row_major(self._df, arg)
-
-        if isinstance(arg, int):
-            if arg < 0 or arg >= len(self._df):
-                raise IndexError("label scalar %s is out of bound" % arg)
-            row_label = arg
-            col_slice = self._df.columns
-
-        elif isinstance(arg, tuple):
-            arg_1, arg_2 = arg
-            if isinstance(arg_1, int):
-                row_label = arg_1
-            elif isinstance(arg_1, slice):
-                row_slice = arg_1
-            else:
-                raise TypeError(type(arg_1))
-            col_slice = arg_2
-            if isinstance(arg_2, str):
-                col_slice = [arg_2]
-
-        elif isinstance(arg, slice):
-            row_slice = arg
-            col_slice = self._df.columns
-        else:
-            raise TypeError(type(arg))
-
-        if row_label is not None:
-            ret_list = []
-            col_list = pd.Categorical(list(col_slice))
-            for col in col_list:
-                if pd.api.types.is_categorical_dtype(
-                        self._df[col][row_label].dtype
-                ):
-                    raise NotImplementedError(
-                        "categorical dtypes are not yet supported in loc"
-                    )
-                ret_list.append(self._df[col][row_label])
-            promoted_type = np.result_type(*[val.dtype for val in ret_list])
-            ret_list = np.array(ret_list, dtype=promoted_type)
-            return Series(ret_list,
-                          index=as_index(col_list))
-
-        df = DataFrame()
-        begin, end = self._df.index.find_label_range(row_slice.start,
-                                                     row_slice.stop)
-        row_step = row_slice.step if row_slice.step is not None else 1
-        for col in col_slice:
-            sr = self._df[col]
-            df.add_column(col, sr[begin:end:row_step], forceindex=True)
-
-        return df
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, df):
-        self._df = df
-
-    def __getitem__(self, arg):
-        if isinstance(arg, (tuple)):
-            if len(arg) == 1:
-                arg = list(arg)
-            elif len(arg) == 2:
-                return self[arg[0]][arg[1]]
-            else:
-                return pd.core.indexing.IndexingError(
-                    "Too many indexers"
-                )
-
-        if isinstance(arg, numbers.Integral):
-            rows = []
-            for col in self._df.columns:
-                rows.append(self._df[col][arg])
-            return Series(np.array(rows), name=arg)
-        else:
-            df = DataFrame()
-            for col in self._df.columns:
-                df[col] = self._df[col][arg]
-            df.index = self._df.index[arg]
-
-            return df
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)
 
 
 def from_pandas(obj):

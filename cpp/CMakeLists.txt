@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.7.1 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -229,8 +229,6 @@ add_library(cudf SHARED
             src/orderby/orderby.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
-            src/sort/sorting.cu
-            src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
@@ -246,7 +244,6 @@ add_library(cudf SHARED
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
-            src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
             src/replace/replace.cu
@@ -254,15 +251,15 @@ add_library(cudf SHARED
             src/transpose/transpose.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
-            # src/windowed/windowed_ops.cu ... this is broken
             src/io/cuio_common.cpp
+            src/io/io_readers.cu
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
-            src/io/json/json_reader.cu
+            src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
@@ -279,6 +276,7 @@ add_library(cudf SHARED
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
+            src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
@@ -286,7 +284,8 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp)
+            src/bitmask/legacy_bitmask.cpp
+            src/gis/point_in_polygon.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

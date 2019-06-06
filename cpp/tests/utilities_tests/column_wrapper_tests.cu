@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
 
@@ -89,17 +89,19 @@ void test_column(cudf::test::column_wrapper<T> const& col,
     // Ensure data on device matches expected
     rmm::device_vector<gdf_valid_type> expected_device_bitmask(
         expected_bitmask);
-    EXPECT_TRUE(thrust::equal(
-        rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
-        expected_device_bitmask.begin() +
-            gdf_num_bitmask_elements(expected_values.size()),
-        underlying_column->valid));
 
     // The last element in the bitmask has to be handled as a special case
-    EXPECT_TRUE(std::equal(expected_bitmask.begin(),
-                           expected_bitmask.begin() +
-                               gdf_num_bitmask_elements(expected_values.size()),
-                           actual_bitmask.begin()));
+      EXPECT_TRUE(thrust::equal(
+          rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
+          expected_device_bitmask.begin() +
+              gdf_num_bitmask_elements(expected_values.size()) - 1,
+          underlying_column->valid));
+
+      EXPECT_TRUE(
+          std::equal(expected_bitmask.begin(),
+                     expected_bitmask.begin() +
+                         gdf_num_bitmask_elements(expected_values.size()) - 1,
+                     actual_bitmask.begin()));
 
     // Only check the bits in the last mask that correspond to rows
     std::bitset<GDF_VALID_BITSIZE> expected_last_mask =
@@ -137,6 +139,30 @@ TYPED_TEST(ColumnWrapperTest, SizeConstructorWithBitmask) {
   cudf::test::column_wrapper<TypeParam> const col(size, true);
   std::vector<TypeParam> expected_values(size);
   std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size));
+  test_column(col, expected_values, expected_bitmask);
+}
+
+TYPED_TEST(ColumnWrapperTest, InitializerListConstructor) {
+  std::initializer_list<TypeParam> list{TypeParam(1),  TypeParam(2),
+                                        TypeParam(3),  TypeParam(4),
+                                        TypeParam(42), TypeParam(137)};
+  cudf::test::column_wrapper<TypeParam> const col{list};
+  std::vector<TypeParam> expected_values(list);
+  test_column(col, expected_values);
+}
+
+TYPED_TEST(ColumnWrapperTest, InitializerListBitInitializer) {
+  auto even_bits_null = [](auto row) { return (row % 2); };
+  std::initializer_list<TypeParam> list{TypeParam(1),  TypeParam(2),
+                                        TypeParam(3),  TypeParam(4),
+                                        TypeParam(42), TypeParam(137)};
+  cudf::test::column_wrapper<TypeParam> const col(list, even_bits_null);
+
+  // Every even bit is null
+  std::vector<gdf_valid_type> expected_bitmask(
+      gdf_valid_allocation_size(list.size()), 0xAA);
+  std::vector<TypeParam> expected_values(list);
+
   test_column(col, expected_values, expected_bitmask);
 }
 
@@ -178,8 +204,8 @@ TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
       [](auto row) { return true; });
 
   std::vector<TypeParam> expected_values(size);
-  std::generate(expected_values.begin(), expected_values.end(), [](){
-    static cudf::detail::unwrapped_type_t<TypeParam> ut{0}; 
+  std::generate(expected_values.begin(), expected_values.end(), []() {
+    static cudf::detail::unwrapped_type_t<TypeParam> ut{0};
     return TypeParam{ut++};
   });
 
@@ -238,9 +264,10 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
   EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0), source_device_data,
                             source_device_data + size, copy_device_data));
 
-  EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0), source_column->valid,
-                            source_column->valid + gdf_num_bitmask_elements(size),
-                            copy_column->valid));
+  EXPECT_TRUE(
+      thrust::equal(rmm::exec_policy()->on(0), source_column->valid,
+                    source_column->valid + gdf_num_bitmask_elements(size),
+                    copy_column->valid));
 
   // Ensure to_host data is equal
   std::vector<TypeParam> source_data;

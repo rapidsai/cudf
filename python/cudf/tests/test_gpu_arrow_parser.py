@@ -36,13 +36,14 @@ def make_gpu_parse_arrow_data_batch():
                     reason='need compatible pyarrow to generate test data')
 def test_gpu_parse_arrow_data():
     batch = make_gpu_parse_arrow_data_batch()
-    schema_data = batch.schema.serialize().to_pybytes()
-    recbatch_data = batch.serialize().to_pybytes()
+    schema_data = batch.schema.serialize()
+    recbatch_data = batch.serialize()
 
-    cpu_schema = np.ndarray(shape=len(schema_data), dtype=np.byte,
-                            buffer=bytearray(schema_data))
-    cpu_data = np.ndarray(shape=len(recbatch_data), dtype=np.byte,
-                          buffer=bytearray(recbatch_data))
+    # To ensure compatibility for OmniSci we're going to create this numpy
+    # array to be read-only as that's how numpy arrays created from foreign
+    # memory buffers will be set
+    cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
+    cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
     gpu_data = rmm.to_device(cpu_data)
     del cpu_data
 

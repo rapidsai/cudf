@@ -76,22 +76,36 @@ TestParameters<group_output_method,
 };
 
 typedef ::testing::Types<
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t > >,
     TestParameters< GroupByOutType::SQL, VTuple<int16_t > >,
     TestParameters< GroupByOutType::SQL, VTuple<int32_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<int64_t> >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<float   > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<double  > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int32_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t > >
+    TestParameters< GroupByOutType::SQL, VTuple<int64_t > >,
+    TestParameters< GroupByOutType::SQL, VTuple<float> >,
+    TestParameters< GroupByOutType::SQL, VTuple<double> >,
+    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t > >,
+    TestParameters< GroupByOutType::SQL, VTuple<int16_t, float > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<float> >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<double> >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int64_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t, float > >
+    
   > Implementations;
 
 typedef ::testing::Types<
+    TestParameters< GroupByOutType::SQL, VTuple<int16_t >>,
     TestParameters< GroupByOutType::SQL, VTuple<int32_t >>,
     TestParameters< GroupByOutType::SQL, VTuple<int64_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<double >>,
-    TestParameters< GroupByOutType::SQL, VTuple<int16_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t >>    
+    TestParameters< GroupByOutType::SQL, VTuple<double >>,    
+    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t >>,
+    TestParameters< GroupByOutType::SQL, VTuple<int64_t, float >>,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t >>,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t >>,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t >>,
+    TestParameters< GroupByOutType::PANDAS, VTuple<double >>,    
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int64_t >>,    
+    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t, float >>
   > ValidTestImplementations;
 
 } //namespace: without_agg
