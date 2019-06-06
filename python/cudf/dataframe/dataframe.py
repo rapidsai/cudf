@@ -459,6 +459,13 @@ class DataFrame(object):
     def _apply_op(self, fn, other=None, fill_value=None):
         result = DataFrame()
         result.set_index(self.index)
+
+        def op(lhs, rhs):
+            if fill_value is None:
+                return getattr(lhs, fn)(rhs)
+            else:
+                return getattr(lhs, fn)(rhs, fill_value)
+
         if other is None:
             for col in self._cols:
                 result[col] = getattr(self._cols[col], fn)()
@@ -468,7 +475,7 @@ class DataFrame(object):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             max_num_rows = max(self.shape[0], other.shape[0])
-   
+
             def fallback(col):
                 if fill_value is None:
                     return Series(cudautils.full(max_num_rows,
@@ -480,13 +487,6 @@ class DataFrame(object):
             for col in self._cols:
                 if col not in other._cols:
                     result[col] = fallback(self._cols[col])
-
-            def op(lhs, rhs):
-                if fill_value is None:
-                    return getattr(lhs, fn)(rhs)
-                else:
-                    return getattr(lhs, fn)(rhs, fill_value)
-
             for col in other._cols:
                 if col in self._cols:
                     if self.shape[0] != other.shape[0]:
@@ -503,7 +503,7 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], fn)(other)
+                result[col] = op(self._cols[col], other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "
