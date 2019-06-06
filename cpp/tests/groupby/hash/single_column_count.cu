@@ -33,10 +33,9 @@ static constexpr cudf::groupby::hash::operators op{
 
 template <typename T>
 struct SingleColumnCount : public GdfTest {
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution{1000, 10000};
-  int random_size() { return distribution(generator); }
   using KeyType = T;
+
+  // For COUNT, the value type doesn't matter
   using ValueType = int;
 };
 
