@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import functools
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,7 +10,53 @@ from cudf.tests.utils import assert_eq
 
 pytest.importorskip('dask.distributed')
 
+import msgpack  # noqa: E402
 from distributed.protocol import serialize, deserialize  # noqa: E402
+
+serialize = functools.partial(serialize, serializers=['cuda'])
+deserialize = functools.partial(deserialize, deserializers=['cuda'])
+
+
+
+@pytest.mark.parametrize('df', [
+    lambda: cudf.Series([1, 2, 3]),
+    lambda: cudf.DataFrame({'x': [1, 2, 3]}),
+    lambda: cudf.Series([1, 2, 3], index=[4, 5, 6]),
+    lambda: cudf.Series([1, None, 3]),
+    lambda: cudf.Series([1, 2, 3], index=[4, 5, None]),
+    lambda: cudf.DataFrame({'x': [1, 2, 3], 'y': [1., None, 3.]}, index=[1, None, 3]),
+    lambda: cudf.Series(['a', 'bb', 'ccc']),
+    lambda: cudf.Series(['a', None, 'ccc']),
+    lambda: cudf.DataFrame({'x': ['a', 'bb', 'ccc'], 'y': [1., None, 3.]}, index=[1, None, 3]),
+    pd.util.testing.makeTimeDataFrame,
+    pd.util.testing.makeMissingDataframe,
+    pd.util.testing.makeMultiIndex,
+    pd.util.testing.makeMixedDataFrame,
+    pd.util.testing.makeTimeDataFrame,
+    pd.util.testing.makeBoolIndex,
+])
+def test_serialize(df):
+    """ This should hopefully replace all functions below """
+    a = df()
+    if 'cudf' not in type(a).__module__:
+        a = cudf.from_pandas(a)
+
+    # This should be removed after things work.
+    # It's slightly easier for debugging
+    from distributed.protocol import cuda_serialize, cuda_deserialize
+    header, frames = cuda_serialize(a)
+    deser = cuda_deserialize.dispatch(type(a))
+    deser(header, frames)
+
+    header, frames = serialize(a)
+    msgpack.dumps(header)  # ensure that header is msgpack serializable
+    for frame in frames:
+        bytes(frame)  # this should work
+        # assert not isinstance(frame, (bytes, memoryview)) # non-host byte objects
+
+    b = deserialize(header, frames)
+    assert_eq(a, b)
+
 
 
 def test_serialize_dataframe():

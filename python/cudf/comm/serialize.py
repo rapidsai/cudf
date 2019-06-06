@@ -1,8 +1,8 @@
-# A flag to allow dask_gdf to detect and warn if
-# IPC serialization is unavailable
-CUSTOM_SERIALIZATION_AVAILABLE = False
+import functools
 
+from distributed.protocol.cuda import cuda_serialize, cuda_deserialize
+from distributed.protocol import serialize, deserialize
 
 def register_distributed_serializer(cls):
-    """ Dummy no-op function """
-    pass
+    cuda_serialize.register(cls)(functools.partial(cls.serialize, serialize=serialize))
+    cuda_deserialize.register(cls)(functools.partial(cls.deserialize, deserialize))
