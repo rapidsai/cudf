@@ -430,11 +430,7 @@ size_t gather_stream_info(
                 stripefooter->columns[stream.column].dictionarySize;
           }
         }
-      } else {
-        col = -1;
       }
-    }
-    if (col != -1) {
       stream_info.emplace_back(stripeinfo->offset + src_offset, dst_offset,
                                stream.length, col, stripe_index);
       dst_offset += stream.length;
@@ -688,15 +684,16 @@ gdf_error read_orc(orc_read_arg *args) {
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
-    // Only use the index if we don't have much work with complete columns &
-    // stripes
-    // TODO: In the future, consider nrows, gpu, and tune the threshold
-    bool use_index =
+    const bool use_index =
+        (args->use_index == true) &&
+        // Only use if we don't have much work with complete columns & stripes
+        // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > md.get_row_index_stride() &&
          !(md.get_row_index_stride() & 7) && md.get_row_index_stride() > 0 &&
-         num_columns * selected_stripes.size() < 8 * 128);
-    // TODO: Currently, first row must align to a stripe boundary
-    use_index = (use_index && skip_rows == 0 && args->use_index);
+         num_columns * selected_stripes.size() < 8 * 128) &&
+        // Only use if first row is aligned to a stripe boundary
+        // TODO: Fix logic to handle unaligned rows
+        (skip_rows == 0);
 
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
