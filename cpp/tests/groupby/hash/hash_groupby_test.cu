@@ -105,21 +105,6 @@ TYPED_TEST(SingleColumnGroupbyTest, OneGroupNoNullsCount) {
       column_wrapper<ResultValue>{size});
 }
 
-TYPED_TEST(SingleColumnGroupbyTest, FourGroupsNoNullsCount) {
-  constexpr int size{10};
-  constexpr operators op{COUNT};
-  using ResultValue = expected_result_t<int, op>;
-  using T = TypeParam;
-  using R = ResultValue;
-
-  single_column_groupby_test<op>(
-      column_wrapper<TypeParam>{T(1), T(2), T(2), T(3), T(3), T(3), T(4), T(4),
-                                T(4), T(4)},
-      column_wrapper<int>(size, [](auto index) { return int(index); }),
-      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultValue>{R(1), R(2), R(3), R(4)});
-}
-
 TYPED_TEST(SingleColumnGroupbyTest, OneGroupAllNullKeysCount) {
   constexpr int size{10};
   constexpr operators op{COUNT};
@@ -131,4 +116,79 @@ TYPED_TEST(SingleColumnGroupbyTest, OneGroupAllNullKeysCount) {
                                 [](auto index) { return false; }),
       column_wrapper<int>(size, [](auto index) { return int(index); }),
       column_wrapper<TypeParam>{}, column_wrapper<ResultValue>{});
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, OneGroupAllNullValuesCount) {
+  constexpr int size{10};
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+  TypeParam key{42};
+  // If all values are null, then the output count should be a non-null zero
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(size, [key](auto index) { return key; }),
+      column_wrapper<int>(size, [](auto index) { return int(index); },
+                          [](auto index) { return false; }),
+      column_wrapper<TypeParam>({key}),
+      column_wrapper<ResultValue>({0}, [](auto index) { return true; }));
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, OneGroupOddNullKeysCount) {
+  constexpr int size{10};
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+
+  EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
+  TypeParam key{42};
+  // Even index keys are null, means COUNT should be size/2
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(size, [key](auto index) { return key; },
+                                [](auto index) { return index % 2; }),
+      column_wrapper<int>(size, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>({key}, [](auto index) { return true; }),
+      column_wrapper<ResultValue>({size / 2}));
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, OneGroupOddNullValuesCount) {
+  constexpr int size{10};
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+
+  EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
+  TypeParam key{42};
+  // Even index values are null, means COUNT should be size/2
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(size, [key](auto index) { return key; }),
+      column_wrapper<int>(size, [](auto index) { return int(index); },
+                          [](auto index) { return index % 2; }),
+      column_wrapper<TypeParam>({key}),
+      column_wrapper<ResultValue>({size / 2}, [](auto index) { return true; }));
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, FourGroupsNoNullsCount) {
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+  using T = TypeParam;
+  using R = ResultValue;
+
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+      column_wrapper<int>(8, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>{T(1), T(2), T(3), T(4)},
+      column_wrapper<ResultValue>{R(2), R(2), R(2), R(2)});
+}
+
+TYPED_TEST(SingleColumnGroupbyTest, FourGroupsOddNullKeysCount) {
+  constexpr operators op{COUNT};
+  using ResultValue = expected_result_t<int, op>;
+  using T = TypeParam;
+  using R = ResultValue;
+
+  single_column_groupby_test<op>(
+      column_wrapper<TypeParam>(
+          {T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
+          [](auto index) { return index % 2; }),
+      column_wrapper<int>(8, [](auto index) { return int(index); }),
+      column_wrapper<TypeParam>({T(1), T(2), T(3), T(4)},
+                                [](auto index) { return true; }),
+      column_wrapper<ResultValue>{R(1), R(1), R(1), R(1)});
 }
