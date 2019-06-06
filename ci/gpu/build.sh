@@ -20,7 +20,7 @@ export HOME=$WORKSPACE
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
-export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]\.[0-9])'`
+export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 ################################################################################
 # SETUP - Check environment
@@ -34,7 +34,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*"
+conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL"
 
 logger "Check versions..."
 python --version
