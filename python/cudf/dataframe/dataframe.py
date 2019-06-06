@@ -47,6 +47,25 @@ def _unique_name(existing_names, suffix="_unique_name"):
     return ret
 
 
+def _reverse_op(fn):
+    return {
+        'add':       'radd',
+        'radd':      'add',
+        'sub':       'rsub',
+        'rsub':      'sub',
+        'mul':       'rmul',
+        'rmul':      'mul',
+        'mod':       'rmod',
+        'rmod':      'mod',
+        'pow':       'rpow',
+        'rpow':      'pow',
+        'floordiv':  'rfloordiv',
+        'rfloordiv': 'floordiv',
+        'truediv':   'rtruediv',
+        'rtruediv':  'truediv',
+    }[fn]
+
+
 class DataFrame(object):
     """
     A GPU Dataframe object.
@@ -476,7 +495,7 @@ class DataFrame(object):
         elif isinstance(other, DataFrame):
             max_num_rows = max(self.shape[0], other.shape[0])
 
-            def fallback(col):
+            def fallback(col, fn):
                 if fill_value is None:
                     return Series(cudautils.full(max_num_rows,
                                   np.dtype('float64').type(np.nan),
@@ -486,7 +505,7 @@ class DataFrame(object):
 
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = fallback(self._cols[col])
+                    result[col] = fallback(self._cols[col], fn)
             for col in other._cols:
                 if col in self._cols:
                     if self.shape[0] != other.shape[0]:
@@ -495,7 +514,7 @@ class DataFrame(object):
                                 "length is not supported", fn)
                     result[col] = op(self._cols[col], other._cols[col])
                 else:
-                    result[col] = fallback(other._cols[col])
+                    result[col] = fallback(other._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -599,38 +618,20 @@ class DataFrame(object):
     def __xor__(self, other):
         return self._apply_op('__xor__', other)
 
-    def eq(self, other, fill_value=None):
-        return self._apply_op('eq', other, fill_value)
-
     def __eq__(self, other):
         return self._apply_op('__eq__', other)
-
-    def ne(self, other, fill_value=None):
-        return self._apply_op('ne', other, fill_value)
 
     def __ne__(self, other):
         return self._apply_op('__ne__', other)
 
-    def lt(self, other, fill_value=None):
-        return self._apply_op('lt', other, fill_value)
-
     def __lt__(self, other):
         return self._apply_op('__lt__', other)
-
-    def le(self, other, fill_value=None):
-        return self._apply_op('le', other, fill_value)
 
     def __le__(self, other):
         return self._apply_op('__le__', other)
 
-    def gt(self, other, fill_value=None):
-        return self._apply_op('gt', other, fill_value)
-
     def __gt__(self, other):
         return self._apply_op('__gt__', other)
-
-    def ge(self, other, fill_value=None):
-        return self._apply_op('ge', other, fill_value)
 
     def __ge__(self, other):
         return self._apply_op('__ge__', other)

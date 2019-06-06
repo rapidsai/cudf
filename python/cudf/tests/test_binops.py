@@ -8,6 +8,8 @@ from itertools import product
 
 import pytest
 import numpy as np
+import pandas as pd
+
 import cudf
 
 from cudf.dataframe import Series
@@ -111,8 +113,6 @@ _logical_binops = [
 @pytest.mark.parametrize('rhstype', _int_types + [np.bool_])
 @pytest.mark.parametrize('binop,cubinop', _logical_binops)
 def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
-    import pandas as pd
-
     arr1 = pd.Series(np.random.choice([True, False], 10))
     if lhstype is not np.bool_:
         arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
@@ -331,8 +331,6 @@ _reflected_ops = [
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('func, dtype', list(product(_reflected_ops, _dtypes)))
 def test_reflected_ops_scalar(func, dtype, obj_class):
-    import pandas as pd
-
     # create random series
     np.random.seed(12)
     random_series = pd.Series(np.random.sample(100) + 10, dtype=dtype)
@@ -359,8 +357,6 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
 @pytest.mark.parametrize('binop', _binops)
 def test_different_shapes_and_columns(binop):
-    import cudf
-    import pandas as pd
 
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
@@ -409,6 +405,9 @@ _operator_funcs = [
     'rfloordiv',
     'truediv',
     'rtruediv',
+]
+
+_operator_funcs_series = [
     'eq',
     'ne',
     'lt',
@@ -418,7 +417,7 @@ _operator_funcs = [
 ]
 
 
-@pytest.mark.parametrize('func', _operator_funcs)
+@pytest.mark.parametrize('func', _operator_funcs + _operator_funcs_series)
 @pytest.mark.parametrize('has_nulls', _nulls)
 @pytest.mark.parametrize('fill_value', [None, 27])
 @pytest.mark.parametrize('dtype', ['float32', 'float64'])
@@ -455,7 +454,7 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('func', _operator_funcs)
+@pytest.mark.parametrize('func', _operator_funcs + _operator_funcs_series)
 @pytest.mark.parametrize('has_nulls', _nulls)
 @pytest.mark.parametrize('fill_value', [None, 27])
 @pytest.mark.parametrize('dtype', ['float32', 'float64'])
@@ -483,5 +482,40 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     # except in not-equal op where bool(Nan != Nan) gives True.
     if got.dtype == np.bool:
         got = got.fillna(True) if func == 'ne' else got.fillna(False)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('func', _operator_funcs)
+@pytest.mark.parametrize('nulls', _nulls)
+@pytest.mark.parametrize('fill_value', [None, 27])
+@pytest.mark.parametrize('other', ['df', 'scalar'])
+def test_operator_func_dataframe(func, nulls, fill_value, other):
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        pdf = pd.DataFrame()
+        from string import ascii_lowercase
+        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+
+        for i in range(num_cols):
+            colname = ascii_lowercase[cols[i]]
+            data = utils.gen_rand('float64', num_rows) * 10000
+            if nulls == 'some':
+                idx = np.random.choice(num_rows,
+                                       size=int(num_rows/2),
+                                       replace=False)
+                data[idx] = np.nan
+            pdf[colname] = data
+        return pdf
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == 'df' else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == 'df' else 59.0
+
+    got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
 
     utils.assert_eq(expect, got)
