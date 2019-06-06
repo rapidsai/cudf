@@ -203,7 +203,7 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bit_mask_t *valid, T bit_index) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  cudf::util::turn_bit_on(valid, bit_idx);
+  cudf::util::turn_bit_on(valid, bit_index);
 }
 
 /**
