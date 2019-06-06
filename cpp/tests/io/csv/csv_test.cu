@@ -28,6 +28,7 @@
 #include <random>
 #include <sstream>
 #include <vector>
+#include <string>
 
 #include <sys/stat.h>
 
@@ -69,6 +70,34 @@ auto random_values(size_t size) {
   std::generate_n(values.begin(), size, [&]() { return dist(engine); });
 
   return values;
+}
+
+void checkStrColumn(gdf_column const *col, std::vector<std::string> refs) {
+  ASSERT_EQ(col->dtype, GDF_STRING);
+
+  const auto stringList = reinterpret_cast<NVStrings *>(col->data);
+  ASSERT_NE(stringList, nullptr);
+
+  const auto count = stringList->size();
+  ASSERT_EQ(count, refs.size());
+
+  std::vector<int> lengths(count);
+  ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
+
+  // Check the actual strings themselves
+  std::vector<char *> strings(count);
+  for (size_t i = 0; i < count; ++i) {
+    strings[i] = new char[lengths[i] + 1];
+    strings[i][lengths[i]] = 0;
+  }
+  EXPECT_EQ(stringList->to_host(strings.data(), 0, count), 0);
+
+  for (size_t i = 0; i < count; ++i) {
+    EXPECT_STREQ(strings[i], refs[i].c_str());
+  }
+  for (size_t i = 0; i < count; ++i) {
+    delete[] strings[i];
+  }
 }
 
 }  // namespace
@@ -118,15 +147,10 @@ TEST(gdf_csv_test, DetectColumns)
 
     {
         csv_read_arg args{};
-        args.input_data_form    = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A", "B", "C" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.decimal = '.';
-        args.skip_blank_lines = true;
         args.header = -1;
-        args.nrows = -1;
         args.use_cols_names = { "A", "C" };
         const table df = read_csv(args);
 
@@ -153,17 +177,12 @@ TEST(gdf_csv_test, UseColumns)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form    = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A", "B", "C" };
         args.dtype = { "int", "float64", "int" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.decimal = '.';
-        args.skip_blank_lines = true;
         args.header = -1;
-        args.nrows = -1;
         args.use_cols_names = { "A", "C" };
         const table df = read_csv(args);
 
@@ -204,18 +223,13 @@ TEST(gdf_csv_test, Numbers) {
   }
 
   {
-    csv_read_arg args{};
+    csv_read_arg args;
     args.input_data_form = gdf_csv_input_form::FILE_PATH;
     args.filepath_or_buffer = fname.c_str();
     args.dtype = {"int8",    "short",  "int16",  "int",
                   "int32",   "long",   "int64",  "float",
-                  "float32", "double", "float64"};;
-    args.delimiter = ',';
-    args.lineterminator = '\n';
-    args.decimal = '.';
-    args.skip_blank_lines = true;
+                  "float32", "double", "float64"};
     args.header = -1;
-    args.nrows = -1;
     const table df = read_csv(args);
 
     EXPECT_THAT(gdf_host_column<int8_t>(df.get_column(0)).hostdata(),
@@ -235,84 +249,13 @@ TEST(gdf_csv_test, Numbers) {
 
 TEST(gdf_csv_test, MortPerf)
 {
-    csv_read_arg args{};
-    args.nrows = -1;
-    args.names =  {
-        "loan_id",
-        "monthly_reporting_period",
-        "servicer",
-        "interest_rate",
-        "current_actual_upb",
-        "loan_age",
-        "remaining_months_to_legal_maturity",
-        "adj_remaining_months_to_maturity",
-        "maturity_date",
-        "msa",
-        "current_loan_delinquency_status",
-        "mod_flag",
-        "zero_balance_code",
-        "zero_balance_effective_date",
-        "last_paid_installment_date",
-        "foreclosed_after",
-        "disposition_date",
-        "foreclosure_costs",
-        "prop_preservation_and_repair_costs",
-        "asset_recovery_costs",
-        "misc_holding_expenses",
-        "holding_taxes",
-        "net_sale_proceeds",
-        "credit_enhancement_proceeds",
-        "repurchase_make_whole_proceeds",
-        "other_foreclosure_proceeds",
-        "non_interest_bearing_upb",
-        "principal_forgiveness_upb",
-        "repurchase_make_whole_proceeds_flag",
-        "foreclosure_principal_write_off_amount",
-        "servicing_activity_indicator"};
-    args.dtype = {
-            "int64",
-            "date",
-            "category",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "date",
-            "float64",
-            "category",
-            "category",
-            "category",
-            "date",
-            "date",
-            "date",
-            "date",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "float64",
-            "category",
-            "float64",
-            "category"};
+    csv_read_arg args;
     args.input_data_form = gdf_csv_input_form::FILE_PATH;
     args.filepath_or_buffer = (char *)("Performance_2000Q1.txt");
 
     if (checkFile(args.filepath_or_buffer))
     {
-        std::cout << "dasdqfewfwf\n";
         args.delimiter = '|';
-        args.lineterminator = '\n';
-        args.mangle_dupe_cols=true;
-
-        args.names.clear();
-        args.dtype.clear();
 
         read_csv(args);
     }
@@ -332,46 +275,18 @@ TEST(gdf_csv_test, Strings)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = names;
         args.dtype = { "int32", "str" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.skip_blank_lines = true;
-        args.header = 0;
-        args.nrows = -1;
+        args.quoting = gdf_csv_quote_style::QUOTE_NONE; // enable quoting
         const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
 
-        // Check the parsed string column metadata
-        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
-
-        ASSERT_NE( stringList, nullptr );
-        auto stringCount = stringList->size();
-        ASSERT_EQ( stringCount, 3u );
-        auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
-        ASSERT_NE( stringList->byte_count(stringLengths.get(), false), 0u );
-
-        // Check the actual strings themselves
-        auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
-        for (size_t i = 0; i < stringCount; ++i) {
-            ASSERT_GT( stringLengths[i], 0 );
-            strings[i] = new char[stringLengths[i] + 1];
-            strings[i][stringLengths[i]] = 0;
-        }
-        EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
-
-        EXPECT_STREQ( strings[0], "abc def ghi" );
-        EXPECT_STREQ( strings[1], "\"jkl mno pqr\"" );
-        EXPECT_STREQ( strings[2], "stu \"\"vwx\"\" yz" );
-        for (size_t i = 0; i < stringCount; ++i) {
-            delete[] strings[i];
-        }
+        checkStrColumn(df.get_column(1), {"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"});
     }
 }
 
@@ -389,48 +304,18 @@ TEST(gdf_csv_test, QuotedStrings)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = names;
         args.dtype = { "int32", "str" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
         args.quotechar = '`';
-        args.quoting = gdf_csv_quote_style::QUOTE_ALL; // enable quoting
-        args.doublequote = true; // replace double quotechar with single
-        args.skip_blank_lines = true;
-        args.header = 0;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
 
-        // Check the parsed string column metadata
-        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
-
-        ASSERT_NE( stringList, nullptr );
-        auto stringCount = stringList->size();
-        ASSERT_EQ( stringCount, 3u );
-        auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
-        ASSERT_NE( stringList->len(stringLengths.get(), false), 0u );
-
-        // Check the actual strings themselves
-        auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
-        for (size_t i = 0; i < stringCount; ++i) {
-            ASSERT_GT( stringLengths[i], 0 );
-            strings[i] = new char[stringLengths[i]+1];
-            strings[i][stringLengths[i]] = 0;
-        }
-        EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
-        EXPECT_STREQ( strings[0], "abc,\ndef, ghi" );
-        EXPECT_STREQ( strings[1], "jkl, `mno`, pqr" );
-        EXPECT_STREQ( strings[2], "stu `vwx` yz" );
-        for (size_t i = 0; i < stringCount; ++i) {
-            delete[] strings[i];
-        }
+        checkStrColumn(df.get_column(1), {"abc,\ndef, ghi", "jkl, `mno`, pqr", "stu `vwx` yz"});
     }
 }
 
@@ -448,48 +333,19 @@ TEST(gdf_csv_test, IgnoreQuotes)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = names;
         args.dtype = { "int32", "str" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.quotechar = '\"';
         args.quoting = gdf_csv_quote_style::QUOTE_NONE; // disable quoting
         args.doublequote = false; // do not replace double quotechar with single
-        args.skip_blank_lines = true;
-        args.header = 0;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
 
-        // Check the parsed string column metadata
-        ASSERT_EQ( df.get_column(1)->dtype, GDF_STRING );
-        auto stringList = reinterpret_cast<NVStrings*>(df.get_column(1)->data);
-
-        ASSERT_NE( stringList, nullptr );
-        auto stringCount = stringList->size();
-        ASSERT_EQ( stringCount, 3u );
-        auto stringLengths = std::unique_ptr<int[]>{ new int[stringCount] };
-        ASSERT_NE( stringList->byte_count(stringLengths.get(), false), 0u );
-
-        // Check the actual strings themselves
-        auto strings = std::unique_ptr<char*[]>{ new char*[stringCount] };
-        for (size_t i = 0; i < stringCount; ++i) {
-            ASSERT_GT( stringLengths[i], 0 );
-            strings[i] = new char[stringLengths[i] + 1];
-            strings[i][stringLengths[i]] = 0;
-        }
-        EXPECT_EQ( stringList->to_host(strings.get(), 0, stringCount), 0 );
-        EXPECT_STREQ( strings[0], "\"abcdef ghi\"" );
-        EXPECT_STREQ( strings[1], "\"jkl \"\"mno\"\" pqr\"" );
-        EXPECT_STREQ( strings[2], "stu \"vwx\" yz" );
-        for (size_t i = 0; i < stringCount; ++i) {
-            delete[] strings[i];
-        }
+        checkStrColumn(df.get_column(1), {"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"});
     }
 }
 
@@ -504,18 +360,14 @@ TEST(gdf_csv_test, Booleans)
     ASSERT_TRUE(checkFile(fname));
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = {"A", "B", "C", "D"};
         args.dtype = {"int32", "int32", "short", "bool"};
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.skip_blank_lines = true;
         args.true_values = {"yes", "Yes", "YES", "foo", "FOO"};
         args.false_values = {"no", "No", "NO", "Bar", "bar"};
         args.header = -1;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         // Booleans are the same (integer) data type, but valued at 0 or 1
@@ -548,17 +400,13 @@ TEST(gdf_csv_test, Dates)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A" };
         args.dtype = { "date" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
         args.dayfirst = true;
-        args.skip_blank_lines = true;
         args.header = -1;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
@@ -582,17 +430,13 @@ TEST(gdf_csv_test, FloatingPoint)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A" };
         args.dtype = { "float32" };
-        args.decimal = '.';
-        args.delimiter = ',';
         args.lineterminator = ';';
-        args.skip_blank_lines = true;
         args.header = -1;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
@@ -615,15 +459,13 @@ TEST(gdf_csv_test, Category)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "UserID" };
         args.dtype = { "category" };
-        args.delimiter = ',';
         args.lineterminator = ';';
         args.header = -1;
-        args.nrows = -1;
         const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
@@ -645,14 +487,11 @@ TEST(gdf_csv_test, SkiprowsNrows)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A" };
         args.dtype = { "int32" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.skip_blank_lines = true;
         args.header = 1;
         args.skiprows = 2;
         args.nrows = 2;
@@ -676,16 +515,12 @@ TEST(gdf_csv_test, ByteRange)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A" };
         args.dtype = { "int32" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.skip_blank_lines = true;
         args.header = -1;
-        args.nrows = -1;
         args.byte_range_offset = 11;
         args.byte_range_size = 15;
         const table df = read_csv(args);
@@ -708,17 +543,13 @@ TEST(gdf_csv_test, BlanksAndComments)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_read_arg args{};
+        csv_read_arg args;
         args.input_data_form = gdf_csv_input_form::FILE_PATH;
         args.filepath_or_buffer = fname.c_str();
         args.names = { "A" };
         args.dtype = { "int32" };
-        args.delimiter = ',';
-        args.lineterminator = '\n';
-        args.skip_blank_lines = true;
         args.header = -1;
         args.comment = '#';
-        args.nrows = -1;
         const table df = read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
@@ -741,17 +572,12 @@ TEST(gdf_csv_test, Writer)
     outfile << "false,5,5.0,five" << '\n';
     outfile.close();
 
-    csv_read_arg rargs{};
+    csv_read_arg rargs;
     rargs.input_data_form = gdf_csv_input_form::FILE_PATH;
     rargs.filepath_or_buffer = fname.c_str();
     rargs.names = { "boolean", "integer", "float", "string" };
     rargs.dtype = { "bool", "int32", "float32", "str" };
-    rargs.decimal = '.';
-    rargs.delimiter = ',';
-    rargs.lineterminator = '\n';
-    rargs.skip_blank_lines = true;
     rargs.header = -1;
-    rargs.nrows = -1;
     const table df = read_csv(rargs);
 
     const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
@@ -759,8 +585,6 @@ TEST(gdf_csv_test, Writer)
     wargs.columns = &(*df.begin());  // columns from reader above
     wargs.filepath = ofname.c_str();
     wargs.num_cols = df.num_columns();
-    wargs.delimiter = ',';
-    wargs.line_terminator = "\n";
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
