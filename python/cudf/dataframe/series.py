@@ -671,7 +671,8 @@ class Series(object):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
-        return self._filled_binaryop(other, operator.floordiv, fill_value, True)
+        return self._filled_binaryop(other, operator.floordiv, fill_value,
+                                     True)
 
     def __rfloordiv__(self, other):
         return self._rbinaryop(other, 'floordiv')
@@ -812,7 +813,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.eq, fill_value)
-    
+
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
 
@@ -831,7 +832,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.ne, fill_value)
-    
+
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
 
@@ -847,7 +848,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.lt, fill_value)
-    
+
     def __lt__(self, other):
         return self._ordered_compare(other, 'lt')
 
@@ -863,7 +864,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.le, fill_value)
-    
+
     def __le__(self, other):
         return self._ordered_compare(other, 'le')
 
@@ -879,7 +880,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.gt, fill_value)
-    
+
     def __gt__(self, other):
         return self._ordered_compare(other, 'gt')
 
@@ -895,7 +896,7 @@ class Series(object):
             corresponding Series locations is null the result will be null
         """
         return self._filled_binaryop(other, operator.ge, fill_value)
-    
+
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
 
