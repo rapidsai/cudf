@@ -168,7 +168,7 @@ void test_replace(std::vector<T> const &input_column,
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
-        if((!input_has_nulls || bit_mask::is_valid(typed_expected_valid, k)) &&
+        if((not input_has_nulls or bit_mask::is_valid(typed_expected_valid, k)) and
              element == values_to_replace_column[i]) {
           toBeReplaced = true;
           isReplaced[k] = toBeReplaced;

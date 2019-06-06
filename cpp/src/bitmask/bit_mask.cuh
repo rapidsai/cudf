@@ -148,14 +148,6 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
   return GDF_SUCCESS;
 }
 
-template <typename T>
-CUDA_HOST_DEVICE_CALLABLE bool bit_container_index(T record_idx) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
-
-  return gdf::util::detail::bit_container_index<bit_mask_t, T>(record_idx);
-}
-
 /**
  *  @brief check to see if the specified bit is set to one
  *
