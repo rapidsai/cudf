@@ -57,7 +57,6 @@
 - PR #1930 Specialize constructor for `cudf::bol8` to cast argument to `bool`
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 
-
 ## Bug Fixes
 
 - PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
