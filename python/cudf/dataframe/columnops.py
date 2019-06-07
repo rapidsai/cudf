@@ -17,7 +17,8 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
-from cudf.bindings.stream_compaction import cpp_drop_nulls
+from cudf.bindings.stream_compaction import (cpp_drop_nulls,
+                                             cpp_apply_boolean_mask)
 
 import warnings
 import cudf.bindings.copying as cpp_copying
@@ -94,13 +95,20 @@ class TypedColumnBase(Column):
         dropped_col = cpp_drop_nulls(self)
         return self.replace(data=dropped_col.data, mask=None, null_count=0)
 
+    def apply_boolean_mask(self, mask):
+        mask = as_column(mask, dtype="bool")
+        data = cpp_apply_boolean_mask(self, mask)
+        return self.replace(data=data.data, mask=data.mask)
+
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
 
-def column_empty_like(column, dtype, masked, newsize=None):
+def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
     """
+    if dtype is None:
+        dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
     if pd.api.types.is_categorical_dtype(dtype):
@@ -112,7 +120,7 @@ def column_empty_like(column, dtype, masked, newsize=None):
 def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
-    dtype = np.dtype(dtype)
+    dtype = pd.api.types.pandas_dtype(dtype)
 
     if masked:
         mask = cudautils.make_mask(row_count)
@@ -128,11 +136,14 @@ def column_empty(row_count, dtype, masked, categories=None):
         data = Buffer(mem)
         dtype = 'category'
     elif dtype.kind in 'OU':
-        mem = rmm.device_array((row_count,), dtype='float64')
-        data = nvstrings.dtos(mem,
-                              len(mem),
-                              nulls=mask,
-                              bdevmem=True)
+        if row_count == 0:
+            data = nvstrings.to_device([])
+        else:
+            mem = rmm.device_array((row_count,), dtype='float64')
+            data = nvstrings.dtos(mem,
+                                  len(mem),
+                                  nulls=mask,
+                                  bdevmem=True)
     else:
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)

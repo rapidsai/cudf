@@ -285,15 +285,8 @@ class Series(object):
                 index = self.index.take(maps)
                 selvals = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
-                if self.dtype == np.dtype('object'):
-                    idx = cudautils.boolean_array_to_index_array(
-                        arg.to_gpu_array())
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_boolmask(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                selvals = self._column.apply_boolean_mask(arg)
+                index = self.index.as_column().apply_boolean_mask(arg)
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
