@@ -14,6 +14,15 @@
  * limitations under the License.
  */
 
+/** --------------------------------------------------------------------------*
+ * This is benchmarks for iterator and raw pointer for cub and thrust
+ * This code won't be compiled by default.
+ * To compile this code, add `CMAKE_ENABLE_BENCHMARKS=ON` at cmake option like this:
+ *   cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON -DCMAKE_ENABLE_BENCHMARKS=ON
+ * The benchmark app binary will be placed under `bench`,
+ * and the app name is `ITERATOR_BENCH`.
+ * -------------------------------------------------------------------------**/
+
 #include <chrono>
 #include <random>
 #include <tuple>
