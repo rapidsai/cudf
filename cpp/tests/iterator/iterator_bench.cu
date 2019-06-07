@@ -24,6 +24,7 @@
 
 #include <iterator/iterator.cuh>    // include iterator header
 #include <utilities/device_operators.cuh>
+#include <reductions/reduction_operators.cuh>
 
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
@@ -215,8 +216,130 @@ void iterator_bench_cub(cudf::test::column_wrapper<T>& col, rmm::device_vector<T
 };
 
 
+template <typename T>
+void raw_stream_bench_thrust(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
+{
+  std::cout << "raw strem thust: " << "\t\t";
+
+  T init{0};
+  auto d_in = static_cast<T*>(col.get()->data);
+  auto d_end = d_in + col.size();
+
+  auto bench = [&](){ thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{}); };
+
+  bench(); // warm up
+
+  do{
+    BenchMarkTimer timer(iters);
+    for (int i = 0; i < iters; ++i) {
+      bench();
+    }
+  }while(0);
+}
 
 
+template <typename T, bool has_null>
+void iterator_bench_thrust(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
+{
+  std::cout << "iterator thust " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
+
+  T init{0};
+  auto d_in = cudf::make_iterator<has_null, T>(col, init);
+  auto d_end = d_in + col.size();
+
+  auto bench = [&](){ thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{}); };
+
+  bench(); // warm up
+
+  do{
+    BenchMarkTimer timer(iters);
+    for (int i = 0; i < iters; ++i) {
+      bench();
+    }
+  }while(0);
+}
+
+
+// --------------------------------------------------------------------------
+static constexpr int reduction_block_size = 128;
+
+/*
+Generic reduction implementation with support for validity mask
+*/
+template<typename T_in, typename T_out, typename F, typename Ld>
+__global__
+void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
+                      gdf_size_type size, T_out *result,
+                      F functor, T_out identity, Ld loader)
+{
+    typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
+    __shared__ typename BlockReduce::TempStorage temp_storage;
+
+    int tid = threadIdx.x;
+    int blkid = blockIdx.x;
+    int blksz = blockDim.x;
+    int gridsz = gridDim.x;
+
+    int step = blksz * gridsz;
+
+    T_out agg = identity;
+    for (int base=blkid * blksz; base<size; base+=step) {
+        // Threadblock synchronous loop
+        int i = base + tid;
+        // load
+        T_out loaded = identity;
+        if (i < size && gdf_is_valid(mask, i))
+            loaded = static_cast<T_out>(loader(data, i));
+
+        // Block reduce
+        T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
+        // Add current block
+        agg = functor(agg, temp);
+    }
+
+    // First thread of each block stores the result.
+    if (tid == 0){
+        cudf::genericAtomicOperation(result, agg, functor);
+    }
+}
+
+template<typename T_in, typename T_out, typename Op>
+void ReduceOp(const gdf_column *input, rmm::device_vector<T_out>& dev_result, int iters)
+{
+    T_out identity = Op::Op::template identity<T_out>();
+
+    // allocate temporary memory for the result
+    T_out* result = dev_result.data().get();
+
+    int blocksize = reduction_block_size;
+    int gridsize = (input->size + reduction_block_size -1 )
+        /reduction_block_size;
+
+    auto bench = [&](){
+      // kernel call
+      gpu_reduction_op<<<gridsize, blocksize>>>(
+          static_cast<const T_in*>(input->data), input->valid, input->size,
+          result,
+          typename Op::Op{}, identity, typename Op::Loader{});
+    };
+
+    bench(); // warm up
+
+    do{
+      BenchMarkTimer timer(iters);
+      for (int i = 0; i < iters; ++i) {
+        bench();
+      }
+    }while(0);
+};
+
+// --------------------------------------------------------------------------
+template <typename T, bool has_null>
+void raw_stream_bench_thrust_block(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
+{
+  std::cout << "raw stream thust block" << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
+  ReduceOp<T, T, cudf::reductions::ReductionSum>(col, result, iters);
+}
 
 // -----------------------------------------------------------------------------
 
@@ -236,18 +359,27 @@ struct benchmark
 
     rmm::device_vector<T> dev_result(1, T{0});
 
+    // if no_new_allocate = false, *_bench_cub will allocate temporary buffer every calls
     bool no_new_allocate = false;
 
     do{
       std::cout << "new allocation: " << no_new_allocate << std::endl;
 
-      raw_stream_bench_cub<T>(hasnull_F, dev_result, iters, no_new_allocate);
-      iterator_bench_cub<T, false>(hasnull_F, dev_result, iters, no_new_allocate);
-      iterator_bench_cub<T, true >(hasnull_T, dev_result, iters, no_new_allocate);
+      raw_stream_bench_cub<T>(hasnull_F, dev_result, iters, no_new_allocate);      // driven by raw pointer
+      iterator_bench_cub<T, false>(hasnull_F, dev_result, iters, no_new_allocate); // driven by riterator without nulls
+      iterator_bench_cub<T, true >(hasnull_T, dev_result, iters, no_new_allocate); // driven by riterator with nulls
 
       no_new_allocate = !no_new_allocate;
     }while (no_new_allocate);
 
+    raw_stream_bench_thrust<T>(hasnull_F, dev_result, iters);      // driven by raw pointer
+    iterator_bench_thrust<T, false>(hasnull_F, dev_result, iters); // driven by riterator without nulls
+    iterator_bench_thrust<T, true >(hasnull_T, dev_result, iters); // driven by riterator with nulls
+
+    // these uses same logic cudf::reduction used at branch-0.7.
+    // thise uses `cub::BlockReduce` + `atomicAdd`
+    raw_stream_bench_thrust_block<T, false>(hasnull_F, dev_result, iters);
+    raw_stream_bench_thrust_block<T, true >(hasnull_T, dev_result, iters);
   };
 };
 
