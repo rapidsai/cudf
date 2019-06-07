@@ -101,8 +101,6 @@
 - PR #1914 Zero initialize gdf_column local variables
 
 
-
-
 # cudf 0.7.2 (16 May 2019)
 
 ## New Features
