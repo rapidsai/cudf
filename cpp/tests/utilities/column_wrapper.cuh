@@ -526,10 +526,6 @@ struct column_wrapper {
     return buffer.str();
   }
 
-  gdf_size_type size() const{
-      return the_column.size;
-  }
-
   /**---------------------------------------------------------------------------*
    * @brief Functor for comparing if two elements between two gdf_columns are
    * equal.
