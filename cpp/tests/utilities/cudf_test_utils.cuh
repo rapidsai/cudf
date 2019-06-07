@@ -224,7 +224,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
     RMM_FREE(col->data, 0);
     RMM_FREE(col->valid, 0);
   };
-  gdf_col_pointer the_column{new gdf_column, deleter};
+  gdf_col_pointer the_column{new gdf_column{}, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(ColumnType), 0);
@@ -268,7 +268,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
-      gdf::util::turn_bit_on(valid_masks.data(), row);
+      cudf::util::turn_bit_on(valid_masks.data(), row);
     }
   }
 

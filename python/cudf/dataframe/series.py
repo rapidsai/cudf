@@ -285,15 +285,8 @@ class Series(object):
                 index = self.index.take(maps)
                 selvals = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
-                if self.dtype == np.dtype('object'):
-                    idx = cudautils.boolean_array_to_index_array(
-                        arg.to_gpu_array())
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_boolmask(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                selvals = self._column.apply_boolean_mask(arg)
+                index = self.index.as_column().apply_boolean_mask(arg)
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
@@ -700,6 +693,16 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        if self.null_count == 0:
+            return self
+        data = self._column.dropna()
+        index = self.index.loc[~self.isna()]
+        return self._copy_construct(data=data, index=index)
+
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
@@ -774,12 +777,20 @@ class Series(object):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
+        if self.dtype.kind not in 'biuf':
+            raise NotImplementedError(
+                "All does not currently support columns of {} dtype.".format(
+                    self.dtype))
         return self._column.all()
 
     def any(self, axis=0, skipna=True, level=None):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
+        if self.dtype.kind not in 'biuf':
+            raise NotImplementedError(
+                "Any does not currently support columns of {} dtype.".format(
+                    self.dtype))
         return self._column.any()
 
     def to_gpu_array(self, fillna=None):

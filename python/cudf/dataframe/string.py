@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical, series
+from cudf.dataframe import column, columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
@@ -534,11 +534,6 @@ class StringColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
 
-    def normalize_binop_value(self, other):
-        col = utils.scalar_broadcast_to(other, shape=len(self),
-                                        dtype="object")
-        return self.replace(data=col.data)
-
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
@@ -585,6 +580,20 @@ class StringColumn(columnops.TypedColumnBase):
         """
         result = StringColumn(self.nvcategory.keys())
         return result
+
+    def normalize_binop_value(self, other):
+        if isinstance(other, column.Column):
+            return other.astype(self.dtype)
+        elif isinstance(other, str) or other is None:
+            col = utils.scalar_broadcast_to(other,
+                                            shape=len(self),
+                                            dtype="object")
+            return self.replace(data=col.data)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+    def default_na_value(self):
+        return None
 
     def take(self, indices):
         return self.element_indexing(indices)

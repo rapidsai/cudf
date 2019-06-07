@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 #include <utility>
+=======
+
+#include <utilities/column_utils.hpp>
+>>>>>>> 0233e4b53205b65196e74889803d8e3a75d1893e
 #include "nvcategory_util.hpp"
 #include <replace.hpp>
 #include <types.hpp>
@@ -87,6 +92,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     }
     GDF_REQUIRE(null_index == 0, GDF_INVALID_API_CALL);
+
     gdf_scalar null_index_scalar;
 
     null_index_scalar.data.si32 = null_index;
@@ -97,6 +103,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     std::swap(column->data, column_nulls_replaced.data);
     std::swap(column->valid, column_nulls_replaced.valid);
     gdf_column_free(&column_nulls_replaced);
+    CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
   }
 
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
@@ -193,4 +200,3 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
   return GDF_SUCCESS;
 }
-
