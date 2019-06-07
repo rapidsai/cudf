@@ -140,7 +140,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
 template <typename T>
 void raw_stream_bench_cub(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters, bool no_new_allocate=false)
 {
-  std::cout << "raw strem cub: " << "\t\t";
+  std::cout << "raw stream cub: " << "\t\t";
 
   T init{0};
   auto begin = static_cast<T*>(col.get()->data);
@@ -228,7 +228,7 @@ void iterator_bench_cub(cudf::test::column_wrapper<T>& col, rmm::device_vector<T
 template <typename T>
 void raw_stream_bench_thrust(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
 {
-  std::cout << "raw strem thust: " << "\t\t";
+  std::cout << "raw stream thust: " << "\t\t";
 
   T init{0};
   auto d_in = static_cast<T*>(col.get()->data);
