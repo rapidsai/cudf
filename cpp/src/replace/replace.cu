@@ -38,6 +38,20 @@ namespace{ //anonymous
   static constexpr int warp_size = 32;
   static constexpr int BLOCK_SIZE = 256;
 
+// returns the block_sum using the given shared array of warp sums.
+template <typename T>
+__device__ T sum_warps(T* warp_smem)
+{
+  T block_sum = 0;
+
+  if (threadIdx.x < warp_size) {
+    T my_warp_sum = warp_smem[threadIdx.x];
+    __shared__ typename cub::WarpReduce<T>::TempStorage temp_storage;
+    block_sum = cub::WarpReduce<T>(temp_storage).Sum(my_warp_sum);
+  }
+  return block_sum;
+}
+
 
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
@@ -161,18 +175,12 @@ __device__ T get_new_value(gdf_size_type         idx,
       if(lane == 0)warp_smem[wid] = __popc(active_mask);
       __syncthreads(); // waiting for the sum of each warp to be ready
 
-      uint32_t block_sum = 0;
-      if (threadIdx.x < warp_size) {
-        uint32_t my_warp_sum = warp_smem[threadIdx.x];
-
-        __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-
-        block_sum = cub::WarpReduce<uint32_t>(temp_storage).Sum(my_warp_sum);
-      }
+      uint32_t block_sum = sum_warps<uint32_t>(warp_smem);
 
       // reusing the same shared memory for block valid counts
       if(threadIdx.x < warp_size) warp_smem[threadIdx.x] = 0;
       __syncthreads();
+
       if(lane == 0 && bitmask != 0){
         int valid_index = wid + (blockIdx.x * (BLOCK_SIZE/warp_size));
         output_valid[valid_index] = bitmask;
@@ -180,18 +188,12 @@ __device__ T get_new_value(gdf_size_type         idx,
       }
       __syncthreads(); // waiting for the valid counts of each warp to be ready
 
-      // Compute total null_count for this block and add it to global count
-      if (threadIdx.x < warp_size) {
-        uint32_t my_valid_count = warp_smem[threadIdx.x];
+      // Compute total valid count for this block and add it to global count
+      uint32_t block_valid_count = sum_warps<uint32_t>(warp_smem);
 
-        __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-
-        uint32_t block_valid_count =
-          cub::WarpReduce<uint32_t>(temp_storage).Sum(my_valid_count);
-
-        if (lane == 0) { // one thread computes and adds to null count
+      // one thread computes and adds to null count
+      if (threadIdx.x < warp_size && lane == 0) {
           atomicAdd(output_null_count, block_sum - block_valid_count);
-        }
       }
     }
 
