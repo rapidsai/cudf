@@ -1701,13 +1701,72 @@ def test_is_monotonic(gdf):
     assert not gdf.index.is_monotonic_decreasing
 
 
-@pytest.mark.xfail(reason="null is not supported in gpu yet")
-def test_dataframe_boolean_mask_with_None():
-    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
-    gdf = DataFrame.from_pandas(pdf)
+def test_dataframe_boolean_mask_with_nulls():
     pdf_masked = pdf[[True, False, True, False]]
     gdf_masked = gdf[[True, False, True, False]]
-    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+@pytest.mark.parametrize(
+    'data',
+    [
+        [1, 2, 3, 4],
+        [1.0, 2.0, 3.0, 4.0],
+        ['one', 'two', 'three', 'four'],
+        pd.Series(['a', 'b', 'c', 'd'], dtype='category'),
+        pd.Series(pd.date_range('2010-01-01', '2010-01-04'))
+    ]
+)
+@pytest.mark.parametrize(
+     'mask',
+    [
+        [True, True, True, True],
+        [False, False, False, False],
+        [True, False, True, False],
+        [True, False, False, True],
+        np.array([True, False, True, False]),
+        pd.Series([True, False, True, False]),
+        gd.Series([True, False, True, False]),
+    ]
+)
+@pytest.mark.parametrize(
+    'nulls',
+    ['one', 'some', 'all', 'none']
+)
+def test_series_apply_boolean_mask(data, mask, nulls):
+    psr = pd.Series(data)
+
+    if len(data) > 0:
+        if nulls == 'one':
+            p = np.random.randint(0, 4)
+            psr[p] = None
+        elif nulls == 'some':
+            p1, p2 = np.random.randint(0, 4, (2,))
+            psr[p1] = None
+            psr[p2] = None
+        elif nulls == 'all':
+            psr[:] = None
+
+    gsr = gd.from_pandas(psr)
+
+    # TODO: from_pandas(psr) has dtype "float64"
+    # when psr has dtype "object" and is all None
+    if psr.dtype == "object" and nulls == 'all':
+        gsr = gd.Series([None, None, None, None], dtype="object")
+
+    if isinstance(mask, gd.Series):
+        expect = psr[mask.to_pandas()]
+    else:
+        expect = psr[mask]
+    got = gsr[mask]
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_apply_boolean_mask():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],
+                        'b': [0.1, 0.2, None, 0.3],
+                        'c': ['a', None, 'b', 'c']})
+    gdf = DataFrame.from_pandas(pdf)
 
 
 """
