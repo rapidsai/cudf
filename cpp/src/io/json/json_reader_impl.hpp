@@ -19,12 +19,12 @@
 #include <memory>
 #include <vector>
 
-#include <cudf.h>
-#include <table.hpp>
+#include <cudf/cudf.h>
+#include <cudf/table.hpp>
 
 #include "../csv/type_conversion.cuh"
-#include "io/utilities/file_utils.hpp"
-#include "io/utilities/wrapper_utils.hpp"
+#include <io/utilities/file_utils.hpp>
+#include <io/utilities/wrapper_utils.hpp>
 
 namespace cudf {
 

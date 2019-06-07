@@ -17,11 +17,11 @@
 #include <type_traits>
 #include <algorithm>
 
-#include "cudf.h"
-#include "dlpack/dlpack.h"
+#include <cudf/cudf.h>
+#include <dlpack/dlpack.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/column_wrapper.cuh"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
 
 template <class TestParameters>
 struct DLPackTypedTest : public GdfTest

@@ -16,11 +16,11 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <bitmask/bit_mask.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_utils.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

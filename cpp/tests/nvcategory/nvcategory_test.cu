@@ -18,9 +18,9 @@
  */
 
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 #include <cudf/functions.h>
@@ -31,17 +31,17 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include <cstring>
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/nvcategory_utils.cuh"
-#include "bitmask/bit_mask.cuh"
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <bitmask/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <tests/utilities/valid_vectors.h>
 
-#include "string/nvcategory_util.hpp"
+#include <string/nvcategory_util.hpp>
 
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){

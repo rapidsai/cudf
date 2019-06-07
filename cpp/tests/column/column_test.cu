@@ -2,7 +2,7 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 

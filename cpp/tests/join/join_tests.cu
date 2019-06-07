@@ -25,7 +25,7 @@
 #include <join/join_compute_api.h>
 #include <utilities/bit_util.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 

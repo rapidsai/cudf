@@ -24,7 +24,7 @@
 #include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 

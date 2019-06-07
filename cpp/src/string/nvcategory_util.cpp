@@ -1,8 +1,8 @@
 
 #include <utilities/column_utils.hpp>
 #include "nvcategory_util.hpp"
-#include <types.hpp>
-#include <table.hpp>
+#include <cudf/types.hpp>
+#include <cudf/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>

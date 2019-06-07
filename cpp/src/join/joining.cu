@@ -16,8 +16,8 @@
 
 
 
-#include <types.hpp>
-#include <cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>

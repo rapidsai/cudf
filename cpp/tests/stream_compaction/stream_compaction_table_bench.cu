@@ -17,7 +17,7 @@
 #include <chrono>
 #include <random>
 #include <cuda_profiler_api.h>
-#include <cudf/stream_compaction.hpp>
+#include <stream_compaction.hpp>
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 
@@ -70,8 +70,8 @@ struct warmup
   template <typename T, typename Init, typename Bench>
   void operator()(Init init, Bench bench, int fraction=100)
   {
-    auto columns = init(T{0}, fraction);
-    bench(columns.first, columns.second);
+    auto tables = init(T{0}, fraction);
+    bench(tables.first, tables.second);
   }
 };
 
@@ -81,12 +81,12 @@ struct benchmark
   void operator()(Init init, Bench bench, int iters = 100, int fraction=100, 
                   bool shmoo=false)
   {
-    auto columns = init(T{0}, fraction);
-    bench(columns.first, columns.second); // warm up
+    auto tables = init(T{0}, fraction);
+    bench(tables.first, tables.second); // warm up
     cudaProfilerStart();
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iters; ++i) {
-      bench(columns.first, columns.second);
+      bench(tables.first, tables.second);
     }
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
@@ -96,29 +96,7 @@ struct benchmark
   }
 };
 
-template <typename Init, typename Bench>
-void benchmark_types(gdf_dtype type, Init init, Bench bench, 
-                     int iters = 100, int pct_step=100, bool shmoo = false)
-{
-  std::vector<gdf_dtype> types{};
-  if (type == N_GDF_TYPES)
-    types = {GDF_INT8, GDF_INT16, GDF_INT32, GDF_INT64, GDF_FLOAT32, GDF_FLOAT64};
-  else 
-    types = {type};
-
-  for (gdf_dtype t : types) {
-    cudf::type_dispatcher(t, warmup(), init, bench);
-    std::cout << name_from_type(t) << ",";
-    if (shmoo) {
-      for (int fraction = 0; fraction <= 100; fraction += pct_step)
-        cudf::type_dispatcher(t, benchmark(), init, bench, iters, fraction, shmoo);
-    }
-    else {
-      cudf::type_dispatcher(t, benchmark(), init, bench, iters, 50);
-    }
-    std::cout << "\n";
-  }
-}
+auto init_tables()
 
 // Shmoo the fraction of true elements that are masked from 0 to 100
 template <typename Bench>
@@ -129,14 +107,14 @@ void benchmark_fraction_shmoo(gdf_dtype type, Bench bench,
   gdf_size_type fraction = 0;
   auto init_fraction_true = [column_size](auto a, int fraction) {
     using TypeParam = decltype(a);
-    cudf::test::column_wrapper<TypeParam> source(
+    cudf::test::column_wrapper<TypeParam> source{
       column_size,
       [](gdf_index_type row) { return TypeParam(row); },
-      [](gdf_index_type row) { return true; });
-    cudf::test::column_wrapper<cudf::bool8> mask(
+      [](gdf_index_type row) { return true; }};
+    cudf::test::column_wrapper<cudf::bool8> mask{
       column_size,
       [&](gdf_index_type row) { return cudf::bool8{random_int(0, 100) < fraction}; },
-      [](gdf_index_type row)  { return true; });
+      [](gdf_index_type row)  { return true; }};
     
     return std::make_pair(source, mask);
   };
@@ -178,14 +156,14 @@ int main(int argc, char **argv)
     if (index == -1 || index == 0) {
       auto init = [column_size](auto a, int) {
         using TypeParam = decltype(a);
-        cudf::test::column_wrapper<TypeParam> source(
+        cudf::test::column_wrapper<TypeParam> source{
           column_size,
           [](gdf_index_type row) { return TypeParam(row); },
-          [](gdf_index_type row) { return row % 2 == 0; });
-        cudf::test::column_wrapper<cudf::bool8> mask(
+          [](gdf_index_type row) { return row % 2 == 0; }};
+        cudf::test::column_wrapper<cudf::bool8> mask{
           column_size,
           [](gdf_index_type row) { return cudf::bool8{true}; },
-          [](gdf_index_type row) { return row % 2 == 1; });
+          [](gdf_index_type row) { return row % 2 == 1; }};
         
         return std::make_pair(source, mask);
       };
@@ -198,12 +176,12 @@ int main(int argc, char **argv)
     if (index == -1 || index == 1) {
       auto init_no_null = [column_size](auto a, int) {
         using TypeParam = decltype(a);
-        cudf::test::column_wrapper<TypeParam> source(column_size, false);
-        cudf::test::column_wrapper<cudf::bool8> mask(
+        cudf::test::column_wrapper<TypeParam> source{column_size, false};
+        cudf::test::column_wrapper<cudf::bool8> mask{
           column_size,
           [](gdf_index_type row) { return cudf::bool8{true}; },
-          [](gdf_index_type row) { return row % 2 == 1; });
-        cudf::test::column_wrapper<TypeParam> output(column_size, false);
+          [](gdf_index_type row) { return row % 2 == 1; }};
+        cudf::test::column_wrapper<TypeParam> output{column_size, false};
 
         return std::make_pair(source, mask);  
       };
@@ -216,14 +194,14 @@ int main(int argc, char **argv)
     if (index == -1 || index == 2) {
       auto init_all_false_mask = [column_size](auto a, int) {
         using TypeParam = decltype(a);
-        cudf::test::column_wrapper<TypeParam> source(
+        cudf::test::column_wrapper<TypeParam> source{
           column_size,
           [](gdf_index_type row) { return TypeParam(row); },
-          [](gdf_index_type row) { return row % 2 == 0; });
-        cudf::test::column_wrapper<cudf::bool8> mask(
+          [](gdf_index_type row) { return row % 2 == 0; }};
+        cudf::test::column_wrapper<cudf::bool8> mask{
           column_size,
           [](gdf_index_type row) { return cudf::bool8{false}; },
-          [](gdf_index_type row) { return row % 2 == 1; });
+          [](gdf_index_type row) { return row % 2 == 1; }};
 
         return std::make_pair(source, mask);  
       };
