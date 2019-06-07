@@ -34,6 +34,11 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  * 
  * This will return a path to the cache directory and will create the directory
  * if it doesn't exist
+ * 
+ * The cache directory is kept in the same place as the output of C++17's 
+ * std::filesystem::temp_directory_path()
+ * @todo: replace the logic to find the cache dir with the above method after 
+ *  transitioning to C++17
  *---------------------------------------------------------------------------**/
 std::string getCacheDir();
 

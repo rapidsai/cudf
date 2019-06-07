@@ -76,17 +76,7 @@ namespace jit {
             Operator operatorSelector;
             std::vector<std::string> arguments;
             arguments.assign({getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
-            
-            {
-                auto startPointClock = std::chrono::high_resolution_clock::now();
-
-                    kernel_inst = cacheInstance.getKernelInstantiation(kernName, program, arguments);
-
-                auto stopPointClock = std::chrono::high_resolution_clock::now();
-                std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
-                std::cout << "Kernel Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
-            }
-
+            kernel_inst = cacheInstance.getKernelInstantiation(kernName, program, arguments);
             return *this;
         }
 

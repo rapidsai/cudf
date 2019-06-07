@@ -53,17 +53,11 @@ namespace jit {
 
     Launcher& Launcher::setProgram(std::string prog_file_name)
     {
-        auto startPointClock = std::chrono::high_resolution_clock::now();
-
-            program = cacheInstance.getProgram(prog_file_name,
-                                                code::kernel,
-                                                headersName,
-                                                compilerFlags,
-                                                headersCode);
-
-        auto stopPointClock = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed_seconds = stopPointClock-startPointClock;
-        std::cout << "Program Deserialize (ms): " << elapsed_seconds.count()*1000 << std::endl;
+        program = cacheInstance.getProgram(prog_file_name,
+                                           code::kernel,
+                                           headersName,
+                                           compilerFlags,
+                                           headersCode);
     }
 
     Launcher::Launcher()
