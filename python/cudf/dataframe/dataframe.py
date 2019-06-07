@@ -511,9 +511,9 @@ class DataFrame(object):
 
             def fallback(col, fn):
                 if fill_value is None:
-                    return Series(cudautils.full(max_num_rows,
-                                  np.dtype('float64').type(np.nan),
-                                  'float64'), nan_as_null=False)
+                    return Series.from_masked_array(
+                        data=rmm.device_array(max_num_rows, dtype='float64'),
+                        mask=cudautils.make_empty_mask(max_num_rows))
                 else:
                     return getattr(col, fn)(fill_value)
 
