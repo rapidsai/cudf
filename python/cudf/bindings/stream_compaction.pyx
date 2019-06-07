@@ -12,7 +12,7 @@ from cudf.dataframe.column import Column
 
 
 def cpp_apply_boolean_mask(inp, mask):
-    from cudf.dataframe.columnops import column_empty
+    from cudf.dataframe.columnops import column_empty_like
 
     cdef gdf_column *inp_col = column_view_from_column(inp)
     cdef gdf_column *mask_col = column_view_from_column(mask)
@@ -20,7 +20,7 @@ def cpp_apply_boolean_mask(inp, mask):
     with nogil:
         result = apply_boolean_mask(inp_col[0], mask_col[0])
     if result.data is NULL:
-        return column_empty(0, dtype=inp.dtype, masked=False)
+        return column_empty_like(inp, newsize=0)
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)
 
