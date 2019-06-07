@@ -554,3 +554,12 @@ def test_groupby_apply_basic_agg_single_column():
     gdg = gdf.groupby(['key', 'val']).mult.sum()
     pdg = pdf.groupby(['key', 'val']).mult.sum()
     assert_eq(pdg, gdg)
+
+
+def test_groupby_multi_agg_single_groupby_series():
+    pdf = pd.DataFrame({"x": np.random.randint(0, 5, size=10000),
+                        "y": np.random.normal(size=10000)})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby("x").y.agg(["sum", "max"])
+    gdg = gdf.groupby("x").y.agg(["sum", "max"])
+    assert_eq(pdg, gdg)

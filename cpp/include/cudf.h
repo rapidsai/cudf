@@ -6,6 +6,7 @@
 #include "cudf/types.h"
 #include "cudf/io_types.h"
 #include "cudf/convert_types.h"
+#include "cudf/io_readers.hpp"
 
 constexpr size_t GDF_VALID_BITSIZE{(sizeof(gdf_valid_type) * 8)};
 

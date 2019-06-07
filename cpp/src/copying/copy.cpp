@@ -19,6 +19,7 @@
 #include <utilities/error_utils.hpp>
 #include <cudf.h>
 #include <table.hpp>
+#include <nvstrings/NVCategory.h>
 
 #include <cuda_runtime.h>
 #include <algorithm>
@@ -32,11 +33,14 @@ namespace cudf
 gdf_column empty_like(gdf_column const& input)
 {
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-  gdf_column output;
+  gdf_column output{};
+
+  gdf_dtype_extra_info info = input.dtype_info;
+  info.category = nullptr;
 
   CUDF_EXPECTS(GDF_SUCCESS == 
                gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, input.dtype_info),
+                                         input.dtype, 0, info),
                "Invalid column parameters");
 
   return output;
@@ -87,6 +91,12 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
     }
   }
 
+  if (input.dtype == GDF_STRING_CATEGORY) {
+    if (input.dtype_info.category != nullptr) {
+      NVCategory *cat = static_cast<NVCategory*>(input.dtype_info.category);
+      output.dtype_info.category = cat->copy();
+    }
+  }
   return output;
 }
 
@@ -94,7 +104,7 @@ table empty_like(table const& t) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
                  [](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column;
+                   out_col = new gdf_column{};
                    *out_col = empty_like(*in_col);
                    return out_col;
                  });
@@ -106,7 +116,7 @@ table allocate_like(table const& t, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
                  [stream](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column;
+                   out_col = new gdf_column{};
                    *out_col = allocate_like(*in_col,stream);
                    return out_col;
                  });
@@ -118,7 +128,7 @@ table copy(table const& t, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
                  [stream](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column;
+                   out_col = new gdf_column{};
                    *out_col = copy(*in_col, stream);
                    return out_col;
                  });
