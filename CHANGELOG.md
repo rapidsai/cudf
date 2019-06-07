@@ -20,6 +20,7 @@
 - PR #1807 Add Series.dropna()
 
 ## Improvements
+
 - PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
@@ -53,7 +54,6 @@
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
 - PR #1930 Specialize constructor for `cudf::bol8` to cast argument to `bool`
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
-
 
 ## Bug Fixes
 
