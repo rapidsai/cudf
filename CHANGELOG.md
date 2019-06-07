@@ -55,6 +55,7 @@
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
 - PR #1930 Specialize constructor for `cudf::bol8` to cast argument to `bool`
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
+- PR #1964 Added support for list-like types in Series.str.cat
 
 ## Bug Fixes
 
@@ -98,7 +99,7 @@
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
-- PR #1964 Added support for list-like types in Series.str.cat
+
 
 
 
