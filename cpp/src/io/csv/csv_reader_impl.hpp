@@ -45,38 +45,40 @@ struct column_data_t {
  *---------------------------------------------------------------------------**/
 class CsvReader::Impl {
 private:
-  const csv_reader_args args_;
-  device_buffer<char> data;         // on-device: the raw unprocessed CSV data - loaded as a large char * array
-  device_buffer<uint64_t> recStart; // on-device: Starting position of the records.
+  const csv_reader_args args_{};
+  device_buffer<char> data;         ///< on-device: the raw unprocessed CSV data - loaded as a large char * array
+  device_buffer<uint64_t> recStart; ///< on-device: Starting position of the records.
 
-  ParseOptions opts; // options to control parsing behavior
+ // data dimensions
+  long num_bytes = 0;      ///< host: the number of bytes in the data
+  long num_bits = 0;       ///< host: the number of 64-bit bitmaps (different than valid)
+  gdf_size_type num_records =  0; ///< host: number of records loaded into device memory, and then number of records to read
+  int num_active_cols = 0; ///< host: number of columns that will be return to user.
+  int num_actual_cols = 0; ///< host: number of columns in the file --- based on the number of columns in header
 
-  long num_bytes;            // host: the number of bytes in the data
-  long num_bits;             // host: the number of 64-bit bitmaps (different than valid)
-  gdf_size_type num_records; // host: number of records loaded into device memory, and then number of records to read
-  int num_active_cols;       // host: number of columns that will be return to user.
-  int num_actual_cols;       // host: number of columns in the file --- based on the number of columns in header
-  std::vector<gdf_dtype> dtypes;      // host: array of dtypes (since gdf_columns are not created until end)
-  std::vector<std::string> col_names; // host: array of column names
-
-  thrust::host_vector<bool> h_parseCol; // host   : array of booleans stating if column should be parsed in reading
+  // parsing options
+  ParseOptions opts{};                  ///< options to control parsing behavior
+  thrust::host_vector<bool> h_parseCol; ///< host   : array of booleans stating if column should be parsed in reading
                                         // process: parseCol[x]=false means that the column x needs to be filtered out.
-  rmm::device_vector<bool> d_parseCol;  // device : array of booleans stating if column should be parsed in reading
+  rmm::device_vector<bool> d_parseCol;  ///< device : array of booleans stating if column should be parsed in reading
                                         // process: parseCol[x]=false means that the column x needs to be filtered out.
+  rmm::device_vector<SerialTrieNode> d_trueTrie;  ///< device: serialized trie of values to recognize as true
+  rmm::device_vector<SerialTrieNode> d_falseTrie; ///< device: serialized trie of values to recognize as false
+  rmm::device_vector<SerialTrieNode> d_naTrie;    ///< device: serialized trie of NA values
 
-  long byte_range_offset; // offset into the data to start parsing
-  long byte_range_size;   // length of the data of interest to parse
+  // intermediate data
+  std::vector<gdf_dtype> dtypes;      ///< host: array of dtypes (since gdf_columns are not created until end)
+  std::vector<std::string> col_names; ///< host: array of column names
+  std::vector<char> header;           ///< host: Header row data, for parsing column names
 
-  gdf_size_type header_row; ///< host: Row index of the header
-  gdf_size_type nrows;      ///< host: Number of rows to read. -1 for all rows
-  gdf_size_type skiprows;   ///< host: Number of rows to skip from the start
-  gdf_size_type skipfooter; ///< host: Number of rows to skip from the end
-  std::vector<char> header; ///< host: Header row data, for parsing column names
-  std::string prefix;       ///< host: Prepended to column ID if there is no header or input column names
+  // specifying which part of the file to parse
+  long byte_range_offset = 0;   ///< offset into the data to start parsing
+  long byte_range_size = 0;     ///< length of the data of interest to parse
+  gdf_size_type header_row = 0; ///< host: Row index of the header
+  gdf_size_type nrows = -1;     ///< host: Number of rows to read. -1 for all rows
+  gdf_size_type skiprows = 0;   ///< host: Number of rows to skip from the start
+  gdf_size_type skipfooter = 0; ///< host: Number of rows to skip from the end
 
-  rmm::device_vector<SerialTrieNode> d_trueTrie;  // device: serialized trie of values to recognize as true
-  rmm::device_vector<SerialTrieNode> d_falseTrie; // device: serialized trie of values to recognize as false
-  rmm::device_vector<SerialTrieNode> d_naTrie;    // device: serialized trie of NA values
 
   void setColumnNamesFromCsv();
   void countRecordsAndQuotes(const char *h_data, size_t h_size);

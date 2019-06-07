@@ -192,7 +192,7 @@ void CsvReader::Impl::setColumnNamesFromCsv() {
 			}
 			else {
 				// This is the first data row, add the automatically generated name
-				col_names.push_back(prefix + std::to_string(num_cols));
+				col_names.push_back(args_.prefix + std::to_string(num_cols));
 			}
 			num_cols++;
 
