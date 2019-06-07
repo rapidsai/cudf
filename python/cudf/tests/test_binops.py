@@ -373,14 +373,19 @@ def test_different_shapes_and_columns(binop):
     cd_frame = cudf.DataFrame({}) + cudf.DataFrame({'x': [1, 2]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
+    # Note: the below rely on a discrepancy between cudf and pandas
+    # While pandas inserts columns in alphabetical order, cudf inserts in the
+    # order of whichever column comes first. So the following code will not
+    # work if the names of columns are reversed i.e. ('y', 'x') != ('x', 'y')
+
     # More rows on the left side
-    pd_frame = pd.DataFrame({'y': [1, 2, 3]}) + pd.DataFrame({'x': [1, 2]})
-    cd_frame = cudf.DataFrame({'y': [1, 2, 3]}) + cudf.DataFrame({'x': [1, 2]})
+    pd_frame = pd.DataFrame({'x': [1, 2, 3]}) + pd.DataFrame({'y': [1, 2]})
+    cd_frame = cudf.DataFrame({'x': [1, 2, 3]}) + cudf.DataFrame({'y': [1, 2]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
     # More rows on the right side
-    pd_frame = pd.DataFrame({'y': [1, 2]}) + pd.DataFrame({'x': [1, 2, 3]})
-    cd_frame = cudf.DataFrame({'y': [1, 2]}) + cudf.DataFrame({'x': [1, 2, 3]})
+    pd_frame = pd.DataFrame({'x': [1, 2]}) + pd.DataFrame({'y': [1, 2, 3]})
+    cd_frame = cudf.DataFrame({'x': [1, 2]}) + cudf.DataFrame({'y': [1, 2, 3]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
 
