@@ -39,7 +39,7 @@
 #endif
 #endif
 
-namespace gdf {
+namespace cudf {
 namespace util {
 
 template <typename T>
@@ -117,4 +117,4 @@ inline constexpr gdf_size_type packed_bit_sequence_size_in_bytes (Size num_bits)
 
 
 } // namespace util
-} // namespace gdf
+} // namespace cudf

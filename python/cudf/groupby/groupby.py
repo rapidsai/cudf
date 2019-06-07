@@ -70,7 +70,7 @@ class SeriesGroupBy(object):
             df['y'] = self.group_series
         groupby = df.groupby('y').agg(agg_types)
         idx = groupby.index
-        idx.name = None
+        idx.name = self.group_name
         groupby.set_index(idx)
         return groupby
 
@@ -171,7 +171,9 @@ class Groupby(object):
         if agg_type in ['mean', 'sum']:
             agg_groupby._df = agg_groupby._df._get_numeric_data()
             agg_groupby._val_columns = []
-            for val in self._val_columns:
+            columns = [self._val_columns] if isinstance(self._val_columns, (
+                  str, Number)) else list(self._val_columns)
+            for val in columns:
                 if val in agg_groupby._df.columns:
                     agg_groupby._val_columns.append(val)
             # _get_numeric_data might have removed the by column
@@ -234,29 +236,32 @@ class Groupby(object):
             return final_result.set_index(multi_index)
 
     def apply_multicolumn(self, result, aggs):
-        levels = []
-        codes = []
-        levels.append(self._val_columns)
-        levels.append(aggs)
-
-        # if the values columns have length == 1, codes is a nested list of
-        # zeros equal to the size of aggs (sum, min, mean, etc.)
-        # if the values columns are length>1, codes will monotonically
-        # increase by 1 for every n values where n is the number of aggs
-        # [['x,', 'z'], ['sum', 'min']]
-        # codes == [[0, 1], [0, 1]]
-        code_size = max(len(aggs), len(self._val_columns))
-        codes.append(list(np.zeros(code_size, dtype='int64')))
-        codes.append(list(range(code_size)))
-
-        if len(aggs) == 1:
+        # multicolumn only applies with multiple aggs and multiple groupby keys
+        if len(aggs) == 1 or len(self._by) == 1:
             # unprefix columns
             new_cols = []
             for c in result.columns:
-                new_col = c.split('_')[1]  # sum_z-> (sum, z)
+                if len(self._by) == 1 and len(result) != 0:
+                    new_col = c.split('_')[0]  # sum_z-> (sum, z)
+                else:
+                    new_col = c.split('_')[1]  # sum_z-> (sum, z)
                 new_cols.append(new_col)
             result.columns = new_cols
         else:
+            levels = []
+            codes = []
+            levels.append(self._val_columns)
+            levels.append(aggs)
+
+            # if the values columns have length == 1, codes is a nested list of
+            # zeros equal to the size of aggs (sum, min, mean, etc.)
+            # if the values columns are length>1, codes will monotonically
+            # increase by 1 for every n values where n is the number of aggs
+            # [['x,', 'z'], ['sum', 'min']]
+            # codes == [[0, 1], [0, 1]]
+            code_size = max(len(aggs), len(self._val_columns))
+            codes.append(list(np.zeros(code_size, dtype='int64')))
+            codes.append(list(range(code_size)))
             result.columns = MultiIndex(levels, codes)
         return result
 
