@@ -37,11 +37,11 @@
 namespace detail {
 
 template <typename T>
-std::string to_string(T val) {
+inline std::string to_string(T val) {
   return std::to_string(cudf::detail::unwrap(val));
 }
 
-std::string to_string(cudf::bool8 val) {
+inline std::string to_string(cudf::bool8 val) {
   return {cudf::detail::unwrap(val) ? "true" : "false"};
 }
 

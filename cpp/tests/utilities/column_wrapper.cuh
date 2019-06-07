@@ -93,7 +93,8 @@ namespace test {
  * ```
  *  std::vector<T> values(size);
  *
- *  std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
+ *  std::vector<gdf_valid_type>
+ *expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
  *
  *  cudf::test::column_wrapper<T> const col(values, bitmask);
  * ```
@@ -160,11 +161,13 @@ struct column_wrapper {
 
   // column data and bitmask destroyed by device_vector dtor
   ~column_wrapper() {
-    if (nullptr != the_column.dtype_info.category) {
-      NVCategory::destroy(
-        reinterpret_cast<NVCategory*>(the_column.dtype_info.category)
-      );
-      the_column.dtype_info.category = 0;
+    if (std::is_same<ColumnType, cudf::nvstring_category>::value) {
+      std::cout << "nvstring category destruction\n";
+      if (nullptr != the_column.dtype_info.category) {
+        NVCategory::destroy(
+            reinterpret_cast<NVCategory*>(the_column.dtype_info.category));
+        the_column.dtype_info.category = 0;
+      }
     }
   }
 
@@ -288,11 +291,14 @@ struct column_wrapper {
    *
    * @param column The gdf_column* that contains the originating data
    *---------------------------------------------------------------------------**/
-  column_wrapper(const gdf_column& column)
-      : data(static_cast<ColumnType*>(column.data),
-             static_cast<ColumnType*>(column.data) + column.size) {
+  column_wrapper(const gdf_column& column) {
     CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype,
                  "Type mismatch between column_wrapper and gdf_column");
+
+    if (column.data != nullptr) {
+      data.assign(static_cast<ColumnType*>(column.data),
+                  static_cast<ColumnType*>(column.data) + column.size);
+    }
 
     if (column.valid != nullptr) {
       bitmask.assign(column.valid,
@@ -496,7 +502,8 @@ struct column_wrapper {
     std::vector<gdf_valid_type> host_bitmask;
 
     if (nullptr != the_column.data) {
-      // TODO Is there a nicer way to get a `std::vector` from a device_vector?
+      // TODO Is there a nicer way to get a `std::vector` from a
+      // device_vector?
       host_data.resize(the_column.size);
       CUDA_RT_CALL(cudaMemcpy(host_data.data(), the_column.data,
                               the_column.size * sizeof(ColumnType),
@@ -518,8 +525,8 @@ struct column_wrapper {
    *
    *---------------------------------------------------------------------------**/
   void print() const {
-    // TODO Move the implementation of `print_gdf_column` here once it's removed
-    // from usage elsewhere
+    // TODO Move the implementation of `print_gdf_column` here once it's
+    // removed from usage elsewhere
     print_gdf_column(&the_column);
   }
 
@@ -608,12 +615,12 @@ struct column_wrapper {
     set_null_count(the_column);
   }
 
-  rmm::device_vector<ColumnType> data;  ///< Container for the column's data
+  rmm::device_vector<ColumnType> data{};  ///< Container for the column's data
 
   // If the column's bitmask does not exist (doesn't contain null values), then
   // the size of this vector will be zero
   rmm::device_vector<gdf_valid_type>
-      bitmask;  ///< Container for the column's bitmask
+      bitmask{};  ///< Container for the column's bitmask
 
   gdf_column the_column{};
 };

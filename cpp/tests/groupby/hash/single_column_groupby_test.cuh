@@ -29,6 +29,7 @@
 
 namespace cudf {
 namespace test {
+
 template <cudf::groupby::hash::operators op, typename Key, typename Value,
           typename ResultValue>
 void single_column_groupby_test(column_wrapper<Key> keys,
@@ -43,6 +44,8 @@ void single_column_groupby_test(column_wrapper<Key> keys,
 
   ASSERT_EQ(keys.size(), values.size())
       << "Number of keys must be equal to number of values.";
+  ASSERT_EQ(expected_keys.size(), expected_values.size())
+      << "Number of keys must be equal to number of values.";
 
   cudf::table input_keys{keys.get()};
   cudf::table input_values{values.get()};
@@ -51,6 +54,8 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   cudf::table output_values_table;
   std::tie(output_keys_table, output_values_table) =
       cudf::groupby::hash::groupby(input_keys, input_values, {op});
+
+  EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
   ASSERT_EQ(cudf::gdf_dtype_of<Key>(), output_keys_table.get_column(0)->dtype);
   ASSERT_EQ(cudf::gdf_dtype_of<ResultValue>(),
@@ -67,12 +72,16 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   column_wrapper<ResultValue> output_values(*output_values_table.get_column(0));
 
   // Sort-by-key the expected and actual data to make them directly comparable
-  thrust::stable_sort_by_key(thrust::device, expected_keys.get_data().begin(),
-                             expected_keys.get_data().end(),
-                             expected_values.get_data().begin());
-  thrust::stable_sort_by_key(thrust::device, output_keys.get_data().begin(),
-                             output_keys.get_data().end(),
-                             output_values.get_data().begin());
+  EXPECT_NO_THROW(thrust::stable_sort_by_key(
+      rmm::exec_policy()->on(0), expected_keys.get_data().begin(),
+      expected_keys.get_data().end(), expected_values.get_data().end()));
+
+  EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
+
+  EXPECT_NO_THROW(thrust::stable_sort_by_key(
+      rmm::exec_policy()->on(0), output_keys.get_data().begin(),
+      output_keys.get_data().end(), output_values.get_data().begin()));
+  EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
   bool const print_all_unequal_pairs{true};
   CUDF_EXPECT_NO_THROW(expect_columns_are_equal(output_keys, "Actual Keys",
