@@ -5,7 +5,6 @@ import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.dataframe.index import Index
 
 
 class _SeriesLocIndexer(object):
@@ -18,6 +17,7 @@ class _SeriesLocIndexer(object):
 
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
+        from cudf.dataframe.index import Index
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
             if len(arg) == 0:
@@ -268,3 +268,13 @@ def _is_single_value(val):
             or isinstance(val, pd.Timestamp)
             or isinstance(val, pd.Categorical)
     )
+
+
+class _IndexLocIndexer(object):
+
+    def __init__(self, idx):
+        self.idx = idx
+
+    def __getitem__(self, arg):
+        from cudf.dataframe.index import as_index
+        return as_index(self.idx.to_series().loc[arg])
