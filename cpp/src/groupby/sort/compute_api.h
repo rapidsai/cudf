@@ -51,15 +51,14 @@
 */
 /* ----------------------------------------------------------------------------*/
 template< typename aggregation_type,
-          typename size_type,
           typename aggregation_operation>
-gdf_error GroupbySort(size_type num_groupby_cols,
+gdf_error GroupbySort(gdf_size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
-                        gdf_column* in_groupby_columns[],       
+                        gdf_column * in_groupby_columns[],       
                         const aggregation_type * const in_aggregation_column,
                         gdf_column* out_groupby_columns[],
                         aggregation_type * out_aggregation_column,
-                        size_type * out_size,
+                        gdf_size_type * out_size,
                         aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
@@ -82,7 +81,7 @@ gdf_error GroupbySort(size_type num_groupby_cols,
                               out_aggregation_column,  
                               comp,
                               aggregation_op);
-  size_type new_size = thrust::distance(out_aggregation_column, ret.second);
+  gdf_size_type new_size = thrust::distance(out_aggregation_column, ret.second);
   *out_size = new_size;
 
   // run gather operation to establish new order
@@ -132,17 +131,26 @@ rmm::device_vector<bool> get_bools_from_gdf_valid(gdf_column* column) {
 void set_bools_for_gdf_valid(gdf_column* column, rmm::device_vector<bool>& d_bools) {
   thrust::for_each(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(column->size), GdfBoolToValid{column->valid, d_bools.data().get()});
 }
-
+ /*
+ gdf_error GroupbySort(gdf_size_type num_groupby_cols,
+                        int32_t* d_sorted_indices,
+                        gdf_column * in_groupby_columns[],       
+                        const aggregation_type * const in_aggregation_column,
+                        gdf_column* out_groupby_columns[],
+                        aggregation_type * out_aggregation_column,
+                        gdf_size_type * out_size,
+                        aggregation_operation aggregation_op,
+                        gdf_context* ctxt)
+ */
 template< typename aggregation_type,
-          typename size_type,
           typename aggregation_operation>
-gdf_error GroupbySortWithNulls(size_type num_groupby_cols,
+gdf_error GroupbySortWithNulls(gdf_size_type num_groupby_cols,
                         int32_t* d_sorted_indices,
                         gdf_column* in_groupby_columns[],       
-                        gdf_column* in_aggregation_column,
+                        gdf_column* const in_aggregation_column,
                         gdf_column* out_groupby_columns[],
                         gdf_column* out_aggregation_column,
-                        size_type * out_size,
+                        gdf_size_type * out_size,
                         aggregation_operation aggregation_op,
                         gdf_context* ctxt)
 {
@@ -176,7 +184,7 @@ gdf_error GroupbySortWithNulls(size_type num_groupby_cols,
                               agg_op);
   auto iter_tuple = ret.second.get_iterator_tuple();
 
-  size_type new_size = thrust::distance((aggregation_type*)out_aggregation_column->data, thrust::get<0>(iter_tuple));
+  gdf_size_type new_size = thrust::distance((aggregation_type*)out_aggregation_column->data, thrust::get<0>(iter_tuple));
 
   *out_size = new_size;
 

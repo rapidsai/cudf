@@ -16,7 +16,10 @@
 
 #include <copying.hpp>
 #include <cudf.h>
+#include <table.hpp>
 #include <cuda_runtime.h>
+#include <algorithm>
+
 #include "utilities/error_utils.hpp"
 
 namespace cudf
@@ -84,6 +87,18 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
   }
 
   return output;
+}
+
+table allocate_like(table const& t, cudaStream_t stream) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+                 [stream](gdf_column* out_col, gdf_column const* in_col) {
+                   out_col = new gdf_column;
+                   *out_col = allocate_like(*in_col,stream);
+                   return out_col;
+                 });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
 
 } // namespace cudf

@@ -43,3 +43,5 @@ cpp/thirdparty/googletest/
 
 ## Doxygen
 cpp/doxygen/html
+
+cpp/build2/

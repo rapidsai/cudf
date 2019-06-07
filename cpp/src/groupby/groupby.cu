@@ -112,13 +112,14 @@ gdf_error gdf_group_by_count_distinct(int ncols,                    // # columns
                            gdf_column* out_col_agg,      //aggregation result
                            gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 {
-  gdf_agg_op op{GDF_COUNT_DISTINCT};
-  return gdf_group_by_sort(cols,
-                      ncols,
-                      &col_agg,
-                      1,
-                      &op,
-                      out_col_values,
-                      &out_col_agg,
-                      ctxt);
+  // gdf_agg_op op{GDF_COUNT_DISTINCT};
+  // return gdf_group_by_sort(cols,
+  //                     ncols,
+  //                     &col_agg,
+  //                     1,
+  //                     &op,
+  //                     out_col_values,
+  //                     &out_col_agg,
+  //                     ctxt);
+  return GDF_C_ERROR;//TODO, fix that
 }

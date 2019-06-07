@@ -379,7 +379,7 @@ struct multi_pass_avg_functor {
  * @returns gdf_error with error code on failure, otherwise GDF_SUCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_group_by_hash_avg(int ncols,               
+static gdf_error gdf_group_by_hash_avg(int ncols,               
                                 gdf_column* in_groupby_columns[],        
                                 gdf_column* in_aggregation_column,       
                                 gdf_column* out_groupby_columns[],
