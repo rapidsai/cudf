@@ -8,11 +8,11 @@ from itertools import product
 
 import pytest
 import numpy as np
-import cudf
+import pandas as pd
 
+import cudf
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
-
 from cudf.tests import utils
 
 
@@ -393,3 +393,13 @@ def test_different_shapes_and_same_columns(binop):
     import cudf
     with pytest.raises(NotImplementedError):
         binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
+
+
+@pytest.mark.parametrize('op',
+                         [operator.eq,
+                          operator.ne])
+def test_boolean_scalar_binop(op):
+    psr = pd.Series(np.random.choice([True, False], 10))
+    gsr = cudf.from_pandas(psr)
+    utils.assert_eq(op(psr, True), op(gsr, True))
+    utils.assert_eq(op(psr, False), op(gsr, False))

@@ -127,6 +127,7 @@ cdef get_scalar_value(gdf_scalar scalar):
         GDF_INT32:   scalar.data.si32,
         GDF_INT16:   scalar.data.si16,
         GDF_INT8:    scalar.data.si08,
+        GDF_BOOL8:   scalar.data.b08,
         GDF_BOOL8:   np.array(scalar.data.b08).astype(np.bool_),
         GDF_DATE32:  np.array(scalar.data.dt32).astype('datetime64[D]'),
         GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
@@ -150,6 +151,10 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si16 = val
     elif val.dtype.type == np.int8:
         scalar.data.si08 = val
+    elif val.dtype.type == np.int8:
+        scalar.data.si08 = val
+    elif val.dtype.type == np.bool_ or val.dtype.type == np.bool:
+        scalar.data.b08 = val
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
                          "to gdf_scalar".format(val.dtype.name))
