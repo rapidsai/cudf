@@ -4,6 +4,7 @@
 # cuDF GPU build and test script for CI #
 #########################################
 set -e
+NUMARGS=$#
 
 # Logger function for build status output
 function logger() {

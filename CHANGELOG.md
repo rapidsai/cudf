@@ -18,6 +18,7 @@
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
 - PR #1807 Add Series.dropna()
+- PR #1954 Add skip test argument to GPU build script
 
 ## Improvements
 
