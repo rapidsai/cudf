@@ -337,7 +337,7 @@ void ReduceOp(const gdf_column *input, rmm::device_vector<T_out>& dev_result, in
 template <typename T, bool has_null>
 void raw_stream_bench_thrust_block(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
 {
-  std::cout << "raw stream thust block" << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
+  std::cout << "raw stream cub::BlockReduce" << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
   ReduceOp<T, T, cudf::reductions::ReductionSum>(col, result, iters);
 }
 
