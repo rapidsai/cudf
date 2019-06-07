@@ -17,7 +17,8 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
-from cudf.bindings.stream_compaction import cpp_drop_nulls, cpp_apply_boolean_mask
+from cudf.bindings.stream_compaction import (cpp_drop_nulls,
+                                             cpp_apply_boolean_mask)
 
 import warnings
 import cudf.bindings.copying as cpp_copying
@@ -140,9 +141,9 @@ def column_empty(row_count, dtype, masked, categories=None):
         else:
             mem = rmm.device_array((row_count,), dtype='float64')
             data = nvstrings.dtos(mem,
-                                len(mem),
-                                nulls=mask,
-                                bdevmem=True)
+                                  len(mem),
+                                  nulls=mask,
+                                  bdevmem=True)
     else:
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
