@@ -57,16 +57,3 @@ gdf_error read_parquet(pq_read_arg *args);
  * @brief Interface to convert GDF Columns to Compressed Sparse Row
  */
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
-
-#include <table.hpp>
-namespace cudf {
-/*
- * @brief Interface to parse CSV data to GDF columns
- *
- * @param[in] args Structure containing the input arguments
- *
- * @return cudf::table Object that contains the array of gdf_columns
- */
-table read_csv(csv_read_arg const &args);
-
-} // namespace cudf

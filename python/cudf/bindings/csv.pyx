@@ -75,24 +75,24 @@ cpdef cpp_read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    cdef csv_read_arg csv_reader = csv_read_arg()
+    cdef csv_reader_args args = csv_reader_args()
 
-    # Populate csv_reader struct
+    # Populate args struct
     if is_file_like(filepath_or_buffer):
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
-            csv_reader.filepath_or_buffer = buffer.encode()
+            args.filepath_or_buffer = buffer.encode()
         else:
-            csv_reader.filepath_or_buffer = buffer
-        csv_reader.input_data_form = HOST_BUFFER
+            args.filepath_or_buffer = buffer
+        args.input_data_form = HOST_BUFFER
     else:
         if (not os.path.isfile(filepath_or_buffer)):
             raise(FileNotFoundError)
         if (not os.path.exists(filepath_or_buffer)):
             raise(FileNotFoundError)
-        csv_reader.filepath_or_buffer = filepath_or_buffer.encode()
-        csv_reader.input_data_form = FILE_PATH
+        args.filepath_or_buffer = filepath_or_buffer.encode()
+        args.input_data_form = FILE_PATH
 
     if header == 'infer':
         header = -1
@@ -107,15 +107,15 @@ cpdef cpp_read_csv(
         if header is None:
             header_infer = -1
         for col_name in names:
-            csv_reader.names.push_back(str(col_name).encode())
+            args.names.push_back(str(col_name).encode())
 
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             for k, v in dtype.items():
-                csv_reader.dtype.push_back(str(str(k)+":"+str(v)).encode())
+                args.dtype.push_back(str(str(k)+":"+str(v)).encode())
         elif isinstance(dtype, collections.abc.Iterable):
             for col_dtype in dtype:
-                csv_reader.dtype.push_back(str(col_dtype).encode())
+                args.dtype.push_back(str(col_dtype).encode())
         else:
             msg = '''dtype must be 'list like' or 'dict' '''
             raise TypeError(msg)
@@ -128,10 +128,10 @@ cpdef cpp_read_csv(
                 all_int = False
                 break
         if all_int:
-            csv_reader.use_cols_indexes = usecols
+            args.use_cols_indexes = usecols
         else:
             for col_name in usecols:
-                csv_reader.use_cols_names.push_back(str(col_name).encode())
+                args.use_cols_names.push_back(str(col_name).encode())
 
     if decimal == delimiter:
         raise ValueError("decimal cannot be the same as delimiter")
@@ -148,45 +148,48 @@ cpdef cpp_read_csv(
                                 using the byte range parameter""")
 
     for value in true_values or []:
-        csv_reader.true_values.push_back(str(value).encode())
+        args.true_values.push_back(str(value).encode())
     for value in false_values or []:
-        csv_reader.false_values.push_back(str(value).encode())
+        args.false_values.push_back(str(value).encode())
     for value in na_values or []:
-        csv_reader.na_values.push_back(str(value).encode())
+        args.na_values.push_back(str(value).encode())
 
-    csv_reader.delimiter = delimiter.encode()[0]
-    csv_reader.lineterminator = lineterminator.encode()[0]
-    csv_reader.quotechar = quotechar.encode()[0]
-    csv_reader.quoting = _quoting_enum[quoting]
-    csv_reader.doublequote = doublequote
-    csv_reader.delim_whitespace = delim_whitespace
-    csv_reader.skipinitialspace = skipinitialspace
-    csv_reader.dayfirst = dayfirst
-    csv_reader.header = header_infer
-    csv_reader.skiprows = skiprows
-    csv_reader.skipfooter = skipfooter
-    csv_reader.mangle_dupe_cols = mangle_dupe_cols
+    args.delimiter = delimiter.encode()[0]
+    args.lineterminator = lineterminator.encode()[0]
+    args.quotechar = quotechar.encode()[0]
+    args.quoting = _quoting_enum[quoting]
+    args.doublequote = doublequote
+    args.delim_whitespace = delim_whitespace
+    args.skipinitialspace = skipinitialspace
+    args.dayfirst = dayfirst
+    args.header = header_infer
+    args.skiprows = skiprows
+    args.skipfooter = skipfooter
+    args.mangle_dupe_cols = mangle_dupe_cols
     if compression is not None:
-        csv_reader.compression = compression.encode()
-    csv_reader.decimal = decimal.encode()[0]
-    csv_reader.thousands = (thousands.encode() if thousands else b'\0')[0]
-    csv_reader.nrows = nrows if nrows is not None else -1
+        args.compression = compression.encode()
+    args.decimal = decimal.encode()[0]
+    args.thousands = (thousands.encode() if thousands else b'\0')[0]
+    args.nrows = nrows if nrows is not None else -1
     if byte_range is not None:
-        csv_reader.byte_range_offset = byte_range[0]
-        csv_reader.byte_range_size = byte_range[1]
+        args.byte_range_offset = byte_range[0]
+        args.byte_range_size = byte_range[1]
     else:
-        csv_reader.byte_range_offset = 0
-        csv_reader.byte_range_size = 0
-    csv_reader.skip_blank_lines = skip_blank_lines
-    csv_reader.comment = (comment.encode() if comment else b'\0')[0]
-    csv_reader.keep_default_na = keep_default_na
-    csv_reader.na_filter = na_filter
+        args.byte_range_offset = 0
+        args.byte_range_size = 0
+    args.skip_blank_lines = skip_blank_lines
+    args.comment = (comment.encode() if comment else b'\0')[0]
+    args.keep_default_na = keep_default_na
+    args.na_filter = na_filter
     if prefix is not None:
-        csv_reader.prefix = prefix.encode()
+        args.prefix = prefix.encode()
 
-    cdef cudf_table table
+    cdef CsvReader reader
     with nogil:
-        table = read_csv(csv_reader)
+        reader = CsvReader(args)
+    
+    cdef cudf_table table
+    table = reader.read()
 
     # Extract parsed columns
     outcols = []

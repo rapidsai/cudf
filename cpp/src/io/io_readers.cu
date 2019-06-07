@@ -17,6 +17,7 @@
 #include "cudf/io_readers.hpp"
 
 #include "io/json/json_reader_impl.hpp"
+#include "io/csv/csv_reader_impl.hpp"
 
 namespace cudf {
 
@@ -55,5 +56,34 @@ table JsonReader::read_byte_range(size_t offset, size_t size) {
 }
 
 JsonReader::~JsonReader() = default;
+
+
+CsvReader::CsvReader() noexcept = default;
+
+CsvReader::CsvReader(CsvReader const &rhs) : impl_(std::make_unique<CsvReader::Impl>(rhs.impl_->getArgs())) {}
+
+CsvReader &CsvReader::operator=(CsvReader const &rhs) {
+  impl_ = std::make_unique<CsvReader::Impl>(rhs.impl_->getArgs());
+  return *this;
+}
+
+CsvReader::CsvReader(CsvReader &&rhs) : impl_(std::move(rhs.impl_)) {}
+
+CsvReader &CsvReader::operator=(CsvReader &&rhs) {
+  impl_ = std::move(rhs.impl_);
+  return *this;
+}
+
+CsvReader::CsvReader(csv_reader_args const &args) : impl_(std::make_unique<Impl>(args)) {}
+
+table CsvReader::read() {
+  if (impl_) {
+    return impl_->read();
+  } else {
+    return table();
+  }
+}
+
+CsvReader::~CsvReader() = default;
 
 } // namespace cudf

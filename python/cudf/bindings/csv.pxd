@@ -25,7 +25,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         QUOTE_NONE,
 
     # See cpp/include/cudf/io_types.h:62
-    cdef struct csv_read_arg:
+    cdef struct csv_reader_args:
         gdf_csv_input_form  input_data_form
         string              filepath_or_buffer
 
@@ -75,4 +75,10 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         size_t              byte_range_offset
         size_t              byte_range_size
 
-    cdef cudf_table read_csv(const csv_read_arg &args) except +
+    cdef cppclass CsvReader:
+
+        CsvReader()
+
+        CsvReader(const csv_reader_args &args) except +
+
+        cudf_table read() except +

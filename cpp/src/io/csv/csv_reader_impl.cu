@@ -20,6 +20,7 @@
  * CSV Reader
  */
 
+#include "csv_reader_impl.hpp"
 
 #include <cuda_runtime.h>
 
@@ -125,7 +126,7 @@ using string_pair = std::pair<const char*,size_t>;
 //
 //---------------create and process ---------------------------------------------
 //
-void parseArguments(csv_read_arg *args, raw_csv_t *csv);
+void parseArguments(csv_reader_args *args, raw_csv_t *csv);
 void uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
 
 //
@@ -382,7 +383,7 @@ void setRecordStarts(const char *h_data, size_t h_size, raw_csv_t *raw_csv) {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-table read_csv(csv_read_arg const &args)
+table read_csv(csv_reader_args const &args)
 {
 	//-----------------------------------------------------------------------------
 	// create the CSV data structure - this will be filled in as the CSV data is processed.
@@ -1264,6 +1265,12 @@ void dataTypeDetection(char *raw_csv,
 		col++;	
 
 	}
+}
+
+CsvReader::Impl::Impl(csv_reader_args const &args) : args_(args) {}
+
+table CsvReader::Impl::read() {
+  return read_csv(args_);
 }
 
 } // namespace cudf
