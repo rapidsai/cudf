@@ -5,6 +5,7 @@
 #########################################
 set -e
 NUMARGS=$#
+ARGS=$*
 
 # Logger function for build status output
 function logger() {
