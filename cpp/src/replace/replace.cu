@@ -57,8 +57,8 @@ __device__ T sum_warps(T* warp_smem)
 template<class T, bool replacement_has_nulls>
 __device__ T get_new_value(gdf_size_type         idx,
                            const T* __restrict__ input_data,
-                           thrust::device_ptr<const T> values_to_replace_begin,
-                           thrust::device_ptr<const T> values_to_replace_end,
+                           const T* __restrict__ values_to_replace_begin,
+                           const T* __restrict__ values_to_replace_end,
                            const T* __restrict__       d_replacement_values,
                            bit_mask_t const * __restrict__ replacement_valid,
                            bool                        &output_is_valid)
@@ -114,8 +114,8 @@ __device__ T get_new_value(gdf_size_type         idx,
                       bit_mask_t * __restrict__ output_valid,
                       gdf_size_type *           output_null_count,
                       gdf_size_type             nrows,
-                      thrust::device_ptr<const T> values_to_replace_begin,
-                      thrust::device_ptr<const T> values_to_replace_end,
+                      const T* __restrict__ values_to_replace_begin,
+                      const T* __restrict__ values_to_replace_end,
                       const T* __restrict__           d_replacement_values,
                       bit_mask_t const * __restrict__ replacement_valid)
   {
@@ -259,8 +259,8 @@ __device__ T get_new_value(gdf_size_type         idx,
                                              typed_out_valid,
                                              null_count,
                                              output.size,
-                                             values_to_replace_begin,
-                                             values_to_replace_begin + replacement_values.size,
+                                             values_to_replace_begin.get(),
+                                             (values_to_replace_begin + replacement_values.size).get(),
                                              static_cast<const col_type*>(replacement_values.data),
                                              typed_replacement_valid);
 
