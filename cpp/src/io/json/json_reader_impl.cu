@@ -133,7 +133,7 @@ table JsonReader::Impl::read_byte_range(size_t offset, size_t size) {
 }
 
 void JsonReader::Impl::ingestRawInput() {
-  if (args_.source_type == gdf_csv_input_form::FILE_PATH) {
+  if (args_.source_type == gdf_input_type::FILE_PATH) {
     map_file_ = std::make_unique<MappedFile>(args_.source.c_str(), O_RDONLY);
     CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
     CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "byte_range offset is too big for the input size.\n");
@@ -158,7 +158,7 @@ void JsonReader::Impl::ingestRawInput() {
     input_data_ = static_cast<const char *>(map_file_->data()) + page_padding;
     // Ignore page padding for parsing purposes
     input_size_ = map_size - page_padding;
-  } else if (args_.source_type == gdf_csv_input_form::HOST_BUFFER) {
+  } else if (args_.source_type == gdf_input_type::HOST_BUFFER) {
     input_data_ = args_.source.c_str() + byte_range_offset_;
     input_size_ = args_.source.size() - byte_range_offset_;
   } else {

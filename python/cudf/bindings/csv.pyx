@@ -82,23 +82,17 @@ cpdef cpp_read_csv(
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
-            buffer_as_bytes = buffer.encode()
+            csv_reader.filepath_or_buffer = buffer.encode()
         else:
-            buffer_as_bytes = buffer
-        buffer_data_holder = <char*>buffer_as_bytes
-
+            csv_reader.filepath_or_buffer = buffer
         csv_reader.input_data_form = HOST_BUFFER
-        csv_reader.filepath_or_buffer = buffer_data_holder
-        csv_reader.buffer_size = len(buffer_as_bytes)
     else:
         if (not os.path.isfile(filepath_or_buffer)):
             raise(FileNotFoundError)
         if (not os.path.exists(filepath_or_buffer)):
             raise(FileNotFoundError)
-        file_path = filepath_or_buffer.encode()
-
+        csv_reader.filepath_or_buffer = filepath_or_buffer.encode()
         csv_reader.input_data_form = FILE_PATH
-        csv_reader.filepath_or_buffer = file_path
 
     if header == 'infer':
         header = -1

@@ -66,7 +66,7 @@ std::string inferCompressionType(const std::string &compression_arg, gdf_input_t
   if (comp_arg_lower != "infer")
     return comp_arg_lower;
   // Cannot infer compression type from a buffer, assume the input is uncompressed
-  if (source_type == gdf_csv_input_form::HOST_BUFFER)
+  if (source_type == gdf_input_type::HOST_BUFFER)
     return "none";
 
   // Need to infer compression from the file extension

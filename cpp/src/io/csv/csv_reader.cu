@@ -424,7 +424,7 @@ table read_csv(csv_read_arg const &args)
 	CUDF_EXPECTS(raw_csv.opts.thousands != raw_csv.opts.delimiter, "Thousands separator cannot be the same as the delimiter");
 
   const string compression_type =
-      inferCompressionType(args.compression, args.input_data_form, string(args.filepath_or_buffer),
+      inferCompressionType(args.compression, args.input_data_form, args.filepath_or_buffer,
                            {{"csv", "none"}, {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
         raw_csv.byte_range_offset = args.byte_range_offset;
@@ -466,13 +466,13 @@ table read_csv(csv_read_arg const &args)
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
-	void * 	map_data = NULL;
+	const void * map_data = nullptr;
 	size_t	map_size = 0;
 	size_t	map_offset = 0;
 	int fd = 0;
 	if (args.input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
-		fd = open(args.filepath_or_buffer, O_RDONLY );
+		fd = open(args.filepath_or_buffer.c_str(), O_RDONLY );
 		if (fd < 0) { close(fd); CUDF_FAIL("Error opening file"); }
 
 		struct stat st{};
@@ -511,8 +511,8 @@ table read_csv(csv_read_arg const &args)
 	}
 	else if (args.input_data_form == gdf_csv_input_form::HOST_BUFFER)
 	{
-		map_data = (void *)args.filepath_or_buffer;
-		raw_csv.num_bytes = map_size = args.buffer_size;
+		map_data = args.filepath_or_buffer.c_str();
+		raw_csv.num_bytes = map_size = args.filepath_or_buffer.size();
 	}
 	else { CUDF_FAIL("invalid input type"); }
 
@@ -553,7 +553,7 @@ table read_csv(csv_read_arg const &args)
 	{
 		close(fd);
 		if (map_data != nullptr) {
-			munmap(map_data, map_size);
+			munmap((void*)map_data, map_size);
 		}
 	}
 

@@ -146,9 +146,8 @@ enum gdf_csv_quote_style{
 
  *---------------------------------------------------------------------------**/
 struct csv_read_arg{
-  gdf_csv_input_form  input_data_form;      ///< Type of source of CSV data
-  const char          *filepath_or_buffer;  ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  size_t              buffer_size;          ///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
+  gdf_csv_input_form input_data_form = HOST_BUFFER; ///< Type of source of CSV data
+  std::string        filepath_or_buffer;            ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
 
   char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
   char          delimiter = ',';            ///< Define the field separator; Default is ','.

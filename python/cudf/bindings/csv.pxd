@@ -27,8 +27,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
     # See cpp/include/cudf/io_types.h:62
     cdef struct csv_read_arg:
         gdf_csv_input_form  input_data_form
-        const char          *filepath_or_buffer
-        size_t              buffer_size
+        string              filepath_or_buffer
 
         char                lineterminator
         char                delimiter
