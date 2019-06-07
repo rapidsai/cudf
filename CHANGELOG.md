@@ -17,6 +17,7 @@
 - PR #1828 JSON Reader: add suport for bool8 columns
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
+- PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 
 ## Improvements

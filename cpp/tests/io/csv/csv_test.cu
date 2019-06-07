@@ -848,10 +848,10 @@ TEST(gdf_csv_test, Writer)
     std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
     std::string verify =
         "\"boolean\",\"integer\",\"float\",\"string\"\n"
-        "true,1,1,\"one\"\n"
+        "true,1,1.0,\"one\"\n"
         "false,2,2.25,\"two\"\n"
         "false,3,3.5,\"three\"\n"
         "true,4,4.75,\"four\"\n"
-        "false,5,5,\"five\"\n";
+        "false,5,5.0,\"five\"\n";
     EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }
