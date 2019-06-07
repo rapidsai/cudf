@@ -72,7 +72,6 @@ class SeriesGroupBy(object):
                 result_series = result_series.set_index(mi)
             else:
                 idx = result_df.index
-                idx.name = self.group_name
                 if self.group_name == _LEVEL_0_INDEX_NAME:
                     idx.name = None
                 result_series = result_series.set_index(idx)
@@ -190,8 +189,8 @@ class Groupby(object):
             by = self._by
             self._by = []
             for idx, each_by in enumerate(by):
-                self._df[each_by.name] = each_by
-                self._by.append(each_by.name)
+                self._df['cudfvalcol+' + each_by.name] = each_by
+                self._by.append('cudfvalcol+' + each_by.name)
         if (method == "hash"):
             self._method = method
         else:
@@ -244,25 +243,51 @@ class Groupby(object):
         if len(self._by) == 1:
             from cudf.dataframe import index
             idx = index.as_index(result[self._by[0]])
-            idx.name = self._by[0]
-            result = result.drop(idx.name)
-            if idx.name == _LEVEL_0_INDEX_NAME:
-                idx.name = self._original_index_name
-            result = result.set_index(idx)
+            name = self._by[0]
+            if isinstance(name, str):
+                name = self._by[0].split('+')
+                if name[0] == 'cudfvalcol':
+                    idx.name = name[1]
+                else:
+                    idx.name = name[0]
+                result = result.drop(self._by[0])
             for col in result.columns:
                 if isinstance(col, str):
-                    colnames = col.split('_')
+                    colnames = col.split('+')
                     if colnames[0] == 'cudfvalcol':
                         result[colnames[1]] = result[col]
                         result = result.drop(col)
+            if idx.name == _LEVEL_0_INDEX_NAME:
+                idx.name = self._original_index_name
+            result = result.set_index(idx)
             return result
         else:
+            for col in result.columns:
+                if isinstance(col, str):
+                    colnames = col.split('+')
+                    if colnames[0] == 'cudfvalcol':
+                        result[colnames[1]] = result[col]
+                        result = result.drop(col)
+            new_by = []
+            for by in self._by:
+                if isinstance(col, str):
+                    splitby = by.split('+')
+                    if splitby[0] == 'cudfvalcol':
+                        new_by.append(splitby[1])
+                    else:
+                        new_by.append(splitby[0])
+                else:
+                    new_by.append(by)
+            self._by = new_by
             multi_index = MultiIndex(source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
-            return final_result.set_index(multi_index)
+            if len(final_result.columns) > 0:
+                return final_result.set_index(multi_index)
+            else:
+                return result.set_index(multi_index)
 
     def apply_multicolumn(self, result, aggs):
         # multicolumn only applies with multiple aggs and multiple groupby keys
