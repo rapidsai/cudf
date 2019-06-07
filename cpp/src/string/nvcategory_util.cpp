@@ -1,9 +1,5 @@
-<<<<<<< HEAD
 #include <utility>
-=======
-
 #include <utilities/column_utils.hpp>
->>>>>>> 0233e4b53205b65196e74889803d8e3a75d1893e
 #include "nvcategory_util.hpp"
 #include <replace.hpp>
 #include <types.hpp>
