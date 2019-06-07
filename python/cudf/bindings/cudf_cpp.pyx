@@ -151,8 +151,6 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si16 = val
     elif val.dtype.type == np.int8:
         scalar.data.si08 = val
-    elif val.dtype.type == np.int8:
-        scalar.data.si08 = val
     elif val.dtype.type == np.bool_ or val.dtype.type == np.bool:
         scalar.data.b08 = val
     else:
