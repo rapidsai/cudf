@@ -62,11 +62,16 @@ class NumericalColumn(columnops.TypedColumnBase):
                   dtype=deserialize(*header['dtype']))
         return col
 
-    def binary_operator(self, binop, rhs):
-        if isinstance(rhs, NumericalColumn):
+    def binary_operator(self, binop, rhs, reflect=False):
+        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
-            return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
-                                        out_dtype=out_dtype)
+            return numeric_column_binop(
+                lhs=self,
+                rhs=rhs,
+                op=binop,
+                out_dtype=out_dtype,
+                reflect=reflect
+            )
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -74,6 +79,10 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unary_operator(self, unaryop):
         return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
+
+    def unary_logic_op(self, unaryop):
+        return numeric_column_unaryop(self, op=unaryop,
+                                      out_dtype=np.bool_)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
@@ -90,12 +99,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            # Temporary workaround since libcudf doesn't support int16 ops
-            if other_dtype == np.dtype('int16'):
-                other_dtype = np.dtype('int32')
-            ary = utils.scalar_broadcast_to(other, shape=len(self),
-                                            dtype=other_dtype)
-            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+
+            if np.isscalar(other):
+                other = np.dtype(other_dtype).type(other)
+                return other
+            else:
+                ary = utils.scalar_broadcast_to(
+                    other,
+                    shape=len(self),
+                    dtype=other_dtype
+                )
+                return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 
@@ -166,7 +180,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        return pd.Series(self.to_array(fillna='pandas'), index=index)
+        if self.null_count > 0 and self.dtype == np.bool:
+            # Boolean series in Pandas that contains None/NaN is of dtype
+            # `np.object`, which is not natively supported in GDF.
+            ret = self.astype(np.int8).to_array(fillna=-1)
+            ret = pd.Series(ret, index=index)
+            ret = ret.where(ret >= 0, other=None)
+            ret.replace(to_replace=1, value=True, inplace=True)
+            ret.replace(to_replace=0, value=False, inplace=True)
+            return ret
+        else:
+            return pd.Series(self.to_array(fillna='pandas'), index=index)
 
     def to_arrow(self):
         mask = None
@@ -231,7 +255,12 @@ class NumericalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def all(self):
-        return bool(self.min())
+        return bool(self.min(dtype=np.bool_))
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)
@@ -259,6 +288,15 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
+
+    def round(self, decimals=0):
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask
+
+        rounded = cudautils.apply_round(self.data.mem, decimals)
+        return NumericalColumn(data=Buffer(rounded), mask=mask,
+                               dtype=self.dtype)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -320,12 +358,46 @@ class NumericalColumn(columnops.TypedColumnBase):
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        found = cudautils.find_first(
+            self.data.mem,
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
 
-def numeric_column_binop(lhs, rhs, op, out_dtype):
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        found = cudautils.find_last(
+            self.data.mem,
+            value)
+        if found == -1:
+            raise ValueError('value not found')
+        return found
+
+
+def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
+    if reflect:
+        lhs, rhs = rhs, lhs
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    masked = False
+    if np.isscalar(lhs):
+        masked = rhs.has_null_mask
+        row_count = len(rhs)
+    elif np.isscalar(rhs):
+        masked = lhs.has_null_mask
+        row_count = len(lhs)
+    else:
+        masked = lhs.has_null_mask or rhs.has_null_mask
+        row_count = len(lhs)
+
+    out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
@@ -349,9 +421,6 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
-    # Temporary workaround since libcudf doesn't support int16 ops
-    if dtype == np.dtype('int16'):
-        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 
