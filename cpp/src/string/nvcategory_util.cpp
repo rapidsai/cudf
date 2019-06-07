@@ -99,7 +99,6 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     std::swap(column->data, column_nulls_replaced.data);
     std::swap(column->valid, column_nulls_replaced.valid);
     gdf_column_free(&column_nulls_replaced);
-    CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
   }
 
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
