@@ -55,6 +55,8 @@
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
 - PR #1930 Specialize constructor for `cudf::bol8` to cast argument to `bool`
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
+- PR #1956 Add support for nulls in `query()`
+
 
 ## Bug Fixes
 
