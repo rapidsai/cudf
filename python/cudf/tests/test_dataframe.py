@@ -1704,7 +1704,9 @@ def test_is_monotonic(gdf):
 def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
     gdf = DataFrame.from_pandas(pdf)
-    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+    pdf_masked = pdf[[True, False, True, False]]
+    gdf_masked = gdf[[True, False, True, False]]
+    assert_eq(pdf_masked, gdf_masked)
 
 
 @pytest.mark.parametrize(
@@ -1718,7 +1720,7 @@ def test_dataframe_boolean_mask_with_None():
     ]
 )
 @pytest.mark.parametrize(
-     'mask',
+    'mask',
     [
         [True, True, True, True],
         [False, False, False, False],
@@ -1768,6 +1770,8 @@ def test_dataframe_apply_boolean_mask():
                         'b': [0.1, 0.2, None, 0.3],
                         'c': ['a', None, 'b', 'c']})
     gdf = DataFrame.from_pandas(pdf)
+    assert_eq(pdf[[True, False, True, False]],
+              gdf[[True, False, True, False]])
 
 
 """
