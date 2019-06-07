@@ -103,9 +103,11 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
 
-def column_empty_like(column, dtype, masked, newsize=None):
+def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
     """
+    if dtype is None:
+        dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
     if pd.api.types.is_categorical_dtype(dtype):
@@ -117,7 +119,7 @@ def column_empty_like(column, dtype, masked, newsize=None):
 def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
-    dtype = np.dtype(dtype)
+    dtype = pd.api.types.pandas_dtype(dtype)
 
     if masked:
         mask = cudautils.make_mask(row_count)
