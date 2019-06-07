@@ -596,7 +596,7 @@ struct column_wrapper {
   rmm::device_vector<gdf_valid_type>
       bitmask;  ///< Container for the column's bitmask
 
-  gdf_column the_column;
+  gdf_column the_column{};
 };
 
 }  // namespace test
