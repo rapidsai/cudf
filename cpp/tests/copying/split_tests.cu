@@ -51,7 +51,7 @@ TEST_F(SplitInputTest, InputColumnSizeNull) {
   using ColumnType = std::int32_t;
 
   // Create input column
-  gdf_column input_column;
+  gdf_column input_column{};
   input_column.size = 0;
 
   // Create indices
