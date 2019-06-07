@@ -280,7 +280,13 @@ def test_string_len(ps_gs):
 @pytest.mark.parametrize('others', [
     None,
     ['f', 'g', 'h', 'i', 'j'],
-    pd.Series(['f', 'g', 'h', 'i', 'j'])
+    pd.Series(['f', 'g', 'h', 'i', 'j']),
+    (['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']),
+    [['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']],
+    (pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j'])),
+    [pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j'])] * 20,
+    (pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), ['f','a','b','f','a']),
+    [['f','a','b','f','a'], pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j'])]
 ])
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
 @pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
@@ -293,6 +299,17 @@ def test_string_cat(ps_gs, others, sep, na_rep):
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     if isinstance(others, pd.Series):
         others = Series(others)
+    elif isinstance(others, (list, tuple)):
+        new_others = []
+        for i in others:
+            if isinstance(i, pd.Series):
+                new_others.append(Series(i))
+            else:
+                new_others.append(i)
+        if isinstance(others, tuple):
+            others = tuple(new_others)
+        else:
+            others = new_others
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
