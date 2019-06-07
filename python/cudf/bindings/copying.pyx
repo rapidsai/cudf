@@ -77,6 +77,7 @@ def apply_gather(in_cols, maps, out_cols=None):
         in_size = in_cols[0].data.size
 
     maps = astype(maps, 'int32')
+    # TODO: replace with libcudf pymod when available
     maps = modulo(maps, in_size)
 
     col_count=len(in_cols)
