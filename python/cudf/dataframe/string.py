@@ -109,23 +109,37 @@ class StringMethods(object):
         """
         from cudf.dataframe import Series, Index
         def is_list_like(others):
-            if isinstance(others, (Series, list, tuple, Index)) and not isinstance(others, (str, bytes)):
+            from collections.abc import Sequence
+            if isinstance(others, (Sequence,)) and \
+                    not isinstance(others, (str, bytes)):
                 return True
             else:
                 return False
 
         if isinstance(others, (Series, Index)):
-            # If others is just another Series/Index, great go ahead with concatenation
+            '''
+            If others is just another Series/Index, 
+            great go ahead with concatenation 
+            '''
             assert others.dtype == np.dtype('object')
             others = others.data
         elif is_list_like(others):
-            # If others is a list-like object (in our case lists & tuples)just another Series/Index, great go ahead with concatenation
-            if all(is_list_like(x) for x in others):
-                # Internal elements in others list should also be list-like and not a regular string/byte
+            '''
+            If others is a list-like object (in our case lists & tuples)
+            just another Series/Index, great go ahead with concatenation.
+            '''
+            if all((is_list_like(x) or isinstance(x, (Series, Index))) for x in others):
+                '''
+                Internal elements in others list should also be
+                list-like and not a regular string/byte
+                '''
                 others = list(others)
                 first = others.pop(0)
 
-                # Need atleast one/first element in the list to be of Series type so that we can use .data to make call to .cat 
+                '''
+                Need atleast one/first element in the list to be of Series 
+                type so that we can use .data to make call to .cat 
+                '''
                 if not isinstance(first, (Series, Index)):
                     first = Series(first, dtype='str')
 
@@ -134,7 +148,10 @@ class StringMethods(object):
                     first = first.data
 
                 for frame in others:
-                    # extracting nvstrings pointer if the `frame` is of type Series/Index
+                    '''
+                    extracting nvstrings pointer if the 
+                    `frame` is of type Series/Index
+                    '''
                     if isinstance(frame, (Series, Index)):
                         assert frame.dtype == np.dtype('object')
                         frame = frame.data
@@ -142,7 +159,9 @@ class StringMethods(object):
                     first = first.cat(frame, sep=sep, na_rep=na_rep)
                 others = first
             elif all(not is_list_like(x) for x in others):
-            # Incase internal elements in others list are strings
+                '''
+                Incase internal elements in others list are strings
+                '''
                 others = Series(others)
                 others = others.data
         out = Series(
