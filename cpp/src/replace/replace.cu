@@ -21,8 +21,8 @@
 #include <thrust/execution_policy.h>
 #include <cub/cub.cuh>
 
-#include "copying.hpp"
-#include "replace.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/cudf.h>
 #include <utilities/error_utils.hpp>
 #include <utilities//type_dispatcher.hpp>
