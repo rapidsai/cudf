@@ -171,7 +171,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
       if (pos != std::string::npos) {
         const auto begin = it->value.find('[', pos);
         const auto end = it->value.find(']', begin);
-        if ((end - begin - 3) > 0) {
+        if ((end - begin) > 1) {
           return it->value.substr(begin + 2, end - begin - 3);
         }
       }
@@ -227,7 +227,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
    * @param[in] use_cols_len Length of the column name array
    * @param[in] use_index_col Name of the index column
    *
-   * @return A list of column names & Parquet column indexes
+   * @return List of column names & Parquet column indexes
    **/
   auto select_columns(
       const char **use_cols, int use_cols_len, const char *use_index_col) {
@@ -236,7 +236,9 @@ struct ParquetMetadata : public parquet::FileMetaData {
     if (use_cols) {
       std::vector<std::string> use_names(use_cols, use_cols + use_cols_len);
       if (get_total_rows() > 0) {
-        use_names.push_back(use_index_col);
+        if (std::find(use_names.begin(), use_names.end(), use_index_col) == use_names.end()) {
+          use_names.push_back(use_index_col);
+        }
       }
       for (const auto &use_name : use_names) {
         size_t index = 0;

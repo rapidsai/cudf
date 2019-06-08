@@ -116,14 +116,15 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical):
         assert(list(gdf['b']) == list(df['b']))
 
 
-@pytest.mark.parametrize('index_col', ['b', 'None', None])
-def test_parquet_reader_index_col(tmpdir, index_col):
+@pytest.mark.parametrize('columns', [None, ['b']])
+@pytest.mark.parametrize('index_col', ['b', 'Nameless', None])
+def test_parquet_reader_index_col(tmpdir, index_col, columns):
     df = pd.DataFrame({'a': range(3), 'b': range(3, 6), 'c': range(6, 9)})
 
     if index_col is None:
         # No index column
         df.reset_index(drop=True, inplace=True)
-    elif index_col == 'None':
+    elif index_col == 'Nameless':
         # Index column but no name
         df.set_index('a', inplace=True)
         df.index.name = None
@@ -132,11 +133,11 @@ def test_parquet_reader_index_col(tmpdir, index_col):
         df.set_index(index_col, inplace=True)
 
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
-    df.to_parquet(fname)
+    df.to_parquet(fname, index=(False if index_col is None else True))
     assert(os.path.exists(fname))
 
-    pdf = pd.read_parquet(fname)
-    gdf = cudf.read_parquet(fname, engine='cudf')
+    pdf = pd.read_parquet(fname, columns=columns)
+    gdf = cudf.read_parquet(fname, engine='cudf', columns=columns)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
