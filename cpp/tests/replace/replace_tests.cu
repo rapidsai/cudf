@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <replace.hpp>
+#include <cudf/replace.hpp>
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/column_wrapper.cuh>
 
 #include <cudf/cudf.h>
-#include <cudf.h>
 #include <bitmask/bit_mask.cuh>
 
 #include <thrust/device_vector.h>
