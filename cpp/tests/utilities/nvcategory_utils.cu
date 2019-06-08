@@ -70,7 +70,7 @@ gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strin
 
 	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 
@@ -91,7 +91,7 @@ gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strin
 gdf_column * create_nv_category_column_strings(const char ** string_host_data, gdf_size_type num_rows){
 	NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 

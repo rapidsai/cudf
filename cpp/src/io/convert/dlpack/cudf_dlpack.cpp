@@ -131,7 +131,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   // Note: assumes Fortran (column-major) data layout
   *num_columns = 1;
   if (tensor->dl_tensor.ndim == 2) *num_columns = tensor->dl_tensor.shape[1];
-  *columns = new gdf_column[*num_columns];
+  *columns = new gdf_column[*num_columns]{};
   GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
 
   gdf_size_type byte_width = cudf::size_of(dtype);

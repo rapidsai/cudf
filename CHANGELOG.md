@@ -17,6 +17,7 @@
 - PR #1828 JSON Reader: add suport for bool8 columns
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
+- PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 
 ## Improvements
@@ -45,6 +46,7 @@
 - PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1390 Added some basic utility functions for `gdf_column`s
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
 - PR #1882 Add iloc functionality to MultiIndex dataframes
 - PR #1884 Rolling windows: general enhancements and better coverage for unit tests
 - PR #1886 support GDF_STRING_CATEGORY columns in apply_boolean_mask, drop_nulls and other libcudf functions
@@ -97,6 +99,7 @@
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
+- PR #1914 Zero initialize gdf_column local variables
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -183,7 +186,6 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
-- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries

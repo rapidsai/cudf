@@ -510,7 +510,7 @@ DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
 // validity
 
 gdf_column gdf_validity_column(const gdf_column &col) {
-    gdf_column ret;
+    gdf_column ret{};
     ret.data = col.valid;
     // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
     ret.dtype = GDF_INT8;

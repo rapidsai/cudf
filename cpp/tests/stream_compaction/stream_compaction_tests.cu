@@ -99,7 +99,7 @@ void BooleanMaskTest(column_wrapper<T> const& source,
                      column_wrapper<cudf::bool8> const& mask,
                      column_wrapper<T> const& expected)
 {
-  gdf_column result;
+  gdf_column result{};
   EXPECT_NO_THROW(result = cudf::apply_boolean_mask(source, mask));
 
   EXPECT_TRUE(expected == result);
@@ -284,11 +284,11 @@ struct DropNullsErrorTest : GdfTest {};
 
 TEST_F(DropNullsErrorTest, EmptyInput)
 {
-  gdf_column bad_input;
+  gdf_column bad_input{};
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
 
   // zero size, so expect no error, just empty output column
-  gdf_column output;
+  gdf_column output{};
   CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls(bad_input));
   EXPECT_EQ(output.size, 0);
   EXPECT_EQ(output.null_count, 0);
@@ -310,7 +310,7 @@ template <typename T>
 void DropNulls(column_wrapper<T> const& source,
                column_wrapper<T> const& expected)
 {
-  gdf_column result;
+  gdf_column result{};
   EXPECT_NO_THROW(result = cudf::drop_nulls(source));
   EXPECT_EQ(result.null_count, 0);
   EXPECT_TRUE(expected == result);

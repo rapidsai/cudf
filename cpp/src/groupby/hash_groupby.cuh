@@ -207,7 +207,7 @@ gdf_error gdf_group_by_hash(gdf_size_type ncols,
 template<typename col_type>
 gdf_column create_gdf_column(const size_t size)
 {
-  gdf_column the_column;
+  gdf_column the_column{};
 
   // Deduce the type and set the gdf_dtype accordingly
   gdf_dtype gdf_col_type;
