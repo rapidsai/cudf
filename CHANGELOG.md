@@ -99,6 +99,7 @@
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
+- PR #1965 Parquet Reader: Fix duplicate index column when it's specified in `use_cols`
 
 
 # cudf 0.7.2 (16 May 2019)
