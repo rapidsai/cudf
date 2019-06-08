@@ -17,10 +17,10 @@
 #ifndef GROUPBY_KERNELS_H
 #define GROUPBY_KERNELS_H
 
-#include "hash/concurrent_unordered_map.cuh"
-#include <table/device_table.cuh>
-
 #include "aggregation_operations.hpp"
+
+#include <hash/concurrent_unordered_map.cuh>
+#include <table/device_table.cuh>
 
 /* --------------------------------------------------------------------------*/
 /** 
