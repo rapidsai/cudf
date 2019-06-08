@@ -18,7 +18,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <cudf/functions.h>
 
 #include <rmm/thrust_rmm_allocator.h>

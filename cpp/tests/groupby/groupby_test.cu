@@ -23,7 +23,7 @@
 
 #include <utilities/cudf_utils.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>

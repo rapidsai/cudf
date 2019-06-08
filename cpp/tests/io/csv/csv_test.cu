@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "cudf.h"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <cudf/cudf.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <nvstrings/NVStrings.h>
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <utilities/error_utils.hpp>
 

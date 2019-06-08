@@ -19,7 +19,7 @@
 
 #include <cuda_runtime.h>
 #include <utilities/cudf_utils.h>
-#include <types.hpp>
+#include <cudf/types.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/integer_utils.hpp>

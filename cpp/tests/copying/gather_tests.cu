@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include "copying.hpp"
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "types.hpp"
-#include "utilities/wrapper_types.hpp"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <cudf/types.hpp>
+#include <utilities/wrapper_types.hpp>
 
 #include <random>
 
