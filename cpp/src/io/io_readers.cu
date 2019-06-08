@@ -84,6 +84,21 @@ table CsvReader::read() {
   }
 }
 
+table CsvReader::read_byte_range(size_t offset, size_t size) {
+  if (impl_) {
+    return impl_->read_byte_range(offset, size);
+  } else {
+    return table();
+  }
+}
+table CsvReader::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read) {
+  if (impl_) {
+    return impl_->read_rows(num_skip_header, num_skip_footer, num_read);
+  } else {
+    return table();
+  }
+}
+
 CsvReader::~CsvReader() = default;
 
 } // namespace cudf

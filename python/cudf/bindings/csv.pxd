@@ -82,3 +82,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         CsvReader(const csv_reader_args &args) except +
 
         cudf_table read() except +
+        
+        cudf_table read_byte_range(size_t offset, size_t size) except +
+
+        cudf_table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read) except +

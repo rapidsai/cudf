@@ -141,13 +141,17 @@ enum gdf_csv_quote_style{
 struct csv_reader_args{
   gdf_csv_input_form input_data_form = HOST_BUFFER; ///< Type of source of CSV data
   std::string        filepath_or_buffer;            ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  std::string        compression = "infer";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
   char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
   char          delimiter = ',';            ///< Define the field separator; Default is ','.
+  char          decimal = '.';              ///< The decimal point character; default is '.'. Should not match the delimiter.
+  char          thousands = '\0';           ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
+  char          comment = '\0';             ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
+  bool          dayfirst = false;           ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
   bool          delim_whitespace = false;   ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
   bool          skipinitialspace = false;   ///< Skip white spaces after the delimiter; default is false.
-
-  gdf_size_type nrows = -1;                 ///< Number of rows to read; default value, -1, indicates all rows.
+  bool          skip_blank_lines = true;    ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
   gdf_size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
 
   std::vector<std::string> names;           ///< Ordered List of column names; Empty by default.
@@ -156,14 +160,8 @@ struct csv_reader_args{
   std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
   std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
 
-  gdf_size_type skiprows = 0;               ///< Number of rows at the start of the files to skip; default is zero.
-  gdf_size_type skipfooter = 0;             ///< Number of rows at the bottom of the file to skip; default is zero.
-
-  bool skip_blank_lines = true;             ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
-
   std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
   std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
-
   std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
                                             'NaN', 'n/a', 'nan', 'null'. */
@@ -173,24 +171,10 @@ struct csv_reader_args{
   std::string   prefix;                     ///< If there is no header or names, prepend this to the column ID as the name; Default value is an empty string.
   bool          mangle_dupe_cols = true;    ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
 
-  bool          dayfirst = false;           ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
-
-  std::string   compression = "infer";      ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
-  char          thousands = '\0';           ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
-
-  char          decimal = '.';              ///< The decimal point character; default is '.'. Should not match the delimiter.
-
   char          quotechar = '\"';           ///< Define the character used to denote start and end of a quoted item; default is '\"'.
   gdf_csv_quote_style quoting = QUOTE_MINIMAL; ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
   bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
-
-  char          comment = '\0';             ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
-
-
-  size_t        byte_range_offset = 0;      ///< Offset of the byte range to read; default is zero.
-  size_t        byte_range_size = 0;        /**< Size of the byte range to read. Set to zero to read to the end of the file (default behavior).
-                                            Reads the row that starts before or at the end of the range, even if it ends after the end of the range.*/
   csv_reader_args() = default;
 };
 
@@ -229,6 +213,33 @@ public:
    * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
   table read();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the specified byte range of the input CSV file.
+   *
+   * Reads the row that starts before or at the end of the range, even if it ends
+   * after the end of the range.
+   *
+   * @param[in] offset Offset of the byte range to read.
+   * @param[in] size Size of the byte range to read. Set to zero to read to
+   * the end of the file.
+   *
+   * @return cudf::table object that contains the array of gdf_columns
+   *---------------------------------------------------------------------------**/
+  table read_byte_range(size_t offset, size_t size);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the specified rows of the input CSV file.
+   * 
+   * Set num_skip_footer to zero when using to_read parameter.
+   *
+   * @param[in] num_skip_header Number of rows at the start of the files to skip.
+   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
+   * @param[in] to_read Number of rows to read. Value of -1 indicates all rows.
+   * 
+   * @return cudf::table object that contains the array of gdf_columns
+   *---------------------------------------------------------------------------**/
+  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type to_read = -1);
 
   ~CsvReader();
 };

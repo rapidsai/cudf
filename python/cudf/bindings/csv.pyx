@@ -163,20 +163,11 @@ cpdef cpp_read_csv(
     args.skipinitialspace = skipinitialspace
     args.dayfirst = dayfirst
     args.header = header_infer
-    args.skiprows = skiprows
-    args.skipfooter = skipfooter
     args.mangle_dupe_cols = mangle_dupe_cols
     if compression is not None:
         args.compression = compression.encode()
     args.decimal = decimal.encode()[0]
     args.thousands = (thousands.encode() if thousands else b'\0')[0]
-    args.nrows = nrows if nrows is not None else -1
-    if byte_range is not None:
-        args.byte_range_offset = byte_range[0]
-        args.byte_range_size = byte_range[1]
-    else:
-        args.byte_range_offset = 0
-        args.byte_range_size = 0
     args.skip_blank_lines = skip_blank_lines
     args.comment = (comment.encode() if comment else b'\0')[0]
     args.keep_default_na = keep_default_na
@@ -189,7 +180,13 @@ cpdef cpp_read_csv(
         reader = CsvReader(args)
     
     cdef cudf_table table
-    table = reader.read()
+    if byte_range is not None:
+        table = reader.read_byte_range(byte_range[0], byte_range[1])
+    elif skipfooter != 0 or skiprows != 0 or nrows is not None:
+        table = reader.read_rows(skiprows, skipfooter,
+                                 nrows if nrows is not None else -1)
+    else:
+        table = reader.read()
 
     # Extract parsed columns
     outcols = []

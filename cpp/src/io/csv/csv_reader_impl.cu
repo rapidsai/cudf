@@ -165,7 +165,7 @@ void CsvReader::Impl::setColumnNamesFromCsv() {
 				 (!quotation && first_row[pos] == opts.terminator) ||
 				 (!quotation && first_row[pos] == opts.delimiter)) {
 			// This is the header, add the column name
-			if (header_row >= 0) {
+			if (args_.header >= 0) {
 				// Include the current character, in case the line is not terminated
 				int col_name_len = pos - prev + 1;
 				// Exclude the delimiter/terminator is present
@@ -317,11 +317,6 @@ table CsvReader::Impl::read()
 	num_actual_cols = args_.names.size();
 	num_active_cols = args_.names.size();
 
-	header_row = args_.header;
-	skiprows = args_.skiprows;
-	skipfooter = args_.skipfooter;
-	nrows = args_.nrows;
-
 	if (args_.delim_whitespace) {
 		opts.delimiter = ' ';
 		opts.multi_delimiter = true;
@@ -351,11 +346,7 @@ table CsvReader::Impl::read()
       inferCompressionType(args_.compression, args_.input_data_form, args_.filepath_or_buffer,
                            {{"csv", "none"}, {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
-        byte_range_offset = args_.byte_range_offset;
-	byte_range_size = args_.byte_range_size;
 	if (byte_range_offset > 0 || byte_range_size > 0) {
-		CUDF_EXPECTS(nrows < 0 && skiprows == 0 || skipfooter == 0,
-			"Cannot manually limit rows to be read when using the byte range parameter");
 		CUDF_EXPECTS(compression_type == "none", 
 			"Cannot read compressed input when using the byte range parameter");
 	}
@@ -403,7 +394,7 @@ table CsvReader::Impl::read()
 		if (fstat(fd, &st)) { close(fd); CUDF_FAIL("cannot stat file"); }
 	
 		const auto file_size = st.st_size;
-		if (args_.byte_range_offset > (size_t)file_size) {
+		if (byte_range_offset > (size_t)file_size) {
 			close(fd);
 			CUDF_FAIL("The byte_range offset is larger than the file size");
 		}
@@ -412,13 +403,13 @@ table CsvReader::Impl::read()
 		if (file_size != 0) {
 			// Have to align map offset to page size
 			const auto page_size = sysconf(_SC_PAGESIZE);
-			map_offset = (args_.byte_range_offset/page_size)*page_size;
+			map_offset = (byte_range_offset/page_size)*page_size;
 
 			// Set to rest-of-the-file size, will reduce based on the byte range size
 			num_bytes = map_size = file_size - map_offset;
 
 			// Include the page padding in the mapped size
-			const size_t page_padding = args_.byte_range_offset - map_offset;
+			const size_t page_padding = byte_range_offset - map_offset;
 			const size_t padded_byte_range_size = byte_range_size + page_padding;
 
 			if (byte_range_size != 0 && padded_byte_range_size < map_size) {
@@ -453,7 +444,7 @@ table CsvReader::Impl::read()
 	if(num_bytes != 0) {
 		if (compression_type == "none") {
 			// Do not use the owner vector here to avoid copying the whole file to the heap
-			h_uncomp_data = (const char*)map_data + (args_.byte_range_offset - map_offset);
+			h_uncomp_data = (const char*)map_data + (byte_range_offset - map_offset);
 			h_uncomp_size = num_bytes;
 		}
 		else {
@@ -758,12 +749,12 @@ void CsvReader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_unc
 
   // Exclude the rows before the header row (inclusive)
   // But copy the header data for parsing the column names later (if necessary)
-  if (header_row >= 0) {
+  if (args_.header >= 0) {
     header.assign(
-        h_uncomp_data + h_rec_starts[header_row],
-        h_uncomp_data + h_rec_starts[header_row + 1]);
+        h_uncomp_data + h_rec_starts[args_.header],
+        h_uncomp_data + h_rec_starts[args_.header + 1]);
     h_rec_starts.erase(h_rec_starts.begin(),
-                       h_rec_starts.begin() + header_row + 1);
+                       h_rec_starts.begin() + args_.header + 1);
     num_records = h_rec_starts.size();
   }
 
@@ -1182,5 +1173,20 @@ void dataTypeDetection(char *raw_csv,
 }
 
 CsvReader::Impl::Impl(csv_reader_args const &args) : args_(args) {}
+
+table CsvReader::Impl::read_byte_range(size_t offset, size_t size) {
+  byte_range_offset = offset;
+  byte_range_size = size;
+  return read();
+}
+
+table CsvReader::Impl::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read) {
+  CUDF_EXPECTS(num_read == -1 || num_skip_footer == 0, "cannot use both num_read and num_skip_footer parameters");
+
+  skiprows = num_skip_header;
+  nrows = num_read;
+  skipfooter = num_skip_footer;
+  return read();
+}
 
 } // namespace cudf
