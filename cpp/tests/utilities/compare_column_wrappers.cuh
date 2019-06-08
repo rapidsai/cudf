@@ -37,9 +37,9 @@
 namespace detail {
 
 template <typename T>
-std::string to_string(T val) 
+std::string to_string(T val)
 {
-    return std::to_string(cudf::detail::unwrap(val)); 
+    return std::to_string(cudf::detail::unwrap(val));
 }
 
 template <> std::string to_string<cudf::bool8>(cudf::bool8 val)
@@ -81,8 +81,8 @@ void expect_column_values_are_equal(
     auto max_name_length = std::max(lhs_name.length(), rhs_name.length());
 
     for(gdf_size_type i = 0; i < common_size; i++) {
-        auto lhs_element_is_valid = lhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(lhs_validity_on_host, i);
-        auto rhs_element_is_valid = rhs_non_nullable or gdf::util::bit_is_set<gdf_valid_type, gdf_size_type>(rhs_validity_on_host, i);
+        auto lhs_element_is_valid = lhs_non_nullable or cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(lhs_validity_on_host, i);
+        auto rhs_element_is_valid = rhs_non_nullable or cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(rhs_validity_on_host, i);
         auto elements_are_equal =
             (treat_distinct_nulls_as_equal and not lhs_element_is_valid and not rhs_element_is_valid) or
             (lhs_element_is_valid == rhs_element_is_valid and lhs_data_on_host[i] == rhs_data_on_host[i]);
@@ -93,6 +93,18 @@ void expect_column_values_are_equal(
     }
 }
 
+// Note: This has quite a bit of code repretition, plus it repeats all of `cudf::util::have_same_type` essentially.
+bool expect_columns_have_same_type(const gdf_column& validated_column_1, const gdf_column& validated_column_2, bool ignore_extra_type_info = false) noexcept
+{
+    EXPECT_EQ(validated_column_1.dtype, validated_column_2.dtype);
+    if(validated_column_1.dtype != validated_column_2.dtype) { return false; }
+    EXPECT_EQ(cudf::is_nullable(validated_column_1), cudf::is_nullable(validated_column_2));
+    if (cudf::is_nullable(validated_column_1) != cudf::is_nullable(validated_column_2)) { return false; }
+    if (ignore_extra_type_info) { return true; }
+    auto common_dtype = validated_column_1.dtype;
+    EXPECT_TRUE(cudf::detail::extra_type_info_is_compatible(common_dtype, validated_column_1.dtype_info, validated_column_2.dtype_info));
+    return cudf::detail::extra_type_info_is_compatible(common_dtype, validated_column_1.dtype_info, validated_column_2.dtype_info);
+}
 
 template<typename E>
 void expect_columns_are_equal(
@@ -107,7 +119,7 @@ void expect_columns_are_equal(
     const gdf_column& rhs_gdf_column = *(rhs.get());
     cudf::validate(lhs_gdf_column);
     cudf::validate(rhs_gdf_column);
-    EXPECT_TRUE(cudf::have_same_type(lhs_gdf_column, rhs_gdf_column));
+    expect_columns_have_same_type(lhs_gdf_column, rhs_gdf_column);
     if (not cudf::have_same_type(lhs_gdf_column, rhs_gdf_column)) { return; }
     EXPECT_EQ(lhs_gdf_column.size, rhs_gdf_column.size);
     EXPECT_EQ(cudf::is_nullable(lhs), cudf::is_nullable(rhs));
