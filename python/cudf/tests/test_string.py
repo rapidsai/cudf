@@ -280,6 +280,7 @@ def test_string_len(ps_gs):
 @pytest.mark.parametrize('others', [
     None,
     ['f', 'g', 'h', 'i', 'j'],
+    ('f', 'g', 'h', 'i', 'j'),
     pd.Series(['f', 'g', 'h', 'i', 'j']),
     (['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']),
     [['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']],
