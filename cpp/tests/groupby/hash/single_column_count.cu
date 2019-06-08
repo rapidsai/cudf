@@ -91,7 +91,7 @@ TYPED_TEST(SingleColumnCount, OneGroupAllNullValues) {
       column_wrapper<ResultValue>({0}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnCount, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnCount, OneGroupEvenNullKeys) {
   constexpr int size{10};
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
@@ -109,7 +109,7 @@ TYPED_TEST(SingleColumnCount, OneGroupOddNullKeys) {
       column_wrapper<ResultValue>({size / 2}));
 }
 
-TYPED_TEST(SingleColumnCount, OneGroupOddNullValues) {
+TYPED_TEST(SingleColumnCount, OneGroupEvenNullValues) {
   constexpr int size{10};
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
@@ -143,7 +143,7 @@ TYPED_TEST(SingleColumnCount, FourGroupsNoNulls) {
       column_wrapper<ResultValue>{R(2), R(2), R(2), R(2)});
 }
 
-TYPED_TEST(SingleColumnCount, FourGroupsOddNullKeys) {
+TYPED_TEST(SingleColumnCount, FourGroupsEvenNullKeys) {
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -161,7 +161,7 @@ TYPED_TEST(SingleColumnCount, FourGroupsOddNullKeys) {
       column_wrapper<ResultValue>{R(1), R(1), R(1), R(1)});
 }
 
-TYPED_TEST(SingleColumnCount, FourGroupsOddNullValues) {
+TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValues) {
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -179,7 +179,7 @@ TYPED_TEST(SingleColumnCount, FourGroupsOddNullValues) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesKeys) {
+TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValuesKeys) {
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -200,7 +200,7 @@ TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesKeys) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnCount, FourGroupsOddNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValuesOddNullKeys) {
   using Key = typename SingleColumnCount<TypeParam>::KeyType;
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;

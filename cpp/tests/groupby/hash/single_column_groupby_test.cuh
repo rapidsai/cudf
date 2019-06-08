@@ -39,9 +39,9 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   using namespace cudf::test;
   using namespace cudf::groupby::hash;
 
+
   static_assert(std::is_same<ResultValue, expected_result_t<Value, op>>::value,
                 "Incorrect type for expected_values.");
-
   ASSERT_EQ(keys.size(), values.size())
       << "Number of keys must be equal to number of values.";
   ASSERT_EQ(expected_keys.size(), expected_values.size())
