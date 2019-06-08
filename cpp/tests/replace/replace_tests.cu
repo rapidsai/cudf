@@ -177,10 +177,13 @@ void test_replace(std::vector<T> const &input_column,
           if(element == values_to_replace_column[i]) {
           toBeReplaced = true;
           isReplaced[k] = toBeReplaced;
-          if(replacement_has_nulls && !bit_mask::is_valid(typed_new_valid, i)){
+          /* workaround for the same issue as above TODO: Fix me */
+          if(replacement_has_nulls){
+            if(!bit_mask::is_valid(typed_new_valid, i)){
               if(print)std::cout << "clearing bit at: "<<k<<"\n";
               bit_mask::clear_bit_unsafe(typed_expected_valid, (int)k);
             }
+           }
           }
          }
         }
