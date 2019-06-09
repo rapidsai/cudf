@@ -252,13 +252,14 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_readers.cu
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
-            src/io/json/json_reader.cu
+            src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
@@ -343,9 +344,6 @@ target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCa
 
 install(TARGETS cudf
         DESTINATION lib)
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
-        DESTINATION include)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)

@@ -18,12 +18,12 @@
 #include <bitmask/bitmask_ops.hpp>
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "types.hpp"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <cudf/types.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>

@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 
-#include "copying.hpp"
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "tests/utilities/compare_column_wrappers.cuh"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "types.hpp"
-#include "utilities/wrapper_types.hpp"
-
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
+#include <cudf/types.hpp>
+#include <utilities/wrapper_types.hpp>
 
 #include <random>
 
@@ -60,8 +58,8 @@ TYPED_TEST(GatherTest, DestMissingValid){
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source{source_size, true};
-  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+  cudf::test::column_wrapper<TypeParam> source(source_size, true);
+  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
 
   gdf_column * raw_source = source.get();
   gdf_column * raw_destination = destination.get();
@@ -79,9 +77,9 @@ TYPED_TEST(GatherTest, NumColumnsMismatch){
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source0{source_size, true};
-  cudf::test::column_wrapper<TypeParam> source1{source_size, true};
-  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+  cudf::test::column_wrapper<TypeParam> source0(source_size, true);
+  cudf::test::column_wrapper<TypeParam> source1(source_size, true);
+  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
 
   std::vector<gdf_column*> source_cols{source0.get(), source1.get()};
 

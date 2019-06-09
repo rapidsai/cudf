@@ -26,7 +26,7 @@
 #include <utilities/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gtest/gtest.h>
 

@@ -19,7 +19,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/random.h>
@@ -368,8 +368,8 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
-		auto outputCol = cudf::test::column_wrapper<TTO>{colSize};				\
+		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
+		auto outputCol = cudf::test::column_wrapper<TTO>(colSize);				\
 																				\
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
@@ -426,9 +426,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
-		auto outputCol = cudf::test::column_wrapper<TTO>{colSize};				\
-		auto originalOutputCol = cudf::test::column_wrapper<TFROM>{colSize};	\
+		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
+		auto outputCol = cudf::test::column_wrapper<TTO>(colSize);				\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(colSize);	\
 																				\
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
@@ -453,9 +453,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<int64_t, TFROM>(inputData, colSize);			\
 																				\
-		auto inputCol = cudf::test::column_wrapper<TFROM>{inputData};			\
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize};	\
-		auto originalOutputCol = cudf::test::column_wrapper<TFROM>{colSize};	\
+		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize);	\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(colSize);	\
 																				\
 		outputCol.get()->dtype = GDF_TIMESTAMP;									\
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;					\
@@ -513,8 +513,8 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<double, float>(inputData, colSize);
 
-		auto inputCol = cudf::test::column_wrapper<float>{inputData}; 
-		auto outputCol = cudf::test::column_wrapper<double>{colSize};
+		auto inputCol = cudf::test::column_wrapper<float>(inputData); 
+		auto outputCol = cudf::test::column_wrapper<double>(colSize);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
@@ -526,8 +526,8 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<float, float>(inputData, colSize);
 
-		auto inputCol = cudf::test::column_wrapper<float>{inputData, generateValidRandom{}}; 
-		auto outputCol = cudf::test::column_wrapper<float>{colSize, true};
+		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
+		auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
@@ -542,8 +542,8 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<float, float>(inputData, colSize);
 
-		auto inputCol = cudf::test::column_wrapper<float>{inputData, generateValidRandom{}}; 
-		auto outputCol = cudf::test::column_wrapper<float>{colSize, true};
+		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
+		auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
@@ -582,9 +582,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>{inputData,  allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>{colSize,    true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>{outputData, allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize,    true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, allValidFunctor);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -664,9 +664,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date64>{inputData,  allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>{colSize,    true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date32>{outputData, allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(inputData,  allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>(colSize,    true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date32>(outputData, allValidFunctor);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -704,9 +704,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 		};
 
 		auto altValidFunctor = [](gdf_size_type row){return (row % 2 == 0);}; //01010101
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>{inputData,  altValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>{colSize,    true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>{outputData, altValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  altValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize,    true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, altValidFunctor);
 
 		gdf_error gdfError = gdf_cast(inputCol, outputCol);
 
@@ -744,9 +744,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
@@ -784,9 +784,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date32>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
@@ -823,9 +823,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
@@ -863,9 +863,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date32>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
@@ -902,9 +902,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
@@ -942,9 +942,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date32>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
@@ -981,9 +981,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
@@ -1021,9 +1021,9 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date32>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
@@ -1075,15 +1075,15 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date64>{ colSize,
+		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(colSize,
 			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
-		}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize, true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{ colSize,
+	); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize, true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(colSize,
 			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
-		};
+	);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
@@ -1133,15 +1133,15 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{ colSize,
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(colSize,
 			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
-		}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>{colSize, true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>{ colSize,
+	); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize, true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>(colSize,
 			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
-		};
+	);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
@@ -1178,9 +1178,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
@@ -1218,9 +1218,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
@@ -1257,9 +1257,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
@@ -1297,9 +1297,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
@@ -1336,9 +1336,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   {inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
@@ -1376,9 +1376,9 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   {colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::date64>   {outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
@@ -1466,9 +1466,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
@@ -1553,9 +1553,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
@@ -1640,9 +1640,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
@@ -1727,9 +1727,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
@@ -1815,9 +1815,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
@@ -1902,9 +1902,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
@@ -1989,9 +1989,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
@@ -2076,9 +2076,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
@@ -2163,9 +2163,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
@@ -2250,9 +2250,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
@@ -2337,9 +2337,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
@@ -2424,9 +2424,9 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		};
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
-		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>{inputData, allValidFunctor}; 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>{colSize,   true};
-		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>{outputData,allValidFunctor};
+		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
+		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
