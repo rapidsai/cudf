@@ -115,6 +115,12 @@ def test_append_index(a, b):
     assert len(expected) == len(actual)
     assert list(expected.index.values) == list(actual.index.values)
 
+    expected = df.a.append(df.b, ignore_index=True)
+    actual = gdf.a.append(gdf.b, ignore_index=True)
+
+    assert len(expected) == len(actual)
+    assert list(expected.index.values) == list(actual.index.values)
+
 
 def test_series_append():
     a1 = np.arange(10, dtype=np.float64)
