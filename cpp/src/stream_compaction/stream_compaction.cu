@@ -219,7 +219,7 @@ cudf::table drop_duplicates(const cudf::table& input_table,
       0 == input_table.num_columns() ||
       0 == key_columns.num_columns() 
       ) {
-    return cudf::table();
+    return cudf::empty_like(input_table);
   }
   rmm::device_vector<gdf_index_type> unique_indices = detail::get_unique_ordered_indices(key_columns, keep);
   // Allocate output columns
