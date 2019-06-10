@@ -57,6 +57,8 @@
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
+- PR #1956 Add support for nulls in `query()`
+
 
 ## Bug Fixes
 
