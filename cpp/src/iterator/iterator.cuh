@@ -61,7 +61,7 @@
 #ifndef CUDF_ITERATOR_CUH
 #define CUDF_ITERATOR_CUH
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/error_utils.hpp>
