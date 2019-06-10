@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
 
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>

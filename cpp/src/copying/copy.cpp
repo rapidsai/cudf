@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <copying.hpp>
+#include <cudf/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <cudf.h>
-#include <table.hpp>
+#include <cudf/cudf.h>
+#include <cudf/table.hpp>
 #include <nvstrings/NVCategory.h>
 
 #include <cuda_runtime.h>

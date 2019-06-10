@@ -294,7 +294,9 @@ class DataFrame(object):
         self._drop_column(name)
 
     def __sizeof__(self):
-        return sum(col.__sizeof__() for col in self._cols.values())
+        columns = sum(col._column.__sizeof__() for col in self._cols.values())
+        index = self._index.__sizeof__()
+        return columns + index
 
     def __len__(self):
         """

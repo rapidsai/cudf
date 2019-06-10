@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 #include <utilities/column_utils.hpp>
-#include "utilities/error_utils.hpp"
+#include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
 #include <rmm/rmm.h>

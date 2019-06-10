@@ -17,12 +17,12 @@
 #include "parquet.h"
 #include "parquet_gpu.h"
 
-#include "cudf.h"
-#include "io/comp/gpuinflate.h"
-#include "io/utilities/datasource.hpp"
-#include "io/utilities/wrapper_utils.hpp"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <io/comp/gpuinflate.h>
+#include <io/utilities/datasource.hpp>
+#include <io/utilities/wrapper_utils.hpp>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
