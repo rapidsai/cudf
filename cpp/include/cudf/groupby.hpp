@@ -17,8 +17,8 @@
 #ifndef GROUPBY_HPP
 #define GROUPBY_HPP
 
-#include <cudf.h>
-#include <types.hpp>
+#include "cudf.h"
+#include "types.hpp"
 #include <tuple>
 #include <rmm/thrust_rmm_allocator.h>
 

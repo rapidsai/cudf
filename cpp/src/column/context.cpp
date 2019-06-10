@@ -1,4 +1,4 @@
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
                            int flag_distinct, int flag_sort_result, int flag_sort_inplace, 

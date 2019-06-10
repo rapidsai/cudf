@@ -84,6 +84,44 @@ def test_series_basic():
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
 
+@pytest.mark.parametrize(
+    'a',
+    [
+        [1, 2, 3],
+        [1, 10, 30]
+    ]
+)
+@pytest.mark.parametrize(
+    'b',
+    [
+        [4, 5, 6],
+        [-11, -100, 30]
+    ]
+)
+def test_append_index(a, b):
+
+    df = pd.DataFrame()
+    df['a'] = a
+    df['b'] = b
+
+    gdf = DataFrame()
+    gdf['a'] = a
+    gdf['b'] = b
+
+    # Check the default index after appending two columns(Series)
+    expected = df.a.append(df.b)
+    actual = gdf.a.append(gdf.b)
+
+    assert len(expected) == len(actual)
+    assert list(expected.index.values) == list(actual.index.values)
+
+    expected = df.a.append(df.b, ignore_index=True)
+    actual = gdf.a.append(gdf.b, ignore_index=True)
+
+    assert len(expected) == len(actual)
+    assert list(expected.index.values) == list(actual.index.values)
+
+
 def test_series_append():
     a1 = np.arange(10, dtype=np.float64)
     series = Series(a1)
@@ -1701,13 +1739,77 @@ def test_is_monotonic(gdf):
     assert not gdf.index.is_monotonic_decreasing
 
 
-@pytest.mark.xfail(reason="null is not supported in gpu yet")
 def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
     gdf = DataFrame.from_pandas(pdf)
     pdf_masked = pdf[[True, False, True, False]]
     gdf_masked = gdf[[True, False, True, False]]
-    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+    assert_eq(pdf_masked, gdf_masked)
+
+
+@pytest.mark.parametrize(
+    'data',
+    [
+        [1, 2, 3, 4],
+        [1.0, 2.0, 3.0, 4.0],
+        ['one', 'two', 'three', 'four'],
+        pd.Series(['a', 'b', 'c', 'd'], dtype='category'),
+        pd.Series(pd.date_range('2010-01-01', '2010-01-04'))
+    ]
+)
+@pytest.mark.parametrize(
+    'mask',
+    [
+        [True, True, True, True],
+        [False, False, False, False],
+        [True, False, True, False],
+        [True, False, False, True],
+        np.array([True, False, True, False]),
+        pd.Series([True, False, True, False]),
+        gd.Series([True, False, True, False]),
+    ]
+)
+@pytest.mark.parametrize(
+    'nulls',
+    ['one', 'some', 'all', 'none']
+)
+def test_series_apply_boolean_mask(data, mask, nulls):
+    psr = pd.Series(data)
+
+    if len(data) > 0:
+        if nulls == 'one':
+            p = np.random.randint(0, 4)
+            psr[p] = None
+        elif nulls == 'some':
+            p1, p2 = np.random.randint(0, 4, (2,))
+            psr[p1] = None
+            psr[p2] = None
+        elif nulls == 'all':
+            psr[:] = None
+
+    gsr = gd.from_pandas(psr)
+
+    # TODO: from_pandas(psr) has dtype "float64"
+    # when psr has dtype "object" and is all None
+    if psr.dtype == "object" and nulls == 'all':
+        gsr = gd.Series([None, None, None, None], dtype="object")
+
+    if isinstance(mask, gd.Series):
+        expect = psr[mask.to_pandas()]
+    else:
+        expect = psr[mask]
+    got = gsr[mask]
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_apply_boolean_mask():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],
+                        'b': [0.1, 0.2, None, 0.3],
+                        'c': ['a', None, 'b', 'c']})
+    gdf = DataFrame.from_pandas(pdf)
+    assert_eq(pdf[[True, False, True, False]],
+              gdf[[True, False, True, False]])
 
 
 """
@@ -1728,34 +1830,6 @@ def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
     pdf_masked = pdf[mask]
     gdf_masked = gdf[mask]
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
-
-
-"""
-This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
-Pandas does not support cudf Series.  When masking with a Series, the length
-is not required to match.
-"""
-
-
-def test_dataframe_boolean_mask_Series(gdf):
-    mask = Series([True, False, True, False])
-    mask2 = Series([True, True, True, True])
-    mask3 = Series([True, True, True, True, True, True, True, True])
-    mask4 = Series([True])  # More likely to trigger an undefined memory read
-    mask5 = Series([False])
-    mask6 = Series([False, False, False, False])
-    gdf_masked = gdf[mask]
-    gdf_masked2 = gdf[mask2]
-    gdf_masked3 = gdf[mask3]
-    gdf_masked4 = gdf[mask4]
-    gdf_masked5 = gdf[mask5]
-    gdf_masked6 = gdf[mask6]
-    assert gdf_masked.shape[0] == 2
-    assert gdf_masked2.shape[0] == 4
-    assert gdf_masked3.shape[0] == 8
-    assert gdf_masked4.shape[0] == 1
-    assert gdf_masked5.shape[0] == 0
-    assert gdf_masked6.shape[0] == 0
 
 
 def test_iter(pdf, gdf):
@@ -2518,6 +2592,7 @@ def test_round(decimal):
                          [
                              [0, 1, 2, 3],
                              [-2, -1, 2, 3, 5],
+                             [-2, -1, 0, 3, 5],
                              [True, False, False],
                              [True],
                              [False],
@@ -2533,6 +2608,13 @@ def test_round(decimal):
                              [[1, True],
                               [2, False],
                               [3, False]],
+                             pytest.param([
+                                 ['a', True],
+                                 ['b', False],
+                                 ['c', False]
+                             ], marks=[pytest.mark.xfail(
+                                 reason='NotImplementedError: all does not '
+                                 'support columns of object dtype.')])
                          ])
 def test_all(data):
     if np.array(data).ndim <= 1:
@@ -2557,6 +2639,7 @@ def test_all(data):
                          [
                              [0, 1, 2, 3],
                              [-2, -1, 2, 3, 5],
+                             [-2, -1, 0, 3, 5],
                              [True, False, False],
                              [True],
                              [False],
@@ -2572,6 +2655,13 @@ def test_all(data):
                              [[1, True],
                               [2, False],
                               [3, False]],
+                             pytest.param([
+                                 ['a', True],
+                                 ['b', False],
+                                 ['c', False]
+                             ], marks=[pytest.mark.xfail(
+                                 reason='NotImplementedError: any does not '
+                                 'support columns of object dtype.')])
                          ])
 def test_any(data):
     if np.array(data).ndim <= 1:
@@ -2590,3 +2680,16 @@ def test_any(data):
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('indexed', [False, True])
+def test_dataframe_sizeof(indexed):
+    rows = int(1e6)
+    index = list(i for i in range(rows)) if indexed else None
+
+    gdf = gd.DataFrame([('A', [8] * rows), ('B', [32] * rows)], index=index)
+
+    for c in gdf._cols.values():
+        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
+    cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
+    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)

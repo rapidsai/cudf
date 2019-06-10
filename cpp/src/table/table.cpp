@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cassert>
-#include <copying.hpp>
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
+#include <utilities/column_utils.hpp>
 
 #include <algorithm>
 
@@ -50,7 +51,7 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
                                                        gdf_dtype dtype) {
         CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
         CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
-        col = new gdf_column;
+        col = new gdf_column{};
         col->size = num_rows;
         col->dtype = dtype;
         col->null_count = 0;
@@ -62,7 +63,7 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         extra_info.time_unit = TIME_UNIT_NONE;
         col->dtype_info = extra_info;
 
-        RMM_ALLOC(&col->data, gdf_dtype_size(dtype) * num_rows, stream);
+        RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);
         if (allocate_bitmasks) {
           int fill_value = (all_valid) ? 0xff : 0;
 

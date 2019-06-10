@@ -17,8 +17,11 @@
 - PR #1828 JSON Reader: add suport for bool8 columns
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
+- PR #1921 Add additional formats for typecasting to/from strings
+- PR #1807 Add Series.dropna()
 
 ## Improvements
+
 - PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
@@ -36,10 +39,26 @@
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
 - PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
+- PR #1890 Add utils.get_dummies- a pandas-like wrapper around one_hot-encoding
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1390 Added some basic utility functions for `gdf_column`s
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1882 Add iloc functionality to MultiIndex dataframes
+- PR #1884 Rolling windows: general enhancements and better coverage for unit tests
+- PR #1886 support GDF_STRING_CATEGORY columns in apply_boolean_mask, drop_nulls and other libcudf functions
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
+- PR #1859 Convert read_json into a C++ API
+- PR #1919 Rename libcudf namespace gdf to namespace cudf
+- PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
+- PR #1952 consolidate libcudf public API headers in include/cudf
+- PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
+- PR #1956 Add support for nulls in `query()`
+
 
 ## Bug Fixes
 
@@ -73,6 +92,18 @@
 - PR #1849 Allow DataFrame support methods to pass arguments to the methods
 - PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
 - PR #1864 Fixing cudf reduction for POWER platform
+- PR #1869 Parquet reader: fix Dask timestamps not matching with Pandas (convert to milliseconds)
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1875 CSV reader: take NaN values into account in dtype detection
+- PR #1873 Add column dtype checking for the all/any methods
+- PR #1902 Bug with string iteration in _apply_basic_agg
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1909 Support of `to_pandas()` of boolean series with null values
+- PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
+- PR #1914 Zero initialize gdf_column local variables
+- PR #1966 Ignore index fix in series append
+- PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -159,7 +190,6 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
-- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries
