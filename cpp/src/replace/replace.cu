@@ -20,7 +20,7 @@
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
 
-#include <replace.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <copying.hpp>

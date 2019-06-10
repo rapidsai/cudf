@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include <replace.hpp>
+#include <cudf/replace.hpp>
 
 #include <utilities/error_utils.hpp>
 

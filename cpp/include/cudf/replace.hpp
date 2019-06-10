@@ -17,7 +17,6 @@
 #ifndef REPLACE_HPP
 #define REPLACE_HPP
 
-#include <cudf/cudf.h>
 #include <types.hpp>
 
 // Forward declaration
