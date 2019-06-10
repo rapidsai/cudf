@@ -101,6 +101,7 @@
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
 - PR #1966 Ignore index fix in series append
+- PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 
 
 # cudf 0.7.2 (16 May 2019)
