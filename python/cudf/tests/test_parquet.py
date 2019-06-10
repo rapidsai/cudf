@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 from string import ascii_letters
+from distutils.version import LooseVersion
 
 
 @pytest.fixture(scope='module')
@@ -133,7 +134,13 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
         df.set_index(index_col, inplace=True)
 
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
-    df.to_parquet(fname, index=(False if index_col is None else True))
+
+    # PANDAS' PyArrow backend always writes the index unless disabled via a
+    # recently-added parameter; unfortunately cannot use kwargs to disable
+    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
+        df.to_parquet(fname)
+    else:
+        df.to_parquet(fname, index=(False if index_col is None else True))
     assert(os.path.exists(fname))
 
     pdf = pd.read_parquet(fname, columns=columns)
