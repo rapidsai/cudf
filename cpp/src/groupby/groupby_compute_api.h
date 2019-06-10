@@ -23,8 +23,8 @@
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
 #include <copying/gather.hpp>
-#include "rmm/thrust_rmm_allocator.h"
-#include "types.hpp"
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/types.hpp>
 #include <hash/helper_functions.cuh>
 
 #include <cuda_runtime_api.h>
@@ -210,7 +210,7 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
       rmm::device_vector<gdf_index_type> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy()->on(0), sorted_indices.begin(), sorted_indices.end());
 
-      gdf_column sorted_indices_col;
+      gdf_column sorted_indices_col{};
       gdf_error status = gdf_column_view(&sorted_indices_col, sorted_indices.data().get(), 
                             nullptr, *out_size, GDF_INT32);
       if (status != GDF_SUCCESS)

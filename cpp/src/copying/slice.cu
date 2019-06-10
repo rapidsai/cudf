@@ -17,15 +17,16 @@
  */
 
 #include <utilities/column_utils.hpp>
-#include "types.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/error_utils.hpp"
-#include "utilities/cuda_utils.hpp"
-#include "utilities/bit_util.cuh"
-#include "rmm/thrust_rmm_allocator.h"
+#include <cudf/copying.hpp>
+#include <cudf/types.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/cuda_utils.hpp>
+#include <utilities/bit_util.cuh>
+#include <rmm/thrust_rmm_allocator.h>
 #include <nvstrings/NVCategory.h>
 #include <bitmask/bit_mask.cuh> 
-#include "copying/slice.hpp"
+#include <copying/slice.hpp>
 
 namespace cudf {
 
@@ -264,14 +265,14 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
   // Initialize output_columns
   output_columns.resize(num_indices/2);
   for (gdf_size_type i = 0; i < num_indices/2; i++){
-    output_columns[i] = new gdf_column;
-    output_columns[i]->size = host_indices[2*i + 1] - host_indices[2*i];
-    output_columns[i]->dtype = input_column.dtype;
-    output_columns[i]->dtype_info.time_unit = input_column.dtype_info.time_unit;
-    output_columns[i]->null_count = 0;
-    output_columns[i]->data = nullptr;
-    output_columns[i]->valid = nullptr;
-    output_columns[i]->dtype_info.category = nullptr;
+    output_columns[i] = new gdf_column{};
+    gdf_column_view_augmented(output_columns[i],
+                              nullptr,
+                              nullptr,
+                              host_indices[2*i + 1] - host_indices[2*i],
+                              input_column.dtype,
+                              0,
+                              {input_column.dtype_info.time_unit, nullptr});
   }
 
   // Create slice helper class

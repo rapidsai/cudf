@@ -19,7 +19,7 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
-#include "types.h.jit"
+#include <types.h.jit>
 #include <cstdint>
 
 namespace cudf {

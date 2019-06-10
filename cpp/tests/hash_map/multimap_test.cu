@@ -18,7 +18,7 @@
 
 #include <thrust/device_vector.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <hash/concurrent_unordered_multimap.cuh>
 
 #include <gtest/gtest.h>

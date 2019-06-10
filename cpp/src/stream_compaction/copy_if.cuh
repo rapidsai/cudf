@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
-#include <types.hpp>
-#include <copying.hpp>
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <bitmask/bit_mask.cuh>
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
@@ -28,6 +28,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
 #include <cub/cub.cuh>
+#include <string/nvcategory_util.hpp>
 
 using bit_mask::bit_mask_t;
 
@@ -354,6 +355,15 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
                           input.valid != nullptr, stream);
 
     CHECK_STREAM(stream);
+  }
+  
+  // synchronize nvcategory after filtering
+  if (output.dtype == GDF_STRING_CATEGORY) {
+    CUDF_EXPECTS(
+    GDF_SUCCESS ==
+      nvcategory_gather(&output,
+                        static_cast<NVCategory *>(input.dtype_info.category)),
+      "could not set nvcategory");
   }
   return output;
 }

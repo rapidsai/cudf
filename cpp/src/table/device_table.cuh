@@ -17,14 +17,14 @@
 #ifndef DEVICE_TABLE_H
 #define DEVICE_TABLE_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
 #include <bitmask/bit_mask.cuh>
 #include <bitmask/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
