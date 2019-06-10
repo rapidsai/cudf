@@ -20,7 +20,7 @@
 #ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 #define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
-#include <binaryop.hpp>
+#include <cudf/binaryop.hpp>
 #include <string>
 
 namespace cudf {

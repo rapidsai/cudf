@@ -18,7 +18,7 @@
 #define COMPILED_BINARY_OPS_H
 
 #include <cudf/types.hpp>
-#include <binaryop.hpp>
+#include <cudf/binaryop.hpp>
 
 namespace cudf {
 namespace binops {

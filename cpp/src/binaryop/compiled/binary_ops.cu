@@ -21,7 +21,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/type_dispatcher.hpp>
 #include <utilities/wrapper_types.hpp>
-#include <binaryop.hpp>
+#include <cudf/binaryop.hpp>
 
 namespace cudf {
 namespace binops {

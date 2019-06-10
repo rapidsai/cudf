@@ -20,7 +20,7 @@
 
 #include <gtest/gtest.h>
 
-#include <binaryop.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
