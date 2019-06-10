@@ -60,7 +60,7 @@ $WORKSPACE/build.sh clean libcudf cudf
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF
 ################################################################################
 
-if hasArg -s; then
+if hasArg --skip-tests; then
     logger "Skipping Tests..."
     exit 0
 fi
