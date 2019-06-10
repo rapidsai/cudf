@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from numba.cuda import to_device
 
 from librmm_cffi import librmm as rmm
 
@@ -299,6 +300,32 @@ class Series(object):
             return self._column.element_indexing(arg)
         else:
             raise NotImplementedError(type(arg))
+
+    def __setitem__(self, key, val):
+        def _process_arg(arg):
+            if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+                                DeviceNDArray)):
+                if len(arg) == 0:
+                    return Series([])
+                else:
+                    return Series(arg)
+            return arg
+        key, val = map(_process_arg, (key, val))
+
+        # TODO make this more robust
+        if isinstance(key, Number):
+            key = Series([key])
+            val = Series([val])
+        else:
+            if isinstance(val, Number):
+                val = Series([val] * len(key))
+            else:
+                # TODO something more intelligent here
+                assert len(key) == len(val)
+
+        cpp_copying.apply_scatter_array(to_device(val),
+                                        to_device(key),
+                                        self._column)
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
