@@ -17,11 +17,11 @@
 #ifndef SCALAR_WRAPPER_H
 #define SCALAR_WRAPPER_H
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 #include "cudf_test_utils.cuh"
-#include "rmm/rmm.h"
-#include "utilities/bit_util.cuh"
-#include "utilities/type_dispatcher.hpp"
+#include <rmm/rmm.h>
+#include <utilities/bit_util.cuh>
+#include <utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>

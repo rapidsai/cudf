@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
-#include <types.hpp>
-#include <copying.hpp>
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <bitmask/bit_mask.cuh>
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>

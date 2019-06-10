@@ -1,19 +1,19 @@
+#include "new_groupby.hpp"
+#include "aggregation_operations.hpp"
+
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/copying.hpp>
+#include <utilities/nvtx/nvtx_utils.h>
+#include <utilities/error_utils.hpp>
+#include <groupby/hash_groupby.cuh>
+#include <string/nvcategory_util.hpp>
+#include <table/device_table.cuh>
+
 #include <cassert>
 #include <thrust/fill.h>
 #include <algorithm>
 #include <tuple>
-
-#include "cudf.h"
-#include "types.hpp"
-#include "copying.hpp"
-#include "new_groupby.hpp"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "utilities/error_utils.hpp"
-#include "aggregation_operations.hpp"
-#include "groupby/hash_groupby.cuh"
-#include "string/nvcategory_util.hpp"
-#include "table/device_table.cuh"
-
 
 namespace{
   /* --------------------------------------------------------------------------*/

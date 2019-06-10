@@ -15,13 +15,13 @@
  */
 
 #include <thrust/device_vector.h>
-#include "copying.hpp"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <cudf/table.hpp>
 #include <random>
 
 template <typename T>

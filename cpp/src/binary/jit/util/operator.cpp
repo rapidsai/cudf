@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#include "binary/jit/util/operator.h"
-#include "binary/jit/util/type.h"
+#include <binary/jit/util/operator.h>
+#include <binary/jit/util/type.h>
 #include <cstring>
 
 namespace cudf {

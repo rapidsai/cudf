@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "copying.hpp"
-#include "cudf.h"
 #include "gather.hpp"
-#include "rmm/thrust_rmm_allocator.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/type_dispatcher.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/cudf.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy_bitmask.hpp>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <string/nvcategory_util.hpp>
 
 #include <algorithm>
