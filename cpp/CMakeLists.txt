@@ -233,7 +233,12 @@ add_library(cudf SHARED
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/groupby/sort/groupby_valid_helpers.cu
             src/groupby/sort/groupby_sort.cu
+            src/groupby/sort/groupby_wo_valid.cu
+            src/groupby/sort/groupby_count_wo_valid.cu
+            src/groupby/sort/groupby_count_valid.cu
+            src/groupby/sort/groupby_valid.cu
             src/rolling/rolling.cu
             src/binary/binary_ops.cu
             src/binary/jit/code/kernel.cpp

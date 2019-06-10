@@ -17,8 +17,10 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
 
+#include <utility>
 #include "utilities/cudf_utils.h"
-#include "utilities/wrapper_types.hpp"
+#include "utilities/wrapper_types.hpp" 
+#include "utilities/release_assert.cuh"
 
 
 /* --------------------------------------------------------------------------*/
@@ -59,6 +61,7 @@ struct max_op_valids
 		return thrust::make_tuple(data_x > data_y ? data_x : data_y, true);
 	}
 };
+
 
 template<typename value_type>
 struct max_op{
@@ -244,5 +247,50 @@ struct avg_op
     return 0;
   }
 };
+
+
+// This pragma disables a compiler warning that complains about the valid usage
+// of calling a __host__ functor from this function which is __host__ __device__
+#pragma hd_warning_disable 
+#pragma nv_exec_check_disable
+template <class functor_t, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) groupby_type_dispatcher(gdf_dtype dtype,
+                                                         functor_t f,
+                                                         Ts&&... args) {
+  switch(dtype)
+  {
+    // The .template is known as a "template disambiguator"
+    // See here for more information:
+    // https://stackoverflow.com/questions/3786360/confusing-template-error
+    case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
+    case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
+    case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
+    case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    default: {
+#ifdef __CUDA_ARCH__
+      
+      // This will cause the calling kernel to crash as well as invalidate
+      // the GPU context
+      release_assert(false && "Invalid gdf_dtype in type_dispatcher");
+
+      // The following code will never be reached, but the compiler generates a
+      // warning if there isn't a return value.
+
+      // Need to find out what the return type is in order to have a default
+      // return value and solve the compiler warning for lack of a default
+      // return
+      using return_type =
+          decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+      return return_type();
+#else
+      // In host-code, the compiler is smart enough to know we don't need a
+      // default return type since we're throwing an exception.
+      throw std::runtime_error("Invalid gdf_dtype in type_dispatcher");
+#endif
+    }
+  }
+}
 
 #endif

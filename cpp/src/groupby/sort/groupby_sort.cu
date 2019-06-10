@@ -1,3 +1,20 @@
+/*
+ * Copyright 2019 BlazingDB, Inc.
+ *     Copyright 2019 Alexander Ocsa <alexander@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cassert>
 #include <thrust/fill.h>
 #include <algorithm>
@@ -17,6 +34,10 @@
 #include "groupby_sort.cuh"
 
 #include <groupby.hpp>
+#include "groupby_wo_valid.h"
+#include "groupby_valid.h"
+#include "groupby_count_valid.h"
+#include "groupby_count_wo_valid.h"
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -124,59 +145,67 @@ gdf_error gdf_group_by_sort(gdf_column* in_key_columns[],
                                               sorted_indices);
 
   GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
+ 
+  bool group_by_keys_contain_nulls = false;
+  for (int i = 0; i < num_key_columns; i++){
+    group_by_keys_contain_nulls = group_by_keys_contain_nulls || in_key_columns[i]->null_count > 0;
+  } 
 
-  gdf_agg_op op{agg_ops[0]};
+  auto op = agg_ops[0];
+  auto in_aggregation_column = in_aggregation_columns[0];
+  auto out_aggregation_column = out_aggregation_columns[0];
 
-  switch(op)
-  { 
-    case GDF_MIN:
-      {
-        gdf_error_code = group_by_sort::gdf_group_by_sort<min_op>(num_key_columns,
-                                                   in_key_columns,
-                                                   in_aggregation_columns[0],
-                                                   out_key_columns,
-                                                   out_aggregation_columns[0],
-                                                   options, sorted_indices);
-        break;
-      } 
-    case GDF_MAX:
-      {
-        gdf_error_code = group_by_sort::gdf_group_by_sort<max_op>(num_key_columns,
-                                                   in_key_columns,
-                                                   in_aggregation_columns[0],
-                                                   out_key_columns,
-                                                   out_aggregation_columns[0],
-                                                   options, sorted_indices);
-        break;
-      } 
-    case GDF_SUM:
-      {
-        gdf_error_code = group_by_sort::gdf_group_by_sort<sum_op>(num_key_columns,
-                                                   in_key_columns,
-                                                   in_aggregation_columns[0],
-                                                   out_key_columns,
-                                                   out_aggregation_columns[0],
-                                                   options, sorted_indices);
-        break;
-      } 
-    // case GDF_COUNT:
-    //   {
-    //     gdf_error_code = group_by_sort::gdf_group_by_sort<count_op>(num_key_columns,
-    //                                                in_key_columns,
-    //                                                in_aggregation_columns[0],
-    //                                                out_key_columns,
-    //                                                out_aggregation_columns[0],
-    //                                                options, sorted_indices);
-    //     break;
-    //   }  
-    default:
-      std::cerr << "Unsupported aggregation method for sort-based groupby." << std::endl;
-      gdf_error_code = GDF_UNSUPPORTED_METHOD;
+  if (op == GDF_COUNT) {
+    if (group_by_keys_contain_nulls) {
+      gdf_error_code = gdf_group_by_count_with_valids(num_key_columns,
+                                                    in_key_columns,
+                                                    in_aggregation_column,
+                                                    out_key_columns,
+                                                    out_aggregation_column,
+                                                    op,
+                                                    options, 
+                                                    sorted_indices);
+    }
+    else {
+      gdf_error_code = gdf_group_by_count_wo_valids(num_key_columns,
+                                                    in_key_columns,
+                                                    in_aggregation_column,
+                                                    out_key_columns,
+                                                    out_aggregation_column,
+                                                    op,
+                                                    options, 
+                                                    sorted_indices);
+    }
+  } else if (op == GDF_AVG) {
+     gdf_error_code = group_by_sort::gdf_group_by_sort_avg(num_key_columns,
+                                               in_key_columns,
+                                               in_aggregation_column,
+                                               out_key_columns,
+                                               out_aggregation_column);
+  } else {
+    if (group_by_keys_contain_nulls) {
+      gdf_error_code = gdf_group_by_sort_with_valids(num_key_columns,
+                                                    in_key_columns,
+                                                    in_aggregation_column,
+                                                    out_key_columns,
+                                                    out_aggregation_column,
+                                                    op,
+                                                    options, 
+                                                    sorted_indices);
+    } else {
+      gdf_error_code = gdf_group_by_sort_wo_valids(num_key_columns,
+                                                    in_key_columns,
+                                                    in_aggregation_column,
+                                                    out_key_columns,
+                                                    out_aggregation_column,
+                                                    op,
+                                                    options, 
+                                                    sorted_indices);
+    }
   }
   GDF_REQUIRE(GDF_SUCCESS == gdf_error_code, gdf_error_code);
 
   POP_RANGE();
-
   return gdf_error_code;
 }
 
