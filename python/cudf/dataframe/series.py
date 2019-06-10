@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
-from numba.cuda import to_device
 
 from librmm_cffi import librmm as rmm
 
@@ -306,25 +305,25 @@ class Series(object):
             if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                                 DeviceNDArray)):
                 if len(arg) == 0:
-                    return Series([])
+                    return np.array([], dtype=self.dtype)
                 else:
-                    return Series(arg)
+                    return np.array(arg, dtype=self.dtype)
             return arg
         key, val = map(_process_arg, (key, val))
 
         # TODO make this more robust
         if isinstance(key, Number):
-            key = Series([key])
-            val = Series([val])
+            key = np.array([key], dtype=self.dtype)
+            val = np.array([val], dtype=self.dtype)
         else:
             if isinstance(val, Number):
-                val = Series([val] * len(key))
+                val = val * np.ones(len(key), dtype=self.dtype)
             else:
                 # TODO something more intelligent here
                 assert len(key) == len(val)
 
-        cpp_copying.apply_scatter_array(to_device(val),
-                                        to_device(key),
+        cpp_copying.apply_scatter_array(rmm.to_device(val),
+                                        rmm.to_device(key),
                                         self._column)
 
     def take(self, indices, ignore_index=False):
