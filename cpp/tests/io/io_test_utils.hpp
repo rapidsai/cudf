@@ -24,7 +24,7 @@
 
 #include <cuda_runtime.h>
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 /**---------------------------------------------------------------------------*
  * @brief Checks if a file exists.
