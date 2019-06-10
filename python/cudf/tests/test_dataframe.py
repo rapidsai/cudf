@@ -2642,3 +2642,21 @@ def test_any(data):
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
+
+@pytest.mark.parametrize('a', [
+    [],
+    ["123"]
+])
+@pytest.mark.parametrize('b', [
+    "123",
+    ["123"]
+])
+def test_create_dataframe_cols_empty_data(a, b):
+    
+    expected = pd.DataFrame({'a': a})
+    actual = DataFrame.from_pandas(expected)
+    
+    expected['b'] = b
+    actual['b'] = b
+    
+    assert_eq(actual, expected)

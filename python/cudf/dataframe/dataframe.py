@@ -844,8 +844,29 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+        from collections.abc import Sequence
+        def is_list_like(obj):
+            if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes, int)):
+                return True
+            else:
+                return False
+
+        if not isinstance(series, Series) and is_list_like(series):
+            '''
+            Case when series is not a series and list-like. 
+            Reason we will have to guard this with not Series check 
+            is because we are converting non-scalars to cudf Series.
+            '''
             series = Series(series)
+        elif is_list_like(series):
+            # Case when series is scalar and of type list.
+            series = Series(series)
+        elif isinstance(series, Series):
+            # Case when series is a cudf Series
+            series = series
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -867,8 +888,38 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        from collections.abc import Sequence
+        def is_list_like(obj):
+            if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes, int)):
+                return True
+            else:
+                return False
+
+        if not isinstance(series, Series) and is_list_like(series):
+            '''
+            Case when series is not a series and list-like. 
+            Reason we will have to guard this with not Series check 
+            is because we are converting non-scalars to cudf Series.
+            '''
             series = Series(series)
+        elif is_list_like(series):
+            # Case when series is scalar and of type list.
+            series = Series(series)
+        elif isinstance(series, Series):
+            # Case when series is a cudf Series
+            series = series
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self._index) == 0) and (series.index > 0) and len(self.columns) == 0:
+                # When self has 0 columns and series has values, we can safely go ahead and assign.
+                return series
+            elif (len(self._index) == 0) and (series.index > 0) and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+            
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
