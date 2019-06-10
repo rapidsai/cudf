@@ -2642,3 +2642,16 @@ def test_any(data):
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('indexed', [False, True])
+def test_dataframe_sizeof(indexed):
+    rows = int(1e6)
+    index = list(i for i in range(rows)) if indexed else None
+
+    gdf = gd.DataFrame([('A', [8] * rows), ('B', [32] * rows)], index=index)
+
+    for c in gdf._cols.values():
+        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
+    cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
+    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
