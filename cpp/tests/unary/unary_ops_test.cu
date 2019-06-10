@@ -19,7 +19,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/random.h>

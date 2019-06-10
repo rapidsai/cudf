@@ -21,7 +21,7 @@
 #include <thrust/execution_policy.h>
 
 #include <replace.hpp>
-#include "cudf.h"
+#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <copying.hpp>
 #include <types.hpp>

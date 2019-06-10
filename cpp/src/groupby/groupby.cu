@@ -1,4 +1,4 @@
-#include "cudf.h"
+#include <cudf/cudf.h>
 #include "new_groupby.hpp"
 
 gdf_error gdf_group_by_sum(int ncols,                    // # columns

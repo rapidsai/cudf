@@ -22,17 +22,17 @@
 #include <type_traits>
 #include <stdlib.h>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
-#include <reduction.hpp>
+#include <cudf/cudf.h>
+#include <cudf/reduction.hpp>
 
 #include <thrust/device_vector.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/scalar_wrapper.cuh"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
 
 template <typename T>
 std::vector<T> convert_values(std::vector<int> const & int_values)

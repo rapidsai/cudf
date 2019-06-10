@@ -17,16 +17,16 @@
  */
 
 #include <utilities/column_utils.hpp>
-#include "copying.hpp"
-#include "types.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/error_utils.hpp"
-#include "utilities/cuda_utils.hpp"
-#include "utilities/bit_util.cuh"
-#include "rmm/thrust_rmm_allocator.h"
+#include <cudf/copying.hpp>
+#include <cudf/types.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/cuda_utils.hpp>
+#include <utilities/bit_util.cuh>
+#include <rmm/thrust_rmm_allocator.h>
 #include <nvstrings/NVCategory.h>
 #include <bitmask/bit_mask.cuh> 
-#include "copying/slice.hpp"
+#include <copying/slice.hpp>
 
 namespace cudf {
 

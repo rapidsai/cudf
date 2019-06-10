@@ -20,7 +20,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 template <typename size_type>
 struct ValidRange {

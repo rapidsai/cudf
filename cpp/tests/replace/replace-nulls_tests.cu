@@ -24,8 +24,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 
-template <typename T>
-struct ReplaceNullsTest : GdfTest {};
+#include <cudf/cudf.h>
 
 using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
