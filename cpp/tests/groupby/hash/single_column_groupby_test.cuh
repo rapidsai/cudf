@@ -39,7 +39,6 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   using namespace cudf::test;
   using namespace cudf::groupby::hash;
 
-
   static_assert(std::is_same<ResultValue, expected_result_t<Value, op>>::value,
                 "Incorrect type for expected_values.");
   ASSERT_EQ(keys.size(), values.size())
@@ -72,6 +71,9 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   column_wrapper<ResultValue> output_values(*output_values_table.get_column(0));
 
   // Sort-by-key the expected and actual data to make them directly comparable
+  // TODO: Need to do a sort by key on the indices to generate a gather map, and
+  // then do a gather in order to make sure the output null values are
+  // rearranged correctly
   EXPECT_NO_THROW(thrust::stable_sort_by_key(
       rmm::exec_policy()->on(0), expected_keys.get_data().begin(),
       expected_keys.get_data().end(), expected_values.get_data().end()));
@@ -82,6 +84,7 @@ void single_column_groupby_test(column_wrapper<Key> keys,
       rmm::exec_policy()->on(0), output_keys.get_data().begin(),
       output_keys.get_data().end(), output_values.get_data().begin()));
   EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
+
 
   bool const print_all_unequal_pairs{true};
   CUDF_EXPECT_NO_THROW(expect_columns_are_equal(output_keys, "Actual Keys",

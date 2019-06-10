@@ -310,6 +310,40 @@ TYPED_TEST(SingleColumnMin, EightKeysAllUnique) {
       column_wrapper<ResultValue>(8, [](auto index) { return R(index); }));
 }
 
+TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenKeysNull) {
+  using Key = typename SingleColumnMin<TypeParam>::KeyType;
+  using Value = typename SingleColumnMin<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using R = ResultValue;
+
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
+                          [](auto index) { return index % 2; }),
+      column_wrapper<Value>(8, [](auto index) { return Value(2 * index); }),
+      column_wrapper<Key>({T(1), T(3), T(5), T(7)},
+                          [](auto index) { return true; }),
+      column_wrapper<ResultValue>({R(2), R(6), R(10), R(14)}));
+}
+
+TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenValuesNull) {
+  using Key = typename SingleColumnMin<TypeParam>::KeyType;
+  using Value = typename SingleColumnMin<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using R = ResultValue;
+
+  // Even index result values should be null
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+      column_wrapper<Value>(8, [](auto index) { return Value(2 * index); },
+                            [](auto index) { return index % 2; }),
+      column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+      column_wrapper<ResultValue>(
+          {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
+          [](auto index) { return index % 2; }));
+}
+
 /*
 TYPED_TEST(SingleColumnMin, OddResultNullValues) {
   using Key = typename SingleColumnMin<TypeParam>::KeyType;
