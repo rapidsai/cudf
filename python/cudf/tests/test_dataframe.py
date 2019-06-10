@@ -2694,6 +2694,7 @@ def test_dataframe_sizeof(indexed):
     cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
     assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
+
 @pytest.mark.parametrize('a', [
     [],
     ["123"]
@@ -2703,11 +2704,8 @@ def test_dataframe_sizeof(indexed):
     ["123"]
 ])
 def test_create_dataframe_cols_empty_data(a, b):
-    
     expected = pd.DataFrame({'a': a})
     actual = DataFrame.from_pandas(expected)
-    
     expected['b'] = b
     actual['b'] = b
-    
     assert_eq(actual, expected)
