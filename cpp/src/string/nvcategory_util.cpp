@@ -97,7 +97,6 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_scalar);
     std::swap(column->data, column_nulls_replaced.data);
-    std::swap(column->valid, column_nulls_replaced.valid);
     gdf_column_free(&column_nulls_replaced);
   }
 
