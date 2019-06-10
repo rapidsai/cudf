@@ -1066,12 +1066,13 @@ gdf_error gdf_replace_nulls(gdf_column*       col_out,
  *
  * @Returns GDF_SUCCESS upon successful merge
  */
-gdf_error gdf_sorted_merge(gdf_column **     left_cols,
-                           gdf_column **     right_cols,
-                           const gdf_size_type ncols,
-                           gdf_column *      sort_by_cols,
-                           gdf_column *      asc_desc,
-                           gdf_column **     output_cols);
+gdf_error gdf_sorted_merge(gdf_column **          left_cols,
+                          gdf_column **          right_cols,
+                          const gdf_size_type    ncols,
+                          const gdf_size_type *  sort_by_cols,
+                          const gdf_size_type    sort_by_cols_size,
+                          gdf_column *           asc_desc,
+                          gdf_column **          output_cols);
 
 /**
  * @brief Finds the indices of the bins in which each value of the column
