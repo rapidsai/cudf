@@ -158,8 +158,8 @@ class StringMethods(object):
                 first = others.pop(0)
 
                 '''
-                Need atleast one/first element in the list to be of Series 
-                type so that we can use .data to make call to .cat 
+                Need atleast one/first element in the list to be of Series
+                type so that we can use .data to make call to .cat
                 '''
                 if not isinstance(first, (Series, Index)):
                     first = Series(first, dtype='str')
@@ -170,7 +170,7 @@ class StringMethods(object):
 
                 for frame in others:
                     '''
-                    extracting nvstrings pointer if the 
+                    extracting nvstrings pointer if the
                     `frame` is of type Series/Index
                     '''
                     if isinstance(frame, (Series, Index)):

@@ -319,10 +319,19 @@ def test_string_len(ps_gs):
      pd.Series(['f', 'g', 'h', 'i', 'j'])),
     [pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(
         ['f', 'g', 'h', 'i', 'j'])] * 20,
-    (pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(
-        ['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), ['f', 'a', 'b', 'f', 'a']),
-    [['f', 'a', 'b', 'f', 'a'], pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(
-        ['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(['f', 'g', 'h', 'i', 'j'])]
+    (
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a']
+    ),
+    [
+        ['f', 'a', 'b', 'f', 'a'], pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j'])
+    ]
 ])
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
 @pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
