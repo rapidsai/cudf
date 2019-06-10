@@ -298,7 +298,6 @@ class DataFrame(object):
         index = self._index.__sizeof__()
         return columns + index
 
-
     def __len__(self):
         """
         Returns the number of rows
