@@ -16,7 +16,7 @@
 
 #include <cuda_runtime.h>
 #include "io_uncomp.h"
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include <string.h> // memset
 #include <zlib.h> // uncompress
 #include "unbz2.h" // bz2 uncompress

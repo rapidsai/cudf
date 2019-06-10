@@ -16,16 +16,16 @@
 
 #include <thrust/tabulate.h>
 
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "utilities/error_utils.hpp"
-#include "join/joining.h"
+#include <cudf/cudf.h>
+#include <rmm/rmm.h>
+#include <utilities/error_utils.hpp>
+#include <join/joining.h>
 #include <table/device_table.cuh>
 #include "hash/hash_functions.cuh"
-#include "utilities/int_fastdiv.h"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "copying/scatter.hpp"
-#include "types.hpp"
+#include <utilities/int_fastdiv.h>
+#include <utilities/nvtx/nvtx_utils.h>
+#include <copying/scatter.hpp>
+#include <cudf/types.hpp>
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;

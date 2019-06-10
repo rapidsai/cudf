@@ -18,6 +18,25 @@ from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
 
 
+_str_to_numeric_typecast_functions = {
+    np.dtype("int32"): nvstrings.nvstrings.stoi,
+    np.dtype("int64"): nvstrings.nvstrings.stol,
+    np.dtype("float32"): nvstrings.nvstrings.stof,
+    np.dtype("float64"): nvstrings.nvstrings.stod,
+    np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int
+}
+
+_numeric_to_str_typecast_functions = {
+    np.dtype("int32"): nvstrings.itos,
+    np.dtype("int64"): nvstrings.ltos,
+    np.dtype("float32"): nvstrings.ftos,
+    np.dtype("float64"): nvstrings.dtos,
+    np.dtype("bool"): nvstrings.from_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.int2timestamp
+}
+
+
 class StringMethods(object):
     """
     This mimicks pandas `df.str` interface.
@@ -497,17 +516,25 @@ class StringColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
-        elif dtype in (np.dtype('int8'), np.dtype('int16'), np.dtype('int32'),
-                       np.dtype('int64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='int32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stoi(devptr=out_ptr)
-        elif dtype in (np.dtype('float32'), np.dtype('float64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='float32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stof(devptr=out_ptr)
+        elif dtype in (np.dtype('int8'), np.dtype('int16')):
+            out_dtype = np.dtype(dtype)
+            dtype = np.dtype('int32')
+        else:
+            out_dtype = np.dtype(dtype)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        out_ptr = get_ctype_ptr(out_arr)
+        kwargs = {
+            'devptr': out_ptr
+        }
+        if dtype == np.dtype('datetime64[ms]'):
+            kwargs['units'] = 'ms'
+        _str_to_numeric_typecast_functions[
+            np.dtype(dtype)
+        ](self.str(), **kwargs)
+
         out_col = columnops.as_column(out_arr)
-        return out_col.astype(dtype)
+        return out_col.astype(out_dtype)
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype='int8')

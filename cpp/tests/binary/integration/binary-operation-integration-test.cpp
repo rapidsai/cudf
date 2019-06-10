@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include "tests/binary/integration/assert-binops.h"
+#include <tests/binary/integration/assert-binops.h>
 
 namespace cudf {
 namespace test {
