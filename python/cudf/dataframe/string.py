@@ -127,6 +127,7 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.dataframe import Series, Index
+
         def is_list_like(others):
             from collections.abc import Sequence
             if isinstance(others, (Sequence,)) and \
@@ -137,8 +138,8 @@ class StringMethods(object):
 
         if isinstance(others, (Series, Index)):
             '''
-            If others is just another Series/Index, 
-            great go ahead with concatenation 
+            If others is just another Series/Index,
+            great go ahead with concatenation
             '''
             assert others.dtype == np.dtype('object')
             others = others.data
@@ -147,7 +148,8 @@ class StringMethods(object):
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
             '''
-            if all((is_list_like(x) or isinstance(x, (Series, Index))) for x in others):
+            if all((is_list_like(x)
+                    or isinstance(x, (Series, Index))) for x in others):
                 '''
                 Internal elements in others list should also be
                 list-like and not a regular string/byte
