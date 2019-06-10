@@ -313,9 +313,9 @@ cpdef cpp_write_csv(
     csv_writer.na_rep = na_rep
     # Do not expose true_value and false_value until gdf_bool type
     # changes added to cpp API
-    true_value = 'true'.encode()
+    true_value = 'True'.encode()
     csv_writer.true_value = true_value
-    false_value = 'false'.encode()
+    false_value = 'False'.encode()
     csv_writer.false_value = false_value
     csv_writer.include_header = header
 

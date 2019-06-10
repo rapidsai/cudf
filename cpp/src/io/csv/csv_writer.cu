@@ -73,7 +73,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
             rtn = NVStrings::dtos(static_cast<const double*>(column->data),rows,valid);
             break;
         case GDF_DATE64:
-            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::seconds,nullptr,valid);
+            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::ms,nullptr,valid);
             break;
         default:
             break;
@@ -89,7 +89,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );

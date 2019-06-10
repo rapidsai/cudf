@@ -41,6 +41,8 @@ def make_numpy_mixed_dataframe():
     df['Float'] = np.array([9.001, 8.343, 6, 2.781])
     df['Integer2'] = np.array([2345, 106, 2088, 789277])
     df['Category'] = np.array(['M', 'F', 'F', 'F'])
+    df['String'] = np.array(['Alpha', 'Beta', 'Gamma', 'Delta'])
+    df['Boolean'] = np.array([True, False, True, False])
     return df
 
 
@@ -116,14 +118,16 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5', '6', '7'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category',
+                           'str', 'bool'],
                     dayfirst=True, **cudf_arg)
-    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5', '6', '7'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category',
+                           'str', 'bool'],
                     dayfirst=True, **pandas_arg)
 
-    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
+    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5', '6', '7'],
                       parse_dates=[1], dayfirst=True, **pandas_arg)
 
     assert len(gdf1.columns) == len(pdf.columns)
@@ -1076,15 +1080,13 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
 
 def test_csv_writer_datetime_data(tmpdir):
-    import csv
     pdf_df_fname = tmpdir.join("pdf_df_2.csv")
     gdf_df_fname = tmpdir.join("gdf_df_2.csv")
 
     df = make_datetime_dataframe()
     df = df.astype('datetime64[ms]')
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator='\n',
-            quoting=csv.QUOTE_NONNUMERIC)
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
     gdf.to_csv(path=gdf_df_fname)
 
     assert(os.path.exists(pdf_df_fname))
@@ -1111,6 +1113,8 @@ def test_csv_writer_datetime_data(tmpdir):
         ['Category', 'Date', 'Float'],
         ['Integer2'],
         ['Category', 'Integer2', 'Float', 'Date', 'Integer'],
+        ['Category', 'Integer2', 'Float', 'Date', 'Integer', 'String',
+            'Boolean'],
         None
     ]
 )
@@ -1139,8 +1143,8 @@ def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
     df['Date'] = df['Date'].astype('datetime64')
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, sep=sep, columns=columns,
-            header=header, line_terminator=line_terminator,
-            date_format="%Y-%m-%dT%H:%M:%SZ", quoting=csv.QUOTE_NONNUMERIC)
+              header=header, line_terminator=line_terminator,
+              date_format="%Y-%m-%dT%H:%M:%SZ", quoting=csv.QUOTE_NONNUMERIC)
     gdf.to_csv(path=gdf_df_fname, sep=sep, columns=columns,
                header=header, line_terminator=line_terminator)
 
