@@ -455,7 +455,6 @@ class GenericIndex(Index):
             values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
-        assert values.null_count == 0
 
         self._values = values
         self.name = name
