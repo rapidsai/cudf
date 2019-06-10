@@ -310,7 +310,7 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     using T = int32_t;
     using T_index = gdf_index_type;
     using T_output = T;
-    using T_transfomer = cudf::detail::transformer<T, T_output>;
+    using T_transfomer = cudf::detail::scalar_cast_transformer<T, T_output>;
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     thrust::device_vector<T> dev_array(hos_array);

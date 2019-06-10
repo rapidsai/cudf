@@ -53,7 +53,7 @@
  *     make_iterator<has_nulls, T, T_output, T_transformer>(...)
  *
  * 4. template parameter for custom indexed iterator
- *     using T_transformer = cudf::detail::mutator_single<T>;
+ *     using T_transformer = cudf::detail::scalar_cast_transformer<T>;
  *     using T_index = gdf_index_type;
  *     make_iterator<has_nulls, T, T, T_transformer, T_index*>(...);
  * -------------------------------------------------------------------------**/
@@ -122,11 +122,17 @@ struct meanvar
     };
 };
 
-// ---------------------------------------------------------------------------
-// transformers: transforms thrust::pair<T_element, bool> into output form.
+/** -------------------------------------------------------------------------*
+ * @brief Construct an instance of `T_output` using a `thrust::pair<T_element, bool>
+ *
+ * Uses a scalar, boolean pair to construct a new object.
+ * -------------------------------------------------------------------------**/
 
 /** -------------------------------------------------------------------------*
- * @brief transformer to output a scalar value
+ * @brief Transforms a scalar by casting it to another scalar type
+ *
+ * By default, performs an identity cast, i.e., casts to the scalar's original type.
+ *
  * A transformer for `column_input_iterator`
  * It transforms `thrust::pair<T_element, bool>` into `T_output` form.
  *
@@ -136,7 +142,7 @@ struct meanvar
  * @tparam  T_output  a scalar data type of output
  * -------------------------------------------------------------------------**/
 template<typename T_element, typename T_output=T_element>
-struct transformer
+struct scalar_cast_transformer
 {
     CUDA_HOST_DEVICE_CALLABLE
     T_output operator() (thrust::pair<T_element, bool> const & pair)
@@ -146,12 +152,12 @@ struct transformer
 };
 
 /** -------------------------------------------------------------------------*
- * @brief transformer to output a squared scalar value
+ * @brief Transforms a scalar by first casting to another type, and then squaring the result.
  * A transformer for `column_input_iterator`
  * It transforms `thrust::pair<T_element, bool>` into `T_output` form.
  *
  * This struct transforms the output value as
- * `static_cast<T_output>(_value)^2`.
+ * `(static_cast<T_output>(_value))^2`.
  *
  * This will be used to compute "sum of squares".
  *
@@ -170,7 +176,7 @@ struct transformer_squared
 };
 
 /** -------------------------------------------------------------------------*
- * @brief transformer to output a set of values
+ * @brief Uses a scalar value to construct a `meanvar` object.
  * A transformer for `column_input_iterator`
  * It transforms `thrust::pair<T_element, bool>` into
  * `T_output = meanvar<T_output_element>` form.
@@ -328,7 +334,7 @@ template<typename T_output, typename T_column_input,
  * @tparam T_output  The cudf data type of output data or array
  * @tparam Transformer
  *                   Transforms pair(value, bool) into T_output form.
- *                   The default is `transformer<T_output, T_element>`
+ *                   The default is `scalar_cast_transformer<T_output, T_element>`
  * @tparam Iterator_Index
  *                   The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
@@ -339,7 +345,7 @@ template<typename T_output, typename T_column_input,
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
@@ -357,7 +363,7 @@ auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const gdf_valid_type *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
@@ -371,7 +377,7 @@ auto make_iterator(const T_element *data, const gdf_valid_type *valid,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const gdf_column& column,
     T_element identity, const Iterator_Index it = Iterator_Index(0))
