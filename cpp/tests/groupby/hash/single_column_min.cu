@@ -15,8 +15,8 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <utilities/type_dispatcher.hpp>
@@ -296,14 +296,13 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesEvenNullKeys) {
       column_wrapper<ResultValue>(4, true));
 }
 
-TYPED_TEST(SingleColumnMin, OddResultNullValues) {
+TYPED_TEST(SingleColumnMin, EightKeysAllUnique) {
   using Key = typename SingleColumnMin<TypeParam>::KeyType;
   using Value = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
 
-  // Odd index output values should be null
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),

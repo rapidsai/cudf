@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
-#include <bitmask.hpp>
+#include <cudf/cudf.h>
+#include <cudf/bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
-#include <copying.hpp>
-#include <groupby.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/groupby.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
 #include <utilities/cuda_utils.hpp>

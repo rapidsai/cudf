@@ -17,8 +17,8 @@
 #ifndef _SINGLE_COLUMN_GROUPBY_TEST_CUH
 #define _SINGLE_COLUMN_GROUPBY_TEST_CUH
 
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <utilities/type_dispatcher.hpp>

@@ -16,7 +16,7 @@
 #ifndef GROUPBY_KERNELS_CUH
 #define GROUPBY_KERNELS_CUH
 
-#include <groupby.hpp>
+#include <cudf/groupby.hpp>
 #include "type_info.hpp"
 
 namespace cudf {

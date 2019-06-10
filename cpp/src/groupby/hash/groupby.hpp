@@ -17,9 +17,9 @@
 #ifndef HASH_GROUPBY_HPP
 #define HASH_GROUPBY_HPP
 
-#include <cudf.h>
-#include <groupby.hpp>
-#include <types.hpp>
+#include <cudf/cudf.h>
+#include <cudf/groupby.hpp>
+#include <cudf/types.hpp>
 
 #include <vector>
 

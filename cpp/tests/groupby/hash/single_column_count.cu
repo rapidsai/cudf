@@ -15,8 +15,8 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <utilities/type_dispatcher.hpp>

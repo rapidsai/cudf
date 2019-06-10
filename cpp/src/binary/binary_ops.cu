@@ -1,10 +1,10 @@
 #include <algorithm>
 
-#include "cudf.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/nvtx/nvtx_utils.h"
-#include "bitmask/legacy_bitmask.hpp"
+#include <cudf/cudf.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/nvtx/nvtx_utils.h>
+#include <bitmask/legacy_bitmask.hpp>
 
 
 template<typename T, typename Tout, typename F>
@@ -510,7 +510,7 @@ DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
 // validity
 
 gdf_column gdf_validity_column(const gdf_column &col) {
-    gdf_column ret;
+    gdf_column ret{};
     ret.data = col.valid;
     // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
     ret.dtype = GDF_INT8;

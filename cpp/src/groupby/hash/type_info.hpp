@@ -17,7 +17,7 @@
 #ifndef _TYPE_INFO_HPP
 #define _TYPE_INFO_HPP
 
-#include <groupby.hpp>
+#include <cudf/groupby.hpp>
 #include <utilities/device_atomics.cuh>
 #include <utilities/device_operators.cuh>
 

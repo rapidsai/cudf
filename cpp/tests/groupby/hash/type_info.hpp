@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf.h>
-#include <groupby.hpp>
+#include <cudf/cudf.h>
+#include <cudf/groupby.hpp>
 #include <utilities/device_operators.cuh>
 
 namespace cudf {
