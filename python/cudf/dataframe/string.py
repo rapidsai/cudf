@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical, series
+from cudf.dataframe import column, columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
@@ -16,6 +16,25 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
+
+
+_str_to_numeric_typecast_functions = {
+    np.dtype("int32"): nvstrings.nvstrings.stoi,
+    np.dtype("int64"): nvstrings.nvstrings.stol,
+    np.dtype("float32"): nvstrings.nvstrings.stof,
+    np.dtype("float64"): nvstrings.nvstrings.stod,
+    np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int
+}
+
+_numeric_to_str_typecast_functions = {
+    np.dtype("int32"): nvstrings.itos,
+    np.dtype("int64"): nvstrings.ltos,
+    np.dtype("float32"): nvstrings.ftos,
+    np.dtype("float64"): nvstrings.dtos,
+    np.dtype("bool"): nvstrings.from_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.int2timestamp
+}
 
 
 class StringMethods(object):
@@ -444,17 +463,25 @@ class StringColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
-        elif dtype in (np.dtype('int8'), np.dtype('int16'), np.dtype('int32'),
-                       np.dtype('int64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='int32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stoi(devptr=out_ptr)
-        elif dtype in (np.dtype('float32'), np.dtype('float64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='float32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stof(devptr=out_ptr)
+        elif dtype in (np.dtype('int8'), np.dtype('int16')):
+            out_dtype = np.dtype(dtype)
+            dtype = np.dtype('int32')
+        else:
+            out_dtype = np.dtype(dtype)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        out_ptr = get_ctype_ptr(out_arr)
+        kwargs = {
+            'devptr': out_ptr
+        }
+        if dtype == np.dtype('datetime64[ms]'):
+            kwargs['units'] = 'ms'
+        _str_to_numeric_typecast_functions[
+            np.dtype(dtype)
+        ](self.str(), **kwargs)
+
         out_col = columnops.as_column(out_arr)
-        return out_col.astype(dtype)
+        return out_col.astype(out_dtype)
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype='int8')
@@ -534,11 +561,6 @@ class StringColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
 
-    def normalize_binop_value(self, other):
-        col = utils.scalar_broadcast_to(other, shape=len(self),
-                                        dtype="object")
-        return self.replace(data=col.data)
-
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
@@ -585,6 +607,20 @@ class StringColumn(columnops.TypedColumnBase):
         """
         result = StringColumn(self.nvcategory.keys())
         return result
+
+    def normalize_binop_value(self, other):
+        if isinstance(other, column.Column):
+            return other.astype(self.dtype)
+        elif isinstance(other, str) or other is None:
+            col = utils.scalar_broadcast_to(other,
+                                            shape=len(self),
+                                            dtype="object")
+            return self.replace(data=col.data)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+    def default_na_value(self):
+        return None
 
     def take(self, indices):
         return self.element_indexing(indices)

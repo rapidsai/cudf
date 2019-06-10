@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-#include "gis.hpp"
+#include <cudf/gis.hpp>
 #include "point_in_polygon.hpp"
 
 #include <bitmask/BitMask.cuh>
-#include "bitmask/bitmask_ops.hpp"
-#include "utilities/type_dispatcher.hpp"
+#include <bitmask/bitmask_ops.hpp>
+#include <utilities/type_dispatcher.hpp>
 #include <utilities/cuda_utils.hpp>
 
 #include <type_traits>

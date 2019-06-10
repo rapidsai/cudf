@@ -19,7 +19,7 @@ extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
-                '../cpp/include/',
+                '../cpp/include/cudf',
                 '../cpp/thirdparty/dlpack/include/dlpack/'
               ],
               library_dirs=[get_python_lib()],

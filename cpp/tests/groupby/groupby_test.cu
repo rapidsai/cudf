@@ -23,7 +23,7 @@
 
 #include <utilities/cudf_utils.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -123,7 +123,7 @@ struct GroupTest : public GdfTest {
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
     auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
-    gdf_col_pointer the_column{new gdf_column, deleter};
+    gdf_col_pointer the_column{new gdf_column{}, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);

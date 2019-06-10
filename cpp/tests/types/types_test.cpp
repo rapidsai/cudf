@@ -15,7 +15,7 @@
  */
 
 #include <utilities/wrapper_types.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gtest/gtest.h>
 
@@ -206,6 +206,16 @@ TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
     EXPECT_TRUE(w2 <= w2);
     EXPECT_FALSE(w2 >= w3);
     EXPECT_TRUE(w2 <= w3);
+}
+
+// Ensure bool8 constructor is correctly casting the input type to a bool
+TEST_F(WrappersTestBool8, BooleanConstructor) {
+  using UnderlyingType = cudf::bool8::value_type;
+  for (int i = 0; i < NUM_TRIALS; ++i) {
+    UnderlyingType t{this->rand()};
+    cudf::bool8 const w{t};
+    EXPECT_EQ(unwrap(w), static_cast<bool>(t));
+  }
 }
 
 // Just for booleans

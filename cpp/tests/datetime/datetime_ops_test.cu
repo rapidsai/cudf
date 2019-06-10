@@ -18,7 +18,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <cudf/functions.h>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -61,7 +61,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 	rmm::device_vector<int32_t> intputDate32DataDev(inputDate32Data);
 	rmm::device_vector<gdf_valid_type> inputDate32ValidDev(1,0);
 
-	gdf_column inputDate32Col;
+	gdf_column inputDate32Col{};
 	inputDate32Col.dtype = GDF_DATE32;
 	inputDate32Col.size = colSize;
 
@@ -72,7 +72,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 	rmm::device_vector<int64_t> intputDate64DataDev(inputDate64Data);
 	rmm::device_vector<gdf_valid_type> inputDate64ValidDev(1,0);
 
-	gdf_column inputDate64Col;
+	gdf_column inputDate64Col{};
 	inputDate64Col.dtype = GDF_DATE64;
 	inputDate64Col.size = colSize;
 
@@ -83,7 +83,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 	rmm::device_vector<int64_t> intputTimestampSecsDataDev(inputTimestampSecsData);
 	rmm::device_vector<gdf_valid_type> inputTimestampSecsValidDev(1,0);
 
-	gdf_column inputTimestampSecsCol;
+	gdf_column inputTimestampSecsCol{};
 	inputTimestampSecsCol.dtype = GDF_TIMESTAMP;
 	inputTimestampSecsCol.size = colSize;
 	inputTimestampSecsCol.dtype_info.time_unit = TIME_UNIT_s;
@@ -95,7 +95,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 	rmm::device_vector<int16_t> outDataDev(colSize);
 	rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
-	gdf_column outputInt16Col;
+	gdf_column outputInt16Col{};
 	outputInt16Col.dtype = GDF_INT16;
 	outputInt16Col.size = colSize;
 
@@ -566,7 +566,7 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		rmm::device_vector<int64_t> intputDataDev(inputData);
 		rmm::device_vector<gdf_valid_type> inputValidDev(4,0);
 
-		gdf_column inputCol;
+		gdf_column inputCol{};
 		inputCol.dtype = GDF_DATE64;
 		inputCol.size = colSize;
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
@@ -627,7 +627,7 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		rmm::device_vector<int64_t> intputDataDev(inputData);
 		rmm::device_vector<gdf_valid_type> inputValidDev(4,0);
 
-		gdf_column inputCol;
+		gdf_column inputCol{};
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_s;
 		inputCol.size = colSize;
@@ -678,7 +678,7 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		rmm::device_vector<int64_t> intputDataDev(inputData);
 		rmm::device_vector<gdf_valid_type> inputValidDev(4,0);
 
-		gdf_column inputCol;
+		gdf_column inputCol{};
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_us;
 		inputCol.size = colSize;
@@ -729,7 +729,7 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		rmm::device_vector<int64_t> intputDataDev(inputData);
 		rmm::device_vector<gdf_valid_type> inputValidDev(4,0);
 
-		gdf_column inputCol;
+		gdf_column inputCol{};
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_ns;
 		inputCol.size = colSize;
@@ -749,8 +749,8 @@ TEST_F(gdf_extract_datetime_TEST, date32Tests) {
 
 	int colSize = 8;
 
-	gdf_column inputCol;
-	gdf_column outputCol;
+	gdf_column inputCol{};
+	gdf_column outputCol{};
 
 	inputCol.dtype = GDF_DATE32;
 	inputCol.size = colSize;
@@ -836,8 +836,8 @@ TEST_F(gdf_extract_datetime_TEST, testErrors) {
 	{
 		int colSize = 8;
 
-		gdf_column inputCol;
-		gdf_column outputCol;
+		gdf_column inputCol{};
+		gdf_column outputCol{};
 
 		inputCol.dtype = GDF_DATE32;
 		inputCol.size = colSize;
@@ -871,8 +871,8 @@ TEST_F(gdf_extract_datetime_TEST, testErrors) {
 	{
 		int colSize = 8;
 
-		gdf_column inputCol;
-		gdf_column outputCol;
+		gdf_column inputCol{};
+		gdf_column outputCol{};
 
 		inputCol.dtype = GDF_DATE32;
 		inputCol.size = colSize;
