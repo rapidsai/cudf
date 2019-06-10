@@ -847,10 +847,10 @@ class DataFrame(object):
            col values
         """
         from collections.abc import Sequence
-        
+
         def is_list_like(obj):
             if isinstance(obj, (Sequence,)) and \
-                not isinstance(obj, (str, bytes, int)):
+                    not isinstance(obj, (str, bytes, int)):
                 return True
             else:
                 return False
@@ -897,7 +897,7 @@ class DataFrame(object):
 
         def is_list_like(obj):
             if isinstance(obj, (Sequence,)) and \
-                not isinstance(obj, (str, bytes, int)):
+                    not isinstance(obj, (str, bytes, int)):
                 return True
             else:
                 return False
@@ -919,12 +919,12 @@ class DataFrame(object):
             # Case when series is just a non-list
             series = Series(series)
             if (len(self._index) == 0) and (series.index > 0) \
-                and len(self.columns) == 0:
+                    and len(self.columns) == 0:
                 # When self has 0 columns and series has values
                 # we can safely go ahead and assign.
                 return series
             elif (len(self._index) == 0) and (series.index > 0) \
-                and len(self.columns) > 0:
+                    and len(self.columns) > 0:
                 # When self has 1 or more columns and series has values
                 # we cannot assign a non-list, hence returning empty series.
                 return Series(dtype=series.dtype)
