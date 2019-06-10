@@ -23,8 +23,11 @@
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
-
 #include <cudf/cudf.h>
+
+
+template <typename T>
+struct ReplaceNullsTest : GdfTest {};
 
 using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
