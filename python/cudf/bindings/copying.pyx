@@ -160,6 +160,8 @@ def apply_scatter(in_cols, maps, out_cols=None):
     """
     # TODO check the dtype of `maps` is compatible with gdf_index_type
 
+    maps = astype(maps, 'int32')
+
     col_count=len(in_cols)
     gather_count = len(maps)
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
