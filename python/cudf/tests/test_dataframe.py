@@ -84,6 +84,44 @@ def test_series_basic():
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
 
+@pytest.mark.parametrize(
+    'a',
+    [
+        [1, 2, 3],
+        [1, 10, 30]
+    ]
+)
+@pytest.mark.parametrize(
+    'b',
+    [
+        [4, 5, 6],
+        [-11, -100, 30]
+    ]
+)
+def test_append_index(a, b):
+
+    df = pd.DataFrame()
+    df['a'] = a
+    df['b'] = b
+
+    gdf = DataFrame()
+    gdf['a'] = a
+    gdf['b'] = b
+
+    # Check the default index after appending two columns(Series)
+    expected = df.a.append(df.b)
+    actual = gdf.a.append(gdf.b)
+
+    assert len(expected) == len(actual)
+    assert list(expected.index.values) == list(actual.index.values)
+
+    expected = df.a.append(df.b, ignore_index=True)
+    actual = gdf.a.append(gdf.b, ignore_index=True)
+
+    assert len(expected) == len(actual)
+    assert list(expected.index.values) == list(actual.index.values)
+
+
 def test_series_append():
     a1 = np.arange(10, dtype=np.float64)
     series = Series(a1)
@@ -2642,6 +2680,19 @@ def test_any(data):
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('indexed', [False, True])
+def test_dataframe_sizeof(indexed):
+    rows = int(1e6)
+    index = list(i for i in range(rows)) if indexed else None
+
+    gdf = gd.DataFrame([('A', [8] * rows), ('B', [32] * rows)], index=index)
+
+    for c in gdf._cols.values():
+        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
+    cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
+    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
 @pytest.mark.parametrize('a', [
     [],

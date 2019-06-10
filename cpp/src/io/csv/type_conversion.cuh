@@ -18,10 +18,10 @@
 #define CONVERSION_FUNCTIONS_CUH
 
 #include "datetime_parser.cuh"
-#include "utilities/wrapper_types.hpp"
+#include <utilities/wrapper_types.hpp>
 #include <cuda_runtime_api.h>
 
-#include "utilities/trie.cuh"
+#include <utilities/trie.cuh>
 
 /**---------------------------------------------------------------------------*
  * @brief Checks whether the given character is a whitespace character.

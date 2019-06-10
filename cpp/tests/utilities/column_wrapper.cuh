@@ -20,7 +20,7 @@
 #ifndef COLUMN_WRAPPER_H
 #define COLUMN_WRAPPER_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <utilities/bit_util.cuh>
 #include <utilities/type_dispatcher.hpp>

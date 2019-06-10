@@ -23,8 +23,8 @@
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
 #include <copying/gather.hpp>
-#include "rmm/thrust_rmm_allocator.h"
-#include "types.hpp"
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/types.hpp>
 #include <hash/helper_functions.cuh>
 
 #include <cuda_runtime_api.h>
