@@ -23,8 +23,8 @@
 #include <cudf/replace.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <copying.hpp>
-#include <types.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities//type_dispatcher.hpp>
 #include <utilities/cuda_utils.hpp>
