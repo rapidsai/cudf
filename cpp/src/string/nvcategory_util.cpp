@@ -7,7 +7,7 @@
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
-#include <binaryop.hpp>
+#include <cudf/binaryop.hpp>
 
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
