@@ -166,7 +166,7 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def append(self, other, ignore_index=True):
+    def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True`` (default), the index is reset.
         """
