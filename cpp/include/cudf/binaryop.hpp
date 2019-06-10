@@ -17,8 +17,7 @@
 #ifndef BINARYOP_HPP
 #define BINARYOP_HPP
 
-#include <cudf/cudf.h>
-#include <types.hpp>
+#include "cudf.h"
 
 /**
  * @brief Types of binary operations that can be performed on data.

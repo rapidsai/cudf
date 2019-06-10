@@ -26,7 +26,7 @@
 #include <cudf/cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <string/nvcategory_util.hpp>
-#include <copying.hpp>
+#include <cudf/copying.hpp>
 #include <nvstrings/NVCategory.h>
 
 namespace cudf {
