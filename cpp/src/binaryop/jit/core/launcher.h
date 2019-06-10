@@ -40,8 +40,14 @@ namespace jit {
             return Launcher();
         }
 
+        static Launcher launch(const std::string& ptx) {
+            return Launcher(ptx);
+        }
+
     public:
         Launcher();
+        
+        Launcher(const std::string& ptx);
 
         Launcher(Launcher&&);
 

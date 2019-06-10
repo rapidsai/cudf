@@ -19,6 +19,7 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
+#include "../core/parser.h"
 #include <types.h.jit>
 #include <cstdint>
 
@@ -64,6 +65,15 @@ namespace jit {
 
     Launcher::Launcher()
      : program {JitCache.program(code::kernel, headersName, compilerFlags, headersCode)}
+    { }
+    
+    Launcher::Launcher(const std::string& ptx)
+     : program {
+        JitCache.program(
+            (parse_single_function_ptx(ptx, "GENERIC_BINARY_OP") + code::kernel).c_str(), 
+            headersName, compilerFlags, headersCode
+        )
+     }
     { }
 
     Launcher::Launcher(Launcher&& launcher)

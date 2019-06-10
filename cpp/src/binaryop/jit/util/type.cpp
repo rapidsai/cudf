@@ -119,6 +119,8 @@ namespace jit {
                 return "LogicalAnd";
             case GDF_LOGICAL_OR:
                 return "LogicalOr";
+            case GDF_GENERIC_OP:
+                return "UsrDefOp";
             default:
                 return "None";
         }

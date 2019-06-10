@@ -162,6 +162,14 @@ namespace jit {
                           .launch(out, lhs, rhs);
 
     }
+    
+    void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx)  {
+
+        Launcher::launch(ptx).kernel("kernel_v_v")
+                          .instantiate(GDF_GENERIC_OP, Operator::Type::Direct, out, lhs, rhs)
+                          .launch(out, lhs, rhs);
+
+    }
 
 } // namespace jit
 } // namespace binops
@@ -273,6 +281,70 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_bin
     auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
     if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
         binops::jit::binary_operation(out, lhs, rhs, ope);
+}
+
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx) {
+    // Check for null pointers in input
+    CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
+        "Input pointers are null");
+
+    // Check for 0 sized data
+    if((out->size == 0) && (lhs->size == 0) && (rhs->size == 0)) return;
+    CUDF_EXPECTS((out->size == lhs->size) && (lhs->size == rhs->size),
+        "Column sizes don't match");
+
+    // Check for null data pointer
+    CUDF_EXPECTS((out->data != nullptr) &&
+                 (lhs->data != nullptr) &&
+                 (rhs->data != nullptr) , 
+        "Column data pointers are null");
+
+    // Check for datatype
+    CUDF_EXPECTS((out->dtype > GDF_invalid) && (out->dtype < N_GDF_TYPES) &&
+                 (lhs->dtype > GDF_invalid) && (lhs->dtype < N_GDF_TYPES) &&
+                 (rhs->dtype > GDF_invalid) && (rhs->dtype < N_GDF_TYPES) ,
+        "Invalid/Unsupported datatype");
+    
+    binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
+
+// (At least) for now we won't consider string and compiled kernels.
+/**
+    if (lhs->dtype == GDF_STRING_CATEGORY && rhs->dtype == GDF_STRING_CATEGORY) {
+        // if the columns are string types then we need to combine categories
+        // before checking for equality because the same category values can mean
+        // different things for different columns
+
+        // make temporary columns which will have synced categories
+        auto temp_lhs = cudf::allocate_like(*lhs);
+        auto temp_rhs = cudf::allocate_like(*rhs);
+        gdf_column* input_cols[2]   = {lhs, rhs};
+        gdf_column* temp_cols[2]    = {&temp_lhs, &temp_rhs};
+
+        // sync categories
+        sync_column_categories(input_cols, temp_cols, 2);
+
+        // now it's ok to directly compare the column data
+        auto err = binops::compiled::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+        if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
+            binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
+
+        // TODO: Need a better way to deallocate temporary columns
+        RMM_TRY(RMM_FREE(temp_lhs.data, 0));
+        RMM_TRY(RMM_FREE(temp_rhs.data, 0));
+        if (temp_lhs.valid != nullptr)
+            RMM_TRY(RMM_FREE(temp_lhs.valid, 0));
+        if (temp_rhs.valid != nullptr)
+            RMM_TRY(RMM_FREE(temp_rhs.valid, 0));
+        NVCategory::destroy(
+            reinterpret_cast<NVCategory*>(temp_lhs.dtype_info.category));
+        NVCategory::destroy(
+            reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
+        return;
+    }
+    auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
+    if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
+*/
+        binops::jit::binary_operation(out, lhs, rhs, ptx);
 }
 
 } // namespace cudf
