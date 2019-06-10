@@ -21,7 +21,19 @@
  *   cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON -DCMAKE_ENABLE_BENCHMARKS=ON
  * The benchmark app binary will be placed under `bench`,
  * and the app name is `ITERATOR_BENCH`.
+ *
+ * the benchmark command:
+ * ITERATOR_BENCH [column size] [num iteration] [dtypes (a|s|i|l|f|d|o)] [do full tests]
+ *
+ * examples:
+ * 1. default parameter
+ *   ./ITERATOR_BENCH
+ * 2. heavy bench parameter
+ *   ./ITERATOR_BENCH 42000000 1000 others
+ * 3. full bench parameter
+ *   ./ITERATOR_BENCH 3000000 1000 others full
  * -------------------------------------------------------------------------**/
+
 
 #include <chrono>
 #include <random>
@@ -344,7 +356,7 @@ void ReduceOp(const gdf_column *input, rmm::device_vector<T_out>& dev_result, in
 
 // --------------------------------------------------------------------------
 template <typename T, bool has_null>
-void raw_stream_bench_thrust_block(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
+void raw_stream_bench_cub_block(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
 {
   std::cout << "raw stream cub::BlockReduce" << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
   ReduceOp<T, T, cudf::reductions::ReductionSum>(col, result, iters);
@@ -355,7 +367,7 @@ void raw_stream_bench_thrust_block(cudf::test::column_wrapper<T>& col, rmm::devi
 struct benchmark
 {
   template <typename T>
-  void operator()(gdf_size_type column_size, int iters)
+  void operator()(gdf_size_type column_size, int iters, bool do_full_test)
   {
     cudf::test::column_wrapper<T> hasnull_F(
       column_size,
@@ -385,14 +397,20 @@ struct benchmark
     iterator_bench_thrust<T, false>(hasnull_F, dev_result, iters); // driven by riterator without nulls
     iterator_bench_thrust<T, true >(hasnull_T, dev_result, iters); // driven by riterator with nulls
 
-    // these uses same logic cudf::reduction used at branch-0.7.
-    // thise uses `cub::BlockReduce` + `atomicAdd`
-    raw_stream_bench_thrust_block<T, false>(hasnull_F, dev_result, iters);
-    raw_stream_bench_thrust_block<T, true >(hasnull_T, dev_result, iters);
+    if( do_full_test ){
+      // these uses same logic cudf::reduction used at branch-0.7.
+      // thise uses `cub::BlockReduce` + `atomicAdd`
+      // do_full_test = false by default, since the exec time of `raw_stream_bench_cub_block` for
+      // GDF_INT8, GDF_INT16 is extremely slow, 1500x slower than others.
+
+      raw_stream_bench_cub_block<T, false>(hasnull_F, dev_result, iters);
+      raw_stream_bench_cub_block<T, true >(hasnull_T, dev_result, iters);
+
+    }
   };
 };
 
-void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_TYPES)
+void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_TYPES, bool do_full_test=false)
 {
   std::vector<gdf_dtype> types{};
   if (type == N_GDF_TYPES)
@@ -406,27 +424,29 @@ void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_
 
   for (gdf_dtype t : types) {
     std::cout << name_from_type(t) << std::endl;
-    cudf::type_dispatcher(t, benchmark(), column_size, iters);
+    cudf::type_dispatcher(t, benchmark(), column_size, iters, do_full_test);
     std::cout << std::endl << std::endl;
   }
 }
 
 int main(int argc, char **argv)
 {
-  gdf_size_type column_size{42000000};
+  gdf_size_type column_size{10000000};
   int iters{1000};
   gdf_dtype type = N_GDF_TYPES;
+  bool do_full_test = false;
 
   if (argc > 1) column_size = std::stoi(argv[1]);
   if (argc > 2) iters = std::stoi(argv[2]);
   if (argc > 3) type = type_from_name(argv[3]);
+  if (argc > 4) do_full_test = (argv[4][0] == 'f')? true : false;
 
   rmmOptions_t options{PoolAllocation, 0, false};
   rmmInitialize(&options);
 
   // -----------------------------------
   // type = GDF_FLOAT64;
-  benchmark_types(column_size, iters, type);
+  benchmark_types(column_size, iters, type, do_full_test);
   // -----------------------------------
 
   rmmFinalize();
