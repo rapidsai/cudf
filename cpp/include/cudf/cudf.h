@@ -3,16 +3,16 @@
 
 #include <cstdlib>
 #include <cstdint>
-#include "cudf/types.h"
-#include "cudf/io_types.h"
-#include "cudf/convert_types.h"
-#include "cudf/io_readers.hpp"
+#include "types.h"
+#include "io_types.h"
+#include "convert_types.h"
+#include "io_readers.hpp"
 
 constexpr size_t GDF_VALID_BITSIZE{(sizeof(gdf_valid_type) * 8)};
 
 extern "C" {
-#include "cudf/functions.h"
-#include "cudf/io_functions.h"
+#include "functions.h"
+#include "io_functions.h"
 }
 
 #endif /* GDF_GDF_H */

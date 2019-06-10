@@ -18,7 +18,7 @@
 
 #include <string>
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 /*
  * @brief Convert dtype strings into gdf_dtype enum;

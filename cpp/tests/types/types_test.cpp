@@ -15,7 +15,7 @@
  */
 
 #include <utilities/wrapper_types.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gtest/gtest.h>
 

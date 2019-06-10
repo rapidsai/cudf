@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <cuda_runtime.h>
 
@@ -32,8 +32,8 @@
 
 #include <nvstrings/NVStrings.h>
 
-#include "io/utilities/parsing_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <io/utilities/parsing_utils.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 using cudf::json_reader_args;
 using cudf::JsonReader;

@@ -20,8 +20,8 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 #define GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 
-#include "binary/jit/util/type.h"
-#include "binary/jit/util/operator.h"
+#include <binary/jit/util/type.h>
+#include <binary/jit/util/operator.h>
 #include <jitify.hpp>
 
 namespace cudf {
