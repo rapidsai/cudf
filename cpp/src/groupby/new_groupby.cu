@@ -269,7 +269,7 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   return unique_indices;
 }
 
-std::tuple<cudf::table, rmm::device_vector<gdf_index_type>> 
+std::pair<cudf::table, rmm::device_vector<gdf_index_type>> 
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const * key_col_indices,
@@ -279,7 +279,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
 
   if (0 == input_table.num_rows()) {
-    return std::make_tuple(cudf::table(), rmm::device_vector<gdf_index_type>());
+    return std::make_pair(cudf::table(), rmm::device_vector<gdf_index_type>());
   }
 
   gdf_size_type nrows = input_table.num_rows();
@@ -351,5 +351,5 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
                   [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
   cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
   
-  return std::make_tuple(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
+  return std::make_pair(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }
