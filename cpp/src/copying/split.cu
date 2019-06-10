@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-#include "types.hpp"
-#include "copying/slice.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/error_utils.hpp"
-#include "rmm/thrust_rmm_allocator.h"
+#include <cudf/types.hpp>
+#include "slice.hpp"
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/error_utils.hpp>
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 

@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 namespace cudf {
 

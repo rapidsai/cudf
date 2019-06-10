@@ -19,8 +19,8 @@
 #include <cuda_runtime.h>
 #include <utilities/error_utils.hpp>
 #include <table/device_table.cuh>
-#include <types.hpp>
-#include <cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/cudf.h>
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"

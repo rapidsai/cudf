@@ -20,10 +20,10 @@
 #ifndef GDF_TESTS_BINARY_OPERATION_INTEGRATION_ASSERT_BINOPS_H
 #define GDF_TESTS_BINARY_OPERATION_INTEGRATION_ASSERT_BINOPS_H
 
-#include "tests/binary/util/operation.h"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/scalar_wrapper.cuh"
-#include "gtest/gtest.h"
+#include <tests/binary/util/operation.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
+#include <gtest/gtest.h>
 
 namespace cudf {
 namespace test {

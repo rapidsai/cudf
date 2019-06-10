@@ -17,10 +17,10 @@
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <cudf.h>
-#include <cassert>
-#include <types.hpp>
+#include "cudf.h"
+#include "types.hpp"
 
+#include <cassert>
 #include <initializer_list>
 #include <vector>
 

@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <cudf.h>
-#include <table.hpp>
+#include <cudf/cudf.h>
 
 #include <string>
 #include <vector>
 
-#include "io/utilities/wrapper_utils.hpp"
+#include <cudf/table.hpp>
+#include <io/utilities/wrapper_utils.hpp>
 #include "type_conversion.cuh"
 
 namespace cudf {

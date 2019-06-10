@@ -18,7 +18,7 @@
 #ifndef POINT_IN_POLYGON_HPP
 #define POINT_IN_POLYGON_HPP
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 namespace cudf {
 namespace gis {

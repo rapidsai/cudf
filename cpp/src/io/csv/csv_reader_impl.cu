@@ -52,21 +52,20 @@
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include "cudf.h"
-#include "table.hpp"
-#include "utilities/error_utils.hpp"
-#include "utilities/trie.cuh"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/cudf_utils.h" 
+#include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/trie.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/cudf_utils.h> 
 
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
-#include "rmm/thrust_rmm_allocator.h"
-#include "io/comp/io_uncomp.h"
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <io/comp/io_uncomp.h>
 
-#include "io/cuio_common.hpp"
-#include "io/utilities/parsing_utils.cuh"
+#include <io/cuio_common.hpp>
+#include <io/utilities/parsing_utils.cuh>
 
 using std::vector;
 using std::string;

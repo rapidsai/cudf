@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cassert>
-#include <copying.hpp>
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/column_utils.hpp>
 

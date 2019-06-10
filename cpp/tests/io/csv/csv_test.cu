@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
- #include <cstdlib>
- #include <fstream>
- #include <iostream>
- #include <vector>
- #include <string>
-
-#include "cudf.h"
-
+#include <cudf/cudf.h>
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "tests/io/io_test_utils.hpp"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <tests/io/io_test_utils.hpp>
+#include <tests/utilities/cudf_test_fixtures.h>
+
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <string>
 
 TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
@@ -499,10 +498,10 @@ TEST(gdf_csv_test, Writer)
     std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
     std::string verify =
         "\"boolean\",\"integer\",\"float\",\"string\"\n"
-        "true,1,1,\"one\"\n"
+        "true,1,1.0,\"one\"\n"
         "false,2,2.25,\"two\"\n"
         "false,3,3.5,\"three\"\n"
         "true,4,4.75,\"four\"\n"
-        "false,5,5,\"five\"\n";
+        "false,5,5.0,\"five\"\n";
     EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }
