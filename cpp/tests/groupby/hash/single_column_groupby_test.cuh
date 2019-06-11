@@ -68,55 +68,34 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
   return std::make_pair(sorted_output_keys, sorted_output_values);
 }
 
-template <typename T, std::size_t Index>
-void expect_equal_columns(cudf::table const& lhs, cudf::table const& rhs) {
-  // Heap allocate the columns in order to be able to check if the constructors
-  // throw
-  std::unique_ptr<column_wrapper<T>> lhs_col;
-  std::unique_ptr<column_wrapper<T>> rhs_col;
-  CUDF_EXPECT_NO_THROW(lhs_col.reset(
-      new column_wrapper<T>(*const_cast<gdf_column*>(lhs.get_column(Index)))));
-  CUDF_EXPECT_NO_THROW(rhs_col.reset(
-      new column_wrapper<T>(*const_cast<gdf_column*>(rhs.get_column(Index)))));
-  expect_columns_are_equal(*lhs_col, *rhs_col);
-}
-
-template <typename... Ts, std::size_t... Indices>
-inline void expect_tables_are_equal_impl(cudf::table const& lhs,
-                                         cudf::table const& rhs,
-                                         std::index_sequence<Indices...>) {
-  (void)std::initializer_list<int>{
-      (expect_equal_columns<Ts, Indices>(lhs, rhs), 0)...};
-}
+struct column_equality {
+  template <typename T>
+  bool operator()(gdf_column lhs, gdf_column rhs) const {
+    std::unique_ptr<column_wrapper<T>> lhs_col;
+    std::unique_ptr<column_wrapper<T>> rhs_col;
+    lhs_col.reset(new column_wrapper<T>(lhs));
+    rhs_col.reset(new column_wrapper<T>(rhs));
+    expect_columns_are_equal(*lhs_col, *rhs_col);
+    return true;
+  }
+};
 
 /**---------------------------------------------------------------------------*
- * @brief Ensures two tables are equal
+ * @brief Verifies the equality of two tables
  *
- * Requires the caller to specify the types of each column in the table.
- *
- * For example, if the tables have 4 columns of types `GDF_INT32, GDF_FLOAT32,
- * GDF_DATE32, GDF_INT8`, then this function would be called as:
- *
- * ```
- * expect_tables_are_equal<int32_t, float, cudf::date32, int8_t>(lhs, rhs);
- * ```
- * Since we are expecting the two tables to be equivalent, we assume that
- * corresponding columns between each table have the same type. Else, the tables
- * will not be considered equal and a corresponding GTest failure will be
- * raised.
- *
- * @tparam Ts The concrete C++ types of each column in the table
- * @param lhs The left hand side table to compare
- * @param rhs The right hand side table to compare
+ * @param lhs The first table
+ * @param rhs The second table
  *---------------------------------------------------------------------------**/
-template <typename... Ts>
 inline void expect_tables_are_equal(cudf::table const& lhs,
                                     cudf::table const& rhs) {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  EXPECT_EQ(static_cast<gdf_size_type>(sizeof...(Ts)), lhs.num_columns())
-      << "Size mismatch between number of types and number of columns";
-  expect_tables_are_equal_impl<Ts...>(lhs, rhs,
-                                      std::index_sequence_for<Ts...>{});
+  EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
+  EXPECT_TRUE(
+      std::equal(lhs.begin(), lhs.end(), rhs.begin(),
+                 [](gdf_column const* lhs_col, gdf_column const* rhs_col) {
+                   return cudf::type_dispatcher(
+                       lhs_col->dtype, column_equality{}, *lhs_col, *rhs_col);
+                 }));
 }
 
 }  // namespace detail
@@ -157,10 +136,10 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   std::tie(sorted_expected_keys, sorted_expected_values) =
       detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
 
-  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal<Key>(
-      sorted_actual_keys, sorted_expected_keys));
-  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal<ResultValue>(
-      sorted_actual_values, sorted_expected_values));
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
+                                                       sorted_expected_keys));
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
+                                                       sorted_expected_values));
 }
 
 }  // namespace test
