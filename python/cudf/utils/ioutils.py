@@ -652,7 +652,7 @@ cudf.io.csv.to_csv
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
 _docstring_to_csv = """
-Write a dataframe to csv file format
+Write a dataframe to csv file format.
 
 Parameters
 ----------
@@ -668,12 +668,26 @@ columns : list of str, optional
     Columns to write
 header : bool, default True
     Write out the column names
+index : bool, default True
+    Write out the index as a column
 line_terminator: char, default '\\n'
 
 Notes
 -----
-Writing index is currently not supported by `to_csv`.
-No indicies will be written to the csv file.
+Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+
+Examples
+--------
+
+Write a dataframe to csv.
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
+                         'y': [1.0, 3.3, 2.2, 4.4],
+                         'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index([3, 2, 1, 0])
+>>> cudf.to_csv(filename)
 
 See Also
 --------
