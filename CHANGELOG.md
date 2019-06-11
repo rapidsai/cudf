@@ -115,6 +115,7 @@
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 - PR #1982 Fixes incorrect index name after join operation
+- PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 
 
 # cudf 0.7.2 (16 May 2019)
