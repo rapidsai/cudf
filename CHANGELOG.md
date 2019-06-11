@@ -48,6 +48,7 @@
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1855 Transition replace_nulls to new C++ API and update corresponding Cython/Python code
 - PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1390 Added some basic utility functions for `gdf_column`s
