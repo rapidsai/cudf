@@ -8,7 +8,13 @@ from cudf.bindings.rolling cimport *
 
 
 def apply_rolling(inp, window, min_periods, op):
-    cdef gdf_column *inp_col = column_view_from_column(inp)
+
+    cdef gdf_column *inp_col
+
+    if op == "mean":
+        inp_col = column_view_from_column(inp.astype("float64"))
+    else:
+        inp_col = column_view_from_column(inp)
 
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
 

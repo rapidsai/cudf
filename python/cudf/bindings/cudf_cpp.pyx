@@ -66,6 +66,7 @@ np_pa_dtypes = {
 
 agg_ops = {
     'sum':            GDF_SUM,
+    'max':            GDF_MAX,
     'min':            GDF_MIN,
     'mean':           GDF_AVG,
     'avg':            GDF_AVG,
