@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#ifndef FILLING_HPP
+#define FILLING_HPP
+
+#include "cudf.h"
 
 namespace cudf {
 
@@ -22,3 +25,5 @@ void fill(gdf_column *column, gdf_scalar const& value,
           gdf_index_type begin, gdf_index_type end);
 
 }; // namespace cudf
+
+#endif // FILLING_HPP

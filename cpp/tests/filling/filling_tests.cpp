@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <filling.hpp>
+#include <cudf/filling.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
