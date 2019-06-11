@@ -22,6 +22,7 @@ from cudf.dataframe import columnops
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.window import Rolling
 
 import cudf.bindings.copying as cpp_copying
 
@@ -1645,6 +1646,9 @@ class Series(object):
 
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
+
+    def rolling(self, window):
+        return Rolling(self, window)
 
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """

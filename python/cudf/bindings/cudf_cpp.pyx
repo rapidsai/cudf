@@ -64,6 +64,15 @@ np_pa_dtypes = {
     np.str_:        pa.string(),
 }
 
+agg_ops = {
+    'sum':            GDF_SUM,
+    'min':            GDF_MIN,
+    'mean':           GDF_AVG,
+    'avg':            GDF_AVG,
+    'count':          GDF_COUNT,
+    'count_distinct': GDF_COUNT_DISTINCT,
+}
+
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
