@@ -143,7 +143,7 @@ class StringMethods(object):
             '''
             assert others.dtype == np.dtype('object')
             others = others.data
-        elif others and is_list_like(others):
+        elif is_list_like(others) and others:
             '''
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
@@ -156,9 +156,13 @@ class StringMethods(object):
             '''
             first = others[0]
 
-            if (is_list_like(first) or isinstance(first, (Series, Index))) \
-                    and all((is_list_like(x) or
-                            isinstance(x, (Series, Index))) for x in others):
+            if (is_list_like(first) or
+                isinstance(first, (Series, Index, pd.Series, pd.Index))) \
+                    and all((
+                            is_list_like(x) or
+                            isinstance(x, (Series, Index, pd.Series, pd.Index))
+                            )
+                            for x in others):
                 '''
                 Internal elements in others list should also be
                 list-like and not a regular string/byte
@@ -166,21 +170,25 @@ class StringMethods(object):
 
                 first = None
                 for frame in others:
+                    if not isinstance(frame, (Series, Index)):
+                        '''
+                        Make sure all inputs to .cat function call
+                        are of type nvstrings so creating a Series object.
+                        '''
+                        frame = Series(frame, dtype='str')
+
                     if (first is None):
-                        if not isinstance(frame, (Series, Index)):
-                            first = Series(frame, dtype='str')
-                        else:
-                            first = frame
                         '''
                         extracting nvstrings pointer since
-                        `frame` is of type Series/Index
+                        `frame` is of type Series/Index and
+                        first isn't yet initialized.
                         '''
-                        first = first.data
+                        first = frame.data
                     else:
-                        if isinstance(frame, (Series, Index)):
-                            assert frame.dtype == np.dtype('object')
-                            frame = frame.data
+                        assert frame.dtype == np.dtype('object')
+                        frame = frame.data
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
+
                 others = first
             elif (not is_list_like(first)) and \
                     all(not is_list_like(x) for x in others):
@@ -189,6 +197,9 @@ class StringMethods(object):
                 '''
                 others = Series(others)
                 others = others.data
+        elif isinstance(others, (pd.Series, pd.Index)):
+            others = Series(others)
+            others = others.data
 
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),

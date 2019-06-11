@@ -342,19 +342,6 @@ def test_string_cat(ps_gs, others, sep, na_rep):
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-    if isinstance(others, pd.Series):
-        others = Series(others)
-    elif isinstance(others, (list, tuple)):
-        new_others = []
-        for i in others:
-            if isinstance(i, pd.Series):
-                new_others.append(Series(i))
-            else:
-                new_others.append(i)
-        if isinstance(others, tuple):
-            others = tuple(new_others)
-        else:
-            others = new_others
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
