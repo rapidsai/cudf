@@ -184,7 +184,7 @@ rmm::device_vector<gdf_index_type> gdf_unique_indices(
  * columns.
  *          - A device vector containing the first index of every unique row
  */
-std::tuple<cudf::table, rmm::device_vector<gdf_index_type>>
+std::pair<cudf::table, rmm::device_vector<gdf_index_type>> 
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const* key_col_indices,

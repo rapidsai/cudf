@@ -1,4 +1,5 @@
 from collections import namedtuple
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -200,6 +201,16 @@ def cudf_dtype_from_pydata_dtype(dtype):
         dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
+
+
+def is_single_value(val):
+    return (
+            isinstance(val, str)
+            or isinstance(val, numbers.Number)
+            or np.isscalar(val)
+            or isinstance(val, pd.Timestamp)
+            or isinstance(val, pd.Categorical)
+    )
 
 
 def get_dummies(df, prefix='', prefix_sep='_', cats={}, columns=None,
