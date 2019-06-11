@@ -191,7 +191,7 @@ endif(BUILD_TESTS)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-if(NOT("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}" STREQUAL ""))
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif()
 
