@@ -302,7 +302,8 @@ class Series(object):
 
     def __setitem__(self, key, val):
         def _process_arg(arg):
-            if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
+            # TODO support ranges, slices using set_range
+            if isinstance(arg, (list, np.ndarray, pd.Series, Index,
                                 DeviceNDArray)):
                 if len(arg) == 0:
                     return np.array([], dtype=self.dtype)
@@ -318,13 +319,8 @@ class Series(object):
         else:
             if isinstance(val, Number):
                 val = val * np.ones(len(key), dtype=self.dtype)
-            else:
-                # TODO something more intelligent here
-                assert len(key) == len(val)
 
-        cpp_copying.apply_scatter_array(rmm.to_device(val),
-                                        rmm.to_device(key),
-                                        self._column)
+        self._column.scatter_assign(val, key)
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.

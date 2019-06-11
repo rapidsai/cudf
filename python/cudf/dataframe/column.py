@@ -482,6 +482,40 @@ class Column(object):
                                value=value)
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
+    def scatter_assign(self, data, maps):
+        """Call cudf::scatter to scatter values in `data` to this column
+
+        Parameters
+        ----------
+        data : column, np.ndarray or structured scalar
+            input data. if not a column, should be supported
+            by `rmm.to_device`
+        maps : np.ndarray or structured scalar
+            scatter map such that row `i` in `data` is scattered
+            to row `maps[i]`, any supported by `rmm.to_device`
+        """
+        def _to_devarray(arg, name):
+            try:
+                return rmm.to_device(arg)
+            except Exception:
+                raise TypeError(f"Unsupported type for argument {name}")
+
+        if not isinstance(data, Column):
+            data = _to_devarray(data, "data")
+            data_len = data.size
+        else:
+            data_len = len(data)
+
+        maps = _to_devarray(maps, "maps")
+        maps_len = maps.size
+
+        if data_len != maps_len:
+            raise ValueError(
+                "Arguments should have the same size "
+                f"(found {data.size} and {maps.size})"
+            )
+        cpp_copying.apply_scatter_array(data, maps, self)
+
     def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
 
