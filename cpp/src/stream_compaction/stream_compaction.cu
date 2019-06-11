@@ -127,7 +127,6 @@ template<typename DerivedPolicy,
          typename InputIterator,
          typename OutputIterator,
          typename BinaryPredicate>
-__host__ __device__
   OutputIterator non_duplicates_copy(thrust::execution_policy<DerivedPolicy> &exec,
                              InputIterator first,
                              InputIterator last,
