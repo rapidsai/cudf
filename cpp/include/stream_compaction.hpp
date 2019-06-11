@@ -92,7 +92,7 @@ enum {
   KEEP_FIRST = 0,   ///< Keeps first duplicate row
   KEEP_LAST,        ///< Keeps last  duplicate row 
   KEEP_FALSE        ///< Don't keep any duplicate rows
-} duplicate_keep_option;
+};
 
 /**
  * @brief Create a new table without duplicate rows 
