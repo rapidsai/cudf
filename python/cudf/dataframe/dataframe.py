@@ -30,6 +30,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
@@ -890,9 +891,20 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
+        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        for col in self.columns:
-            out[col] = self[col].take(positions, ignore_index=ignore_index)
+        cols = [s._column for s in self._cols.values()]
+
+        result_cols = cpp_copying.apply_gather(cols, positions)
+
+        out = DataFrame()
+        for i, col_name in enumerate(self._cols):
+            out[col_name] = result_cols[i]
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        else:
+            out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):
@@ -994,10 +1006,13 @@ class DataFrame(object):
         series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        if forceindex or empty_index or self._index.equals(series.index):
+
+        if not self._cols:
+            self._size = len(series)
+
+        if forceindex or empty_index or self.index is series.index:
             if empty_index:
                 self._index = series.index
-            self._size = len(series)
             return series
         else:
             return series.set_index(self._index)
@@ -2785,6 +2800,16 @@ class DataFrame(object):
             result = Series(result)
             result = result.set_index(self._cols.keys())
         return result
+
+    def _columns_view(self, columns):
+        """
+        Return a subset of the DataFrame's columns as a view.
+        """
+        columns = as_index(columns)
+        result_columns = OrderedDict({})
+        for col in columns:
+            result_columns[col] = self[col]
+        return DataFrame(result_columns)
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.

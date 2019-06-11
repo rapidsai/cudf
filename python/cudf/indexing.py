@@ -223,9 +223,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
         columns = self._get_column_selection(arg[1])
-        df = DataFrame()
-        for col in columns:
-            df.add_column(name=col, data=self._df[col].iloc[arg[0]])
+
+        if isinstance(arg[0], slice):
+            df = DataFrame()
+            for col in columns:
+                df.add_column(name=col, data=self._df[col].iloc[arg[0]])
+        else:
+            df = self._df._columns_view(columns).take(arg[0])
+
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
                 df.index = as_index(self._df.index[arg[0].start])
