@@ -5,6 +5,7 @@ class Rolling:
     def __init__(self, obj, window):
         self.obj = obj
         self.window = window
+        self._validate_args()
 
     def _apply_agg(self, agg_name):
         result_col = apply_rolling(
@@ -28,3 +29,8 @@ class Rolling:
 
     def count(self):
         return self._apply_agg("count")
+
+    def _validate_args(self):
+
+        if self.window <= 0:
+            raise ValueError("Window size cannot be zero or negative")
