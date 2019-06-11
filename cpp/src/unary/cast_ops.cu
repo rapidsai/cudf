@@ -22,9 +22,9 @@
 
 #include "unary_ops.cuh"
 
-#include "rmm/thrust_rmm_allocator.h"
-#include "utilities/wrapper_types.hpp"
-#include "utilities/type_dispatcher.hpp"
+#include <rmm/thrust_rmm_allocator.h>
+#include <utilities/wrapper_types.hpp>
+#include <utilities/type_dispatcher.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>

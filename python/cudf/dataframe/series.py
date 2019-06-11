@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import warnings
+import operator
 from collections import OrderedDict
 from numbers import Number
 
@@ -166,7 +167,7 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def append(self, other, ignore_index=True):
+    def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True`` (default), the index is reset.
         """
@@ -453,38 +454,234 @@ class Series(object):
         outcol = self._column.unary_operator(fn)
         return self._copy_construct(data=outcol)
 
+    def _filled_binaryop(self, other, fn, fill_value=None, reflect=False):
+        def func(lhs, rhs):
+            return fn(rhs, lhs) if reflect else fn(lhs, rhs)
+
+        if fill_value is not None:
+            if isinstance(other, Series):
+                if self.has_null_mask and other.has_null_mask:
+                    lmask = Series(data=self.nullmask)
+                    rmask = Series(data=other.nullmask)
+                    out_mask = (lmask | rmask).data
+                    temp_lhs = self.fillna(fill_value)
+                    temp_rhs = other.fillna(fill_value)
+                    out = func(temp_lhs, temp_rhs)
+                    col = self._column.replace(data=out.data, mask=out_mask)
+                    return self._copy_construct(data=col)
+                else:
+                    return func(self.fillna(fill_value),
+                                other.fillna(fill_value))
+            elif is_scalar(other):
+                return func(self.fillna(fill_value), other)
+        else:
+            return func(self, other)
+
+    def add(self, other, fill_value=None):
+        """Addition of series and other, element-wise
+        (binary operator add).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.add, fill_value)
+
     def __add__(self, other):
         return self._binaryop(other, 'add')
+
+    def radd(self, other, fill_value=None):
+        """Addition of series and other, element-wise
+        (binary operator radd).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.add, fill_value, True)
 
     def __radd__(self, other):
         return self._rbinaryop(other, 'add')
 
+    def sub(self, other, fill_value=None):
+        """Subtraction of series and other, element-wise
+        (binary operator sub).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.sub, fill_value)
+
     def __sub__(self, other):
         return self._binaryop(other, 'sub')
+
+    def rsub(self, other, fill_value=None):
+        """Subtraction of series and other, element-wise
+        (binary operator rsub).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.sub, fill_value, True)
 
     def __rsub__(self, other):
         return self._rbinaryop(other, 'sub')
 
+    def mul(self, other, fill_value=None):
+        """Multiplication of series and other, element-wise
+        (binary operator mul).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mul, fill_value)
+
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
+
+    def rmul(self, other, fill_value=None):
+        """Multiplication of series and other, element-wise
+        (binary operator rmul).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mul, fill_value, True)
 
     def __rmul__(self, other):
         return self._rbinaryop(other, 'mul')
 
+    def mod(self, other, fill_value=None):
+        """Modulo of series and other, element-wise
+        (binary operator mod).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mod, fill_value)
+
     def __mod__(self, other):
         return self._binaryop(other, 'mod')
+
+    def rmod(self, other, fill_value=None):
+        """Modulo of series and other, element-wise
+        (binary operator rmod).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mod, fill_value, True)
 
     def __rmod__(self, other):
         return self._rbinaryop(other, 'mod')
 
+    def pow(self, other, fill_value=None):
+        """Exponential power of series and other, element-wise
+        (binary operator pow).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.pow, fill_value)
+
     def __pow__(self, other):
         return self._binaryop(other, 'pow')
+
+    def rpow(self, other, fill_value=None):
+        """Exponential power of series and other, element-wise
+        (binary operator rpow).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.pow, fill_value, True)
+
+    def __rpow__(self, other):
+        return self._rbinaryop(other, 'pow')
+
+    def floordiv(self, other, fill_value=None):
+        """Integer division of series and other, element-wise
+        (binary operator floordiv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.floordiv, fill_value)
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
 
+    def rfloordiv(self, other, fill_value=None):
+        """Integer division of series and other, element-wise
+        (binary operator rfloordiv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.floordiv, fill_value,
+                                     True)
+
     def __rfloordiv__(self, other):
         return self._rbinaryop(other, 'floordiv')
+
+    def truediv(self, other, fill_value=None):
+        """Floating division of series and other, element-wise
+        (binary operator truediv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.truediv, fill_value)
 
     def __truediv__(self, other):
         if self.dtype in list(truediv_int_dtype_corrections.keys()):
@@ -492,6 +689,19 @@ class Series(object):
             return self.astype(truediv_type)._binaryop(other, 'truediv')
         else:
             return self._binaryop(other, 'truediv')
+
+    def rtruediv(self, other, fill_value=None):
+        """Floating division of series and other, element-wise
+        (binary operator rtruediv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.truediv, fill_value, True)
 
     def __rtruediv__(self, other):
         if self.dtype in list(truediv_int_dtype_corrections.keys()):
@@ -584,23 +794,101 @@ class Series(object):
         nvtx_range_pop()
         return result
 
+    def eq(self, other, fill_value=None):
+        """Equal to of series and other, element-wise
+        (binary operator eq).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.eq, fill_value)
+
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
 
     def equals(self, other):
         return self._unordered_compare(other, 'eq').min()
 
+    def ne(self, other, fill_value=None):
+        """Not equal to of series and other, element-wise
+        (binary operator ne).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.ne, fill_value)
+
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
+
+    def lt(self, other, fill_value=None):
+        """Less than of series and other, element-wise
+        (binary operator lt).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.lt, fill_value)
 
     def __lt__(self, other):
         return self._ordered_compare(other, 'lt')
 
+    def le(self, other, fill_value=None):
+        """Less than or equal to of series and other, element-wise
+        (binary operator le).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.le, fill_value)
+
     def __le__(self, other):
         return self._ordered_compare(other, 'le')
 
+    def gt(self, other, fill_value=None):
+        """Greater than of series and other, element-wise
+        (binary operator gt).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.gt, fill_value)
+
     def __gt__(self, other):
         return self._ordered_compare(other, 'gt')
+
+    def ge(self, other, fill_value=None):
+        """Greater than or equal to of series and other, element-wise
+        (binary operator ge).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.ge, fill_value)
 
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')

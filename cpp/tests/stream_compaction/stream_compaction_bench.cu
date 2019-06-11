@@ -17,7 +17,7 @@
 #include <chrono>
 #include <random>
 #include <cuda_profiler_api.h>
-#include <stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 

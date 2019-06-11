@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#include "binary/jit/util/type.h"
-#include "utilities/type_dispatcher.hpp"
+#include "type.h"
+#include <utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace binops {

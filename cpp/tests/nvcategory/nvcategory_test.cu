@@ -18,9 +18,10 @@
  */
 
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
+#include <cudf/binaryop.hpp>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 #include <cudf/functions.h>
@@ -31,17 +32,17 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include <cstring>
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/nvcategory_utils.cuh"
-#include "bitmask/bit_mask.cuh"
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <bitmask/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <tests/utilities/valid_vectors.h>
 
-#include "string/nvcategory_util.hpp"
+#include <string/nvcategory_util.hpp>
 
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
@@ -509,8 +510,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	gdf_error err = gdf_binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL);
-	EXPECT_EQ(GDF_SUCCESS, err);
+	CUDF_EXPECT_NO_THROW(cudf::binary_operation(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL));
 
 	int8_t * data = new int8_t[rows_size];
 	CUDA_TRY( cudaMemcpy(data, output_column->data, sizeof(int8_t) * rows_size, cudaMemcpyDeviceToHost) );
