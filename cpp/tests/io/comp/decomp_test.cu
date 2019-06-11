@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "io/comp/gpuinflate.h"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include <io/comp/gpuinflate.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <vector>
 

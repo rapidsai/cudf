@@ -17,7 +17,7 @@
 #ifndef __IO_ORC_GPU_H__
 #define __IO_ORC_GPU_H__
 
-#include "io/comp/gpuinflate.h"
+#include <io/comp/gpuinflate.h>
 
 namespace orc { namespace gpu {
 

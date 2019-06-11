@@ -116,56 +116,39 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+
         elif (dtype == np.dtype('object') or
               np.issubdtype(dtype, np.dtype('U').type)):
-            import nvstrings
-            if np.issubdtype(self.dtype, np.signedinteger):
-                if len(self) > 0:
+            if len(self) > 0:
+                if self.dtype in (np.dtype('int8'), np.dtype('int16')):
                     dev_array = self.astype('int32').data.mem
-                    dev_ptr = get_ctype_ptr(dev_array)
-                    null_ptr = None
-                    if self.mask is not None:
-                        null_ptr = get_ctype_ptr(self.mask.mem)
-                    return string.StringColumn(
-                        data=nvstrings.itos(
-                            dev_ptr,
-                            count=len(self),
-                            nulls=null_ptr,
-                            bdevmem=True
-                        )
-                    )
                 else:
-                    return string.StringColumn(
-                        data=nvstrings.to_device(
-                            []
-                        )
-                    )
-            elif np.issubdtype(self.dtype, np.floating):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # dev_array = self.astype('float32').data.mem
-                # dev_ptr = get_ctype_ptr(self.data.mem)
-                # return string.StringColumn(
-                #     data=nvstrings.ftos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
-            elif self.dtype == np.dtype('bool'):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # return string.StringColumn(
-                #     data=nvstrings.btos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
+                    dev_array = self.data.mem
+                dev_ptr = get_ctype_ptr(dev_array)
+                null_ptr = None
+                if self.mask is not None:
+                    null_ptr = get_ctype_ptr(self.mask.mem)
+                kwargs = {
+                    'count': len(self),
+                    'nulls': null_ptr,
+                    'bdevmem': True
+                }
+                data = string._numeric_to_str_typecast_functions[
+                    np.dtype(dev_array.dtype)
+                ](dev_ptr, **kwargs)
+
+            else:
+                data = []
+
+            return string.StringColumn(data=data)
+
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
                 dtype=dtype,
                 data=self.data.astype(dtype)
             )
+
         else:
             col = self.replace(data=self.data.astype(dtype),
                                dtype=np.dtype(dtype))
@@ -328,6 +311,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
+        elif dkind == 'b':
+            return False
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
