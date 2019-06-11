@@ -137,7 +137,7 @@ template<typename DerivedPolicy,
   thrust::detail::tail_flags<InputIterator, BinaryPredicate> stencil2(first, last, binary_pred);
   auto combined_stencil = thrust::make_transform_iterator(
           thrust::make_zip_iterator(thrust::make_tuple(stencil1.begin(), stencil2.begin())),
-          tuple_reduced_and());
+          [] __device__ (thrust::tuple<bool,bool> const& x)(return thrust::get<0>(x) and thrust::get<1>(x););
   
   using namespace thrust::placeholders;
   
