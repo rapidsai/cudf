@@ -39,7 +39,6 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 
 using cudf::csv_reader_args;
 using cudf::CsvReader;
-using cudf::gdf_csv_input_form;
 using cudf::gdf_csv_quote_style;
 
 TEST(gdf_csv_test, DetectColumns)
@@ -57,7 +56,7 @@ TEST(gdf_csv_test, DetectColumns)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A", "B", "C" };
         args.header = -1;
@@ -88,7 +87,7 @@ TEST(gdf_csv_test, UseColumns)
 
     {
         csv_reader_args args;
-        args.input_data_form    = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form    = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A", "B", "C" };
         args.dtype = { "int", "float64", "int" };
@@ -134,7 +133,7 @@ TEST(gdf_csv_test, Numbers) {
 
   {
     csv_reader_args args;
-    args.input_data_form = gdf_csv_input_form::FILE_PATH;
+    args.input_data_form = gdf_input_type::FILE_PATH;
     args.filepath_or_buffer = fname;
     args.dtype = {"int8",    "short",  "int16",  "int",
                   "int32",   "long",   "int64",  "float",
@@ -160,7 +159,7 @@ TEST(gdf_csv_test, Numbers) {
 TEST(gdf_csv_test, MortPerf)
 {
     csv_reader_args args;
-    args.input_data_form = gdf_csv_input_form::FILE_PATH;
+    args.input_data_form = gdf_input_type::FILE_PATH;
     args.filepath_or_buffer = "Performance_2000Q1.txt";
 
     if (checkFile(args.filepath_or_buffer))
@@ -186,7 +185,7 @@ TEST(gdf_csv_test, Strings)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = names;
         args.dtype = { "int32", "str" };
@@ -215,7 +214,7 @@ TEST(gdf_csv_test, QuotedStrings)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = names;
         args.dtype = { "int32", "str" };
@@ -244,7 +243,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = names;
         args.dtype = { "int32", "str" };
@@ -271,7 +270,7 @@ TEST(gdf_csv_test, Booleans)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = {"A", "B", "C", "D"};
         args.dtype = {"int32", "int32", "short", "bool"};
@@ -311,7 +310,7 @@ TEST(gdf_csv_test, Dates)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A" };
         args.dtype = { "date" };
@@ -341,7 +340,7 @@ TEST(gdf_csv_test, FloatingPoint)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A" };
         args.dtype = { "float32" };
@@ -370,7 +369,7 @@ TEST(gdf_csv_test, Category)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "UserID" };
         args.dtype = { "category" };
@@ -398,7 +397,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A" };
         args.dtype = { "int32" };
@@ -424,7 +423,7 @@ TEST(gdf_csv_test, ByteRange)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A" };
         args.dtype = { "int32" };
@@ -450,7 +449,7 @@ TEST(gdf_csv_test, BlanksAndComments)
 
     {
         csv_reader_args args;
-        args.input_data_form = gdf_csv_input_form::FILE_PATH;
+        args.input_data_form = gdf_input_type::FILE_PATH;
         args.filepath_or_buffer = fname;
         args.names = { "A" };
         args.dtype = { "int32" };
@@ -479,7 +478,7 @@ TEST(gdf_csv_test, Writer)
     outfile.close();
 
     csv_reader_args rargs;
-    rargs.input_data_form = gdf_csv_input_form::FILE_PATH;
+    rargs.input_data_form = gdf_input_type::FILE_PATH;
     rargs.filepath_or_buffer = fname;
     rargs.names = { "boolean", "integer", "float", "string" };
     rargs.dtype = { "bool", "int32", "float32", "str" };

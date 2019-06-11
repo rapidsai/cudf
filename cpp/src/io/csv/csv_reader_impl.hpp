@@ -116,11 +116,11 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief Parse the specified rows of the input CSV file.
    * 
-   * Set num_skip_footer to zero when using to_read parameter.
+   * Set num_skip_footer to zero when using num_read parameter.
    *
    * @param[in] num_skip_header Number of rows at the start of the files to skip.
    * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
-   * @param[in] to_read Number of rows to read. Value of -1 indicates all rows.
+   * @param[in] num_read Number of rows to read. Value of -1 indicates all rows.
    * 
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/

@@ -384,7 +384,7 @@ table CsvReader::Impl::read()
 	size_t	map_size = 0;
 	size_t	map_offset = 0;
 	int fd = 0;
-	if (args_.input_data_form == gdf_csv_input_form::FILE_PATH)
+	if (args_.input_data_form == gdf_input_type::FILE_PATH)
 	{
 		fd = open(args_.filepath_or_buffer.c_str(), O_RDONLY );
 		if (fd < 0) { close(fd); CUDF_FAIL("Error opening file"); }
@@ -423,7 +423,7 @@ table CsvReader::Impl::read()
 			if (map_data == MAP_FAILED || map_size==0) { close(fd); CUDF_FAIL("Error mapping file"); }
 		}
 	}
-	else if (args_.input_data_form == gdf_csv_input_form::HOST_BUFFER)
+	else if (args_.input_data_form == gdf_input_type::HOST_BUFFER)
 	{
 		map_data = args_.filepath_or_buffer.c_str();
 		num_bytes = map_size = args_.filepath_or_buffer.size();
@@ -463,7 +463,7 @@ table CsvReader::Impl::read()
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	if (args_.input_data_form == gdf_csv_input_form::FILE_PATH)
+	if (args_.input_data_form == gdf_input_type::FILE_PATH)
 	{
 		close(fd);
 		if (map_data != nullptr) {

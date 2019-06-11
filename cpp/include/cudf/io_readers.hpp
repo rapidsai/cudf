@@ -102,14 +102,6 @@ public:
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Enumeration of supported input types for CSV reader
- *
- * TODO: Remove and use gdf_input_type directly. This typedef is to reduce the
- * initial changes for Parquet review by not changing/including any CSV code.
- */
-using gdf_csv_input_form = gdf_input_type;
-
-/**---------------------------------------------------------------------------*
  * @brief Enumeration of quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
 enum gdf_csv_quote_style{
@@ -139,7 +131,7 @@ enum gdf_csv_quote_style{
 
  *---------------------------------------------------------------------------**/
 struct csv_reader_args{
-  gdf_csv_input_form input_data_form = HOST_BUFFER; ///< Type of source of CSV data
+  gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
   std::string        filepath_or_buffer;            ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   std::string        compression = "infer";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
@@ -231,15 +223,15 @@ public:
   /**---------------------------------------------------------------------------*
    * @brief Parse the specified rows of the input CSV file.
    * 
-   * Set num_skip_footer to zero when using to_read parameter.
+   * Set num_skip_footer to zero when using num_read parameter.
    *
    * @param[in] num_skip_header Number of rows at the start of the files to skip.
    * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
-   * @param[in] to_read Number of rows to read. Value of -1 indicates all rows.
+   * @param[in] num_read Number of rows to read. Value of -1 indicates all rows.
    * 
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type to_read = -1);
+  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read = -1);
 
   ~CsvReader();
 };

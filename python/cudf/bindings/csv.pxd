@@ -14,9 +14,6 @@ from libcpp.vector cimport vector
 
 cdef extern from "cudf.h" namespace "cudf" nogil:
 
-    # See cpp/include/cudf/io_types.h:33
-    ctypedef gdf_input_type gdf_csv_input_form
-
     # See cpp/include/cudf/io_types.h:38
     ctypedef enum gdf_csv_quote_style:
         QUOTE_MINIMAL = 0,
@@ -26,7 +23,7 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
 
     # See cpp/include/cudf/io_types.h:62
     cdef struct csv_reader_args:
-        gdf_csv_input_form  input_data_form
+        gdf_input_type  input_data_form
         string              filepath_or_buffer
 
         char                lineterminator
