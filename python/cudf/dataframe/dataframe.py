@@ -947,28 +947,22 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        from collections.abc import Sequence
 
-        def is_list_like(obj):
-            if isinstance(obj, (Sequence,)) and \
-                    not isinstance(obj, (str, bytes, int)):
-                return True
-            else:
-                return False
-
-        if not isinstance(series, Series) and is_list_like(series):
+        if (not isinstance(series, Series) and utils.is_list_like(series)) \
+                or (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
             '''
-            Case when series is not a series and list-like.
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
             Reason we will have to guard this with not Series check
             is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
             '''
             series = Series(series)
-        elif is_list_like(series):
-            # Case when series is scalar and of type list.
-            series = Series(series)
-        elif isinstance(series, Series):
-            # Case when series is a cudf Series
-            series = series
         else:
             # Case when series is just a non-list
             return
@@ -994,37 +988,30 @@ class DataFrame(object):
         if SCALAR:
             col = series
 
-        from collections.abc import Sequence
-
-        def is_list_like(obj):
-            if isinstance(obj, (Sequence,)) and \
-                    not isinstance(obj, (str, bytes, int)):
-                return True
-            else:
-                return False
-
-        if not isinstance(series, Series) and is_list_like(series):
+        if (not isinstance(series, Series) and utils.is_list_like(series)) \
+                or (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
             '''
-            Case when series is not a series and list-like.
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
             Reason we will have to guard this with not Series check
             is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
             '''
             series = Series(series)
-        elif is_list_like(series):
-            # Case when series is scalar and of type list.
-            series = Series(series)
-        elif isinstance(series, Series):
-            # Case when series is a cudf Series
-            series = series
         else:
             # Case when series is just a non-list
             series = Series(series)
-            if (len(self._index) == 0) and (series.index > 0) \
+            if (len(self.index) == 0) and (series.index > 0) \
                     and len(self.columns) == 0:
                 # When self has 0 columns and series has values
                 # we can safely go ahead and assign.
                 return series
-            elif (len(self._index) == 0) and (series.index > 0) \
+            elif (len(self.index) == 0) and (series.index > 0) \
                     and len(self.columns) > 0:
                 # When self has 1 or more columns and series has values
                 # we cannot assign a non-list, hence returning empty series.
