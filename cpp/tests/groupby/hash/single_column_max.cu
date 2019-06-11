@@ -28,6 +28,21 @@
 
 #include <random>
 
+namespace {
+/**---------------------------------------------------------------------------*
+ * @brief Return last odd index in a container containing `size` items
+ *---------------------------------------------------------------------------**/
+auto constexpr last_odd_index(gdf_size_type size) {
+  return size - (size + 1) % 2;
+}
+/**---------------------------------------------------------------------------*
+ * @brief Return last even index in a container containing `size` items
+*---------------------------------------------------------------------------**/
+auto constexpr last_even_index(gdf_size_type size) {
+  return (size - 1) - ((size - 1) % 2);
+}
+}  // namespace
+
 static constexpr cudf::groupby::hash::operators op{
     cudf::groupby::hash::operators::MAX};
 
@@ -65,10 +80,9 @@ TYPED_TEST(SingleColumnMax, OneGroupNoNulls) {
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({ResultValue(size)}));
+      column_wrapper<ResultValue>({ResultValue(size - 1)}));
 }
 
-/*
 TYPED_TEST(SingleColumnMax, OneGroupAllNullKeys) {
   constexpr int size{10};
   using Key = typename SingleColumnMax<TypeParam>::KeyType;
@@ -109,7 +123,7 @@ TYPED_TEST(SingleColumnMax, OneGroupEvenNullKeys) {
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({Value(1)}));
+      column_wrapper<ResultValue>({Value(last_odd_index(size))}));
 }
 
 TYPED_TEST(SingleColumnMax, OneGroupOddNullKeys) {
@@ -123,7 +137,7 @@ TYPED_TEST(SingleColumnMax, OneGroupOddNullKeys) {
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({Value(0)}));
+      column_wrapper<ResultValue>({Value(last_even_index(size))}));
 }
 
 TYPED_TEST(SingleColumnMax, OneGroupEvenNullValues) {
@@ -132,13 +146,13 @@ TYPED_TEST(SingleColumnMax, OneGroupEvenNullValues) {
   using Value = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
-
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({Value(1)}, [](auto index) { return true; }));
+      column_wrapper<ResultValue>({Value(last_odd_index(size))},
+                                  [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnMax, OneGroupOddNullValues) {
@@ -147,13 +161,13 @@ TYPED_TEST(SingleColumnMax, OneGroupOddNullValues) {
   using Value = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
-
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return not(index % 2); }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({Value(0)}, [](auto index) { return true; }));
+      column_wrapper<ResultValue>({Value(last_even_index(size))},
+                                  [](auto index) { return true; }));
 }
 
 TYPED_TEST(SingleColumnMax, FourGroupsNoNulls) {
@@ -169,7 +183,7 @@ TYPED_TEST(SingleColumnMax, FourGroupsNoNulls) {
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
+      column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
 
 TYPED_TEST(SingleColumnMax, FourGroupsEvenNullKeys) {
@@ -179,8 +193,6 @@ TYPED_TEST(SingleColumnMax, FourGroupsEvenNullKeys) {
   using T = Key;
   using R = ResultValue;
 
-  // Even index keys are null, COUNT should be the count of each key / 2
-  // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return index % 2; }),
@@ -197,8 +209,6 @@ TYPED_TEST(SingleColumnMax, FourGroupsOddNullKeys) {
   using T = Key;
   using R = ResultValue;
 
-  // Odd index keys are null, COUNT should be the count of each key / 2
-  // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return not(index % 2); }),
@@ -215,8 +225,6 @@ TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValues) {
   using T = Key;
   using R = ResultValue;
 
-  // Even index values are null, COUNT should be the count of each key / 2
-  // Output values should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); },
@@ -344,5 +352,3 @@ TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenValuesNull) {
           {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
           [](auto index) { return index % 2; }));
 }
-
-*/

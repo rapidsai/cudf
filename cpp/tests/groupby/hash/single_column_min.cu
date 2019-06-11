@@ -178,8 +178,6 @@ TYPED_TEST(SingleColumnMin, FourGroupsEvenNullKeys) {
   using T = Key;
   using R = ResultValue;
 
-  // Even index keys are null, COUNT should be the count of each key / 2
-  // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return index % 2; }),
@@ -196,8 +194,6 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullKeys) {
   using T = Key;
   using R = ResultValue;
 
-  // Odd index keys are null, COUNT should be the count of each key / 2
-  // Output keys should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return not(index % 2); }),
@@ -214,8 +210,6 @@ TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValues) {
   using T = Key;
   using R = ResultValue;
 
-  // Even index values are null, COUNT should be the count of each key / 2
-  // Output values should be nullable
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); },
