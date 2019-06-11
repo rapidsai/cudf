@@ -27,12 +27,27 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
+#include <utility>
 
 namespace cudf {
 namespace test {
+namespace detail {
 
-inline auto sort_by_key(cudf::table const& keys, cudf::table const& values) {
+/**---------------------------------------------------------------------------*
+ * @brief Performs a sort-by-key on tables.
+ *
+ * Sorts the rows of `keys` into ascending order and reorders the corresponding
+ * rows of `values` to match the sorted order.
+ *
+ * @param keys The keys to sort
+ * @param values The values to reorder
+ * @return std::pair<table, table> A pair whose first element contains the
+ * sorted keys and second element contains reordered values.
+ *---------------------------------------------------------------------------**/
+inline std::pair<table, table> sort_by_key(cudf::table const& keys,
+                                           cudf::table const& values) {
+  CUDF_EXPECTS(keys.num_rows() == values.num_row(),
+               "Size mismatch between keys and values");
   rmm::device_vector<gdf_index_type> sorted_indices(keys.num_rows());
   gdf_column gdf_sorted_indices;
   gdf_column_view(&gdf_sorted_indices, sorted_indices.data().get(), nullptr,
@@ -52,6 +67,59 @@ inline auto sort_by_key(cudf::table const& keys, cudf::table const& values) {
 
   return std::make_pair(sorted_output_keys, sorted_output_values);
 }
+
+template <typename T, std::size_t Index>
+void expect_equal_columns(cudf::table const& lhs, cudf::table const& rhs) {
+  // Heap allocate the columns in order to be able to check if the constructors
+  // throw
+  std::unique_ptr<column_wrapper<T>> lhs_col;
+  std::unique_ptr<column_wrapper<T>> rhs_col;
+  CUDF_EXPECT_NO_THROW(lhs_col.reset(
+      new column_wrapper<T>(*const_cast<gdf_column*>(lhs.get_column(Index)))));
+  CUDF_EXPECT_NO_THROW(rhs_col.reset(
+      new column_wrapper<T>(*const_cast<gdf_column*>(rhs.get_column(Index)))));
+  expect_columns_are_equal(*lhs_col, *rhs_col);
+}
+
+template <typename... Ts, std::size_t... Indices>
+inline void expect_tables_are_equal_impl(cudf::table const& lhs,
+                                         cudf::table const& rhs,
+                                         std::index_sequence<Indices...>) {
+  (void)std::initializer_list<int>{
+      (expect_equal_columns<Ts, Indices>(lhs, rhs), 0)...};
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Ensures two tables are equal
+ *
+ * Requires the caller to specify the types of each column in the table.
+ *
+ * For example, if the tables have 4 columns of types `GDF_INT32, GDF_FLOAT32,
+ * GDF_DATE32, GDF_INT8`, then this function would be called as:
+ *
+ * ```
+ * expect_tables_are_equal<int32_t, float, cudf::date32, int8_t>(lhs, rhs);
+ * ```
+ * Since we are expecting the two tables to be equivalent, we assume that
+ * corresponding columns between each table have the same type. Else, the tables
+ * will not be considered equal and a corresponding GTest failure will be
+ * raised.
+ *
+ * @tparam Ts The concrete C++ types of each column in the table
+ * @param lhs The left hand side table to compare
+ * @param rhs The right hand side table to compare
+ *---------------------------------------------------------------------------**/
+template <typename... Ts>
+inline void expect_tables_are_equal(cudf::table const& lhs,
+                                    cudf::table const& rhs) {
+  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
+  EXPECT_EQ(static_cast<gdf_size_type>(sizeof...(Ts)), lhs.num_columns())
+      << "Size mismatch between number of types and number of columns";
+  expect_tables_are_equal_impl<Ts...>(lhs, rhs,
+                                      std::index_sequence_for<Ts...>{});
+}
+
+}  // namespace detail
 
 template <cudf::groupby::hash::operators op, typename Key, typename Value,
           typename ResultValue>
@@ -79,75 +147,20 @@ void single_column_groupby_test(column_wrapper<Key> keys,
 
   EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
-  ASSERT_EQ(cudf::gdf_dtype_of<Key>(), actual_keys_table.get_column(0)->dtype);
-  ASSERT_EQ(cudf::gdf_dtype_of<ResultValue>(),
-            actual_values_table.get_column(0)->dtype);
-
   cudf::table sorted_actual_keys;
   cudf::table sorted_actual_values;
   std::tie(sorted_actual_keys, sorted_actual_values) =
-      sort_by_key(actual_keys_table, actual_values_table);
+      detail::sort_by_key(actual_keys_table, actual_values_table);
 
   cudf::table sorted_expected_keys;
   cudf::table sorted_expected_values;
   std::tie(sorted_expected_keys, sorted_expected_values) =
-      sort_by_key({expected_keys.get()}, {expected_values.get()});
+      detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
 
-  // TODO Is there a better way to test that these don't throw other than
-  // doing the construction twice?
-  // CUDF_EXPECT_NO_THROW(
-  //    column_wrapper<Key> output_keys(*output_keys_table.get_column(0)));
-  // CUDF_EXPECT_NO_THROW(column_wrapper<ResultValue> output_values(
-  //    *output_values_table.get_column(0)));
-
-  // column_wrapper<Key> output_keys(*output_keys_table.get_column(0));
-  // column_wrapper<ResultValue>
-  // output_values(*output_values_table.get_column(0));
-
-  // Sort-by-key the expected and actual data to make them directly
-  // comparable
-  // TODO: Need to do a sort by key on the indices to generate a gather map,
-  // and then do a gather in order to make sure the output null values are
-  // rearranged correctly
-  // thrust::device_vector<gdf_index_type> expected_gather_map(
-  //    expected_keys.size());
-  // thrust::sequence(thrust::device, expected_gather_map.begin(),
-  //                 expected_gather_map.end());
-  // EXPECT_NO_THROW(thrust::stable_sort_by_key(
-  //    rmm::exec_policy()->on(0), expected_keys.get_data().begin(),
-  //    expected_keys.get_data().end(), expected_gather_map.begin()));
-  // gdf_column gathered_expected_values =
-  //    cudf::allocate_like(*expected_values.get());
-
-  /*
-    CUDF_EXPECT_NO_THROW(cudf::gather({expected_values.get()},
-                                      expected_gather_map.data().get(),
-                                      {&gathered_expected_values}));
-    EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
-    */
-
-  /*
-    thrust::device_vector<gdf_index_type>
-    output_gather_map(output_keys.size()); thrust::sequence(thrust::device,
-    output_gather_map.begin(), output_gather_map.end());
-    EXPECT_NO_THROW(thrust::stable_sort_by_key(
-        rmm::exec_policy()->on(0), output_keys.get_data().begin(),
-        output_keys.get_data().end(), output_gather_map.begin()));
-    EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
-    */
-
-  // gdf_column auto gathered_output_values =
-  // cudf::allocate_like(expected_values.get());
-
-  // bool const print_all_unequal_pairs{true};
-  // CUDF_EXPECT_NO_THROW(expect_columns_are_equal(output_keys, "Actual Keys",
-  //                                              expected_keys, "Expected
-  //                                              Keys",
-  //                                              print_all_unequal_pairs));
-  // CUDF_EXPECT_NO_THROW(
-  //    expect_columns_are_equal(output_values, "Actual Values",
-  //    expected_values,
-  //                             "Expected Values", print_all_unequal_pairs));
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal<Key>(
+      sorted_actual_keys, sorted_expected_keys));
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal<ResultValue>(
+      sorted_actual_values, sorted_expected_values));
 }
 
 }  // namespace test
