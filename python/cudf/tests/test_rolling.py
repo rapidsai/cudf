@@ -9,7 +9,7 @@ from cudf.tests.utils import assert_eq
     'agg',
     ['sum', 'min', 'max', 'mean', 'count']
 )
-def test_rollling_series_basic():
+def test_rollling_series_basic(agg):
     psr = pd.Series([1, 2, 4, 9, 9, 4])
     gsr = cudf.Series([1, 2, 4, 9, 9, 4])
     assert_eq(getattr(psr.rolling(2), agg)().fillna(-1),

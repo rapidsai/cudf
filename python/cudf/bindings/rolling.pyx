@@ -16,6 +16,9 @@ def apply_rolling(inp, window, min_periods, op):
     else:
         inp_col = column_view_from_column(inp)
 
+    if op == "count":
+        min_periods = 0
+
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
 
     cdef gdf_index_type c_window = window
