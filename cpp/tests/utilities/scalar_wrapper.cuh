@@ -52,6 +52,9 @@ struct scalar_wrapper {
    *---------------------------------------------------------------------------**/
   operator gdf_scalar*() { return &the_scalar; };
 
+  operator gdf_scalar&() { return the_scalar; };
+
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
    *
