@@ -128,14 +128,6 @@ class StringMethods(object):
         """
         from cudf.dataframe import Series, Index
 
-        def is_list_like(others):
-            from collections.abc import Sequence
-            if isinstance(others, (Sequence,)) and \
-                    not isinstance(others, (str, bytes)):
-                return True
-            else:
-                return False
-
         if isinstance(others, (Series, Index)):
             '''
             If others is just another Series/Index,
@@ -143,7 +135,7 @@ class StringMethods(object):
             '''
             assert others.dtype == np.dtype('object')
             others = others.data
-        elif is_list_like(others) and others:
+        elif utils.is_list_like(others) and others:
             '''
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
@@ -156,10 +148,10 @@ class StringMethods(object):
             '''
             first = others[0]
 
-            if (is_list_like(first) or
+            if (utils.is_list_like(first) or
                 isinstance(first, (Series, Index, pd.Series, pd.Index))) \
                     and all((
-                            is_list_like(x) or
+                            utils.is_list_like(x) or
                             isinstance(x, (Series, Index, pd.Series, pd.Index))
                             )
                             for x in others):
@@ -190,8 +182,8 @@ class StringMethods(object):
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
-            elif (not is_list_like(first)) and \
-                    all(not is_list_like(x) for x in others):
+            elif (not utils.is_list_like(first)) and \
+                    all(not utils.is_list_like(x) for x in others):
                 '''
                 Incase internal elements in others list are strings
                 '''
