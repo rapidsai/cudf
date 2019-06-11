@@ -20,6 +20,8 @@
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
+- PR #1954 Add skip test argument to GPU build script
+
 
 ## Improvements
 
@@ -46,6 +48,7 @@
 - PR #1823 CSV Reader: default the column type to string for empty dataframes
 - PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
 - PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1855 Transition replace_nulls to new C++ API and update corresponding Cython/Python code
 - PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
 - PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
 - PR #1390 Added some basic utility functions for `gdf_column`s
@@ -54,9 +57,10 @@
 - PR #1884 Rolling windows: general enhancements and better coverage for unit tests
 - PR #1886 support GDF_STRING_CATEGORY columns in apply_boolean_mask, drop_nulls and other libcudf functions
 - PR #1896 Improve performance of groupby with levels specified in dask-cudf
+- PR #1915 Improve iloc performance for non-contiguous row selection
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-- PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1850 Support left_on and right_on for DataFrame merge operator
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
@@ -109,6 +113,7 @@
 - PR #1914 Zero initialize gdf_column local variables
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
+- PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 
 
