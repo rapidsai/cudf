@@ -19,6 +19,7 @@
 - PR #1863 Series and Dataframe methods for all and any
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
+- PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 
 ## Improvements
 
@@ -35,6 +36,8 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1390 Added some basic utility functions for `gdf_column`'s
+- PR #1791 Added general column comparison code for testing
 - PR #1795 Add printing of git submodule info to `print_env.sh`
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
@@ -58,8 +61,8 @@
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
+- PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
 - PR #1964 Added support for list-like types in Series.str.cat
-
 
 
 ## Bug Fixes
@@ -101,6 +104,7 @@
 - PR #1902 Bug with string iteration in _apply_basic_agg
 - PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
 - PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1891 Fix bug #1750 in string column comparison
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
@@ -114,6 +118,7 @@
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 - PR #1741 Add MultiIndex concatenation
+
 
 ## Bug Fixes
 

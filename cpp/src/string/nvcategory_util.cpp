@@ -7,6 +7,7 @@
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
+#include <cudf/binaryop.hpp>
 
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
@@ -79,7 +80,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
       rhs.data.si32 = 1;
       rhs.is_valid = true;
       rhs.dtype = GDF_STRING_CATEGORY;
-      gdf_binary_operation_v_s(column, column,  &rhs, GDF_ADD);
+      cudf::binary_operation(column, column,  &rhs, GDF_ADD);
       destroy_category = true;
       null_index = nv_category->get_value(nullptr);
 

@@ -883,3 +883,18 @@ def test_string_slice():
     df = DataFrame({'a': ['hello', 'world']})
     a_slice = df.a.str.slice(0, 2)
     assert isinstance(a_slice, Series)
+
+
+def test_string_equality():
+    data1 = ['b', 'c',  'd', 'a', 'c']
+    data2 = ['a', None, 'c', 'a', 'c']
+
+    ps1 = pd.Series(data1)
+    ps2 = pd.Series(data2)
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    expect = (ps1 == ps2)
+    got = (gs1 == gs2)
+
+    assert_eq(expect, got.fillna(False))

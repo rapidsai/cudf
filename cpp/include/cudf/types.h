@@ -203,34 +203,6 @@ typedef enum {
 
 
 /**
- * @brief Types of binary operations that can be performed on data.
- */
-typedef enum {
-  GDF_ADD,            ///< operator +
-  GDF_SUB,            ///< operator -
-  GDF_MUL,            ///< operator *
-  GDF_DIV,            ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
-  GDF_MOD,            ///< operator %
-  GDF_POW,            ///< lhs ^ rhs
-  GDF_EQUAL,          ///< operator ==
-  GDF_NOT_EQUAL,      ///< operator !=
-  GDF_LESS,           ///< operator <
-  GDF_GREATER,        ///< operator >
-  GDF_LESS_EQUAL,     ///< operator <=
-  GDF_GREATER_EQUAL,  ///< operator >=
-  GDF_BITWISE_AND,    ///< operator &
-  GDF_BITWISE_OR,     ///< operator |
-  GDF_BITWISE_XOR,    ///< operator ^
-  GDF_LOGICAL_AND,    ///< operator &&
-  GDF_LOGICAL_OR,     ///< operator ||
-  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_INVALID_BINARY  ///< invalid operation
-} gdf_binary_operator;
-
-
-/**
  * @brief Types of unary math operations that can be performed on data.
  */
 typedef enum {
