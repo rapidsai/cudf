@@ -122,14 +122,16 @@ struct copy_range_dispatch {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
       "fill_kernel assumes bitmask element size in bits == warp size");
 
-    //auto fill = copy_range_kernel<T, scalar_functor<T>, false>;
+    auto input = make_input.template operator()<T>();
+    auto kernel = copy_range_kernel<T, decltype(input), true>;
+
     gdf_size_type *null_count = nullptr;
 
-    if (column->valid != nullptr) {
+    if (cudf::is_nullable(*column)) {
       RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
       CUDA_TRY(cudaMemsetAsync(null_count, column->null_count, 
                                sizeof(gdf_size_type), stream));
-      //fill = copy_range_kernel<T, scalar_functor<T>, true>;
+      kernel = copy_range_kernel<T, decltype(input), true>;
     }
 
     // This one results in a compiler internal error! TODO: file NVIDIA bug
@@ -146,16 +148,8 @@ struct copy_range_dispatch {
     bit_mask_t * __restrict__ bitmask =
       reinterpret_cast<bit_mask_t*>(column->valid);
   
-    auto input = make_input.template operator()<T>();
-
-    if (cudf::is_nullable(*column))
-      copy_range_kernel<T, decltype(input), true>
-        <<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, null_count, begin, end, input);
-    else
-      copy_range_kernel<T, decltype(input), false>
-        <<<grid.num_blocks, block_size, 0, stream>>>
-        (data, bitmask, null_count, begin, end, input);
+    kernel<<<grid.num_blocks, block_size, 0, stream>>>
+      (data, bitmask, null_count, begin, end, input);
 
     if (column->valid != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
