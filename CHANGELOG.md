@@ -56,7 +56,7 @@
 - PR #1896 Improve performance of groupby with levels specified in dask-cudf
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-- PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1850 Support left_on and right_on for DataFrame merge operator
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
@@ -109,6 +109,7 @@
 - PR #1914 Zero initialize gdf_column local variables
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
+- PR #1982 Fixes incorrect index name after join operation
 
 
 # cudf 0.7.2 (16 May 2019)

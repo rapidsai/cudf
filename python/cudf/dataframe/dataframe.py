@@ -1850,6 +1850,8 @@ class DataFrame(object):
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)
+        # change random number index to None to better reflect pandas behavior
+        df.index.name = None
 
         if sort and len(df):
             return df.sort_index()
