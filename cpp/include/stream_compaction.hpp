@@ -98,7 +98,7 @@ enum {
  * @brief Create a new table without duplicate rows 
  *
  * @param input_table input table to copy only unique rows
- * @param key_columns columns to consider to identigfy duplicate rows
+ * @param key_columns columns to consider to identify duplicate rows
 * @param keep keep first entry, last entry, or no entries if duplicates found
  *
  * @return out_table with only unique rows
