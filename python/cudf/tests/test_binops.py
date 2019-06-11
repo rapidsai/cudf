@@ -36,7 +36,7 @@ def test_series_binop(binop, obj_class):
     arr1 = utils.gen_rand('float64', nelem) * 10000
     # Keeping a low value because CUDA 'pow' has 2 full range error
     arr2 = utils.gen_rand('float64', nelem) * 10
-    
+
     sr1 = Series(arr1)
     sr2 = Series(arr2)
 
