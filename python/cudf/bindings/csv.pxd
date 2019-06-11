@@ -23,32 +23,29 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
 
     # See cpp/include/cudf/io_types.h:62
     cdef struct csv_reader_args:
-        gdf_input_type  input_data_form
+        gdf_input_type      input_data_form
         string              filepath_or_buffer
+        string              compression
 
         char                lineterminator
         char                delimiter
+        char                decimal
+        char                thousands
+        char                comment
+        bool                dayfirst
         bool                delim_whitespace
         bool                skipinitialspace
-
-        gdf_size_type       nrows
+        bool                skip_blank_lines
         gdf_size_type       header
 
         vector[string]      names
         vector[string]      dtype
 
-        int                 *index_col
         vector[int]         use_cols_indexes
         vector[string]      use_cols_names
 
-        gdf_size_type       skiprows
-        gdf_size_type       skipfooter
-
-        bool                skip_blank_lines
-
         vector[string]      true_values
         vector[string]      false_values
-
         vector[string]      na_values
         bool                keep_default_na
         bool                na_filter
@@ -56,21 +53,9 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         string              prefix
         bool                mangle_dupe_cols
 
-        bool                dayfirst
-
-        string              compression
-        char                thousands
-
-        char                decimal
-
         char                quotechar
         gdf_csv_quote_style quoting
         bool                doublequote
-
-        char                comment
-
-        size_t              byte_range_offset
-        size_t              byte_range_size
 
     cdef cppclass CsvReader:
 

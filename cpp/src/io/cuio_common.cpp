@@ -18,23 +18,35 @@
 
 #include <algorithm>
 
-#include "utilities/error_utils.hpp"
+#include <utilities/error_utils.hpp>
 
 namespace cudf {
 
 gdf_dtype convertStringToDtype(const std::string &dtype) {
-  if (dtype == "str") return GDF_STRING;
-  if (dtype == "timestamp") return GDF_TIMESTAMP;
-  if (dtype == "category") return GDF_CATEGORY;
-  if (dtype == "date32") return GDF_DATE32;
-  if (dtype == "bool" || dtype == "boolean") return GDF_BOOL8;
-  if (dtype == "date" || dtype == "date64") return GDF_DATE64;
-  if (dtype == "float" || dtype == "float32") return GDF_FLOAT32;
-  if (dtype == "double" || dtype == "float64") return GDF_FLOAT64;
-  if (dtype == "byte" || dtype == "int8") return GDF_INT8;
-  if (dtype == "short" || dtype == "int16") return GDF_INT16;
-  if (dtype == "int" || dtype == "int32") return GDF_INT32;
-  if (dtype == "long" || dtype == "int64") return GDF_INT64;
+  if (dtype == "str")
+    return GDF_STRING;
+  if (dtype == "timestamp")
+    return GDF_TIMESTAMP;
+  if (dtype == "category")
+    return GDF_CATEGORY;
+  if (dtype == "date32")
+    return GDF_DATE32;
+  if (dtype == "bool" || dtype == "boolean")
+    return GDF_BOOL8;
+  if (dtype == "date" || dtype == "date64")
+    return GDF_DATE64;
+  if (dtype == "float" || dtype == "float32")
+    return GDF_FLOAT32;
+  if (dtype == "double" || dtype == "float64")
+    return GDF_FLOAT64;
+  if (dtype == "byte" || dtype == "int8")
+    return GDF_INT8;
+  if (dtype == "short" || dtype == "int16")
+    return GDF_INT16;
+  if (dtype == "int" || dtype == "int32")
+    return GDF_INT32;
+  if (dtype == "long" || dtype == "int64")
+    return GDF_INT64;
 
   return GDF_invalid;
 }
@@ -55,8 +67,8 @@ gdf_dtype convertStringToDtype(const std::string &dtype) {
  * @return string representing the compression type.
  *---------------------------------------------------------------------------**/
 std::string inferCompressionType(const std::string &compression_arg, gdf_input_type source_type,
-                                        const std::string &source,
-                                        const std::map<std::string, std::string> ext_to_compression) {
+                                 const std::string &source,
+                                 const std::map<std::string, std::string> &ext_to_compression) {
   auto str_tolower = [](const auto &begin, const auto &end) {
     std::string out;
     std::transform(begin, end, std::back_inserter(out), ::tolower);
@@ -78,4 +90,4 @@ std::string inferCompressionType(const std::string &compression_arg, gdf_input_t
   CUDF_FAIL("Invalid compression argument");
 }
 
-} //namespace cudf
+} // namespace cudf
