@@ -20,6 +20,8 @@
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
+- PR #1954 Add skip test argument to GPU build script
+
 
 ## Improvements
 
