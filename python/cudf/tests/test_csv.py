@@ -1069,7 +1069,7 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
-    gdf.to_csv(path=gdf_df_fname)
+    gdf.to_csv(path=gdf_df_fname, index=False)
 
     assert(os.path.exists(pdf_df_fname))
     assert(os.path.exists(gdf_df_fname))
@@ -1087,7 +1087,7 @@ def test_csv_writer_datetime_data(tmpdir):
     df = df.astype('datetime64[ms]')
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
-    gdf.to_csv(path=gdf_df_fname)
+    gdf.to_csv(path=gdf_df_fname, index=False)
 
     assert(os.path.exists(pdf_df_fname))
     assert(os.path.exists(gdf_df_fname))
@@ -1126,6 +1126,13 @@ def test_csv_writer_datetime_data(tmpdir):
     ]
 )
 @pytest.mark.parametrize(
+    'index',
+    [
+        True,
+        False
+    ]
+)
+@pytest.mark.parametrize(
     'line_terminator',
     [
         '\r',
@@ -1134,7 +1141,8 @@ def test_csv_writer_datetime_data(tmpdir):
         '<<<<<'
     ]
 )
-def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
+def test_csv_writer_mixed_data(sep, columns, header, index,
+                               line_terminator, tmpdir):
     import csv
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
@@ -1142,11 +1150,32 @@ def test_csv_writer_mixed_data(sep, columns, header, line_terminator, tmpdir):
     df = make_numpy_mixed_dataframe()
     df['Date'] = df['Date'].astype('datetime64')
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, sep=sep, columns=columns,
+    df.to_csv(pdf_df_fname, index=index, sep=sep, columns=columns,
               header=header, line_terminator=line_terminator,
               date_format="%Y-%m-%dT%H:%M:%SZ", quoting=csv.QUOTE_NONNUMERIC)
-    gdf.to_csv(path=gdf_df_fname, sep=sep, columns=columns,
+    gdf.to_csv(path=gdf_df_fname, index=index, sep=sep, columns=columns,
                header=header, line_terminator=line_terminator)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+def test_csv_writer_multiindex(tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_3.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_3.csv")
+
+    gdf = cudf.DataFrame({'a': np.random.randint(0, 5, 20),
+                          'b': np.random.randint(0, 5, 20),
+                          'c': range(20),
+                          'd': np.random.random(20)})
+    gdg = gdf.groupby(['a', 'b']).mean()
+    pdg = gdg.to_pandas()
+    pdg.to_csv(pdf_df_fname)
+    gdg.to_csv(gdf_df_fname)
 
     assert(os.path.exists(pdf_df_fname))
     assert(os.path.exists(gdf_df_fname))

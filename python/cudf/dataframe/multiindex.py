@@ -358,6 +358,32 @@ class MultiIndex(Index):
             result.append(match.levels[level][match.codes[item][0]])
         return tuple(result)
 
+    def to_frame(self, index=True, name=None):
+        df = self._source_data if hasattr(
+                self, '_source_data') else self._to_frame()
+        if index:
+            df = df.set_index(self)
+        if name:
+            if len(name) != len(self.levels):
+                raise ValueError("'name' should have th same length as "
+                                 "number of levels on index.")
+            df.columns = name
+        return df
+
+    def _to_frame(self):
+        from cudf import DataFrame
+        # for each column of codes
+        # replace column with mapping from integers to levels
+        df = self.codes.copy(deep=False)
+        for idx, column in enumerate(df.columns):
+             # use merge as a replace fn
+             level = DataFrame({'idx': Series(range(len(self.levels[idx])),
+                                              dtype=df[column].dtype),
+                               'level': self.levels[idx]})
+             code = DataFrame({'idx': df[column]})
+             df[column] = code.merge(level).level
+        return df
+
     @property
     def _values(self):
         return list([i for i in self])

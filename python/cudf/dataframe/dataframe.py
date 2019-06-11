@@ -790,10 +790,17 @@ class DataFrame(object):
             return df
 
     def reset_index(self, drop=False):
+        out = DataFrame()
         if not drop:
-            name = self.index.name or 'index'
-            out = DataFrame()
-            out[name] = self.index
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+                framed = self.index.to_frame()
+                for c in framed.columns:
+                    out[c] = framed[c]
+            else:
+                name = 'index'
+                if self.index.name is not None:
+                    name = self.index.name
+                out[name] = self.index
             for c in self.columns:
                 out[c] = self[c]
         else:
@@ -2809,11 +2816,11 @@ class DataFrame(object):
 
     @ioutils.doc_to_csv()
     def to_csv(self, path=None, sep=',', na_rep='',
-               columns=None, header=True, line_terminator='\n'):
+               columns=None, header=True, index=True, line_terminator='\n'):
         """{docstring}"""
         import cudf.io.csv as csv
         return csv.to_csv(self, path, sep, na_rep, columns,
-                          header, line_terminator)
+                          header, index, line_terminator)
 
 
 def from_pandas(obj):

@@ -54,8 +54,18 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 @ioutils.doc_to_csv()
 def to_csv(df, path=None, sep=',', na_rep='',
-           columns=None, header=True, line_terminator='\n'):
+           columns=None, header=True, index=True, line_terminator='\n'):
     """{docstring}"""
+    if index:
+        from cudf import MultiIndex
+        if not isinstance(df.index, MultiIndex):
+            if df.index.name is None:
+                df.index.name = ''
+            if columns is not None:
+                columns = columns.copy()
+                columns.insert(0, df.index.name)
+        df = df.reset_index()
+
     return cpp_write_csv(
         cols=df._cols,
         path=path,
