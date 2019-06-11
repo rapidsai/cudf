@@ -99,7 +99,7 @@ enum {
  *
  * @param input_table input table to copy only unique rows
  * @param key_columns columns to consider to identigfy duplicate rows
-* @param keep_first keep first or last entry as unique if duplicate is found
+* @param keep keep first entry, last entry, or no entries if duplicates found
  *
  * @return out_table with only unique rows
  */
