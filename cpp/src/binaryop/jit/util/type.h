@@ -17,34 +17,22 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_UTIL_OPERATOR_H
-#define GDF_BINARY_OPERATION_JIT_UTIL_OPERATOR_H
+#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
-#include <cudf/cudf.h>
+#include <cudf/binaryop.hpp>
+#include <string>
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    class Operator {
-    public:
-        enum class Type {
-            Direct,
-            Reverse
-        };
+    std::string getTypeName(gdf_dtype type);
 
-    public:
-        Operator();
+    std::string getOperatorName(gdf_binary_operator ope);
 
-    public:
-        char* getOperatorName(gdf_binary_operator ope, Operator::Type type);
-
-    private:
-        char buffer[16];
-    };
-
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}
+}
+}
 
 #endif
