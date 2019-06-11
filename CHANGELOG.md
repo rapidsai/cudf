@@ -60,6 +60,7 @@
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
+- PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
 
 
 ## Bug Fixes
