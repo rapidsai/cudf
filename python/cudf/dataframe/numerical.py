@@ -311,6 +311,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
+        elif dkind == 'b':
+            return False
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
