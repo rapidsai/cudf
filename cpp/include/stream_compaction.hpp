@@ -88,7 +88,7 @@ gdf_column drop_nulls(gdf_column const &input);
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
-typedef enum {
+enum {
   KEEP_FIRST = 0,   ///< Keeps first duplicate row
   KEEP_LAST,        ///< Keeps last  duplicate row 
   KEEP_FALSE        ///< Don't keep any duplicate rows
