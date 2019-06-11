@@ -1,0 +1,55 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+from __future__ import division
+
+import operator
+import random
+from itertools import product
+
+import pytest
+import numpy as np
+import cudf
+
+from cudf.dataframe import Series
+from cudf.dataframe.index import as_index
+
+from cudf.tests import utils
+
+from cudf.bindings import binops
+
+from numba import cuda
+from numba import types
+
+@pytest.mark.parametrize('dtype', ['float32', 'float64'])
+def test_generic_ptx(dtype):
+
+    size = 500
+
+    lhs_arr = np.random.random(size).astype(dtype)
+    lhs_col = Series(lhs_arr)._column
+
+    rhs_arr = np.random.random(size).astype(dtype)
+    rhs_col = Series(rhs_arr)._column
+
+    out_arr = np.random.random(size).astype(dtype)
+    out_col = Series(out_arr)._column
+    
+    @cuda.jit(device=True)
+    def add(a, b):
+        return a**3 + b
+    if dtype == 'float32': 
+      type_signature = (types.float32, types.float32)
+    elif dtype == 'float64':
+      type_signature = (types.float64, types.float64)
+    
+    add.compile(type_signature)
+    ptx = add.inspect_ptx(type_signature)
+    
+    ptx_code = ptx.decode('utf-8')
+
+    binops.apply_op_udf(lhs_col, rhs_col, out_col, ptx_code)
+
+    result = lhs_arr**3 + rhs_arr
+
+    np.testing.assert_almost_equal(result, out_col)
+

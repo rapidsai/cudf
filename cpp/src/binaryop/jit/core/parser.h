@@ -1,3 +1,6 @@
+#ifndef GDF_BINARY_OPERATION_JIT_CORE_PARSER_H
+#define GDF_BINARY_OPERATION_JIT_CORE_PARSER_H
+
 #include <cctype>
 #include <map>
 #include <string>
@@ -490,9 +493,7 @@ inline std::string parse_single_function_ptx(const std::string& src,
 
   final_output += "}";
 
-  // TODO: clean this
-  printf("%s\n", src.c_str());
-  printf("%s\n", final_output.c_str());
-
   return final_output;
 }
+
+#endif
