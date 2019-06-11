@@ -69,6 +69,7 @@
 
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
 namespace cudf
@@ -168,7 +169,7 @@ template<typename T_element, typename T_output=T_element>
 struct transformer_squared
 {
     CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (thrust::pair<T_element, bool> const& pair)
+    T_output operator() (thrust::pair<T_element, bool> pair)
     {
         T_output v = static_cast<T_output>(pair.first);
         return (v*v);
@@ -273,28 +274,27 @@ private:
  * `T_column_input = column_input` will provide the value at index `id`
  *  with/without null bitmask.
  *
- * @tparam  T_output The output data value type.
+ * @tparam  T_iterator_output The output data value type.
  * @tparam  T_column_input  The input struct type of `column_input`
  * @tparam  Iterator The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
  * -------------------------------------------------------------------------**/
-template<typename T_output, typename T_column_input,
-    typename Transformer,
+template<typename T_iterator_output, typename T_column_input,
     typename Iterator=thrust::counting_iterator<gdf_index_type> >
   class column_input_iterator
     : public thrust::iterator_adaptor<
-        column_input_iterator<T_output, T_column_input, Transformer, Iterator>, // the name of the iterator we're creating
+        column_input_iterator<T_iterator_output, T_column_input, Iterator>, // the name of the iterator we're creating
         Iterator,                   // the name of the iterator we're adapting
         thrust::use_default, thrust::use_default, thrust::use_default,
-        T_output,                   // set `super_t::reference` to `T_output`
+        T_iterator_output,                   // set `super_t::reference` to `T_iterator_output`
         thrust::use_default
       >
   {
   public:
     // shorthand for the name of the iterator_adaptor we're deriving from
     using super_t = thrust::iterator_adaptor<
-      column_input_iterator<T_output, T_column_input, Transformer, Iterator>, Iterator,
-      thrust::use_default, thrust::use_default, thrust::use_default, T_output, thrust::use_default
+      column_input_iterator<T_iterator_output, T_column_input, Iterator>, Iterator,
+      thrust::use_default, thrust::use_default, thrust::use_default, T_iterator_output, thrust::use_default
     >;
 
     CUDA_HOST_DEVICE_CALLABLE
@@ -317,7 +317,7 @@ template<typename T_output, typename T_column_input,
     typename super_t::reference dereference() const
     {
       gdf_index_type id = *(this->base()); // base() returns base iterator: `Iterator`
-      return  Transformer{}.operator()(colData.at(id));
+      return colData.at(id);
     }
 };
 
@@ -345,16 +345,17 @@ template<typename T_output, typename T_column_input,
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_element, T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
     using T_colunn_input = cudf::detail::column_input<T_element, has_nulls>;
-    using T_iterator = cudf::detail::column_input_iterator<T_output, T_colunn_input, Transformer, Iterator_Index>;
+    using T_iterator_output = thrust::pair<T_element, bool>;
+    using T_iterator = cudf::detail::column_input_iterator<T_iterator_output, T_colunn_input, Iterator_Index>;
 
     // column_input constructor checks if valid is not nullptr when has_nulls = true
-    return T_iterator(T_colunn_input(data, valid, identity), it);
+    return thrust::make_transform_iterator(T_iterator(T_colunn_input(data, valid, identity), it), Transformer{});
 }
 
 /** -------------------------------------------------------------------------*
@@ -363,7 +364,7 @@ auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_element, T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const T_element *data, const gdf_valid_type *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
@@ -377,7 +378,7 @@ auto make_iterator(const T_element *data, const gdf_valid_type *valid,
  *                     Iterator_Index const it = Iterator_Index(0))
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element, typename T_output = T_element,
-    typename Transformer = cudf::detail::scalar_cast_transformer<T_output, T_element>,
+    typename Transformer = cudf::detail::scalar_cast_transformer<T_element, T_output>,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const gdf_column& column,
     T_element identity, const Iterator_Index it = Iterator_Index(0))
