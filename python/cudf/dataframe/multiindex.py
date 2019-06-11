@@ -376,12 +376,12 @@ class MultiIndex(Index):
         # replace column with mapping from integers to levels
         df = self.codes.copy(deep=False)
         for idx, column in enumerate(df.columns):
-             # use merge as a replace fn
-             level = DataFrame({'idx': Series(range(len(self.levels[idx])),
-                                              dtype=df[column].dtype),
+            # use merge as a replace fn
+            level = DataFrame({'idx': Series(range(len(self.levels[idx])),
+                                             dtype=df[column].dtype),
                                'level': self.levels[idx]})
-             code = DataFrame({'idx': df[column]})
-             df[column] = code.merge(level).level
+            code = DataFrame({'idx': df[column]})
+            df[column] = code.merge(level).level
         return df
 
     @property
