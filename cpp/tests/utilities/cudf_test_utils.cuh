@@ -24,7 +24,7 @@
 #include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
@@ -224,7 +224,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
     RMM_FREE(col->data, 0);
     RMM_FREE(col->valid, 0);
   };
-  gdf_col_pointer the_column{new gdf_column, deleter};
+  gdf_col_pointer the_column{new gdf_column{}, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(ColumnType), 0);

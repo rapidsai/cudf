@@ -26,7 +26,7 @@ namespace code {
 const char* kernel =
 R"***(
     #include "operation.h"
-    #include "cudf/types.h"
+    #include <cudf/types.h>
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__

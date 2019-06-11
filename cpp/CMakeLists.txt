@@ -232,14 +232,14 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
-            src/binary/binary_ops.cu
-            src/binary/jit/code/kernel.cpp
-            src/binary/jit/code/operation.cpp
-            src/binary/jit/code/traits.cpp
-            src/binary/jit/core/binop.cpp
-            src/binary/jit/core/launcher.cpp
-            src/binary/jit/util/operator.cpp
-            src/binary/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/compiled/binary_ops.cu
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
+            src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/util/operator.cpp
+            src/binaryop/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
@@ -345,9 +345,6 @@ target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCa
 
 install(TARGETS cudf
         DESTINATION lib)
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
-        DESTINATION include)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)

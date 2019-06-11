@@ -17,29 +17,22 @@
  * limitations under the License.
  */
 
-#include "binary/jit/util/operator.h"
-#include "binary/jit/util/type.h"
-#include <cstring>
+#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+
+#include <cudf/binaryop.hpp>
+#include <string>
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    Operator::Operator()
-     : buffer{'\0'}
-    { }
+    std::string getTypeName(gdf_dtype type);
 
-    char* Operator::getOperatorName(gdf_binary_operator ope, Operator::Type type) {
-        if (type == Operator::Type::Direct) {
-            buffer[0] = '\0';
-        } else {
-            buffer[0] = 'R';
-            buffer[1] = '\0';
-        }
-        strcat(buffer, jit::getOperatorName(ope).data());
-        return buffer;
-    }
+    std::string getOperatorName(gdf_binary_operator ope);
 
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}
+}
+}
+
+#endif
