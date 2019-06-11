@@ -46,7 +46,7 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 inline std::pair<table, table> sort_by_key(cudf::table const& keys,
                                            cudf::table const& values) {
-  CUDF_EXPECTS(keys.num_rows() == values.num_row(),
+  CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between keys and values");
   rmm::device_vector<gdf_index_type> sorted_indices(keys.num_rows());
   gdf_column gdf_sorted_indices;

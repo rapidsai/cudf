@@ -343,24 +343,3 @@ TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenValuesNull) {
           {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
           [](auto index) { return index % 2; }));
 }
-
-/*
-TYPED_TEST(SingleColumnMin, OddResultNullValues) {
-  using Key = typename SingleColumnMin<TypeParam>::KeyType;
-  using Value = typename SingleColumnMin<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using R = ResultValue;
-
-  // Odd index output values should be null
-  cudf::test::single_column_groupby_test<op>(
-      column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
-                          [](auto index) { return true; }),
-      column_wrapper<Value>(8, [](auto index) { return Value(index); },
-                            [](auto index) { return index % 2; }),
-      column_wrapper<Key>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
-                          [](auto index) { return true; }),
-      column_wrapper<Value>(8, [](auto index) { return Value(index); },
-                            [](auto index) { return index % 2; }));
-}
-*/
