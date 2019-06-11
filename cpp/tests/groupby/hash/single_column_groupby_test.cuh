@@ -98,6 +98,12 @@ inline void expect_tables_are_equal(cudf::table const& lhs,
                  }));
 }
 
+inline void destroy_table(table* t) {
+  std::for_each(t->begin(), t->end(), [](gdf_column* col) {
+    gdf_column_free(col);
+    delete col;
+  });
+}
 }  // namespace detail
 
 template <cudf::groupby::hash::operators op, typename Key, typename Value,
@@ -140,6 +146,11 @@ void single_column_groupby_test(column_wrapper<Key> keys,
                                                        sorted_expected_keys));
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
                                                        sorted_expected_values));
+
+  detail::destroy_table(&sorted_actual_keys);
+  detail::destroy_table(&sorted_actual_values);
+  detail::destroy_table(&sorted_expected_keys);
+  detail::destroy_table(&sorted_expected_values);
 }
 
 }  // namespace test
