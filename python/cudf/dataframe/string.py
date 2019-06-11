@@ -143,48 +143,53 @@ class StringMethods(object):
             '''
             assert others.dtype == np.dtype('object')
             others = others.data
-        elif is_list_like(others):
+        elif others and is_list_like(others):
             '''
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
             '''
-            if all((is_list_like(x)
-                    or isinstance(x, (Series, Index))) for x in others):
+
+            '''
+            Picking first element and checking if it really adheres to
+            list like conditions, if not we don't have the
+            necessity to scan the rest of the list.
+            '''
+            first = others[0]
+
+            if (is_list_like(first) or isinstance(first, (Series, Index))) \
+                    and all((is_list_like(x) or
+                            isinstance(x, (Series, Index))) for x in others):
                 '''
                 Internal elements in others list should also be
                 list-like and not a regular string/byte
                 '''
-                others = list(others)
-                first = others.pop(0)
 
-                '''
-                Need atleast one/first element in the list to be of Series
-                type so that we can use .data to make call to .cat
-                '''
-                if not isinstance(first, (Series, Index)):
-                    first = Series(first, dtype='str')
-
-                if isinstance(first, (Series, Index)):
-                    assert first.dtype == np.dtype('object')
-                    first = first.data
-
+                first = None
                 for frame in others:
-                    '''
-                    extracting nvstrings pointer if the
-                    `frame` is of type Series/Index
-                    '''
-                    if isinstance(frame, (Series, Index)):
-                        assert frame.dtype == np.dtype('object')
-                        frame = frame.data
-
-                    first = first.cat(frame, sep=sep, na_rep=na_rep)
+                    if (first is None):
+                        if not isinstance(frame, (Series, Index)):
+                            first = Series(frame, dtype='str')
+                        else:
+                            first = frame
+                        '''
+                        extracting nvstrings pointer since
+                        `frame` is of type Series/Index
+                        '''
+                        first = first.data
+                    else:
+                        if isinstance(frame, (Series, Index)):
+                            assert frame.dtype == np.dtype('object')
+                            frame = frame.data
+                        first = first.cat(frame, sep=sep, na_rep=na_rep)
                 others = first
-            elif all(not is_list_like(x) for x in others):
+            elif (not is_list_like(first)) and \
+                    all(not is_list_like(x) for x in others):
                 '''
                 Incase internal elements in others list are strings
                 '''
                 others = Series(others)
                 others = others.data
+
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
             index=self._index
