@@ -32,18 +32,25 @@ _binops = [
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('binop', _binops)
 def test_series_binop(binop, obj_class):
-    arr = np.random.random(100)
-    sr = Series(arr)
+    nelem = 1000
+    arr1 = utils.gen_rand('float64', nelem) * 10000
+    # Keeping a low value because CUDA 'pow' has 2 full range error
+    arr2 = utils.gen_rand('float64', nelem) * 10
+    
+    sr1 = Series(arr1)
+    sr2 = Series(arr2)
 
     if obj_class == 'Index':
-        sr = as_index(sr)
+        sr1 = as_index(sr1)
+        sr2 = as_index(sr2)
 
-    result = binop(sr, sr)
+    result = binop(sr1, sr2)
+    expect = binop(pd.Series(arr1), pd.Series(arr2))
 
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(arr, arr))
+    utils.assert_eq(result, expect)
 
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
@@ -310,6 +317,7 @@ _reflected_ops = [
     lambda x: 3 - x,
     lambda x: 3 // x,
     lambda x: 3 / x,
+    lambda x: 3 % x,
     lambda x: -1 + x,
     lambda x: -2 * x,
     lambda x: -2 - x,
@@ -320,6 +328,7 @@ _reflected_ops = [
     lambda x: -3 - x,
     lambda x: -3 // x,
     lambda x: -3 / x,
+    lambda x: -3 % x,
     lambda x: 0 + x,
     lambda x: 0 * x,
     lambda x: 0 - x,
@@ -403,8 +412,8 @@ _operator_funcs = [
     'rsub',
     'mul',
     'rmul',
-    # 'mod', << Coming Later
-    # 'rmod', << Coming Later
+    'mod',
+    'rmod',
     'pow',
     'rpow',
     'floordiv',
