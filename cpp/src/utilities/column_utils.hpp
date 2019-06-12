@@ -30,7 +30,7 @@
 
 #include <utilities/type_dispatcher.hpp>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <algorithm>
 

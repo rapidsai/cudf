@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <utilities/error_utils.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 

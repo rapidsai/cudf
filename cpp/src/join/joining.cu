@@ -16,8 +16,8 @@
 
 
 
-#include <types.hpp>
-#include <cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
@@ -483,8 +483,8 @@ gdf_error join_call_compute_df(
 
 
 
-        gdf_column * new_left_column_ptr = new gdf_column;
-        gdf_column * new_right_column_ptr = new gdf_column;
+        gdf_column * new_left_column_ptr = new gdf_column{};
+        gdf_column * new_right_column_ptr = new gdf_column{};
 
         temp_columns_to_free.push_back(new_left_column_ptr);
         temp_columns_to_free.push_back(new_right_column_ptr);
@@ -551,12 +551,12 @@ gdf_error join_call_compute_df(
   gdf_col_pointer l_index_temp, r_index_temp;
 
   if (nullptr == left_indices) {
-    l_index_temp = {new gdf_column, gdf_col_deleter};
+    l_index_temp = {new gdf_column{}, gdf_col_deleter};
     left_index_out = l_index_temp.get();
     }
 
     if (nullptr == right_indices) {
-        r_index_temp = {new gdf_column, gdf_col_deleter};
+        r_index_temp = {new gdf_column{}, gdf_col_deleter};
         right_index_out = r_index_temp.get();
     }
 

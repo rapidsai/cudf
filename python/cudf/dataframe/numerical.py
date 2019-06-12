@@ -116,56 +116,39 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+
         elif (dtype == np.dtype('object') or
               np.issubdtype(dtype, np.dtype('U').type)):
-            import nvstrings
-            if np.issubdtype(self.dtype, np.signedinteger):
-                if len(self) > 0:
+            if len(self) > 0:
+                if self.dtype in (np.dtype('int8'), np.dtype('int16')):
                     dev_array = self.astype('int32').data.mem
-                    dev_ptr = get_ctype_ptr(dev_array)
-                    null_ptr = None
-                    if self.mask is not None:
-                        null_ptr = get_ctype_ptr(self.mask.mem)
-                    return string.StringColumn(
-                        data=nvstrings.itos(
-                            dev_ptr,
-                            count=len(self),
-                            nulls=null_ptr,
-                            bdevmem=True
-                        )
-                    )
                 else:
-                    return string.StringColumn(
-                        data=nvstrings.to_device(
-                            []
-                        )
-                    )
-            elif np.issubdtype(self.dtype, np.floating):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # dev_array = self.astype('float32').data.mem
-                # dev_ptr = get_ctype_ptr(self.data.mem)
-                # return string.StringColumn(
-                #     data=nvstrings.ftos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
-            elif self.dtype == np.dtype('bool'):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # return string.StringColumn(
-                #     data=nvstrings.btos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
+                    dev_array = self.data.mem
+                dev_ptr = get_ctype_ptr(dev_array)
+                null_ptr = None
+                if self.mask is not None:
+                    null_ptr = get_ctype_ptr(self.mask.mem)
+                kwargs = {
+                    'count': len(self),
+                    'nulls': null_ptr,
+                    'bdevmem': True
+                }
+                data = string._numeric_to_str_typecast_functions[
+                    np.dtype(dev_array.dtype)
+                ](dev_ptr, **kwargs)
+
+            else:
+                data = []
+
+            return string.StringColumn(data=data)
+
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
                 dtype=dtype,
                 data=self.data.astype(dtype)
             )
+
         else:
             col = self.replace(data=self.data.astype(dtype),
                                dtype=np.dtype(dtype))
@@ -274,14 +257,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def product(self, dtype=None):
         return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self, dtype=None):
+    def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1, dtype=None):
-        x = self.astype('f8')
-        mu = x.mean(dtype=dtype)
-        n = x.valid_count
-        asum = x.sum_of_squares(dtype=dtype)
+    def mean_var(self, ddof=1, dtype=np.float64):
+        mu = self.mean(dtype=dtype)
+        n = self.valid_count
+        asum = np.float64(self.sum_of_squares(dtype=dtype))
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
@@ -328,6 +310,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
+        elif dkind == 'b':
+            return False
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
@@ -348,14 +332,24 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
-        result = self.copy()
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-        if is_integer_dtype(result.dtype):
-            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        if np.isscalar(fill_value):
+            # castsafely to the same dtype as self
+            fill_value_casted = self.dtype.type(fill_value)
+            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+                raise TypeError(
+                    "Cannot safely cast non-equivalent {} to {}".format(
+                        type(fill_value).__name__, self.dtype.name
+                    )
+                )
+            fill_value = fill_value_casted
         else:
-            fill_value_col = fill_value_col.astype(result.dtype)
-        cpp_replace.replace_nulls(result, fill_value_col)
-        result = result.replace(mask=None)
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
+            # cast safely to the same dtype as self
+            if is_integer_dtype(self.dtype):
+                fill_value = safe_cast_to_int(fill_value, self.dtype)
+            else:
+                fill_value = fill_value.astype(self.dtype)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):

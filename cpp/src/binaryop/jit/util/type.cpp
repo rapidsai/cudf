@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#include "binary/jit/util/type.h"
-#include "utilities/type_dispatcher.hpp"
+#include "type.h"
+#include <utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace binops {
@@ -95,6 +95,8 @@ namespace jit {
                 return "FloorDiv";
             case GDF_MOD:
                 return "Mod";
+            case GDF_PYMOD:
+                return "PyMod";
             case GDF_POW:
                 return "Pow";
             case GDF_EQUAL:

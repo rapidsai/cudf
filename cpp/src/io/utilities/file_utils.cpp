@@ -22,8 +22,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
 
 MappedFile::MappedFile(const char *path, int oflag) {
   CUDF_EXPECTS((fd_ = open(path, oflag)) != -1, "Cannot open input file");

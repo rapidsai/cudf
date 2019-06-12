@@ -19,7 +19,7 @@
 #include <vector>
 #include <string>
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 enum {
     IO_UNCOMP_STREAM_TYPE_INFER     = 0,

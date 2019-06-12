@@ -17,13 +17,13 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 
-#include <rolling.hpp>
-#include "src/rolling/rolling_detail.hpp"
-#include <cudf.h>
+#include <cudf/rolling.hpp>
+#include <src/rolling/rolling_detail.hpp>
+#include <cudf/cudf.h>
 
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
-#include "tests/utilities/column_wrapper.cuh"
+#include <tests/utilities/column_wrapper.cuh>
 
 #include <gtest/gtest.h>
 

@@ -15,14 +15,14 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <copying.hpp>
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 
 struct CopyErrorTest : GdfTest {};
 
 TEST_F(CopyErrorTest, NullInput) {
-  gdf_column input;
+  gdf_column input{};
   input.size = 10;
   input.data = 0;
 
@@ -42,7 +42,7 @@ TYPED_TEST(CopyTest, BasicCopy) {
   cudf::test::column_wrapper<TypeParam> source{
       source_size, [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }};
-  gdf_column copy;
+  gdf_column copy{};
   EXPECT_NO_THROW(copy = cudf::copy(source));
   EXPECT_TRUE(source == copy);
 }
@@ -54,7 +54,7 @@ TYPED_TEST(CopyTest, NoNullMask) {
   std::iota(data.begin(), data.end(), TypeParam{0});
   cudf::test::column_wrapper<TypeParam> source{data};
 
-  gdf_column copy;
+  gdf_column copy{};
   EXPECT_NO_THROW(copy = cudf::copy(source));
   EXPECT_TRUE(source == copy);
 }
@@ -64,7 +64,7 @@ TYPED_TEST(CopyTest, EmptyInput) {
   cudf::test::column_wrapper<TypeParam> source{
       source_size, [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }};
-  gdf_column copy;
+  gdf_column copy{};
   EXPECT_NO_THROW(copy = cudf::copy(source));
   EXPECT_TRUE(source == copy);
 }
