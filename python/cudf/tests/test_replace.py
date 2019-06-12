@@ -233,6 +233,6 @@ def test_series_fillna_invalid_dtype(data_dtype):
     with pytest.raises(TypeError) as raises:
         gdf.fillna(fill_value)
     raises.match("Cannot safely cast non-equivalent {} to {}".format(
-        np.dtype(type(fill_value)).type.__name__,
+        type(fill_value).__name__,
         gdf.dtype.type.__name__
     ))
