@@ -149,6 +149,8 @@ skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
+use_index : bool, default True
+    If True, use row index if available for faster seeking.
 kwargs are passed to the engine
 
 Returns
