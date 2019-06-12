@@ -1054,27 +1054,6 @@ gdf_error gdf_replace_nulls(gdf_column*       col_out,
                                    const gdf_column* col_in);
 
 /**
- * @brief Merge sorted arrays of gdf_column.
- *
- * @Param[in] left_cols A column array to be merged with right_cols
- * @Param[in] right_cols A column array to be merged with left_cols
- * @Param[in] ncols Column length in left_cols and right_cols
- * @Param[in] sort_by_cols Indices of left_cols and right_cols to be used
- *                         for comparison criteria
- * @Param[in] asc_desc Sort order types of columns indexed by sort_by_cols
- * @Param[out] output_cols Merged columns
- *
- * @Returns GDF_SUCCESS upon successful merge
- */
-gdf_error gdf_sorted_merge(gdf_column **          left_cols,
-                          gdf_column **          right_cols,
-                          const gdf_size_type    ncols,
-                          const gdf_size_type *  sort_by_cols,
-                          const gdf_size_type    sort_by_cols_size,
-                          gdf_column *           asc_desc,
-                          gdf_column **          output_cols);
-
-/**
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.
  *
