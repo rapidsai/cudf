@@ -50,7 +50,6 @@
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
 #include <thrust/device_vector.h>
-#if 1
 
 template <typename T>
 T random_int(T min, T max)
@@ -427,10 +426,9 @@ void benchmark_types(gdf_size_type column_size, int iters, gdf_dtype type=N_GDF_
     std::cout << std::endl << std::endl;
   }
 }
-#endif
+
 int main(int argc, char **argv)
 {
-#if 1
   gdf_size_type column_size{10000000};
   int iters{1000};
   gdf_dtype type = N_GDF_TYPES;
@@ -450,6 +448,5 @@ int main(int argc, char **argv)
   // -----------------------------------
 
   rmmFinalize();
-#endif
   return 0;
 }
