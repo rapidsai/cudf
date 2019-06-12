@@ -23,7 +23,10 @@ from cudf.tests.utils import assert_eq
     'nulls',
     ['none', 'one', 'some', 'all']
 )
-def test_rollling_series_basic(data, agg, nulls):
+@pytest.mark.parametrize(
+    'center',
+    [True, False])
+def test_rollling_series_basic(data, agg, nulls, center):
     psr = pd.Series(data)
 
     if len(data) > 0:
@@ -42,8 +45,8 @@ def test_rollling_series_basic(data, agg, nulls):
     for window_size in range(1, len(data)+1):
         for min_periods in range(1, window_size+1):
             assert_eq(
-                getattr(psr.rolling(window_size, min_periods), agg)().fillna(-1),
-                getattr(gsr.rolling(window_size, min_periods), agg)().fillna(-1),
+                getattr(psr.rolling(window_size, min_periods, center), agg)().fillna(-1),
+                getattr(gsr.rolling(window_size, min_periods, center), agg)().fillna(-1),
                 check_dtype=False
             )
 
@@ -64,8 +67,10 @@ def test_rollling_series_basic(data, agg, nulls):
     'nulls',
     ['none', 'one', 'some', 'all']
 )
-
-def test_rolling_dataframe_basic(data, agg, nulls):
+@pytest.mark.parametrize(
+    'center',
+    [True, False])
+def test_rolling_dataframe_basic(data, agg, nulls, center):
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
@@ -85,7 +90,7 @@ def test_rolling_dataframe_basic(data, agg, nulls):
     for window_size in range(1, len(data)+1):
         for min_periods in range(1, window_size+1):
             assert_eq(
-                getattr(pdf.rolling(window_size, min_periods), agg)().fillna(-1),
-                getattr(gdf.rolling(window_size, min_periods), agg)().fillna(-1),
+                getattr(pdf.rolling(window_size, min_periods, center), agg)().fillna(-1),
+                getattr(gdf.rolling(window_size, min_periods, center), agg)().fillna(-1),
                 check_dtype=False
             )

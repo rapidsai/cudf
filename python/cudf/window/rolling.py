@@ -3,12 +3,13 @@ from cudf.bindings.rolling import apply_rolling
 
 class Rolling:
 
-    def __init__(self, obj, window, min_periods=None):
+    def __init__(self, obj, window, min_periods=None, center=False):
         if min_periods is None:
             min_periods = window
         self.obj = obj
         self.window = window
         self.min_periods = min_periods
+        self.center = center
         self._validate_args()
 
     def _apply_agg_series(self, sr, agg_name):
@@ -16,6 +17,7 @@ class Rolling:
             sr._column,
             self.window,
             self.min_periods,
+            self.center,
             agg_name)
         return sr._copy_construct(data=result_col)
 

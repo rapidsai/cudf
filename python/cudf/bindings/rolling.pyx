@@ -7,11 +7,12 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.rolling cimport *
 
 
-def apply_rolling(inp, window, min_periods, op):
+def apply_rolling(inp, window, min_periods, center, op):
 
     cdef gdf_column *inp_col
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
-    cdef gdf_index_type c_window = window
+    cdef gdf_index_type c_window
+    cdef gdf_index_type c_forward_window
     cdef gdf_agg_op c_op = agg_ops[op]
 
     if op == "mean":
@@ -23,6 +24,13 @@ def apply_rolling(inp, window, min_periods, op):
         min_periods = 0
 
     cdef gdf_index_type c_min_periods = min_periods
+
+    if center:
+        c_window = (window // 2) + 1
+        c_forward_window = window - (c_window)
+    else:
+        c_window = window
+        c_forward_window = 0
 
     if window == 0:
         data = rmm.device_array_like(inp.data.mem)
@@ -37,7 +45,7 @@ def apply_rolling(inp, window, min_periods, op):
             output_col = rolling_window(inp_col[0],
                                         c_window,
                                         c_min_periods,
-                                        0,
+                                        c_forward_window,
                                         c_op,
                                         NULL,
                                         NULL,
