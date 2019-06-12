@@ -948,8 +948,7 @@ class DataFrame(object):
            col values
         """
 
-        if (not isinstance(series, Series) and utils.is_list_like(series)) \
-                or (utils.is_list_like(series)) \
+        if (utils.is_list_like(series)) \
                 or (isinstance(series, Series)):
             '''
             This case should handle following three scenarios:
@@ -988,8 +987,7 @@ class DataFrame(object):
         if SCALAR:
             col = series
 
-        if (not isinstance(series, Series) and utils.is_list_like(series)) \
-                or (utils.is_list_like(series)) \
+        if (utils.is_list_like(series)) \
                 or (isinstance(series, Series)):
             '''
             This case should handle following three scenarios:
