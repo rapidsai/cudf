@@ -54,11 +54,12 @@ struct column_range_factory {
     gdf_index_type begin;
 
     __device__
-    T data(gdf_index_type index) { return column_data[begin + index]; }
+    T data(gdf_index_type index) { 
+      return column_data[begin + index]; }
 
     __device__
     bool valid(gdf_index_type index) {
-      return bit_mask::is_valid(bitmask, index);
+      return bit_mask::is_valid(bitmask, begin + index);
     }
   };
 

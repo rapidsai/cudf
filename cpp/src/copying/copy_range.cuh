@@ -50,10 +50,12 @@ void copy_range_kernel(T * __restrict__ const data,
       cudf::util::detail::bit_container_index<bit_mask_t>(end);
 
   gdf_index_type mask_idx = begin_mask_idx + warp_id;
-  gdf_index_type input_idx = tid;
+
+  gdf_index_type output_offset = begin_mask_idx * mask_size - begin;
+  gdf_index_type input_idx = tid + output_offset; 
 
   // each warp shares its total change in null count to shared memory to ease
-  // computing the total changed to null_count.
+  // computing the total change to null_count.
   // note maximum block size is limited to 1024 by this, but that's OK
   __shared__ uint32_t warp_null_change[has_validity ? warp_size : 1];
   if (has_validity && threadIdx.x < warp_size) warp_null_change[threadIdx.x] = 0;
@@ -71,13 +73,13 @@ void copy_range_kernel(T * __restrict__ const data,
     if (has_validity) { // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
 
-      bool valid = (in_range) ? input.valid(input_idx) : false;
+      bool valid = in_range & input.valid(input_idx);
       int warp_mask = __ballot_sync(active_mask, valid);
 
       bit_mask_t old_mask = bitmask[mask_idx];
 
       if (lane_id == 0) {
-        bit_mask_t new_mask = (old_mask & ~active_mask) | 
+        bit_mask_t new_mask = (old_mask & ~active_mask) |
                               (warp_mask & active_mask);
         bitmask[mask_idx] = new_mask;
         // null_diff = (mask_size - __popc(new_mask)) - (mask_size - __popc(old_mask))
@@ -90,19 +92,21 @@ void copy_range_kernel(T * __restrict__ const data,
     mask_idx += masks_per_grid;
   }
 
-  __syncthreads(); // wait for shared null counts to be ready
-  
-  // Compute total null_count change for this block and add it to global count
-  if (threadIdx.x < warp_size) {
-    uint32_t my_null_change = warp_null_change[threadIdx.x];
+  if (has_validity) {
+    __syncthreads(); // wait for shared null counts to be ready
+    
+    // Compute total null_count change for this block and add it to global count
+    if (threadIdx.x < warp_size) {
+      uint32_t my_null_change = warp_null_change[threadIdx.x];
 
-    __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
-        
-    uint32_t block_null_change =
-      cub::WarpReduce<uint32_t>(temp_storage).Sum(my_null_change);
-        
-    if (lane_id == 0) { // one thread computes and adds to null count
-      atomicAdd(null_count, block_null_change);
+      __shared__ typename cub::WarpReduce<uint32_t>::TempStorage temp_storage;
+          
+      uint32_t block_null_change =
+        cub::WarpReduce<uint32_t>(temp_storage).Sum(my_null_change);
+          
+      if (lane_id == 0) { // one thread computes and adds to null count
+        atomicAdd(null_count, block_null_change);
+      }
     }
   }
 }
@@ -120,7 +124,7 @@ struct copy_range_dispatch {
       "fill_kernel assumes bitmask element size in bits == warp size");
 
     auto input = make_input.template operator()<T>();
-    auto kernel = copy_range_kernel<T, decltype(input), true>;
+    auto kernel = copy_range_kernel<T, decltype(input), false>;
 
     gdf_size_type *null_count = nullptr;
 
