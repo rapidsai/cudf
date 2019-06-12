@@ -118,13 +118,20 @@ gdf_column drop_nulls(gdf_column const &input) {
 
 namespace detail {
 
+/*
+ * unique_copy copies elements from the range [first, last) to a range beginning
+ * with output, except that in a consecutive group of duplicate elements only
+ * depending on last argument keep, only the first one is copied, or the last
+ * one is copied or neither is copied. The return value is the end of the range
+ * to which the elements are copied.
+ */
 template<typename DerivedPolicy,
          typename InputIterator,
          typename OutputIterator,
          typename BinaryPredicate,
     typename IndexType = typename
   thrust::iterator_difference<InputIterator>::type>
-  OutputIterator non_duplicates_copy(thrust::execution_policy<DerivedPolicy> &exec,
+  OutputIterator unique_copy(thrust::execution_policy<DerivedPolicy> &exec,
                              InputIterator first,
                              InputIterator last,
                              OutputIterator output,
@@ -163,7 +170,7 @@ template<typename DerivedPolicy,
   }
 }
 
-rmm::device_vector<gdf_index_type>
+auto 
 get_unique_ordered_indices(const cudf::table& key_columns,
                            const duplicate_keep_option keep,
                            cudaStream_t stream=0)
@@ -192,7 +199,7 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   bool nullable = device_input_table.get()->has_nulls();
   if(nullable) {
     auto comp = row_equality_comparator<true>(*device_input_table, true);
-    result_end = non_duplicates_copy(exec,
+    result_end = unique_copy(exec,
         sorted_indices.begin(),
         sorted_indices.end(),
         unique_indices.begin(),
@@ -200,7 +207,7 @@ get_unique_ordered_indices(const cudf::table& key_columns,
         keep);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
-    result_end = non_duplicates_copy(exec,
+    result_end = unique_copy(exec,
         sorted_indices.begin(),
         sorted_indices.end(),
         unique_indices.begin(),
@@ -210,10 +217,12 @@ get_unique_ordered_indices(const cudf::table& key_columns,
  
   // reorder unique indices
   thrust::sort(exec, unique_indices.begin(), result_end);
-  unique_indices.resize(thrust::distance(unique_indices.begin(), result_end));
+  //not resizing vector to avoid copy
   cudaStreamSynchronize(stream);
 
-  return unique_indices;
+  //return unique_indices;
+  return std::make_pair(unique_indices, 
+                        thrust::distance(unique_indices.begin(), result_end));
 }
 } //namespace detail
 
@@ -230,9 +239,11 @@ rows in input table should be equal to number of rows in key colums table");
       ) {
     return cudf::empty_like(input_table);
   }
-  rmm::device_vector<gdf_index_type> unique_indices = detail::get_unique_ordered_indices(key_columns, keep);
+  rmm::device_vector<gdf_index_type> unique_indices;
+  gdf_size_type unique_count; 
+  std::tie(unique_indices, unique_count) = detail::get_unique_ordered_indices(key_columns, keep);
   // Allocate output columns
-  cudf::table destination_table(unique_indices.size(), cudf::column_dtypes(input_table), true);
+  cudf::table destination_table(unique_count, cudf::column_dtypes(input_table), true);
   // run gather operation to establish new order
   cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
   nvcategory_gather_table(input_table, destination_table);
