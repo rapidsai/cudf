@@ -36,6 +36,30 @@ using SortedMergerTypes = ::testing::Types<int8_t, int32_t, double>;
 
 TYPED_TEST_CASE(SortedMergeTest, SortedMergerTypes);
 
+TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
+    cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    cudf::test::column_wrapper<TypeParam> rightColWrap1(0);
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols = {0};
+    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC});
+
+    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                                cudf::table(rightColumns, 1),
+                                                sortByCols,
+                                                ordersDeviceVector);
+
+    const gdf_size_type outputLength = leftColumn1->size + rightColumn1->size;
+    cudf::test::column_wrapper<TypeParam> expectedDataWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
+
+    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap1.get(), outputTable.get_column(0)));
+}
+
 TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
     cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
     cudf::test::column_wrapper<TypeParam> leftColWrap2({4, 5, 6, 7}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));

@@ -87,7 +87,7 @@ std::pair<rmm::device_vector<gdf_size_type>, rmm::device_vector<gdf_size_type>>
 generate_merged_indices(device_table const& left_table,
                         device_table const& right_table,
                         rmm::device_vector<int8_t> const& asc_desc,
-                        cudaStream_t cudaStream = 0) {
+                        cudaStream_t stream = 0) {
 
     const gdf_size_type left_size  = left_table.num_rows();
     const gdf_size_type right_size = right_table.num_rows();
@@ -112,7 +112,7 @@ generate_merged_indices(device_table const& left_table,
     bool nullable = left_table.has_nulls() || right_table.has_nulls();
     if (nullable){
         auto ineq_op = row_inequality_comparator<true>(right_table, left_table, false, asc_desc.data().get()); 
-        thrust::merge(rmm::exec_policy(cudaStream)->on(cudaStream),
+        thrust::merge(rmm::exec_policy(stream)->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
                     right_begin_zip_iterator,
@@ -126,7 +126,7 @@ generate_merged_indices(device_table const& left_table,
                     });			        
     } else {
         auto ineq_op = row_inequality_comparator<false>(right_table, left_table, false, asc_desc.data().get()); 
-        thrust::merge(rmm::exec_policy(cudaStream)->on(cudaStream),
+        thrust::merge(rmm::exec_policy(stream)->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
                     right_begin_zip_iterator,
