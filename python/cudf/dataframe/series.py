@@ -1371,9 +1371,7 @@ class Series(object):
             raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
-
-        fill_value = columnops.as_column(False)
-        return ((self == cat).fillna(fill_value).astype(dtype)
+        return ((self == cat).fillna(False).astype(dtype)
                 for cat in cats)
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):

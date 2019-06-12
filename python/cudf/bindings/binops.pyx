@@ -22,7 +22,7 @@ _BINARY_OP = {
     'div'       : GDF_DIV,
     'truediv'   : GDF_TRUE_DIV,
     'floordiv'  : GDF_FLOOR_DIV,
-    'mod'       : GDF_MOD,
+    'mod'       : GDF_PYMOD,
     'pow'       : GDF_POW,
     'eq'        : GDF_EQUAL,
     'ne'        : GDF_NOT_EQUAL,

@@ -24,7 +24,7 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc()
 def read_orc(path, engine='cudf', columns=None, stripe=None, skip_rows=None,
-             num_rows=None):
+             num_rows=None, use_index=True):
     """{docstring}"""
 
     if engine == 'cudf':
@@ -33,7 +33,8 @@ def read_orc(path, engine='cudf', columns=None, stripe=None, skip_rows=None,
             columns,
             stripe,
             skip_rows,
-            num_rows
+            num_rows,
+            use_index
         )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
