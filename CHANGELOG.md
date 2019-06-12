@@ -21,6 +21,7 @@
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
+- PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 
 
 ## Improvements

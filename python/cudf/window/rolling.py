@@ -1,6 +1,7 @@
 import cudf
 from cudf.bindings.rolling import apply_rolling
 
+
 class Rolling:
 
     def __init__(self, obj, window, min_periods=None, center=False):
@@ -24,8 +25,8 @@ class Rolling:
     def _apply_agg_dataframe(self, df, agg_name):
         result_df = cudf.DataFrame({})
         for col_name in df.columns:
-            result_df.add_column(name=col_name,
-                                 data=self._apply_agg_series(df[col_name], agg_name))
+            result_col = self._apply_agg_series(df[col_name], agg_name)
+            result_df.add_column(name=col_name, data=result_col)
         result_df.index = df.index
         return result_df
 
