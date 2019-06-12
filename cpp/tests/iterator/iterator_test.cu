@@ -171,7 +171,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
     // test column input
     cudf::test::column_wrapper<T> w_col(hos_array);
-//    this->column_sum_test(expected_value, w_col);
+    this->column_sum_test(expected_value, w_col);
 
 }
 
@@ -199,55 +199,7 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    {
 
-
-        using T_in = thrust::pair<T, bool>;
-        std::vector<T_in> v;
-        v.push_back(thrust::make_pair(T{100}, false) );
-        v.push_back(thrust::make_pair(T{200}, false) );
-        v.push_back(thrust::make_pair(T{300}, true) );
-    
-        using T_transformer = cudf::detail::scalar_cast_transformer<T, float>;
-        thrust::host_vector<T_in> ints(v);
-        T_transformer trasformer;
-    //    trasformer.size = v.size();
-        
-    // this works:
-        auto begin = thrust::make_transform_iterator(ints.begin(), trasformer);
-        auto end = thrust::make_transform_iterator(ints.end(), trasformer);
-        
-        float val = thrust::reduce(begin, end);
-        printf("value:%f\n", val);
-        printf("begin:%f\n", *begin);
-        printf("end:%f\n", *end);
-
-
-    }
-
-
-
-    using T_element = T;
-    using T_colunn_input = cudf::detail::column_input<T_element, true>;
-    using T_iterator_output = thrust::pair<T_element, bool>;
-    using Iterator_Index = thrust::counting_iterator<gdf_index_type>;
-    using T_iterator = cudf::detail::column_input_iterator<T_iterator_output, T_colunn_input, Iterator_Index>;
-    using T_transformer = cudf::detail::scalar_cast_transformer<T, float>;
-
-    T_colunn_input input = T_colunn_input(std::get<0>(hos).data(), 
-        reinterpret_cast<const bit_mask::bit_mask_t*>(std::get<1>(hos).data() ), init);
-
-    // `it` returns T_iterator_output = thrust::pair<T_element, bool>
-    T_iterator it = T_iterator(input, Iterator_Index{0});
-    printf("it:%d\n", (*it).first);
-
-#if 1
-    // this fails to compile:
-    auto begin = thrust::make_transform_iterator(it, T_transformer{});
-    printf("begin:%f\n", *begin);
-#endif
-
-    /*
     // CPU test
     auto it_hos = cudf::make_iterator<true>(
         std::get<0>(hos).data(), std::get<1>(hos).data(), init);
@@ -259,9 +211,7 @@ TYPED_TEST(IteratorTest, null_iterator)
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
     this->column_sum_test(expected_value, w_col);
-    */
 }
-#if 0
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by `cudf::make_iterator<true, T, T_upcast>(...)`
@@ -509,4 +459,3 @@ TYPED_TEST(IteratorTest, error_handling)
     CUDF_EXPECT_NO_THROW( (cudf::make_iterator<false, T>( *w_col_null.get(), T{0}) ) );
 }
 
-#endif

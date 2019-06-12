@@ -285,8 +285,9 @@ template<typename T_iterator_output, typename T_column_input,
     : public thrust::iterator_adaptor<
         column_input_iterator<T_iterator_output, T_column_input, Iterator>, // the name of the iterator we're creating
         Iterator,                   // the name of the iterator we're adapting
-        thrust::use_default, thrust::use_default, thrust::use_default,
-        T_iterator_output,                   // set `super_t::reference` to `T_iterator_output`
+        T_iterator_output,          // set `super_t::value` to `T_iterator_output`
+        thrust::use_default, thrust::use_default,
+        T_iterator_output,          // set `super_t::reference` to `T_iterator_output`
         thrust::use_default
       >
   {
@@ -294,7 +295,7 @@ template<typename T_iterator_output, typename T_column_input,
     // shorthand for the name of the iterator_adaptor we're deriving from
     using super_t = thrust::iterator_adaptor<
       column_input_iterator<T_iterator_output, T_column_input, Iterator>, Iterator,
-      thrust::use_default, thrust::use_default, thrust::use_default, T_iterator_output, thrust::use_default
+      T_iterator_output, thrust::use_default, thrust::use_default, T_iterator_output, thrust::use_default
     >;
 
     CUDA_HOST_DEVICE_CALLABLE
