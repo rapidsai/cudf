@@ -60,7 +60,6 @@
 - PR #1915 Improve iloc performance for non-contiguous row selection
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-<<<<<<< HEAD
 - PR #1850 Support left_on and right_on for DataFrame merge operator  
 - PR #1938 Add default constructor for `column_wrapper`
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
