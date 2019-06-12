@@ -2,6 +2,10 @@
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif()
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
