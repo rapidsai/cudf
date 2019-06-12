@@ -58,9 +58,6 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         bool                doublequote
 
     cdef cppclass CsvReader:
-
-        CsvReader()
-
         CsvReader(const csv_reader_args &args) except +
 
         cudf_table read() except +

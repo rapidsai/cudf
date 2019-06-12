@@ -88,15 +88,17 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     if dtype is not None:
         args.dtype = arr_dtypes
 
-    cdef JsonReader reader
+    cdef JsonReader *reader
     with nogil:
-        reader = JsonReader(args)
+        reader = new JsonReader(args)
     
     cdef cudf_table table
     if byte_range is None:
         table = reader.read()
     else:
         table = reader.read_byte_range(byte_range[0], byte_range[1])
+
+    free(reader)
 
     # Extract parsed columns
     outcols = []

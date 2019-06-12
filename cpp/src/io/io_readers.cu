@@ -21,22 +21,6 @@
 
 namespace cudf {
 
-JsonReader::JsonReader() noexcept = default;
-
-JsonReader::JsonReader(JsonReader const &rhs) : impl_(std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs())) {}
-
-JsonReader &JsonReader::operator=(JsonReader const &rhs) {
-  impl_ = std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs());
-  return *this;
-}
-
-JsonReader::JsonReader(JsonReader &&rhs) : impl_(std::move(rhs.impl_)) {}
-
-JsonReader &JsonReader::operator=(JsonReader &&rhs) {
-  impl_ = std::move(rhs.impl_);
-  return *this;
-}
-
 JsonReader::JsonReader(json_reader_args const &args) : impl_(std::make_unique<Impl>(args)) {}
 
 table JsonReader::read() {
@@ -56,23 +40,6 @@ table JsonReader::read_byte_range(size_t offset, size_t size) {
 }
 
 JsonReader::~JsonReader() = default;
-
-
-CsvReader::CsvReader() noexcept = default;
-
-CsvReader::CsvReader(CsvReader const &rhs) : impl_(std::make_unique<CsvReader::Impl>(rhs.impl_->getArgs())) {}
-
-CsvReader &CsvReader::operator=(CsvReader const &rhs) {
-  impl_ = std::make_unique<CsvReader::Impl>(rhs.impl_->getArgs());
-  return *this;
-}
-
-CsvReader::CsvReader(CsvReader &&rhs) : impl_(std::move(rhs.impl_)) {}
-
-CsvReader &CsvReader::operator=(CsvReader &&rhs) {
-  impl_ = std::move(rhs.impl_);
-  return *this;
-}
 
 CsvReader::CsvReader(csv_reader_args const &args) : impl_(std::make_unique<Impl>(args)) {}
 

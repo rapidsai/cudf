@@ -175,9 +175,9 @@ cpdef cpp_read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef CsvReader reader
+    cdef CsvReader *reader
     with nogil:
-        reader = CsvReader(args)
+        reader = new CsvReader(args)
     
     cdef cudf_table table
     if byte_range is not None:
@@ -187,6 +187,8 @@ cpdef cpp_read_csv(
                                  nrows if nrows is not None else -1)
     else:
         table = reader.read()
+
+    free(reader)
 
     # Extract parsed columns
     outcols = []

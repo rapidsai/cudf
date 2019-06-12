@@ -61,19 +61,6 @@ private:
 
 public:
   /**---------------------------------------------------------------------------*
-   * @brief JsonReader defult constructor;
-   * 
-   * Calling read_XYZ() on a default-constructed object yields an empty table.
-   *---------------------------------------------------------------------------**/
-  JsonReader() noexcept;
-
-  JsonReader(JsonReader const &rhs);
-  JsonReader& operator=(JsonReader const &rhs);
-
-  JsonReader(JsonReader &&rhs);
-  JsonReader& operator=(JsonReader &&rhs);
-
-  /**---------------------------------------------------------------------------*
    * @brief JsonReader constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
   explicit JsonReader(json_reader_args const &args);
@@ -180,19 +167,6 @@ private:
   std::unique_ptr<Impl> impl_;
 
 public:
-  /**---------------------------------------------------------------------------*
-   * @brief CsvReader defult constructor;
-   * 
-   * Calling read_XYZ() on a default-constructed object yields an empty table.
-   *---------------------------------------------------------------------------**/
-  CsvReader() noexcept;
-
-  CsvReader(CsvReader const &rhs);
-  CsvReader& operator=(CsvReader const &rhs);
-
-  CsvReader(CsvReader &&rhs);
-  CsvReader& operator=(CsvReader &&rhs);
-
   /**---------------------------------------------------------------------------*
    * @brief CsvReader constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
