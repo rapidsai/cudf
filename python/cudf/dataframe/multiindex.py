@@ -382,7 +382,6 @@ class MultiIndex(Index):
                                              dtype=df[column].dtype)),
                                'level': self.levels[idx]})
             code = DataFrame({'idx': df[column]})
-            breakpoint()
             df[column] = code.merge(level).level
         return df
 
