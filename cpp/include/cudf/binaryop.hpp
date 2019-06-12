@@ -30,6 +30,7 @@ typedef enum {
   GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
   GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
   GDF_MOD,            ///< operator %
+  GDF_PYMOD,          ///< operator % but following python's sign rules for negatives
   GDF_POW,            ///< lhs ^ rhs
   GDF_EQUAL,          ///< operator ==
   GDF_NOT_EQUAL,      ///< operator !=

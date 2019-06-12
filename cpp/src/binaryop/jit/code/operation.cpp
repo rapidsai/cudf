@@ -153,6 +153,46 @@ R"***(
         }
     };
 
+    struct PyMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return ((x % y) + y) % y;
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            double x1 = static_cast<double>(x);
+            double y1 = static_cast<double>(y);
+            return fmod(fmod(x1, y1) + y1, y1);
+        }
+    };
+
+    struct RPyMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return ((y % x) + x) % x;
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            double x1 = static_cast<double>(x);
+            double y1 = static_cast<double>(y);
+            return fmod(fmod(y1, x1) + x1, x1);
+        }
+    };
+
     struct Pow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
