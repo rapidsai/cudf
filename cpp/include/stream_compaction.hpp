@@ -20,6 +20,16 @@
 #include "cudf.h"
 #include <types.hpp>
 
+
+/**
+ * @brief Choices for drop_duplicates API for retainment of duplicate rows
+ */
+enum duplicate_keep_option {
+  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
+  KEEP_FALSE        ///< Don't keep any duplicate rows, Keeps only unique rows
+};
+
 namespace cudf {
 
 /**
@@ -73,33 +83,21 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  */
 gdf_column drop_nulls(gdf_column const &input);
 
-/**
-* @brief Filter only unique row indices in original order
-*
-* @param key_columns cudf::table containing key columns to check duplicates rows
-* @param keep_first keep first or last entry as unique if duplicate is found
-*
-* @return unique_indices in order
-*/
-//rmm::device_vector<gdf_index_type> get_unique_ordered_indices(const cudf::table& key_columns,
-//                           const bool keep_first);
-
-
-/**
- * @brief Choices for drop_duplicates API for retainment of duplicate rows
- */
-enum {
-  KEEP_FIRST = 0,   ///< Keeps first duplicate row
-  KEEP_LAST,        ///< Keeps last  duplicate row 
-  KEEP_FALSE        ///< Don't keep any duplicate rows
-};
 
 /**
  * @brief Create a new table without duplicate rows 
  *
+ * Given an input table, each row is copied to output table if the corresponding
+ * row of key column table is (unique or first duplicate row) or (unique or last
+ * duplicate row) or (only unique row).
+ *
+ * The input table and key columns table should have same number of rows.
+ * Note that the output table columns memory is allocated by this function but 
+ * must be freed by the caller when finished. 
+ *
  * @param input_table input table to copy only unique rows
  * @param key_columns columns to consider to identify duplicate rows
-* @param keep keep first entry, last entry, or no entries if duplicates found
+ * @param keep keep first entry, last entry, or no entries if duplicates found
  *
  * @return out_table with only unique rows
  */

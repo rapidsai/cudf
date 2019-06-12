@@ -304,7 +304,8 @@ ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
 
