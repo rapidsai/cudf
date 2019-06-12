@@ -1937,8 +1937,8 @@ class DataFrame(object):
                              level=level)
             return result
 
-    def rolling(self, window):
-        return Rolling(self, window)
+    def rolling(self, window, min_periods=None):
+        return Rolling(self, window, min_periods=min_periods)
 
     def query(self, expr, local_dict={}):
         """

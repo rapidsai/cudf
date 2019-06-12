@@ -40,11 +40,12 @@ def test_rollling_series_basic(data, agg, nulls):
     gsr = cudf.from_pandas(psr)
 
     for window_size in range(1, len(data)+1):
-        assert_eq(
-            getattr(psr.rolling(window_size), agg)().fillna(-1),
-            getattr(gsr.rolling(window_size), agg)().fillna(-1),
-            check_dtype=False
-        )
+        for min_periods in range(1, window_size+1):
+            assert_eq(
+                getattr(psr.rolling(window_size, min_periods), agg)().fillna(-1),
+                getattr(gsr.rolling(window_size, min_periods), agg)().fillna(-1),
+                check_dtype=False
+            )
 
 @pytest.mark.parametrize(
     'data',
@@ -82,8 +83,9 @@ def test_rolling_dataframe_basic(data, agg, nulls):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(data)+1):
-        assert_eq(
-            getattr(pdf.rolling(window_size), agg)().fillna(-1),
-            getattr(gdf.rolling(window_size), agg)().fillna(-1),
-            check_dtype=False
-        )
+        for min_periods in range(1, window_size+1):
+            assert_eq(
+                getattr(pdf.rolling(window_size, min_periods), agg)().fillna(-1),
+                getattr(gdf.rolling(window_size, min_periods), agg)().fillna(-1),
+                check_dtype=False
+            )

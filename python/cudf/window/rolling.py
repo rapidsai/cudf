@@ -3,16 +3,19 @@ from cudf.bindings.rolling import apply_rolling
 
 class Rolling:
 
-    def __init__(self, obj, window):
+    def __init__(self, obj, window, min_periods=None):
+        if min_periods is None:
+            min_periods = window
         self.obj = obj
         self.window = window
+        self.min_periods = min_periods
         self._validate_args()
 
     def _apply_agg_series(self, sr, agg_name):
         result_col = apply_rolling(
             sr._column,
             self.window,
-            self.window,
+            self.min_periods,
             agg_name)
         return sr._copy_construct(data=result_col)
 
@@ -49,3 +52,6 @@ class Rolling:
 
         if self.window <= 0:
             raise ValueError("Window size cannot be zero or negative")
+
+        if self.min_periods <= 0:
+            raise ValueError("min_periods cannot be zero or negative")

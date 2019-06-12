@@ -1933,8 +1933,8 @@ class Series(object):
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
 
-    def rolling(self, window):
-        return Rolling(self, window)
+    def rolling(self, window, min_periods=None):
+        return Rolling(self, window, min_periods=min_periods)
 
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """
