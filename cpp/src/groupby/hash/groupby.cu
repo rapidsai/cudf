@@ -243,7 +243,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   }
   CHECK_STREAM(stream);
 
-  return std::make_tuple(std::move(map), sparse_output_values);
+  return std::make_pair(std::move(map), sparse_output_values);
 }
 
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
@@ -289,7 +289,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
 
-  return std::make_tuple(output_keys, output_values);
+  return std::make_pair(output_keys, output_values);
 }
 
 /**---------------------------------------------------------------------------*
@@ -328,7 +328,7 @@ auto extract_results(table const& input_keys, table const& input_values,
  * @param options Options to control behavior of the groupby operation
  * @param stream CUDA stream on which all memory allocations and kernels will be
  * executed
- * @return A tuple of the output keys table and output values table
+ * @return A pair of the output keys table and output values table
  *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
@@ -340,8 +340,8 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
       keys, values, *d_input_keys, *d_input_values, ops, options, stream);
 
-  auto const map{std::move(std::get<0>(result))};
-  cudf::table const sparse_output_values{std::get<1>(result)};
+  auto const map{std::move(result.first)};
+  cudf::table const sparse_output_values{result.second};
 
   return extract_results<keys_have_nulls, values_have_nulls>(
       keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
@@ -373,7 +373,7 @@ auto groupby_null_specialization(table const& keys, table const& values) {
 }  // namespace
 namespace detail {
 
-std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops,
                                              Options options,
@@ -390,11 +390,11 @@ std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
   update_nvcategories(keys, output_keys, values, output_values);
 
-  return std::make_tuple(output_keys, output_values);
+  return std::make_pair(output_keys, output_values);
 }
 }  // namespace detail
 
-std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops,
                                              Options options) {

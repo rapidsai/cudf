@@ -28,7 +28,7 @@ namespace groupby {
 namespace hash {
 namespace detail {
 
-std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops,
                                              Options options,
