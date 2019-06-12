@@ -68,7 +68,6 @@ TYPED_TEST(SingleColumnSum, OneGroupNoNulls) {
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}), column_wrapper<ResultValue>({sum}));
 }
-/*
 
 TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys) {
   constexpr int size{10};
@@ -105,12 +104,14 @@ TYPED_TEST(SingleColumnSum, OneGroupEvenNullKeys) {
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
+  // The sum of n odd numbers is n^2
+  ResultValue sum = (size/2) * (size/2);
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({Value(last_odd_index(size))}));
+      column_wrapper<ResultValue>({sum}));
 }
 
 TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys) {
@@ -119,12 +120,16 @@ TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys) {
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
+  // The number of even values in the range [0,n) is (n-1)/2
+  int num_even_numbers = (size-1)/2;
+  // The sum of n even numbers is n(n+1)
+  ResultValue sum = num_even_numbers * (num_even_numbers + 1);
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({Value(last_even_index(size))}));
+      column_wrapper<ResultValue>({sum}));
 }
 
 TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues) {
@@ -133,12 +138,14 @@ TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues) {
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
+  // The sum of n odd numbers is n^2
+  ResultValue sum = (size/2) * (size/2);
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({Value(last_odd_index(size))},
+      column_wrapper<ResultValue>({sum},
                                   [](auto index) { return true; }));
 }
 
@@ -148,12 +155,16 @@ TYPED_TEST(SingleColumnSum, OneGroupOddNullValues) {
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
+  // The number of even values in the range [0,n) is (n-1)/2
+  int num_even_numbers = (size-1)/2;
+  // The sum of n even numbers is n(n+1)
+  ResultValue sum = num_even_numbers * (num_even_numbers + 1);
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return not(index % 2); }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({Value(last_even_index(size))},
+      column_wrapper<ResultValue>({sum},
                                   [](auto index) { return true; }));
 }
 
@@ -170,7 +181,7 @@ TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
+      column_wrapper<ResultValue>{R(1), R(5), R(9), R(13)});
 }
 
 TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
@@ -188,7 +199,6 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
                           [](auto index) { return true; }),
       column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
-
 TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
   using Key = typename SingleColumnSum<TypeParam>::KeyType;
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
@@ -339,4 +349,3 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenValuesNull) {
           {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
           [](auto index) { return index % 2; }));
 }
-*/
