@@ -169,7 +169,7 @@ class MultiIndex(Index):
             if len(self._source_data[by]) > 0:
                 level = self._source_data[by].unique()
                 replaced = self._source_data[by].replace(
-                        level, Series(range(len(level))))
+                        level, Series(cudautils.arange(len(level))))
             else:
                 level = np.array([])
                 replaced = np.array([])
@@ -377,7 +377,8 @@ class MultiIndex(Index):
         df = self.codes.copy(deep=False)
         for idx, column in enumerate(df.columns):
             # use merge as a replace fn
-            level = DataFrame({'idx': Series(range(len(self.levels[idx])),
+            level = DataFrame({'idx': Series(cudautils.arange(len(
+                                                        self.levels[idx])),
                                              dtype=df[column].dtype),
                                'level': self.levels[idx]})
             code = DataFrame({'idx': df[column]})
