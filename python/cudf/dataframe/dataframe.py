@@ -36,7 +36,9 @@ from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
-from cudf.bindings.stream_compaction import apply_drop_duplicates as cpp_drop_duplicates 
+from cudf.bindings.stream_compaction import (
+        apply_drop_duplicates as cpp_drop_duplicates
+        )
 
 
 class DataFrame(object):
@@ -988,10 +990,10 @@ class DataFrame(object):
 
     def drop_duplicates(self, subset=None, keep='first', inplace=False):
         """
-        Return DataFrame with duplicate rows removed, optionally only 
+        Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        in_cols  = [series._column for series in self._cols.values()]
+        in_cols = [series._column for series in self._cols.values()]
         if subset is None:
             subset = self._cols
         elif (not np.iterable(subset) or
@@ -1002,8 +1004,9 @@ class DataFrame(object):
         if len(diff) != 0:
             raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [series._column for name, series in self._cols.items()
-                        if name in subset]
-        out_cols, new_index = cpp_drop_duplicates([self.index.as_column()], in_cols, subset_cols, keep)
+                       if name in subset]
+        out_cols, new_index = cpp_drop_duplicates([self.index.as_column()],
+                                                  in_cols, subset_cols, keep)
         new_index = as_index(new_index)
         if len(self.index) == len(new_index) and self.index.equals(new_index):
             new_index = self.index

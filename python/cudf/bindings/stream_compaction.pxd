@@ -8,13 +8,14 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.types cimport table as cudf_table
 
-cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
-
+cdef extern from "stream_compaction.hpp" nogil:
     #defined in cpp/include/stream_compaction.hpp
     ctypedef enum duplicate_keep_option:
         KEEP_FIRST
         KEEP_LAST
         KEEP_FALSE
+
+cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
     cdef gdf_column apply_boolean_mask(const gdf_column &input,
                                        const gdf_column &boolean_mask) except +

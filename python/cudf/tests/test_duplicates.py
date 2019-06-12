@@ -1,12 +1,12 @@
 import pytest
 
 import numpy as np
-from numba import cuda
 
 import cudf
-from pandas import DataFrame, Series, date_range
+from pandas import DataFrame, date_range
 from cudf.multi import concat
 from cudf.tests.utils import assert_eq
+
 
 def assert_df(g, p):
     assert g.index.dtype == p.index.dtype
@@ -16,7 +16,8 @@ def assert_df(g, p):
         assert g[k].dtype == p[k].dtype
         np.testing.assert_equal(g[k].to_array(), p[k])
 
-# most tests are similar to pandas drop_duplicates 
+# most tests are similar to pandas drop_duplicates
+
 
 @pytest.mark.parametrize('subset', ['a', ['a'], ['a', 'B']])
 def test_duplicated_with_misspelled_column_name(subset):
@@ -28,6 +29,7 @@ def test_duplicated_with_misspelled_column_name(subset):
 
     with pytest.raises(KeyError):
         df.drop_duplicates(subset)
+
 
 def test_drop_duplicates():
     df = DataFrame({'AAA': ['foo', 'bar', 'foo', 'bar',
@@ -235,12 +237,12 @@ def test_drop_duplicates_empty(df):
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
     import random
     import itertools as it
-    comb=list(it.permutations(range(num_columns), num_columns))
-    shuf=list(comb)
+    comb = list(it.permutations(range(num_columns), num_columns))
+    shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)
 
-    #create dataframe with n_dup duplicate rows
     def get_pdf(n_dup):
+        # create dataframe with n_dup duplicate rows
         rows = comb + shuf[:n_dup]
         random.Random(n_dup).shuffle(rows)
         return DataFrame(rows)
@@ -248,46 +250,52 @@ def test_dataframe_drop_duplicates_numeric_method(num_columns):
     for i in range(5):
         pdf = get_pdf(i)
         gdf = cudf.DataFrame.from_pandas(pdf)
-        assert_eq(gdf.drop_duplicates() , pdf.drop_duplicates())
+        assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     # subset columns, single columns
-    assert_eq(gdf.drop_duplicates(pdf.columns[:-1]) , pdf.drop_duplicates(pdf.columns[:-1]))
-    assert_eq(gdf.drop_duplicates(pdf.columns[-1]) , pdf.drop_duplicates(pdf.columns[-1]))
-    assert_eq(gdf.drop_duplicates(pdf.columns[0]) , pdf.drop_duplicates(pdf.columns[0]))
+    assert_eq(gdf.drop_duplicates(pdf.columns[:-1]),
+              pdf.drop_duplicates(pdf.columns[:-1]))
+    assert_eq(gdf.drop_duplicates(pdf.columns[-1]),
+              pdf.drop_duplicates(pdf.columns[-1]))
+    assert_eq(gdf.drop_duplicates(pdf.columns[0]),
+              pdf.drop_duplicates(pdf.columns[0]))
 
     # subset columns shuffled
-    cols =  list(pdf.columns)
+    cols = list(pdf.columns)
     random.Random(3).shuffle(cols)
-    assert_eq(gdf.drop_duplicates(cols) , pdf.drop_duplicates(cols))
+    assert_eq(gdf.drop_duplicates(cols), pdf.drop_duplicates(cols))
     random.Random(3).shuffle(cols)
-    assert_eq(gdf.drop_duplicates(cols[:-1]) , pdf.drop_duplicates(cols[:-1]))
+    assert_eq(gdf.drop_duplicates(cols[:-1]), pdf.drop_duplicates(cols[:-1]))
     random.Random(3).shuffle(cols)
-    assert_eq(gdf.drop_duplicates(cols[-1]) , pdf.drop_duplicates(cols[-1]))
-    assert_eq(gdf.drop_duplicates(cols, keep='last') , pdf.drop_duplicates(cols, keep='last'))
+    assert_eq(gdf.drop_duplicates(cols[-1]), pdf.drop_duplicates(cols[-1]))
+    assert_eq(gdf.drop_duplicates(cols, keep='last'),
+              pdf.drop_duplicates(cols, keep='last'))
 
 
-#@pytest.mark.skip(reason="string column unsupported yet (issue #1467)")
 def test_dataframe_drop_duplicates_method():
     pdf = DataFrame([(1, 2, 'a'),
-                        (2, 3, 'b'),
-                        (3, 4, 'c'),
-                        (2, 3, 'd'),
-                        (3, 5, 'c')], columns=['n1', 'n2', 's1'])
+                     (2, 3, 'b'),
+                     (3, 4, 'c'),
+                     (2, 3, 'd'),
+                     (3, 5, 'c')], columns=['n1', 'n2', 's1'])
     gdf = cudf.DataFrame.from_pandas(pdf)
-    assert_eq(gdf.drop_duplicates() , pdf.drop_duplicates())
+    assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     assert tuple(gdf.drop_duplicates('n1')['n1']) == (1, 2, 3)
     assert tuple(gdf.drop_duplicates('n2')['n2']) == (2, 3, 4, 5)
     assert tuple(gdf.drop_duplicates('s1')['s1']) == ('a', 'b', 'c', 'd')
-    assert tuple(gdf.drop_duplicates('s1', keep='last')['s1']) == ('a', 'b', 'd', 'c')
-    assert gdf.drop_duplicates('s1', inplace=True) == None
+    assert tuple(gdf.drop_duplicates('s1', keep='last')['s1']) == ('a', 'b',
+                                                                   'd', 'c')
+    assert gdf.drop_duplicates('s1', inplace=True) is None
 
     gdf = cudf.DataFrame.from_pandas(pdf)
-    assert_eq(gdf.drop_duplicates('n1') , pdf.drop_duplicates('n1'))
-    assert_eq(gdf.drop_duplicates('n2') , pdf.drop_duplicates('n2'))
-    assert_eq(gdf.drop_duplicates('s1') , pdf.drop_duplicates('s1'))
-    assert_eq(gdf.drop_duplicates(['n1', 'n2']) , pdf.drop_duplicates(['n1', 'n2']))
-    assert_eq(gdf.drop_duplicates(['n1', 's1']) , pdf.drop_duplicates(['n1', 's1']))
+    assert_eq(gdf.drop_duplicates('n1'), pdf.drop_duplicates('n1'))
+    assert_eq(gdf.drop_duplicates('n2'), pdf.drop_duplicates('n2'))
+    assert_eq(gdf.drop_duplicates('s1'), pdf.drop_duplicates('s1'))
+    assert_eq(gdf.drop_duplicates(['n1', 'n2']),
+              pdf.drop_duplicates(['n1', 'n2']))
+    assert_eq(gdf.drop_duplicates(['n1', 's1']),
+              pdf.drop_duplicates(['n1', 's1']))
 
     # Test drop error
     with pytest.raises(KeyError) as raises:
@@ -297,8 +305,8 @@ def test_dataframe_drop_duplicates_method():
         gdf.drop_duplicates(['n1', 'n4', 'n3'])
     raises.match("columns {'n[34]', 'n[34]'} do not exist")
 
+
 def test_datetime_drop_duplicates():
-    import datetime as dt
 
     date_df = cudf.DataFrame()
     date_df['date'] = date_range('11/20/2018', periods=6, freq='D')
@@ -307,11 +315,12 @@ def test_datetime_drop_duplicates():
     df = concat([date_df, date_df[:4]])
     assert_eq(df[:-4], df.drop_duplicates())
 
-    df2=df.reset_index()
+    df2 = df.reset_index()
     assert_eq(df2[:-4], df2.drop_duplicates())
 
-    df3=df.set_index('date')
+    df3 = df.set_index('date')
     assert_eq(df3[:-4], df3.drop_duplicates())
+
 
 def test_drop_duplicates_NA():
     # none

@@ -117,36 +117,56 @@ gdf_column drop_nulls(gdf_column const &input) {
 
 
 namespace detail {
-struct tuple_reduced_and
-{
-    __host__ __device__ bool operator()(const thrust::tuple<bool,bool> &x) const {
-        return thrust::get<0>(x) && thrust::get<1>(x); }
-}; 
 
 template<typename DerivedPolicy,
          typename InputIterator,
          typename OutputIterator,
-         typename BinaryPredicate>
+         typename BinaryPredicate,
+    typename IndexType = typename
+  thrust::iterator_difference<InputIterator>::type>
   OutputIterator non_duplicates_copy(thrust::execution_policy<DerivedPolicy> &exec,
                              InputIterator first,
                              InputIterator last,
                              OutputIterator output,
-                             BinaryPredicate binary_pred)
+                             BinaryPredicate comp,
+                             const duplicate_keep_option keep)
 {
-  thrust::detail::head_flags<InputIterator, BinaryPredicate> stencil1(first, last, binary_pred);
-  thrust::detail::tail_flags<InputIterator, BinaryPredicate> stencil2(first, last, binary_pred);
-  auto combined_stencil = thrust::make_transform_iterator(
-          thrust::make_zip_iterator(thrust::make_tuple(stencil1.begin(), stencil2.begin())),
-          [] __device__ (thrust::tuple<bool,bool> const& x){ return thrust::get<0>(x) and thrust::get<1>(x);});
-  
-  using namespace thrust::placeholders;
-  
-  return thrust::copy_if(exec, first, last, combined_stencil, output, _1);
-} 
+  IndexType n = (last-first)-1;
+  if (keep == duplicate_keep_option::KEEP_FIRST) {
+      return thrust::copy_if(exec,
+              first,
+              last,
+              thrust::counting_iterator<IndexType>(0),
+              output,
+              [first, comp, n] __device__ (const IndexType i) {
+              return (i == 0 || !comp(first[i], first[i-1]));
+              });
+  } else if (keep == duplicate_keep_option::KEEP_LAST) {
+      return thrust::copy_if(exec,
+              first,
+              last,
+              thrust::counting_iterator<IndexType>(0),
+              output,
+              [first, comp, n] __device__ (const IndexType i) {
+              return (i == n || !comp(first[i], first[i+1]));
+              });
+  } else {
+      return thrust::copy_if(exec,
+              first,
+              last,
+              thrust::counting_iterator<IndexType>(0),
+              output,
+              [first, comp, n] __device__ (const IndexType i) {
+              return (i == 0 || !comp(first[i], first[i-1])) 
+                  && (i == n || !comp(first[i], first[i+1]));
+              });
+  }
+}
 
 rmm::device_vector<gdf_index_type>
 get_unique_ordered_indices(const cudf::table& key_columns,
-                           const duplicate_keep_option keep)
+                           const duplicate_keep_option keep,
+                           cudaStream_t stream=0)
 {
   gdf_size_type ncols = key_columns.num_columns();
   gdf_size_type nrows = key_columns.num_rows();
@@ -165,43 +185,33 @@ get_unique_ordered_indices(const cudf::table& key_columns,
 
   // extract unique indices 
   rmm::device_vector<gdf_index_type> unique_indices(nrows);
-
-  cudaStream_t stream;
-  cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
-
   auto device_input_table = device_table::create(key_columns, stream);
-  auto comp = row_equality_comparator<true>(*device_input_table, true);
+  rmm::device_vector<gdf_size_type>::iterator result_end;
 
-  gdf_index_type* result_end;
-  if (keep == duplicate_keep_option::KEEP_FIRST ) {
-      result_end = thrust::unique_copy(exec, 
-              sorted_indices.begin(),
-              sorted_indices.end(),
-              unique_indices.data().get(),
-              comp
-              );
-  } else if (keep == duplicate_keep_option::KEEP_LAST) {
-      result_end = thrust::unique_copy(exec, 
-              sorted_indices.rbegin(),
-              sorted_indices.rend(),
-              unique_indices.data().get(),
-              comp
-              );
+  bool nullable = device_input_table.get()->has_nulls();
+  if(nullable) {
+    auto comp = row_equality_comparator<true>(*device_input_table, true);
+    result_end = non_duplicates_copy(exec,
+        sorted_indices.begin(),
+        sorted_indices.end(),
+        unique_indices.begin(),
+        comp,
+        keep);
   } else {
-      result_end = non_duplicates_copy(exec, 
-              sorted_indices.begin(),
-              sorted_indices.end(),
-              unique_indices.data().get(),
-              comp
-              );
-
+    auto comp = row_equality_comparator<false>(*device_input_table, true);
+    result_end = non_duplicates_copy(exec,
+        sorted_indices.begin(),
+        sorted_indices.end(),
+        unique_indices.begin(),
+        comp,
+        keep);
   }
+ 
   // reorder unique indices
-  thrust::sort(exec, unique_indices.data().get(), result_end);
-  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
+  thrust::sort(exec, unique_indices.begin(), result_end);
+  unique_indices.resize(thrust::distance(unique_indices.begin(), result_end));
   cudaStreamSynchronize(stream);
-  cudaStreamDestroy(stream);
 
   return unique_indices;
 }
@@ -211,8 +221,8 @@ cudf::table drop_duplicates(const cudf::table& input_table,
                             const cudf::table& key_columns,
                             const duplicate_keep_option keep)
 {
-  //CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
-  //CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
+  CUDF_EXPECTS( input_table.num_rows() == key_columns.num_rows(), "number of \
+rows in input table should be equal to number of rows in key colums table");
 
   if (0 == input_table.num_rows() || 
       0 == input_table.num_columns() ||
