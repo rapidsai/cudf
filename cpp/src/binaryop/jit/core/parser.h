@@ -102,20 +102,20 @@ inline std::string parse_register_type(const std::string& src)
 
 inline std::string register_type_to_cppname(const std::string& register_type)
 {
-  if (register_type == ".u16")
-    return "unsigned short";
+  if      (register_type == ".u16")
+    return "short";
   else if (register_type == ".s16")
     return "short";
   else if (register_type == ".f16")
     return "half";
   else if (register_type == ".u32")
-    return "unsigned";
+    return "int";
   else if (register_type == ".s32")
     return "int";
   else if (register_type == ".f16x2")
     return "half2";
   else if (register_type == ".u64")
-    return "unsigned long";
+    return "long";
   else if (register_type == ".s64")
     return "long";
   else if (register_type == ".f32")
