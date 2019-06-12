@@ -143,23 +143,20 @@ class StringMethods(object):
 
             '''
             Picking first element and checking if it really adheres to
-            list like conditions, if not we don't have the
-            necessity to scan the rest of the list.
+            list like conditions, if not we switch to next case
+
+            Note: We have made a call not to iterate over the entire list as
+            it could be more expensive if it was of very large size.
+            Thus only doing a sanity check on just the first element of list.
             '''
             first = others[0]
 
-            if (utils.is_list_like(first) or
-                isinstance(first, (Series, Index, pd.Series, pd.Index))) \
-                    and all((
-                            utils.is_list_like(x) or
-                            isinstance(x, (Series, Index, pd.Series, pd.Index))
-                            )
-                            for x in others):
+            if utils.is_list_like(first) or \
+                    isinstance(first, (Series, Index, pd.Series, pd.Index)):
                 '''
                 Internal elements in others list should also be
                 list-like and not a regular string/byte
                 '''
-
                 first = None
                 for frame in others:
                     if not isinstance(frame, (Series, Index)):
@@ -182,10 +179,15 @@ class StringMethods(object):
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
-            elif (not utils.is_list_like(first)) and \
-                    all(not utils.is_list_like(x) for x in others):
+            elif not utils.is_list_like(first):
                 '''
-                Incase internal elements in others list are strings
+                Picking first element and checking if it really adheres to
+                non-list like conditions.
+
+                Note: We have made a call not to iterate over the entire
+                list as it could be more expensive if it was of very
+                large size. Thus only doing a sanity check on just the
+                first element of list.
                 '''
                 others = Series(others)
                 others = others.data
