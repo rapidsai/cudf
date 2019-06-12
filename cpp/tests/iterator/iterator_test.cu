@@ -175,8 +175,6 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
 }
 
-
-
 // Tests for null input iterator (column with null bitmap)
 // Actually, we can use cub for reduction with nulls without creating custom kernel or multiple steps.
 // We may accelarate the reduction for a column using cub
@@ -200,7 +198,6 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-
     // CPU test
     auto it_hos = cudf::make_iterator<true>(
         std::get<0>(hos).data(), std::get<1>(hos).data(), init);
@@ -213,8 +210,6 @@ TYPED_TEST(IteratorTest, null_iterator)
 
     this->column_sum_test(expected_value, w_col);
 }
-
-
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by `cudf::make_iterator<true, T, T_upcast>(...)`
@@ -234,7 +229,6 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
         column_size,
         [](gdf_index_type row) { return T{random_int<T>(-128, 127)}; },
         [&](gdf_index_type row) { return host_bools[row]; } );
-
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();

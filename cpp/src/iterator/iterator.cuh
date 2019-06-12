@@ -68,6 +68,8 @@
 #define CUDF_ITERATOR_CUH
 
 #include <cudf/cudf.h>
+#include <iterator/transform_unary_functions.cuh>
+
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
 #include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/error_utils.hpp>
@@ -81,136 +83,8 @@
 
 namespace cudf
 {
-
-/** -------------------------------------------------------------------------*
- * @brief intermediate struct to calculate mean and variance
- * This is an example case to output a struct from column input.
- *
- * this will be used to calculate and hold `sum of values`, 'sum of squares',
- * 'sum of valid count'.
- * Those will be used to compute `mean` (= sum / count)
- * and `variance` (= sum of squares / count - mean^2).
- *
-  @tparam  T  a element data type of value and value_squared.
- * -------------------------------------------------------------------------**/
-template<typename T>
-struct meanvar
-{
-    T value;                /// the value
-    T value_squared;        /// the value of squared
-    gdf_index_type count;   /// the count
-
-    CUDA_HOST_DEVICE_CALLABLE
-    meanvar(T _value=0, T _value_squared=0, gdf_index_type _count=0)
-    : value(_value), value_squared(_value_squared), count(_count)
-    {};
-
-    using this_t = cudf::meanvar<T>;
-
-    CUDA_HOST_DEVICE_CALLABLE
-    this_t operator+(this_t const &rhs) const
-    {
-        return this_t(
-            (this->value + rhs.value),
-            (this->value_squared + rhs.value_squared),
-            (this->count + rhs.count)
-        );
-    };
-
-    CUDA_HOST_DEVICE_CALLABLE
-    bool operator==(this_t const &rhs) const
-    {
-        return (
-            (this->value == rhs.value) &&
-            (this->value_squared == rhs.value_squared) &&
-            (this->count == rhs.count)
-        );
-    };
-};
-
-/** -------------------------------------------------------------------------*
- * @brief Construct an instance of `T_output` using a `thrust::pair<T_element, bool>
- *
- * Uses a scalar, boolean pair to construct a new object.
- * -------------------------------------------------------------------------**/
-
-/** -------------------------------------------------------------------------*
- * @brief Transforms a scalar by casting it to another scalar type
- *
- * By default, performs an identity cast, i.e., casts to the scalar's original type.
- *
- * A transformer for `column_input_iterator`
- * It transforms `thrust::pair<T_element, bool>` into `T_output` form.
- *
- * This struct transforms the output value as `static_cast<T_output>(value)`.
- *
- * @tparam  T_element a scalar data type of input
- * @tparam  T_output  a scalar data type of output
- * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output=T_element>
-struct scalar_cast_transformer
-{
-    CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (T_element const & value)
-    {
-        return static_cast<T_output>(value);
-    };
-};
-
-/** -------------------------------------------------------------------------*
- * @brief Transforms a scalar by first casting to another type, and then squaring the result.
- * A transformer for `column_input_iterator`
- * It transforms `thrust::pair<T_element, bool>` into `T_output` form.
- *
- * This struct transforms the output value as
- * `(static_cast<T_output>(_value))^2`.
- *
- * This will be used to compute "sum of squares".
- *
- * @tparam  T_element a scalar data type of input
- * @tparam  T_output  a scalar data type of output
- * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output=T_element>
-struct transformer_squared
-{
-    CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (T_element const & value)
-    {
-        T_output v = static_cast<T_output>(value);
-        return (v*v);
-    };
-};
-
-/** -------------------------------------------------------------------------*
- * @brief Uses a scalar value to construct a `meanvar` object.
- * A transformer for `column_input_iterator`
- * It transforms `thrust::pair<T_element, bool>` into
- * `T_output = meanvar<T_output_element>` form.
- *
- * This struct transforms the value and the squared value and the count at once.
- *
- * @tparam  T_element         a scalar data type of input
- * @tparam  T_output_element  a scalar data type of the element of output
- * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output_element=T_element>
-struct transformer_meanvar
-{
-    using T_output = meanvar<T_output_element>;
-
-    CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (thrust::pair<T_element, bool> const& pair)
-    {
-        T_output_element v = static_cast<T_output_element>(pair.first);
-        return T_output(v, v*v, (pair.second)? 1 : 0 );
-    };
-};
-
-
 namespace detail
 {
-
-
-// ---------------------------------------------------------------------------
 /** -------------------------------------------------------------------------*
  * @brief column input struct with/without null bitmask
  * A helper struct struct for `column_input_iterator`
@@ -275,9 +149,23 @@ protected:
     }
 };
 
+/** -------------------------------------------------------------------------*
+ * @brief column input struct with/without null bitmask
+ * A helper struct struct for `column_input_iterator`
+ * `column_input.at(gdf_index_type id)` computes
+ * `data` value and valid flag at `id` and construct and return
+ * `T_output(data, valid flag)`.
+ * If has_nulls = true, the valid flag is always true.
+ * If has_nulls = false, the valid flag corresponds to null bitmask flag
+ * at `id`, and the data value = (is_valid(id))? data[id] : identity;
+ *
+ * @tparam  T_element a native element type (cudf data type) of input element array
+ *           and `identity` value which is used when null bitmaps flag is false.
+ * @tparam  has_nulls if true, this struct holds only data array.
+ *           else, this struct holds data array and bitmask array and identity value
+ * -------------------------------------------------------------------------**/
 template<typename T_element, bool has_nulls>
 struct column_input_pair;
-
 
 template<typename T_element>
 struct column_input_pair<T_element, false> : public column_input<T_element, false>
