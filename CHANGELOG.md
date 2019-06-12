@@ -117,6 +117,7 @@
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 - PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
+- PR #1991 Parquet reader: fix decoding of NULLs
 
 
 # cudf 0.7.2 (16 May 2019)
