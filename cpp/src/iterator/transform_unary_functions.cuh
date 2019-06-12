@@ -44,7 +44,7 @@ namespace cudf
  * Those will be used to compute `mean` (= sum / count)
  * and `variance` (= sum of squares / count - mean^2).
  *
-  @tparam  T  a element data type of value and value_squared.
+  @tparam  T  element data type of value and value_squared.
  * -------------------------------------------------------------------------**/
 template<typename T>
 struct meanvar
@@ -91,8 +91,8 @@ struct meanvar
  *
  * This struct transforms the output value as `static_cast<T_output>(value)`.
  *
- * @tparam  T_element a scalar data type of input
- * @tparam  T_output  a scalar data type of output
+ * @tparam  T_element scalar data type of input
+ * @tparam  T_output  scalar data type of output
  * -------------------------------------------------------------------------**/
 template<typename T_element, typename T_output>
 struct scalar_cast_transformer
@@ -112,8 +112,8 @@ struct scalar_cast_transformer
  *
  * This will be used to compute "sum of squares".
  *
- * @tparam  T_element a scalar data type of input
- * @tparam  T_output  a scalar data type of output
+ * @tparam  T_element scalar data type of input
+ * @tparam  T_output  scalar data type of output
  * -------------------------------------------------------------------------**/
 template<typename T_element, typename T_output=T_element>
 struct transformer_squared
@@ -133,8 +133,8 @@ struct transformer_squared
  *
  * This struct transforms the value and the squared value and the count at once.
  *
- * @tparam  T_element         a scalar data type of input
- * @tparam  T_output_element  a scalar data type of the element of output
+ * @tparam  T_element         scalar data type of input
+ * @tparam  T_output_element  scalar data type of the element of output
  * -------------------------------------------------------------------------**/
 template<typename T_element, typename T_output_element=T_element>
 struct transformer_meanvar

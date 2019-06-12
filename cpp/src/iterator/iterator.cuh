@@ -18,13 +18,13 @@
  * @brief provide column input iterator with/without nulls
  * @file iterator.cuh
  *
- * This column input iterator is designed to be able to be used as input
+ * The column input iterator is designed to be used as an input
  * iterator for thrust and cub.
  *
- * The input iterator is implemented using thrust::iterator_adaptor
- * and thrust::counting_iterator. When creating a null supported input iterator,
- * the iterator requires pointer of data and null bitmap and an identity value
- * like below.
+ * The column input iterator is implemented using thrust::iterator_adaptor
+ * and thrust::counting_iterator. The following example code creates
+ * an input iterator for the iterator from a column with a validity (null)
+ * bit mask. The second argument is the identity value.
  *
  *   template<typename T, bool has_nulls>
  *   auto it_dev = cudf::make_iterator<has_nulls, T>(column, T{0});
@@ -38,6 +38,12 @@
  *     identity = int32_t{0}
  * T = cudf::date32 and aggregation is a kind of `max`:
  *     identity = std::numeric_limits<cudf::date32>::lowest()
+ *
+ * The column input iterator itself returns only a scalar value of
+ * the data at id or identity value.
+ * thrust::make_transform_iterator can trasform the iterator output
+ * into various forms and use cases, like up casting, squared value,
+ * struct of values, etc...
  *
  * Examples of use cases:
  * 1. template parameter for same precision input iterator
@@ -87,23 +93,23 @@ namespace detail
 {
 /** -------------------------------------------------------------------------*
  * @brief column input struct with/without null bitmask
- * A helper struct struct for `column_input_iterator`
+ * A helper struct for column_input_iterator
  * `column_input.at(gdf_index_type id)` computes
- * `data` value and valid flag at `id` and construct and return
- * `T_output(data, valid flag)`.
- * If has_nulls = true, the valid flag is always true.
- * If has_nulls = false, the valid flag corresponds to null bitmask flag
- * at `id`, and the data value = (is_valid(id))? data[id] : identity;
+ * `data` value and valid flag at `id`
  *
- * @tparam  T_element a native element type (cudf data type) of input element array
- *           and `identity` value which is used when null bitmaps flag is false.
+ * If has_nulls = false, the data is always `data[id]`
+ * If has_nulls = true,  the data value = (is_valid(id))? data[id] : identity;
+ *
+ * @tparam  T_element cudf data type of input element array and `identity` value
+ *                    which is used when null bitmaps flag is false.
  * @tparam  has_nulls if true, this struct holds only data array.
- *           else, this struct holds data array and bitmask array and identity value
+ *                    else, this struct holds data array and
+ *                    bitmask array and identity value
  * -------------------------------------------------------------------------**/
 template<typename T_element, bool has_nulls=true>
 struct column_input;
 
-// @overload column_input<T_mutator, T_element, false>
+// @overload column_input<T_element, false>
 template<typename T_element>
 struct column_input<T_element, false>{
     const T_element *data;
@@ -118,7 +124,7 @@ struct column_input<T_element, false>{
     };
 };
 
-// @overload column_input<T_output, T_element, true>
+// @overload column_input<T_element, true>
 template<typename T_element>
 struct column_input<T_element, true>{
     const T_element *data;
@@ -151,22 +157,25 @@ protected:
 
 /** -------------------------------------------------------------------------*
  * @brief column input struct with/without null bitmask
- * A helper struct struct for `column_input_iterator`
+ * A helper struct for column_input_iterator
  * `column_input.at(gdf_index_type id)` computes
- * `data` value and valid flag at `id` and construct and return
- * `T_output(data, valid flag)`.
- * If has_nulls = true, the valid flag is always true.
- * If has_nulls = false, the valid flag corresponds to null bitmask flag
+ * `data` value and valid flag at `id`
+ * and return `thrust::pair<T_element, bool>(data, valid flag)`.
+ *
+ * If has_nulls = false, the valid flag is always true.
+ * If has_nulls = true, the valid flag corresponds to null bitmask flag
  * at `id`, and the data value = (is_valid(id))? data[id] : identity;
  *
- * @tparam  T_element a native element type (cudf data type) of input element array
- *           and `identity` value which is used when null bitmaps flag is false.
+ * @tparam  T_element cudf data type of input element array and `identity` value
+ *                    which is used when null bitmaps flag is false.
  * @tparam  has_nulls if true, this struct holds only data array.
- *           else, this struct holds data array and bitmask array and identity value
+ *                    else, this struct holds data array and
+ *                    bitmask array and identity value
  * -------------------------------------------------------------------------**/
 template<typename T_element, bool has_nulls>
 struct column_input_pair;
 
+// @overload column_input_pair<T_element, false>
 template<typename T_element>
 struct column_input_pair<T_element, false> : public column_input<T_element, false>
 {
@@ -181,6 +190,7 @@ struct column_input_pair<T_element, false> : public column_input<T_element, fals
 
 };
 
+// @overload column_input_pair<T_element, true>
 template<typename T_element>
 struct column_input_pair<T_element, true> : public column_input<T_element, true>
 {
@@ -196,18 +206,15 @@ struct column_input_pair<T_element, true> : public column_input<T_element, true>
     };
 };
 
-
-
-
 /** -------------------------------------------------------------------------*
  * @brief column input iterator to support null bitmask
  * The input iterator which can be used for cub and thrust.
  * This is derived from `thrust::iterator_adaptor`
- * `T_column_input = column_input` will provide the value at index `id`
- *  with/without null bitmask.
+ * T_column_input = column_input or column_input_pair
+ * T_column_input will provide the value at index `id` with/without null bitmask.
  *
- * @tparam  T_iterator_output The output data value type.
- * @tparam  T_column_input  The input struct type of `column_input`
+ * @tparam  T_iterator_output The output data value type of the iterator
+ * @tparam  T_column_input  The input struct type of column_input or column_input_pair
  * @tparam  Iterator The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
  * -------------------------------------------------------------------------**/
@@ -260,8 +267,9 @@ template<typename T_iterator_output, typename T_column_input,
 // helper functions to make iterator
 
 /** -------------------------------------------------------------------------*
- * @brief helper function to make iterator with nulls
+ * @brief helper function to make a cudf column iterator
  * Input iterator which can be used for cub and thrust.
+ * The iterator returns same cudf data type of input: `T_element`.
  *
  * @tparam has_nulls True if the data has valid bit mask, False else
  * @tparam T_element The cudf data type of input array
@@ -289,9 +297,11 @@ auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
 }
 
 /** -------------------------------------------------------------------------*
- *  @overload auto make_iterator(const T_element *data,
+ * @overload auto make_iterator(const T_element *data,
  *                     const gdf_valid_type *valid, T_element identity,
  *                     Iterator_Index const it = Iterator_Index(0))
+ *
+ * make iterator from the pointer of null bitmask of column as gdf_valid_type
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
@@ -303,8 +313,10 @@ auto make_iterator(const T_element *data, const gdf_valid_type *valid,
 }
 
 /** -------------------------------------------------------------------------*
- *  @overload auto make_iterator(const gdf_column& column, T_element identity,
+ * @overload auto make_iterator(const gdf_column& column, T_element identity,
  *                     Iterator_Index const it = Iterator_Index(0))
+ *
+ * make iterator from a column
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
@@ -324,6 +336,9 @@ auto make_iterator(const gdf_column& column,
 /** -------------------------------------------------------------------------*
  * @brief helper function to make iterator with nulls
  * Input iterator which can be used for cub and thrust.
+ * The iterator returns thrust::pair<T_element, bool>
+ * This is useful for more complex logic that depends on the validity.
+ * e.g. group_by.count, mean_var, sort algorism.
  *
  * @tparam has_nulls True if the data has valid bit mask, False else
  * @tparam T_element The cudf data type of input array
@@ -350,6 +365,13 @@ auto make_pair_iterator(const T_element *data, const bit_mask::bit_mask_t *valid
     return T_iterator(T_colunn_input(data, valid, identity), it);
 }
 
+/** -------------------------------------------------------------------------*
+ * @overload auto make_pair_iterator(const T_element *data,
+ *                     const gdf_valid_type *valid, T_element identity,
+ *                     Iterator_Index const it = Iterator_Index(0))
+ *
+ * make iterator from the pointer of null bitmask of column as gdf_valid_type
+ * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_pair_iterator(const T_element *data, const gdf_valid_type *valid,
@@ -359,6 +381,12 @@ auto make_pair_iterator(const T_element *data, const gdf_valid_type *valid,
         (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
+/** -------------------------------------------------------------------------*
+ * @overload auto make_pair_iterator(const gdf_column& column, T_element identity,
+ *                     Iterator_Index const it = Iterator_Index(0))
+ *
+ * make iterator from a column
+ * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename T_element,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_pair_iterator(const gdf_column& column,
