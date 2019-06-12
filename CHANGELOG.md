@@ -12,6 +12,7 @@
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
+- PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 
 ## Improvements
 - PR #1538 Replacing LesserRTTI with inequality_comparator
