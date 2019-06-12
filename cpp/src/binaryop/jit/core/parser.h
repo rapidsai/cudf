@@ -224,7 +224,12 @@ inline std::string parse_instruction(const std::string& src)
       if (piece.find("ld.param") != std::string::npos) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
-        output += " mov" + register_type;
+        if(register_type_to_cppname(register_type) == "int"){
+          // The trick to support statement like "ld.param.s32 %rd0, [...];", where %rd0 is a 64-bit register.
+          output += " cvt.s32.s32";
+        }else{
+          output += " mov" + register_type;
+        }
         constraint = parse_register_type(register_type);
       } else if (piece.find("st.param") != std::string::npos) {
         return "// Out port does not support return value!" +
@@ -492,6 +497,9 @@ inline std::string parse_single_function_ptx(const std::string& src,
   }
 
   final_output += "}";
+
+  // printf("%s\n", src.c_str());
+  // printf("%s\n", final_output.c_str());
 
   return final_output;
 }

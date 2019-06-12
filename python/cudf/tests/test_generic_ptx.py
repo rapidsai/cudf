@@ -20,7 +20,7 @@ from cudf.bindings import binops
 from numba import cuda
 from numba import types
 
-@pytest.mark.parametrize('dtype', ['int64', 'float32', 'float64'])
+@pytest.mark.parametrize('dtype', ['int32', 'int64', 'float32', 'float64'])
 def test_generic_ptx(dtype):
 
     size = 500
@@ -41,10 +41,10 @@ def test_generic_ptx(dtype):
       type_signature = (types.float32, types.float32)
     elif dtype == 'float64':
       type_signature = (types.float64, types.float64)
+    elif dtype == 'int32':
+      type_signature = (types.int32, types.int32)
     elif dtype == 'int64':
       type_signature = (types.int64, types.int64)
-    """elif dtype == 'int32':
-      type_signature = (types.int32, types.int32)"""
    
     add.compile(type_signature)
     ptx = add.inspect_ptx(type_signature)

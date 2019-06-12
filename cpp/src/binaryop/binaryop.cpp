@@ -301,7 +301,8 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const s
 
     // Check for datatype
     CUDF_EXPECTS((out->dtype == lhs->dtype) && (lhs->dtype == rhs->dtype) &&
-                 (out->dtype == GDF_FLOAT32 || out->dtype == GDF_FLOAT64 || out->dtype == GDF_INT64),
+                 (out->dtype == GDF_FLOAT32 || out->dtype == GDF_FLOAT64 || 
+                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ),
         "Invalid/Unsupported datatype");
     
     binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
