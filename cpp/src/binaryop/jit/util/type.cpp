@@ -95,6 +95,8 @@ namespace jit {
                 return "FloorDiv";
             case GDF_MOD:
                 return "Mod";
+            case GDF_PYMOD:
+                return "PyMod";
             case GDF_POW:
                 return "Pow";
             case GDF_EQUAL:
