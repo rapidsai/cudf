@@ -378,10 +378,11 @@ class MultiIndex(Index):
         for idx, column in enumerate(df.columns):
             # use merge as a replace fn
             level = DataFrame({'idx': Series(cudautils.arange(len(
-                                                        self.levels[idx])),
-                                             dtype=df[column].dtype),
+                                                        self.levels[idx]),
+                                             dtype=df[column].dtype)),
                                'level': self.levels[idx]})
             code = DataFrame({'idx': df[column]})
+            breakpoint()
             df[column] = code.merge(level).level
         return df
 
