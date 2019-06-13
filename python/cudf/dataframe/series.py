@@ -23,6 +23,7 @@ from cudf.dataframe import columnops
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.utils.docutils import copy_docstring
 from cudf.window import Rolling
 
 import cudf.bindings.copying as cpp_copying
@@ -1933,6 +1934,7 @@ class Series(object):
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
 
+    @copy_docstring(Rolling)
     def rolling(self, window, min_periods=None, center=False):
         return Rolling(self, window, min_periods=min_periods, center=center)
 

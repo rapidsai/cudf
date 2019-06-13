@@ -3,7 +3,75 @@ from cudf.bindings.rolling import apply_rolling
 
 
 class Rolling:
+    """
+    Rolling window calculations.
 
+    Parameters
+    ----------
+    window : int
+        Size of the window, i.e., the number of observations used
+        to calculate the statistic. Currently cuDF only supports
+        a fixed window size.
+    min_periods : int, optional
+        The minimum number of observations in the window that are
+        required to be non-null, so that the result is non-null.
+        If not provided or ``None``, ``min_periods`` is equal to
+        the window size.
+    center : bool, optional
+        If ``True``, the result is set at the center of the window.
+        If ``False`` (default), the result is set at the right edge
+        of the window.
+
+    Returns
+    -------
+    ``Rolling`` object.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> a = cudf.Series([1, 2, 3, None, 4])
+
+    Rolling sum with window size 2.
+
+    >>> print(a.rolling(2).sum())
+    0
+    1    3
+    2    5
+    3
+    4
+    dtype: int64
+
+    Rolling sum with window size 2 and min_periods 1.
+
+    >>> print(a.rolling(2, min_periods=1).sum())
+    0    1
+    1    3
+    2    5
+    3    3
+    4    4
+    dtype: int64
+
+    Rolling count with window size 3.
+
+    >>> print(a.rolling(3).count())
+    0    1
+    1    2
+    2    3
+    3    2
+    4    2
+    dtype: int64
+
+    Rolling count with window size 3, but with the result set at the
+    center of the window.
+
+    >>> print(a.rolling(3, center=True).count())
+    0    2
+    1    3
+    2    2
+    3    2
+    4    1
+    dtype: int64
+    """
     def __init__(self, obj, window, min_periods=None, center=False):
         if min_periods is None:
             min_periods = window
@@ -58,3 +126,11 @@ class Rolling:
 
         if self.min_periods <= 0:
             raise ValueError("min_periods cannot be zero or negative")
+
+    def __repr__(self):
+        return "{} [window={},min_periods={},center={}]".format(
+            self.__class__.__name__,
+            self.window,
+            self.min_periods,
+            self.center
+        )
