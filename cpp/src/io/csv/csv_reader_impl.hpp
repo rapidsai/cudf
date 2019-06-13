@@ -100,7 +100,7 @@ public:
   table read();
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified byte range of the input CSV file.
+   * @brief Read and return only the specified range of bytes.
    *
    * Reads the row that starts before or at the end of the range, even if it ends
    * after the end of the range.
@@ -114,7 +114,7 @@ public:
   table read_byte_range(size_t offset, size_t size);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified rows of the input CSV file.
+   * @brief Read and return only the specified range of rows.
    * 
    * Set num_skip_footer to zero when using num_read parameter.
    *
@@ -124,7 +124,7 @@ public:
    * 
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read);
+  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows);
 
   auto getArgs() const { return args_; }
 };

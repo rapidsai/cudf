@@ -56,7 +56,6 @@ template <typename T> inline auto random_values(size_t size) {
  * @brief Simple test internal helper class to transfer cudf column data
  * from device to host for test comparisons and debugging/development.
  *---------------------------------------------------------------------------**/
-// DESCRIPTION: 
 template <typename T> class gdf_host_column {
 public:
   gdf_host_column() = delete;
