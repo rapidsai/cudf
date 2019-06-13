@@ -70,6 +70,8 @@
 - PR #1956 Add support for nulls in `query()`
 - PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
+- PR #1964 Added support for list-like types in Series.str.cat
+
 
 ## Bug Fixes
 
