@@ -122,6 +122,8 @@
 - PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
+- PR #1978 Fix for values being filled in an empty dataframe 
+
 
 
 # cudf 0.7.2 (16 May 2019)
