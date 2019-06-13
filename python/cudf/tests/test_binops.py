@@ -11,8 +11,6 @@ import numpy as np
 import pandas as pd
 
 import cudf
-
-import cudf
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
 from cudf.tests import utils
