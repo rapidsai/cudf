@@ -58,9 +58,9 @@ table CsvReader::read_byte_range(size_t offset, size_t size) {
     return table();
   }
 }
-table CsvReader::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read) {
+table CsvReader::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) {
   if (impl_) {
-    return impl_->read_rows(num_skip_header, num_skip_footer, num_read);
+    return impl_->read_rows(num_skip_header, num_skip_footer, num_rows);
   } else {
     return table();
   }

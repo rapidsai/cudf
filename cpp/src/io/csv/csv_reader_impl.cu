@@ -1179,11 +1179,11 @@ table CsvReader::Impl::read_byte_range(size_t offset, size_t size) {
   return read();
 }
 
-table CsvReader::Impl::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_read) {
-  CUDF_EXPECTS(num_read == -1 || num_skip_footer == 0, "cannot use both num_read and num_skip_footer parameters");
+table CsvReader::Impl::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) {
+  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0, "cannot use both num_rows and num_skip_footer parameters");
 
   skiprows = num_skip_header;
-  nrows = num_read;
+  nrows = num_rows;
   skipfooter = num_skip_footer;
   return read();
 }

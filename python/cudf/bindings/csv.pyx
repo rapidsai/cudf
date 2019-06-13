@@ -10,6 +10,7 @@ from .cudf_cpp import *
 from cudf.bindings.csv cimport *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.column import Column
@@ -172,20 +173,18 @@ cpdef cpp_read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef CsvReader *reader
+    cdef unique_ptr[CsvReader] reader
     with nogil:
-        reader = new CsvReader(args)
+        reader = unique_ptr[CsvReader](new CsvReader(args))
     
     cdef cudf_table table
     if byte_range is not None:
-        table = reader.read_byte_range(byte_range[0], byte_range[1])
+        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
     elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        table = reader.read_rows(skiprows, skipfooter,
+        table = reader.get().read_rows(skiprows, skipfooter,
                                  nrows if nrows is not None else -1)
     else:
-        table = reader.read()
-
-    free(reader)
+        table = reader.get().read()
 
     # Extract parsed columns
 
