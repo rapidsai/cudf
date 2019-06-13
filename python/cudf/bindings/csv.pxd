@@ -94,3 +94,20 @@ cdef extern from "cudf.h" nogil:
         size_t              byte_range_size
 
     cdef gdf_error read_csv(csv_read_arg *args) except +
+
+    # See cpp/include/cudf/io_types.h:146
+    ctypedef struct csv_write_arg:
+        # Arguments to csv writer function
+        gdf_column**        columns
+        int                 num_cols
+
+        const char*         filepath
+        const char*         line_terminator
+        char                delimiter
+
+        const char*         true_value
+        const char*         false_value
+        const char*         na_rep
+        bool                include_header
+
+    cdef gdf_error write_csv(csv_write_arg* args) except +

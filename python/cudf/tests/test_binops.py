@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 
 import cudf
+
+import cudf
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
 from cudf.tests import utils
@@ -30,18 +32,25 @@ _binops = [
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('binop', _binops)
 def test_series_binop(binop, obj_class):
-    arr = np.random.random(100)
-    sr = Series(arr)
+    nelem = 1000
+    arr1 = utils.gen_rand('float64', nelem) * 10000
+    # Keeping a low value because CUDA 'pow' has 2 full range error
+    arr2 = utils.gen_rand('float64', nelem) * 10
+
+    sr1 = Series(arr1)
+    sr2 = Series(arr2)
 
     if obj_class == 'Index':
-        sr = as_index(sr)
+        sr1 = as_index(sr1)
+        sr2 = as_index(sr2)
 
-    result = binop(sr, sr)
+    result = binop(sr1, sr2)
+    expect = binop(pd.Series(arr1), pd.Series(arr2))
 
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(arr, arr))
+    utils.assert_eq(result, expect)
 
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
@@ -111,8 +120,6 @@ _logical_binops = [
 @pytest.mark.parametrize('rhstype', _int_types + [np.bool_])
 @pytest.mark.parametrize('binop,cubinop', _logical_binops)
 def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
-    import pandas as pd
-
     arr1 = pd.Series(np.random.choice([True, False], 10))
     if lhstype is not np.bool_:
         arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
@@ -310,6 +317,7 @@ _reflected_ops = [
     lambda x: 3 - x,
     lambda x: 3 // x,
     lambda x: 3 / x,
+    lambda x: 3 % x,
     lambda x: -1 + x,
     lambda x: -2 * x,
     lambda x: -2 - x,
@@ -320,6 +328,7 @@ _reflected_ops = [
     lambda x: -3 - x,
     lambda x: -3 // x,
     lambda x: -3 / x,
+    lambda x: -3 % x,
     lambda x: 0 + x,
     lambda x: 0 * x,
     lambda x: 0 - x,
@@ -331,11 +340,9 @@ _reflected_ops = [
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('func, dtype', list(product(_reflected_ops, _dtypes)))
 def test_reflected_ops_scalar(func, dtype, obj_class):
-    import pandas as pd
-
     # create random series
     np.random.seed(12)
-    random_series = pd.Series(np.random.sample(100) + 10, dtype=dtype)
+    random_series = utils.gen_rand(dtype, 100, low=10)
 
     # gpu series
     gs = Series(random_series)
@@ -359,8 +366,6 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
 @pytest.mark.parametrize('binop', _binops)
 def test_different_shapes_and_columns(binop):
-    import cudf
-    import pandas as pd
 
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
@@ -377,14 +382,19 @@ def test_different_shapes_and_columns(binop):
     cd_frame = cudf.DataFrame({}) + cudf.DataFrame({'x': [1, 2]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
+    # Note: the below rely on a discrepancy between cudf and pandas
+    # While pandas inserts columns in alphabetical order, cudf inserts in the
+    # order of whichever column comes first. So the following code will not
+    # work if the names of columns are reversed i.e. ('y', 'x') != ('x', 'y')
+
     # More rows on the left side
-    pd_frame = pd.DataFrame({'y': [1, 2, 3]}) + pd.DataFrame({'x': [1, 2]})
-    cd_frame = cudf.DataFrame({'y': [1, 2, 3]}) + cudf.DataFrame({'x': [1, 2]})
+    pd_frame = pd.DataFrame({'x': [1, 2, 3]}) + pd.DataFrame({'y': [1, 2]})
+    cd_frame = cudf.DataFrame({'x': [1, 2, 3]}) + cudf.DataFrame({'y': [1, 2]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
     # More rows on the right side
-    pd_frame = pd.DataFrame({'y': [1, 2]}) + pd.DataFrame({'x': [1, 2, 3]})
-    cd_frame = cudf.DataFrame({'y': [1, 2]}) + cudf.DataFrame({'x': [1, 2, 3]})
+    pd_frame = pd.DataFrame({'x': [1, 2]}) + pd.DataFrame({'y': [1, 2, 3]})
+    cd_frame = cudf.DataFrame({'x': [1, 2]}) + cudf.DataFrame({'y': [1, 2, 3]})
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
 
@@ -403,3 +413,134 @@ def test_boolean_scalar_binop(op):
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(op(psr, True), op(gsr, True))
     utils.assert_eq(op(psr, False), op(gsr, False))
+
+
+_operator_funcs = [
+    'add',
+    'radd',
+    'sub',
+    'rsub',
+    'mul',
+    'rmul',
+    'mod',
+    'rmod',
+    'pow',
+    'rpow',
+    'floordiv',
+    'rfloordiv',
+    'truediv',
+    'rtruediv',
+]
+
+_operator_funcs_series = [
+    'eq',
+    'ne',
+    'lt',
+    'le',
+    'gt',
+    'ge'
+]
+
+
+@pytest.mark.parametrize('func', _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize('has_nulls', _nulls)
+@pytest.mark.parametrize('fill_value', [None, 27])
+@pytest.mark.parametrize('dtype', ['float32', 'float64'])
+def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
+    nelem = 1000
+    arr1 = utils.gen_rand(dtype, nelem) * 10000
+    # Keeping a low value because CUDA 'pow' has 2 full range error
+    arr2 = utils.gen_rand(dtype, nelem) * 100
+
+    if has_nulls == 'some':
+        nulls1 = utils.random_bitmask(nelem)
+        nulls2 = utils.random_bitmask(nelem)
+        sr1 = Series.from_masked_array(arr1, nulls1)
+        sr2 = Series.from_masked_array(arr2, nulls2)
+    else:
+        sr1 = Series(arr1)
+        sr2 = Series(arr2)
+
+    psr1 = sr1.to_pandas()
+    psr2 = sr2.to_pandas()
+
+    expect = getattr(psr1, func)(psr2, fill_value=fill_value)
+    got = getattr(sr1, func)(sr2, fill_value=fill_value)
+
+    # This is being done because of the various gymnastics required to support
+    # equality for null values. cudf.Series().to_pandas() replaces nulls with
+    # None and so a bool Series becomes object Series. Which does not match the
+    # output of equality op in pandas which remains a bool. Furthermore, NaN
+    # values are treated as not comparable and always return False in a bool op
+    # except in not-equal op where bool(Nan != Nan) gives True.
+    if got.dtype == np.bool:
+        got = got.fillna(True) if func == 'ne' else got.fillna(False)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('func', _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize('has_nulls', _nulls)
+@pytest.mark.parametrize('fill_value', [None, 27])
+@pytest.mark.parametrize('dtype', ['float32', 'float64'])
+def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
+    nelem = 1000
+    arr = utils.gen_rand(dtype, nelem) * 10000
+    scalar = 59.0
+
+    if has_nulls == 'some':
+        nulls = utils.random_bitmask(nelem)
+        sr = Series.from_masked_array(arr, nulls)
+    else:
+        sr = Series(arr)
+
+    psr = sr.to_pandas()
+
+    expect = getattr(psr, func)(scalar, fill_value=fill_value)
+    got = getattr(sr, func)(scalar, fill_value=fill_value)
+
+    # This is being done because of the various gymnastics required to support
+    # equality for null values. cudf.Series().to_pandas() replaces nulls with
+    # None and so a bool Series becomes object Series. Which does not match the
+    # output of equality op in pandas which remains a bool. Furthermore, NaN
+    # values are treated as not comparable and always return False in a bool op
+    # except in not-equal op where bool(Nan != Nan) gives True.
+    if got.dtype == np.bool:
+        got = got.fillna(True) if func == 'ne' else got.fillna(False)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('func', _operator_funcs)
+@pytest.mark.parametrize('nulls', _nulls)
+@pytest.mark.parametrize('fill_value', [None, 27])
+@pytest.mark.parametrize('other', ['df', 'scalar'])
+def test_operator_func_dataframe(func, nulls, fill_value, other):
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        pdf = pd.DataFrame()
+        from string import ascii_lowercase
+        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+
+        for i in range(num_cols):
+            colname = ascii_lowercase[cols[i]]
+            data = utils.gen_rand('float64', num_rows) * 10000
+            if nulls == 'some':
+                idx = np.random.choice(num_rows,
+                                       size=int(num_rows/2),
+                                       replace=False)
+                data[idx] = np.nan
+            pdf[colname] = data
+        return pdf
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == 'df' else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == 'df' else 59.0
+
+    got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
+    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
+
+    utils.assert_eq(expect, got)

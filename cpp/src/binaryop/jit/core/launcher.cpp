@@ -17,9 +17,9 @@
  * limitations under the License.
  */
 
-#include "binary/jit/core/launcher.h"
-#include "binary/jit/code/code.h"
-#include "types.h.jit"
+#include "../core/launcher.h"
+#include "../code/code.h"
+#include <types.h.jit>
 #include <cstdint>
 
 namespace cudf {
