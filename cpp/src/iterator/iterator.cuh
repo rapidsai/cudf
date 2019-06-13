@@ -94,10 +94,12 @@ namespace cudf
  * `operator() (gdf_index_type id)` computes
  * `data` value and valid flag at `id`
  *
- * If has_nulls = false, the data is always `data[id]`
- * If has_nulls = true,  the data value = (is_valid(id))? data[id] : identity;
+ * If has_nulls = false, the data is always `static_cast<T_output>(data[id])`
+ * If has_nulls = true,  the data value = (is_valid(id))?
+ *      static_cast<T_output>(data[id]) : identity;
  *
- * @tparam  T_element cudf data type of input element array and `identity` value
+ * @tparam  T_element cudf data type of input element array
+ * @tparam  T_output  cudf data type of output and `identity` value
  *                    which is used when null bitmaps flag is false.
  * @tparam  has_nulls if true, this struct holds only data array.
  *                    else, this struct holds data array and
@@ -143,13 +145,14 @@ struct value_accessor<T_element, T_output, false>
  * A unary function returns pair of scalar value and validity at `id`.
  * `operator() (gdf_index_type id)` computes
  * `data` value and validity at `id`
- * and return `thrust::pair<T_element, bool>(data, validity)`.
+ * and return `thrust::pair<T_output, bool>(data, validity)`.
  *
  * If has_nulls = false, the validity is always true.
  * If has_nulls = true, the valid flag corresponds to null bitmask flag at `id`,
- * and the data value = (is_valid(id))? data[id] : identity;
+ * and the data value = (is_valid(id))? static_cast<T_output>(data[id]) : identity;
  *
- * @tparam  T_element cudf data type of input element array and `identity` value
+ * @tparam  T_element cudf data type of input element array
+ * @tparam  T_output  cudf data type of output and `identity` value
  *                    which is used when null bitmaps flag is false.
  * @tparam  has_nulls if true, this struct holds only data array.
  *                    else, this struct holds data array and
@@ -194,6 +197,8 @@ struct pair_accessor<T_element, T_output, false> : public value_accessor<T_eleme
  *
  * @tparam has_nulls True if the data has valid bit mask, False else
  * @tparam T_element The cudf data type of input array
+ * @tparam T_output  cudf data type of output and `identity` value
+ *                   which is used when null bitmaps flag is false.
  * @tparam Iterator_Index
  *                   The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
@@ -214,7 +219,7 @@ auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_iterator(const T_element *data,
- *                     const gdf_valid_type *valid, T_element identity,
+ *                     const gdf_valid_type *valid, T_output identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from the pointer of null bitmask of column as gdf_valid_type
@@ -256,6 +261,8 @@ auto make_iterator(const gdf_column& column,
  *
  * @tparam has_nulls True if the data has valid bit mask, False else
  * @tparam T_element The cudf data type of input array
+ * @tparam T_output  cudf data type of output and `identity` value
+ *                   which is used when null bitmaps flag is false.
  * @tparam Iterator_Index
  *                   The base iterator which gives the index of array.
  *                   The default is `thrust::counting_iterator`
@@ -276,7 +283,7 @@ auto make_pair_iterator(const T_element *data, const bit_mask::bit_mask_t *valid
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_pair_iterator(const T_element *data,
- *                     const gdf_valid_type *valid, T_element identity,
+ *                     const gdf_valid_type *valid, T_output identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from the pointer of null bitmask of column as gdf_valid_type
@@ -291,7 +298,7 @@ auto make_pair_iterator(const T_element *data, const gdf_valid_type *valid,
 }
 
 /** -------------------------------------------------------------------------*
- * @overload auto make_pair_iterator(const gdf_column& column, T_element identity,
+ * @overload auto make_pair_iterator(const gdf_column& column, T_output identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from a column
