@@ -27,7 +27,7 @@
 enum duplicate_keep_option {
   KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
   KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
-  KEEP_FALSE        ///< Don't keep any duplicate rows, Keeps only unique rows
+  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
 };
 
 namespace cudf {

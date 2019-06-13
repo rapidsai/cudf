@@ -13,7 +13,7 @@ cdef extern from "stream_compaction.hpp" nogil:
     ctypedef enum duplicate_keep_option:
         KEEP_FIRST
         KEEP_LAST
-        KEEP_FALSE
+        KEEP_NONE
 
 cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 

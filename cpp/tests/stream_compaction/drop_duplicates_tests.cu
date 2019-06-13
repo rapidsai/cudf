@@ -199,7 +199,7 @@ TYPED_TEST(DropDuplicatesDoubleTest, Distinct)
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{column_size, lamda_type0},
     cudf::test::column_wrapper<typename TypeParam::Type1>{column_size, lamda_type1},
-    duplicate_keep_option::KEEP_FALSE);
+    duplicate_keep_option::KEEP_NONE);
 }
 
 TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
@@ -228,6 +228,6 @@ TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{0, lamda_type0},
     cudf::test::column_wrapper<typename TypeParam::Type1>{0, lamda_type1},
-    duplicate_keep_option::KEEP_FALSE);
+    duplicate_keep_option::KEEP_NONE);
 }
 

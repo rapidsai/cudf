@@ -40,7 +40,7 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     elif keep == 'last':
         keep_first = duplicate_keep_option.KEEP_LAST
     elif keep == False:
-        keep_first = duplicate_keep_option.KEEP_FALSE
+        keep_first = duplicate_keep_option.KEEP_NONE
     else:
         raise ValueError('keep must be either "first", "last" or False')
 
