@@ -54,17 +54,25 @@ struct CopyRangeTest : GdfTest
 
 using test_types =
   ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                   cudf::bool8>;
+                   cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(CopyRangeTest, test_types);
 
 template <typename T>
-struct original_value {
-  T operator()(gdf_index_type row) { return static_cast<T>(0); }
+struct get_input {
+  int scale;
+  T operator()(gdf_index_type row) { return static_cast<T>(scale * row); }
 };
-template <typename T>
-struct replacement_value {
-  T operator()(gdf_index_type row) { return static_cast<T>(row); }
+
+template <>
+struct get_input<const char*> {
+  int scale;
+  const char* operator()(gdf_index_type row) { 
+    std::ostringstream convert;
+    convert << scale * row;
+    return convert.str().c_str();
+  }
 };
+
 auto valid = [](gdf_index_type row) { return true; };
 auto depends = [](gdf_index_type row) { return (row % 2 == 0); };
 
@@ -78,15 +86,15 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  column_wrapper<T> dest(size, original_value<T>{}, valid);
+  column_wrapper<T> dest(size, get_input<T>{1}, valid);
   
   this->test(
     dest,
-    column_wrapper<T>(size, replacement_value<T>{}, depends),
+    column_wrapper<T>(size, get_input<T>{2}, depends),
     column_wrapper<T>(size, 
       [&](gdf_index_type row) { 
         return ((row >= out_begin) && (row < out_end)) ? 
-          replacement_value<T>{}(row + row_diff) : original_value<T>{}(row);
+          get_input<T>{2}(row + row_diff) : get_input<T>{1}(row);
       },
       [&](gdf_index_type row) { 
         return ((row >= out_begin) && (row < out_end)) ? 
@@ -105,16 +113,16 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  column_wrapper<T> dest(size, original_value<T>{});
+  column_wrapper<T> dest(size, get_input<T>{1});
 
   // First set it as valid
   this->test(
     dest,
-    column_wrapper<T>(size, replacement_value<T>{}),
+    column_wrapper<T>(size, get_input<T>{2}),
     column_wrapper<T>(size, 
       [&](gdf_index_type row) { 
         return ((row >= out_begin) && (row < out_end)) ? 
-          replacement_value<T>{}(row + row_diff) : original_value<T>{}(row);
+          get_input<T>{2}(row + row_diff) : get_input<T>{1}(row);
       }),
     out_begin, out_end, in_begin);
 }
@@ -123,7 +131,7 @@ struct CopyRangeErrorTest : GdfTest {};
 
 TEST_F(CopyRangeErrorTest, InvalidColumn)
 {
-  column_wrapper<int32_t> source(100, replacement_value<int32_t>{});
+  column_wrapper<int32_t> source(100, get_input<int32_t>{1});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(nullptr, *source.get(), 0, 10, 0),
                             "Null gdf_column pointer");
 
@@ -144,8 +152,8 @@ TEST_F(CopyRangeErrorTest, InvalidColumn)
 
 TEST_F(CopyRangeErrorTest, InvalidRange)
 {
-  column_wrapper<int32_t> dest(100, original_value<int32_t>{});
-  column_wrapper<int32_t> source(100, replacement_value<int32_t>{});
+  column_wrapper<int32_t> dest(100, get_input<int32_t>{1});
+  column_wrapper<int32_t> source(100, get_input<int32_t>{2});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 95),
                             "Range is out of bounds");
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 110, 0),
@@ -160,8 +168,8 @@ TEST_F(CopyRangeErrorTest, InvalidRange)
 
 TEST_F(CopyRangeErrorTest, DTypeMismatch)
 {
-  column_wrapper<int32_t> dest(100, original_value<int32_t>{});
-  column_wrapper<float> source(100, replacement_value<float>{});
+  column_wrapper<int32_t> dest(100, get_input<int32_t>{1});
+  column_wrapper<float> source(100, get_input<float>{2});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 0),
                             "Data type mismatch");
 }
