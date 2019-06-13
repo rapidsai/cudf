@@ -27,18 +27,19 @@ cpdef replace(input_col, values_to_replace, replacement_values):
     cdef gdf_column* c_replacement_values = \
                             column_view_from_column(replacement_values)
 
-    cdef gdf_column output
+    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
 
     with nogil:
-        output = find_and_replace_all(c_input_col[0],
+        output[0] = find_and_replace_all(c_input_col[0],
                                       c_values_to_replace[0],
                                       c_replacement_values[0])
 
-    data, mask = gdf_column_to_column_mem(&output)
+    data, mask = gdf_column_to_column_mem(output)
 
     free(c_values_to_replace)
     free(c_replacement_values)
     free(c_input_col)
+    free(output)
 
     return Column.from_mem_views(data, mask)
 
