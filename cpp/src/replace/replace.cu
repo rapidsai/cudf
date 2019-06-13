@@ -300,7 +300,7 @@ namespace detail {
     CUDF_EXPECTS(values_to_replace.valid == nullptr || values_to_replace.null_count == 0,
                  "Nulls are in values_to_replace column.");
 
-    gdf_column output = cudf::allocate_like(input_col, stream);
+    gdf_column output = cudf::allocate_like(input_col, true, stream);
 
     if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
       gdf_valid_type *valid = nullptr;
