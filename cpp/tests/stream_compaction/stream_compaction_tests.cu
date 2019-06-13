@@ -85,7 +85,7 @@ struct ApplyBooleanMaskTest : GdfTest {};
 
 using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                     cudf::nvstring_category>;
+                     cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(ApplyBooleanMaskTest, test_types);
 
 // Test computation
