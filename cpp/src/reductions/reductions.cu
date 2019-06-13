@@ -4,7 +4,9 @@
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy_bitmask.hpp>
+#include <iterator/iterator.cuh>
 
+#include <cub/device/device_reduce.cuh>
 #include <cub/block/block_reduce.cuh>
 
 #include <limits>
@@ -15,49 +17,27 @@
 
 namespace { // anonymous namespace
 
-static constexpr int reduction_block_size = 128;
-
-/*
-Generic reduction implementation with support for validity mask
-*/
-template<typename T_in, typename T_out, typename F, typename Ld>
-__global__
-void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T_out *result,
-                      F functor, T_out identity, Ld loader)
+template <typename Op, typename InputIterator, typename T_output>
+void reduction_op(T_output* dev_result, InputIterator d_in, int num_items,
+    T_output init, Op op, cudaStream_t stream)
 {
-    typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage temp_storage;
+    void     *d_temp_storage = NULL;
+    size_t   temp_storage_bytes = 0;
 
-    int tid = threadIdx.x;
-    int blkid = blockIdx.x;
-    int blksz = blockDim.x;
-    int gridsz = gridDim.x;
+    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
+        op, init, stream);
+    // Allocate temporary storage
+    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
 
-    int step = blksz * gridsz;
+    // Run reduction
+    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
+        op, init, stream);
 
-    T_out agg = identity;
-    for (int base=blkid * blksz; base<size; base+=step) {
-        // Threadblock synchronous loop
-        int i = base + tid;
-        // load
-        T_out loaded = identity;
-        if (i < size && gdf_is_valid(mask, i))
-            loaded = static_cast<T_out>(loader(data, i));
-
-        // Block reduce
-        T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
-        // Add current block
-        agg = functor(agg, temp);
-    }
-
-    // First thread of each block stores the result.
-    if (tid == 0){
-        cudf::genericAtomicOperation(result, agg, functor);
-    }
+    // Free temporary storage
+    RMM_TRY(RMM_FREE(d_temp_storage, stream));
 }
 
-template<typename T_in, typename T_out, typename Op>
+template<typename T_in, typename T_out, typename Op, bool has_nulls>
 void ReduceOp(const gdf_column *input,
                    gdf_scalar* scalar, cudaStream_t stream)
 {
@@ -72,16 +52,16 @@ void ReduceOp(const gdf_column *input,
             sizeof(T_out), cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
 
-    int blocksize = reduction_block_size;
-    int gridsize = (input->size + reduction_block_size -1 )
-        /reduction_block_size;
-
-    // kernel call
-    gpu_reduction_op<<<gridsize, blocksize, 0, stream>>>(
-        static_cast<const T_in*>(input->data), input->valid, input->size,
-        static_cast<T_out*>(result),
-        typename Op::Op{}, identity, typename Op::Loader{});
-    CHECK_STREAM(stream);
+    if( std::is_same<Op, cudf::reductions::ReductionSumOfSquares>::value ){
+        auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
+        auto it = thrust::make_transform_iterator(it_raw, cudf::transformer_squared<T_out>{});
+        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+            typename Op::Op{}, stream);
+    }else{
+        auto it = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
+        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+            typename Op::Op{}, stream);
+    }
 
     // read back the result to host memory
     // TODO: asynchronous copy
@@ -103,7 +83,11 @@ public:
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
-        ReduceOp<T_in, T_out, Op>(col, scalar, stream);
+        if( col->valid == nullptr ){
+            ReduceOp<T_in, T_out, Op, false>(col, scalar, stream);
+        }else{
+            ReduceOp<T_in, T_out, Op, true >(col, scalar, stream);
+        }
     }
 
     template <typename T_out, typename std::enable_if<
