@@ -116,6 +116,7 @@
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
+- PR #1959 Add support for comparing boolean Series to scalar
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 - PR #1982 Fixes incorrect index name after join operation
