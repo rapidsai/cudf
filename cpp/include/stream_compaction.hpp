@@ -92,7 +92,6 @@ gdf_column drop_nulls(gdf_column const &input);
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied 
- * duplicate row) or (only unique row).
  *
  * The input table and key columns table should have same number of rows.
  * Note that the memory for the output table columns is allocated by this function, so 
