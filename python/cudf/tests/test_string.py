@@ -311,20 +311,79 @@ def test_string_len(ps_gs):
 @pytest.mark.parametrize('others', [
     None,
     ['f', 'g', 'h', 'i', 'j'],
-    pd.Series(['f', 'g', 'h', 'i', 'j'])
+    ('f', 'g', 'h', 'i', 'j'),
+    pd.Series(['f', 'g', 'h', 'i', 'j']),
+    pd.Index(['f', 'g', 'h', 'i', 'j']),
+    (['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']),
+    [['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']],
+    (pd.Series(['f', 'g', 'h', 'i', 'j']),
+     pd.Series(['f', 'g', 'h', 'i', 'j'])),
+    (pd.Index(['f', 'g', 'h', 'i', 'j']),
+     pd.Index(['1', '2', '3', '4', '5'])),
+    [pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(
+        ['f', 'g', 'h', 'i', 'j'])] * 20,
+    (
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a']
+    ),
+    [
+        ['f', 'a', 'b', 'f', 'a'], pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j'])
+    ],
+    [
+        ['f', 'a', 'b', 'f', 'a'], pd.Index(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        pd.Index(['f', 'g', 'h', 'i', 'j']),
+        pd.Series(['f', 'g', 'h', 'i', 'j'])
+    ]
 ])
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
 @pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
-def test_string_cat(ps_gs, others, sep, na_rep):
+@pytest.mark.parametrize('index', [
+    ['1', '2', '3', '4', '5'],
+    pd.Series(['1', '2', '3', '4', '5']),
+    pd.Index(['1', '2', '3', '4', '5'])
+])
+@pytest.mark.parametrize('misc_with_index', [
+    ['1', '2', '3', '4', '5'],
+    pd.Series(['1', '2', '3', '4', '5']),
+    pd.Index(['1', '2', '3', '4', '5'])
+])
+def test_string_cat(ps_gs, others, sep, na_rep, index, misc_with_index):
     ps, gs = ps_gs
 
     pd_others = others
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-    if isinstance(others, pd.Series):
-        others = Series(others)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    ps.index = index
+    gs.index = index
+
+    expect = ps.str.cat(others=ps.index, sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=gs.index, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    expect = ps.str.cat(others=[ps.index] + [misc_with_index],
+                        sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=[gs.index] + [misc_with_index],
+                     sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    expect = ps.str.cat(others=(ps.index, misc_with_index),
+                        sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=(gs.index, misc_with_index),
+                     sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -852,3 +911,18 @@ def test_string_slice():
     df = DataFrame({'a': ['hello', 'world']})
     a_slice = df.a.str.slice(0, 2)
     assert isinstance(a_slice, Series)
+
+
+def test_string_equality():
+    data1 = ['b', 'c',  'd', 'a', 'c']
+    data2 = ['a', None, 'c', 'a', 'c']
+
+    ps1 = pd.Series(data1)
+    ps2 = pd.Series(data2)
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    expect = (ps1 == ps2)
+    got = (gs1 == gs2)
+
+    assert_eq(expect, got.fillna(False))

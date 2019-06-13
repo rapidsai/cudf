@@ -30,6 +30,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
@@ -45,6 +46,39 @@ def _unique_name(existing_names, suffix="_unique_name"):
         ret = "%s_%d" % (suffix, i)
         i += 1
     return ret
+
+
+def _reverse_op(fn):
+    return {
+        'add':              'radd',
+        'radd':             'add',
+        'sub':              'rsub',
+        'rsub':             'sub',
+        'mul':              'rmul',
+        'rmul':             'mul',
+        'mod':              'rmod',
+        'rmod':             'mod',
+        'pow':              'rpow',
+        'rpow':             'pow',
+        'floordiv':         'rfloordiv',
+        'rfloordiv':        'floordiv',
+        'truediv':          'rtruediv',
+        'rtruediv':         'truediv',
+        '__add__':          '__radd__',
+        '__radd__':         '__add__',
+        '__sub__':          '__rsub__',
+        '__rsub__':         '__sub__',
+        '__mul__':          '__rmul__',
+        '__rmul__':         '__mul__',
+        '__mod__':          '__rmod__',
+        '__rmod__':         '__mod__',
+        '__pow__':          '__rpow__',
+        '__rpow__':         '__pow__',
+        '__floordiv__':     '__rfloordiv__',
+        '__rfloordiv__':    '__floordiv__',
+        '__truediv__':      '__rtruediv__',
+        '__rtruediv__':     '__truediv__',
+    }[fn]
 
 
 class DataFrame(object):
@@ -458,9 +492,16 @@ class DataFrame(object):
         )
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other=None):
+    def _apply_op(self, fn, other=None, fill_value=None):
         result = DataFrame()
         result.set_index(self.index)
+
+        def op(lhs, rhs):
+            if fill_value is None:
+                return getattr(lhs, fn)(rhs)
+            else:
+                return getattr(lhs, fn)(rhs, fill_value)
+
         if other is None:
             for col in self._cols:
                 result[col] = getattr(self._cols[col], fn)()
@@ -470,23 +511,27 @@ class DataFrame(object):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             max_num_rows = max(self.shape[0], other.shape[0])
+
+            def fallback(col, fn):
+                if fill_value is None:
+                    return Series.from_masked_array(
+                        data=rmm.device_array(max_num_rows, dtype='float64'),
+                        mask=cudautils.make_empty_mask(max_num_rows))
+                else:
+                    return getattr(col, fn)(fill_value)
+
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = fallback(self._cols[col], fn)
             for col in other._cols:
                 if col in self._cols:
                     if self.shape[0] != other.shape[0]:
                         raise NotImplementedError(
                                 "%s on columns with different "
                                 "length is not supported", fn)
-                    result[col] = getattr(self._cols[col], fn)(
-                                          other._cols[col])
+                    result[col] = op(self._cols[col], other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
-            for col in self._cols:
-                if col not in other._cols:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
+                    result[col] = fallback(other._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -494,48 +539,93 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], fn)(other)
+                result[col] = op(self._cols[col], other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "
                     "supported at this time.")
         return result
 
+    def add(self, other, fill_value=None):
+        return self._apply_op('add', other, fill_value)
+
     def __add__(self, other):
         return self._apply_op('__add__', other)
+
+    def radd(self, other, fill_value=None):
+        return self._apply_op('radd', other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op('__radd__', other)
 
+    def sub(self, other, fill_value=None):
+        return self._apply_op('sub', other, fill_value)
+
     def __sub__(self, other):
         return self._apply_op('__sub__', other)
+
+    def rsub(self, other, fill_value=None):
+        return self._apply_op('rsub', other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op('__rsub__', other)
 
+    def mul(self, other, fill_value=None):
+        return self._apply_op('mul', other, fill_value)
+
     def __mul__(self, other):
         return self._apply_op('__mul__', other)
+
+    def rmul(self, other, fill_value=None):
+        return self._apply_op('rmul', other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def mod(self, other, fill_value=None):
+        return self._apply_op('mod', other, fill_value)
+
     def __mod__(self, other):
         return self._apply_op('__mod__', other)
+
+    def rmod(self, other, fill_value=None):
+        return self._apply_op('rmod', other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op('__rmod__', other)
 
+    def pow(self, other, fill_value=None):
+        return self._apply_op('pow', other, fill_value)
+
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
+
+    def rpow(self, other, fill_value=None):
+        return self._apply_op('rpow', other, fill_value)
+
+    def __rpow__(self, other):
+        return self._apply_op('__pow__', other)
+
+    def floordiv(self, other, fill_value=None):
+        return self._apply_op('floordiv', other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
 
+    def rfloordiv(self, other, fill_value=None):
+        return self._apply_op('rfloordiv', other, fill_value)
+
     def __rfloordiv__(self, other):
         return self._apply_op('__rfloordiv__', other)
 
+    def truediv(self, other, fill_value=None):
+        return self._apply_op('truediv', other, fill_value)
+
     def __truediv__(self, other):
         return self._apply_op('__truediv__', other)
+
+    def rtruediv(self, other, fill_value=None):
+        return self._apply_op('rtruediv', other, fill_value)
 
     def __rtruediv__(self, other):
         return self._apply_op('__rtruediv__', other)
@@ -790,10 +880,17 @@ class DataFrame(object):
             return df
 
     def reset_index(self, drop=False):
+        out = DataFrame()
         if not drop:
-            name = self.index.name or 'index'
-            out = DataFrame()
-            out[name] = self.index
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+                framed = self.index.to_frame()
+                for c in framed.columns:
+                    out[c] = framed[c]
+            else:
+                name = 'index'
+                if self.index.name is not None:
+                    name = self.index.name
+                out[name] = self.index
             for c in self.columns:
                 out[c] = self[c]
         else:
@@ -801,9 +898,20 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
+        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        for col in self.columns:
-            out[col] = self[col].take(positions, ignore_index=ignore_index)
+        cols = [s._column for s in self._cols.values()]
+
+        result_cols = cpp_copying.apply_gather(cols, positions)
+
+        out = DataFrame()
+        for i, col_name in enumerate(self._cols):
+            out[col_name] = result_cols[i]
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        else:
+            out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):
@@ -846,8 +954,24 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -869,8 +993,35 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) == 0:
+                # When self has 0 columns and series has values
+                # we can safely go ahead and assign.
+                return series
+            elif (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
@@ -905,10 +1056,13 @@ class DataFrame(object):
         series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        if forceindex or empty_index or self._index.equals(series.index):
+
+        if not self._cols:
+            self._size = len(series)
+
+        if forceindex or empty_index or self.index is series.index:
             if empty_index:
                 self._index = series.index
-            self._size = len(series)
             return series
         else:
             return series.set_index(self._index)
@@ -1761,6 +1915,8 @@ class DataFrame(object):
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)
+        # change random number index to None to better reflect pandas behavior
+        df.index.name = None
 
         if sort and len(df):
             return df.sort_index()
@@ -2695,6 +2851,16 @@ class DataFrame(object):
             result = result.set_index(self._cols.keys())
         return result
 
+    def _columns_view(self, columns):
+        """
+        Return a subset of the DataFrame's columns as a view.
+        """
+        columns = as_index(columns)
+        result_columns = OrderedDict({})
+        for col in columns:
+            result_columns[col] = self[col]
+        return DataFrame(result_columns)
+
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
 
@@ -2806,6 +2972,14 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @ioutils.doc_to_csv()
+    def to_csv(self, path=None, sep=',', na_rep='',
+               columns=None, header=True, index=True, line_terminator='\n'):
+        """{docstring}"""
+        import cudf.io.csv as csv
+        return csv.to_csv(self, path, sep, na_rep, columns,
+                          header, index, line_terminator)
 
 
 def from_pandas(obj):
