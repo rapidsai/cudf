@@ -7,12 +7,12 @@ from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize(
-    'data',
+    'data,index',
     [
-        [],
-        [1, 1, 1, 1],
-        [1, 2, 3, 4],
-        [1, 2, 4, 9, 9, 4]
+        ([], []),
+        ([1, 1, 1, 1], None),
+        ([1, 2, 3, 4], pd.date_range('2001-01-01', '2001-01-04')),
+        ([1, 2, 4, 9, 9, 4], ['a', 'b', 'c', 'd', 'e', 'f'])
     ]
 )
 @pytest.mark.parametrize(
@@ -26,20 +26,19 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize(
     'center',
     [True, False])
-def test_rollling_series_basic(data, agg, nulls, center):
-    psr = pd.Series(data)
-
+def test_rollling_series_basic(data, index, agg, nulls, center):
     if len(data) > 0:
         if nulls == 'one':
             p = np.random.randint(0, len(data))
-            psr[p] = None
+            data[p] = None
         elif nulls == 'some':
             p1, p2 = np.random.randint(0, len(data), (2,))
-            psr[p1] = None
-            psr[p2] = None
+            data[p1] = None
+            data[p2] = None
         elif nulls == 'all':
-            psr[:] = None
+            data = [None]*len(data)
 
+    psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
     for window_size in range(1, len(data)+1):
