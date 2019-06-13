@@ -306,21 +306,25 @@ class Series(object):
             if isinstance(arg, (list, np.ndarray, pd.Series, Index,
                                 DeviceNDArray)):
                 if len(arg) == 0:
-                    return np.array([], dtype=self.dtype)
+                    return Series([], dtype=self.dtype)
                 else:
-                    return np.array(arg, dtype=self.dtype)
+                    return Series(arg, dtype=self.dtype)
             return arg
         key, val = map(_process_arg, (key, val))
 
         # TODO make this more robust
         if isinstance(key, Number):
-            key = np.array([key], dtype=self.dtype)
-            val = np.array([val], dtype=self.dtype)
+            key = Series([key], dtype=self.dtype)
+            val = Series([val], dtype=self.dtype)
         else:
-            if isinstance(val, Number):
-                val = val * np.ones(len(key), dtype=self.dtype)
+            if val is None or isinstance(val, Number):
+                val = Series([val] * len(key), dtype=self.dtype)
 
-        self._column.scatter_assign(val, key)
+        # TODO handling nulls
+        if key.dtype == 'bool':
+            self._column.masked_assign(val, key)
+        else:
+            self._column.scatter_assign(val, key, val.isna())
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.

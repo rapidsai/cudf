@@ -8,6 +8,7 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
@@ -17,8 +18,17 @@ import cudf.bindings.copying as cpp_copying
 
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
+from cudf.dataframe import columnops
 from cudf.bindings.cudf_cpp import count_nonzero_mask, column_view_pointer
 from cudf.bindings.concat import _column_concat
+
+
+@cuda.jit
+def boolean_assign_kernel(data, mask, out):
+    idx = cuda.threadIdx.x + cuda.threadIdx.y * cuda.blockDim.x
+    # assume data.size == mask.size == out.size
+    if idx < data.size and mask[idx]:
+        out[idx] = data[idx]
 
 
 class Column(object):
@@ -446,29 +456,55 @@ class Column(object):
         else:
             raise NotImplementedError(type(arg))
 
-    def masked_assign(self, value, mask):
-        """Assign a scalar value to a series using a boolean mask
-        df[df < 0] = 0
+    # def masked_assign(self, value, mask):
+    #     """Assign a scalar value to a series using a boolean mask
+    #     df[df < 0] = 0
 
-        Parameters
-        ----------
-        value : scalar
-            scalar value for assignment
-        mask : cudf Series
-            Boolean Series
+    #     Parameters
+    #     ----------
+    #     value : scalar
+    #         scalar value for assignment
+    #     mask : cudf Series
+    #         Boolean Series
 
-        Returns
-        -------
-        cudf Series
-            cudf series with new value set to where mask is True
+    #     Returns
+    #     -------
+    #     cudf Series
+    #         cudf series with new value set to where mask is True
+    #     """
+
+    #     # need to invert to properly use gpu_fill_mask
+    #     mask_invert = mask._column._invert()
+    #     out = cudautils.fill_mask(data=self.data.to_gpu_array(),
+    #                               mask=mask_invert.as_mask(),
+    #                               value=value)
+    #     return self.replace(data=Buffer(out), mask=None, null_count=0)
+
+    def masked_assign(self, data, mask):
+        """Assign values in `data` to this column, subject to `mask`
         """
+        def _to_devarray(arg, name):
+            try:
+                return rmm.to_device(arg)
+            except Exception:
+                raise TypeError(
+                    f"Unsupported type {type(arg)} for argument {name}"
+                )
 
-        # need to invert to properly use gpu_fill_mask
-        mask_invert = mask._column._invert()
-        out = cudautils.fill_mask(data=self.data.to_gpu_array(),
-                                  mask=mask_invert.as_mask(),
-                                  value=value)
-        return self.replace(data=Buffer(out), mask=None, null_count=0)
+        if isinstance(data, Number):
+            data = data * np.ones(len(mask))
+        data = _to_devarray(data, "data")
+        mask = _to_devarray(mask, "mask")
+
+        if data.size != mask.size:
+            raise ValueError(
+                "Arguments should have the same size "
+                f"(found {data.size} and {mask.size})"
+            )
+
+        threads_per_block = 32
+        blocks_per_grid = (data.size + (threads_per_block - 1)) // threads_per_block
+        boolean_assign_kernel[blocks_per_grid, threads_per_block](data, mask, self.data.mem)
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -482,39 +518,46 @@ class Column(object):
                                value=value)
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
-    def scatter_assign(self, data, maps):
+    def scatter_assign(self, data, maps, isnull):
         """Call cudf::scatter to scatter values in `data` to this column
 
         Parameters
         ----------
-        data : column, np.ndarray or structured scalar
+        data : column, Buffer, Series, Index, device array, np.ndarray, pyarrow array, or pandas Categorical
             input data. if not a column, should be supported
-            by `rmm.to_device`
-        maps : np.ndarray or structured scalar
+            by `columnops.as_column`
+        maps : column, Buffer, Series, Index, device array, np.ndarray, pyarrow array, or pandas Categorical
             scatter map such that row `i` in `data` is scattered
-            to row `maps[i]`, any supported by `rmm.to_device`
+            to row `maps[i]`, any supported by `columnops.as_column`
+        isnull : Sequence[bool]
+            sequence with the same length as maps, such that isnull[i] is True
+            iff the value corresponding to maps[i] is None. Used to update
+            nullmask
         """
-        def _to_devarray(arg, name):
+        def _to_col(arg, name):
             try:
-                return rmm.to_device(arg)
+                return columnops.as_column(arg)
             except Exception:
-                raise TypeError(f"Unsupported type for argument {name}")
+                raise TypeError(
+                    f"Unsupported type {type(arg)} for argument {name}"
+                )
+        data = _to_col(data, "data").fillna(0)
+        maps = _to_col(maps, "maps")
+        # nullmask = _to_col(nullmask, "nullmask")
 
-        if not isinstance(data, Column):
-            data = _to_devarray(data, "data")
-            data_len = data.size
-        else:
-            data_len = len(data)
-
-        maps = _to_devarray(maps, "maps")
-        maps_len = maps.size
-
-        if data_len != maps_len:
+        if len(data) != len(maps) != len(isnull):
             raise ValueError(
                 "Arguments should have the same size "
-                f"(found {data.size} and {maps.size})"
+                f"(found {len(data)}, {len(maps)}, and {len(isnull)})"
             )
-        cpp_copying.apply_scatter_array(data, maps, self)
+        for i, val in zip(maps, isnull):
+            nullmap_idx, pos = divmod(i, 8)
+            bitmask = 1 << pos
+            if not val:
+                self.nullmask.mem[nullmap_idx] = self.nullmask.mem[nullmap_idx] | bitmask
+            else:
+                self.nullmask.mem[nullmap_idx] = self.nullmask.mem[nullmap_idx] & ~bitmask
+        cpp_copying.apply_scatter_column(data, maps.data.mem, self)
 
     def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
