@@ -162,6 +162,12 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
   if (left.null_count != right.null_count) return false;
   if (left.dtype_info.time_unit != right.dtype_info.time_unit) return false;
 
+  if ((left.col_name == nullptr) != (right.col_name == nullptr))
+    return false; // if one is null but not both
+
+  if (left.col_name != nullptr && std::strcmp(left.col_name, right.col_name) != 0)
+    return false;
+
   if ((left.data == nullptr) != (right.data == nullptr))
     return false;  // if one is null but not both
   

@@ -20,11 +20,12 @@ cdef gdf_dtype get_dtype(dtype)
 
 cdef get_scalar_value(gdf_scalar scalar)
 
-cdef gdf_column* column_view_from_column(col)
+cdef gdf_column* column_view_from_column(col, col_name=*)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
+cdef gdf_column* column_view_from_string_column(col, col_name=*)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace,
@@ -115,7 +116,7 @@ cdef extern from "cudf.h" nogil:
         char *col_name
 
     ctypedef enum gdf_null_sort_behavior:
-      GDF_NULL_AS_LARGEST = 0, 
+      GDF_NULL_AS_LARGEST = 0,
       GDF_NULL_AS_SMALLEST,
    
     ctypedef enum gdf_method:
@@ -286,10 +287,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    gdf_column* old_values,
                                    gdf_column* new_values) except +
-
-
-    cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
-                                     const gdf_column* col_in) except +
 
 
     cdef gdf_error gdf_digitize(gdf_column* col,

@@ -154,6 +154,7 @@ typedef struct
     const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
     const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
     const char* na_rep;           // string to use for null entries
+    bool include_header;          // Indicates whether to write headers to csv
 
 } csv_write_arg;
 
@@ -182,6 +183,8 @@ typedef struct {
   int           stripe;                     ///< In: Stripe index of interest; only data in this stripe will be returned.
   int           skip_rows;                  ///< In: Number of rows to skip from the start
   int           num_rows;                   ///< In: Number of rows to read. Actual number of returned rows may be less
+
+  bool          use_index;                  ///< In: Use row index if available for faster position seeking
 
 } orc_read_arg;
 
