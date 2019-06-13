@@ -85,66 +85,43 @@ struct meanvar
 // transformers
 
 /** -------------------------------------------------------------------------*
- * @brief Transforms a scalar by casting it to another scalar type
- *
- * It casts `T_element` into `T_output`.
- *
- * This struct transforms the output value as `static_cast<T_output>(value)`.
- *
- * @tparam  T_element scalar data type of input
- * @tparam  T_output  scalar data type of output
- * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output>
-struct scalar_cast_transformer
-{
-    CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (T_element const & value)
-    {
-        return static_cast<T_output>(value);
-    };
-};
-
-/** -------------------------------------------------------------------------*
  * @brief Transforms a scalar by first casting to another type, and then squaring the result.
  *
  * This struct transforms the output value as
- * `(static_cast<T_output>(_value))^2`.
+ * `value * value`.
  *
  * This will be used to compute "sum of squares".
  *
- * @tparam  T_element scalar data type of input
  * @tparam  T_output  scalar data type of output
  * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output=T_element>
+template<typename T_element>
 struct transformer_squared
 {
     CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (T_element const & value)
+    T_element operator() (T_element const & value)
     {
-        T_output v = static_cast<T_output>(value);
-        return (v*v);
+        return (value*value);
     };
 };
 
 /** -------------------------------------------------------------------------*
  * @brief Uses a scalar value to construct a `meanvar` object.
  * This transforms `thrust::pair<T_element, bool>` into
- * `T_output = meanvar<T_output_element>` form.
+ * `T_output = meanvar<T_element>` form.
  *
  * This struct transforms the value and the squared value and the count at once.
  *
  * @tparam  T_element         scalar data type of input
- * @tparam  T_output_element  scalar data type of the element of output
  * -------------------------------------------------------------------------**/
-template<typename T_element, typename T_output_element=T_element>
+template<typename T_element>
 struct transformer_meanvar
 {
-    using T_output = meanvar<T_output_element>;
+    using T_output = meanvar<T_element>;
 
     CUDA_HOST_DEVICE_CALLABLE
     T_output operator() (thrust::pair<T_element, bool> const& pair)
     {
-        T_output_element v = static_cast<T_output_element>(pair.first);
+        T_element v = pair.first;
         return T_output(v, v*v, (pair.second)? 1 : 0 );
     };
 };

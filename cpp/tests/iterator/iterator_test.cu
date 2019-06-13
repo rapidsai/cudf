@@ -219,7 +219,6 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
     using T = int8_t;
     using T_upcast = int64_t;
     T init{0};
-    cudf::scalar_cast_transformer<T, T_upcast> transformer{};
 
     std::vector<bool> host_bools(column_size);
     std::generate(host_bools.begin(), host_bools.end(),
@@ -243,16 +242,14 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
 
 
     // CPU test
-    auto it_hos = cudf::make_iterator<true, T>(
-        std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
-    auto it_hos_squared = thrust::make_transform_iterator(it_hos, transformer);
-    this->iterator_test_thrust_host(expected_value, it_hos_squared, w_col.size());
+    auto it_hos = cudf::make_iterator<true, T, T_upcast>(
+        std::get<0>(hos).data(), std::get<1>(hos).data(), T_upcast{0});
+    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator<true, T>(w_col, T{0});
-    auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-    this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
-    this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
+    auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T_upcast{0});
+    this->iterator_test_thrust(expected_value, it_dev, w_col.size());
+    this->iterator_test_cub(expected_value, it_dev, w_col.size());
 }
 
 
@@ -265,7 +262,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     using T = int8_t;
     using T_upcast = int64_t;
     T init{0};
-    cudf::transformer_squared<T, T_upcast> transformer{};
+    cudf::transformer_squared<T_upcast> transformer{};
 
     std::vector<bool> host_bools(column_size);
     std::generate(host_bools.begin(), host_bools.end(),
@@ -288,13 +285,13 @@ TYPED_TEST(IteratorTest, null_iterator_square)
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
     // CPU test
-    auto it_hos = cudf::make_iterator<true, T>(
+    auto it_hos = cudf::make_iterator<true, T, T_upcast>(
         std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
     auto it_hos_squared = thrust::make_transform_iterator(it_hos, transformer);
     this->iterator_test_thrust_host(expected_value, it_hos_squared, w_col.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator<true, T>(w_col, T{0});
+    auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T{0});
     auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
     this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
     this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
@@ -327,12 +324,12 @@ TYPED_TEST(IteratorTest, indexed_iterator)
 
     const bit_mask::bit_mask_t *dummy = nullptr;
     // CPU test
-    auto it_host = cudf::make_iterator<false, T, T_index*>
+    auto it_host = cudf::make_iterator<false, T, T, T_index*>
         (hos_array.data(), dummy, T{0}, hos_indices.data());
     this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 
     // GPU test
-    auto it_dev = cudf::make_iterator<false, T, T_index*>
+    auto it_dev = cudf::make_iterator<false, T, T, T_index*>
         (dev_array.data().get(), dummy, T{0}, dev_indices.data().get());
     this->iterator_test_thrust(expected_value, it_dev, dev_indices.size());
     this->iterator_test_cub(expected_value, it_dev, dev_indices.size());
@@ -392,11 +389,10 @@ TYPED_TEST(IteratorTest, mean_var_output)
     using T = int32_t;
     using T_upcast = int64_t;
     using T_output = cudf::meanvar<T_upcast>;
-    cudf::transformer_meanvar<T, T_upcast> transformer{};
-
+    cudf::transformer_meanvar<T_upcast> transformer{};
 
     const int column_size{5000};
-    const T init{0};
+    const T_upcast init{0};
 
     std::vector<bool> host_bools(column_size);
     std::generate(host_bools.begin(), host_bools.end(),
