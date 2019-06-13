@@ -122,7 +122,7 @@ cpdef cpp_read_csv(
 
     if usecols is not None:
         all_int = True
-        # TODO all_of
+        # TODO Refactor to use `all_of()`
         for col in usecols:
             if not isinstance(col, int):
                 all_int = False
