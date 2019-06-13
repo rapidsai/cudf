@@ -2,23 +2,15 @@
 
 from __future__ import division
 
-import operator
-import random
-from itertools import product
-
 import pytest
 import numpy as np
-import cudf
-
-from cudf.dataframe import Series
-from cudf.dataframe.index import as_index
-
-from cudf.tests import utils
 
 from cudf.bindings import binops
+from cudf.dataframe import Series
 
 from numba import cuda
 from numba import types
+
 
 @pytest.mark.parametrize('dtype', ['int32', 'int64', 'float32', 'float64'])
 def test_generic_ptx(dtype):
@@ -33,22 +25,22 @@ def test_generic_ptx(dtype):
 
     out_arr = np.random.random(size).astype(dtype)
     out_col = Series(out_arr)._column
-    
+
     @cuda.jit(device=True)
     def add(a, b):
         return a**3 + b
-    if   dtype == 'float32': 
-      type_signature = (types.float32, types.float32)
+    if dtype == 'float32':
+        type_signature = (types.float32, types.float32)
     elif dtype == 'float64':
-      type_signature = (types.float64, types.float64)
+        type_signature = (types.float64, types.float64)
     elif dtype == 'int32':
-      type_signature = (types.int32, types.int32)
+        type_signature = (types.int32, types.int32)
     elif dtype == 'int64':
-      type_signature = (types.int64, types.int64)
-   
+        type_signature = (types.int64, types.int64)
+
     add.compile(type_signature)
     ptx = add.inspect_ptx(type_signature)
-    
+
     ptx_code = ptx.decode('utf-8')
 
     binops.apply_op_udf(lhs_col, rhs_col, out_col, ptx_code)
@@ -56,4 +48,3 @@ def test_generic_ptx(dtype):
     result = lhs_arr**3 + rhs_arr
 
     np.testing.assert_almost_equal(result, out_col)
-
