@@ -33,6 +33,10 @@ R"***(
     template <typename T>
     constexpr bool is_integral_v = std::is_integral<T>::value;
 
+    // Simplifying std::is_floating_point
+    template <typename T>
+    constexpr bool is_floating_point_v = std::is_floating_point<T>::value;
+
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double
     template <typename Type>

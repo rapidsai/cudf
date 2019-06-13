@@ -17,6 +17,7 @@ def datadir(datadir):
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
+@pytest.mark.parametrize('use_index', [False, True])
 @pytest.mark.parametrize(
     'inputfile, columns',
     [
@@ -27,7 +28,7 @@ def datadir(datadir):
         ('TestOrcFile.demo-12-zlib.orc', ['_col2', '_col3', '_col4', '_col5'])
     ]
 )
-def test_orc_reader_basic(datadir, inputfile, columns, engine):
+def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     path = datadir / inputfile
     try:
         orcfile = pa.orc.ORCFile(path)
@@ -38,7 +39,12 @@ def test_orc_reader_basic(datadir, inputfile, columns, engine):
             print(type(excpr).__name__)
 
     expect = orcfile.read(columns=columns).to_pandas()
-    got = cudf.read_orc(path, engine=engine, columns=columns)
+    got = cudf.read_orc(
+        path,
+        engine=engine,
+        columns=columns,
+        use_index=use_index
+    )
 
     assert_eq(expect, got, check_categorical=False)
 

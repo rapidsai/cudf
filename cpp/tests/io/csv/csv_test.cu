@@ -841,6 +841,7 @@ TEST(gdf_csv_test, Writer)
     wargs.num_cols = rargs.num_cols_out;
     wargs.delimiter = ',';
     wargs.line_terminator = "\n";
+    wargs.include_header = true;
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
