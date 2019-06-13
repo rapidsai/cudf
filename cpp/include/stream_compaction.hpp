@@ -88,7 +88,10 @@ gdf_column drop_nulls(gdf_column const &input);
  * @brief Create a new table without duplicate rows 
  *
  * Given an input table, each row is copied to output table if the corresponding
- * row of key column table is (unique or first duplicate row) or (unique or last
+ * row of key column table is unique, where the definition of unique depends on the value of @p keep:
+ * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
+ * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
+ * - KEEP_NONE: no duplicate rows are copied 
  * duplicate row) or (only unique row).
  *
  * The input table and key columns table should have same number of rows.
