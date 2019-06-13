@@ -216,8 +216,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
               gdf.loc[('c', 'forest', 'clear')])
 
 
-@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet",
-                   raises=AttributeError)
+@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet")
 def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
@@ -463,3 +462,19 @@ def test_multiindex_copy():
 
     mi2 = mi1.copy(deep=True)
     assert_eq(mi1, mi2)
+
+
+def test_multiindex_iloc(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.iloc[0], gdf.iloc[0])
+    assert_eq(pdf.iloc[1], gdf.iloc[1])
+    assert_eq(pdf.iloc[:0], gdf.iloc[:0])
+    assert_eq(pdf.iloc[:1], gdf.iloc[:1])
+    assert_eq(pdf.iloc[0:1], gdf.iloc[0:1])
+    assert_eq(pdf.iloc[1:2], gdf.iloc[1:2])
+    assert_eq(pdf.iloc[0:2], gdf.iloc[0:2])
+    assert_eq(pdf.iloc[0:], gdf.iloc[0:])
+    assert_eq(pdf.iloc[1:], gdf.iloc[1:])
