@@ -15,13 +15,13 @@
  */
 
 #include <cudf/cudf.h>
-#include <cudf/bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
+#include <cudf/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
-#include <cudf/table.hpp>
 #include <table/device_table.cuh>
 #include <table/device_table_row_operators.cuh>
 #include <utilities/cuda_utils.hpp>
@@ -35,7 +35,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
 #include <algorithm>
+#include <set>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf {
@@ -252,7 +254,8 @@ auto extract_results(table const& input_keys, table const& input_values,
                      table const& sparse_output_values, Map* map,
                      cudaStream_t stream) {
   cudf::table output_keys{cudf::allocate_like(input_keys, true, stream)};
-  cudf::table output_values{cudf::allocate_like(sparse_output_values, true, stream)};
+  cudf::table output_values{
+      cudf::allocate_like(sparse_output_values, true, stream)};
 
   auto d_sparse_output_values =
       device_table::create(sparse_output_values, stream);
@@ -291,6 +294,41 @@ auto extract_results(table const& input_keys, table const& input_values,
 
   return std::make_pair(output_keys, output_values);
 }
+
+auto compound_to_primitive(cudf::table values,
+                           std::vector<operators> const& ops) {
+  CUDF_EXPECTS(values.num_columns() == static_cast<gdf_size_type>(ops.size()),
+               "Size mismatch between columns and operators.");
+
+  // Contructs a mapping of every value column to the minimal set of primitive
+  // ops to be performed on that column
+  std::unordered_map<gdf_column*, std::set<operators>> columns_to_ops;
+  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
+    if (ops[i] == AVG) {
+      columns_to_ops[values.get_column(i)].insert(COUNT);
+      columns_to_ops[values.get_column(i)].insert(SUM);
+    } else {
+      columns_to_ops[values.get_column(i)].insert(ops[i]);
+    }
+  }
+
+  // Create minimal set of columns and operators
+  std::vector<gdf_column*> minimal_columns;
+  std::vector<operators> primitive_operators;
+  for (auto& p : columns_to_ops) {
+    gdf_column* col = p.first;
+    std::set<operators>& ops = p.second;
+    minimal_columns.insert(minimal_columns.end(), ops.size(), col);
+    primitive_operators.insert(primitive_operators.end(), ops.begin(),
+                               ops.end());
+  }
+  cudf::table minimal_columns_table(minimal_columns);
+  return std::make_pair(minimal_columns_table, primitive_operators);
+}
+
+auto primitive_to_compound(cudf::table const& minimal_columns,
+                           std::vector<operators> const& original_ops,
+                           std::vector<operators> const& minimal_ops) {}
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the groupby operation for a set of keys, values, and
@@ -334,17 +372,29 @@ template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
                           cudaStream_t stream) {
+  cudf::table minimal_columns;
+  std::vector<operators> minimal_operators;
+
+  std::tie(minimal_columns, minimal_operators) =
+      compound_to_primitive(values, ops);
+
   auto const d_input_keys = device_table::create(keys);
-  auto const d_input_values = device_table::create(values);
+  auto const d_input_values = device_table::create(minimal_columns);
 
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
-      keys, values, *d_input_keys, *d_input_values, ops, options, stream);
+      keys, values, *d_input_keys, *d_input_values, minimal_operators, options,
+      stream);
 
   auto const map{std::move(result.first)};
   cudf::table const sparse_output_values{result.second};
 
-  return extract_results<keys_have_nulls, values_have_nulls>(
-      keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
+  cudf::table output_keys;
+  cudf::table output_values;
+  std::tie(output_keys, output_values) =
+      extract_results<keys_have_nulls, values_have_nulls>(
+          keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
+
+  return std::make_pair(output_keys, output_values);
 }
 
 /**---------------------------------------------------------------------------*
@@ -370,21 +420,21 @@ auto groupby_null_specialization(table const& keys, table const& values) {
     }
   }
 }
+
 }  // namespace
 namespace detail {
 
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                             cudf::table const& values,
-                                             std::vector<operators> const& ops,
-                                             Options options,
-                                             cudaStream_t stream) {
+                                            cudf::table const& values,
+                                            std::vector<operators> const& ops,
+                                            Options options,
+                                            cudaStream_t stream) {
   verify_operators(values, ops);
 
   auto compute_groupby = groupby_null_specialization(keys, values);
 
   cudf::table output_keys;
   cudf::table output_values;
-
   std::tie(output_keys, output_values) =
       compute_groupby(keys, values, ops, options, stream);
 
@@ -395,9 +445,9 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }  // namespace detail
 
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                             cudf::table const& values,
-                                             std::vector<operators> const& ops,
-                                             Options options) {
+                                            cudf::table const& values,
+                                            std::vector<operators> const& ops,
+                                            Options options) {
   return detail::groupby(keys, values, ops, options);
 }
 }  // namespace hash

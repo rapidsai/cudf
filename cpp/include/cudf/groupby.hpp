@@ -78,7 +78,7 @@ struct Options : groupby::Options {};
  * @brief Supported aggregation operations
  *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT };
+enum operators { SUM, MIN, MAX, COUNT, AVG };
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
