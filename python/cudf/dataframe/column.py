@@ -480,7 +480,7 @@ class Column(object):
     #                               value=value)
     #     return self.replace(data=Buffer(out), mask=None, null_count=0)
 
-    def masked_assign(self, data, mask):
+    def masked_assign(self, data, mask, isnull):
         """Assign values in `data` to this column, subject to `mask`
         """
         def _to_devarray(arg, name):
@@ -501,6 +501,14 @@ class Column(object):
                 "Arguments should have the same size "
                 f"(found {data.size} and {mask.size})"
             )
+        for i, val in enumerate(isnull):
+            if mask[i]:
+                nullmap_idx, pos = divmod(i, 8)
+                bitmask = 1 << pos
+                if not val:
+                    self.nullmask.mem[nullmap_idx] = self.nullmask.mem[nullmap_idx] | bitmask
+                else:
+                    self.nullmask.mem[nullmap_idx] = self.nullmask.mem[nullmap_idx] & ~bitmask
 
         threads_per_block = 32
         blocks_per_grid = (data.size + (threads_per_block - 1)) // threads_per_block
@@ -545,10 +553,10 @@ class Column(object):
         maps = _to_col(maps, "maps")
         # nullmask = _to_col(nullmask, "nullmask")
 
-        if len(data) != len(maps) != len(isnull):
+        if len(data) != len(maps):
             raise ValueError(
                 "Arguments should have the same size "
-                f"(found {len(data)}, {len(maps)}, and {len(isnull)})"
+                f"(found {len(data)} and {len(maps)})"
             )
         for i, val in zip(maps, isnull):
             nullmap_idx, pos = divmod(i, 8)

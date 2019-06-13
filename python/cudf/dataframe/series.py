@@ -303,7 +303,7 @@ class Series(object):
     def __setitem__(self, key, val):
         def _process_arg(arg):
             # TODO support ranges, slices using set_range
-            if isinstance(arg, (list, np.ndarray, pd.Series, Index,
+            if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                                 DeviceNDArray)):
                 if len(arg) == 0:
                     return Series([], dtype=self.dtype)
@@ -322,7 +322,9 @@ class Series(object):
 
         # TODO handling nulls
         if key.dtype == 'bool':
-            self._column.masked_assign(val, key)
+            self._column.masked_assign(val.fillna(0).to_array(),
+                                       key.fillna(False).to_array(),
+                                       val.isna())
         else:
             self._column.scatter_assign(val, key, val.isna())
 
