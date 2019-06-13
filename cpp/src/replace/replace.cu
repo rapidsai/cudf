@@ -241,13 +241,6 @@ __device__ T get_new_value(gdf_size_type         idx,
 
       auto replace = replace_kernel<col_type, true, true>;
 
-    cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
-                          col->data,
-                          col->size,
-                          old_values->data,
-                          new_values->data,
-                          new_values->size);
-
       if (input_has_nulls){
         if (replacement_has_nulls){
           replace = replace_kernel<col_type, true, true>;
