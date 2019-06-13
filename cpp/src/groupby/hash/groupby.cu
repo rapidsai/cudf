@@ -295,35 +295,39 @@ auto extract_results(table const& input_keys, table const& input_values,
   return std::make_pair(output_keys, output_values);
 }
 
-auto compound_to_primitive(cudf::table values,
-                           std::vector<operators> const& ops) {
-  CUDF_EXPECTS(values.num_columns() == static_cast<gdf_size_type>(ops.size()),
-               "Size mismatch between columns and operators.");
-
+auto compound_to_primitive(
+    std::vector<std::pair<gdf_column const*, operators>> const&
+        requested_aggregations) {
   // Contructs a mapping of every value column to the minimal set of primitive
   // ops to be performed on that column
   std::unordered_map<gdf_column*, std::set<operators>> columns_to_ops;
-  for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
-    if (ops[i] == AVG) {
-      columns_to_ops[values.get_column(i)].insert(COUNT);
-      columns_to_ops[values.get_column(i)].insert(SUM);
-    } else {
-      columns_to_ops[values.get_column(i)].insert(ops[i]);
-    }
-  }
+  std::for_each(
+      requested_aggregations.begin(), requested_aggregations.end(),
+      [&columns_to_ops](std::pair<gdf_column const*, operators> pair) {
+        gdf_column* col = const_cast<gdf_column*>(pair.first);
+        auto op = pair.second;
+        // AVG requires computing a COUNT and SUM aggregation and then doing
+        // elementwise division
+        if (op == AVG) {
+          columns_to_ops[col].insert(COUNT);
+          columns_to_ops[col].insert(SUM);
+        } else {
+          columns_to_ops[col].insert(op);
+        }
+      });
 
   // Create minimal set of columns and operators
   std::vector<gdf_column*> minimal_columns;
-  std::vector<operators> primitive_operators;
+  std::vector<operators> minimal_operators;
+  //std::vector<std::pair<gdf_column*, operators>> minimal_aggregations;
   for (auto& p : columns_to_ops) {
-    gdf_column* col = p.first;
+    auto col = p.first;
     std::set<operators>& ops = p.second;
     minimal_columns.insert(minimal_columns.end(), ops.size(), col);
-    primitive_operators.insert(primitive_operators.end(), ops.begin(),
-                               ops.end());
+    minimal_operators.insert(minimal_operators.end(), ops.begin(), ops.end());
   }
   cudf::table minimal_columns_table(minimal_columns);
-  return std::make_pair(minimal_columns_table, primitive_operators);
+  return std::make_pair(minimal_columns_table, minimal_operators);
 }
 
 auto primitive_to_compound(cudf::table const& minimal_columns,
@@ -372,11 +376,23 @@ template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
                           cudaStream_t stream) {
+  CUDF_EXPECTS(values.num_columns() == static_cast<gdf_size_type>(ops.size()),
+               "Size mismatch between number of value columns and number of "
+               "aggregations.");
+
+  std::vector<std::pair<gdf_column const*, operators>> requested_aggregations(
+      values.num_columns());
+
+  std::transform(values.begin(), values.end(), ops.begin(),
+                 requested_aggregations.begin(),
+                 [](gdf_column const* col, operators op) {
+                   return std::make_pair(col, op);
+                 });
+
   cudf::table minimal_columns;
   std::vector<operators> minimal_operators;
-
   std::tie(minimal_columns, minimal_operators) =
-      compound_to_primitive(values, ops);
+      compound_to_primitive(requested_aggregations);
 
   auto const d_input_keys = device_table::create(keys);
   auto const d_input_values = device_table::create(minimal_columns);
@@ -390,9 +406,15 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
 
   cudf::table output_keys;
   cudf::table output_values;
+  //cudf::table minimal_output_values;
+  //std::tie(output_keys, minimal_output_values) =
   std::tie(output_keys, output_values) =
       extract_results<keys_have_nulls, values_have_nulls>(
           keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
+
+  //std::vector<std::pair<gdf_column*,operators>> computed_aggregations(minimal_output_values.num_columns());
+
+  //cudf::table output_values = minimal_to_final(minimal_output_values, );
 
   return std::make_pair(output_keys, output_values);
 }
@@ -429,6 +451,10 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             std::vector<operators> const& ops,
                                             Options options,
                                             cudaStream_t stream) {
+  // TODO Handle Empty inputs
+  CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
+               "Size mismatch between number of rows in keys and values.");
+
   verify_operators(values, ops);
 
   auto compute_groupby = groupby_null_specialization(keys, values);
