@@ -16,25 +16,10 @@
 
 #include <cudf/io_readers.hpp>
 
+#include <io/csv/csv_reader_impl.hpp>
 #include <io/json/json_reader_impl.hpp>
 
 namespace cudf {
-
-JsonReader::JsonReader() noexcept = default;
-
-JsonReader::JsonReader(JsonReader const &rhs) : impl_(std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs())) {}
-
-JsonReader &JsonReader::operator=(JsonReader const &rhs) {
-  impl_ = std::make_unique<JsonReader::Impl>(rhs.impl_->getArgs());
-  return *this;
-}
-
-JsonReader::JsonReader(JsonReader &&rhs) : impl_(std::move(rhs.impl_)) {}
-
-JsonReader &JsonReader::operator=(JsonReader &&rhs) {
-  impl_ = std::move(rhs.impl_);
-  return *this;
-}
 
 JsonReader::JsonReader(json_reader_args const &args) : impl_(std::make_unique<Impl>(args)) {}
 
@@ -55,5 +40,32 @@ table JsonReader::read_byte_range(size_t offset, size_t size) {
 }
 
 JsonReader::~JsonReader() = default;
+
+CsvReader::CsvReader(csv_reader_args const &args) : impl_(std::make_unique<Impl>(args)) {}
+
+table CsvReader::read() {
+  if (impl_) {
+    return impl_->read();
+  } else {
+    return table();
+  }
+}
+
+table CsvReader::read_byte_range(size_t offset, size_t size) {
+  if (impl_) {
+    return impl_->read_byte_range(offset, size);
+  } else {
+    return table();
+  }
+}
+table CsvReader::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) {
+  if (impl_) {
+    return impl_->read_rows(num_skip_header, num_skip_footer, num_rows);
+  } else {
+    return table();
+  }
+}
+
+CsvReader::~CsvReader() = default;
 
 } // namespace cudf
