@@ -119,12 +119,49 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
     out_begin, out_end, in_begin);
 }
 
-/* struct CopyRangeErrorTest : GdfTest {};
+struct CopyRangeErrorTest : GdfTest {};
 
 TEST_F(CopyRangeErrorTest, InvalidColumn)
 {
   column_wrapper<int32_t> source(100, replacement_value<int32_t>{});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(nullptr, *source.get(), 0, 10, 0),
                             "Null gdf_column pointer");
+
+  gdf_column bad_input;
+  gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
+  // empty range == no-op, even on invalid output column...
+  EXPECT_NO_THROW(cudf::copy_range(&bad_input, *source.get(), 0, 0, 0));
+
+  // for zero-size column, non-empty range is out of bounds
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(&bad_input, *source.get(), 0, 10, 0),
+                            "Range is out of bounds");
+
+  // invalid data pointer
+  bad_input.size = 20;
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(&bad_input, *source.get(), 0, 10, 0),
+                            "Null column data with non-zero size");
 }
- */
+
+TEST_F(CopyRangeErrorTest, InvalidRange)
+{
+  column_wrapper<int32_t> dest(100, original_value<int32_t>{});
+  column_wrapper<int32_t> source(100, replacement_value<int32_t>{});
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 95),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 110, 0),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), -10, 0, 0),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, -10),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 10, 0, 0),
+                            "Range is empty or reversed");
+}
+
+TEST_F(CopyRangeErrorTest, DTypeMismatch)
+{
+  column_wrapper<int32_t> dest(100, original_value<int32_t>{});
+  column_wrapper<float> source(100, replacement_value<float>{});
+  CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 0),
+                            "Data type mismatch");
+}

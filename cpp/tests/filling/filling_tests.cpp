@@ -101,3 +101,51 @@ TYPED_TEST(FillingTest, SetRange)
   // Next set it as invalid
   FillTest(begin, end, val, false);
 }
+
+struct FillingErrorTest : GdfTest {};
+
+TEST_F(FillingErrorTest, InvalidColumn)
+{
+  scalar_wrapper<int32_t> val(5, true);
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(nullptr, *val.get(), 0, 10),
+                            "Null gdf_column pointer");
+
+  gdf_column bad_input;
+  gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
+  // empty range == no-op, even on invalid output column...
+  EXPECT_NO_THROW(cudf::fill(&bad_input, *val.get(), 0, 0));
+
+  // for zero-size column, non-empty range is out of bounds
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(&bad_input, *val.get(), 0, 10),
+                            "Range is out of bounds");
+
+  // invalid data pointer
+  bad_input.size = 20;
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(&bad_input, *val.get(), 0, 10),
+                            "Null column data with non-zero size");
+}
+
+TEST_F(FillingErrorTest, InvalidRange)
+{
+  scalar_wrapper<int32_t> val(5, true);
+  column_wrapper<int32_t> dest(100, 
+    [](gdf_index_type row) { return static_cast<int32_t>(row); },
+    [](gdf_index_type row) { return true; });
+  
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 110),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), -10, 0),
+                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 10, 0),
+                            "Range is empty or reversed");
+}
+
+TEST_F(FillingErrorTest, DTypeMismatch)
+{
+  scalar_wrapper<int32_t> val(5, true);
+  column_wrapper<float> dest(100, 
+    [](gdf_index_type row) { return static_cast<float>(row); },
+    [](gdf_index_type row) { return true; });
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10),
+                            "Data type mismatch");
+}

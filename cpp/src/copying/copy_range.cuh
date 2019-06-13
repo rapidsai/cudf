@@ -121,7 +121,7 @@ struct copy_range_dispatch {
                   cudaStream_t stream = 0)
   {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
-      "fill_kernel assumes bitmask element size in bits == warp size");
+      "copy_range_kernel assumes bitmask element size in bits == warp size");
 
     auto input = make_input.template operator()<T>();
     auto kernel = copy_range_kernel<T, decltype(input), false>;
@@ -173,7 +173,7 @@ void copy_range(gdf_column *out_column, InputFunctor input,
                 gdf_index_type begin, gdf_index_type end)
 {
   validate(out_column);
-  CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed0");
+  CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed");
   CUDF_EXPECTS((begin >= 0) and (end <= out_column->size), "Range is out of bounds");
   
   cudf::type_dispatcher(out_column->dtype,

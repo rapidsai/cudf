@@ -79,19 +79,28 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type out_begin, gdf_index_type out_end, 
                 gdf_index_type in_begin)
 {
-  validate(in_column);
-  CUDF_EXPECTS(out_column->dtype == in_column.dtype, "Data type mismatch");
   gdf_size_type num_elements = out_end - out_begin;
-  CUDF_EXPECTS( in_begin + num_elements <= in_column.size, "Range is out of bounds");
+  if (num_elements != 0) { // otherwise no-op
+    validate(in_column);
+    validate(out_column);
+    CUDF_EXPECTS(out_column->dtype == in_column.dtype, "Data type mismatch");
+    // out range validated by detail::copy_range
+    CUDF_EXPECTS((in_begin >= 0) && (in_begin + num_elements <= in_column.size),
+                 "Range is out of bounds");
 
-  detail::copy_range(out_column, detail::column_range_factory{in_column, in_begin},
-                     out_begin, out_end);
+    detail::copy_range(out_column, detail::column_range_factory{in_column, in_begin},
+                      out_begin, out_end);
+  }
 }
 
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end)
 { 
-  detail::copy_range(column, detail::scalar_factory{value}, begin, end);
+  if (end != begin) { // otherwise no-op
+    validate(column);
+    CUDF_EXPECTS(column->dtype == value.dtype, "Data type mismatch");
+    detail::copy_range(column, detail::scalar_factory{value}, begin, end);
+  }
 }
 
 }; // namespace cudf
