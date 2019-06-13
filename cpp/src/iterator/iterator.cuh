@@ -21,7 +21,7 @@
  * The column input iterator is designed to be used as an input
  * iterator for thrust and cub.
  *
- * The column input iterator is implemented using thrust::iterator_adaptor
+ * The column input iterator is implemented using thrust::transform_iterator
  * and thrust::counting_iterator. The following example code creates
  * an input iterator for the iterator from a column with a validity (null)
  * bit mask. The second argument is the identity value.
@@ -89,12 +89,11 @@
 
 namespace cudf
 {
-namespace detail
-{
+
 /** -------------------------------------------------------------------------*
- * @brief column input struct with/without null bitmask
- * A helper struct for column_input_iterator
- * `column_input.at(gdf_index_type id)` computes
+ * @brief value accessor with/without null bitmask
+ * A unary function returns scalar value at `id`.
+ * `operator() (gdf_index_type id)` computes
  * `data` value and valid flag at `id`
  *
  * If has_nulls = false, the data is always `data[id]`
@@ -106,65 +105,51 @@ namespace detail
  *                    else, this struct holds data array and
  *                    bitmask array and identity value
  * -------------------------------------------------------------------------**/
-template<typename T_element, bool has_nulls=true>
-struct column_input;
+template <typename T_element, bool has_nulls>
+struct value_accessor;
 
-// @overload column_input<T_element, false>
-template<typename T_element>
-struct column_input<T_element, false>{
-    const T_element *data;
+template <typename T_element>
+struct value_accessor<T_element, true>
+{
+  T_element const* elements{};
+  bit_mask::bit_mask_t const* bitmask{};
+  T_element const identity{};
 
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input(const T_element *_data, const bit_mask::bit_mask_t *_valid=nullptr, T_element _identity=T_element{0})
-    : data(_data){};
+  value_accessor(T_element const* e, bit_mask::bit_mask_t const* b, T_element i)
+    : elements{e}, bitmask{b}, identity{i}
+  {
+#if  !defined(__CUDA_ARCH__)
+    // verify valid is non-null, otherwise, is_valid() will crash
+    CUDF_EXPECTS(b != nullptr, "non-null bit mask is required");
+#endif
+  }
 
-    CUDA_HOST_DEVICE_CALLABLE
-    auto at(gdf_index_type id) const {
-        return data[id];
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  T_element operator()(gdf_index_type i) const {
+    return bit_mask::is_valid(bitmask, i) ? elements[i] : identity;
+  }
 };
 
-// @overload column_input<T_element, true>
-template<typename T_element>
-struct column_input<T_element, true>{
-    const T_element *data;
-    const bit_mask::bit_mask_t *valid;
-    T_element identity;
+template <typename T_element>
+struct value_accessor<T_element, false>
+{
+  T_element const* elements{};
+  value_accessor(T_element const* e, bit_mask::bit_mask_t const*, T_element) : elements{e} {}
 
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
-    : data(_data), valid(_valid), identity(_identity){
-#if  !defined(__CUDA_ARCH__)
-        // verify valid is non-null, otherwise, is_valid() will crash
-        CUDF_EXPECTS(valid != nullptr, "non-null bit mask is required");
-#endif
-    };
-
-    CUDA_HOST_DEVICE_CALLABLE
-    auto at(gdf_index_type id) const {
-        return (is_valid(id) ? data[id] : identity );
-    };
-
-protected:
-    CUDA_HOST_DEVICE_CALLABLE
-    bool is_valid(gdf_index_type id) const
-    {
-        // `bit_mask::is_valid` never check if valid is nullptr,
-        // while `gdf_is_valid` checks if valid is nullptr
-        return bit_mask::is_valid(valid, id);
-    }
+  CUDA_HOST_DEVICE_CALLABLE
+  T_element operator()(gdf_index_type i) const { return elements[i]; }
 };
 
 /** -------------------------------------------------------------------------*
- * @brief column input struct with/without null bitmask
- * A helper struct for column_input_iterator
- * `column_input.at(gdf_index_type id)` computes
- * `data` value and valid flag at `id`
- * and return `thrust::pair<T_element, bool>(data, valid flag)`.
+ * @brief pair accessor with/without null bitmask
+ * A unary function returns pair of scalar value and validity at `id`.
+ * `operator() (gdf_index_type id)` computes
+ * `data` value and validity at `id`
+ * and return `thrust::pair<T_element, bool>(data, validity)`.
  *
- * If has_nulls = false, the valid flag is always true.
- * If has_nulls = true, the valid flag corresponds to null bitmask flag
- * at `id`, and the data value = (is_valid(id))? data[id] : identity;
+ * If has_nulls = false, the validity is always true.
+ * If has_nulls = true, the valid flag corresponds to null bitmask flag at `id`,
+ * and the data value = (is_valid(id))? data[id] : identity;
  *
  * @tparam  T_element cudf data type of input element array and `identity` value
  *                    which is used when null bitmaps flag is false.
@@ -172,96 +157,34 @@ protected:
  *                    else, this struct holds data array and
  *                    bitmask array and identity value
  * -------------------------------------------------------------------------**/
-template<typename T_element, bool has_nulls>
-struct column_input_pair;
+template <typename T_element, bool has_nulls>
+struct pair_accessor;
 
-// @overload column_input_pair<T_element, false>
-template<typename T_element>
-struct column_input_pair<T_element, false> : public column_input<T_element, false>
+template <typename T_element>
+struct pair_accessor<T_element, true> : public value_accessor<T_element, true>
 {
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_pair(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
-    : column_input<T_element, false>(_data, _valid, _identity){};
+  pair_accessor(T_element const* e, bit_mask::bit_mask_t const* b, T_element i)
+    : value_accessor<T_element, true>(e, b, i) {};
 
-    CUDA_HOST_DEVICE_CALLABLE
-    auto at(gdf_index_type id) const {
-        return thrust::make_pair(this->data[id], true);
-    };
-
+  CUDA_HOST_DEVICE_CALLABLE
+  thrust::pair<T_element, bool> operator()(gdf_index_type i) const {
+    return bit_mask::is_valid(this->bitmask, i) ?
+        thrust::make_pair(this->elements[i], true) :
+        thrust::make_pair(this->identity, false) ;
+  }
 };
 
-// @overload column_input_pair<T_element, true>
-template<typename T_element>
-struct column_input_pair<T_element, true> : public column_input<T_element, true>
+template <typename T_element>
+struct pair_accessor<T_element, false> : public value_accessor<T_element, false>
 {
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_pair(const T_element *_data, const bit_mask::bit_mask_t *_valid, T_element _identity)
-    : column_input<T_element, true>(_data, _valid, _identity){};
+  pair_accessor(T_element const* e, bit_mask::bit_mask_t const* b , T_element i)
+    : value_accessor<T_element, false>(e, b, i) {};
 
-    CUDA_HOST_DEVICE_CALLABLE
-    auto at(gdf_index_type id) const {
-        return this->is_valid(id) ?
-            thrust::make_pair(this->data[id], true):
-            thrust::make_pair(this->identity, false);
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  thrust::pair<T_element, bool> operator()(gdf_index_type i) const {
+    return thrust::make_pair(this->elements[i], true);
+  }
 };
-
-/** -------------------------------------------------------------------------*
- * @brief column input iterator to support null bitmask
- * The input iterator which can be used for cub and thrust.
- * This is derived from `thrust::iterator_adaptor`
- * T_column_input = column_input or column_input_pair
- * T_column_input will provide the value at index `id` with/without null bitmask.
- *
- * @tparam  T_iterator_output The output data value type of the iterator
- * @tparam  T_column_input  The input struct type of column_input or column_input_pair
- * @tparam  Iterator The base iterator which gives the index of array.
- *                   The default is `thrust::counting_iterator`
- * -------------------------------------------------------------------------**/
-template<typename T_iterator_output, typename T_column_input,
-    typename Iterator=thrust::counting_iterator<gdf_index_type> >
-  class column_input_iterator
-    : public thrust::iterator_adaptor<
-        column_input_iterator<T_iterator_output, T_column_input, Iterator>, // the name of the iterator we're creating
-        Iterator,                   // the name of the iterator we're adapting
-        T_iterator_output,          // set `super_t::value` to `T_iterator_output`
-        thrust::use_default, thrust::use_default,
-        T_iterator_output,          // set `super_t::reference` to `T_iterator_output`
-        thrust::use_default
-      >
-  {
-  public:
-    // shorthand for the name of the iterator_adaptor we're deriving from
-    using super_t = thrust::iterator_adaptor<
-      column_input_iterator<T_iterator_output, T_column_input, Iterator>, Iterator,
-      T_iterator_output, thrust::use_default, thrust::use_default, T_iterator_output, thrust::use_default
-    >;
-
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_iterator(const T_column_input col, const Iterator &it) : super_t(it), colData(col){}
-
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_iterator(const T_column_input col) : super_t(Iterator{0}), colData(col){}
-
-    CUDA_HOST_DEVICE_CALLABLE
-    column_input_iterator(const column_input_iterator &other) : super_t(other.base()), colData(other.colData){}
-
-    // befriend thrust::iterator_core_access to allow it access to the private interface below
-    friend class thrust::iterator_core_access;
-
-  private:
-    const T_column_input colData;
-
-    // it is private because only thrust::iterator_core_access needs access to it
-    CUDA_HOST_DEVICE_CALLABLE
-    typename super_t::reference dereference() const
-    {
-      gdf_index_type id = *(this->base()); // base() returns base iterator: `Iterator`
-      return colData.at(id);
-    }
-};
-
-} // namespace detail
 
 // ---------------------------------------------------------------------------
 // helper functions to make iterator
@@ -287,13 +210,8 @@ template <bool has_nulls, typename T_element,
 auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
-    using T_colunn_input = cudf::detail::column_input<T_element, has_nulls>;
-    using T_iterator_output = T_element;
-    using T_iterator = cudf::detail::column_input_iterator<
-        T_iterator_output, T_colunn_input, Iterator_Index>;
-
-    // column_input constructor checks if valid is not nullptr when has_nulls = true
-    return T_iterator(T_colunn_input(data, valid, identity), it);
+    return thrust::make_transform_iterator(
+      it, value_accessor<T_element, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
@@ -331,8 +249,6 @@ auto make_iterator(const gdf_column& column,
         reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
 }
 
-
-
 /** -------------------------------------------------------------------------*
  * @brief helper function to make iterator with nulls
  * Input iterator which can be used for cub and thrust.
@@ -356,13 +272,8 @@ template <bool has_nulls, typename T_element,
 auto make_pair_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
     T_element identity, Iterator_Index const it = Iterator_Index(0))
 {
-    using T_colunn_input = cudf::detail::column_input_pair<T_element, has_nulls>;
-    using T_iterator_output = thrust::pair<T_element, bool>;
-    using T_iterator = cudf::detail::column_input_iterator<
-        T_iterator_output, T_colunn_input, Iterator_Index>;
-
-    // column_input constructor checks if valid is not nullptr when has_nulls = true
-    return T_iterator(T_colunn_input(data, valid, identity), it);
+    return thrust::make_transform_iterator(
+      it, pair_accessor<T_element, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
