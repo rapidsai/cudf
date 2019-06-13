@@ -36,9 +36,9 @@ cpdef replace(input_col, values_to_replace, replacement_values):
 
     data, mask = gdf_column_to_column_mem(&output)
 
-    # some other tests are failing due to these lines
-    # check_gdf_error(gdf_column_free(c_values_to_replace))
-    # check_gdf_error(gdf_column_free(c_replacement_values))
+    free(c_values_to_replace)
+    free(c_replacement_values)
+    free(c_input_col)
 
     return Column.from_mem_views(data, mask)
 
