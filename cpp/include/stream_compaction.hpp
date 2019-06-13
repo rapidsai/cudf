@@ -92,7 +92,7 @@ gdf_column drop_nulls(gdf_column const &input);
  * duplicate row) or (only unique row).
  *
  * The input table and key columns table should have same number of rows.
- * Note that the output table columns memory is allocated by this function but 
+ * Note that the memory for the output table columns is allocated by this function, so 
  * must be freed by the caller when finished. 
  *
  * @param input_table input table to copy only unique rows
