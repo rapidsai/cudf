@@ -23,7 +23,6 @@
 - PR #1954 Add skip test argument to GPU build script
 - PR #1542 Python method and bindings for to_csv
 
-
 ## Improvements
 
 - PR #1538 Replacing LesserRTTI with inequality_comparator
@@ -71,7 +70,6 @@
 - PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
-
 
 ## Bug Fixes
 
@@ -121,10 +119,10 @@
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 - PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
+- PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
 - PR #1978 Fix for values being filled in an empty dataframe 
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
-
 
 # cudf 0.7.2 (16 May 2019)
 
@@ -132,7 +130,6 @@
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 - PR #1741 Add MultiIndex concatenation
-
 
 ## Bug Fixes
 

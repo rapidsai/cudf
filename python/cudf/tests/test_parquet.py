@@ -5,6 +5,7 @@ from cudf.tests.utils import assert_eq
 
 import pytest
 import os
+import random
 import pandas as pd
 import numpy as np
 import pyarrow as pa
@@ -62,6 +63,24 @@ def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine='pyarrow', compression=request.param)
     return fname
+
+
+def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
+    test_pdf = pd.util.testing.makeCustomDataframe(
+        nrows=nrows,
+        ncols=1,
+        data_gen_f=lambda r, c: r,
+        dtype=dtype,
+        r_idx_type='i'
+    )
+    del(test_pdf.columns.name)
+
+    # Randomly but reproducibly mark subset of rows as invalid
+    random.seed(1337)
+    mask = random.sample(range(nrows), nvalids)
+    test_pdf[test_pdf.index.isin(mask)] = np.NaN
+
+    return test_pdf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -214,6 +233,18 @@ def test_parquet_reader_spark_timestamps(datadir):
 
 def test_parquet_reader_microsecond_timestamps(datadir):
     fname = datadir / 'usec_timestamp.parquet'
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_invalids(tmpdir):
+    test_pdf = make_pdf(nrows=1000, nvalids=1000 // 4, dtype=np.int64)
+
+    fname = tmpdir.join("invalids.parquet")
+    test_pdf.to_parquet(fname, engine='pyarrow')
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
