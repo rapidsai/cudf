@@ -41,6 +41,7 @@ typedef struct
     const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
     const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
     const char* na_rep;           // string to use for null entries
+    bool include_header;          // Indicates whether to write headers to csv
 
 } csv_write_arg;
 

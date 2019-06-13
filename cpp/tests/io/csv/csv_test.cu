@@ -490,6 +490,9 @@ TEST(gdf_csv_test, Writer)
     wargs.columns = &(*df.begin());  // columns from reader above
     wargs.filepath = ofname.c_str();
     wargs.num_cols = df.num_columns();
+    wargs.delimiter = ',';
+    wargs.line_terminator = "\n";
+    wargs.include_header = true;
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 

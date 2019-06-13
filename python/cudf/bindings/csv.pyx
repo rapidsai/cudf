@@ -8,15 +8,12 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.csv cimport *
-from libc.stdlib cimport malloc, free
-from libc.stdint cimport uintptr_t
+from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
 from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.column import Column
-from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.datetime import DatetimeColumn
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
 
@@ -191,6 +188,7 @@ cpdef cpp_read_csv(
     free(reader)
 
     # Extract parsed columns
+
     outcols = []
     new_names = []
     cdef gdf_column* column
@@ -221,3 +219,85 @@ cpdef cpp_read_csv(
     nvtx_range_pop()
 
     return df
+
+cpdef cpp_write_csv(
+    cols, path=None,
+    sep=',', na_rep='',
+    columns=None, header=True, line_terminator='\n'):
+    """
+    Cython function to call into libcudf API, see `write_csv`.
+
+    See Also
+    --------
+    cudf.io.csv.write_csv
+    """
+
+    nvtx_range_push("CUDF_WRITE_CSV", "purple")
+
+    cdef csv_write_arg csv_writer = csv_write_arg()
+
+    path = str(os.path.expanduser(str(path))).encode()
+    csv_writer.filepath = path
+    line_terminator = line_terminator.encode()
+    csv_writer.line_terminator = line_terminator
+    csv_writer.delimiter = sep.encode()[0]
+    na_rep = na_rep.encode()
+    csv_writer.na_rep = na_rep
+    # Do not expose true_value and false_value until gdf_bool type
+    # changes added to cpp API
+    true_value = 'True'.encode()
+    csv_writer.true_value = true_value
+    false_value = 'False'.encode()
+    csv_writer.false_value = false_value
+    csv_writer.include_header = header
+
+    cdef vector[gdf_column*] list_cols
+    # Variable for storing col name list that does not get garbage collected
+    # Allow setting colname during `column_view_from_column` without gc issues
+    col_names_encoded = []
+
+    if columns is not None:
+        if not isinstance(columns, list):
+            raise TypeError('columns must be a list')
+        for idx, col_name in enumerate(columns):
+            if col_name not in cols:
+                raise NameError('column {!r} does not exist in DataFrame'
+                                .format(col_name))
+            check_gdf_compatibility(cols[col_name])
+            col_names_encoded.append(col_name.encode())
+            #Workaround for string columns
+            if cols[col_name]._column.dtype.type == np.object_:
+                c_col = column_view_from_string_column(cols[col_name]._column,
+                                                       col_names_encoded[idx])
+            else:
+                c_col = column_view_from_column(cols[col_name]._column,
+                                                col_names_encoded[idx])
+            list_cols.push_back(c_col)
+    else:
+        for idx, (col_name, col) in enumerate(cols.items()):
+            check_gdf_compatibility(col)
+            col_names_encoded.append(col_name.encode())
+            #Workaround for string columns
+            if col._column.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col._column,
+                                                       col_names_encoded[idx])
+            else:
+                c_col = column_view_from_column(col._column,
+                                                       col_names_encoded[idx])
+            list_cols.push_back(c_col)
+
+    csv_writer.columns = list_cols.data()
+    csv_writer.num_cols = len(columns) if columns else len(cols)
+
+    # Call write_csv
+    with nogil:
+        result = write_csv(&csv_writer)
+
+    check_gdf_error(result)
+
+    for c_col in list_cols:
+        free(c_col)
+
+    nvtx_range_pop()
+
+    return None
