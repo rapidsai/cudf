@@ -38,24 +38,24 @@ def test_series_replace():
     np.testing.assert_equal(sr8.to_array(), a8)
 
     # large input containing null
-    sr9 = Series(list(range(4000000)) + [None])
-    sr10 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], None)
-    assert sr10.null_count == 8
-    assert len(sr10.to_array()) == (4000001-8)
+    sr9 = Series(list(range(400)) + [None])
+    sr10 = sr9.replace([22, 323, 27, 0], None)
+    assert sr10.null_count == 5
+    assert len(sr10.to_array()) == (401-5)
 
-    sr11 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], -1)
+    sr11 = sr9.replace([22, 323, 27, 0], -1)
     assert sr11.null_count == 1
-    assert len(sr11.to_array()) == (4000001 - 1)
+    assert len(sr11.to_array()) == (401 - 1)
 
     # large input not containing nulls
     sr9 = sr9.fillna(-11)
-    sr12 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], None)
-    assert sr12.null_count == 7
-    assert len(sr12.to_array()) == (4000001 - 7)
+    sr12 = sr9.replace([22, 323, 27, 0], None)
+    assert sr12.null_count == 4
+    assert len(sr12.to_array()) == (401 - 4)
 
-    sr13 = sr9.replace([22, 323, 544, 925, 1126, 27, 0], -1)
+    sr13 = sr9.replace([22, 323, 27, 0], -1)
     assert sr13.null_count == 0
-    assert len(sr13.to_array()) == 4000001
+    assert len(sr13.to_array()) == 401
 
 
 def test_series_replace_with_nulls():

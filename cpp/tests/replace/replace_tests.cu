@@ -164,7 +164,7 @@ void test_replace(std::vector<T> const &input_column,
     for(size_t i = 0; i < values_to_replace_column.size(); i++)
     {
       size_t k = 0;
-      auto pred = [& ](T element) {
+      auto pred = [=, &k, &typed_expected_valid, &isReplaced](T element) {
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
