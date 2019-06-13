@@ -257,14 +257,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def product(self, dtype=None):
         return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self, dtype=None):
+    def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1, dtype=None):
-        x = self.astype('f8')
-        mu = x.mean(dtype=dtype)
-        n = x.valid_count
-        asum = x.sum_of_squares(dtype=dtype)
+    def mean_var(self, ddof=1, dtype=np.float64):
+        mu = self.mean(dtype=dtype)
+        n = self.valid_count
+        asum = np.float64(self.sum_of_squares(dtype=dtype))
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
