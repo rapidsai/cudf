@@ -291,6 +291,7 @@ __global__ void build_aggregation_map(
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
+
     if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, i)) {
       i += blockDim.x * gridDim.x;
       continue;

@@ -232,7 +232,7 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/groupby/hash/groupby.cu
-            src/groupby/aggregation_requests.cpp
+            src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu

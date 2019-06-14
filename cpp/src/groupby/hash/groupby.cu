@@ -27,7 +27,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
-#include <groupby/aggregation_requests.hpp>
+#include "aggregation_requests.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 #include "type_info.hpp"
@@ -41,8 +41,6 @@ namespace cudf {
 namespace groupby {
 namespace hash {
 namespace {
-
-
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
@@ -184,7 +182,6 @@ void update_nvcategories(table const& input_keys, table& output_keys,
   nvcategory_gather_table(input_values, output_values);
 }
 
-
 template <bool keys_have_nulls, bool values_have_nulls>
 auto build_aggregation_map(table const& input_keys, table const& input_values,
                            device_table const& d_input_keys,
@@ -228,6 +225,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
       std::make_unique<map_type>(compute_hash_table_size(input_keys.num_rows()),
                                  unused_key, unused_value, hasher, rows_equal);
 
+  // TODO: Explore optimal block size and work per thread.
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
   if (skip_key_rows_with_nulls) {
@@ -427,11 +425,17 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             std::vector<operators> const& ops,
                                             Options options,
                                             cudaStream_t stream) {
-  // TODO Handle Empty inputs
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
 
   verify_operators(values, ops);
+
+  // Empty inputs
+  if (keys.num_rows() == 0) {
+    return std::make_pair(
+        cudf::empty_like(keys),
+        cudf::table(0, target_dtypes(column_dtypes(values), ops)));
+  }
 
   auto compute_groupby = groupby_null_specialization(keys, values);
 
