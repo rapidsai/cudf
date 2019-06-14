@@ -29,6 +29,7 @@ def test_generic_ptx(dtype):
     @cuda.jit(device=True)
     def add(a, b):
         return a**3 + b
+
     if dtype == 'float32':
         type_signature = (types.float32, types.float32)
     elif dtype == 'float64':
