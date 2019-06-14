@@ -104,6 +104,8 @@ class Groupby(object):
             self._by = by
             self._df = df
             self._val_columns = []
+            if by is not None:
+                by = [by] if isinstance(by, str) else list(by)
             for col in self._df.columns:
                 if by is None or col not in by:
                     self._val_columns.append(col)
