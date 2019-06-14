@@ -4,10 +4,17 @@
 # cuDF GPU build and test script for CI #
 #########################################
 set -e
+NUMARGS=$#
+ARGS=$*
 
 # Logger function for build status output
 function logger() {
   echo -e "\n>>>> $@\n"
+}
+
+# Arg parsing function
+function hasArg {
+    (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
 # Set path and build parallel level
@@ -18,9 +25,9 @@ export CUDA_REL=${CUDA_VERSION%.*}
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
-# Set versions of packages needed to be grabbed
-export NVSTRINGS_VERSION=0.7.*
-export RMM_VERSION=0.7.*
+# Parse git describe
+export GIT_DESCRIBE_TAG=`git describe --tags`
+export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 ################################################################################
 # SETUP - Check environment
@@ -34,7 +41,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install -c rapidsai/label/cuda${CUDA_REL} -c rapidsai-nightly/label/cuda${CUDA_REL} rmm=${RMM_VERSION} nvstrings=${NVSTRINGS_VERSION}
+conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL"
 
 logger "Check versions..."
 python --version
@@ -47,27 +54,16 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-mkdir -p $WORKSPACE/cpp/build
-cd $WORKSPACE/cpp/build
-logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
-
-logger "Clean up make..."
-make clean
-
-logger "Make libcudf..."
-make -j${PARALLEL_LEVEL}
-
-logger "Install libcudf..."
-make -j${PARALLEL_LEVEL} install
-
-logger "Build cuDF..."
-cd $WORKSPACE/python
-python setup.py build_ext --inplace
+$WORKSPACE/build.sh clean libcudf cudf
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF
 ################################################################################
+
+if hasArg --skip-tests; then
+    logger "Skipping Tests..."
+    exit 0
+fi
 
 logger "Check GPU usage..."
 nvidia-smi

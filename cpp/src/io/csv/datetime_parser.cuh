@@ -62,7 +62,7 @@
 
 #pragma once
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 __inline__ __device__ bool extractDate(const char *data, long sIdx, long eIdx,
                             bool dayfirst, int *year, int *month, int *day);

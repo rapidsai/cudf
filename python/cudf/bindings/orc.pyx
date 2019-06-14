@@ -34,7 +34,8 @@ def is_file_like(obj):
     return True
 
 
-cpdef cpp_read_orc(path, columns=None, skip_rows=None, num_rows=None):
+cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
+                   num_rows=None, use_index=True):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -56,21 +57,32 @@ cpdef cpp_read_orc(path, columns=None, skip_rows=None, num_rows=None):
     orc_reader.source = source_ptr
 
     usecols = columns
+    arr_cols = []
+    orc_reader.use_cols_len = 0
     cdef vector[const char*] vector_use_cols
     if usecols is not None:
-        arr_cols = []
         for col in usecols:
             arr_cols.append(str(col).encode())
-        vector_use_cols = arr_cols
-        orc_reader.use_cols = vector_use_cols.data()
         orc_reader.use_cols_len = len(usecols)
+    vector_use_cols = arr_cols
+    orc_reader.use_cols = vector_use_cols.data() 
+
+    if stripe is not None:
+        orc_reader.stripe = stripe
+    else:
+        orc_reader.stripe = -1
 
     if skip_rows is not None:
         orc_reader.skip_rows = skip_rows
+    else:
+        orc_reader.skip_rows = 0 
+
     if num_rows is not None:
         orc_reader.num_rows = num_rows
     else:
         orc_reader.num_rows = -1
+
+    orc_reader.use_index = use_index
 
     # Call read_orc
     with nogil:

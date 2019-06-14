@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-
 import warnings
+import operator
 from numbers import Number
 
 import numpy as np
@@ -18,6 +18,7 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
+from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
@@ -164,6 +165,25 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
+    def append(self, other, ignore_index=False):
+        """Append values from another ``Series`` or array-like object.
+        If ``ignore_index=True`` (default), the index is reset.
+        """
+        this = self
+        other = Series(other)
+
+        from cudf.dataframe import numerical
+        if isinstance(this._column, numerical.NumericalColumn):
+            if self.dtype != other.dtype:
+                this, other = numerical.numeric_normalize_types(this, other)
+
+        if ignore_index:
+            index = None
+        else:
+            index = True
+
+        return Series._concat([this, other], index=index)
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -260,28 +280,15 @@ class Series(object):
                 arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
-                if self.dtype == np.dtype('object'):
-                    idx = arg.to_gpu_array()
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_position(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                maps = columnops.as_column(arg).data.mem
+                index = self.index.take(maps)
+                selvals = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
-                if self.dtype == np.dtype('object'):
-                    idx = cudautils.boolean_array_to_index_array(
-                        arg.to_gpu_array())
-                    selvals = self._column[idx]
-                    index = self.index.take(idx)
-                else:
-                    selvals, selinds = columnops.column_select_by_boolmask(
-                        self._column, arg)
-                    index = self.index.take(selinds.to_gpu_array())
+                selvals = self._column.apply_boolean_mask(arg)
+                index = self.index.as_column().apply_boolean_mask(arg)
             else:
                 raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
-
         elif isinstance(arg, slice):
             index = self.index[arg]         # slice index
             col = self._column[arg]         # slice column
@@ -384,18 +391,22 @@ class Series(object):
     def _repr_latex_(self):
         return get_renderable_pandas_dataframe(self)._repr_latex_()
 
-    def _binaryop(self, other, fn):
+    def _binaryop(self, other, fn, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
+
+        If ``reflect`` is ``True``, swap the order of the operands.
         """
         from cudf import DataFrame
         if isinstance(other, DataFrame):
-            return other._binaryop(self, fn)
+            # TODO: fn is not the same as arg expected by _apply_op
+            # e.g. for fn = 'and', _apply_op equivalent is '__and__'
+            return other._apply_op(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other._column)
+        outcol = self._column.binary_operator(fn, other, reflect=reflect)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -407,16 +418,7 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
-        from cudf import DataFrame
-        if isinstance(other, DataFrame):
-            return other._binaryop(self, fn)
-        nvtx_range_push("CUDF_BINARY_OP", "orange")
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator(fn, self._column)
-        result = self._copy_construct(data=outcol)
-        result.name = None
-        nvtx_range_pop()
-        return result
+        return self._binaryop(other, fn, reflect=True)
 
     def _unaryop(self, fn):
         """
@@ -427,38 +429,234 @@ class Series(object):
         outcol = self._column.unary_operator(fn)
         return self._copy_construct(data=outcol)
 
+    def _filled_binaryop(self, other, fn, fill_value=None, reflect=False):
+        def func(lhs, rhs):
+            return fn(rhs, lhs) if reflect else fn(lhs, rhs)
+
+        if fill_value is not None:
+            if isinstance(other, Series):
+                if self.has_null_mask and other.has_null_mask:
+                    lmask = Series(data=self.nullmask)
+                    rmask = Series(data=other.nullmask)
+                    out_mask = (lmask | rmask).data
+                    temp_lhs = self.fillna(fill_value)
+                    temp_rhs = other.fillna(fill_value)
+                    out = func(temp_lhs, temp_rhs)
+                    col = self._column.replace(data=out.data, mask=out_mask)
+                    return self._copy_construct(data=col)
+                else:
+                    return func(self.fillna(fill_value),
+                                other.fillna(fill_value))
+            elif is_scalar(other):
+                return func(self.fillna(fill_value), other)
+        else:
+            return func(self, other)
+
+    def add(self, other, fill_value=None):
+        """Addition of series and other, element-wise
+        (binary operator add).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.add, fill_value)
+
     def __add__(self, other):
         return self._binaryop(other, 'add')
+
+    def radd(self, other, fill_value=None):
+        """Addition of series and other, element-wise
+        (binary operator radd).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.add, fill_value, True)
 
     def __radd__(self, other):
         return self._rbinaryop(other, 'add')
 
+    def sub(self, other, fill_value=None):
+        """Subtraction of series and other, element-wise
+        (binary operator sub).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.sub, fill_value)
+
     def __sub__(self, other):
         return self._binaryop(other, 'sub')
+
+    def rsub(self, other, fill_value=None):
+        """Subtraction of series and other, element-wise
+        (binary operator rsub).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.sub, fill_value, True)
 
     def __rsub__(self, other):
         return self._rbinaryop(other, 'sub')
 
+    def mul(self, other, fill_value=None):
+        """Multiplication of series and other, element-wise
+        (binary operator mul).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mul, fill_value)
+
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
+
+    def rmul(self, other, fill_value=None):
+        """Multiplication of series and other, element-wise
+        (binary operator rmul).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mul, fill_value, True)
 
     def __rmul__(self, other):
         return self._rbinaryop(other, 'mul')
 
+    def mod(self, other, fill_value=None):
+        """Modulo of series and other, element-wise
+        (binary operator mod).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mod, fill_value)
+
     def __mod__(self, other):
         return self._binaryop(other, 'mod')
+
+    def rmod(self, other, fill_value=None):
+        """Modulo of series and other, element-wise
+        (binary operator rmod).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.mod, fill_value, True)
 
     def __rmod__(self, other):
         return self._rbinaryop(other, 'mod')
 
+    def pow(self, other, fill_value=None):
+        """Exponential power of series and other, element-wise
+        (binary operator pow).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.pow, fill_value)
+
     def __pow__(self, other):
         return self._binaryop(other, 'pow')
+
+    def rpow(self, other, fill_value=None):
+        """Exponential power of series and other, element-wise
+        (binary operator rpow).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.pow, fill_value, True)
+
+    def __rpow__(self, other):
+        return self._rbinaryop(other, 'pow')
+
+    def floordiv(self, other, fill_value=None):
+        """Integer division of series and other, element-wise
+        (binary operator floordiv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.floordiv, fill_value)
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
 
+    def rfloordiv(self, other, fill_value=None):
+        """Integer division of series and other, element-wise
+        (binary operator rfloordiv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.floordiv, fill_value,
+                                     True)
+
     def __rfloordiv__(self, other):
         return self._rbinaryop(other, 'floordiv')
+
+    def truediv(self, other, fill_value=None):
+        """Floating division of series and other, element-wise
+        (binary operator truediv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.truediv, fill_value)
 
     def __truediv__(self, other):
         if self.dtype in list(truediv_int_dtype_corrections.keys()):
@@ -466,6 +664,19 @@ class Series(object):
             return self.astype(truediv_type)._binaryop(other, 'truediv')
         else:
             return self._binaryop(other, 'truediv')
+
+    def rtruediv(self, other, fill_value=None):
+        """Floating division of series and other, element-wise
+        (binary operator rtruediv).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.truediv, fill_value, True)
 
     def __rtruediv__(self, other):
         if self.dtype in list(truediv_int_dtype_corrections.keys()):
@@ -477,9 +688,22 @@ class Series(object):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (np.issubdtype(self.dtype.type, np.integer) and
-                np.issubdtype(other.dtype.type, np.integer)):
-            return self._binaryop(other, op)
+        if (
+            np.issubdtype(self.dtype, np.bool_)
+            or np.issubdtype(self.dtype, np.integer)
+        ) and (
+            np.issubdtype(other.dtype, np.bool_)
+            or np.issubdtype(other.dtype, np.integer)
+        ):
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
+            ser = self._binaryop(other, op)
+            if (
+                np.issubdtype(self.dtype, np.bool_)
+                or np.issubdtype(other.dtype, np.bool_)
+            ):
+                ser = ser.astype(np.bool_)
+            return ser
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
@@ -504,19 +728,33 @@ class Series(object):
         """
         return self._bitwise_binop(other, 'xor')
 
+    def logical_and(self, other):
+        ser = self._binaryop(other, 'l_and')
+        return ser.astype(np.bool_)
+
+    def logical_or(self, other):
+        ser = self._binaryop(other, 'l_or')
+        return ser.astype(np.bool_)
+
+    def logical_not(self):
+        outcol = self._column.unary_logic_op('not')
+        return self._copy_construct(data=outcol)
+
     def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
         if isinstance(other, Series):
-            return other
+            return other._column
         elif isinstance(other, Index):
-            return Series(other)
+            return Series(other)._column
         else:
-            col = self._column.normalize_binop_value(other)
-            return self._copy_construct(data=col)
+            return self._column.normalize_binop_value(other)
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.unordered_compare(cmpops, other._column)
+        outcol = self._column.unordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
@@ -525,11 +763,24 @@ class Series(object):
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
-        outcol = self._column.ordered_compare(cmpops, other._column)
+        outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
         return result
+
+    def eq(self, other, fill_value=None):
+        """Equal to of series and other, element-wise
+        (binary operator eq).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.eq, fill_value)
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
@@ -537,27 +788,95 @@ class Series(object):
     def equals(self, other):
         return self._unordered_compare(other, 'eq').min()
 
+    def ne(self, other, fill_value=None):
+        """Not equal to of series and other, element-wise
+        (binary operator ne).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.ne, fill_value)
+
     def __ne__(self, other):
         return self._unordered_compare(other, 'ne')
+
+    def lt(self, other, fill_value=None):
+        """Less than of series and other, element-wise
+        (binary operator lt).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.lt, fill_value)
 
     def __lt__(self, other):
         return self._ordered_compare(other, 'lt')
 
+    def le(self, other, fill_value=None):
+        """Less than or equal to of series and other, element-wise
+        (binary operator le).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.le, fill_value)
+
     def __le__(self, other):
         return self._ordered_compare(other, 'le')
 
+    def gt(self, other, fill_value=None):
+        """Greater than of series and other, element-wise
+        (binary operator gt).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.gt, fill_value)
+
     def __gt__(self, other):
         return self._ordered_compare(other, 'gt')
+
+    def ge(self, other, fill_value=None):
+        """Greater than or equal to of series and other, element-wise
+        (binary operator ge).
+
+        Parameters
+        ----------
+        other: Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+        """
+        return self._filled_binaryop(other, operator.ge, fill_value)
 
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
 
     def __invert__(self):
-        """Bitwise invert (~)/(not) for each element
+        """Bitwise invert (~) for each element.
+        Logical NOT if dtype is bool
 
         Returns a new Series.
         """
-        if np.issubdtype(self.dtype.type, np.integer):
+        if np.issubdtype(self.dtype, np.integer):
+            return self._unaryop('invert')
+        elif np.issubdtype(self.dtype, np.bool_):
             return self._unaryop('not')
         else:
             raise TypeError(
@@ -588,7 +907,11 @@ class Series(object):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            index = Index._concat([o.index for o in objs])
+            from cudf.dataframe.multiindex import MultiIndex
+            if isinstance(objs[0].index, MultiIndex):
+                index = MultiIndex._concat([o.index for o in objs])
+            else:
+                index = Index._concat([o.index for o in objs])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -597,15 +920,6 @@ class Series(object):
             name = None
         col = Column._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
-
-    def append(self, arbitrary):
-        """Append values from another ``Series`` or array-like object.
-        Returns a new copy with the index resetted.
-        """
-        other = Series(arbitrary)
-        other_col = other._column
-        # return new series
-        return Series(self._column.append(other_col))
 
     @property
     def valid_count(self):
@@ -641,6 +955,16 @@ class Series(object):
 
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
+
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        if self.null_count == 0:
+            return self
+        data = self._column.dropna()
+        index = self.index.loc[~self.isna()]
+        return self._copy_construct(data=data, index=index)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -712,6 +1036,26 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
         return Series(mask, name=self.name, index=self.index)
 
+    def all(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        if self.dtype.kind not in 'biuf':
+            raise NotImplementedError(
+                "All does not currently support columns of {} dtype.".format(
+                    self.dtype))
+        return self._column.all()
+
+    def any(self, axis=0, skipna=True, level=None):
+        """
+        """
+        assert axis in (None, 0) and skipna is True and level in (None,)
+        if self.dtype.kind not in 'biuf':
+            raise NotImplementedError(
+                "Any does not currently support columns of {} dtype.".format(
+                    self.dtype))
+        return self._column.any()
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -746,6 +1090,7 @@ class Series(object):
 
     @property
     def index(self):
+
         """The index object
         """
         return self._index
@@ -753,6 +1098,10 @@ class Series(object):
     @index.setter
     def index(self, _index):
         self._index = _index
+
+    @property
+    def loc(self):
+        return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
@@ -789,7 +1138,7 @@ class Series(object):
         -------
         Series containing the elements corresponding to the indices
         """
-        return Iloc(self)
+        return _SeriesIlocIndexer(self)
 
     @property
     def nullmask(self):
@@ -997,15 +1346,8 @@ class Series(object):
             raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
-        out = []
-        for cat in cats:
-            mask = None  # self.nullmask.to_gpu_array()
-            buf = cudautils.apply_equal_constant(
-                arr=self.data.to_gpu_array(),
-                mask=mask,
-                val=cat, dtype=dtype)
-            out.append(Series(buf, index=self.index))
-        return out
+        return ((self == cat).fillna(False).astype(dtype)
+                for cat in cats)
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
@@ -1096,7 +1438,7 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        return self._column.find_first_value(value)
+        return self._column._first_value(value)
 
     def find_last_value(self, value):
         """
@@ -1222,7 +1564,7 @@ class Series(object):
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
         res = self._column.unique(method=method)
-        return Series(res)
+        return Series(res, name=self.name)
 
     def nunique(self, method='sort', dropna=True):
         """Returns the number of unique values of the Series: approximate version,
@@ -1777,22 +2119,3 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
-
-
-class Iloc(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, sr):
-        self._sr = sr
-
-    def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        return self._sr[arg]
-
-    def __setitem__(self, key, value):
-        # throws an exception while updating
-        msg = "updating columns using iloc is not allowed"
-        raise ValueError(msg)

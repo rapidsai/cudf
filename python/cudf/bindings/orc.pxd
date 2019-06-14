@@ -24,7 +24,9 @@ cdef extern from "cudf.h" nogil:
         size_t buffer_size
         const char **use_cols
         int use_cols_len
+        int stripe
         int skip_rows
         int num_rows
+        bool use_index
 
     cdef gdf_error read_orc(orc_read_arg *args) except +

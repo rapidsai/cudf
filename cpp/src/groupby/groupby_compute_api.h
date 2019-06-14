@@ -21,9 +21,10 @@
 #include <hash/managed.cuh>
 #include "hash_groupby_kernels.cuh"
 #include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 #include <copying/gather.hpp>
-#include "rmm/thrust_rmm_allocator.h"
-#include "types.hpp"
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/types.hpp>
 #include <hash/helper_functions.cuh>
 
 #include <cuda_runtime_api.h>
@@ -145,18 +146,14 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
   // for a given unique row
-  using map_type = concurrent_unordered_map<gdf_size_type, 
-                                            aggregation_type, 
-                                            std::numeric_limits<gdf_size_type>::max(), 
-                                            default_hash<gdf_size_type>, 
-                                            equal_to<gdf_size_type>,
-                                            legacy_allocator<thrust::pair<gdf_size_type, aggregation_type> > >;
+  using map_type = concurrent_unordered_map<gdf_size_type, aggregation_type>;
 
   // The hash table occupancy and the input size determines the size of the hash table
   const size_t hash_table_size{ compute_hash_table_size(input_num_rows) };
   
   // Initialize the hash table with the aggregation operation functor's identity value
-  std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
+  std::unique_ptr<map_type> the_map(
+      new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
   const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
@@ -213,7 +210,7 @@ gdf_error GroupbyHash(cudf::table const& input_keys,
       rmm::device_vector<gdf_index_type> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy()->on(0), sorted_indices.begin(), sorted_indices.end());
 
-      gdf_column sorted_indices_col;
+      gdf_column sorted_indices_col{};
       gdf_error status = gdf_column_view(&sorted_indices_col, sorted_indices.data().get(), 
                             nullptr, *out_size, GDF_INT32);
       if (status != GDF_SUCCESS)
