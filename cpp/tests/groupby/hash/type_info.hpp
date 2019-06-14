@@ -18,9 +18,13 @@
 
 #include <cudf/cudf.h>
 #include <cudf/groupby.hpp>
-#include <utilities/device_operators.cuh>
 
 namespace cudf {
+// forward decls
+struct DeviceMin;
+struct DeviceMax;
+struct DeviceSum;
+
 namespace test {
 using namespace cudf::groupby::hash;
 

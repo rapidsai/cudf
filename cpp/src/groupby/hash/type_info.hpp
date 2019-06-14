@@ -18,17 +18,17 @@
 #define _TYPE_INFO_HPP
 
 #include <cudf/groupby.hpp>
-#include <utilities/device_atomics.cuh>
-#include <utilities/device_operators.cuh>
-
-#include <algorithm>
 
 /**---------------------------------------------------------------------------*
  * @file type_info.hpp
  * @brief Type info traits used in hash-based groupby.
 *---------------------------------------------------------------------------**/
-
 namespace cudf {
+// forward decls
+struct DeviceMin;
+struct DeviceMax;
+struct DeviceSum;
+
 namespace groupby {
 namespace hash {
 /**---------------------------------------------------------------------------*
