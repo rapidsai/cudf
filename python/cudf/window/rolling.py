@@ -2,7 +2,6 @@ import pandas as pd
 
 import cudf
 from cudf.bindings.rolling import apply_rolling
-from cudf.dataframe.columnops import as_column
 from cudf.utils import cudautils
 
 
@@ -121,10 +120,9 @@ class Rolling:
         return self._apply_agg("count")
 
     def _normalize(self):
-        self._window, self.min_periods = self._normalize_window_and_min_periods()
-
-    def _normalize_window_and_min_periods(self):
         """
+        Normalize the *window* and *min_periods* args
+
         *window* can be:
 
         * An integer, in which case it is the window size.
@@ -134,6 +132,7 @@ class Rolling:
         * A timedelta offset, in which case it is used to generate
           a column of window sizes to use for each element.
           If *min_periods* is unspecified, it is set to 1.
+          Only valid for datetime index.
         """
         window, min_periods = self.window, self.min_periods
         if pd.api.types.is_number(window):
@@ -145,8 +144,10 @@ class Rolling:
             if self.min_periods is None:
                 min_periods = window
         else:
-            if not isinstance(self.obj.index, cudf.dataframe.index.DatetimeIndex):
-                raise ValueError("window must be an integer")
+            if not isinstance(self.obj.index,
+                              cudf.dataframe.index.DatetimeIndex):
+                raise ValueError("window must be an integer for "
+                                 "non datetime index")
             try:
                 window = pd.to_timedelta(window)
                 # to_timedelta will also convert np.arrays etc.,
