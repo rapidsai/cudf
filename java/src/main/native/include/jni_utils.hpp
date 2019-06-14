@@ -85,6 +85,44 @@ public:
   }
 };
 
+class native_jintArray_accessor {
+public:
+  jint * getArrayElements(JNIEnv *const env, jintArray arr) const {
+    return env->GetIntArrayElements(arr, NULL);
+  }
+
+  jintArray newArray(JNIEnv *const env, int len) const {
+    return env->NewIntArray(len);
+  }
+
+  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint * arr) const {
+    env->SetIntArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jintArray jarr, jint * arr, jint mode) const {
+    env->ReleaseIntArrayElements(jarr, arr, mode);
+  }
+};
+
+class native_jbooleanArray_accessor {
+public:
+  jboolean * getArrayElements(JNIEnv *const env, jbooleanArray arr) const {
+    return env->GetBooleanArrayElements(arr, NULL);
+  }
+
+  jbooleanArray newArray(JNIEnv *const env, int len) const {
+    return env->NewBooleanArray(len);
+  }
+
+  void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len, jboolean * arr) const {
+    env->SetBooleanArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jbooleanArray jarr, jboolean * arr, jint mode) const {
+    env->ReleaseBooleanArrayElements(jarr, arr, mode);
+  }
+};
+
 /**
  * @brief RAII for java arrays to be sure it is handled correctly.
  *
@@ -200,6 +238,8 @@ public:
 };
 
 typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
+typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
+typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> native_jbooleanArray;
 
 /**
  * @brief wrapper around native_jlongArray to make it take pointers instead.
@@ -326,180 +366,6 @@ public:
       }
     }
   }
-};
-
-/**
- * @brief RAII for jintArray to be sure it is handled correctly.
- *
- * By default any changes to the array will be committed back when
- * the destructor is called unless cancel is called first.
- */
-class native_jintArray {
-private:
-  JNIEnv *const env;
-  jintArray orig;
-  int len;
-  mutable jint *data_ptr;
-
-  void init_data_ptr() const {
-    if (orig != NULL && data_ptr == NULL) {
-      data_ptr = env->GetIntArrayElements(orig, NULL);
-      check_java_exception(env);
-    }
-  }
-
-public:
-  native_jintArray(native_jintArray const &) = delete;
-  native_jintArray &operator=(native_jintArray const &) = delete;
-
-  native_jintArray(JNIEnv *const env, jintArray orig)
-      : env(env), orig(orig), len(0), data_ptr(NULL) {
-    if (orig != NULL) {
-      len = env->GetArrayLength(orig);
-      check_java_exception(env);
-    }
-  }
-
-  bool is_null() const noexcept { return orig == NULL; }
-
-  int size() const noexcept { return len; }
-
-  jint operator[](int index) const {
-    if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jintArray pointer is NULL");
-    }
-    if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
-    }
-    return data()[index];
-  }
-
-  jint &operator[](int index) {
-    if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jintArray pointer is NULL");
-    }
-    if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
-    }
-    return data()[index];
-  }
-
-  const jint *const data() const {
-    init_data_ptr();
-    return data_ptr;
-  }
-
-  jint *data() {
-    init_data_ptr();
-    return data_ptr;
-  }
-
-  /**
-   * @brief if data has been written back into this array, don't commit
-   * it.
-   */
-  void cancel() {
-    if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseIntArrayElements(orig, data_ptr, JNI_ABORT);
-      data_ptr = NULL;
-    }
-  }
-
-  void commit() {
-    if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseIntArrayElements(orig, data_ptr, 0);
-      data_ptr = NULL;
-    }
-  }
-
-  ~native_jintArray() { commit(); }
-};
-
-/**
- * @brief RAII for jbooleanArray to be sure it is handled correctly.
- *
- * By default any changes to the array will be committed back when
- * the destructor is called unless cancel is called first.
- */
-class native_jbooleanArray {
-private:
-  JNIEnv *const env;
-  jbooleanArray orig;
-  int len;
-  mutable jboolean *data_ptr;
-
-  void init_data_ptr() const {
-    if (orig != NULL && data_ptr == NULL) {
-      data_ptr = env->GetBooleanArrayElements(orig, NULL);
-      check_java_exception(env);
-    }
-  }
-
-public:
-  native_jbooleanArray(native_jbooleanArray const &) = delete;
-  native_jbooleanArray &operator=(native_jbooleanArray const &) = delete;
-
-  native_jbooleanArray(JNIEnv *const env, jbooleanArray orig)
-      : env(env), orig(orig), len(0), data_ptr(NULL) {
-    if (orig != NULL) {
-      len = env->GetArrayLength(orig);
-      check_java_exception(env);
-    }
-  }
-
-  bool is_null() const noexcept { return orig == NULL; }
-
-  int size() const noexcept { return len; }
-
-  jboolean operator[](int index) const {
-    if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jbooleanArray pointer is NULL");
-    }
-    if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
-    }
-    return data()[index];
-  }
-
-  jboolean &operator[](int index) {
-    if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jbooleanArray pointer is NULL");
-    }
-    if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
-    }
-    return data()[index];
-  }
-
-  const jboolean *const data() const {
-    init_data_ptr();
-    return data_ptr;
-  }
-
-  jboolean *data() {
-    init_data_ptr();
-    return data_ptr;
-  }
-
-  /**
-   * @brief if data has been written back into this array, don't commit
-   * it.
-   */
-  void cancel() {
-    if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseBooleanArrayElements(orig, data_ptr, JNI_ABORT);
-      data_ptr = NULL;
-    }
-  }
-
-  void commit() {
-    if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseBooleanArrayElements(orig, data_ptr, 0);
-      data_ptr = NULL;
-    }
-  }
-
-  ~native_jbooleanArray() { commit(); }
 };
 
 /**
