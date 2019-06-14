@@ -163,7 +163,8 @@ class Rolling:
             )
             if self.min_periods is None:
                 min_periods = 1
-        return window, min_periods
+        self.window = window
+        self.min_periods = min_periods
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
