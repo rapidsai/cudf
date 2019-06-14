@@ -249,6 +249,14 @@ class MultiIndex(Index):
                 # directly
                 result = result.T
                 result = result[result.columns[0]]
+                # convert to Series
+                series_name = []
+                for idx, code in enumerate(result.columns.codes):
+                    series_name.append(result.columns.levels[idx][
+                            result.columns.codes[code][0]])
+                result = Series(list(result._cols.values())[0],
+                                name=series_name)
+                result.name = tuple(series_name)
             elif(len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)

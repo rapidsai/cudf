@@ -478,3 +478,26 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex):
     assert_eq(pdf.iloc[0:2], gdf.iloc[0:2])
     assert_eq(pdf.iloc[0:], gdf.iloc[0:])
     assert_eq(pdf.iloc[1:], gdf.iloc[1:])
+
+
+def test_multiindex_columns_from_pandas(pdf, pdfIndex):
+    pdf.index = pdfIndex
+    pdfT = pdf.T
+    gdfT = cudf.from_pandas(pdfT)
+    assert(isinstance(gdfT.columns, cudf.dataframe.multiindex.MultiIndex))
+
+
+def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(gdf, pdf)
+    assert_eq(gdf.T, pdf.T)
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    pdg = pdf.groupby(['x', 'y']).sum()
+    assert_eq(gdg, pdg)
+    assert_eq(gdg.T, pdg.T)
