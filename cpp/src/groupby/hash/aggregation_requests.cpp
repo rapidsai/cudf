@@ -21,6 +21,8 @@
 #include <cudf/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include "type_info.hpp"
 
 #include <rmm/rmm.h>
 #include <algorithm>
@@ -67,15 +69,23 @@ std::vector<AggRequestType> compound_to_simple(
   return simple_requests;
 }
 
+struct avg_result_type {
+  template <typename SourceType>
+  gdf_dtype operator()() {
+    return cudf::gdf_dtype_of<target_type_t<SourceType, AVG>>();
+  }
+};
+
 gdf_column* compute_average(gdf_column sum, gdf_column count,
                             cudaStream_t stream) {
   CUDF_EXPECTS(sum.size == count.size,
                "Size mismatch between sum and count columns.");
   gdf_column* avg = new gdf_column{};
-  avg->dtype = GDF_FLOAT64;
+
+  avg->dtype = cudf::type_dispatcher(sum.dtype, avg_result_type{});
   avg->size = sum.size;
   RMM_TRY(RMM_ALLOC(&avg->data, sizeof(double) * sum.size, stream));
-  if (cudf::has_nulls(sum) or cudf::has_nulls(count)) {
+  if (cudf::is_nullable(sum) or cudf::is_nullable(count)) {
     RMM_TRY(RMM_ALLOC(
         &avg->valid,
         sizeof(gdf_size_type) * gdf_valid_allocation_size(sum.size), stream));
