@@ -18,16 +18,16 @@
 #include <cudf/cudf.h>
 #include <cudf/binaryop.hpp>
 #include <cudf/groupby.hpp>
-#include <utilities/error_utils.hpp>
 #include <cudf/table.hpp>
 #include <utilities/column_utils.hpp>
+#include <utilities/error_utils.hpp>
 
+#include <rmm/rmm.h>
 #include <algorithm>
 #include <map>
 #include <set>
 #include <unordered_map>
 #include <vector>
-#include <rmm/rmm.h>
 
 namespace cudf {
 namespace groupby {
@@ -42,6 +42,7 @@ std::vector<AggRequestType> compound_to_simple(
       compound_requests.begin(), compound_requests.end(),
       [&columns_to_ops](std::pair<gdf_column const*, operators> pair) {
         gdf_column* col = const_cast<gdf_column*>(pair.first);
+        CUDF_EXPECTS(col != nullptr, "Null column in aggregation request.");
         auto op = pair.second;
         // AVG requires computing a COUNT and SUM aggregation and then doing
         // elementwise division
@@ -54,7 +55,7 @@ std::vector<AggRequestType> compound_to_simple(
       });
 
   // Create minimal set of columns and simple operators
-  std::vector<std::pair<gdf_column*, operators>> simple_requests;
+  std::vector<AggRequestType> simple_requests;
   for (auto& p : columns_to_ops) {
     auto col = p.first;
     std::set<operators>& ops = p.second;
@@ -72,6 +73,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count,
                "Size mismatch between sum and count columns.");
   gdf_column* avg = new gdf_column{};
   avg->dtype = GDF_FLOAT64;
+  avg->size = sum.size;
   RMM_TRY(RMM_ALLOC(&avg->data, sizeof(double) * sum.size, stream));
   if (cudf::has_nulls(sum) or cudf::has_nulls(count)) {
     RMM_TRY(RMM_ALLOC(
@@ -90,6 +92,9 @@ table compute_original_requests(
   std::map<AggRequestType, gdf_column*> simple_requests_to_outputs;
 
   for (std::size_t i = 0; i < simple_requests.size(); ++i) {
+    CUDF_EXPECTS(simple_outputs.get_column(i) != nullptr,
+                 "Missing output column[" + std::to_string(i) + "]");
+
     simple_requests_to_outputs[simple_requests[i]] =
         simple_outputs.get_column(i);
   }
@@ -105,10 +110,14 @@ table compute_original_requests(
                    "SUM request missing.");
       gdf_column* sum = found->second;
 
+      CUDF_EXPECTS(sum != nullptr, "SUM column is null.");
+
       found = simple_requests_to_outputs.find({req.first, COUNT});
       CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
                    "COUNT request missing.");
       gdf_column* count = found->second;
+
+      CUDF_EXPECTS(count != nullptr, "COUNT column is null.");
 
       final_value_columns.push_back(compute_average(*sum, *count, stream));
     } else {
@@ -117,6 +126,10 @@ table compute_original_requests(
       auto found = simple_requests_to_outputs.find(req);
       CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
                    "Aggregation missing!");
+
+      CUDF_EXPECTS(found->second != nullptr,
+                   "Simple aggregation result is null.");
+
       final_value_columns.push_back(found->second);
       simple_requests_to_outputs.erase(req);
     }

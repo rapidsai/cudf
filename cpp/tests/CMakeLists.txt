@@ -92,6 +92,7 @@ ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 set(HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_count.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_avg.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_max.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu")
 

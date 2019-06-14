@@ -198,6 +198,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   // an upper bound
   gdf_size_type const output_size_estimate{input_keys.num_rows()};
 
+
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(input_values), ops),
       values_have_nulls, false, stream};
@@ -280,6 +281,7 @@ auto extract_results(table const& input_keys, table const& input_values,
 
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
+    CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
     col->size = result_size;
     set_null_count(*col);
     return col;
@@ -372,11 +374,12 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
 
   // Step 1: Build hash map
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
-      keys, values, *d_input_keys, *d_input_values, simple_operators, options,
+      keys, simple_values_table, *d_input_keys, *d_input_values, simple_operators, options,
       stream);
 
   auto const map{std::move(result.first)};
   cudf::table const sparse_output_values{result.second};
+
 
   // Step 2: Extract non-empty entries
   cudf::table output_keys;
