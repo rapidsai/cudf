@@ -70,8 +70,10 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     result = Column.from_mem_views(data, mask)
 
-    if op == "count":
-        result = result.fillna(0)
+    if c_window_col is NULL:
+        # Pandas only does this for fixed windows...?
+        if op == "count":
+            result = result.fillna(0)
 
     free(output_col)
     free(inp_col)

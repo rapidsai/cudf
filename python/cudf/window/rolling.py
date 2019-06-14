@@ -11,10 +11,14 @@ class Rolling:
 
     Parameters
     ----------
-    window : int
+    window : int or offset
         Size of the window, i.e., the number of observations used
-        to calculate the statistic. Currently cuDF only supports
-        a fixed window size.
+        to calculate the statistic.
+        For datetime indexes, an offset can be provided instead
+        of an int. The offset must be convertible to a timedelta.
+        As opposed to a fixed window size, each window will be
+        sized to accommodate observations within the time period
+        specified by the offset.
     min_periods : int, optional
         The minimum number of observations in the window that are
         required to be non-null, so that the result is non-null.
@@ -73,6 +77,30 @@ class Rolling:
     2    2
     3    2
     4    1 dtype: int64
+
+    Rolling max with variable window size specified by an offset;
+    only valid for datetime index.
+
+    >>> a = cudf.Series(
+    ...     [1, 9, 5, 4, np.nan, 1],
+    ...     index=[
+    ...         pd.Timestamp('20190101 09:00:00'),
+    ...         pd.Timestamp('20190101 09:00:01'),
+    ...         pd.Timestamp('20190101 09:00:02'),
+    ...         pd.Timestamp('20190101 09:00:04'),
+    ...         pd.Timestamp('20190101 09:00:07'),
+    ...         pd.Timestamp('20190101 09:00:08')
+    ...     ]
+    ... )
+
+    >>> print(a.rolling('2s').max())
+    2019-01-01T09:00:00.000    1
+    2019-01-01T09:00:01.000    9
+    2019-01-01T09:00:02.000    9
+    2019-01-01T09:00:04.000    4
+    2019-01-01T09:00:07.000
+    2019-01-01T09:00:08.000    1
+    dtype: int64
     """
     def __init__(self, obj, window, min_periods=None, center=False):
         self.obj = obj
@@ -84,7 +112,7 @@ class Rolling:
     def _apply_agg_series(self, sr, agg_name):
         result_col = apply_rolling(
             sr._column,
-            self._window,
+            self.window,
             self.min_periods,
             self.center,
             agg_name)

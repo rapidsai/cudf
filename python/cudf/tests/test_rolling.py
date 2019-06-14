@@ -111,7 +111,11 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
             )
 
 
-def test_rolling_with_offset():
+@pytest.mark.parametrize(
+    'agg',
+    ['sum', 'min', 'max', 'mean', 'count']
+)
+def test_rolling_with_offset(agg):
     psr = pd.Series(
         [1, 2, 4, 4, np.nan, 9],
         index=[
@@ -125,6 +129,7 @@ def test_rolling_with_offset():
     )
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        psr.rolling('2s').sum(),
-        gsr.rolling('2s').sum()
+        getattr(psr.rolling('2s'), agg)().fillna(-1),
+        getattr(gsr.rolling('2s'), agg)().fillna(-1),
+        check_dtype=False
     )
