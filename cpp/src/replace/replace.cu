@@ -30,6 +30,7 @@
 #include <utilities//type_dispatcher.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
+#include <utilities/column_utils.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
 
@@ -40,34 +41,20 @@ namespace{ //anonymous
   static constexpr int warp_size = 32;
   static constexpr int BLOCK_SIZE = 256;
 
-// returns the block_sum using the given shared array of warp sums.
-template <typename T>
-__device__ T sum_warps(T* warp_smem)
-{
-  T block_sum = 0;
-
-  if (threadIdx.x < warp_size) {
-    T my_warp_sum = warp_smem[threadIdx.x];
-    __shared__ typename cub::WarpReduce<T>::TempStorage temp_storage;
-    block_sum = cub::WarpReduce<T>(temp_storage).Sum(my_warp_sum);
-  }
-  return block_sum;
-}
-
-
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
-__device__ T get_new_value(gdf_size_type         idx,
+__device__ auto get_new_value(gdf_size_type         idx,
                            const T* __restrict__ input_data,
                            const T* __restrict__ values_to_replace_begin,
                            const T* __restrict__ values_to_replace_end,
                            const T* __restrict__       d_replacement_values,
-                           bit_mask_t const * __restrict__ replacement_valid,
-                           bool                        &output_is_valid)
+                           bit_mask_t const * __restrict__ replacement_valid)
    {
      auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
                                       values_to_replace_end, input_data[idx]);
      T new_value{0};
+     bool output_is_valid{true};
+
      if (found_ptr != values_to_replace_end) {
        auto d = thrust::distance(values_to_replace_begin, found_ptr);
        new_value = d_replacement_values[d];
@@ -77,7 +64,7 @@ __device__ T get_new_value(gdf_size_type         idx,
      } else {
        new_value = input_data[idx];
      }
-     return new_value;
+     return thrust::make_pair(new_value, output_is_valid);
    }
 
   /* --------------------------------------------------------------------------*/
@@ -95,7 +82,7 @@ __device__ T get_new_value(gdf_size_type         idx,
    * @param[in] input_valid Valid mask associated with input_data
    * @param[out] output_data Device array to store the data from input_data
    * @param[out] output_valid Valid mask associated with output_data
-   * @param[out] output_null_count #nulls in output column
+   * @param[out] output_valid_count #valid in output column
    * @param[in] nrows # rows in `output_data`
    * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
    * of old values to be replaced
@@ -114,8 +101,8 @@ __device__ T get_new_value(gdf_size_type         idx,
                       bit_mask_t const * __restrict__ input_valid,
                       T * __restrict__          output_data,
                       bit_mask_t * __restrict__ output_valid,
-                      gdf_size_type *           output_null_count,
-                      gdf_size_type             nrows,
+                      gdf_size_type * __restrict__    output_valid_count,
+                      gdf_size_type                   nrows,
                       const T* __restrict__ values_to_replace_begin,
                       const T* __restrict__ values_to_replace_end,
                       const T* __restrict__           d_replacement_values,
@@ -125,7 +112,6 @@ __device__ T get_new_value(gdf_size_type         idx,
 
   uint32_t active_mask = 0xffffffff;
   active_mask = __ballot_sync(active_mask, i < nrows);
-  __shared__ T    temp_data[BLOCK_SIZE];
 
   while (i < nrows) {
     bool output_is_valid = true;
@@ -138,64 +124,31 @@ __device__ T get_new_value(gdf_size_type         idx,
       bitmask = __ballot_sync(active_mask, input_is_valid);
 
       if (input_is_valid) {
-        temp_data[threadIdx.x] = get_new_value<T, replacement_has_nulls>(i, input_data,
+        thrust::tie(output_data[i], output_is_valid)  =
+            get_new_value<T, replacement_has_nulls>(i, input_data,
                                       values_to_replace_begin,
                                       values_to_replace_end,
                                       d_replacement_values,
-                                      replacement_valid,
-                                      output_is_valid);
+                                      replacement_valid);
       }
 
     } else {
-       temp_data[threadIdx.x] = get_new_value<T, replacement_has_nulls>(i, input_data,
+       thrust::tie(output_data[i], output_is_valid) =
+            get_new_value<T, replacement_has_nulls>(i, input_data,
                                       values_to_replace_begin,
                                       values_to_replace_end,
                                       d_replacement_values,
-                                      replacement_valid,
-                                      output_is_valid);
+                                      replacement_valid);
     }
 
-    __syncthreads(); // waiting for temp_data to be ready
-
-    output_data[i] = temp_data[threadIdx.x];
-
-    /* output null counts calculations*/
+    /* output valid counts calculations*/
     if (input_has_nulls or replacement_has_nulls){
 
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
-      // allocating the shared memory for calculating the block_sum and
-      // block_valid_counts
-      __shared__ uint32_t warp_smem[warp_size];
-
-      if(threadIdx.x < warp_size) warp_smem[threadIdx.x] = 0;
-      __syncthreads();
-
-      const int wid = threadIdx.x / warp_size;
-      const int lane = threadIdx.x % warp_size;
-
-      if(lane == 0)warp_smem[wid] = __popc(active_mask);
-      __syncthreads(); // waiting for the sum of each warp to be ready
-
-      uint32_t block_sum = sum_warps<uint32_t>(warp_smem);
-
-      // reusing the same shared memory for block valid counts
-      if(threadIdx.x < warp_size) warp_smem[threadIdx.x] = 0;
-      __syncthreads();
-
-      if(lane == 0 && bitmask != 0){
-        int valid_index = wid + (blockIdx.x * (BLOCK_SIZE/warp_size));
-        output_valid[valid_index] = bitmask;
-        warp_smem[wid] = __popc(bitmask);
-      }
-      __syncthreads(); // waiting for the valid counts of each warp to be ready
-
-      // Compute total valid count for this block and add it to global count
-      uint32_t block_valid_count = sum_warps<uint32_t>(warp_smem);
-
-      // one thread computes and adds to null count
-      if (threadIdx.x < warp_size && lane == 0) {
-          atomicAdd(output_null_count, block_sum - block_valid_count);
+      if(threadIdx.x % warp_size == 0 && bitmask != 0){
+        output_valid[(int)(i/warp_size)] = bitmask;
+        atomicAdd(output_valid_count, __popc(bitmask));
       }
     }
 
@@ -218,9 +171,8 @@ __device__ T get_new_value(gdf_size_type         idx,
                     gdf_column       &output,
                     cudaStream_t     stream = 0)
     {
-      const bool input_has_nulls = (input_col.valid != nullptr && input_col.null_count > 0);
-      const bool replacement_has_nulls =
-                    (replacement_values.valid != nullptr && replacement_values.null_count > 0);
+      const bool input_has_nulls = cudf::has_nulls(input_col);
+      const bool replacement_has_nulls = cudf::has_nulls(replacement_values);
 
       const bit_mask_t* __restrict__ typed_input_valid =
                                         reinterpret_cast<bit_mask_t*>(input_col.valid);
@@ -228,14 +180,13 @@ __device__ T get_new_value(gdf_size_type         idx,
                                         reinterpret_cast<bit_mask_t*>(replacement_values.valid);
       bit_mask_t* __restrict__ typed_out_valid =
                                         reinterpret_cast<bit_mask_t*>(output.valid);
-      gdf_size_type *null_count = nullptr;
+      gdf_size_type *valid_count = nullptr;
       if (typed_out_valid != nullptr) {
-        RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
-        CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(gdf_size_type), stream));
+        RMM_ALLOC(&valid_count, sizeof(gdf_size_type), stream);
+        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(gdf_size_type), stream));
       }
 
-      thrust::device_ptr<const col_type> values_to_replace_begin =
-                thrust::device_pointer_cast(static_cast<const col_type*>(values_to_replace.data));
+      col_type const * values_to_replace_ptr{ cudf::get_data<col_type const>(values_to_replace) };
 
       cudf::util::cuda::grid_config_1d grid{output.size, BLOCK_SIZE, 1};
 
@@ -259,17 +210,19 @@ __device__ T get_new_value(gdf_size_type         idx,
                                              typed_input_valid,
                                              static_cast<col_type*>(output.data),
                                              typed_out_valid,
-                                             null_count,
+                                             valid_count,
                                              output.size,
-                                             values_to_replace_begin.get(),
-                                             (values_to_replace_begin + replacement_values.size).get(),
+                                             values_to_replace_ptr,
+                                             values_to_replace_ptr + replacement_values.size,
                                              static_cast<const col_type*>(replacement_values.data),
                                              typed_replacement_valid);
 
       if(typed_out_valid != nullptr){
-        CUDA_TRY(cudaMemcpyAsync(&output.null_count, null_count,
+        gdf_size_type valids {0};
+        CUDA_TRY(cudaMemcpyAsync(&valids, valid_count,
                                sizeof(gdf_size_type), cudaMemcpyDefault, stream));
-        RMM_FREE(null_count, stream);
+        output.null_count = output.size - valids;
+        RMM_FREE(valid_count, stream);
       }
     }
   };
@@ -284,10 +237,14 @@ namespace detail {
                                   cudaStream_t stream = 0) {
 
     if (0 == input_col.size )
+    {
       return cudf::empty_like(input_col);
+    }
 
     if (0 == values_to_replace.size || 0 == replacement_values.size)
+    {
       return cudf::copy(input_col, stream);
+    }
 
     CUDF_EXPECTS(values_to_replace.size == replacement_values.size,
                  "values_to_replace and replacement_values size mismatch.");
