@@ -204,23 +204,20 @@ __device__ inline void aggregate_row(device_table const& target,
                                      gdf_size_type source_index,
                                      operators* ops) {
   using namespace bit_mask;
-  thrust::for_each(
-      thrust::seq, thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(target.num_columns()),
-      [target, target_index, source, source_index, ops](gdf_size_type i) {
-        bit_mask_t* const __restrict__ source_mask{
-            reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
+  for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
+    bit_mask_t* const __restrict__ source_mask{
+        reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
 
-        if (values_have_nulls and nullptr != source_mask and
-            not is_valid(source_mask, source_index)) {
-          return;
-        }
+    if (values_have_nulls and nullptr != source_mask and
+        not is_valid(source_mask, source_index)) {
+      return;
+    }
 
-        cudf::type_dispatcher(source.get_column(i)->dtype,
-                              elementwise_aggregator<values_have_nulls>{},
-                              *target.get_column(i), target_index,
-                              *source.get_column(i), source_index, ops[i]);
-      });
+    cudf::type_dispatcher(source.get_column(i)->dtype,
+                          elementwise_aggregator<values_have_nulls>{},
+                          *target.get_column(i), target_index,
+                          *source.get_column(i), source_index, ops[i]);
+  }
 }
 
 template <bool nullable = true>
@@ -235,6 +232,57 @@ struct row_hasher {
   }
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Builds a hash map where the keys are the rows of a `keys` table, and
+ * the values are the aggregation(s) of corresponding rows in a `values` table.
+ *
+ * The hash map is built by inserting every row `i` from the `keys` and
+ * `values` tables as a single (key,value) pair. When the pair is inserted, if
+ * the key was not already present in the map, then the corresponding value is
+ * simply copied to the output. If the key was already present in the map,
+ * then the inserted `values` row is aggregated with the existing row. This
+ * aggregation is done for every element `j` in the row by applying aggregation
+ * operation `j` between the new and existing element.
+ *
+ * Instead of storing the entire rows from `input_keys` and `input_values` in
+ * the hashmap, we instead store the row indices. For example, when inserting
+ * row at index `i` from `input_keys` into the hash map, the value `i` is what
+ * gets stored for the hash map's "key". It is assumed the `map` was constructed
+ * with a custom comparator that uses these row indices to check for equality
+ * between key rows. For example, comparing two keys `k0` and `k1` will compare
+ * the two rows `input_keys[k0] ?= input_keys[k1]`
+ *
+ * Likewise, we store the row indices for the hash maps "values". These indices
+ * index into the `output_values` table. For a given key `k` (which is an index
+ * into `input_keys`), the corresponding value `v` indexes into `output_values`
+ * and stores the result of aggregating rows from `input_values` from rows of
+ * `input_keys` equivalent to the row at `k`.
+ *
+ * The exact size of the result is not known a priori, but can be upper bounded
+ * by the number of rows in `input_keys` & `input_values`. Therefore, it is
+ * assumed `output_values` has sufficient storage for an equivalent number of
+ * rows. In this way, after all rows are aggregated, `output_values` will likely
+ * be "sparse", meaning that not all rows contain the result of an aggregation.
+ *
+ * @tparam skip_rows_with_nulls Indicates if rows in `input_keys` containing
+ * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
+ * bitmask where bit `i` indicates the presence of a null value in row `i`.
+ * @tparam values_have_nulls Indicates if rows in `input_values` contain null
+ * values
+ * @tparam Map The type of the hash map
+ * @param map Pointer to hash map object to insert key,value pairs into.
+ * (Assumed to be allocated with managed memory)
+ * @param input_keys The table whose rows will be keys of the hash map
+ * @param input_values The table whose rows will be aggregated in the values of
+ * the hash map
+ * @param output_values Table that stores the results of aggregating rows of
+ * `input_values`.
+ * @param ops The set of aggregation operations to perform accross the columns
+ * of the `input_values` rows
+ * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
+ * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
+ * `true`.
+ *---------------------------------------------------------------------------**/
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
 __global__ void build_aggregation_map(
     Map* map, device_table input_keys, device_table input_values,
@@ -279,6 +327,10 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
     if (source_key_row_index != map->get_unused_key()) {
       auto output_index = atomicAdd(output_write_index, 1);
 
+      // TODO: Optimize setting bits in output bitmask. Currently, we rely on
+      // the functionality of `copy_row` to update the target's bitmask, which
+      // is inefficient as it requires an atomic per bit. This could be done
+      // here instead with warp intrinsics.
       copy_row<keys_have_nulls>(output_keys, output_index, input_keys,
                                 source_key_row_index);
 

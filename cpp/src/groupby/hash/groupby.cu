@@ -16,7 +16,6 @@
 
 #include <cudf/cudf.h>
 #include <bitmask/bit_mask.cuh>
-#include <cudf/binaryop.hpp>
 #include <cudf/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
@@ -27,27 +26,23 @@
 #include <table/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/device_atomics.cuh>
-#include <utilities/release_assert.cuh>
 #include <utilities/type_dispatcher.hpp>
+#include <groupby/aggregation_requests.hpp>
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 #include "type_info.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
-#include <algorithm>
-#include <map>
-#include <set>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
 
 namespace cudf {
 namespace groupby {
 namespace hash {
 namespace {
-using AggRequestType = std::pair<gdf_column*, operators>;
+
+
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
@@ -189,6 +184,7 @@ void update_nvcategories(table const& input_keys, table& output_keys,
   nvcategory_gather_table(input_values, output_values);
 }
 
+
 template <bool keys_have_nulls, bool values_have_nulls>
 auto build_aggregation_map(table const& input_keys, table const& input_values,
                            device_table const& d_input_keys,
@@ -300,154 +296,6 @@ auto extract_results(table const& input_keys, table const& input_values,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Converts a set of "compound" aggregation requests into a set of
- *"simple" aggregation requests that can be used to satisfy the compound
- *request.
- *
- * An "aggregation request" is the combination of an input `gdf_column`
- * an aggregation operation to perform on that column.
- *
- * A "compound" aggregation request is a requested aggregation operation that
- * can only be satisfied by first computing 1 or more "simple" aggregation
- * requests, and then transforming the result of the simple aggregation request
- * into the requested compound aggregation.
- *
- * For example, `AVG` is a "compound" aggregation. The request to compute an AVG
- * on a column can be satisfied via the `COUNT` and `SUM` "simple" aggregation
- * operations.
- *
- * @param compound_requests The set of compound aggregation requests
- * @return The set of corresponding simple aggregation requests that can be used
- * to satisfy the compound requests
- *---------------------------------------------------------------------------**/
-std::vector<AggRequestType> compound_to_simple(
-    std::vector<AggRequestType> const& compound_requests) {
-  // Contructs a mapping of every value column to the minimal set of simple
-  // ops to be performed on that column
-  std::unordered_map<gdf_column*, std::set<operators>> columns_to_ops;
-  std::for_each(
-      compound_requests.begin(), compound_requests.end(),
-      [&columns_to_ops](std::pair<gdf_column const*, operators> pair) {
-        gdf_column* col = const_cast<gdf_column*>(pair.first);
-        auto op = pair.second;
-        // AVG requires computing a COUNT and SUM aggregation and then doing
-        // elementwise division
-        if (op == AVG) {
-          columns_to_ops[col].insert(COUNT);
-          columns_to_ops[col].insert(SUM);
-        } else {
-          columns_to_ops[col].insert(op);
-        }
-      });
-
-  // Create minimal set of columns and simple operators
-  std::vector<std::pair<gdf_column*, operators>> simple_requests;
-  for (auto& p : columns_to_ops) {
-    auto col = p.first;
-    std::set<operators>& ops = p.second;
-    while (not ops.empty()) {
-      simple_requests.emplace_back(col, *ops.begin());
-      ops.erase(ops.begin());
-    }
-  }
-  return simple_requests;
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Computes the `AVG` aggregation of a column by doing element-wise
- * division of the corresponding `SUM` and `COUNT` aggregation columns.
- *
- * @param sum The result of a `SUM` aggregation request
- * @param count The result of a `COUNT` aggregation request
- * @param stream Stream on which to perform operation
- * @return gdf_column* New column containing the result of elementwise division
- * of the sum and count columns
- *---------------------------------------------------------------------------**/
-gdf_column* compute_average(gdf_column sum, gdf_column count,
-                            cudaStream_t stream) {
-  CUDF_EXPECTS(sum.size == count.size,
-               "Size mismatch between sum and count columns.");
-  gdf_column* avg = new gdf_column{};
-  avg->dtype = GDF_FLOAT64;
-  RMM_TRY(RMM_ALLOC(&avg->data, sizeof(double) * sum.size, stream));
-  if (cudf::has_nulls(sum) or cudf::has_nulls(count)) {
-    RMM_TRY(RMM_ALLOC(
-        &avg->valid,
-        sizeof(gdf_size_type) * gdf_valid_allocation_size(sum.size), stream));
-  }
-  cudf::binary_operation(avg, &sum, &count, GDF_DIV);
-  return avg;
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Computes the results of a set of aggregation requests from a set of
- * computed simple requests.
- *
- * Given a set of pre-computed results for simple aggregation requests, computes
- * the results of a set of (potentially compound) requests. If the simple
- * aggregation request neccessary to compute the original request is not
- *present, an exception is thrown.
- *
- * @param original_requests[in] The original set of potentially compound
- * aggregation requests
- * @param simple_requests[in] Set of simple requests generated from the original
- * requests
- * @param simple_outputs[in] Set of output aggregation columns corresponding to
- *the simple requests
- * @param stream[in] CUDA stream on which to execute
- * @return table Set of columns satisfying each of the original requests
- *---------------------------------------------------------------------------**/
-table compute_original_requests(
-    std::vector<AggRequestType> const& original_requests,
-    std::vector<AggRequestType> const& simple_requests, table simple_outputs,
-    cudaStream_t stream) {
-  // Maps the requested simple aggregation to the resulting output column
-  std::map<AggRequestType, gdf_column*> simple_requests_to_outputs;
-
-  for (std::size_t i = 0; i < simple_requests.size(); ++i) {
-    simple_requests_to_outputs[simple_requests[i]] =
-        simple_outputs.get_column(i);
-  }
-
-  std::vector<gdf_column*> final_value_columns;
-
-  // Iterate requests. For any compound request, compute the compound result
-  // from the corresponding simple requests
-  for (auto const& req : original_requests) {
-    if (req.second == AVG) {
-      auto found = simple_requests_to_outputs.find({req.first, SUM});
-      CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
-                   "SUM request missing.");
-      gdf_column* sum = found->second;
-
-      found = simple_requests_to_outputs.find({req.first, COUNT});
-      CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
-                   "COUNT request missing.");
-      gdf_column* count = found->second;
-
-      final_value_columns.push_back(compute_average(*sum, *count, stream));
-    } else {
-      // For non-compound requests, append the result to the final output
-      // and remove it from the map
-      auto found = simple_requests_to_outputs.find(req);
-      CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
-                   "Aggregation missing!");
-      final_value_columns.push_back(found->second);
-      simple_requests_to_outputs.erase(req);
-    }
-  }
-
-  // Any remaining columns in the `simple_outputs` are intermediary columns used
-  // to satisfy a compound request that should be deleted.
-  for (auto& p : simple_requests_to_outputs) {
-    gdf_column_free(p.second);
-    delete p.second;
-  }
-
-  return cudf::table{final_value_columns};
-}
-
-/**---------------------------------------------------------------------------*
  * @brief Computes the groupby operation for a set of keys, values, and
  * operators using a hash-based implementation.
  *
@@ -524,6 +372,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   auto const d_input_keys = device_table::create(keys);
   auto const d_input_values = device_table::create(simple_values_table);
 
+  // Step 1: Build hash map
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
       keys, values, *d_input_keys, *d_input_values, simple_operators, options,
       stream);
@@ -531,6 +380,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   auto const map{std::move(result.first)};
   cudf::table const sparse_output_values{result.second};
 
+  // Step 2: Extract non-empty entries
   cudf::table output_keys;
   cudf::table simple_output_values;
   std::tie(output_keys, simple_output_values) =
