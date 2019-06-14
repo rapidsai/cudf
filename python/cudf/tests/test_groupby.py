@@ -563,3 +563,8 @@ def test_groupby_multi_agg_single_groupby_series():
     pdg = pdf.groupby("x").y.agg(["sum", "max"])
     gdg = gdf.groupby("x").y.agg(["sum", "max"])
     assert_eq(pdg, gdg)
+
+
+def test_groupby_empty_dataframe():
+    gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
+    gdf.groupby(level=[0, 1])  # it doesn't crash

@@ -95,11 +95,20 @@ class Groupby(object):
             A string indicating the libgdf method to use to perform the
             group by. Valid values are "hash".
         """
-        self.level = None
+        self.level = level
         self._original_index_name = None
         self._val_columns = []
         self._df = df.copy(deep=False)
         self._as_index = as_index
+        if len(df) == 0:  # empty case
+            self._by = by
+            self._df = df
+            self._val_columns = []
+            for col in self._df.columns:
+                if by is None or col not in by:
+                    self._val_columns.append(col)
+            self._method = method
+            return
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
                 raise NotImplementedError("CUDF doesn't support series groupby"
