@@ -880,10 +880,17 @@ class DataFrame(object):
             return df
 
     def reset_index(self, drop=False):
+        out = DataFrame()
         if not drop:
-            name = self.index.name or 'index'
-            out = DataFrame()
-            out[name] = self.index
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+                framed = self.index.to_frame()
+                for c in framed.columns:
+                    out[c] = framed[c]
+            else:
+                name = 'index'
+                if self.index.name is not None:
+                    name = self.index.name
+                out[name] = self.index
             for c in self.columns:
                 out[c] = self[c]
         else:
@@ -947,8 +954,24 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -970,8 +993,35 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) == 0:
+                # When self has 0 columns and series has values
+                # we can safely go ahead and assign.
+                return series
+            elif (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
@@ -2949,6 +2999,14 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @ioutils.doc_to_csv()
+    def to_csv(self, path=None, sep=',', na_rep='',
+               columns=None, header=True, index=True, line_terminator='\n'):
+        """{docstring}"""
+        import cudf.io.csv as csv
+        return csv.to_csv(self, path, sep, na_rep, columns,
+                          header, index, line_terminator)
 
 
 def from_pandas(obj):
