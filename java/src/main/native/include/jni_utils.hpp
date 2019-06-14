@@ -45,8 +45,8 @@ public:
 /**
  * @brief throw a java exception and a C++ one for flow control.
  */
-inline void throw_java_exception(JNIEnv *const env, const char *clazz_name, const char *message) {
-  jclass ex_class = env->FindClass(clazz_name);
+inline void throw_java_exception(JNIEnv *const env, const char *class_name, const char *message) {
+  jclass ex_class = env->FindClass(class_name);
   if (ex_class != NULL) {
     env->ThrowNew(ex_class, message);
   }
@@ -57,7 +57,7 @@ inline void throw_java_exception(JNIEnv *const env, const char *clazz_name, cons
  * @brief check if an java exceptions have been thrown and if so throw a C++
  * exception so the flow control stop processing.
  */
-inline void checkJavaException(JNIEnv *const env) {
+inline void check_java_exception(JNIEnv *const env) {
   if (env->ExceptionOccurred()) {
     // Not going to try to get the message out of the Exception, too complex and
     // might fail.
@@ -81,7 +81,7 @@ private:
   void init_data_ptr() const {
     if (orig != NULL && data_ptr == NULL) {
       data_ptr = env->GetLongArrayElements(orig, NULL);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -93,27 +93,27 @@ public:
       : env(env), orig(orig), len(0), data_ptr(NULL) {
     if (orig != NULL) {
       len = env->GetArrayLength(orig);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
   native_jlongArray(JNIEnv *const env, int len)
       : env(env), orig(env->NewLongArray(len)), len(len), data_ptr(NULL) {
-    checkJavaException(env);
+    check_java_exception(env);
   }
 
   native_jlongArray(JNIEnv *const env, jlong *arr, int len)
       : env(env), orig(env->NewLongArray(len)), len(len), data_ptr(NULL) {
-    checkJavaException(env);
+    check_java_exception(env);
     env->SetLongArrayRegion(orig, 0, len, arr);
-    checkJavaException(env);
+    check_java_exception(env);
   }
 
   native_jlongArray(JNIEnv *const env, const std::vector<long> & arr)
       : env(env), orig(env->NewLongArray(arr.size())), len(arr.size()), data_ptr(NULL) {
-    checkJavaException(env);
+    check_java_exception(env);
     env->SetLongArrayRegion(orig, 0, len, arr.data());
-    checkJavaException(env);
+    check_java_exception(env);
   }
 
   bool is_null() const noexcept { return orig == NULL; }
@@ -318,7 +318,7 @@ private:
   void init_data_ptr() const {
     if (orig != NULL && data_ptr == NULL) {
       data_ptr = env->GetIntArrayElements(orig, NULL);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -330,7 +330,7 @@ public:
       : env(env), orig(orig), len(0), data_ptr(NULL) {
     if (orig != NULL) {
       len = env->GetArrayLength(orig);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -405,7 +405,7 @@ private:
   void init_data_ptr() const {
     if (orig != NULL && data_ptr == NULL) {
       data_ptr = env->GetBooleanArrayElements(orig, NULL);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -417,7 +417,7 @@ public:
       : env(env), orig(orig), len(0), data_ptr(NULL) {
     if (orig != NULL) {
       len = env->GetArrayLength(orig);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -490,7 +490,7 @@ private:
     if (orig != NULL && cstr == NULL) {
       cstr_length = env->GetStringUTFLength(orig);
       cstr = env->GetStringUTFChars(orig, 0);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -534,7 +534,7 @@ public:
       return cstr_length <= 0;
     } else if (orig != NULL) {
       jsize len = env->GetStringLength(orig);
-      checkJavaException(env);
+      check_java_exception(env);
       return len <= 0;
     }
     return true;
@@ -562,7 +562,7 @@ public:
   native_jobjectArray(JNIEnv *const env, jobjectArray orig) : env(env), orig(orig), len(0) {
     if (orig != NULL) {
       len = env->GetArrayLength(orig);
-      checkJavaException(env);
+      check_java_exception(env);
     }
   }
 
@@ -577,7 +577,7 @@ public:
       throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
     }
     T ret = static_cast<T>(env->GetObjectArrayElement(orig, index));
-    checkJavaException(env);
+    check_java_exception(env);
     return ret;
   }
 
@@ -586,7 +586,7 @@ public:
       throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
     }
     env->SetObjectArrayElement(orig, index, val);
-    checkJavaException(env);
+    check_java_exception(env);
   }
 };
 
@@ -689,7 +689,7 @@ public:
 
   void set(int index, const char *val) {
     jstring str = env->NewStringUTF(val);
-    checkJavaException(env);
+    check_java_exception(env);
     arr.set(index, str);
     update_caches(index, str);
   }
@@ -1001,9 +1001,9 @@ inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
 } // namespace jni
 } // namespace cudf
 
-#define JNI_THROW_NEW(env, clazz_name, message, ret_val)                                           \
+#define JNI_THROW_NEW(env, class_name, message, ret_val)                                           \
   {                                                                                                \
-    jclass ex_class = env->FindClass(clazz_name);                                                  \
+    jclass ex_class = env->FindClass(class_name);                                                  \
     if (ex_class == NULL) {                                                                        \
       return ret_val;                                                                              \
     }                                                                                              \

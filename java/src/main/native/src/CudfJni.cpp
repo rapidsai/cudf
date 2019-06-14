@@ -485,10 +485,10 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cudf_getCategoryIndex(JNIEnv *env, jc
     JNI_NULL_CHECK(env, cat, "category is null", -1);
 
     int len = env->GetArrayLength(jstr);
-    cudf::jni::checkJavaException(env);
+    cudf::jni::check_java_exception(env);
     std::unique_ptr<char[]> str(new char[len + 1]);
     env->GetByteArrayRegion(jstr, 0, len, reinterpret_cast<jbyte *>(str.get()));
-    cudf::jni::checkJavaException(env);
+    cudf::jni::check_java_exception(env);
     str[len] = '\0'; // NUL-terminate UTF-8 string
 
     return cat->get_value(str.get());
