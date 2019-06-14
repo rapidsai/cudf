@@ -80,7 +80,7 @@ void verify_operators(table const& values, std::vector<operators> const& ops) {
  * gdf_dtypes and aggregation operations.
  *
  * Given vectors of source gdf_dtypes and corresponding aggregation operations
- * to be performed on that type, returns a vector the gdf_dtypes to use to store
+ * to be performed on that type, returns a vector of gdf_dtypes to use to store
  * the result of the aggregation operations.
  *
  * @param source_dtypes The source types
