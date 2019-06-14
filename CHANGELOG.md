@@ -71,6 +71,7 @@
 - PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
+- PR #2005 Use HTML5 details tag in bug report issue template
 
 ## Bug Fixes
 
