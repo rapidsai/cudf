@@ -168,22 +168,14 @@ void test_replace(std::vector<T> const &input_column,
         bool toBeReplaced = false;
         if(!isReplaced[k])
         {
-        /* workaround to escape the centos gcc-7 `internal_compiler_error` TODO: Fix me */
-        int8_t check = 0;
-        if(!input_has_nulls) check++;
-        else if(bit_mask::is_valid(typed_expected_valid, k)) check++;
-
-        if(check > 0){
+        if(!input_has_nulls || bit_mask::is_valid(typed_expected_valid, k)){
           if(element == values_to_replace_column[i]) {
           toBeReplaced = true;
           isReplaced[k] = toBeReplaced;
-          /* workaround for the same issue as above TODO: Fix me */
-          if(replacement_has_nulls){
-            if(!bit_mask::is_valid(typed_new_valid, i)){
+            if(replacement_has_nulls && !bit_mask::is_valid(typed_new_valid, i)){
               if(print)std::cout << "clearing bit at: "<<k<<"\n";
               bit_mask::clear_bit_unsafe(typed_expected_valid, (int)k);
             }
-           }
           }
          }
         }
