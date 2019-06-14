@@ -41,6 +41,22 @@ namespace{ //anonymous
   static constexpr int warp_size = 32;
   static constexpr int BLOCK_SIZE = 256;
 
+
+// returns the block_sum using the given shared array of warp sums.
+template <typename T>
+__device__ T sum_warps(T* warp_smem)
+{
+  T block_sum = 0;
+
+   if (threadIdx.x < warp_size) {
+    T my_warp_sum = warp_smem[threadIdx.x];
+    __shared__ typename cub::WarpReduce<T>::TempStorage temp_storage;
+    block_sum = cub::WarpReduce<T>(temp_storage).Sum(my_warp_sum);
+  }
+  return block_sum;
+}
+
+
 // return the new_value for output column at index `idx`
 template<class T, bool replacement_has_nulls>
 __device__ auto get_new_value(gdf_size_type         idx,
@@ -146,9 +162,28 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
-      if(threadIdx.x % warp_size == 0 && bitmask != 0){
+      __shared__ uint32_t valid_sum[warp_size];
+
+      // init shared memory for block valid counts
+      if(threadIdx.x < warp_size) valid_sum[threadIdx.x] = 0;
+      __syncthreads();
+
+      const int wid = threadIdx.x / warp_size;
+      const int lane = threadIdx.x % warp_size;
+
+      if(lane == 0 && bitmask != 0){
         output_valid[(int)(i/warp_size)] = bitmask;
-        atomicAdd(output_valid_count, __popc(bitmask));
+        valid_sum[wid] = __popc(bitmask);
+      }
+
+      __syncthreads(); // waiting for the valid counts of each warp to be ready
+
+      // Compute total valid count for this block and add it to global count
+      uint32_t block_valid_count = sum_warps<uint32_t>(valid_sum);
+
+      // one thread computes and adds to output_valid_count
+      if (threadIdx.x < warp_size && lane == 0) {
+          atomicAdd(output_valid_count, block_valid_count);
       }
     }
 
