@@ -17,6 +17,7 @@
 #include <cstring>
 
 #include "cudf/copying.hpp"
+#include "cudf/io_readers.hpp"
 #include "cudf/table.hpp"
 #include "cudf/types.hpp"
 
@@ -162,80 +163,53 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     cudf::jni::native_jstringArray n_false_values(env, false_values);
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
-    csv_read_arg read_arg{};
+    cudf::csv_reader_args read_arg{};
 
     if (read_buffer) {
-      read_arg.filepath_or_buffer = reinterpret_cast<const char *>(buffer);
+      read_arg.filepath_or_buffer = std::string(reinterpret_cast<const char *>(buffer), buffer_length);
       read_arg.input_data_form = HOST_BUFFER;
-      read_arg.buffer_size = buffer_length;
     } else {
       read_arg.filepath_or_buffer = filename.get();
 
       read_arg.input_data_form = FILE_PATH;
-      // don't use buffer, use file path
-      read_arg.buffer_size = 0;
     }
 
-    read_arg.windowslinetermination = false;
     read_arg.lineterminator = '\n';
     // delimiter ideally passed in
     read_arg.delimiter = delim;
     read_arg.delim_whitespace = 0;
     read_arg.skipinitialspace = 0;
-    read_arg.nrows = -1;
     read_arg.header = header_row;
 
-    read_arg.num_names = n_col_names.size();
-    read_arg.names = n_col_names.as_c_array();
-    read_arg.num_dtype = n_data_types.size();
-    read_arg.dtype = n_data_types.as_c_array();
+    read_arg.names = n_col_names.as_cpp_vector();
+    read_arg.dtype = n_data_types.as_cpp_vector();
 
-    // leave blank
-    // read_arg.index_col
+    read_arg.use_cols_names = n_filter_col_names.as_cpp_vector();
 
-    // only support picking columns by name
-    read_arg.use_cols_int = NULL;
-    read_arg.use_cols_int_len = 0;
-    read_arg.use_cols_char = n_filter_col_names.as_c_array();
-    read_arg.use_cols_char_len = n_filter_col_names.size();
-
-    read_arg.skiprows = 0;
-    read_arg.skipfooter = 0;
     read_arg.skip_blank_lines = true;
 
-    read_arg.true_values = n_true_values.as_c_array();
-    read_arg.num_true_values = n_true_values.size();
-    read_arg.false_values = n_false_values.as_c_array();
-    read_arg.num_false_values = n_false_values.size();
+    read_arg.true_values = n_true_values.as_cpp_vector();
+    read_arg.false_values = n_false_values.as_cpp_vector();
 
-    read_arg.num_na_values = n_null_values.size();
-    read_arg.na_values = n_null_values.as_c_array();
+    read_arg.na_values = n_null_values.as_cpp_vector();
     read_arg.keep_default_na = false; ///< Keep the default NA values
-    read_arg.na_filter = read_arg.num_na_values > 0;
+    read_arg.na_filter = n_null_values.size() > 0;
 
-    read_arg.prefix = NULL;
     read_arg.mangle_dupe_cols = true;
-    read_arg.parse_dates = 1;
-    // read_arg.infer_datetime_format = true;
     read_arg.dayfirst = 0;
-    read_arg.compression = nullptr;
-    // read_arg.thousands
+    read_arg.compression = "infer";
     read_arg.decimal = '.';
     read_arg.quotechar = quote;
-    // read_arg.quoting = QUOTE_NONNUMERIC;
-    read_arg.quoting = QUOTE_MINIMAL;
+    read_arg.quoting = cudf::QUOTE_MINIMAL;
     read_arg.doublequote = true;
-    // read_arg.escapechar =
     read_arg.comment = comment;
-    read_arg.encoding = NULL;
-    read_arg.byte_range_offset = 0;
-    read_arg.byte_range_size = 0;
 
-    gdf_error gdf_status = read_csv(&read_arg);
-    JNI_GDF_TRY(env, NULL, gdf_status);
+    cudf::CsvReader reader(read_arg);
+    cudf::table result = reader.read();
+    std::vector<gdf_column*> ptrs(result.begin(), result.end());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(read_arg.data),
-                                                read_arg.num_cols_out);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
+                                                ptrs.size());
     return native_handles.get_jlongArray();
   }
   CATCH_STD(env, NULL);

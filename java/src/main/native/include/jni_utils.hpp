@@ -109,6 +109,13 @@ public:
     checkJavaException(env);
   }
 
+  native_jlongArray(JNIEnv *const env, const std::vector<long> & arr)
+      : env(env), orig(env->NewLongArray(arr.size())), len(arr.size()), data_ptr(NULL) {
+    checkJavaException(env);
+    env->SetLongArrayRegion(orig, 0, len, arr.data());
+    checkJavaException(env);
+  }
+
   bool is_null() const noexcept { return orig == NULL; }
 
   int size() const noexcept { return len; }
@@ -592,6 +599,7 @@ private:
   JNIEnv *const env;
   native_jobjectArray<jstring> arr;
   mutable std::vector<native_jstring> cache;
+  mutable std::vector<std::string> cpp_cache;
   mutable std::vector<const char *> c_cache;
 
   void init_cache() const {
@@ -615,13 +623,28 @@ private:
     }
   }
 
+  void init_cpp_cache() const {
+    if (!arr.is_null() && cpp_cache.empty()) {
+      init_cache();
+      int size = this->size();
+      cpp_cache.reserve(size);
+      for (int i = 0; i < size; i++) {
+        cpp_cache.push_back(cache[i].get());
+      }
+    }
+  }
+
   void update_caches(int index, jstring val) {
     if (!cache.empty()) {
       cache[index] = native_jstring(env, val);
       if (!c_cache.empty()) {
         c_cache[index] = cache[index].get();
       }
-    } else if (!c_cache.empty()) {
+
+      if (!cpp_cache.empty()) {
+        cpp_cache[index] = cache[index].get();
+      }
+    } else if (!c_cache.empty() || !cpp_cache.empty()) {
       // Illegal state
       throw std::logic_error("CACHING IS MESSED UP");
     }
@@ -647,6 +670,11 @@ public:
   const char **const as_c_array() const {
     init_c_cache();
     return c_cache.data();
+  }
+
+  const std::vector<std::string> as_cpp_vector() const {
+    init_cpp_cache();
+    return cpp_cache;
   }
 
   void set(int index, jstring val) {
