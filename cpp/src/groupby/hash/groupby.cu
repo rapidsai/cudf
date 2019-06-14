@@ -76,7 +76,7 @@ void verify_operators(table const& values, std::vector<operators> const& ops) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Deteremines target gdf_dtypes to use for combinations of source
+ * @brief Determines target gdf_dtypes to use for combinations of source
  * gdf_dtypes and aggregation operations.
  *
  * Given vectors of source gdf_dtypes and corresponding aggregation operations
