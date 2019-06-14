@@ -13,8 +13,8 @@ from cudf.bindings.rolling cimport *
 def apply_rolling(inp, window, min_periods, center, op):
     cdef gdf_column *inp_col
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
-    cdef gdf_index_type c_window
-    cdef gdf_index_type c_forward_window
+    cdef gdf_index_type c_window = 0
+    cdef gdf_index_type c_forward_window = 0
     cdef gdf_agg_op c_op = agg_ops[op]
     cdef gdf_index_type *c_window_col = NULL
     cdef gdf_index_type *c_min_periods_col = NULL
@@ -32,10 +32,13 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     cdef uintptr_t c_window_ptr
     if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
-        c_window = 0
+        if center:
+            # TODO: we can support this even though Pandas currently does not
+            raise NotImplementedError(
+                "center is not implemented for offset-based windows"
+            )
         c_window_ptr = get_ctype_ptr(window)
         c_window_col = <gdf_index_type*> c_window_ptr
-        c_forward_window = 0
     else:
         if center:
             c_window = (window // 2) + 1
@@ -67,9 +70,10 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     result = Column.from_mem_views(data, mask)
 
-    free(output_col)
-
     if op == "count":
         result = result.fillna(0)
+
+    free(output_col)
+    free(inp_col)
 
     return result
