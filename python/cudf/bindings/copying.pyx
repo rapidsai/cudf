@@ -21,6 +21,7 @@ from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
+from cython.operator import dereference as deref
 
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
@@ -194,9 +195,9 @@ def apply_scatter(in_cols, maps, out_cols=None):
 
     if is_same_input == False :
         free_table(c_out_table, c_out_cols)
-    
+
     free_table(c_in_table, c_in_cols)
-    
+
     return out_cols
 
 
@@ -233,4 +234,31 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
+
+
+def apply_copy_range(out_col, in_col, idx_out_begin, idx_out_end, idx_in_begin):
+    """Call cudf::copy_range
+
+    Parameters
+    ----------
+    out_col : Column
+        column to copy to
+    in_col : Column
+        column to copy from
+    idf_out_begin, idx_out_end : gdf_index_type
+        [start, end) indices in out_col to copy to
+    idx_in_begin : gdf_index_type
+        index in in_col to start copying from
+    """
+    check_gdf_compatibility(out_col)
+    check_gdf_compatibility(in_col)
+    cdef gdf_column *c_out_col = column_view_from_column(out_col)
+    cdef gdf_column *c_in_col = column_view_from_column(in_col)
+
+    cdef gdf_index_type c_idx_out_begin = <gdf_index_type>idx_out_begin
+    cdef gdf_index_type c_idx_out_end = <gdf_index_type>idx_out_end
+    cdef gdf_index_type c_idx_in_begin = <gdf_index_type>idx_in_begin
+
+    copy_range(c_out_col, deref(c_in_col), c_idx_out_begin, c_idx_out_end,
+               c_idx_in_begin)
 
