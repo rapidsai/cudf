@@ -63,6 +63,3 @@ BENCHMARK_TEMPLATE(gather_benchmark, double)->RangeMultiplier(2)->Range(1<<10, 1
 BENCHMARK_TEMPLATE(gather_benchmark, float )->RangeMultiplier(2)->Range(1<<10, 1<<28);
 BENCHMARK_TEMPLATE(gather_benchmark, int   )->RangeMultiplier(2)->Range(1<<10, 1<<28);
 BENCHMARK_TEMPLATE(gather_benchmark, long  )->RangeMultiplier(2)->Range(1<<10, 1<<28);
-
-BENCHMARK_MAIN();
-

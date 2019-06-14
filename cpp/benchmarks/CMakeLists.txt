@@ -10,7 +10,7 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
                    ${CMAKE_BENCH_SRC})
                    # "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_BENCH_NAME} gmock gtest gmock_main gtest_main benchmark pthread cudf)
+    target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
 endfunction(ConfigureBench)
@@ -53,18 +53,18 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 ###################################################################################################
 
 ###################################################################################################
-# - test tests ------------------------------------------------------------------------------------
+# - test benchmark --------------------------------------------------------------------------------
 
 set(TEST_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/test/test.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/test_benchmark.cpp")
 
 ConfigureBench(TEST_BENCH "${TEST_BENCH_SRC}")
 
 ###################################################################################################
-# - gather tests ----------------------------------------------------------------------------------
+# - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_benchmark.cpp")
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 

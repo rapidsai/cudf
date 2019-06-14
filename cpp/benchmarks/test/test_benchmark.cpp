@@ -39,5 +39,3 @@ void BM_Sequential(benchmark::State& state) {
       static_cast<int64_t>(state.iterations())*state.range(0));
 }
 BENCHMARK_TEMPLATE(BM_Sequential, std::vector<int>)->Range(1<<0, 1<<10);
-
-BENCHMARK_MAIN();
