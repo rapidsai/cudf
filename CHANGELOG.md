@@ -123,6 +123,7 @@
 - PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
 - PR #1978 Fix for values being filled in an empty dataframe 
+- PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 
 
 # cudf 0.7.2 (16 May 2019)
