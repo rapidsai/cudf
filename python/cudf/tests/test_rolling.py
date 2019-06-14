@@ -109,3 +109,22 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
                 )().fillna(-1),
                 check_dtype=False
             )
+
+
+def test_rolling_with_offset():
+    psr = pd.Series(
+        [1, 2, 4, 4, np.nan, 9],
+        index=[
+            pd.Timestamp('20190101 09:00:00'),
+            pd.Timestamp('20190101 09:00:01'),
+            pd.Timestamp('20190101 09:00:02'),
+            pd.Timestamp('20190101 09:00:04'),
+            pd.Timestamp('20190101 09:00:07'),
+            pd.Timestamp('20190101 09:00:08')
+        ]
+    )
+    gsr = cudf.from_pandas(psr)
+    assert_eq(
+        psr.rolling('2s').sum(),
+        gsr.rolling('2s').sum()
+    )

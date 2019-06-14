@@ -1,4 +1,7 @@
 from libc.stdlib cimport calloc, malloc, free
+from libc.stdint cimport uintptr_t
+
+import numba.cuda
 
 from cudf.dataframe.column import Column
 
@@ -8,12 +11,14 @@ from cudf.bindings.rolling cimport *
 
 
 def apply_rolling(inp, window, min_periods, center, op):
-
     cdef gdf_column *inp_col
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
     cdef gdf_index_type c_window
     cdef gdf_index_type c_forward_window
     cdef gdf_agg_op c_op = agg_ops[op]
+    cdef gdf_index_type *c_window_col = NULL
+    cdef gdf_index_type *c_min_periods_col = NULL
+    cdef gdf_index_type *c_forward_window_col = NULL
 
     if op == "mean":
         inp_col = column_view_from_column(inp.astype("float64"))
@@ -25,12 +30,19 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     cdef gdf_index_type c_min_periods = min_periods
 
-    if center:
-        c_window = (window // 2) + 1
-        c_forward_window = window - (c_window)
-    else:
-        c_window = window
+    cdef uintptr_t c_window_ptr
+    if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
+        c_window = 0
+        c_window_ptr = get_ctype_ptr(window)
+        c_window_col = <gdf_index_type*> c_window_ptr
         c_forward_window = 0
+    else:
+        if center:
+            c_window = (window // 2) + 1
+            c_forward_window = window - (c_window)
+        else:
+            c_window = window
+            c_forward_window = 0
 
     if window == 0:
         data = rmm.device_array_like(inp.data.mem)
@@ -47,9 +59,9 @@ def apply_rolling(inp, window, min_periods, center, op):
                                         c_min_periods,
                                         c_forward_window,
                                         c_op,
-                                        NULL,
-                                        NULL,
-                                        NULL
+                                        c_window_col,
+                                        c_min_periods_col,
+                                        c_forward_window_col
             )
         data, mask = gdf_column_to_column_mem(output_col)
 

@@ -1,5 +1,9 @@
+import pandas as pd
+
 import cudf
 from cudf.bindings.rolling import apply_rolling
+from cudf.dataframe.columnops import as_column
+from cudf.utils import cudautils
 
 
 class Rolling:
@@ -69,22 +73,19 @@ class Rolling:
     1    3
     2    2
     3    2
-    4    1
-    dtype: int64
+    4    1 dtype: int64
     """
     def __init__(self, obj, window, min_periods=None, center=False):
-        if min_periods is None:
-            min_periods = window
         self.obj = obj
         self.window = window
         self.min_periods = min_periods
         self.center = center
-        self._validate_args()
+        self._normalize()
 
     def _apply_agg_series(self, sr, agg_name):
         result_col = apply_rolling(
             sr._column,
-            self.window,
+            self._window,
             self.min_periods,
             self.center,
             agg_name)
@@ -119,13 +120,49 @@ class Rolling:
     def count(self):
         return self._apply_agg("count")
 
-    def _validate_args(self):
+    def _normalize(self):
+        self._window, self.min_periods = self._normalize_window_and_min_periods()
 
-        if self.window <= 0:
-            raise ValueError("Window size cannot be zero or negative")
+    def _normalize_window_and_min_periods(self):
+        """
+        *window* can be:
 
-        if self.min_periods <= 0:
-            raise ValueError("min_periods cannot be zero or negative")
+        * An integer, in which case it is the window size.
+          If *min_periods* is unspecified, it is set to be equal to
+          the window size.
+
+        * A timedelta offset, in which case it is used to generate
+          a column of window sizes to use for each element.
+          If *min_periods* is unspecified, it is set to 1.
+        """
+        window, min_periods = self.window, self.min_periods
+        if pd.api.types.is_number(window):
+            # only allow integers
+            if not pd.api.types.is_integer(window):
+                raise ValueError("window must be an integer")
+            if window <= 0:
+                raise ValueError("window cannot be zero or negative")
+            if self.min_periods is None:
+                min_periods = window
+        else:
+            if not isinstance(self.obj.index, cudf.dataframe.index.DatetimeIndex):
+                raise ValueError("window must be an integer")
+            try:
+                window = pd.to_timedelta(window)
+                # to_timedelta will also convert np.arrays etc.,
+                if not isinstance(window, pd.Timedelta):
+                    raise ValueError
+                window = window.to_timedelta64()
+            except ValueError as e:
+                raise ValueError("window must be integer or "
+                                 "convertible to a timedelta") from e
+            window = cudautils.window_sizes_from_offset(
+                self.obj.index.as_column().data.mem,
+                window
+            )
+            if self.min_periods is None:
+                min_periods = 1
+        return window, min_periods
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
