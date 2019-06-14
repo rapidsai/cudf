@@ -70,9 +70,6 @@ TYPED_TEST(SingleColumnAvg, OneGroupNoNulls) {
       column_wrapper<Key>({key}), column_wrapper<ResultValue>({avg}));
 }
 
-/*
-
-
 TYPED_TEST(SingleColumnAvg, OneGroupAllNullKeys) {
   constexpr int size{10};
   using Key = typename SingleColumnAvg<TypeParam>::KeyType;
@@ -110,12 +107,14 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullKeys) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({sum}));
+      column_wrapper<ResultValue>({avg}));
 }
 
 TYPED_TEST(SingleColumnAvg, OneGroupOddNullKeys) {
@@ -128,12 +127,14 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullKeys) {
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({sum}));
+      column_wrapper<ResultValue>({avg}));
 }
 
 TYPED_TEST(SingleColumnAvg, OneGroupEvenNullValues) {
@@ -144,12 +145,14 @@ TYPED_TEST(SingleColumnAvg, OneGroupEvenNullValues) {
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({sum},
+      column_wrapper<ResultValue>({avg},
                                   [](auto index) { return true; }));
 }
 
@@ -163,14 +166,17 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullValues) {
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return not(index % 2); }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({sum},
+      column_wrapper<ResultValue>({avg},
                                   [](auto index) { return true; }));
 }
+/*
 
 TYPED_TEST(SingleColumnAvg, FourGroupsNoNulls) {
   using Key = typename SingleColumnAvg<TypeParam>::KeyType;
