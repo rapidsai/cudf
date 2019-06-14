@@ -11,6 +11,7 @@ from cudf.bindings.json cimport *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.string cimport string
+from libcpp.memory cimport unique_ptr
 
 from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.dataframe import DataFrame
@@ -88,15 +89,15 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     if dtype is not None:
         args.dtype = arr_dtypes
 
-    cdef JsonReader reader
+    cdef unique_ptr[JsonReader] reader
     with nogil:
-        reader = JsonReader(args)
+        reader = unique_ptr[JsonReader](new JsonReader(args))
     
     cdef cudf_table table
     if byte_range is None:
-        table = reader.read()
+        table = reader.get().read()
     else:
-        table = reader.read_byte_range(byte_range[0], byte_range[1])
+        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
 
     # Extract parsed columns
     outcols = []

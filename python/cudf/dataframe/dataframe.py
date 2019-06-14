@@ -954,8 +954,24 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -977,8 +993,35 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) == 0:
+                # When self has 0 columns and series has values
+                # we can safely go ahead and assign.
+                return series
+            elif (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
