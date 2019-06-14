@@ -232,14 +232,14 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/rolling/rolling.cu
-            src/binary/binary_ops.cu
-            src/binary/jit/code/kernel.cpp
-            src/binary/jit/code/operation.cpp
-            src/binary/jit/code/traits.cpp
-            src/binary/jit/core/binop.cpp
-            src/binary/jit/core/launcher.cpp
-            src/binary/jit/util/operator.cpp
-            src/binary/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/compiled/binary_ops.cu
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
+            src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/util/operator.cpp
+            src/binaryop/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
@@ -252,13 +252,14 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_readers.cu
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/csv/csv_writer.cu
-            src/io/json/json_reader.cu
+            src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
@@ -275,6 +276,7 @@ add_library(cudf SHARED
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/utilities/cuda_utils.cu
+            src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
@@ -282,7 +284,8 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp)
+            src/bitmask/legacy_bitmask.cpp
+            src/gis/point_in_polygon.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
@@ -341,9 +344,6 @@ target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCa
 
 install(TARGETS cudf
         DESTINATION lib)
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
-        DESTINATION include)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)

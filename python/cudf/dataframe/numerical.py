@@ -62,11 +62,16 @@ class NumericalColumn(columnops.TypedColumnBase):
                   dtype=deserialize(*header['dtype']))
         return col
 
-    def binary_operator(self, binop, rhs):
-        if isinstance(rhs, NumericalColumn):
+    def binary_operator(self, binop, rhs, reflect=False):
+        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
-            return numeric_column_binop(lhs=self, rhs=rhs, op=binop,
-                                        out_dtype=out_dtype)
+            return numeric_column_binop(
+                lhs=self,
+                rhs=rhs,
+                op=binop,
+                out_dtype=out_dtype,
+                reflect=reflect
+            )
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -74,6 +79,10 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unary_operator(self, unaryop):
         return numeric_column_unaryop(self, op=unaryop,
                                       out_dtype=self.dtype)
+
+    def unary_logic_op(self, unaryop):
+        return numeric_column_unaryop(self, op=unaryop,
+                                      out_dtype=np.bool_)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
@@ -90,65 +99,56 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
-            ary = utils.scalar_broadcast_to(other, shape=len(self),
-                                            dtype=other_dtype)
-            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+
+            if np.isscalar(other):
+                other = np.dtype(other_dtype).type(other)
+                return other
+            else:
+                ary = utils.scalar_broadcast_to(
+                    other,
+                    shape=len(self),
+                    dtype=other_dtype
+                )
+                return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+
         elif (dtype == np.dtype('object') or
               np.issubdtype(dtype, np.dtype('U').type)):
-            import nvstrings
-            if np.issubdtype(self.dtype, np.signedinteger):
-                if len(self) > 0:
+            if len(self) > 0:
+                if self.dtype in (np.dtype('int8'), np.dtype('int16')):
                     dev_array = self.astype('int32').data.mem
-                    dev_ptr = get_ctype_ptr(dev_array)
-                    null_ptr = None
-                    if self.mask is not None:
-                        null_ptr = get_ctype_ptr(self.mask.mem)
-                    return string.StringColumn(
-                        data=nvstrings.itos(
-                            dev_ptr,
-                            count=len(self),
-                            nulls=null_ptr,
-                            bdevmem=True
-                        )
-                    )
                 else:
-                    return string.StringColumn(
-                        data=nvstrings.to_device(
-                            []
-                        )
-                    )
-            elif np.issubdtype(self.dtype, np.floating):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # dev_array = self.astype('float32').data.mem
-                # dev_ptr = get_ctype_ptr(self.data.mem)
-                # return string.StringColumn(
-                #     data=nvstrings.ftos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
-            elif self.dtype == np.dtype('bool'):
-                raise NotImplementedError(
-                    f"Casting object of {self.dtype} dtype "
-                    "to str dtype is not yet supported"
-                )
-                # return string.StringColumn(
-                #     data=nvstrings.btos(dev_ptr, count=len(self),
-                #                         bdevmem=True)
-                # )
+                    dev_array = self.data.mem
+                dev_ptr = get_ctype_ptr(dev_array)
+                null_ptr = None
+                if self.mask is not None:
+                    null_ptr = get_ctype_ptr(self.mask.mem)
+                kwargs = {
+                    'count': len(self),
+                    'nulls': null_ptr,
+                    'bdevmem': True
+                }
+                data = string._numeric_to_str_typecast_functions[
+                    np.dtype(dev_array.dtype)
+                ](dev_ptr, **kwargs)
+
+            else:
+                data = []
+
+            return string.StringColumn(data=data)
+
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
                 dtype=dtype,
                 data=self.data.astype(dtype)
             )
+
         else:
             col = self.replace(data=self.data.astype(dtype),
                                dtype=np.dtype(dtype))
@@ -163,7 +163,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
-        return pd.Series(self.to_array(fillna='pandas'), index=index)
+        if self.null_count > 0 and self.dtype == np.bool:
+            # Boolean series in Pandas that contains None/NaN is of dtype
+            # `np.object`, which is not natively supported in GDF.
+            ret = self.astype(np.int8).to_array(fillna=-1)
+            ret = pd.Series(ret, index=index)
+            ret = ret.where(ret >= 0, other=None)
+            ret.replace(to_replace=1, value=True, inplace=True)
+            ret.replace(to_replace=0, value=False, inplace=True)
+            return ret
+        else:
+            return pd.Series(self.to_array(fillna='pandas'), index=index)
 
     def to_arrow(self):
         mask = None
@@ -228,7 +238,12 @@ class NumericalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def all(self):
-        return bool(self.min())
+        return bool(self.min(dtype=np.bool_))
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
         return cpp_reduce.apply_reduce('min', self, dtype=dtype)
@@ -242,14 +257,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def product(self, dtype=None):
         return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self, dtype=None):
+    def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1, dtype=None):
-        x = self.astype('f8')
-        mu = x.mean(dtype=dtype)
-        n = x.valid_count
-        asum = x.sum_of_squares(dtype=dtype)
+    def mean_var(self, ddof=1, dtype=np.float64):
+        mu = self.mean(dtype=dtype)
+        n = self.valid_count
+        asum = np.float64(self.sum_of_squares(dtype=dtype))
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
@@ -296,6 +310,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
+        elif dkind == 'b':
+            return False
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
@@ -316,14 +332,24 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Fill null values with *fill_value*
         """
-        result = self.copy()
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-        if is_integer_dtype(result.dtype):
-            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        if np.isscalar(fill_value):
+            # castsafely to the same dtype as self
+            fill_value_casted = self.dtype.type(fill_value)
+            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+                raise TypeError(
+                    "Cannot safely cast non-equivalent {} to {}".format(
+                        type(fill_value).__name__, self.dtype.name
+                    )
+                )
+            fill_value = fill_value_casted
         else:
-            fill_value_col = fill_value_col.astype(result.dtype)
-        cpp_replace.replace_nulls(result, fill_value_col)
-        result = result.replace(mask=None)
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
+            # cast safely to the same dtype as self
+            if is_integer_dtype(self.dtype):
+                fill_value = safe_cast_to_int(fill_value, self.dtype)
+            else:
+                fill_value = fill_value.astype(self.dtype)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):
@@ -349,11 +375,23 @@ class NumericalColumn(columnops.TypedColumnBase):
         return found
 
 
-def numeric_column_binop(lhs, rhs, op, out_dtype):
+def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
+    if reflect:
+        lhs, rhs = rhs, lhs
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
-    masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    masked = False
+    if np.isscalar(lhs):
+        masked = rhs.has_null_mask
+        row_count = len(rhs)
+    elif np.isscalar(rhs):
+        masked = lhs.has_null_mask
+        row_count = len(lhs)
+    else:
+        masked = lhs.has_null_mask or rhs.has_null_mask
+        row_count = len(lhs)
+
+    out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 

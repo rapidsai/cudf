@@ -51,21 +51,21 @@
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/trie.cuh"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/cudf_utils.h" 
+#include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/trie.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/cudf_utils.h> 
 
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
-#include "rmm/thrust_rmm_allocator.h"
-#include "io/comp/io_uncomp.h"
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <io/comp/io_uncomp.h>
 
-#include "io/cuio_common.hpp"
-#include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/wrapper_utils.hpp"
+#include <io/cuio_common.hpp>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/wrapper_utils.hpp>
 
 using std::vector;
 using std::string;
@@ -686,45 +686,45 @@ gdf_error read_csv(csv_read_arg *args)
 
   if(args->dtype == NULL){
     if (raw_csv.num_records == 0) {
-      checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
-    }
+      raw_csv.dtypes = vector<gdf_dtype>(raw_csv.num_active_cols, GDF_STRING);
+    } else {
+      vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
+      device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
+      CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
 
-    vector<column_data_t> h_ColumnData(raw_csv.num_active_cols);
-    device_buffer<column_data_t> d_ColumnData(raw_csv.num_active_cols);
-    CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * raw_csv.num_active_cols));
+      launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
+      CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * raw_csv.num_active_cols, cudaMemcpyDeviceToHost));
 
-    launch_dataTypeDetection(&raw_csv, d_ColumnData.data());
-    CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * raw_csv.num_active_cols, cudaMemcpyDeviceToHost));
+      // host: array of dtypes (since gdf_columns are not created until end)
+      vector<gdf_dtype> d_detectedTypes;
 
-    // host: array of dtypes (since gdf_columns are not created until end)
-    vector<gdf_dtype> d_detectedTypes;
+      for(int col = 0; col < raw_csv.num_active_cols; col++){
+        unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
+                                      h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
 
-    for(int col = 0; col < raw_csv.num_active_cols; col++){
-      unsigned long long countInt = h_ColumnData[col].countInt8 + h_ColumnData[col].countInt16 +
-                                    h_ColumnData[col].countInt32 + h_ColumnData[col].countInt64;
-
-      if (h_ColumnData[col].countNULL == raw_csv.num_records){
-        // Entire column is NULL; allocate the smallest amount of memory
-        d_detectedTypes.push_back(GDF_INT8);
-      } else if(h_ColumnData[col].countString > 0L){
-        d_detectedTypes.push_back(GDF_STRING);
-      } else if(h_ColumnData[col].countDateAndTime > 0L){
-        d_detectedTypes.push_back(GDF_DATE64);
-      } else if(h_ColumnData[col].countBool > 0L) {
-        d_detectedTypes.push_back(GDF_BOOL8);
-      } else if(h_ColumnData[col].countFloat > 0L ||
-        (h_ColumnData[col].countFloat == 0L &&
-         countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
-        // The second condition has been added to conform to
-        // PANDAS which states that a column of integers with
-        // a single NULL record need to be treated as floats.
-        d_detectedTypes.push_back(GDF_FLOAT64);
-      } else {
-        // All other integers are stored as 64-bit to conform to PANDAS
-        d_detectedTypes.push_back(GDF_INT64);
+        if (h_ColumnData[col].countNULL == raw_csv.num_records){
+          // Entire column is NULL; allocate the smallest amount of memory
+          d_detectedTypes.push_back(GDF_INT8);
+        } else if(h_ColumnData[col].countString > 0L){
+          d_detectedTypes.push_back(GDF_STRING);
+        } else if(h_ColumnData[col].countDateAndTime > 0L){
+          d_detectedTypes.push_back(GDF_DATE64);
+        } else if(h_ColumnData[col].countBool > 0L) {
+          d_detectedTypes.push_back(GDF_BOOL8);
+        } else if(h_ColumnData[col].countFloat > 0L ||
+          (h_ColumnData[col].countFloat == 0L &&
+           countInt > 0L && h_ColumnData[col].countNULL > 0L)) {
+          // The second condition has been added to conform to
+          // PANDAS which states that a column of integers with
+          // a single NULL record need to be treated as floats.
+          d_detectedTypes.push_back(GDF_FLOAT64);
+        } else {
+          // All other integers are stored as 64-bit to conform to PANDAS
+          d_detectedTypes.push_back(GDF_INT64);
+        }
       }
+      raw_csv.dtypes = d_detectedTypes;
     }
-    raw_csv.dtypes = d_detectedTypes;
   }
   else {
     const bool is_dict = std::all_of(args->dtype, args->dtype + args->num_dtype,
@@ -1249,7 +1249,8 @@ void dataTypeDetection(char *raw_csv,
 			long tempPos=pos-1;
 
 			// Checking if the record is NULL
-			if(start>(tempPos)){
+			if(start > tempPos ||
+				serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start)){
 				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
 				pos++;
 				start=pos;

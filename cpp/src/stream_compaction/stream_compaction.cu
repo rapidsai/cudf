@@ -15,13 +15,12 @@
  */
 
 #include "copy_if.cuh"
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include "table/device_table.cuh"
 #include <table/device_table_row_operators.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <string/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
-#include <thrust/detail/range/tail_flags.h>
  
 namespace {
 

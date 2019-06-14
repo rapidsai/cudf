@@ -26,7 +26,7 @@
 #include <utilities/bit_util.cuh>
 #include <utilities/wrapper_types.hpp>
 #include <bitmask/legacy_bitmask.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
@@ -124,7 +124,7 @@ struct OrderByTest : public GdfTest
       RMM_FREE(col->data, 0); 
       RMM_FREE(col->valid, 0); 
     };
-    gdf_col_pointer the_column{new gdf_column, deleter};
+    gdf_col_pointer the_column{new gdf_column{}, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);

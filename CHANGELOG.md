@@ -12,9 +12,21 @@
 - PR #1745 Add rounding of numeric columns via Numba
 - PR #1772 JSON reader: add support for BytesIO and StringIO input
 - PR #1527 Support GDF_BOOL8 in readers and writers
+- PR #1819 Logical operators (AND, OR, NOT) for libcudf and cuDF
+- PR #1813 ORC Reader: Add support for stripe selection
+- PR #1828 JSON Reader: add suport for bool8 columns
+- PR #1665 Add the point-in-polygon GIS function
+- PR #1863 Series and Dataframe methods for all and any
+- PR #1921 Add additional formats for typecasting to/from strings
+- PR #1807 Add Series.dropna()
+- PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
+- PR #1954 Add skip test argument to GPU build script
+- PR #1542 Python method and bindings for to_csv
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 
+
 ## Improvements
+
 - PR #1538 Replacing LesserRTTI with inequality_comparator
 - PR #1703 C++: Added non-aggregating `insert` to `concurrent_unordered_map` with specializations to store pairs with a single atomicCAS when possible.
 - PR #1422 C++: Added a RAII wrapper for CUDA streams
@@ -22,14 +34,45 @@
 - PR #1713 Add documentation for Dask-XGBoost
 - PR #1666 CSV Reader: Improve performance for files with large number of columns
 - PR #1725 Enable the ability to use a single column groupby as its own index
+- PR #1759 Add an example showing simultaneous rolling averages to `apply_grouped` documentation
 - PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
+- PR #1764 Improve Numerical column: `mean_var` and `mean`
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1390 Added some basic utility functions for `gdf_column`'s
+- PR #1791 Added general column comparison code for testing
 - PR #1795 Add printing of git submodule info to `print_env.sh`
 - PR #1796 Removing old sort based group by code and gdf_filter
 - PR #1811 Added funtions for copying/allocating `cudf::table`s
+- PR #1838 Improve columnops.column_empty so that it returns typed columns instead of a generic Column
+- PR #1890 Add utils.get_dummies- a pandas-like wrapper around one_hot-encoding
+- PR #1823 CSV Reader: default the column type to string for empty dataframes
+- PR #1827 Create bindings for scalar-vector binops, and update one_hot_encoding to use them
+- PR #1817 Operators now support different sized dataframes as long as they don't share different sized columns
+- PR #1855 Transition replace_nulls to new C++ API and update corresponding Cython/Python code
+- PR #1858 Add `std::initializer_list` constructor to `column_wrapper`
+- PR #1846 C++ type-erased gdf_equal_columns test util; fix gdf_equal_columns logic error
+- PR #1390 Added some basic utility functions for `gdf_column`s
+- PR #1391 Tidy up bit-resolution-operation and bitmask class code
+- PR #1882 Add iloc functionality to MultiIndex dataframes
+- PR #1884 Rolling windows: general enhancements and better coverage for unit tests
+- PR #1886 support GDF_STRING_CATEGORY columns in apply_boolean_mask, drop_nulls and other libcudf functions
+- PR #1896 Improve performance of groupby with levels specified in dask-cudf
+- PR #1915 Improve iloc performance for non-contiguous row selection
+- PR #1859 Convert read_json into a C++ API
+- PR #1919 Rename libcudf namespace gdf to namespace cudf
+- PR #1850 Support left_on and right_on for DataFrame merge operator
+- PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
+- PR #1938 Add default constructor for `column_wrapper`
+- PR #1952 consolidate libcudf public API headers in include/cudf
+- PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
+- PR #1956 Add support for nulls in `query()`
+- PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
+- PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
+- PR #1964 Added support for list-like types in Series.str.cat
+
 
 ## Bug Fixes
 
@@ -55,6 +98,32 @@
 - PR #1786 Maintain the original series name in series.unique output
 - PR #1760 CSV Reader: fix segfault when dtype list only includes columns from usecols list
 - PR #1831 build.sh: Assuming python is in PATH instead of using PYTHON env var
+- PR #1839 Raise an error instead of segfaulting when transposing a DataFrame with StringColumns
+- PR #1840 Retain index correctly during merge left_on right_on
+- PR #1825 cuDF: Multiaggregation Groupby Failures
+- PR #1789 CSV Reader: Fix missing support for specifying `int8` and `int16` dtypes
+- PR #1857 Cython Bindings: Handle `bool` columns while calling `column_view_from_NDArrays`
+- PR #1849 Allow DataFrame support methods to pass arguments to the methods
+- PR #1847 Fixed #1375 by moving the nvstring check into the wrapper function
+- PR #1864 Fixing cudf reduction for POWER platform
+- PR #1869 Parquet reader: fix Dask timestamps not matching with Pandas (convert to milliseconds)
+- PR #1876 add dtype=bool for `any`, `all` to treat integer column correctly
+- PR #1875 CSV reader: take NaN values into account in dtype detection
+- PR #1873 Add column dtype checking for the all/any methods
+- PR #1902 Bug with string iteration in _apply_basic_agg
+- PR #1887 Fix for initialization issue in pq_read_arg,orc_read_arg
+- PR #1867 JSON reader: add support for null/empty fields, including the 'null' literal
+- PR #1891 Fix bug #1750 in string column comparison
+- PR #1909 Support of `to_pandas()` of boolean series with null values
+- PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
+- PR #1914 Zero initialize gdf_column local variables
+- PR #1959 Add support for comparing boolean Series to scalar
+- PR #1966 Ignore index fix in series append
+- PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
+- PR #1982 Fixes incorrect index name after join operation
+- PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
+- PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
+
 
 # cudf 0.7.2 (16 May 2019)
 
@@ -62,6 +131,7 @@
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 - PR #1741 Add MultiIndex concatenation
+
 
 ## Bug Fixes
 
@@ -140,7 +210,6 @@
 - PR #1319 CSV Reader: Use column wrapper for gdf_column output alloc/dealloc
 - PR #1376 Change series quantile default to linear
 - PR #1399 Replace CFFI bindings for NVTX functions with Cython bindings
-- PR #1407 Rename and cleanup of `gdf_table` to `device_table`
 - PR #1389 Refactored `set_null_count()`
 - PR #1386 Added macros `GDF_TRY()`, `CUDF_TRY()` and `ASSERT_CUDF_SUCCEEDED()`
 - PR #1435 Rework CMake and conda recipes to depend on installed libraries

@@ -13,6 +13,7 @@ from cudf.bindings.types import *
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
 from cudf.dataframe.column import Column
+from cudf.bindings.stream_compaction import *
 
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     """
@@ -64,3 +65,26 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     #convert table to columns, index
     out_cols = [Column.from_mem_views(*gdf_column_to_column_mem(i)) for i in out_table]
     return (out_cols[:-1], out_cols[-1])
+
+
+def cpp_apply_boolean_mask(inp, mask):
+    from cudf.dataframe.columnops import column_empty_like
+
+    cdef gdf_column *inp_col = column_view_from_column(inp)
+    cdef gdf_column *mask_col = column_view_from_column(mask)
+    cdef gdf_column result
+    with nogil:
+        result = apply_boolean_mask(inp_col[0], mask_col[0])
+    if result.data is NULL:
+        return column_empty_like(inp, newsize=0)
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
+
+
+def cpp_drop_nulls(inp):
+    cdef gdf_column *inp_col = column_view_from_column(inp)
+    cdef gdf_column result
+    with nogil:
+        result = drop_nulls(inp_col[0])
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)

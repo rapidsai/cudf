@@ -462,3 +462,51 @@ def test_multiindex_copy():
 
     mi2 = mi1.copy(deep=True)
     assert_eq(mi1, mi2)
+
+
+def test_multiindex_iloc(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.iloc[0], gdf.iloc[0])
+    assert_eq(pdf.iloc[1], gdf.iloc[1])
+    assert_eq(pdf.iloc[:0], gdf.iloc[:0])
+    assert_eq(pdf.iloc[:1], gdf.iloc[:1])
+    assert_eq(pdf.iloc[0:1], gdf.iloc[0:1])
+    assert_eq(pdf.iloc[1:2], gdf.iloc[1:2])
+    assert_eq(pdf.iloc[0:2], gdf.iloc[0:2])
+    assert_eq(pdf.iloc[0:], gdf.iloc[0:])
+    assert_eq(pdf.iloc[1:], gdf.iloc[1:])
+
+
+def test_multiindex_to_frame(pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
+
+
+def test_multiindex_groupby_to_frame():
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(['x', 'y']).count()
+    pdg = pdf.groupby(['x', 'y']).count()
+    assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
+
+
+def test_multiindex_reset_index(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.reset_index(), gdf.reset_index())
+
+
+def test_multiindex_groupby_reset_index():
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    pdg = pdf.groupby(['x', 'y']).sum()
+    assert_eq(pdg.reset_index(), gdg.reset_index())

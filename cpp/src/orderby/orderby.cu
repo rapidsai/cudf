@@ -18,14 +18,14 @@
 #include <type_traits>
 #include <algorithm>
 
-#include "cudf.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
 
-#include "table/device_table.cuh"
-#include "table/device_table_row_operators.cuh"
+#include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 /* --------------------------------------------------------------------------*/
 /** 

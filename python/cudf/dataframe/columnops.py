@@ -17,6 +17,8 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
+from cudf.bindings.stream_compaction import (cpp_drop_nulls,
+                                             cpp_apply_boolean_mask)
 
 import warnings
 import cudf.bindings.copying as cpp_copying
@@ -89,57 +91,71 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
+    def dropna(self):
+        dropped_col = cpp_drop_nulls(self)
+        return self.replace(data=dropped_col.data, mask=None, null_count=0)
+
+    def apply_boolean_mask(self, mask):
+        mask = as_column(mask, dtype="bool")
+        data = cpp_apply_boolean_mask(self, mask)
+        return self.replace(data=data.data, mask=data.mask)
+
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
 
-def make_null_like(other, size=None, dtype=None):
-    if size is None:
-        size = other.size
+def column_empty_like(column, dtype=None, masked=False, newsize=None):
+    """Allocate a new column like the given *column*
+    """
     if dtype is None:
-        dtype = other.dtype
-    mask = cudautils.make_mask(size)
-    cudautils.fill_value(mask, 0)
-
-    if pd.api.types.is_categorical_dtype(dtype):
-        mem = rmm.device_array((size,), dtype=other.data.dtype)
-        data = Buffer(mem)
-    elif dtype.kind in 'OU':
-        mem = rmm.device_array((size,), dtype='float64')
-        data = nvstrings.dtos(mem,
-                              len(mem),
-                              nulls=mask,
-                              bdevmem=True)
-    else:
-        mem = rmm.device_array((size,), dtype=dtype)
-        data = Buffer(mem)
-    mask = Buffer(mask)
+        dtype = column.dtype
+    row_count = len(column) if newsize is None else newsize
     categories = None
-    if hasattr(other, 'cat'):
-        categories = other.cat().categories
+    if pd.api.types.is_categorical_dtype(dtype):
+        categories = column.cat().categories
+        dtype = column.data.dtype
+    return column_empty(row_count, dtype, masked, categories=categories)
+
+
+def column_empty(row_count, dtype, masked, categories=None):
+    """Allocate a new column like the given row_count and dtype.
+    """
+    dtype = pd.api.types.pandas_dtype(dtype)
+
+    if masked:
+        mask = cudautils.make_mask(row_count)
+        cudautils.fill_value(mask, 0)
+    else:
+        mask = None
+
+    if (
+        categories is not None
+        or pd.api.types.is_categorical_dtype(dtype)
+    ):
+        mem = rmm.device_array((row_count,), dtype=dtype)
+        data = Buffer(mem)
+        dtype = 'category'
+    elif dtype.kind in 'OU':
+        if row_count == 0:
+            data = nvstrings.to_device([])
+        else:
+            mem = rmm.device_array((row_count,), dtype='float64')
+            data = nvstrings.dtos(mem,
+                                  len(mem),
+                                  nulls=mask,
+                                  bdevmem=True)
+    else:
+        mem = rmm.device_array((row_count,), dtype=dtype)
+        data = Buffer(mem)
+
+    if mask is not None:
+        mask = Buffer(mask)
+
     from cudf.dataframe.columnops import build_column
     return build_column(data,
                         dtype,
                         mask,
                         categories)
-
-
-def column_empty_like(column, dtype, masked):
-    """Allocate a new column like the given *column*
-    """
-    return column_empty(len(column), dtype, masked)
-
-
-def column_empty(row_count, dtype, masked):
-    """Allocate a new column like the given row_count and dtype.
-    """
-    data = rmm.device_array(shape=row_count, dtype=dtype)
-    params = dict(data=Buffer(data))
-    if masked:
-        mask = utils.make_mask(row_count)
-        cudautils.fill_value(mask, 0)
-        params.update(dict(mask=Buffer(mask), null_count=data.size))
-    return Column(**params)
 
 
 def column_empty_like_same_mask(column, dtype):
