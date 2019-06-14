@@ -45,7 +45,7 @@ struct Options {
   Options() = default;
 
   /**---------------------------------------------------------------------------*
-   * Determines if key rows with null values are ignored.
+   * Determines whether key rows with null values are ignored.
    *
    * If `true`, any row in the `keys` table that contains a NULL value will be
    * ignored. That is, the row will not be present in the output keys, and it's
