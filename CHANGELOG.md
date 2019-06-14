@@ -21,7 +21,8 @@
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
-- PR #1478 Refactored groupby implementation: sorts nulls in keys/values, does aggregations a single pass
+- PR #1478 Refactored groupby implementation: handles nulls in keys/values, does aggregations a single pass
+- PR #1542 Python method and bindings for to_csv
 
 
 ## Improvements
@@ -36,6 +37,7 @@
 - PR #1759 Add an example showing simultaneous rolling averages to `apply_grouped` documentation
 - PR #1746 C++: Remove unused code: `windowed_ops.cu`, `sorting.cu`, `hash_ops.cu`
 - PR #1748 C++: Add `bool` nullability flag to `device_table` row operators
+- PR #1764 Improve Numerical column: `mean_var` and `mean`
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
@@ -68,7 +70,9 @@
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
 - PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
-
+- PR #1981 Convert read_csv into a C++ API
+- PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
+- PR #1964 Added support for list-like types in Series.str.cat
 
 ## Bug Fixes
 
@@ -113,9 +117,14 @@
 - PR #1909 Support of `to_pandas()` of boolean series with null values
 - PR #1923 Use prefix removal when two aggs are called on a SeriesGroupBy
 - PR #1914 Zero initialize gdf_column local variables
+- PR #1959 Add support for comparing boolean Series to scalar
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
 - PR #1982 Fixes incorrect index name after join operation
+- PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
+- PR #1991 Parquet reader: fix decoding of NULLs
+- PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
+- PR #1978 Fix for values being filled in an empty dataframe 
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -124,7 +133,6 @@
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 - PR #1741 Add MultiIndex concatenation
-
 
 ## Bug Fixes
 

@@ -217,10 +217,15 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
 set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -323,15 +328,6 @@ set(ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cu")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
-
-###################################################################################################
-# - json tests -------------------------------------------------------------------------------------
-
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp")
-
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-
 
 ###################################################################################################
 # - point in polygon test -----------------------------------------------------------------------------------

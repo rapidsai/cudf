@@ -17,6 +17,7 @@ cdef extern from "binaryop.hpp" nogil:
         GDF_TRUE_DIV,
         GDF_FLOOR_DIV,
         GDF_MOD,
+        GDF_PYMOD,
         GDF_POW,
         GDF_EQUAL,
         GDF_NOT_EQUAL,
