@@ -286,7 +286,7 @@ R"***(
 
     using RLogicalOr = LogicalOr;
 
-    struct UsrDefOp {
+    struct UserDefinedOp {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             TypeOut output;
