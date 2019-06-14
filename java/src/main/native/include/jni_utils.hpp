@@ -65,31 +65,53 @@ inline void check_java_exception(JNIEnv *const env) {
   }
 }
 
+
+class native_jlongArray_accessor {
+public:
+  jlong * getArrayElements(JNIEnv *const env, jlongArray arr) const {
+    return env->GetLongArrayElements(arr, NULL);
+  }
+
+  jlongArray newArray(JNIEnv *const env, int len) const {
+    return env->NewLongArray(len);
+  }
+
+  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong * arr) const {
+    env->SetLongArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jlongArray jarr, jlong * arr, jint mode) const {
+    env->ReleaseLongArrayElements(jarr, arr, mode);
+  }
+};
+
 /**
- * @brief RAII for jlongArray to be sure it is handled correctly.
+ * @brief RAII for java arrays to be sure it is handled correctly.
  *
  * By default any changes to the array will be committed back when
  * the destructor is called unless cancel is called first.
  */
-class native_jlongArray {
+template <typename N_TYPE, typename J_ARRAY_TYPE, typename ACCESSOR>
+class native_jArray {
 private:
+  ACCESSOR access {};
   JNIEnv *const env;
-  jlongArray orig;
+  J_ARRAY_TYPE orig;
   int len;
-  mutable jlong *data_ptr;
+  mutable N_TYPE *data_ptr;
 
   void init_data_ptr() const {
-    if (orig != NULL && data_ptr == NULL) {
-      data_ptr = env->GetLongArrayElements(orig, NULL);
+    if (orig != nullptr && data_ptr == nullptr) {
+      data_ptr = access.getArrayElements(env, orig);
       check_java_exception(env);
     }
   }
 
 public:
-  native_jlongArray(native_jlongArray const &) = delete;
-  native_jlongArray &operator=(native_jlongArray const &) = delete;
+  native_jArray(native_jArray const &) = delete;
+  native_jArray &operator=(native_jArray const &) = delete;
 
-  native_jlongArray(JNIEnv *const env, jlongArray orig)
+  native_jArray(JNIEnv *const env, J_ARRAY_TYPE orig)
       : env(env), orig(orig), len(0), data_ptr(NULL) {
     if (orig != NULL) {
       len = env->GetArrayLength(orig);
@@ -97,22 +119,22 @@ public:
     }
   }
 
-  native_jlongArray(JNIEnv *const env, int len)
-      : env(env), orig(env->NewLongArray(len)), len(len), data_ptr(NULL) {
+  native_jArray(JNIEnv *const env, int len)
+      : env(env), orig(access.newArray(env, len)), len(len), data_ptr(NULL) {
     check_java_exception(env);
   }
 
-  native_jlongArray(JNIEnv *const env, jlong *arr, int len)
-      : env(env), orig(env->NewLongArray(len)), len(len), data_ptr(NULL) {
+  native_jArray(JNIEnv *const env, N_TYPE *arr, int len)
+      : env(env), orig(access.newArray(env, len)), len(len), data_ptr(NULL) {
     check_java_exception(env);
-    env->SetLongArrayRegion(orig, 0, len, arr);
+    access.setArrayRegion(env, orig, 0, len, arr);
     check_java_exception(env);
   }
 
-  native_jlongArray(JNIEnv *const env, const std::vector<long> & arr)
-      : env(env), orig(env->NewLongArray(arr.size())), len(arr.size()), data_ptr(NULL) {
+  native_jArray(JNIEnv *const env, const std::vector<N_TYPE> & arr)
+      : env(env), orig(access.newArray(env, arr.size())), len(arr.size()), data_ptr(NULL) {
     check_java_exception(env);
-    env->SetLongArrayRegion(orig, 0, len, arr.data());
+    access.setArrayRegion(env, orig, 0, len, arr.data());
     check_java_exception(env);
   }
 
@@ -120,9 +142,9 @@ public:
 
   int size() const noexcept { return len; }
 
-  jlong operator[](int index) const {
+  N_TYPE operator[](int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jlongArray pointer is NULL");
+      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
     }
     if (index < 0 || index >= len) {
       throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
@@ -130,9 +152,9 @@ public:
     return data()[index];
   }
 
-  jlong &operator[](int index) {
+  N_TYPE &operator[](int index) {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jlongArray pointer is NULL");
+      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
     }
     if (index < 0 || index >= len) {
       throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
@@ -140,19 +162,19 @@ public:
     return data()[index];
   }
 
-  const jlong *const data() const {
+  const N_TYPE *const data() const {
     init_data_ptr();
     return data_ptr;
   }
 
-  jlong *data() {
+  N_TYPE *data() {
     init_data_ptr();
     return data_ptr;
   }
 
-  const jlongArray get_jlongArray() const { return orig; }
+  const J_ARRAY_TYPE get_jArray() const { return orig; }
 
-  jlongArray get_jlongArray() { return orig; }
+  J_ARRAY_TYPE get_jArray() { return orig; }
 
   /**
    * @brief if data has been written back into this array, don't commit
@@ -160,20 +182,24 @@ public:
    */
   void cancel() {
     if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseLongArrayElements(orig, data_ptr, JNI_ABORT);
+      access.releaseArrayElements(env, orig, data_ptr, JNI_ABORT);
       data_ptr = NULL;
     }
   }
 
   void commit() {
     if (data_ptr != NULL && orig != NULL) {
-      env->ReleaseLongArrayElements(orig, data_ptr, 0);
+      access.releaseArrayElements(env, orig, data_ptr, 0);
       data_ptr = NULL;
     }
   }
 
-  ~native_jlongArray() { commit(); }
+  ~native_jArray() {
+      commit();
+  }
 };
+
+typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
 
 /**
  * @brief wrapper around native_jlongArray to make it take pointers instead.
@@ -207,9 +233,9 @@ public:
 
   T **data() { return reinterpret_cast<T **>(wrapped.data()); }
 
-  const jlongArray get_jlongArray() const { return wrapped.get_jlongArray(); }
+  const jlongArray get_jArray() const { return wrapped.get_jArray(); }
 
-  jlongArray get_jlongArray() { return wrapped.get_jlongArray(); }
+  jlongArray get_jArray() { return wrapped.get_jArray(); }
 
   /**
    * @brief if data has been written back into this array, don't commit
@@ -288,7 +314,7 @@ public:
       return NULL;
     }
     wrapped->commit();
-    jlongArray ret = wrapped->get_jlongArray();
+    jlongArray ret = wrapped->get_jArray();
     wrapped.reset(NULL);
     return ret;
   }
@@ -825,7 +851,7 @@ public:
     for (int i = 0; i < wrappers.size(); i++) {
       wrappers[i].release();
     }
-    return native_handles.get_jlongArray();
+    return native_handles.get_jArray();
   }
 };
 

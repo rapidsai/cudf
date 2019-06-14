@@ -37,7 +37,7 @@ static jlongArray put_strings_on_host(JNIEnv *env, NVStrings *nvstr) {
   ret[3] = offset_size;
   strdata.release();
   offsetdata.release();
-  return ret.get_jlongArray();
+  return ret.get_jArray();
 }
 } // namespace jni
 } // namespace cudf

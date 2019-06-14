@@ -210,7 +210,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
 
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
                                                 ptrs.size());
-    return native_handles.get_jlongArray();
+    return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
 }
@@ -265,7 +265,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(read_arg.data),
                                                 read_arg.num_cols_out);
-    return native_handles.get_jlongArray();
+    return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
 }
@@ -357,7 +357,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfInnerJoin(
     for (int i = 0; i < result_num_cols; i++) {
       output_columns[i].release();
     }
-    return output_handles.get_jlongArray();
+    return output_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
 }
@@ -406,7 +406,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
 
     cudf::jni::native_jlongArray outcol_handles(env, reinterpret_cast<jlong *>(outcol_ptrs.data()),
                                                 num_columns);
-    jlongArray result = outcol_handles.get_jlongArray();
+    jlongArray result = outcol_handles.get_jArray();
     for (int i = 0; i < num_columns; ++i) {
       outcols[i].release();
     }
