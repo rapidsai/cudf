@@ -185,6 +185,8 @@ class NumericalColumn(columnops.TypedColumnBase):
                 new_type = pd.Int32Dtype()
             elif original_type == np.int64:
                 new_type = pd.Int32Dtype()
+            else:
+                new_type = original_type
             return pd.Series(array, index=index, dtype=new_type)
 
     def to_arrow(self):
@@ -317,7 +319,6 @@ class NumericalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        breakpoint()
         dkind = self.dtype.kind
         if dkind == 'f':
             return self.dtype.type(np.nan)

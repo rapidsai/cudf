@@ -355,7 +355,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                             (len(arbitrary),),
                             dtype=new_dtype
                         )
-            breakpoint()
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
