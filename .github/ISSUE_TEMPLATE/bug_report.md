@@ -20,8 +20,10 @@ A clear and concise description of what you expected to happen.
  - Environment location: [Bare-metal, Docker, Cloud(specify cloud provider)]
  - Method of cuDF install: [conda, Docker, or from source]
    - If method of install is [Docker], provide `docker pull` & `docker run` commands used
- - Please run and attach the output of the `cudf/print_env.sh` script to gather relevant environment details
- 
+
+<details><summary>Click here to see environment details</summary><pre>
+Please run and attach the output of the `cudf/print_env.sh` script to gather relevant environment details
+</pre></details>
 
 **Additional context**
 Add any other context about the problem here.
