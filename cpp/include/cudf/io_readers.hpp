@@ -210,4 +210,83 @@ public:
   ~CsvReader();
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Options for the Parquet reader
+ *---------------------------------------------------------------------------**/
+struct ParquetReaderOptions {
+  std::vector<std::string> columns;
+  bool strings_to_categorical = false;
+
+  ParquetReaderOptions() = default;
+  ParquetReaderOptions(ParquetReaderOptions const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
+   *---------------------------------------------------------------------------**/
+  ParquetReaderOptions(std::vector<std::string> cols,
+                       bool strings_as_category)
+      : columns(std::move(cols)),
+        strings_to_categorical(strings_as_category) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache Parquet data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class ParquetReader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit ParquetReader(std::string filepath,
+                         ParquetReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit ParquetReader(const char *buffer, size_t length,
+                         ParquetReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the index column derived from the dataset metadata.
+   *
+   * @return std::string Name of the column if it exists.
+   *---------------------------------------------------------------------------**/
+  std::string get_index_column();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a specific row group.
+   *
+   * @param[in] row_group Index of the row group
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_row_group(size_t row_group);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~ParquetReader();
+};
+
 } // namespace cudf
