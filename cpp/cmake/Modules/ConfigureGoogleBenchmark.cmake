@@ -54,6 +54,6 @@ endif(GBENCH_BUILD)
 
 message(STATUS "Google Benchmark installed here: " ${GBENCH_ROOT}/install)
 set(GBENCH_INCLUDE_DIR "${GBENCH_ROOT}/install/include")
-set(GBENCH_LIBRARY_DIR "${GBENCH_ROOT}/install/lib")
+set(GBENCH_LIBRARY_DIR "${GBENCH_ROOT}/install/lib" "${GBENCH_ROOT}/install/lib64")
 set(GBENCH_FOUND TRUE)
 
