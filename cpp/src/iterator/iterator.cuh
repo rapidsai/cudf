@@ -75,7 +75,7 @@
 #include <iterator/transform_unary_functions.cuh>
 
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
-#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
+#include <utilities/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -134,7 +134,7 @@ struct value_accessor<ElementType, ResultType, true>
 #endif
   }
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDA_DEVICE_CALLABLE
   ResultType operator()(gdf_index_type i) const {
     return bit_mask::is_valid(bitmask, i) ? static_cast<ResultType>(elements[i]) : identity;
   }
@@ -157,7 +157,7 @@ struct value_accessor<ElementType, ResultType, false>
  * -------------------------------------------------------------------------**/
   value_accessor(ElementType const* e, bit_mask::bit_mask_t const*, ResultType) : elements{e} {}
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDA_DEVICE_CALLABLE
   ResultType operator()(gdf_index_type i) const { return static_cast<ResultType>(elements[i]); }
 };
 
@@ -198,7 +198,7 @@ struct pair_accessor<ElementType, ResultType, true> : public value_accessor<Elem
   pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
     : value_accessor<ElementType, ResultType, true>(e, b, i) {};
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDA_DEVICE_CALLABLE
   thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
     return bit_mask::is_valid(this->bitmask, i) ?
         thrust::make_pair(static_cast<ResultType>(this->elements[i]), true) :
@@ -222,7 +222,7 @@ struct pair_accessor<ElementType, ResultType, false> : public value_accessor<Ele
   pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b , ResultType i)
     : value_accessor<ElementType, ResultType, false>(e, b, i) {};
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDA_DEVICE_CALLABLE
   thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
     return thrust::make_pair(static_cast<ResultType>(this->elements[i]), true);
   }

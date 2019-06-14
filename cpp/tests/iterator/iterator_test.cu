@@ -107,17 +107,6 @@ struct IteratorTest : public GdfTest
         EXPECT_EQ(expected, result) << "thrust test";
     }
 
-    // iterator test case which uses thrust
-    template <typename InputIterator, typename T_output>
-    void iterator_test_thrust_host(T_output expected, InputIterator d_in, int num_items)
-    {
-        T_output init{0};
-        InputIterator d_in_last =  d_in + num_items;
-        EXPECT_EQ( thrust::distance(d_in, d_in_last), num_items);
-
-        T_output result = thrust::reduce(thrust::host, d_in, d_in_last, init, cudf::DeviceSum{});
-        EXPECT_EQ(expected, result) << "thrust host test";
-    }
 
     template <typename T_output>
     void evaluate(T_output expected, thrust::device_vector<T_output> &dev_result, const char* msg=nullptr)
@@ -167,8 +156,6 @@ TYPED_TEST(IteratorTest, non_null_iterator)
     this->iterator_test_cub(expected_value, it_dev, dev_array.size());
     this->iterator_test_thrust(expected_value, it_dev, dev_array.size());
 
-    this->iterator_test_thrust_host(expected_value, hos_array.begin(), hos_array.size());
-
     // test column input
     cudf::test::column_wrapper<T> w_col(hos_array);
     this->column_sum_test(expected_value, w_col);
@@ -198,10 +185,6 @@ TYPED_TEST(IteratorTest, null_iterator)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // CPU test
-    auto it_hos = cudf::make_iterator<true>(
-        std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
     auto it_dev = cudf::make_iterator<true, T>(w_col, init);
@@ -239,12 +222,6 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
     T_upcast expected_value = std::accumulate(
         replaced_array.begin(), replaced_array.end(), T_upcast{0});
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
-
-
-    // CPU test
-    auto it_hos = cudf::make_iterator<true, T, T_upcast>(
-        std::get<0>(hos).data(), std::get<1>(hos).data(), T_upcast{0});
-    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
     auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T_upcast{0});
@@ -284,12 +261,6 @@ TYPED_TEST(IteratorTest, null_iterator_square)
         replaced_array.begin(), replaced_array.end(), T_upcast{0});
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // CPU test
-    auto it_hos = cudf::make_iterator<true, T, T_upcast>(
-        std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
-    auto it_hos_squared = thrust::make_transform_iterator(it_hos, transformer);
-    this->iterator_test_thrust_host(expected_value, it_hos_squared, w_col.size());
-
     // GPU test
     auto it_dev = cudf::make_iterator<true, T, T_upcast>(w_col, T{0});
     auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
@@ -323,10 +294,6 @@ TYPED_TEST(IteratorTest, indexed_iterator)
     std::cout << "expected <group_by_iterator> = " << expected_value << std::endl;
 
     const bit_mask::bit_mask_t *dummy = nullptr;
-    // CPU test
-    auto it_host = cudf::make_iterator<false, T, T, T_index*>
-        (hos_array.data(), dummy, T{0}, hos_indices.data());
-    this->iterator_test_thrust_host(expected_value, it_host, hos_indices.size());
 
     // GPU test
     auto it_dev = cudf::make_iterator<false, T, T, T_index*>
@@ -362,9 +329,6 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     T expected_value = std::accumulate(replaced_array.begin(), replaced_array.end(), init);
     std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
-    // CPU test
-    auto it_hos = cudf::make_iterator<true>(std::get<0>(hos).data(), std::get<1>(hos).data(), init);
-    this->iterator_test_thrust_host(expected_value, it_hos, w_col.size());
 
     // GPU test
     auto it_dev = cudf::make_iterator<true, T>(w_col, init);
@@ -421,12 +385,6 @@ TYPED_TEST(IteratorTest, mean_var_output)
         [](T acc, T i) { return acc + i * i; });
 
     std::cout << "expected <mixed_output> = " << expected_value << std::endl;
-
-    // CPU test
-    auto it_hos = cudf::make_pair_iterator<true, T>
-        (std::get<0>(hos).data(), std::get<1>(hos).data(), T{0});
-    auto it_hos_squared = thrust::make_transform_iterator(it_hos, transformer);
-    this->iterator_test_thrust_host(expected_value, it_hos_squared, w_col.size());
 
     // GPU test
     auto it_dev = cudf::make_pair_iterator<true, T>
