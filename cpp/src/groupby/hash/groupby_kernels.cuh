@@ -304,6 +304,32 @@ __global__ void build_aggregation_map(
   }
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Extracts the resulting keys and values of the groupby operation from a
+ * hash map and sparse output table.
+ *
+ * @tparam keys_have_nulls Indicates the presence of null values in the keys
+ * table
+ * @tparam values_have_nulls Indicates the presence of null values in the values
+ * table
+ * @tparam Map The type of the hash map object
+ * @param map[in] The hash map whos "keys" are indices into the `input_keys`
+ * table, and "values" are indices into the `sparse_output_values` table
+ * @param input_keys The table whose rows were used as the keys to build the
+ * hash map
+ * @param output_keys[out] Resulting keys of the groupby operation. Contains the
+ * unique set of key rows from `input_keys`. The "key" row at `i` corresponds to
+ * the value row at `i` in `dense_output_values`.
+ * @param sparse_output_values[in] The sparse table that holds the result of
+ * aggregating the values corresponding to the rows in `input_keys`. The
+ * "values" of the hash map index into this table.
+ * @param dense_output_values[out] The compacted version of
+ * `sparse_output_values` where row `i` corresponds to row `i` in the
+ * `output_keys` table.
+ * @param output_write_index[in/out] Global counter used for determining write
+ * location for output keys/values. When kernel is complete, indicates the final
+ * result size.
+ *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
 __global__ void extract_groupby_result(Map* map, device_table const input_keys,
                                        device_table output_keys,
