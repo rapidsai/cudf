@@ -176,7 +176,6 @@ TYPED_TEST(SingleColumnAvg, OneGroupOddNullValues) {
       column_wrapper<ResultValue>({avg},
                                   [](auto index) { return true; }));
 }
-/*
 
 TYPED_TEST(SingleColumnAvg, FourGroupsNoNulls) {
   using Key = typename SingleColumnAvg<TypeParam>::KeyType;
@@ -191,7 +190,7 @@ TYPED_TEST(SingleColumnAvg, FourGroupsNoNulls) {
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultValue>{R(1), R(5), R(9), R(13)});
+      column_wrapper<ResultValue>{R(1)/2, R(5)/2, R(9)/2, R(13)/2});
 }
 
 TYPED_TEST(SingleColumnAvg, FourGroupsEvenNullKeys) {
@@ -209,6 +208,7 @@ TYPED_TEST(SingleColumnAvg, FourGroupsEvenNullKeys) {
                           [](auto index) { return true; }),
       column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
+
 TYPED_TEST(SingleColumnAvg, FourGroupsOddNullKeys) {
   using Key = typename SingleColumnAvg<TypeParam>::KeyType;
   using Value = typename SingleColumnAvg<TypeParam>::ValueType;
@@ -359,5 +359,3 @@ TYPED_TEST(SingleColumnAvg, EightKeysAllUniqueEvenValuesNull) {
           {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
           [](auto index) { return index % 2; }));
 }
-
-*/
