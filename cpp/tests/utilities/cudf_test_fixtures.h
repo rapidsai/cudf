@@ -14,27 +14,17 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef CUDF_TEST_FIXTURES_H
+#define CUDF_TEST_FIXTURES_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <rmm/rmm.h>
 
-#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
-#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
-#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
-
-#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression) \
-do { \
-    gdf_error _assert_cudf_success_eval_result;\
-    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
-    const char* _assertion_failure_message = #gdf_error_expression; \
-    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) << "Failing expression: " << _assertion_failure_message; \
-} while (0)
-
+#include <ftw.h>
+#include "cudf_test_utils.cuh"
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
@@ -48,3 +38,42 @@ struct GdfTest : public ::testing::Test
         ASSERT_RMM_SUCCEEDED( rmmFinalize() );
     }
 };
+
+/**
+* @brief Environment for google tests that creates/deletes temporary directory 
+* for each test program and provides path of filenames
+* 
+* TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+*   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+*/
+struct TempDirTestEnvironment : public ::testing::Environment
+{
+    std::string tmpdir;
+
+    void SetUp() {
+        char tmp_format[]="/tmp/gtest.XXXXXX";
+        tmpdir = mkdtemp(tmp_format);
+        tmpdir += "/";
+    }
+
+    void TearDown() {
+        //TODO: should use std::filesystem instead, once C++17 support added
+        nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+    }
+
+    static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+    {
+        return remove(pathname);
+    }
+
+    /**
+    * @brief get temporary path of filename for this test program
+    *
+    * @return temporary directory path
+    */
+    std::string get_temp_dir()
+    {
+        return tmpdir;
+    }
+};
+#endif // CUDF_TEST_FIXTURES_H

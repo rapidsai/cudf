@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <utilities/column_utils.hpp>
+#include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
 #include <rmm/rmm.h>
@@ -62,7 +63,7 @@ class gdf_column_wrapper {
     const auto num_rows = std::max(col->size, 1);
     const auto column_byte_width = (col->dtype == GDF_STRING)
                                        ? sizeof(std::pair<const char *, size_t>)
-                                       : gdf_dtype_size(col->dtype);
+                                       : cudf::byte_width(*col);
 
     RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
     RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
@@ -157,8 +158,12 @@ public:
 
   T* data() const noexcept {return d_data_;}
   size_t size() const noexcept {return count_;}
+  bool empty() const noexcept {return count_ == 0;}
 
   void resize(size_t cnt) {
+    if (cnt == count_) {
+      return;
+    }
     // new size is zero, free the buffer if not null
     if(cnt == 0 && d_data_ != nullptr) {
       RMM_FREE(d_data_, stream_);

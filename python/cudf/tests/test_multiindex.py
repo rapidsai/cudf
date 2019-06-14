@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_neq
 
 
 def test_multiindex_levels_codes_validation():
@@ -215,8 +216,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
               gdf.loc[('c', 'forest', 'clear')])
 
 
-@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet",
-                   raises=AttributeError)
+@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet")
 def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
@@ -395,3 +395,118 @@ def test_multi_column(func):
     b = func(gdf)
 
     assert_eq(a, b)
+
+
+def test_multiindex_equality():
+    # mi made from groupby
+    # mi made manually to be identical
+    # are they equal?
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    mi1 = gdf.groupby(['x', 'y']).mean().index
+    mi2 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    assert_eq(mi1, mi2)
+
+    # mi made from two groupbys, are they equal?
+    mi2 = gdf.groupby(['x', 'y']).max().index
+    assert_eq(mi1, mi2)
+
+    # mi made manually twice are they equal?
+    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    assert_eq(mi1, mi2)
+
+    # mi made from different groupbys are they not equal?
+    mi1 = gdf.groupby(['x', 'y']).mean().index
+    mi1 = gdf.groupby(['x', 'z']).mean().index
+    assert_neq(mi1, mi2)
+
+    # mi made from different manuals are they not equal?
+    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    mi1 = cudf.MultiIndex(levels=[[0, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    assert_neq(mi1, mi2)
+
+
+def test_multiindex_copy():
+    # mi made from groupby
+    # make a copy with .copy
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    mi1 = gdf.groupby(['x', 'y']).mean().index
+    mi2 = mi1.copy(deep=False)
+    assert_eq(mi1, mi2)
+
+    mi2 = mi1.copy(deep=True)
+    assert_eq(mi1, mi2)
+
+    # mi made manually
+    # make a copy with .copy
+    # is it equal?
+    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                          names=['x', 'y'])
+    mi2 = mi1.copy(deep=False)
+    assert_eq(mi1, mi2)
+
+    mi2 = mi1.copy(deep=True)
+    assert_eq(mi1, mi2)
+
+
+def test_multiindex_iloc(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.iloc[0], gdf.iloc[0])
+    assert_eq(pdf.iloc[1], gdf.iloc[1])
+    assert_eq(pdf.iloc[:0], gdf.iloc[:0])
+    assert_eq(pdf.iloc[:1], gdf.iloc[:1])
+    assert_eq(pdf.iloc[0:1], gdf.iloc[0:1])
+    assert_eq(pdf.iloc[1:2], gdf.iloc[1:2])
+    assert_eq(pdf.iloc[0:2], gdf.iloc[0:2])
+    assert_eq(pdf.iloc[0:], gdf.iloc[0:])
+    assert_eq(pdf.iloc[1:], gdf.iloc[1:])
+
+
+def test_multiindex_to_frame(pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
+
+
+def test_multiindex_groupby_to_frame():
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(['x', 'y']).count()
+    pdg = pdf.groupby(['x', 'y']).count()
+    assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
+
+
+def test_multiindex_reset_index(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.reset_index(), gdf.reset_index())
+
+
+def test_multiindex_groupby_reset_index():
+    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
+                          'y': [1, 1, 2, 2, 5],
+                          'z': [0, 1, 0, 1, 0]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(['x', 'y']).sum()
+    pdg = pdf.groupby(['x', 'y']).sum()
+    assert_eq(pdg.reset_index(), gdg.reset_index())

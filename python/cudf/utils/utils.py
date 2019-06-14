@@ -1,6 +1,8 @@
 from collections import namedtuple
+import numbers
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from math import isnan, isinf, ceil
 
@@ -178,3 +180,109 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
             np.empty(0, dtype=new_dtype)
         )
     return (pamask, padata)
+
+
+def cudf_dtype_from_pydata_dtype(dtype):
+    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
+        Python dtype.
+    """
+    try:
+        # pd 0.24.X
+        from pandas.core.dtypes.common import \
+            infer_dtype_from_object
+    except ImportError:
+        # pd 0.23.X
+        from pandas.core.dtypes.common import \
+            _get_dtype_from_object as infer_dtype_from_object
+
+    if pd.api.types.is_categorical_dtype(dtype):
+        pass
+    elif np.issubdtype(dtype, np.datetime64):
+        dtype = np.datetime64
+
+    return infer_dtype_from_object(dtype)
+
+
+def is_single_value(val):
+    return (
+            isinstance(val, str)
+            or isinstance(val, numbers.Number)
+            or np.isscalar(val)
+            or isinstance(val, pd.Timestamp)
+            or isinstance(val, pd.Categorical)
+    )
+
+
+def get_dummies(df, prefix='', prefix_sep='_', cats={}, columns=None,
+                dtype='float64'):
+    """ Returns a dataframe whose columns are the one hot encodings of all
+    columns in `df`
+
+    Parameters
+    ----------
+    df : cudf.DataFrame
+        dataframe to encode
+    prefix : str, dict, or sequence, optional
+        prefix to append. Either a str (to apply a constant prefix), dict
+        mapping column names to prefixes, or sequence of prefixes to apply with
+        the same length as the number of columns. If not supplied, defaults
+        to the empty string
+    prefix_sep : str, optional
+        separator to use when appending prefixes
+    cats : dict, optional
+        dictionary mapping column names to sequences of integers representing
+        that column's category. See `cudf.DataFrame.one_hot_encoding` for more
+        information. if not supplied, it will be computed
+    columns : sequence of str, optional
+        Names of columns to encode. If not provided, will attempt to encode all
+        columns. Note this is different from pandas default behavior, which
+        encodes all columns with dtype object or categorical
+    dtype : str, optional
+        output dtype, default 'float64'
+    """
+    from cudf.multi import concat
+
+    if columns is None:
+        columns = df.columns
+
+    if isinstance(prefix, str):
+        prefix_map = {}
+    elif isinstance(prefix, dict):
+        prefix_map = prefix
+    else:
+        prefix_map = dict(zip(columns, prefix))
+
+    return concat([
+        df.one_hot_encoding(
+            name,
+            prefix=name
+            + (prefix_sep if prefix else '')
+            + prefix_map.get(name, prefix),
+            cats=cats.get(name, df[name].unique()),
+            prefix_sep=prefix_sep,
+            dtype=dtype)
+        for name in columns
+    ], axis=1)
+
+
+def is_list_like(obj):
+    '''
+    This function checks if the given `obj`
+    is a list-like (list, tuple, Series...)
+    type or not.
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    Boolean: True or False depending on whether the
+    input `obj` is like-like or not.
+    '''
+    from collections.abc import Sequence
+    if isinstance(obj, (Sequence,)) and \
+            not isinstance(obj, (str, bytes)):
+        return True
+    else:
+        return False

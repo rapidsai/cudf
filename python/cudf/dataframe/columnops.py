@@ -17,8 +17,11 @@ from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
+from cudf.bindings.stream_compaction import (cpp_drop_nulls,
+                                             cpp_apply_boolean_mask)
 
 import warnings
+import cudf.bindings.copying as cpp_copying
 
 
 class TypedColumnBase(Column):
@@ -88,19 +91,71 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
+    def dropna(self):
+        dropped_col = cpp_drop_nulls(self)
+        return self.replace(data=dropped_col.data, mask=None, null_count=0)
+
+    def apply_boolean_mask(self, mask):
+        mask = as_column(mask, dtype="bool")
+        data = cpp_apply_boolean_mask(self, mask)
+        return self.replace(data=data.data, mask=data.mask)
+
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
 
-def column_empty_like(column, dtype, masked):
+def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
     """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
-    params = dict(data=Buffer(data))
+    if dtype is None:
+        dtype = column.dtype
+    row_count = len(column) if newsize is None else newsize
+    categories = None
+    if pd.api.types.is_categorical_dtype(dtype):
+        categories = column.cat().categories
+        dtype = column.data.dtype
+    return column_empty(row_count, dtype, masked, categories=categories)
+
+
+def column_empty(row_count, dtype, masked, categories=None):
+    """Allocate a new column like the given row_count and dtype.
+    """
+    dtype = pd.api.types.pandas_dtype(dtype)
+
     if masked:
-        mask = utils.make_mask(data.size)
-        params.update(dict(mask=Buffer(mask), null_count=data.size))
-    return Column(**params)
+        mask = cudautils.make_mask(row_count)
+        cudautils.fill_value(mask, 0)
+    else:
+        mask = None
+
+    if (
+        categories is not None
+        or pd.api.types.is_categorical_dtype(dtype)
+    ):
+        mem = rmm.device_array((row_count,), dtype=dtype)
+        data = Buffer(mem)
+        dtype = 'category'
+    elif dtype.kind in 'OU':
+        if row_count == 0:
+            data = nvstrings.to_device([])
+        else:
+            mem = rmm.device_array((row_count,), dtype='float64')
+            data = nvstrings.dtos(mem,
+                                  len(mem),
+                                  nulls=mask,
+                                  bdevmem=True)
+    else:
+        mem = rmm.device_array((row_count,), dtype=dtype)
+        data = Buffer(mem)
+
+    if mask is not None:
+        mask = Buffer(mask)
+
+    from cudf.dataframe.columnops import build_column
+    return build_column(data,
+                        dtype,
+                        mask,
+                        categories)
 
 
 def column_empty_like_same_mask(column, dtype):
@@ -143,13 +198,10 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
-    assert column.null_count == 0
 
-    selvals = cudautils.gather(column.data.to_gpu_array(),
-                               positions.data.to_gpu_array())
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(positions.data.to_gpu_array())
+    pos_ary = positions.data.to_gpu_array()
+    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_index = Buffer(pos_ary)
 
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
@@ -157,16 +209,16 @@ def column_select_by_position(column, positions):
 
 def build_column(buffer, dtype, mask=None, categories=None):
     from cudf.dataframe import numerical, categorical, datetime, string
-    if np.dtype(dtype).type == np.datetime64:
-        return datetime.DatetimeColumn(data=buffer,
-                                       dtype=np.dtype(dtype),
-                                       mask=mask)
-    elif pd.api.types.is_categorical_dtype(dtype):
+    if pd.api.types.is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(data=buffer,
                                              dtype='categorical',
                                              categories=categories,
                                              ordered=False,
                                              mask=mask)
+    elif np.dtype(dtype).type == np.datetime64:
+        return datetime.DatetimeColumn(data=buffer,
+                                       dtype=np.dtype(dtype),
+                                       mask=mask)
     elif np.dtype(dtype).type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
@@ -228,8 +280,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        if (data.dtype in [np.float16, np.float32, np.float64]
-                and arbitrary.size > 0):
+        if (data.dtype in
+           [np.float16, np.float32, np.float64] and arbitrary.size > 0):
             if nan_as_null:
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)
@@ -387,6 +439,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
+        arbitrary = arbitrary.ceil('ms')
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))

@@ -22,14 +22,14 @@
 #include <typeinfo>
 #include <memory>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-#include <cudf.h>
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/cudf.h>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 
-#include "utilities/cudf_utils.h"
+#include <utilities/cudf_utils.h>
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
@@ -39,11 +39,11 @@
 #include "../groupby_test_helpers.cuh"
 
 // See this header for all valid handling
-#include "bitmask/legacy_bitmask.hpp"
+#include <bitmask/legacy_bitmask.hpp>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace without_agg {
 
@@ -171,11 +171,9 @@ struct GroupByWoAggTest : public GdfTest {
    * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result(const gdf_error expected_error = GDF_SUCCESS)
+  void compute_gdf_result()
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
-
-    gdf_error error{GDF_SUCCESS};
 
     gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
 
@@ -193,51 +191,24 @@ struct GroupByWoAggTest : public GdfTest {
                                                                             groupby_col_indices.data(),
                                                                             &context));
 
-    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
+    copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
 
-    if (GDF_SUCCESS == expected_error) {
-        copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
-
-        std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
-        for (size_t i = 0; i < num_columns; ++i) {
-          tuple_each(cpu_data_cols_out, [this](auto& v) {
-            for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
-              std::cout << "\tcout_out:" <<  v.at(this->cpu_out_indices[j]) << std::endl;
-            }
-          });
-        }
-        std::cout << "gdf_out_indices - " <<  cpu_out_indices.size() << std::endl;
-        for (size_t i = 0; i < cpu_out_indices.size(); ++i) {
-          std::cout << "\t index: " << cpu_out_indices[i] << std::endl;
-        }
-
-        // Free results
-        std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
-          RMM_FREE(col->data, 0);
-          RMM_FREE(col->valid, 0);
-          delete col;
-        });
-    }
+    // Free results
+    std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
+      RMM_FREE(col->data, 0);
+      RMM_FREE(col->valid, 0);
+      delete col;
+    });    
   }
 
   void compare_gdf_result(map_t& reference_map) {
     ASSERT_EQ(cpu_out_indices.size(), reference_map.size()) << "Size of gdf result does not match reference result\n";
 
-      for(auto &iter : reference_map) {
-        tuple_each(iter.first, [&](auto& val) {
-            std::cout << val <<  " => " <<  iter.second << std::endl;
-        });
-      }
       auto ref_size = reference_map.size();
       for (size_t i = 0; i < ref_size; ++i) {
           auto sch = reference_map.find(extractKey(cpu_data_cols_out, cpu_out_indices[i]));
           bool found = (sch != reference_map.end());
-          if (found) {
-            tuple_each(sch->first, [&](auto &val) {
-              std::cout <<  "sch:  " << val  <<  " => " << sch->second << std::endl;
-            });
-          }
-
+     
           EXPECT_EQ(found, true);
           if (!found) { continue; }
 
@@ -267,7 +238,7 @@ TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest)
     const size_t max_val = 10;
     this->create_input(num_keys, num_values_per_key, max_key, max_val, false);
     auto reference_map = this->compute_reference_solution();
-    this->print_reference_solution(reference_map);
+    // this->print_reference_solution(reference_map);
 
     this->compute_gdf_result();
     this->compare_gdf_result(reference_map);
@@ -413,17 +384,16 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
    * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result_with_nulls(const gdf_error expected_error = GDF_SUCCESS)
+  void compute_gdf_result_with_nulls()
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
-
-    gdf_error error{GDF_SUCCESS};
 
     gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
 
     std::vector<int> groupby_col_indices;
-    for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++)
+    for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++){
       groupby_col_indices.push_back(i);
+    }
 
     cudf::table input_table(group_by_input_key, num_columns);
 
@@ -434,70 +404,31 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
                                                                             num_columns,
                                                                             groupby_col_indices.data(),
                                                                             &this->context));
+    copy_output_with_array_with_nulls(
+            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
 
-    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
-
-    if (GDF_SUCCESS == expected_error) {
-        copy_output_with_array_with_nulls(
-                output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
-
-        std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
-        size_t index = 0;
-        tuple_each(this->cpu_data_cols_out, [this, &index](auto& v) {
-          auto valid = this->cpu_data_cols_out_valid[index].get();
-          for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
-            bool b1 = gdf_is_valid(valid, this->cpu_out_indices[j]); // too important
-            if (b1) {
-              std::cout << "\tcout_out:" <<  v.at(this->cpu_out_indices[j]) << std::endl;
-            } else {
-              std::cout << "\tcout_out:" <<   '@' << std::endl;
-            }
-          }
-          index++;
-        });
-
-        std::cout << "gdf_out_indices - " <<  this->cpu_out_indices.size() << std::endl;
-        for (size_t i = 0; i < this->cpu_out_indices.size(); ++i) {
-          std::cout << "\t index: " << this->cpu_out_indices[i] << std::endl;
-        }
-
-        // Free results
-        std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
-          RMM_FREE(col->data, 0);
-          RMM_FREE(col->valid, 0);
-          delete col;
-        });
-    }
+    // Free results
+    std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
+      RMM_FREE(col->data, 0);
+      RMM_FREE(col->valid, 0);
+      delete col;
+    });    
   }
 
   void compare_gdf_result_with_nulls(map_t& reference_map) {
 
-      for(auto &iter : reference_map) {
-
-        tuple_each(iter.first, [&](auto& val) {
-            std::cout << val <<  " => " <<  iter.second << std::endl;
-        });
-      }
-      size_t ref_size = reference_map.size();
+      size_t ref_size =  this->cpu_out_indices.size();
       for (size_t i = 0; i < ref_size; ++i) {
           bool all_valid_key = true;
           auto valid_key = this->get_input_key_valids(this->cpu_data_cols_out_valid, this->cpu_out_indices[i], all_valid_key);
 
           auto l_key = extractKeyWithNulls(this->cpu_data_cols_out, valid_key, this->cpu_out_indices[i]);
-          std::cout <<  "lkey: \n  ";
-          print_basic_tuple(l_key);
-
+          
           auto sch = reference_map.find(l_key);
           bool found = (sch != reference_map.end());
-          if (found) {
-            tuple_each(sch->first, [&](auto &val) {
-              std::cout <<  "sch:  " << val  <<  " => " << sch->second << std::endl;
-            });
-          }
-
+          
           EXPECT_EQ(found, true);
           if (!found) { continue; }
-
 
           reference_map.erase(sch);
       }
@@ -512,9 +443,9 @@ TYPED_TEST(GroupValidTest, GroupbyValidExampleTest)
     const size_t num_values_per_key = 8;
     const size_t max_key = num_keys*2;
     const size_t max_val = 10;
-    this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
+    this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, false);
     auto reference_map = this->compute_reference_solution_with_nulls();
-    this->print_reference_solution(reference_map);
+    // this->print_reference_solution(reference_map);
 
     this->create_gdf_output_buffers_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
     this->compute_gdf_result_with_nulls();
@@ -524,14 +455,14 @@ TYPED_TEST(GroupValidTest, GroupbyValidExampleTest)
 
 TYPED_TEST(GroupValidTest, AllKeysDifferent)
 {
-    const size_t num_keys = 1 << 10;
+    const size_t num_keys = 1 << 5;
     const size_t num_values_per_key = 1;
     const size_t max_key = num_keys*2;
     const size_t max_val = 1000;
 
     this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, false);
     auto reference_map = this->compute_reference_solution_with_nulls();
-    this->print_reference_solution(reference_map);
+    // this->print_reference_solution(reference_map);
 
     this->create_gdf_output_buffers_with_nulls(num_keys, num_values_per_key, max_key, max_val, false);
     this->compute_gdf_result_with_nulls();

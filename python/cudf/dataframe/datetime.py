@@ -4,18 +4,21 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from cudf.dataframe import columnops, numerical
-from cudf.utils import utils, cudautils
+from cudf.dataframe import columnops, numerical, string
+from cudf.utils import utils
 from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
+from cudf.utils.utils import is_single_value
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.copying as cpp_copying
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.unaryops as cpp_unaryops
+from cudf.bindings.cudf_cpp import get_ctype_ptr
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -126,6 +129,29 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype is dtype:
             return self
+        elif (dtype == np.dtype('object') or
+              np.issubdtype(dtype, np.dtype('U').type)):
+            if len(self) > 0:
+                dev_array = self.data.mem
+                dev_ptr = get_ctype_ptr(dev_array)
+                null_ptr = None
+                if self.mask is not None:
+                    null_ptr = get_ctype_ptr(self.mask.mem)
+                kwargs = {
+                    'count': len(self),
+                    'nulls': null_ptr,
+                    'bdevmem': True,
+                    'units': 'ms'
+                }
+                data = string._numeric_to_str_typecast_functions[
+                    np.dtype(self.dtype)
+                ](dev_ptr, **kwargs)
+
+            else:
+                data = []
+
+            return string.StringColumn(data=data)
+
         return self.as_numerical.astype(dtype)
 
     def unordered_compare(self, cmpop, rhs):
@@ -177,33 +203,19 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 "datetime column of {} has no NaN value".format(self.dtype))
 
     def fillna(self, fill_value, inplace=False):
-        result = self.copy()
-
-        if np.isscalar(fill_value):
+        if is_single_value(fill_value):
             fill_value = np.datetime64(fill_value, 'ms')
-        elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
-            fill_value = pd.to_datetime(fill_value)
+        else:
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
 
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-
-        cpp_replace.replace_nulls(result, fill_value_col)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
 
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cudautils.gather(data=self.data.mem,
-                                    index=sort_inds.data.mem)
-        mask = None
-        if self.mask:
-            mask = self._get_mask_as_column()\
-                .take(sort_inds.data.to_gpu_array()).as_mask()
-            mask = Buffer(mask)
-        col_keys = self.replace(data=Buffer(col_keys),
-                                mask=mask,
-                                null_count=self.null_count,
-                                dtype=self.dtype)
+        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(data=sort_inds.data,
                                 mask=sort_inds.mask,
                                 dtype=sort_inds.data.dtype)
@@ -214,6 +226,22 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def max(self, dtype=None):
         return cpp_reduce.apply_reduce('max', self, dtype=dtype)
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_first_value(value)
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        value = pd.to_datetime(value)
+        value = columnops.as_column(value).as_numerical[0]
+        return self.as_numerical.find_last_value(value)
 
 
 def binop(lhs, rhs, op, out_dtype):

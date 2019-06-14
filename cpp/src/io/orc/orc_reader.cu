@@ -18,12 +18,12 @@
 #include "orc_gpu.h"
 #include "timezone.h"
 
-#include "cudf.h"
-#include "io/comp/gpuinflate.h"
-#include "io/utilities/datasource.hpp"
-#include "io/utilities/wrapper_utils.hpp"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <io/comp/gpuinflate.h>
+#include <io/utilities/datasource.hpp>
+#include <io/utilities/wrapper_utils.hpp>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
@@ -54,6 +54,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     const orc::SchemaType &schema) {
   switch (schema.kind) {
     case orc::BOOLEAN:
+      return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::BYTE:
       return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::SHORT:
@@ -89,24 +90,29 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
   return std::make_pair(GDF_invalid, gdf_dtype_extra_info{TIME_UNIT_NONE});
 }
 
-constexpr orc::gpu::StreamIndexType to_stream_index(
-    const orc::StreamKind kind) {
+constexpr std::pair<orc::gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
+    const orc::StreamKind kind, uint32_t skip_count, bool non_child) {
   switch (kind) {
     case orc::DATA:
-      return orc::gpu::CI_DATA;
+      skip_count += 1;
+      skip_count |= (skip_count & 0xff) << 8;
+      return std::make_pair(orc::gpu::CI_DATA, skip_count);
     case orc::LENGTH:
     case orc::SECONDARY:
-      return orc::gpu::CI_DATA2;
+      skip_count += 1;
+      skip_count |= (skip_count & 0xff) << 16;
+      return std::make_pair(orc::gpu::CI_DATA2, skip_count);
     case orc::DICTIONARY_DATA:
-      return orc::gpu::CI_DICTIONARY;
+      return std::make_pair(orc::gpu::CI_DICTIONARY, skip_count);
     case orc::PRESENT:
-      return orc::gpu::CI_PRESENT;
+      skip_count += (non_child ? 1 : 0);
+      return std::make_pair(orc::gpu::CI_PRESENT, skip_count);
+    case orc::ROW_INDEX:
+      return std::make_pair(orc::gpu::CI_INDEX, skip_count);
     default:
       // Skip this stream as it's not strictly required
-      break;
+      return std::make_pair(orc::gpu::CI_NUM_STREAMS, 0);
   }
-
-  return orc::gpu::CI_NUM_STREAMS;
 }
 
 /**
@@ -115,7 +121,7 @@ constexpr orc::gpu::StreamIndexType to_stream_index(
  **/
 class OrcMetadata {
   using OrcStripeInfo =
-      std::pair<const orc::StripeInformation *, orc::StripeFooter>;
+      std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:
   explicit OrcMetadata(const DataSource &input_) : input(&input_) {
@@ -125,7 +131,7 @@ class OrcMetadata {
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
     auto buffer = input->get_buffer(len - max_ps_size, max_ps_size);
     const size_t ps_length = buffer->data()[max_ps_size - 1];
-    const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
+    const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     orc::ProtobufReader pb;
     pb.init(ps_data, ps_length);
     CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
@@ -151,63 +157,63 @@ class OrcMetadata {
   /**
    * @brief Filters and reads the info of only a selection of stripes
    *
+   * @param[in] stripe Index of the stripe to select
    * @param[in] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(int row_start, int &row_count) {
+  auto select_stripes(int stripe, int row_start, int &row_count) {
     std::vector<OrcStripeInfo> selection;
 
-    // Exclude non-needed stripes
-    row_start = std::max(row_start, 0);
-    if (row_count == -1) {
-      row_count = get_total_rows();
-    }
-    CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-    CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
-    while (ff.stripes.size() > 0 && ff.stripes[0].numberOfRows <= uint32_t(row_start)) {
-      ff.numberOfRows -= ff.stripes[0].numberOfRows;
-      row_start -= ff.stripes[0].numberOfRows;
-      ff.stripes.erase(ff.stripes.begin());
-    }
-    if (row_count == 0) {
-      row_count = ff.numberOfRows - std::min<int>(row_start, ff.numberOfRows);
+    if (stripe != -1) {
+      CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
+      for (int i = 0; i < stripe; ++i) {
+        row_start += ff.stripes[i].numberOfRows;
+      }
+      selection.emplace_back(&ff.stripes[stripe], nullptr);
+      row_count = ff.stripes[stripe].numberOfRows;
     } else {
-      row_count = std::min<int>(row_count, ff.numberOfRows - std::min<int>(row_start, ff.numberOfRows));
-    }
-    if (ff.numberOfRows > uint64_t(row_count)) {
-      uint64_t row = 0;
-      for (size_t i = 0; i < ff.stripes.size(); i++) {
-        if (row >= uint64_t(row_count)) {
-          ff.stripes.resize(i);
-          ff.numberOfRows = row;
+      row_start = std::max(row_start, 0);
+      if (row_count == -1) {
+        row_count = get_total_rows();
+      }
+      CUDF_EXPECTS(row_count >= 0, "Invalid row count");
+      CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
+
+      for (int i = 0, count = 0; i < (int)ff.stripes.size(); ++i) {
+        count += ff.stripes[i].numberOfRows;
+        if (count > row_start || count == 0) {
+          selection.emplace_back(&ff.stripes[i], nullptr);
+        }
+        if (count >= (row_start + row_count)) {
           break;
         }
-        row += ff.stripes[i].numberOfRows;
       }
     }
-    assert(row_count <= ff.numberOfRows);
 
     // Read each stripe's stripefooter metadata
-    selection.resize(ff.stripes.size());
-    for (size_t i = 0; i < ff.stripes.size(); ++i) {
-      const auto &stripe = ff.stripes[i];
-      const auto sf_comp_offset =
-          stripe.offset + stripe.indexLength + stripe.dataLength;
-      const auto sf_comp_length = stripe.footerLength;
-      CUDF_EXPECTS(sf_comp_offset + sf_comp_length < input->size(),
-                   "Invalid stripe information");
-
-      const auto buffer = input->get_buffer(sf_comp_offset, sf_comp_length);
-      size_t sf_length = 0;
-      auto sf_data = decompressor->Decompress(buffer->data(), sf_comp_length,
-                                              &sf_length);
+    if (not selection.empty()) {
       orc::ProtobufReader pb;
-      pb.init(sf_data, sf_length);
-      CUDF_EXPECTS(pb.read(&selection[i].second, sf_length),
-                   "Cannot read stripefooter");
-      selection[i].first = &stripe;
+
+      stripefooters.resize(selection.size());
+      for (size_t i = 0; i < selection.size(); ++i) {
+        const auto stripe = selection[i].first;
+        const auto sf_comp_offset =
+            stripe->offset + stripe->indexLength + stripe->dataLength;
+        const auto sf_comp_length = stripe->footerLength;
+        CUDF_EXPECTS(sf_comp_offset + sf_comp_length < input->size(),
+                     "Invalid stripe information");
+
+        const auto buffer = input->get_buffer(sf_comp_offset, sf_comp_length);
+        size_t sf_length = 0;
+        auto sf_data = decompressor->Decompress(buffer->data(), sf_comp_length,
+                                                &sf_length);
+        pb.init(sf_data, sf_length);
+        CUDF_EXPECTS(pb.read(&stripefooters[i], sf_length),
+                     "Cannot read stripefooter");
+        selection[i].second = &stripefooters[i];
+      }
     }
 
     return selection;
@@ -261,68 +267,71 @@ class OrcMetadata {
   }
 
   inline int get_total_rows() const { return ff.numberOfRows; }
-  inline int get_num_rowgroups() const { return ff.stripes.size(); }
+  inline int get_num_stripes() const { return ff.stripes.size(); }
   inline int get_num_columns() const { return ff.types.size(); }
+  inline int get_row_index_stride() const { return ff.rowIndexStride; }
 
-private:
- void print_postscript(size_t ps_length) const {
-   LOG_PRINTF("\n[+] PostScript:\n");
-   LOG_PRINTF(" postscriptLength = %zd\n", ps_length);
-   LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
-   LOG_PRINTF(" compression = %d\n", ps.compression);
-   LOG_PRINTF(" compressionBlockSize = %d\n", ps.compressionBlockSize);
-   LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(),
-              (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1,
-              (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
-   LOG_PRINTF(" metadataLength = %zd\n", (size_t)ps.metadataLength);
-   LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
- }
+ private:
+  void print_postscript(size_t ps_length) const {
+    LOG_PRINTF("\n[+] PostScript:\n");
+    LOG_PRINTF(" postscriptLength = %zd\n", ps_length);
+    LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
+    LOG_PRINTF(" compression = %d\n", ps.compression);
+    LOG_PRINTF(" compressionBlockSize = %d\n", ps.compressionBlockSize);
+    LOG_PRINTF(" version(%zd) = {%d,%d}\n", ps.version.size(),
+               (ps.version.size() > 0) ? (int32_t)ps.version[0] : -1,
+               (ps.version.size() > 1) ? (int32_t)ps.version[1] : -1);
+    LOG_PRINTF(" metadataLength = %zd\n", (size_t)ps.metadataLength);
+    LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
+  }
 
- void print_filefooter() const {
-   LOG_PRINTF("\n[+] FileFooter:\n");
-   LOG_PRINTF(" headerLength = %zd\n", ff.headerLength);
-   LOG_PRINTF(" contentLength = %zd\n", ff.contentLength);
-   LOG_PRINTF(" stripes (%zd entries):\n", ff.stripes.size());
-   for (size_t i = 0; i < ff.stripes.size(); i++) {
-     LOG_PRINTF("  [%zd] @ %zd: %d rows, index+data+footer: %zd+%zd+%d bytes\n",
-                i, ff.stripes[i].offset, ff.stripes[i].numberOfRows,
-                ff.stripes[i].indexLength, ff.stripes[i].dataLength,
-                ff.stripes[i].footerLength);
-   }
-   LOG_PRINTF(" types (%zd entries):\n", ff.types.size());
-   for (size_t i = 0; i < ff.types.size(); i++) {
-     LOG_PRINTF("  column [%zd]: kind = %d, parent = %d\n", i, ff.types[i].kind,
-                ff.types[i].parent_idx);
-     if (ff.types[i].subtypes.size() > 0) {
-       LOG_PRINTF("   subtypes = ");
-       for (size_t j = 0; j < ff.types[i].subtypes.size(); j++) {
-         LOG_PRINTF("%c%d", (j) ? ',' : '{', ff.types[i].subtypes[j]);
-       }
-       LOG_PRINTF("}\n");
-     }
-     if (ff.types[i].fieldNames.size() > 0) {
-       LOG_PRINTF("   fieldNames = ");
-       for (size_t j = 0; j < ff.types[i].fieldNames.size(); j++) {
-         LOG_PRINTF("%c\"%s\"", (j) ? ',' : '{',
-                    ff.types[i].fieldNames[j].c_str());
-       }
-       LOG_PRINTF("}\n");
-     }
-   }
-   if (ff.metadata.size() > 0) {
-     LOG_PRINTF(" metadata (%zd entries):\n", ff.metadata.size());
-     for (size_t i = 0; i < ff.metadata.size(); i++) {
-       LOG_PRINTF("  [%zd] \"%s\" = \"%s\"\n", i, ff.metadata[i].name.c_str(),
-                  ff.metadata[i].value.c_str());
-     }
-   }
-   LOG_PRINTF(" numberOfRows = %zd\n", ff.numberOfRows);
-   LOG_PRINTF(" rowIndexStride = %d\n", ff.rowIndexStride);
+  void print_filefooter() const {
+    LOG_PRINTF("\n[+] FileFooter:\n");
+    LOG_PRINTF(" headerLength = %zd\n", ff.headerLength);
+    LOG_PRINTF(" contentLength = %zd\n", ff.contentLength);
+    LOG_PRINTF(" stripes (%zd entries):\n", ff.stripes.size());
+    for (size_t i = 0; i < ff.stripes.size(); i++) {
+      LOG_PRINTF(
+          "  [%zd] @ %zd: %d rows, index+data+footer: %zd+%zd+%d bytes\n", i,
+          ff.stripes[i].offset, ff.stripes[i].numberOfRows,
+          ff.stripes[i].indexLength, ff.stripes[i].dataLength,
+          ff.stripes[i].footerLength);
+    }
+    LOG_PRINTF(" types (%zd entries):\n", ff.types.size());
+    for (size_t i = 0; i < ff.types.size(); i++) {
+      LOG_PRINTF("  column [%zd]: kind = %d, parent = %d\n", i,
+                 ff.types[i].kind, ff.types[i].parent_idx);
+      if (ff.types[i].subtypes.size() > 0) {
+        LOG_PRINTF("   subtypes = ");
+        for (size_t j = 0; j < ff.types[i].subtypes.size(); j++) {
+          LOG_PRINTF("%c%d", (j) ? ',' : '{', ff.types[i].subtypes[j]);
+        }
+        LOG_PRINTF("}\n");
+      }
+      if (ff.types[i].fieldNames.size() > 0) {
+        LOG_PRINTF("   fieldNames = ");
+        for (size_t j = 0; j < ff.types[i].fieldNames.size(); j++) {
+          LOG_PRINTF("%c\"%s\"", (j) ? ',' : '{',
+                     ff.types[i].fieldNames[j].c_str());
+        }
+        LOG_PRINTF("}\n");
+      }
+    }
+    if (ff.metadata.size() > 0) {
+      LOG_PRINTF(" metadata (%zd entries):\n", ff.metadata.size());
+      for (size_t i = 0; i < ff.metadata.size(); i++) {
+        LOG_PRINTF("  [%zd] \"%s\" = \"%s\"\n", i, ff.metadata[i].name.c_str(),
+                   ff.metadata[i].value.c_str());
+      }
+    }
+    LOG_PRINTF(" numberOfRows = %zd\n", ff.numberOfRows);
+    LOG_PRINTF(" rowIndexStride = %d\n", ff.rowIndexStride);
   }
 
  public:
   orc::PostScript ps;
   orc::FileFooter ff;
+  std::vector<orc::StripeFooter> stripefooters;
   std::unique_ptr<orc::OrcDecompressor> decompressor;
 
  private:
@@ -357,26 +366,26 @@ struct OrcStreamInfo {
  * @param[in] orc2gdf Mapping of ORC columns to cuDF columns
  * @param[in] gdf2orc Mapping of cuDF columns to ORC columns
  * @param[in] types List of schema types in the dataset
+ * @param[in] use_index Whether to use row index data
  * @param[out] num_dictionary_entries Number of required dictionary entries
  * @param[in,out] chunks List of column chunk descriptions
  * @param[in,out] stream_info List of column stream info
  *
  * @return size_t Size in bytes of readable stream data found
  **/
-size_t gather_stream_info(const size_t stripe_index,
-                          const orc::StripeInformation& stripeinfo,
-                          const orc::StripeFooter &stripefooter,
-                          const std::vector<int> &orc2gdf,
-                          const std::vector<int> &gdf2orc,
-                          const std::vector<orc::SchemaType> types,
-                          size_t* num_dictionary_entries,
-                          hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-                          std::vector<OrcStreamInfo> &stream_info) {
+size_t gather_stream_info(
+    const size_t stripe_index, const orc::StripeInformation *stripeinfo,
+    const orc::StripeFooter *stripefooter, const std::vector<int> &orc2gdf,
+    const std::vector<int> &gdf2orc, const std::vector<orc::SchemaType> types,
+    bool use_index,
+    size_t *num_dictionary_entries,
+    hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+    std::vector<OrcStreamInfo> &stream_info) {
 
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
-  for (const auto &stream : stripefooter.streams) {
+  for (const auto &stream : stripefooter->streams) {
     if (stream.column >= orc2gdf.size()) {
       dst_offset += stream.length;
       continue;
@@ -389,8 +398,7 @@ size_t gather_stream_info(const size_t stripe_index,
       // needs to be included for the reader.
       const auto schema_type = types[stream.column];
       if (schema_type.subtypes.size() != 0) {
-        if (schema_type.kind == orc::STRUCT &&
-            stream.kind == orc::PRESENT) {
+        if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
           for (const auto &idx : schema_type.subtypes) {
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
             if (child_idx >= 0) {
@@ -404,23 +412,26 @@ size_t gather_stream_info(const size_t stripe_index,
       }
     }
     if (col != -1) {
-      if (src_offset >= stripeinfo.indexLength) {
-        const auto idx = to_stream_index(stream.kind);
-        if (idx < orc::gpu::CI_NUM_STREAMS) {
-          auto &chunk = chunks[stripe_index * num_columns + col];
-          chunk.strm_id[idx] = stream_info.size();
-          chunk.strm_len[idx] = stream.length;
+      if (src_offset >= stripeinfo->indexLength || use_index) {
+        // NOTE: skip_count field is temporarily used to track index ordering
+        auto &chunk = chunks[stripe_index * num_columns + col];
+        const auto idx = get_index_type_and_pos(stream.kind, chunk.skip_count,
+                                                col == orc2gdf[stream.column]);
+        if (idx.first < orc::gpu::CI_NUM_STREAMS) {
+          chunk.strm_id[idx.first] = stream_info.size();
+          chunk.strm_len[idx.first] = stream.length;
+          chunk.skip_count = idx.second;
 
-          if (idx == orc::gpu::CI_DICTIONARY) {
+          if (idx.first == orc::gpu::CI_DICTIONARY) {
             chunk.dictionary_start = *num_dictionary_entries;
             chunk.dict_len =
-                stripefooter.columns[stream.column].dictionarySize;
+                stripefooter->columns[stream.column].dictionarySize;
             *num_dictionary_entries +=
-                stripefooter.columns[stream.column].dictionarySize;
+                stripefooter->columns[stream.column].dictionarySize;
           }
         }
       }
-      stream_info.emplace_back(stripeinfo.offset + src_offset, dst_offset,
+      stream_info.emplace_back(stripeinfo->offset + src_offset, dst_offset,
                                stream.length, col, stripe_index);
       dst_offset += stream.length;
     }
@@ -438,6 +449,8 @@ size_t gather_stream_info(const size_t stripe_index,
  * @param[in] decompressor Originally host decompressor
  * @param[in] stream_info List of stream to column mappings
  * @param[in] num_stripes Number of stripes making up column chunks
+ * @param[in] row_groups List of row index descriptors
+ * @param[in] row_index_stride Distance between each row index
  *
  * @return device_buffer<uint8_t> Device buffer to decompressed page data
  **/
@@ -445,7 +458,9 @@ device_buffer<uint8_t> decompress_stripe_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
     const std::vector<device_buffer<uint8_t>> &stripe_data,
     const orc::OrcDecompressor *decompressor,
-    std::vector<OrcStreamInfo> &stream_info, size_t num_stripes) {
+    std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
+    rmm::device_vector<orc::gpu::RowGroup> &row_groups,
+    size_t row_index_stride) {
 
   // Parse the columns' compressed info
   hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
@@ -525,7 +540,6 @@ device_buffer<uint8_t> decompress_stripe_data(
                            compinfo.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
 
-  // const auto num_stripes = md.ff.stripes.size();
   const size_t num_columns = chunks.size() / num_stripes;
 
   for (size_t i = 0; i < num_stripes; ++i) {
@@ -540,6 +554,15 @@ device_buffer<uint8_t> decompress_stripe_data(
     }
   }
 
+  if (not row_groups.empty()) {
+    CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
+                             chunks.memory_size(), cudaMemcpyHostToDevice));
+    CUDA_TRY(ParseRowGroupIndex(row_groups.data().get(), compinfo.device_ptr(),
+                                chunks.device_ptr(), num_columns, num_stripes,
+                                row_groups.size() / num_columns,
+                                row_index_stride));
+  }
+
   return decomp_data;
 }
 
@@ -550,11 +573,15 @@ device_buffer<uint8_t> decompress_stripe_data(
  * @param[in] num_dicts Number of dictionary entries required
  * @param[in] skip_rows Number of rows to offset from start
  * @param[in] timezone_table Local time to UTC conversion table
+ * @param[in] row_groups List of row index descriptors
+ * @param[in] row_index_stride Distance between each row index
  * @param[in,out] columns List of gdf_columns
  **/
 void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                         size_t num_dicts, size_t skip_rows,
                         const std::vector<int64_t> &timezone_table,
+                        rmm::device_vector<orc::gpu::RowGroup> &row_groups,
+                        size_t row_index_stride,
                         const std::vector<gdf_column_wrapper> &columns) {
 
   const size_t num_columns = columns.size();
@@ -569,7 +596,7 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
       chunk.column_data_base = columns[j]->data;
       chunk.dtype_len = (columns[j]->dtype == GDF_STRING)
                             ? sizeof(std::pair<const char *, size_t>)
-                            : gdf_dtype_size(columns[j]->dtype);
+                            : cudf::size_of(columns[j]->dtype);
     }
   }
 
@@ -584,9 +611,11 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
   CUDA_TRY(DecodeNullsAndStringDictionaries(
       chunks.device_ptr(), global_dict.data().get(), num_columns, num_stripes,
       num_rows, skip_rows));
-  CUDA_TRY(DecodeOrcColumnData(chunks.device_ptr(), global_dict.data().get(),
-                               num_columns, num_stripes, num_rows, skip_rows,
-                               tz_table.data().get(), tz_table.size()));
+  CUDA_TRY(DecodeOrcColumnData(
+      chunks.device_ptr(), global_dict.data().get(), num_columns, num_stripes,
+      num_rows, skip_rows, tz_table.data().get(), tz_table.size(),
+      row_groups.data().get(), row_groups.size() / num_columns,
+      row_index_stride));
   CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
                            chunks.memory_size(), cudaMemcpyDeviceToHost));
   CUDA_TRY(cudaStreamSynchronize(0));
@@ -615,7 +644,7 @@ gdf_error read_orc(orc_read_arg *args) {
   // Select only stripes required (aka row groups)
   int skip_rows = args->skip_rows;
   int num_rows = args->num_rows;
-  const auto selected_stripes = md.select_stripes(skip_rows, num_rows);
+  const auto selected_stripes = md.select_stripes(args->stripe, skip_rows, num_rows);
 
   // Select only columns required
   bool has_time_stamp_column = false;
@@ -635,9 +664,8 @@ gdf_error read_orc(orc_read_arg *args) {
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows),
-                         dtype_info.first, dtype_info.second,
-                         md.ff.GetColumnName(col));
+    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+                         dtype_info.second, md.ff.GetColumnName(col));
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
@@ -654,17 +682,30 @@ gdf_error read_orc(orc_read_arg *args) {
   if (num_rows > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
+    memset(chunks.host_ptr(), 0, chunks.memory_size());
+
+    const bool use_index =
+        (args->use_index == true) &&
+        // Only use if we don't have much work with complete columns & stripes
+        // TODO: Consider nrows, gpu, and tune the threshold
+        (num_rows > md.get_row_index_stride() &&
+         !(md.get_row_index_stride() & 7) && md.get_row_index_stride() > 0 &&
+         num_columns * selected_stripes.size() < 8 * 128) &&
+        // Only use if first row is aligned to a stripe boundary
+        // TODO: Fix logic to handle unaligned rows
+        (skip_rows == 0);
 
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
+    size_t num_rowgroups = 0;
     for (size_t i = 0; i < selected_stripes.size(); ++i) {
       const auto stripe_info = selected_stripes[i].first;
       const auto stripe_footer = selected_stripes[i].second;
 
       auto stream_count = stream_info.size();
       const auto total_data_size = gather_stream_info(
-          i, *stripe_info, stripe_footer, orc_col_map, selected_cols,
-          md.ff.types, &num_dict_entries, chunks, stream_info);
+          i, stripe_info, stripe_footer, orc_col_map, selected_cols,
+          md.ff.types, use_index, &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
       stripe_data.emplace_back(total_data_size);
@@ -693,9 +734,10 @@ gdf_error read_orc(orc_read_arg *args) {
         auto &chunk = chunks[i * num_columns + j];
         chunk.start_row = stripe_start_row;
         chunk.num_rows = stripe_info->numberOfRows;
-        chunk.encoding_kind = stripe_footer.columns[selected_cols[j]].kind;
+        chunk.encoding_kind = stripe_footer->columns[selected_cols[j]].kind;
         chunk.type_kind = md.ff.types[selected_cols[j]].kind;
         chunk.decimal_scale = md.ff.types[selected_cols[j]].scale;
+        chunk.rowgroup_id = num_rowgroups;
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
             chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
@@ -703,32 +745,62 @@ gdf_error read_orc(orc_read_arg *args) {
         }
       }
       stripe_start_row += stripe_info->numberOfRows;
+      if (use_index) {
+        num_rowgroups +=
+            (stripe_info->numberOfRows + md.get_row_index_stride() - 1) /
+            md.get_row_index_stride();
+      }
     }
 
     // Setup table for converting timestamp columns from local to UTC time
     std::vector<int64_t> tz_table;
     if (has_time_stamp_column && !selected_stripes.empty()) {
       CUDF_EXPECTS(BuildTimezoneTransitionTable(
-                       tz_table, selected_stripes[0].second.writerTimezone),
+                       tz_table, selected_stripes[0].second->writerTimezone),
                    "Cannot setup timezone LUT");
     }
 
+    // Setup row group descriptors if using indexes
+    rmm::device_vector<orc::gpu::RowGroup> row_groups(num_rowgroups *
+                                                      num_columns);
+
     if (md.ps.compression != orc::NONE) {
-      auto decomp_data =
-          decompress_stripe_data(chunks, stripe_data, md.decompressor.get(),
-                                 stream_info, selected_stripes.size());
+      auto decomp_data = decompress_stripe_data(
+          chunks, stripe_data, md.decompressor.get(), stream_info,
+          selected_stripes.size(), row_groups, md.get_row_index_stride());
       stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
+    } else {
+      if (not row_groups.empty()) {
+        CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
+                                 chunks.memory_size(), cudaMemcpyHostToDevice));
+        CUDA_TRY(ParseRowGroupIndex(
+            row_groups.data().get(), nullptr, chunks.device_ptr(), num_columns,
+            selected_stripes.size(), num_rowgroups, md.get_row_index_stride()));
+      }
     }
 
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (column->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            column->data, 0,
+            column->size * sizeof(std::pair<const char *, size_t>)));
+      }
     }
-    decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table, columns);
+    decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table,
+                       row_groups, md.get_row_index_stride(), columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (column->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            column->data, 0,
+            column->size * sizeof(std::pair<const char *, size_t>)));
+      }
     }
   }
 

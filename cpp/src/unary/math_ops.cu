@@ -16,7 +16,7 @@
 
 #include "unary_ops.cuh"
 
-#include "utilities/type_dispatcher.hpp"
+#include <utilities/type_dispatcher.hpp>
 
 #include <cmath>
 #include <algorithm>
@@ -127,10 +127,21 @@ struct DeviceAbs {
 // bitwise op
 
 struct DeviceInvert {
+    // TODO: maybe sfinae overload this for cudf::bool8
     template<typename T>
     __device__
     T apply(T data) {
         return ~data;
+    }
+};
+
+// logical op
+
+struct DeviceNot {
+    template<typename T>
+    __device__
+    cudf::bool8 apply(T data) {
+        return static_cast<cudf::bool8>( !data );
     }
 };
 
@@ -167,6 +178,33 @@ struct BitwiseOpDispatcher {
 
     template <typename T>
     typename std::enable_if_t<!std::is_integral<T>::value, gdf_error>
+    operator()(gdf_column *input, gdf_column *output) {
+        return GDF_UNSUPPORTED_DTYPE;
+    }
+};
+
+
+template <typename F>
+struct LogicalOpDispatcher {
+private:
+    template <typename T>
+    static constexpr bool is_supported() {
+        return std::is_arithmetic<T>::value ||
+               std::is_same<T, cudf::bool8>::value;
+
+        // TODO: try using member detector
+        // std::is_member_function_pointer<decltype(&T::operator!)>::value;
+    }
+
+public:
+    template <typename T>
+    typename std::enable_if_t<is_supported<T>(), gdf_error>
+    operator()(gdf_column *input, gdf_column *output) {
+        return cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
+    }
+
+    template <typename T>
+    typename std::enable_if_t<!is_supported<T>(), gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
         return GDF_UNSUPPORTED_DTYPE;
     }
@@ -228,6 +266,10 @@ gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_o
         case GDF_BIT_INVERT:
             return cudf::type_dispatcher(input->dtype,
                                         BitwiseOpDispatcher<DeviceInvert>{},
+                                        input, output);
+        case GDF_NOT:
+            return cudf::type_dispatcher(input->dtype,
+                                        LogicalOpDispatcher<DeviceNot>{},
                                         input, output);
         default:
             return GDF_INVALID_API_CALL;

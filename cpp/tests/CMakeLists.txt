@@ -16,6 +16,22 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction(ConfigureTest)
 
+option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
+
+function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
+    if(CMAKE_ENABLE_BENCHMARKS)
+        add_executable(${CMAKE_BENCH_NAME}
+                    ${CMAKE_BENCH_SRC}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_link_libraries(${CMAKE_BENCH_NAME} cudf)
+        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
+                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
+        add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
+    endif(CMAKE_ENABLE_BENCHMARKS)
+endfunction(ConfigureBench)
+
+
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
@@ -193,10 +209,15 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
 set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -219,7 +240,8 @@ ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 # - nvcategory tests -------------------------------------------------------------------------------
 
 set(NVCATEGORY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
@@ -235,8 +257,12 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -280,6 +306,14 @@ set(DEVICE_TABLE_TEST_SRC
 ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
+# - stream compaction tests -----------------------------------------------------------------------
+
+set(STREAM_COMPACTION_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu")
+
+ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
+
+###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 
 set(ROLLING_TEST_SRC
@@ -288,15 +322,31 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - json tests -------------------------------------------------------------------------------------
+# - point in polygon test -----------------------------------------------------------------------------------
 
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp")
+set(GIS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
 
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
+ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
+
 
 ###################################################################################################
 ### enable testing ################################################################################
 ###################################################################################################
 
 enable_testing()
+
+
+###################################################################################################
+### benchmarks ####################################################################################
+###################################################################################################
+
+# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
+
+###################################################################################################
+# - stream compaction benchmarks-------------------------------------------------------------------
+
+set(STREAM_COMPACTION_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")

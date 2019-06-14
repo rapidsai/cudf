@@ -1,4 +1,4 @@
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 
 int gdf_cuda_last_error() {

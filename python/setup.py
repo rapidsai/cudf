@@ -19,7 +19,7 @@ extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
-                '../cpp/include/',
+                '../cpp/include/cudf',
                 '../cpp/thirdparty/dlpack/include/dlpack/'
               ],
               library_dirs=[get_python_lib()],
@@ -44,9 +44,6 @@ setup(name='cudf',
       setup_requires=['cython'],
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
-      package_data={
-        'cudf.tests': ['data/*.pickle'],
-      },
       install_requires=install_requires,
       license="Apache",
       cmdclass=versioneer.get_cmdclass(),
