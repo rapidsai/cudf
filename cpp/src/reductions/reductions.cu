@@ -8,6 +8,7 @@
 
 #include <cub/device/device_reduce.cuh>
 #include <cub/block/block_reduce.cuh>
+#include <thrust/reduce.h>
 
 #include <limits>
 #include <type_traits>
@@ -21,6 +22,7 @@ template <typename Op, typename InputIterator, typename T_output>
 void reduction_op(T_output* dev_result, InputIterator d_in, int num_items,
     T_output init, Op op, cudaStream_t stream)
 {
+#if 1
     void     *d_temp_storage = NULL;
     size_t   temp_storage_bytes = 0;
 
@@ -35,6 +37,13 @@ void reduction_op(T_output* dev_result, InputIterator d_in, int num_items,
 
     // Free temporary storage
     RMM_TRY(RMM_FREE(d_temp_storage, stream));
+#else
+    auto d_in_last = d_in + num_items;
+    T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, op);
+
+    CUDA_TRY(cudaMemcpyAsync(dev_result, &result,
+        sizeof(T_output), cudaMemcpyHostToDevice, stream));
+#endif
 }
 
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
@@ -75,18 +84,79 @@ void ReduceOp(const gdf_column *input,
     scalar->is_valid = true;
 };
 
+
+// Reduction for mean, var, std
+// It requires extra step after single step reduction call
+template<typename T_in, typename T_out, typename Op, bool has_nulls>
+void ReduceMultiStepOp(const gdf_column *input,
+                   gdf_scalar* scalar, cudaStream_t stream)
+{
+    T_out identity = Op::Op::template identity<T_out>();
+    auto  intermediate = Op::template intermediate<T_out>();
+
+    // allocate temporary memory for the result
+    void *result = NULL;
+    RMM_TRY(RMM_ALLOC(&result, sizeof(intermediate), stream));
+
+    // initialize output by identity value
+    CUDA_TRY(cudaMemcpyAsync(result, &intermediate,
+            sizeof(T_out), cudaMemcpyHostToDevice, stream));
+    CHECK_STREAM(stream);
+
+    if( std::is_same<Op, cudf::reductions::ReductionMean>::value ){
+        auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
+        auto it = thrust::make_transform_iterator(it_raw, cudf::transformer_squared<T_out>{});
+        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+            typename Op::Op{}, stream);
+    }else{
+        auto it = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
+        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+            typename Op::Op{}, stream);
+    }
+
+    // read back the result to host memory
+    // TODO: asynchronous copy
+    CUDA_TRY(cudaMemcpy(&intermediate, result,
+            sizeof(T_out), cudaMemcpyDeviceToHost));
+
+    // compute the result value from intermediate value.
+
+
+    // cleanup temporary memory
+    RMM_TRY(RMM_FREE(result, stream));
+
+    // set scalar is valid
+    scalar->is_valid = true;
+};
+
 template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
+private:
+    static constexpr bool is_multistep_reduction()
+    {
+        return  std::is_same<Op, cudf::reductions::ReductionMean>::value ||
+                std::is_same<Op, cudf::reductions::ReductionVar >::value ||
+                std::is_same<Op, cudf::reductions::ReductionStd >::value;
+    }
+
 public:
     template <typename T_out, typename std::enable_if<
         std::is_constructible<T_out, T_in>::value >::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
-        if( col->valid == nullptr ){
-            ReduceOp<T_in, T_out, Op, false>(col, scalar, stream);
+        if( is_multistep_reduction() ){
+            if( col->valid == nullptr ){
+                ReduceMultiStepOp<T_in, T_out, Op, false>(col, scalar, stream);
+            }else{
+                ReduceMultiStepOp<T_in, T_out, Op, true >(col, scalar, stream);
+            }
         }else{
-            ReduceOp<T_in, T_out, Op, true >(col, scalar, stream);
+            if( col->valid == nullptr ){
+                ReduceOp<T_in, T_out, Op, false>(col, scalar, stream);
+            }else{
+                ReduceOp<T_in, T_out, Op, true >(col, scalar, stream);
+            }
         }
     }
 
@@ -151,6 +221,7 @@ gdf_scalar reduction(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
+#if 0
     case GDF_REDUCTION_SUM:
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionSum>(), col, &scalar);
@@ -171,6 +242,24 @@ gdf_scalar reduction(const gdf_column *col,
         cudf::type_dispatcher(col->dtype,
             ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
         break;
+    case GDF_REDUCTION_MEAN:
+        cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<cudf::reductions::ReductionMean>(), col, &scalar);
+        break;
+    case GDF_REDUCTION_VAR:
+        cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<cudf::reductions::ReductionVar>(), col, &scalar);
+        break;
+    case GDF_REDUCTION_STD:
+        cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<cudf::reductions::ReductionStd>(), col, &scalar);
+        break;
+#else
+    case GDF_REDUCTION_MEAN:
+        cudf::type_dispatcher(col->dtype,
+            ReduceDispatcher<cudf::reductions::ReductionMean>(), col, &scalar);
+        break;
+#endif
     default:
         CUDF_FAIL("Unsupported reduction operator");
     }
