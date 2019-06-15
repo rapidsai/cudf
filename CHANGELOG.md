@@ -72,6 +72,7 @@
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
 - PR #2005 Use HTML5 details tag in bug report issue template
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
 
 ## Bug Fixes
 
