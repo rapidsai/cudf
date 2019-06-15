@@ -862,6 +862,81 @@ class DataFrame(object):
         for k in self.columns:
             self[k] = self[k].set_index(idx)
 
+    def reindex(self, labels=None, axis=0, index=None, columns=None, copy=True):
+        """Return a new DataFrame whose axes conform to a new index
+
+        ``DataFrame.reindex`` supports two calling conventions
+        * ``(index=index_labels, columns=column_names)``
+        * ``(labels, axis={0 or 'index', 1 or 'columns'})``
+
+        Parameters
+        ----------
+        labels : Index, Series-convertible, optional, default None
+        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+        index : Index, Series-convertible, optional, default None
+            Shorthand for ``df.reindex(labels=index_labels, axis=0)``
+        columns : array-like, optional, default None
+            Shorthand for ``df.reindex(labels=column_names, axis=1)``
+        copy : boolean, optional, default True
+
+        Returns
+        -------
+        A DataFrame whose axes conform to the new index(es)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]
+        >>> df_new = df.reindex(index=[0, 3, 4, 5], columns=['key', 'val', 'sum'])
+        >>> print(df)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
+        >>> print(df_new)
+           key   val  sum
+        0    0  10.0  NaN
+        3    3  13.0  NaN
+        4    4  14.0  NaN
+        5   -1   NaN  NaN
+        """
+
+        idx = self.index
+        df = self.copy(deep=copy)
+        col_names = list(df.columns)
+
+        if index is not None or (labels is not None and axis in (0, 'index')):
+            idx = labels if index is None else index
+            idx = idx if isinstance(idx, Index) else as_index(idx)
+            if df.index.dtype != idx.dtype:
+                df = DataFrame()
+            else:
+                df = DataFrame(None, idx).join(df, how='left', sort=True)
+
+        if columns is not None or (labels is not None and axis in (1, 'columns')):
+            col_names = labels if columns is None else columns
+            same_names = list(set(df.columns) & set(col_names))
+            df = df[same_names]
+
+        new_length = len(idx)
+        out_cols = OrderedDict({})
+
+        for name in col_names:
+            if name in df._cols:
+                out_cols[name] = df[name]
+            else:
+                col = Series([]).astype(np.float64)
+                mask = cudautils.make_empty_mask(new_length)
+                data = cudautils.zeros(new_length, col.dtype)
+                col = col._copy_construct(data=data, index=idx)
+                out_cols[name] = col.set_mask(mask, new_length)
+
+        return DataFrame(out_cols, idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -1753,9 +1828,11 @@ class DataFrame(object):
 
         # We save the original categories for the reconstruction of the
         # final data frame
+        categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
             if pd.api.types.is_categorical_dtype(col):
+                categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
         # Save the order of the original column names for preservation later
@@ -1827,7 +1904,7 @@ class DataFrame(object):
                     mask = Buffer(valid)
                 df[name] = columnops.build_column(
                     Buffer(col),
-                    dtype=col.dtype,
+                    dtype=categorical_dtypes.get(name, col.dtype),
                     mask=mask,
                     categories=col_with_categories.get(name, None),
                 )
