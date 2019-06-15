@@ -14,25 +14,20 @@
  * limitations under the License.
  */
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc_reader_impl.hpp"
 #include "timezone.h"
 
 #include <cudf/cudf.h>
 #include <io/comp/gpuinflate.h>
-#include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
-#include <rmm/thrust_rmm_allocator.h>
 
 #include <cstring>
 #include <iostream>
 #include <numeric>
-#include <vector>
+
+namespace cudf {
 
 static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
                   !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
@@ -124,12 +119,12 @@ class OrcMetadata {
       std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:
-  explicit OrcMetadata(const DataSource &input_) : input(&input_) {
-    const auto len = input->size();
+  explicit OrcMetadata(DataSource *const src) : source(src) {
+    const auto len = source->size();
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-    auto buffer = input->get_buffer(len - max_ps_size, max_ps_size);
+    auto buffer = source->get_buffer(len - max_ps_size, max_ps_size);
     const size_t ps_length = buffer->data()[max_ps_size - 1];
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     orc::ProtobufReader pb;
@@ -144,7 +139,7 @@ class OrcMetadata {
         ps.compression, ps.compressionBlockSize);
 
     // Read compressed filefooter section
-    buffer = input->get_buffer(len - ps_length - 1 - ps.footerLength,
+    buffer = source->get_buffer(len - ps_length - 1 - ps.footerLength,
                                ps.footerLength);
     size_t ff_length = 0;
     auto ff_data = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
@@ -202,10 +197,10 @@ class OrcMetadata {
         const auto sf_comp_offset =
             stripe->offset + stripe->indexLength + stripe->dataLength;
         const auto sf_comp_length = stripe->footerLength;
-        CUDF_EXPECTS(sf_comp_offset + sf_comp_length < input->size(),
+        CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(),
                      "Invalid stripe information");
 
-        const auto buffer = input->get_buffer(sf_comp_offset, sf_comp_length);
+        const auto buffer = source->get_buffer(sf_comp_offset, sf_comp_length);
         size_t sf_length = 0;
         auto sf_data = decompressor->Decompress(buffer->data(), sf_comp_length,
                                                 &sf_length);
@@ -222,18 +217,16 @@ class OrcMetadata {
   /**
    * @brief Filters and reduces down to a selection of columns
    *
-   * @param[in] use_cols Array of column names to select
-   * @param[in] use_cols_len Length of the column name array
+   * @param[in] use_names List of column names to select
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
    * @return List of ORC column indexes
    **/
-  auto select_columns(const char **use_cols, int use_cols_len,
+  auto select_columns(std::vector<std::string> use_names,
                       bool &has_timestamp_column) {
     std::vector<int> selection;
 
-    if (use_cols) {
-      std::vector<std::string> use_names(use_cols, use_cols + use_cols_len);
+    if (not use_names.empty()) {
       int index = 0;
       for (const auto &use_name : use_names) {
         for (int i = 0; i < get_num_columns(); ++i, ++index) {
@@ -335,7 +328,7 @@ class OrcMetadata {
   std::unique_ptr<orc::OrcDecompressor> decompressor;
 
  private:
-  const DataSource *const input;
+  DataSource *const source;
 };
 
 /**
@@ -357,23 +350,7 @@ struct OrcStreamInfo {
   uint32_t stripe_idx;  // stripe index
 };
 
-/**
- * @brief Helper function that populates column descriptors stream/chunk
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] stripeinfo List of stripe metadata
- * @param[in] stripefooter List of stripe footer metadata
- * @param[in] orc2gdf Mapping of ORC columns to cuDF columns
- * @param[in] gdf2orc Mapping of cuDF columns to ORC columns
- * @param[in] types List of schema types in the dataset
- * @param[in] use_index Whether to use row index data
- * @param[out] num_dictionary_entries Number of required dictionary entries
- * @param[in,out] chunks List of column chunk descriptions
- * @param[in,out] stream_info List of column stream info
- *
- * @return size_t Size in bytes of readable stream data found
- **/
-size_t gather_stream_info(
+size_t OrcReader::Impl::gather_stream_info(
     const size_t stripe_index, const orc::StripeInformation *stripeinfo,
     const orc::StripeFooter *stripefooter, const std::vector<int> &orc2gdf,
     const std::vector<int> &gdf2orc, const std::vector<orc::SchemaType> types,
@@ -441,20 +418,7 @@ size_t gather_stream_info(
   return dst_offset;
 }
 
-/**
- * @brief Decompresses the stripe data, at stream granularity
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] stripe_data List of source stripe column data
- * @param[in] decompressor Originally host decompressor
- * @param[in] stream_info List of stream to column mappings
- * @param[in] num_stripes Number of stripes making up column chunks
- * @param[in] row_groups List of row index descriptors
- * @param[in] row_index_stride Distance between each row index
- *
- * @return device_buffer<uint8_t> Device buffer to decompressed page data
- **/
-device_buffer<uint8_t> decompress_stripe_data(
+device_buffer<uint8_t> OrcReader::Impl::decompress_stripe_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
     const std::vector<device_buffer<uint8_t>> &stripe_data,
     const orc::OrcDecompressor *decompressor,
@@ -566,23 +530,11 @@ device_buffer<uint8_t> decompress_stripe_data(
   return decomp_data;
 }
 
-/**
- * @brief Converts the stripe column data and outputs to gdf_columns
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] num_dicts Number of dictionary entries required
- * @param[in] skip_rows Number of rows to offset from start
- * @param[in] timezone_table Local time to UTC conversion table
- * @param[in] row_groups List of row index descriptors
- * @param[in] row_index_stride Distance between each row index
- * @param[in,out] columns List of gdf_columns
- **/
-void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-                        size_t num_dicts, size_t skip_rows,
-                        const std::vector<int64_t> &timezone_table,
-                        rmm::device_vector<orc::gpu::RowGroup> &row_groups,
-                        size_t row_index_stride,
-                        const std::vector<gdf_column_wrapper> &columns) {
+void OrcReader::Impl::decode_stream_data(
+    const hostdevice_vector<orc::gpu::ColumnDesc> &chunks, size_t num_dicts,
+    size_t skip_rows, const std::vector<int64_t> &timezone_table,
+    rmm::device_vector<orc::gpu::RowGroup> &row_groups, size_t row_index_stride,
+    const std::vector<gdf_column_wrapper> &columns) {
 
   const size_t num_columns = columns.size();
   const size_t num_stripes = chunks.size() / columns.size();
@@ -633,39 +585,45 @@ void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
   }
 }
 
-//
-// Implementation for reading Apache ORC data and outputting to cuDF columns.
-//
-gdf_error read_orc(orc_read_arg *args) {
+OrcReader::Impl::Impl(std::unique_ptr<DataSource> source,
+                      OrcReaderOptions const &options)
+    : source_(std::move(source)) {
 
-  DataSource input(args->source);
-  OrcMetadata md(input);
+  // Open and parse the source Parquet dataset metadata
+  md_ = std::make_unique<OrcMetadata>(source_.get());
+
+  // Select only columns required by the options
+  selected_cols_ = md_->select_columns(options.columns, has_timestamp_column_);
+
+  // Enable or disable attempt to use row index for parsing
+  use_index_ = options.use_index;
+}
+
+OrcReader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
+                      OrcReaderOptions const &options)
+    : OrcReader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
+
+table OrcReader::Impl::read(int skip_rows, int num_rows, int stripe) {
 
   // Select only stripes required (aka row groups)
-  int skip_rows = args->skip_rows;
-  int num_rows = args->num_rows;
-  const auto selected_stripes = md.select_stripes(args->stripe, skip_rows, num_rows);
-
-  // Select only columns required
-  bool has_time_stamp_column = false;
-  const auto selected_cols = md.select_columns(
-      args->use_cols, args->use_cols_len, has_time_stamp_column);
-  const int num_columns = selected_cols.size();
+  const auto selected_stripes =
+      md_->select_stripes(stripe, skip_rows, num_rows);
+  const int num_columns = selected_cols_.size();
 
   // Association between each ORC column and its gdf_column
-  std::vector<int32_t> orc_col_map(md.get_num_columns(), -1);
+  std::vector<int32_t> orc_col_map(md_->get_num_columns(), -1);
 
   // Initialize gdf_columns, but hold off on allocating storage space
   std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
-  for (const auto &col : selected_cols) {
-    auto dtype_info = to_dtype(md.ff.types[col]);
+  for (const auto &col : selected_cols_) {
+    auto dtype_info = to_dtype(md_->ff.types[col]);
 
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
 
     columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
-                         dtype_info.second, md.ff.GetColumnName(col));
+                         dtype_info.second, md_->ff.GetColumnName(col));
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
@@ -685,11 +643,11 @@ gdf_error read_orc(orc_read_arg *args) {
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
     const bool use_index =
-        (args->use_index == true) &&
+        (use_index_ == true) &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
-        (num_rows > md.get_row_index_stride() &&
-         !(md.get_row_index_stride() & 7) && md.get_row_index_stride() > 0 &&
+        (num_rows > md_->get_row_index_stride() &&
+         !(md_->get_row_index_stride() & 7) && md_->get_row_index_stride() > 0 &&
          num_columns * selected_stripes.size() < 8 * 128) &&
         // Only use if first row is aligned to a stripe boundary
         // TODO: Fix logic to handle unaligned rows
@@ -704,8 +662,8 @@ gdf_error read_orc(orc_read_arg *args) {
 
       auto stream_count = stream_info.size();
       const auto total_data_size = gather_stream_info(
-          i, stripe_info, stripe_footer, orc_col_map, selected_cols,
-          md.ff.types, use_index, &num_dict_entries, chunks, stream_info);
+          i, stripe_info, stripe_footer, orc_col_map, selected_cols_,
+          md_->ff.types, use_index, &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
       stripe_data.emplace_back(total_data_size);
@@ -723,7 +681,7 @@ gdf_error read_orc(orc_read_arg *args) {
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = input.get_buffer(offset, len);
+        const auto buffer = source_->get_buffer(offset, len);
         CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len,
                                  cudaMemcpyHostToDevice));
         CUDA_TRY(cudaStreamSynchronize(0));
@@ -734,9 +692,9 @@ gdf_error read_orc(orc_read_arg *args) {
         auto &chunk = chunks[i * num_columns + j];
         chunk.start_row = stripe_start_row;
         chunk.num_rows = stripe_info->numberOfRows;
-        chunk.encoding_kind = stripe_footer->columns[selected_cols[j]].kind;
-        chunk.type_kind = md.ff.types[selected_cols[j]].kind;
-        chunk.decimal_scale = md.ff.types[selected_cols[j]].scale;
+        chunk.encoding_kind = stripe_footer->columns[selected_cols_[j]].kind;
+        chunk.type_kind = md_->ff.types[selected_cols_[j]].kind;
+        chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale;
         chunk.rowgroup_id = num_rowgroups;
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
@@ -747,14 +705,14 @@ gdf_error read_orc(orc_read_arg *args) {
       stripe_start_row += stripe_info->numberOfRows;
       if (use_index) {
         num_rowgroups +=
-            (stripe_info->numberOfRows + md.get_row_index_stride() - 1) /
-            md.get_row_index_stride();
+            (stripe_info->numberOfRows + md_->get_row_index_stride() - 1) /
+            md_->get_row_index_stride();
       }
     }
 
     // Setup table for converting timestamp columns from local to UTC time
     std::vector<int64_t> tz_table;
-    if (has_time_stamp_column && !selected_stripes.empty()) {
+    if (has_timestamp_column_ && !selected_stripes.empty()) {
       CUDF_EXPECTS(BuildTimezoneTransitionTable(
                        tz_table, selected_stripes[0].second->writerTimezone),
                    "Cannot setup timezone LUT");
@@ -764,10 +722,10 @@ gdf_error read_orc(orc_read_arg *args) {
     rmm::device_vector<orc::gpu::RowGroup> row_groups(num_rowgroups *
                                                       num_columns);
 
-    if (md.ps.compression != orc::NONE) {
+    if (md_->ps.compression != orc::NONE) {
       auto decomp_data = decompress_stripe_data(
-          chunks, stripe_data, md.decompressor.get(), stream_info,
-          selected_stripes.size(), row_groups, md.get_row_index_stride());
+          chunks, stripe_data, md_->decompressor.get(), stream_info,
+          selected_stripes.size(), row_groups, md_->get_row_index_stride());
       stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
     } else {
@@ -776,7 +734,7 @@ gdf_error read_orc(orc_read_arg *args) {
                                  chunks.memory_size(), cudaMemcpyHostToDevice));
         CUDA_TRY(ParseRowGroupIndex(
             row_groups.data().get(), nullptr, chunks.device_ptr(), num_columns,
-            selected_stripes.size(), num_rowgroups, md.get_row_index_stride()));
+            selected_stripes.size(), num_rowgroups, md_->get_row_index_stride()));
       }
     }
 
@@ -790,7 +748,7 @@ gdf_error read_orc(orc_read_arg *args) {
       }
     }
     decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table,
-                       row_groups, md.get_row_index_stride(), columns);
+                       row_groups, md_->get_row_index_stride(), columns);
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
@@ -821,12 +779,35 @@ gdf_error read_orc(orc_read_arg *args) {
   }
 
   // Transfer ownership to raw pointer output arguments
-  args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
-  for (int i = 0; i < num_columns; ++i) {
-    args->data[i] = columns[i].release();
+  std::vector<gdf_column *> out_cols(columns.size());
+  for (size_t i = 0; i < columns.size(); ++i) {
+    out_cols[i] = columns[i].release();
   }
-  args->num_cols_out = num_columns;
-  args->num_rows_out = num_rows;
 
-  return GDF_SUCCESS;
+  return table(out_cols.data(), out_cols.size());
 }
+
+OrcReader::OrcReader(std::string filepath, OrcReaderOptions const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+
+OrcReader::OrcReader(const char *buffer, size_t length,
+                     OrcReaderOptions const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(buffer, length), options)) {}
+
+table OrcReader::read_all() {
+  return impl_->read(0, -1, -1);
+}
+
+table OrcReader::read_rows(size_t skip_rows, size_t num_rows) {
+  return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
+}
+
+table OrcReader::read_stripe(size_t stripe) {
+  return impl_->read(0, -1, stripe);
+}
+
+OrcReader::~OrcReader() = default;
+
+}  // namespace cudf
