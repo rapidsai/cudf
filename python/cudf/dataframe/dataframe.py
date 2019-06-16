@@ -912,10 +912,10 @@ class DataFrame(object):
 
         df = self
         cols = columns
-        names = list(df.columns)
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, 'index') else index
         cols = labels if cols is None and axis in (1, 'columns') else cols
+        df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
         if idx is not None:
             idx = idx if isinstance(idx, Index) else as_index(idx)
@@ -923,17 +923,15 @@ class DataFrame(object):
                 df = DataFrame()
             else:
                 df = DataFrame(None, idx).join(df, how='left', sort=True)
-                # TODO: use df.take() after it's string cols are working
+                # TODO: use df.take() once string cols are working
                 # df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
                 # double-argsort to map back from sorted to unsorted positions
                 positions = idx.argsort(True).argsort(True).to_gpu_array()
                 for col_name, col in df._cols.items():
                     df[col_name] = col.take(positions)
 
-        if cols is not None:
-            idx = self.index if idx is None else idx
-            names = labels if cols is None else cols
-            df = df[list(set(df.columns) & set(names))]
+        idx = df.index if idx is None else idx
+        names = list(df.columns) if cols is None else cols
 
         length = len(idx)
         cols = OrderedDict({})
