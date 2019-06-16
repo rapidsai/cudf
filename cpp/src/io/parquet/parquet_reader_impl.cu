@@ -17,13 +17,12 @@
 #include "parquet_reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
-#include <cuda_runtime.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <array>
-#include <iostream>
-#include <numeric>
 
 namespace cudf {
 
@@ -216,11 +215,10 @@ struct ParquetMetadata : public parquet::FileMetaData {
   /**
    * @brief Filters and reduces down to a selection of columns
    *
-   * @param[in] use_cols Array of column names to select
-   * @param[in] use_cols_len Length of the column name array
+   * @param[in] use_names List of column names to select
    * @param[in] use_index_col Name of the index column
    *
-   * @return A list of column names & Parquet column indexes
+   * @return List of column names & Parquet column indexes
    **/
   auto select_columns(std::vector<std::string> use_names,
                       const char *use_index_col) {
