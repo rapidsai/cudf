@@ -68,8 +68,10 @@
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
 - PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
+- PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
 
 ## Bug Fixes
 
@@ -122,7 +124,9 @@
 - PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
 - PR #1978 Fix for values being filled in an empty dataframe 
+- PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
+
 
 # cudf 0.7.2 (16 May 2019)
 
