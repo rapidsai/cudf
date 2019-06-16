@@ -214,8 +214,6 @@ get_unique_ordered_indices(const cudf::table& key_columns,
         keep);
   }
  
-  // reorder unique indices
-  thrust::sort(exec, unique_indices.begin(), result_end);
   //not resizing vector to avoid copy
   cudaStreamSynchronize(stream);
 

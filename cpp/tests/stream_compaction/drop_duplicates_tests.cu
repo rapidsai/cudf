@@ -16,6 +16,7 @@
 
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table.hpp>
+#include <cudf/copying.hpp>
 
 #include <utilities/error_utils.hpp>
 
@@ -134,22 +135,28 @@ typedef ::testing::Types <TypeDefinitions<int32_t,int32_t>,
 TYPED_TEST_CASE(DropDuplicatesDoubleTest, Implementations);
 
 template <class T>
-void TypedDropDuplicatesTest(
-    cudf::test::column_wrapper<typename T::Type0> source_col1, 
-    cudf::test::column_wrapper<typename T::Type1> source_col2, 
+bool compare_columns_indexed(
+    cudf::table out_table,
     cudf::test::column_wrapper<typename T::Type0> expected_col1, 
-    cudf::test::column_wrapper<typename T::Type1> expected_col2,
-    enum duplicate_keep_option keep)
+    cudf::test::column_wrapper<typename T::Type1> expected_col2
+    )
 {
-  gdf_column* inrow[]{source_col1.get(), source_col2.get()};
-  cudf::table input_table(inrow, 2);
-  cudf::table out_table;
+  int rows = expected_col1.size();
+  gdf_column index_col = *(out_table.get_column(0));
+  gdf_index_type* index_ptr = ((gdf_index_type*)index_col.data);
 
-  EXPECT_NO_THROW(out_table = cudf::drop_duplicates(input_table, input_table, keep));
+  rmm::device_vector<gdf_index_type> ordered(rows);
+  auto exec = rmm::exec_policy(0)->on(0);
+  thrust::sequence(exec, ordered.begin(), ordered.end());
+  thrust::sort_by_key(exec, index_ptr , index_ptr + rows, ordered.data().get());
 
-  gdf_column result_col1 = *(out_table.get_column(0));
+  cudf::table destination_table(rows, cudf::column_dtypes(out_table), true);
+  cudf::gather(&out_table, ordered.data().get(), &destination_table);
+
+  gdf_column result_col1 = *(destination_table.get_column(1));
   EXPECT_TRUE(expected_col1 == result_col1);
-  gdf_column result_col2 = *(out_table.get_column(1));
+
+  gdf_column result_col2 = *(destination_table.get_column(2));
   EXPECT_TRUE(expected_col2 == result_col2);
 
   /*
@@ -167,8 +174,33 @@ void TypedDropDuplicatesTest(
   }
   */
 
+  gdf_column_free(&index_col);
   gdf_column_free(&result_col1);
   gdf_column_free(&result_col2);
+  return true;
+}
+
+template <class T>
+void TypedDropDuplicatesTest(
+    cudf::test::column_wrapper<typename T::Type0> source_col1, 
+    cudf::test::column_wrapper<typename T::Type1> source_col2, 
+    cudf::test::column_wrapper<typename T::Type0> expected_col1, 
+    cudf::test::column_wrapper<typename T::Type1> expected_col2,
+    enum duplicate_keep_option keep)
+{
+  cudf::test::column_wrapper<gdf_index_type> index{source_col1.size(),
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; }};
+   
+  gdf_column* inrow[]{index.get(), source_col1.get(), source_col2.get()};
+  cudf::table input_table(inrow, 3);
+  cudf::table keycol_table(inrow+1, 2);
+  cudf::table out_table;
+
+  EXPECT_NO_THROW(out_table = cudf::drop_duplicates(input_table, keycol_table, keep));
+
+  //reorder and compare columns
+  compare_columns_indexed<T>(out_table, expected_col1, expected_col2);
 }
 
 auto lamda_valid = [](gdf_index_type row) { return true; };
