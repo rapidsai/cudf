@@ -123,16 +123,17 @@ def column_empty(row_count, dtype, masked, categories=None):
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if masked:
-        mask = cudautils.make_mask(row_count)
-        cudautils.fill_value(mask, 0)
+        mask = cudautils.make_empty_mask(row_count)
     else:
         mask = None
 
-    if (
-        categories is not None
-        or pd.api.types.is_categorical_dtype(dtype)
-    ):
-        mem = rmm.device_array((row_count,), dtype=dtype)
+    if categories is None and pd.api.types.is_categorical_dtype(dtype):
+        categories = [] if dtype.categories is None else dtype.categories
+
+    if categories is not None:
+        from math import ceil, log
+        width = str(ceil(log(max(2, len(categories)), 256)) * 8)
+        mem = rmm.device_array((row_count,), dtype='int' + width)
         data = Buffer(mem)
         dtype = 'category'
     elif dtype.kind in 'OU':
