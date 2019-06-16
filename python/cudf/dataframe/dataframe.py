@@ -905,37 +905,44 @@ class DataFrame(object):
         5   -1   NaN  NaN
         """
 
-        idx = self.index
-        df = self.copy(deep=copy)
-        col_names = list(df.columns)
+        if labels is None and index is None and columns is None:
+            return self.copy(deep=copy)
+
+        df = self
+        names = list(df.columns)
+        dtypes = OrderedDict(df.dtypes)
 
         if index is not None or (labels is not None and axis in (0, 'index')):
-            idx = labels if index is None else index
-            idx = idx if isinstance(idx, Index) else as_index(idx)
-            if df.index.dtype != idx.dtype:
+            index = labels if index is None else index
+            index = index if isinstance(index, Index) else as_index(index)
+            if df.index.dtype != index.dtype:
                 df = DataFrame()
             else:
-                df = DataFrame(None, idx).join(df, how='left', sort=True)
+                df = DataFrame(None, index).join(df, how='left', sort=True)
+                # TODO: use df.take() after it's string cols are working
+                # df = df.take(index.argsort(True).argsort(True).to_gpu_array())
+                # double-argsort to map back from sorted to unsorted positions
+                positions = index.argsort(True).argsort(True).to_gpu_array()
+                for col_name, col in df._cols.items():
+                    df[col_name] = col.take(positions)
 
         if columns is not None or (labels is not None and axis in (1, 'columns')):
-            col_names = labels if columns is None else columns
-            same_names = list(set(df.columns) & set(col_names))
-            df = df[same_names]
+            index = self.index if index is None else index
+            names = labels if columns is None else columns
+            df = df[list(set(df.columns) & set(names))]
+        
+        length = len(index)
+        columns = OrderedDict({})
 
-        new_length = len(idx)
-        out_cols = OrderedDict({})
-
-        for name in col_names:
-            if name in df._cols:
-                out_cols[name] = df[name]
+        for name in names:
+            if name in df:
+                columns[name] = df[name].copy(deep=copy)
             else:
-                col = Series([]).astype(np.float64)
-                mask = cudautils.make_empty_mask(new_length)
-                data = cudautils.zeros(new_length, col.dtype)
-                col = col._copy_construct(data=data, index=idx)
-                out_cols[name] = col.set_mask(mask, new_length)
+                t = dtypes.get(name, np.float64)
+                col = columnops.column_empty(length, t, True)
+                columns[name] = Series(data=col, index=index)
 
-        return DataFrame(out_cols, idx)
+        return DataFrame(columns, index)
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
