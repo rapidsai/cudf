@@ -20,6 +20,7 @@ from itertools import combinations
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
 
+
 def test_buffer_basic():
     n = 10
     buf = Buffer(np.arange(n, dtype=np.float64))
@@ -2191,8 +2192,6 @@ def test_reset_index(pdf, gdf, drop):
 
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_0(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
     # TODO (ptaylor): pandas changes `int` dtype to `float64`
     # when reindexing and filling new label indices with NaN
     gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
@@ -2205,15 +2204,12 @@ def test_reindex_dataframe_0(copy):
               gdf.reindex(copy=copy))
 
 
-
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_1(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
     gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
-                                                  'd': str
-                                                  })
+                                                  'd': str})
     pdf = gdf.to_pandas()
     # Validate labels are used as index when axis defaults to 0
     assert_eq(pdf.reindex(index, copy=True),
@@ -2223,8 +2219,7 @@ def test_reindex_dataframe_1(copy):
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_2(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2235,9 +2230,8 @@ def test_reindex_dataframe_2(copy):
 
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_3(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2249,8 +2243,7 @@ def test_reindex_dataframe_3(copy):
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_4(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2261,9 +2254,8 @@ def test_reindex_dataframe_4(copy):
 
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_5(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2275,8 +2267,7 @@ def test_reindex_dataframe_5(copy):
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_6(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2287,9 +2278,8 @@ def test_reindex_dataframe_6(copy):
 
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_7(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2301,8 +2291,7 @@ def test_reindex_dataframe_7(copy):
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_8(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2313,9 +2302,8 @@ def test_reindex_dataframe_8(copy):
 
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_dataframe_9(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2328,7 +2316,7 @@ def test_reindex_dataframe_9(copy):
 def test_reindex_dataframe_10(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2342,7 +2330,7 @@ def test_reindex_dataframe_10(copy):
 def test_reindex_dataframe_change_dtype(copy):
     index = pd.date_range('12/29/2009', periods=10, freq='D')
     columns = ['a', 'b', 'c', 'd', 'e']
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category',
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category',
                                                   'c': float,
                                                   'd': str})
     pdf = gdf.to_pandas()
@@ -2355,7 +2343,7 @@ def test_reindex_dataframe_change_dtype(copy):
 @pytest.mark.parametrize('copy', [True, False])
 def test_reindex_categorical_series(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a':'category'})
+    gdf = gd.datasets.randomdata(nrows=6, dtypes={'a': 'category'})
     pdf = gdf.to_pandas()
     assert_eq(pdf['a'].reindex(copy=True),
               gdf['a'].reindex(copy=copy))

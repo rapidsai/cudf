@@ -862,7 +862,8 @@ class DataFrame(object):
         for k in self.columns:
             self[k] = self[k].set_index(idx)
 
-    def reindex(self, labels=None, axis=0, index=None, columns=None, copy=True):
+    def reindex(self, labels=None, axis=0, index=None, columns=None,
+                copy=True):
         """Return a new DataFrame whose axes conform to a new index
 
         ``DataFrame.reindex`` supports two calling conventions
@@ -889,7 +890,8 @@ class DataFrame(object):
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]
-        >>> df_new = df.reindex(index=[0, 3, 4, 5], columns=['key', 'val', 'sum'])
+        >>> df_new = df.reindex(index=[0, 3, 4, 5],
+                                columns=['key', 'val', 'sum'])
         >>> print(df)
            key   val
         0    0  10.0
@@ -909,40 +911,42 @@ class DataFrame(object):
             return self.copy(deep=copy)
 
         df = self
+        cols = columns
         names = list(df.columns)
         dtypes = OrderedDict(df.dtypes)
+        idx = labels if index is None and axis in (0, 'index') else index
+        cols = labels if cols is None and axis in (1, 'columns') else cols
 
-        if index is not None or (labels is not None and axis in (0, 'index')):
-            index = labels if index is None else index
-            index = index if isinstance(index, Index) else as_index(index)
-            if df.index.dtype != index.dtype:
+        if idx is not None:
+            idx = idx if isinstance(idx, Index) else as_index(idx)
+            if df.index.dtype != idx.dtype:
                 df = DataFrame()
             else:
-                df = DataFrame(None, index).join(df, how='left', sort=True)
+                df = DataFrame(None, idx).join(df, how='left', sort=True)
                 # TODO: use df.take() after it's string cols are working
-                # df = df.take(index.argsort(True).argsort(True).to_gpu_array())
+                # df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
                 # double-argsort to map back from sorted to unsorted positions
-                positions = index.argsort(True).argsort(True).to_gpu_array()
+                positions = idx.argsort(True).argsort(True).to_gpu_array()
                 for col_name, col in df._cols.items():
                     df[col_name] = col.take(positions)
 
-        if columns is not None or (labels is not None and axis in (1, 'columns')):
-            index = self.index if index is None else index
-            names = labels if columns is None else columns
+        if cols is not None:
+            idx = self.index if idx is None else idx
+            names = labels if cols is None else cols
             df = df[list(set(df.columns) & set(names))]
-        
-        length = len(index)
-        columns = OrderedDict({})
+
+        length = len(idx)
+        cols = OrderedDict({})
 
         for name in names:
             if name in df:
-                columns[name] = df[name].copy(deep=copy)
+                cols[name] = df[name].copy(deep=copy)
             else:
-                t = dtypes.get(name, np.float64)
-                col = columnops.column_empty(length, t, True)
-                columns[name] = Series(data=col, index=index)
+                dtype = dtypes.get(name, np.float64)
+                col = columnops.column_empty(length, dtype, True)
+                cols[name] = Series(data=col, index=idx)
 
-        return DataFrame(columns, index)
+        return DataFrame(cols, idx)
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
