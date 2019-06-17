@@ -24,6 +24,7 @@
 - PR #1819 Logical operators (AND, OR, NOT) for libcudf and cuDF
 - PR #1813 ORC Reader: Add support for stripe selection
 - PR #1828 JSON Reader: add suport for bool8 columns
+- PR #1833 Add column iterator with/without nulls
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
 - PR #1921 Add additional formats for typecasting to/from strings
