@@ -964,3 +964,24 @@ def boolean_array_to_index_array(bool_array):
     indices = arange(len(bool_array))
     _, selinds = copy_to_dense(indices, mask=boolbits)
     return selinds
+
+
+@cuda.jit
+def gpu_window_sizes_from_offset(arr, window_sizes, offset):
+    i = cuda.grid(1)
+    j = i
+    if i < arr.size:
+        while j > -1:
+            if (arr[i] - arr[j]) >= offset:
+                break
+            j -= 1
+        window_sizes[i] = i - j
+
+
+def window_sizes_from_offset(arr, offset):
+    window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
+    if arr.size > 0:
+        gpu_window_sizes_from_offset.forall(arr.size)(
+            arr, window_sizes, offset
+        )
+    return window_sizes

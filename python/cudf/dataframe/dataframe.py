@@ -34,6 +34,8 @@ from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
+from cudf.utils.docutils import copy_docstring
+from cudf.window import Rolling
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
@@ -1995,6 +1997,10 @@ class DataFrame(object):
             result = Groupby(self, by=by, method=method, as_index=as_index,
                              level=level)
             return result
+
+    @copy_docstring(Rolling)
+    def rolling(self, window, min_periods=None, center=False):
+        return Rolling(self, window, min_periods=min_periods, center=center)
 
     def query(self, expr, local_dict={}):
         """
