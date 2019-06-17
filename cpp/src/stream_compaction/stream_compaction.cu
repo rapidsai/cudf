@@ -195,7 +195,7 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   auto device_input_table = device_table::create(key_columns, stream);
   rmm::device_vector<gdf_size_type>::iterator result_end;
 
-  bool nullable = device_input_table.get()->has_nulls();
+  bool nullable = device_input_table->has_nulls();
   if(nullable) {
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = unique_copy(exec,
