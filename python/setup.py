@@ -13,19 +13,24 @@ install_requires = [
     'cython'
 ]
 
-cython_files = ['cudf/bindings/*.pyx']
+cython_files = [
+    'cudf/bindings/**/*.pyx',
+]
 
 extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
                 '../cpp/include/cudf',
-                '../cpp/thirdparty/dlpack/include/dlpack/'
+                '../cpp/thirdparty/dlpack/include/dlpack/',
+                '../cpp/thirdparty/rmm/include/',
+                '../cpp/thirdparty/cnmem/include/',
+                '/usr/local/cuda-10.0/include'
               ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
-              extra_compile_args=['-std=c++11'])
+              extra_compile_args=['-std=c++14'])
 ]
 
 setup(name='cudf',
@@ -40,8 +45,7 @@ setup(name='cudf',
         "Programming Language :: Python :: 3.7"
       ],
       # Include the separately-compiled shared library
-      author="NVIDIA Corporation",
-      setup_requires=['cython'],
+     author="NVIDIA Corporation", setup_requires=['cython'],
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
       install_requires=install_requires,

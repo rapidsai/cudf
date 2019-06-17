@@ -388,6 +388,7 @@ cdef gdf_column* column_view_from_string_column(col, col_name=None):
 
     return c_col
 
+
 # gdf_context functions
 
 _join_method_api = {

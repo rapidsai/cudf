@@ -8,7 +8,7 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf import MultiIndex
 
-from cudf.bindings.groupby import (
+from cudf.bindings.groupby_old import (
     agg as cpp_agg,
     _apply_basic_agg as _cpp_apply_basic_agg
 )
