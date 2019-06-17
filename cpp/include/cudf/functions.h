@@ -847,7 +847,7 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column** input_columns,
+gdf_error gdf_order_by(gdf_column const* const* input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
