@@ -153,12 +153,9 @@ std::string cudfJitCache::cacheFile::read()
     rewind( fp );
 
     // Allocate memory of file length size
-    char *buffer = (char*) malloc( file_size+1 );
-    if ( !buffer ) {
-        successful_read = false;
-        fclose(fp);
-        return std::string();
-    }
+    std::string content;
+    content.resize(file_size);
+    char *buffer = &content[0];
 
     // Copy file into buffer
     if( fread(buffer, file_size, 1, fp) != 1 ) {
@@ -168,12 +165,7 @@ std::string cudfJitCache::cacheFile::read()
         return std::string();
     }
     fclose(fp);
-
-    // Copy buffer into string
-    std::string content{buffer, file_size};
     successful_read = true;
-
-    free(buffer);
 
     return content;
 }
