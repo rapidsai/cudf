@@ -263,3 +263,26 @@ def get_dummies(df, prefix='', prefix_sep='_', cats={}, columns=None,
             dtype=dtype)
         for name in columns
     ], axis=1)
+
+
+def is_list_like(obj):
+    '''
+    This function checks if the given `obj`
+    is a list-like (list, tuple, Series...)
+    type or not.
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    Boolean: True or False depending on whether the
+    input `obj` is like-like or not.
+    '''
+    from collections.abc import Sequence
+    if isinstance(obj, (Sequence,)) and \
+            not isinstance(obj, (str, bytes)):
+        return True
+    else:
+        return False

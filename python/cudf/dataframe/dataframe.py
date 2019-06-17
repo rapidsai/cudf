@@ -34,6 +34,8 @@ from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
+from cudf.utils.docutils import copy_docstring
+from cudf.window import Rolling
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
@@ -880,10 +882,17 @@ class DataFrame(object):
             return df
 
     def reset_index(self, drop=False):
+        out = DataFrame()
         if not drop:
-            name = self.index.name or 'index'
-            out = DataFrame()
-            out[name] = self.index
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+                framed = self.index.to_frame()
+                for c in framed.columns:
+                    out[c] = framed[c]
+            else:
+                name = 'index'
+                if self.index.name is not None:
+                    name = self.index.name
+                out[name] = self.index
             for c in self.columns:
                 out[c] = self[c]
         else:
@@ -947,8 +956,24 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -970,8 +995,35 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) == 0:
+                # When self has 0 columns and series has values
+                # we can safely go ahead and assign.
+                return series
+            elif (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
@@ -1138,6 +1190,8 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='columns' only.
           * Not supporting: index, level
+        Rename will not overwite column names. If a list with duplicates it
+        passed, column names will be postfixed.
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -1145,11 +1199,16 @@ class DataFrame(object):
 
         out = DataFrame()
         out = out.set_index(self.index)
-
         if isinstance(mapper, Mapping):
+            postfix = 1
             for column in self.columns:
                 if column in mapper:
-                    out[mapper[column]] = self[column]
+                    if mapper[column] in out.columns:
+                        out_column = str(mapper[column]) + '_' + str(postfix)
+                        postfix += 1
+                    else:
+                        out_column = mapper[column]
+                    out[out_column] = self[column]
                 else:
                     out[column] = self[column]
         elif callable(mapper):
@@ -1444,10 +1503,13 @@ class DataFrame(object):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        from cudf.bindings.transpose import transpose as cpp_tranpose
-        result = cpp_tranpose(self)
+        from cudf.bindings.transpose import transpose as cpp_transpose
+        result = cpp_transpose(self)
         result = result.rename(dict(zip(result.columns, self.index)))
+        index = self.index
         result = result.set_index(self.columns)
+        if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
+            result.columns = index
         return result
 
     @property
@@ -1936,6 +1998,10 @@ class DataFrame(object):
                              level=level)
             return result
 
+    @copy_docstring(Rolling)
+    def rolling(self, window, min_periods=None, center=False):
+        return Rolling(self, window, min_periods=min_periods, center=center)
+
     def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
@@ -2398,7 +2464,7 @@ class DataFrame(object):
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
         if isinstance(self.columns, Index):
-            out.columns = self.columns
+            out.columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out.columns.names = self.columns.names
@@ -2431,14 +2497,31 @@ class DataFrame(object):
         # Set columns
         for colk in dataframe.columns:
             vals = dataframe[colk].values
-            df[colk] = Series(vals, nan_as_null=nan_as_null)
+            # necessary because multi-index can return multiple
+            # columns for a single key
+            if isinstance(colk, tuple):
+                colk = str(colk)
+            if len(vals.shape) == 1:
+                df[colk] = Series(vals, nan_as_null=nan_as_null)
+            else:
+                vals = vals.T
+                if vals.shape[0] == 1:
+                    df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
+                else:
+                    for idx in range(len(vals.shape)):
+                        df[colk+str(idx)] = Series(vals[idx],
+                                                   nan_as_null=nan_as_null)
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
             import cudf
             index = cudf.from_pandas(dataframe.index)
         else:
             index = dataframe.index
-        return df.set_index(index)
+        result = df.set_index(index)
+        if isinstance(dataframe.columns, pd.MultiIndex):
+            import cudf
+            result.columns = cudf.from_pandas(dataframe.columns)
+        return result
 
     def to_arrow(self, preserve_index=True):
         """
@@ -2922,6 +3005,14 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @ioutils.doc_to_csv()
+    def to_csv(self, path=None, sep=',', na_rep='',
+               columns=None, header=True, index=True, line_terminator='\n'):
+        """{docstring}"""
+        import cudf.io.csv as csv
+        return csv.to_csv(self, path, sep, na_rep, columns,
+                          header, index, line_terminator)
 
 
 def from_pandas(obj):
