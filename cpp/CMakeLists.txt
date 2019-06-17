@@ -86,6 +86,8 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
@@ -191,6 +193,23 @@ if(BUILD_TESTS)
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 endif(BUILD_TESTS)
+
+###################################################################################################
+# - add google benchmark --------------------------------------------------------------------------
+
+if(BUILD_BENCHMARKS)
+  
+  include(ConfigureGoogleBenchmark)
+  
+  if(GBENCH_FOUND)
+    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
+    include_directories(${GBENCH_INCLUDE_DIR})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+  else()
+    message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
+  endif(GBENCH_FOUND)
+
+endif(BUILD_BENCHMARKS)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
