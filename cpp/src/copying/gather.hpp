@@ -64,6 +64,9 @@ namespace detail {
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table, bool check_bounds = false,
                  cudaStream_t stream = 0);
+void gather_opt(table const* source_table, gdf_index_type const gather_map[],
+                 table* destination_table, bool check_bounds = false,
+                 cudaStream_t stream = 0);
 }  // namespace detail
 }  // namespace cudf
 
