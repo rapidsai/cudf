@@ -10,6 +10,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.types import *
 from cudf.bindings.filling import *
 from cython.operator import dereference as deref
+from libc.stdlib cimport free
 
 
 def apply_scalar_fill(column, value, idx_begin, idx_end):
@@ -32,3 +33,6 @@ def apply_scalar_fill(column, value, idx_begin, idx_end):
     cdef gdf_index_type c_idx_end = <gdf_index_type>idx_end
 
     fill(out_col, deref(fill_value), c_idx_begin, c_idx_end)
+
+    free(out_col)
+    free(fill_value)

@@ -262,3 +262,5 @@ def apply_copy_range(out_col, in_col, idx_out_begin, idx_out_end, idx_in_begin):
     copy_range(c_out_col, deref(c_in_col), c_idx_out_begin, c_idx_out_end,
                c_idx_in_begin)
 
+    free(c_out_col)
+    free(c_in_col)
