@@ -27,115 +27,14 @@
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
 
-namespace group_by_sort{ 
-
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis Calls the Sort Based group by compute API to compute the groupby with 
- * aggregation.
- * 
- * @Param ncols, in_groupby_columns The input groupby table
- * @Param in_aggregation_column The input aggregation column
- * @Param out_groupby_columns The output groupby table
- * @Param out_aggregation_column The output aggregation column
- * @Param ctxt Flag to optionally sort the output
- * @tparam aggregation_type  The type of the aggregation column
- * @tparam op A binary functor that implements the aggregation operation
- * 
- * @Returns On failure, returns appropriate error code. Otherwise, GDF_SUCCESS
- */
-/* ----------------------------------------------------------------------------*/
-
-gdf_error groupby_sort_presort(gdf_size_type num_groupby_cols,
-                        gdf_column * const* in_groupby_columns,
-                        gdf_context* ctxt,
-                        rmm::device_vector<int32_t> &sorted_indices)
-{
-  bool group_by_keys_contain_nulls = false;
-  std::vector<gdf_column*> orderby_cols_vect(num_groupby_cols);
-  for (int i = 0; i < num_groupby_cols; i++){
-    orderby_cols_vect[i] = (gdf_column*)in_groupby_columns[i];
-    group_by_keys_contain_nulls = group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0;
-  } 
-  int32_t nrows = in_groupby_columns[0]->size;
-
-  sorted_indices.resize(nrows);
-  gdf_column sorted_indices_col;
-  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), nullptr, nrows, GDF_INT32);
-  
-  if (status != GDF_SUCCESS)
-    return status;
-  
-  // run order by and get new sort indexes
-  status = gdf_order_by(&orderby_cols_vect[0],             //input columns
-                          nullptr,
-                          num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                          &sorted_indices_col,             //a gdf_column that is pre allocated for storing sorted indices
-                          ctxt);
-  return status;
-}
-
-template <template <typename> class, template<typename> class>
-struct is_same_functor : std::false_type{};
-
-template <template <typename> class T>
-struct is_same_functor<T,T> : std::true_type{};
+namespace cudf{
+namespace groupby{
+namespace sort{
+namespace detail {     
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Helper function for gdf_groupby_sort. Deduces the type of the aggregation
- * column and calls another function to perform the group by.
- * 
- */
-/* ----------------------------------------------------------------------------*/
- 
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  This function provides the libgdf entry point for a Sort-based group-by.
- * Performs a Group-By operation on an arbitrary number of columns with a single aggregation column.
- * 
- * @Param[in] ncols The number of columns to group-by
- * @Param[in] in_groupby_columns[] The columns to group-by
- * @Param[in,out] in_aggregation_column The column to perform the aggregation on
- * @Param[in,out] out_groupby_columns[] A preallocated buffer to store the resultant group-by columns
- * @Param[in,out] out_aggregation_column A preallocated buffer to store the resultant aggregation column
- * @tparam[in] aggregation_operation A functor that defines the aggregation operation
- * 
- * @Returns gdf_error
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_group_by_sort_pre(gdf_size_type ncols,               
-                            gdf_column * const* in_groupby_columns,        
-                            gdf_context* ctxt,
-                            rmm::device_vector<int32_t> &sorted_indices
-                            )
-{
-
-
-  // Make sure the inputs are not null
-  if( 0 == ncols || nullptr == in_groupby_columns) 
-  {
-    return GDF_DATASET_EMPTY;
-  }
-
-  // If there are no rows in the input, return successfully
-  if (0 == in_groupby_columns[0]->size)
-  {
-    return GDF_SUCCESS;
-  }
-   
-  return groupby_sort_presort( ncols,
-                               in_groupby_columns, 
-                               ctxt,
-                               sorted_indices);
-}
-
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  Creates a gdf_column of a specified size and data type
+ * @Synopsis  Creates a gdf_column of a specified siz~e and data type
  * 
  * @Param size The number of elements in the gdf_column
  * @tparam col_type The datatype of the gdf_column
@@ -230,45 +129,45 @@ gdf_error multi_pass_avg(int ncols,
                          gdf_column* out_groupby_columns[],
                          gdf_column* out_aggregation_column)
 {
-  // Allocate intermediate output gdf_columns for the output of the Count and Sum aggregations
-  const size_t output_size = out_aggregation_column->size;
+  // // Allocate intermediate output gdf_columns for the output of the Count and Sum aggregations
+  // const size_t output_size = out_aggregation_column->size;
 
-  // Make sure the result is sorted so the output is in identical order
-  gdf_context ctxt;
-  ctxt.flag_distinct = false;
-  ctxt.flag_method = GDF_SORT;
-  ctxt.flag_sort_result = 1;
+  // // Make sure the result is sorted so the output is in identical order
+  // gdf_context ctxt;
+  // ctxt.flag_distinct = false;
+  // ctxt.flag_method = GDF_SORT;
+  // ctxt.flag_sort_result = 1;
   
-  // FIXME Currently, Sort based groupby assumes the type of the input aggregation column and 
-  // the output aggregation column are the same. This doesn't work for COUNT
+  // // FIXME Currently, Sort based groupby assumes the type of the input aggregation column and 
+  // // the output aggregation column are the same. This doesn't work for COUNT
 
-  // // Compute the counts for each key 
-  gdf_column count_output = create_gdf_column<size_t>(output_size);
-  gdf_agg_op count_op[] = {GDF_COUNT};
-  gdf_column* out_agg_count[] =  {&count_output};
-  gdf_group_by_sort(in_groupby_columns, ncols, &in_aggregation_column, 1, count_op, out_groupby_columns, out_agg_count, &ctxt);
+  // // // Compute the counts for each key 
+  // gdf_column count_output = create_gdf_column<size_t>(output_size);
+  // gdf_agg_op count_op[] = {GDF_COUNT};
+  // gdf_column* out_agg_count[] =  {&count_output};
+  // // gdf_group_by_sort(in_groupby_columns, ncols, &in_aggregation_column, 1, count_op, out_groupby_columns, out_agg_count, &ctxt);
 
-  // // Compute the sum for each key. Should be okay to reuse the groupby column output
-  gdf_column sum_output = create_gdf_column<sum_type>(output_size);
-  gdf_agg_op sum_op[] = {GDF_SUM};
-  gdf_column* out_agg_sum[] =  {&sum_output};
-  gdf_group_by_sort(in_groupby_columns, ncols, &in_aggregation_column, 1, sum_op, out_groupby_columns, out_agg_sum, &ctxt);
+  // // // Compute the sum for each key. Should be okay to reuse the groupby column output
+  // gdf_column sum_output = create_gdf_column<sum_type>(output_size);
+  // gdf_agg_op sum_op[] = {GDF_SUM};
+  // gdf_column* out_agg_sum[] =  {&sum_output};
+  // // gdf_group_by_sort(in_groupby_columns, ncols, &in_aggregation_column, 1, sum_op, out_groupby_columns, out_agg_sum, &ctxt);
 
-  // // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
-  const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
-  switch(gdf_output_type){
-    case GDF_INT8:    { compute_average<sum_type, int8_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT16:   { compute_average<sum_type, int16_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT32:   { compute_average<sum_type, int32_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_INT64:   { compute_average<sum_type, int64_t>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_FLOAT32: { compute_average<sum_type, float>( out_aggregation_column, count_output, sum_output); break; }
-    case GDF_FLOAT64: { compute_average<sum_type, double>( out_aggregation_column, count_output, sum_output); break; }
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
+  // // // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
+  // const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
+  // switch(gdf_output_type){
+  //   case GDF_INT8:    { compute_average<sum_type, int8_t>( out_aggregation_column, count_output, sum_output); break; }
+  //   case GDF_INT16:   { compute_average<sum_type, int16_t>( out_aggregation_column, count_output, sum_output); break; }
+  //   case GDF_INT32:   { compute_average<sum_type, int32_t>( out_aggregation_column, count_output, sum_output); break; }
+  //   case GDF_INT64:   { compute_average<sum_type, int64_t>( out_aggregation_column, count_output, sum_output); break; }
+  //   case GDF_FLOAT32: { compute_average<sum_type, float>( out_aggregation_column, count_output, sum_output); break; }
+  //   case GDF_FLOAT64: { compute_average<sum_type, double>( out_aggregation_column, count_output, sum_output); break; }
+  //   default: return GDF_UNSUPPORTED_DTYPE;
+  // }
 
-  // Free intermediate storage
-  RMM_TRY( RMM_FREE(count_output.data, 0) );
-  RMM_TRY( RMM_FREE(sum_output.data, 0) );
+  // // Free intermediate storage
+  // RMM_TRY( RMM_FREE(count_output.data, 0) );
+  // RMM_TRY( RMM_FREE(sum_output.data, 0) );
   
   return GDF_SUCCESS;
 }
@@ -306,5 +205,8 @@ static inline gdf_error gdf_group_by_sort_avg(int ncols,
   }
 }
 
-} //END: namespace group_by_sort 
+} //END: namespace detail
+} //END: namespace sort
+} //END: namespace groupby
+} //END: namespace cudf 
 #endif

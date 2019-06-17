@@ -140,21 +140,21 @@ gdf_error gdf_group_by_sort_wo_valids(
   gdf_error gdf_error_code{GDF_SUCCESS};
   switch (agg_op) {
   case GDF_MIN: {
-    gdf_error_code = cudf::type_dispatcher(
+    gdf_error_code = groupby_type_dispatcher(
         in_aggregation_column->dtype, dispatch_groupby_forwarder<min_op>{},
         ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns,
         out_aggregation_column, ctxt, sorted_indices);
     break;
   }
   case GDF_MAX: {
-    gdf_error_code = cudf::type_dispatcher(
+    gdf_error_code = groupby_type_dispatcher(
         in_aggregation_column->dtype, dispatch_groupby_forwarder<max_op>{},
         ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns,
         out_aggregation_column, ctxt, sorted_indices);
     break;
   }
   case GDF_SUM: {
-    gdf_error_code = cudf::type_dispatcher(
+    gdf_error_code = groupby_type_dispatcher(
         in_aggregation_column->dtype, dispatch_groupby_forwarder<sum_op>{},
         ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns,
         out_aggregation_column, ctxt, sorted_indices);

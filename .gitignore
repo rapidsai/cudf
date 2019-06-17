@@ -35,6 +35,9 @@ build/
 cpp/build/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
+cpp/build2/
+cpp/.idea/
+cpp/cmake-build-debug/
 
 ## Eclipse IDE
 .project

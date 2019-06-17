@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 #include <cudf.h>
 
 gdf_error gdf_group_by_count_with_valids(

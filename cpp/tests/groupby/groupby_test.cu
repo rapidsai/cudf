@@ -351,17 +351,6 @@ struct GroupTest : public GdfTest {
                                    &ctxt);
           break;
         }
-      case agg_op::CNT_DISTINCT:
-        {
-          error = gdf_group_by_count_distinct(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }  
       case agg_op::AVG:
         {
           error = gdf_group_by_avg(num_columns,

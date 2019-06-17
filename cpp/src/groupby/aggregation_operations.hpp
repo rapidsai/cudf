@@ -263,11 +263,11 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) groupby_type_dispatcher(gdf_dtype dtype
     // See here for more information:
     // https://stackoverflow.com/questions/3786360/confusing-template-error
     case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
-    case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
-    case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
-    case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
-    case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
-    case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    // case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
+    // case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
+    // case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
+    // case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
+    // case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
     default: {
 #ifdef __CUDA_ARCH__
       

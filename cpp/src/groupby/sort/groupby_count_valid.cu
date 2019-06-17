@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "groupby_count_wo_valid.h"
+#include "groupby_count_valid.h"
 #include "rmm/thrust_rmm_allocator.h"
 
 #include <cuda_runtime.h>

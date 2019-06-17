@@ -20,7 +20,6 @@
 
 #include "gtest/gtest.h"
 
-
 #include <cudf.h>
 #include <cudf/functions.h>
 
@@ -140,20 +139,21 @@ struct GroupByCountDTest : public GdfTest
     gdf_column **group_by_output_key = &(tmp);
     gdf_column *group_by_output_value = gdf_output_val_column->get();
 
-    gdf_context ctxt = {0, GDF_SORT, 0};
-		ctxt.flag_distinct = false;
-		ctxt.flag_method = GDF_HASH;
-		ctxt.flag_sort_result = 1;
-  
-    gdf_agg_op op{GDF_AVG};
-    gdf_error status  = gdf_group_by_sort(group_by_input_key,
-                                    num_columns,
-                                    &group_by_input_value,
-                                    1,
-                                    &op,
-                                    group_by_output_key,
-                                    &group_by_output_value,
-                                    &ctxt);
+    // gdf_context ctxt = {0, GDF_SORT, 0};
+		// ctxt.flag_distinct = false;
+		// ctxt.flag_method = GDF_HASH;
+		// ctxt.flag_sort_result = 1;
+    //TODO!
+    // //gdf_agg_op op{GDF_AVG};
+
+    // cudf::table input_keys{group_by_input_key, 1};
+    // cudf::table input_values{group_by_input_value, 1};
+
+    // cudf::table actual_keys_table;
+    // cudf::table actual_values_table;
+    // std::tie(actual_keys_table, actual_values_table) = groupby(input_keys, input_values, {cudf::groupby::sort::operators::SUM}, &ctxt);
+    // gdf_output_key_column = std::make_unique<cudf::test::column_wrapper<T>>(actual_keys_table.get_column(0));
+    // gdf_output_val_column = std::make_unique<cudf::test::column_wrapper<T>>(actual_values_table.get_column(0));
 
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
@@ -190,7 +190,7 @@ struct GroupByCountDTest : public GdfTest
 };
 
 
-using TestingTypes = ::testing::Types<int32_t>;
+using TestingTypes = ::testing::Types<int8_t>;
 
 TYPED_TEST_CASE(GroupByCountDTest, TestingTypes);
 

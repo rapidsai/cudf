@@ -144,7 +144,7 @@ enum operators {SUM/*, MIN, MAX, COUNT, COUNT_DISTINCT, AVG*/};
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the table of reduced output values
  *---------------------------------------------------------------------------**/
-std::tuple<cudf::table, cudf::table> groupby(cudf::table const& keys,
+std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                              cudf::table const& values,
                                              std::vector<operators> const& ops, // 
                                              gdf_context* options); // Context *context
