@@ -184,7 +184,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             elif original_type == np.int32:
                 new_type = pd.Int32Dtype()
             elif original_type == np.int64:
-                new_type = pd.Int32Dtype()
+                new_type = pd.Int64Dtype()
             else:
                 new_type = original_type
             return pd.Series(array, index=index, dtype=new_type)
