@@ -275,6 +275,14 @@ set(UTILITIES_TEST_SRC
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
 ###################################################################################################
+# - iterator tests -------------------------------------------------------------------------------
+
+set(ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+
+ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
+
+###################################################################################################
 # - device atomics tests -------------------------------------------------------------------------------
 
 set(DEVICE_ATOMICS_TEST_SRC
@@ -350,3 +358,12 @@ set(STREAM_COMPACTION_BENCH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
 
 ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+
+###################################################################################################
+# - iterator benchmarks-------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
