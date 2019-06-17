@@ -128,6 +128,13 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
   uint32_t active_mask = 0xffffffff;
   active_mask = __ballot_sync(active_mask, i < nrows);
+  __shared__ uint32_t valid_sum[warp_size];
+
+  // init shared memory for block valid counts
+  if (input_has_nulls or replacement_has_nulls){
+    if(threadIdx.x < warp_size) valid_sum[threadIdx.x] = 0;
+    __syncthreads();
+  }
 
   while (i < nrows) {
     bool output_is_valid = true;
@@ -162,33 +169,25 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
-      __shared__ uint32_t valid_sum[warp_size];
-
-      // init shared memory for block valid counts
-      if(threadIdx.x < warp_size) valid_sum[threadIdx.x] = 0;
-      __syncthreads();
-
-      const int wid = threadIdx.x / warp_size;
-      const int lane = threadIdx.x % warp_size;
-
-      if(lane == 0 && bitmask != 0){
+      if(0 == (threadIdx.x % warp_size) && bitmask != 0){
         output_valid[(int)(i/warp_size)] = bitmask;
-        valid_sum[wid] = __popc(bitmask);
-      }
-
-      __syncthreads(); // waiting for the valid counts of each warp to be ready
-
-      // Compute total valid count for this block and add it to global count
-      uint32_t block_valid_count = sum_warps<uint32_t>(valid_sum);
-
-      // one thread computes and adds to output_valid_count
-      if (threadIdx.x < warp_size && lane == 0) {
-          atomicAdd(output_valid_count, block_valid_count);
+        valid_sum[(int)(threadIdx.x / warp_size)] += __popc(bitmask);
       }
     }
 
     i += blockDim.x * gridDim.x;
     active_mask = __ballot_sync(active_mask, i < nrows);
+  }
+  if(input_has_nulls or replacement_has_nulls){
+    __syncthreads(); // waiting for the valid counts of each warp to be ready
+
+    // Compute total valid count for this block and add it to global count
+    uint32_t block_valid_count = sum_warps<uint32_t>(valid_sum);
+
+    // one thread computes and adds to output_valid_count
+    if (threadIdx.x < warp_size && 0 == (threadIdx.x % warp_size)) {
+      atomicAdd(output_valid_count, block_valid_count);
+    }
   }
 }
 
