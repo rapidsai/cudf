@@ -17,11 +17,6 @@
 #pragma once
 
 /*
- * @brief Interface to parse CSV data to GDF columns
- */
-gdf_error read_csv(csv_read_arg *args);
-
-/*
  * @brief Interface to output GDF columns to CSV format
  *
  * This function accepts an array of gdf_columns and creates a CSV
