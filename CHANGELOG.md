@@ -71,6 +71,7 @@
 - PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
 
 ## Bug Fixes
 
@@ -124,6 +125,7 @@
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
 - PR #1978 Fix for values being filled in an empty dataframe 
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
+- PR #2006 Handle empty dataframe groupby construction for dask
 
 
 # cudf 0.7.2 (16 May 2019)
