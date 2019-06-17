@@ -2680,3 +2680,59 @@ def test_any(data):
     got = gdata.any()
     expected = pdata.any()
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize('indexed', [False, True])
+def test_dataframe_sizeof(indexed):
+    rows = int(1e6)
+    index = list(i for i in range(rows)) if indexed else None
+
+    gdf = gd.DataFrame([('A', [8] * rows), ('B', [32] * rows)], index=index)
+
+    for c in gdf._cols.values():
+        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
+    cols_sizeof = sum(c._column.__sizeof__() for c in gdf._cols.values())
+    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
+
+
+@pytest.mark.parametrize('a', [
+    [],
+    ["123"]
+])
+@pytest.mark.parametrize('b', [
+    "123",
+    ["123"]
+])
+@pytest.mark.parametrize('misc_data', [
+    "123",
+    ["123"] * 20,
+    123,
+    [1, 2, 0.8, 0.9] * 50,
+    0.9,
+    0.00001
+])
+@pytest.mark.parametrize('non_list_data', [
+    123,
+    "abc",
+    "zyx",
+    "rapids",
+    0.8
+])
+def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
+    expected = pd.DataFrame({'a': a})
+    actual = DataFrame.from_pandas(expected)
+    expected['b'] = b
+    actual['b'] = b
+    assert_eq(actual, expected)
+
+    expected = pd.DataFrame({'a': []})
+    actual = DataFrame.from_pandas(expected)
+    expected['b'] = misc_data
+    actual['b'] = misc_data
+    assert_eq(actual, expected)
+
+    expected = pd.DataFrame({'a': a})
+    actual = DataFrame.from_pandas(expected)
+    expected['b'] = non_list_data
+    actual['b'] = non_list_data
+    assert_eq(actual, expected)
