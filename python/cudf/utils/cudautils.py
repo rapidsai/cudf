@@ -981,5 +981,7 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 def window_sizes_from_offset(arr, offset):
     window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_window_sizes_from_offset.forall(arr.size)(arr, window_sizes, offset)
+        gpu_window_sizes_from_offset.forall(arr.size)(
+            arr, window_sizes, offset
+        )
     return window_sizes
