@@ -77,8 +77,8 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         std::cout << "Child output begin:" << std::endl;
         char buf;
         while (read(pipefd[0], &buf, 1) > 0)
-            write(STDOUT_FILENO, &buf, 1);
-        write(STDOUT_FILENO, "\n", 1);
+            ASSERT_EQ(write(STDOUT_FILENO, &buf, 1), 1);
+        ASSERT_EQ(write(STDOUT_FILENO, "\n", 1), 1);
         std::cout << "Child output end" << std::endl;
 
         ASSERT_TRUE(WIFEXITED(status)) << "Child did not exit normally.";
