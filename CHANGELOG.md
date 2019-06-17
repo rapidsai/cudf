@@ -123,6 +123,7 @@
 - PR #1959 Add support for comparing boolean Series to scalar
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
+- PR #1977 Support CUDA installation in default system directories
 - PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 - PR #1991 Parquet reader: fix decoding of NULLs

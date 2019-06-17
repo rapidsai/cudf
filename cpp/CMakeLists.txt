@@ -17,6 +17,10 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
 
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif()
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
@@ -191,8 +195,11 @@ endif(BUILD_TESTS)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif()
+
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
