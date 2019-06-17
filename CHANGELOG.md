@@ -72,7 +72,8 @@
 - PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
-- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
+- PR #1944 Groupby design improvements
 - PR #2011 Convert `read_parquet()` into a C++ API
 
 ## Bug Fixes
