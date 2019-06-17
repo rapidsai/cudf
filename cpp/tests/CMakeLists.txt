@@ -212,6 +212,12 @@ set(JITCACHE_TEST_SRC
 
 ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
+set(JITCACHE_MULTI_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binary/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/jit-cache-multiprocess-test.cpp")
+
+ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
+
 ###################################################################################################
 # - io tests -------------------------------------------------------------------------------------
 

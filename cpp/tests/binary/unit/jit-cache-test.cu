@@ -15,85 +15,11 @@
  */
 
 
-#include <tests/utilities/column_wrapper.cuh>
-#include <binary/jit/core/cache.h>
-#include <gtest/gtest.h>
-#include <ftw.h>
+#include "jit-cache-test.hpp"
 
 namespace cudf {
 namespace test {
 
-
-struct JitCacheTest : public ::testing::Test
-                    , public cudf::jit::cudfJitCache {
-    JitCacheTest() {
-    }
-
-    virtual ~JitCacheTest() {
-    }
-
-    virtual void SetUp() {
-        // Prime up the cache so that the in-memory and file cache is populated
-        
-        purgeFileCache();
-
-        // Single value column
-        auto column = cudf::test::column_wrapper<int>{{4,0}};
-        auto expect = cudf::test::column_wrapper<int>{{64,0}};
-
-        // make program
-        auto program = getProgram("MemoryCacheTestProg", program_source);
-        // make kernel
-        auto kernel = getKernelInstantiation("my_kernel",
-                                                    program,
-                                                    {"3", "int"});
-        (*std::get<1>(kernel)).configure_1d_max_occupancy()
-                 .launch(column.get()->data);
-
-        ASSERT_EQ(expect, column);
-    }
-
-    virtual void TearDown() {
-        purgeFileCache();
-    }
-
-    void purgeFileCache() {
-        #if defined(JITIFY_USE_CACHE)
-            std::string cachedir = cudf::jit::getCacheDir();
-            nftw(cachedir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
-        #endif
-    }
-
-    // TODO (dm): remove if/when #1642 gets merged and use the following:
-    // https://github.com/rapidsai/cudf/pull/1642/files#diff-aee4e59e3139423d13edaa200e8c82b3R64
-    static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
-    {
-        return remove(pathname);
-    }
-
-    const char* program_source =
-        "my_program\n"
-        "template<int N, typename T>\n"
-        "__global__\n"
-        "void my_kernel(T* data) {\n"
-        "    T data0 = data[0];\n"
-        "    for( int i=0; i<N-1; ++i ) {\n"
-        "        data[0] *= data0;\n"
-        "    }\n"
-        "}\n";
-
-    const char* program2_source =
-        "my_program\n"
-        "template<int N, typename T>\n"
-        "__global__\n"
-        "void my_kernel(T* data) {\n"
-        "    T data0 = data[0];\n"
-        "    for( int i=0; i<N-1; ++i ) {\n"
-        "        data[0] += data0;\n"
-        "    }\n"
-        "}\n";
-
-};
 
 TEST_F(JitCacheTest, CacheExceptionTest) {
     EXPECT_NO_THROW(auto program = getProgram("MemoryCacheTestProg"));
@@ -200,11 +126,6 @@ TEST_F(JitCacheTest, FileCacheKernelTest) {
                               << "  Actual col: " << column.to_str();
 }
 #endif
-
-// Test the thread safety
-// just create a bunch of std threads and make sure they all give correct result
-
-
 
 
 } // namespace test
