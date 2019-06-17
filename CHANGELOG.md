@@ -22,6 +22,7 @@
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
 - PR #1542 Python method and bindings for to_csv
+- PR #1652 Added `Series.where()` feature 
 
 ## Improvements
 

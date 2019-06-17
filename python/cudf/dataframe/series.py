@@ -1032,23 +1032,22 @@ class Series(object):
         :return: Series
 
         """
-        idx_bool = cond.to_array()
-        to_replace = self.to_array()[idx_bool]
+
+        to_replace = self._column.apply_boolean_mask(cond & self.notna())
         if is_scalar(other):
-            other = utils.scalar_broadcast_to(
+            new_value = utils.scalar_broadcast_to(
                 other, (len(to_replace),), np.dtype(type(other))
             )
         else:
-            if len(to_replace) != len(other):
-                raise ValueError(
-                    "Replacement lists must be"
-                    "of same length."
-                    "Expected {}, got {}.".format(len(to_replace), len(other))
-                )
+            raise NotImplementedError(
+                    "Replacement arg {} is not supported.".format(type(other))
+            )
 
-        result = self._column.find_and_replace(to_replace, other)
+        result = self._column.find_and_replace(to_replace, new_value, all_nan=False)
 
-        # TODO: replace nulls
+        # To replace nulls
+        if (cond & self.isnull()).any():
+            result = result.fillna(other)
         return self._copy_construct(data=result)
 
     def to_array(self, fillna=None):
