@@ -17,7 +17,7 @@
 #pragma once
 
 #include <tests/utilities/column_wrapper.cuh>
-#include <binary/jit/core/cache.h>
+#include <binaryop/jit/core/cache.h>
 #include <gtest/gtest.h>
 #include <ftw.h>
 
