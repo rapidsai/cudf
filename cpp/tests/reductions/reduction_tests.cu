@@ -58,17 +58,19 @@ struct ReductionTest : public GdfTest
 
     void reduction_test(std::vector<T>& input_values,
         T expected_value, bool succeeded_condition,
-        gdf_reduction_op op)
+        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
     {
+
         cudf::test::column_wrapper<T> const col(input_values);
 
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T> dev_result(1);
 
+        if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
+
         auto statement = [&]() {
-            cudf::test::scalar_wrapper<T> result 
-                = cudf::reduction(underlying_column, op,
-                                underlying_column->dtype);
+            cudf::test::scalar_wrapper<T> result
+                = cudf::reduction(underlying_column, op, output_dtype);
             EXPECT_EQ(expected_value, result.value());
         };
 
@@ -135,6 +137,34 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
     this->reduction_test(v, expected_value, this->ret_non_arithmetic,
                          GDF_REDUCTION_SUMOFSQUARES);
+}
+
+// ----------------------------------------------------------------------------
+
+template <typename T>
+struct MultiStepReductionTest : public ReductionTest<T>
+{
+    MultiStepReductionTest(){}
+    ~MultiStepReductionTest(){}
+};
+
+using MultiStepReductionTypes = testing::Types<
+    int8_t,int16_t, int32_t, int64_t, float, double>;
+
+TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
+
+TYPED_TEST(MultiStepReductionTest, Mean)
+{
+    using T = TypeParam;
+    std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2});
+    std::vector<T> v = convert_values<T>(int_values);
+
+    double expected_value = std::accumulate(v.begin(), v.end(), double{0});
+    expected_value /= int_values.size() ;
+//    double expected_value = mean_value(accum_value, int_values.size() );
+
+    this->reduction_test(v, expected_value, this->ret_non_arithmetic,
+        GDF_REDUCTION_MEAN, GDF_FLOAT64);
 }
 
 // ----------------------------------------------------------------------------

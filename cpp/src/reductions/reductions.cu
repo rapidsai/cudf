@@ -19,10 +19,9 @@
 namespace { // anonymous namespace
 
 template <typename Op, typename InputIterator, typename T_output>
-void reduction_op(T_output* dev_result, InputIterator d_in, int num_items,
+void reduction_op(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
     T_output init, Op op, cudaStream_t stream)
 {
-#if 1
     void     *d_temp_storage = NULL;
     size_t   temp_storage_bytes = 0;
 
@@ -37,13 +36,6 @@ void reduction_op(T_output* dev_result, InputIterator d_in, int num_items,
 
     // Free temporary storage
     RMM_TRY(RMM_FREE(d_temp_storage, stream));
-#else
-    auto d_in_last = d_in + num_items;
-    T_output result = thrust::reduce(thrust::device, d_in, d_in_last, init, op);
-
-    CUDA_TRY(cudaMemcpyAsync(dev_result, &result,
-        sizeof(T_output), cudaMemcpyHostToDevice, stream));
-#endif
 }
 
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
@@ -84,43 +76,43 @@ void ReduceOp(const gdf_column *input,
     scalar->is_valid = true;
 };
 
-
 // Reduction for mean, var, std
 // It requires extra step after single step reduction call
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
 void ReduceMultiStepOp(const gdf_column *input,
                    gdf_scalar* scalar, cudaStream_t stream)
 {
+    gdf_size_type valid_count = input->size - input->null_count;
+
     T_out identity = Op::Op::template identity<T_out>();
-    auto  intermediate = Op::template intermediate<T_out>();
+    using intermediateOp = typename Op::template Intermediate<T_out>;
+    using Itype = typename intermediateOp::IType;
+    Itype intermediate{0};
 
     // allocate temporary memory for the result
     void *result = NULL;
-    RMM_TRY(RMM_ALLOC(&result, sizeof(intermediate), stream));
+    RMM_TRY(RMM_ALLOC(&result, sizeof(Itype), stream));
 
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(result, &intermediate,
-            sizeof(T_out), cudaMemcpyHostToDevice, stream));
+            sizeof(Itype), cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
 
-    if( std::is_same<Op, cudf::reductions::ReductionMean>::value ){
-        auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
-        auto it = thrust::make_transform_iterator(it_raw, cudf::transformer_squared<T_out>{});
-        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
-            typename Op::Op{}, stream);
-    }else{
-        auto it = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
-        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
-            typename Op::Op{}, stream);
-    }
+    auto transformer = intermediateOp::get_transformer();
+    auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
+    auto it = thrust::make_transform_iterator(it_raw, transformer);
+    reduction_op(static_cast<Itype*>(result), it, input->size, intermediate,
+        typename Op::Op{}, stream);
+
 
     // read back the result to host memory
     // TODO: asynchronous copy
     CUDA_TRY(cudaMemcpy(&intermediate, result,
-            sizeof(T_out), cudaMemcpyDeviceToHost));
+            sizeof(Itype), cudaMemcpyDeviceToHost));
 
     // compute the result value from intermediate value.
-
+    T_out hos_result = intermediateOp::ComputeResult(intermediate, valid_count);
+    memcpy(&scalar->data, result, sizeof(T_out));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
@@ -139,9 +131,15 @@ private:
                 std::is_same<Op, cudf::reductions::ReductionStd >::value;
     }
 
+    template <typename T_out>
+    static constexpr bool is_convertible_v()
+    {
+        return  std::is_arithmetic<T_in>::value && std::is_arithmetic<T_out>::value;
+    }
+
 public:
     template <typename T_out, typename std::enable_if<
-        std::is_constructible<T_out, T_in>::value >::type* = nullptr>
+        is_convertible_v<T_out>() >::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -161,7 +159,7 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-        not std::is_constructible<T_out, T_in>::value >::type* = nullptr >
+        not is_convertible_v<T_out>() >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
