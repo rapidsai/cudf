@@ -468,8 +468,8 @@ def test_csv_reader_buffer_strings():
                                                     ('.beez', 'bz2', 'bz2'),
                                                     ('.gz', 'gzip', 'infer'),
                                                     ('.bz2', 'bz2', 'infer'),
-                                                    ('.csv', None, 'infer'),
-                                                    ('.csv', None, None),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
                                                     ('', None, None)])
 def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
 
