@@ -19,130 +19,323 @@
 #include <thrust/device_ptr.h>
 #include <thrust/find.h>
 #include <thrust/execution_policy.h>
+#include <cub/cub.cuh>
 
+#include <cudf/copying.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities//type_dispatcher.hpp>
-#include <utilities/cuda_utils.hpp>
 #include <utilities/cudf_utils.h>
-#include <bitmask/bit_mask.cuh>
+#include <utilities/cuda_utils.hpp>
+#include <utilities/column_utils.hpp>
 #include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/bit_mask.cuh>
+
+using bit_mask::bit_mask_t;
 
 namespace{ //anonymous
 
-  constexpr int BLOCK_SIZE = 256;
+  static constexpr int warp_size = 32;
+  static constexpr int BLOCK_SIZE = 256;
+
+
+// returns the block_sum using the given shared array of warp sums.
+template <typename T>
+__device__ T sum_warps(T* warp_smem)
+{
+  T block_sum = 0;
+
+   if (threadIdx.x < warp_size) {
+    T my_warp_sum = warp_smem[threadIdx.x];
+    __shared__ typename cub::WarpReduce<T>::TempStorage temp_storage;
+    block_sum = cub::WarpReduce<T>(temp_storage).Sum(my_warp_sum);
+  }
+  return block_sum;
+}
+
+
+// return the new_value for output column at index `idx`
+template<class T, bool replacement_has_nulls>
+__device__ auto get_new_value(gdf_size_type         idx,
+                           const T* __restrict__ input_data,
+                           const T* __restrict__ values_to_replace_begin,
+                           const T* __restrict__ values_to_replace_end,
+                           const T* __restrict__       d_replacement_values,
+                           bit_mask_t const * __restrict__ replacement_valid)
+   {
+     auto found_ptr = thrust::find(thrust::seq, values_to_replace_begin,
+                                      values_to_replace_end, input_data[idx]);
+     T new_value{0};
+     bool output_is_valid{true};
+
+     if (found_ptr != values_to_replace_end) {
+       auto d = thrust::distance(values_to_replace_begin, found_ptr);
+       new_value = d_replacement_values[d];
+       if (replacement_has_nulls) {
+         output_is_valid = bit_mask::is_valid(replacement_valid, d);
+       }
+     } else {
+       new_value = input_data[idx];
+     }
+     return thrust::make_pair(new_value, output_is_valid);
+   }
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @brief Kernel that replaces elements from `d_col_data` given the following
-   *        rule: replace all `old_values[i]` in [old_values_begin`, `old_values_end`)
-   *        present in `d_col_data` with `d_new_values[i]`.
+   * @brief Kernel that replaces elements from `output_data` given the following
+   *        rule: replace all `values_to_replace[i]` in [values_to_replace_begin`,
+   *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
    *
-   * @param[in,out] d_col_data Device array with the data to be modified
-   * @param[in] nrows # rows in `d_col_data`
-   * @param[in] old_values_begin Device pointer to the beginning of the sequence
+   * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
+   * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false` otherwise
+   * The input_has_nulls and replacement_has_nulls template parameters allows us to specialize
+   * this kernel for the different scenario for performance without writing different kernel.
+   *
+   * @param[in] input_data Device array with the data to be modified
+   * @param[in] input_valid Valid mask associated with input_data
+   * @param[out] output_data Device array to store the data from input_data
+   * @param[out] output_valid Valid mask associated with output_data
+   * @param[out] output_valid_count #valid in output column
+   * @param[in] nrows # rows in `output_data`
+   * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
    * of old values to be replaced
-   * @param[in] old_values_end  Device pointer to the end of the sequence
+   * @param[in] values_to_replace_end  Device pointer to the end of the sequence
    * of old values to be replaced
-   * @param[in] d_new_values Device array with the new values
+   * @param[in] d_replacement_values Device array with the new values
+   * @param[in] replacement_valid Valid mask associated with d_replacement_values
    *
    * @returns
    */
   /* ----------------------------------------------------------------------------*/
-  template <class T>
+  template <class T,
+            bool input_has_nulls, bool replacement_has_nulls>
   __global__
-  void replace_kernel(T*                          d_col_data,
-                      gdf_size_type                      nrows,
-                      thrust::device_ptr<const T> old_values_begin,
-                      thrust::device_ptr<const T> old_values_end,
-                      const T*                    d_new_values)
+  void replace_kernel(const T* __restrict__           input_data,
+                      bit_mask_t const * __restrict__ input_valid,
+                      T * __restrict__          output_data,
+                      bit_mask_t * __restrict__ output_valid,
+                      gdf_size_type * __restrict__    output_valid_count,
+                      gdf_size_type                   nrows,
+                      const T* __restrict__ values_to_replace_begin,
+                      const T* __restrict__ values_to_replace_end,
+                      const T* __restrict__           d_replacement_values,
+                      bit_mask_t const * __restrict__ replacement_valid)
   {
-    gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
-    while(i < nrows)
-    {
-      auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
+  gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
-      if (found_ptr != old_values_end) {
-          auto d = thrust::distance(old_values_begin, found_ptr);
-          d_col_data[i] = d_new_values[d];
+  uint32_t active_mask = 0xffffffff;
+  active_mask = __ballot_sync(active_mask, i < nrows);
+  __shared__ uint32_t valid_sum[warp_size];
+
+  // init shared memory for block valid counts
+  if (input_has_nulls or replacement_has_nulls){
+    if(threadIdx.x < warp_size) valid_sum[threadIdx.x] = 0;
+    __syncthreads();
+  }
+
+  while (i < nrows) {
+    bool output_is_valid = true;
+    uint32_t bitmask = 0xffffffff;
+
+    if (input_has_nulls) {
+      bool const input_is_valid{bit_mask::is_valid(input_valid, i)};
+      output_is_valid = input_is_valid;
+
+      bitmask = __ballot_sync(active_mask, input_is_valid);
+
+      if (input_is_valid) {
+        thrust::tie(output_data[i], output_is_valid)  =
+            get_new_value<T, replacement_has_nulls>(i, input_data,
+                                      values_to_replace_begin,
+                                      values_to_replace_end,
+                                      d_replacement_values,
+                                      replacement_valid);
       }
 
-      i += blockDim.x * gridDim.x;
+    } else {
+       thrust::tie(output_data[i], output_is_valid) =
+            get_new_value<T, replacement_has_nulls>(i, input_data,
+                                      values_to_replace_begin,
+                                      values_to_replace_end,
+                                      d_replacement_values,
+                                      replacement_valid);
+    }
+
+    /* output valid counts calculations*/
+    if (input_has_nulls or replacement_has_nulls){
+
+      bitmask &= __ballot_sync(active_mask, output_is_valid);
+
+      if(0 == (threadIdx.x % warp_size) && bitmask != 0){
+        output_valid[(int)(i/warp_size)] = bitmask;
+        valid_sum[(int)(threadIdx.x / warp_size)] += __popc(bitmask);
+      }
+    }
+
+    i += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, i < nrows);
+  }
+  if(input_has_nulls or replacement_has_nulls){
+    __syncthreads(); // waiting for the valid counts of each warp to be ready
+
+    // Compute total valid count for this block and add it to global count
+    uint32_t block_valid_count = sum_warps<uint32_t>(valid_sum);
+
+    // one thread computes and adds to output_valid_count
+    if (threadIdx.x < warp_size && 0 == (threadIdx.x % warp_size)) {
+      atomicAdd(output_valid_count, block_valid_count);
     }
   }
+}
 
   /* --------------------------------------------------------------------------*/
   /**
    * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
-   *        `replace_kernel` with the apropiate data types.
+   *        `replace_kernel` with the appropriate data types.
    */
   /* ----------------------------------------------------------------------------*/
   struct replace_kernel_forwarder {
     template <typename col_type>
-    void operator()(void*       d_col_data,
-                    gdf_size_type      nrows,
-                    const void* d_old_values,
-                    const void* d_new_values,
-                    gdf_size_type      nvalues)
+    void operator()(const gdf_column &input_col,
+                    const gdf_column &values_to_replace,
+                    const gdf_column &replacement_values,
+                    gdf_column       &output,
+                    cudaStream_t     stream = 0)
     {
-      thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
+      const bool input_has_nulls = cudf::has_nulls(input_col);
+      const bool replacement_has_nulls = cudf::has_nulls(replacement_values);
 
-      const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
-      replace_kernel<<<grid_size, BLOCK_SIZE>>>(static_cast<col_type*>(d_col_data),
-                                             nrows,
-                                             old_values_begin,
-                                             old_values_begin + nvalues,
-                                             static_cast<const col_type*>(d_new_values));
+      const bit_mask_t* __restrict__ typed_input_valid =
+                                        reinterpret_cast<bit_mask_t*>(input_col.valid);
+      const bit_mask_t* __restrict__ typed_replacement_valid =
+                                        reinterpret_cast<bit_mask_t*>(replacement_values.valid);
+      bit_mask_t* __restrict__ typed_out_valid =
+                                        reinterpret_cast<bit_mask_t*>(output.valid);
+      gdf_size_type *valid_count = nullptr;
+      if (typed_out_valid != nullptr) {
+        RMM_ALLOC(&valid_count, sizeof(gdf_size_type), stream);
+        CUDA_TRY(cudaMemsetAsync(valid_count, 0, sizeof(gdf_size_type), stream));
+      }
+
+      col_type const * values_to_replace_ptr{ cudf::get_data<col_type const>(values_to_replace) };
+
+      cudf::util::cuda::grid_config_1d grid{output.size, BLOCK_SIZE, 1};
+
+      auto replace = replace_kernel<col_type, true, true>;
+
+      if (input_has_nulls){
+        if (replacement_has_nulls){
+          replace = replace_kernel<col_type, true, true>;
+        }else{
+          replace = replace_kernel<col_type, true, false>;
+        }
+      }else{
+        if (replacement_has_nulls){
+          replace = replace_kernel<col_type, false, true>;
+        }else{
+          replace = replace_kernel<col_type, false, false>;
+        }
+      }
+      replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
+                                             static_cast<const col_type*>(input_col.data),
+                                             typed_input_valid,
+                                             static_cast<col_type*>(output.data),
+                                             typed_out_valid,
+                                             valid_count,
+                                             output.size,
+                                             values_to_replace_ptr,
+                                             values_to_replace_ptr + replacement_values.size,
+                                             static_cast<const col_type*>(replacement_values.data),
+                                             typed_replacement_valid);
+
+      if(typed_out_valid != nullptr){
+        gdf_size_type valids {0};
+        CUDA_TRY(cudaMemcpyAsync(&valids, valid_count,
+                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+        output.null_count = output.size - valids;
+        RMM_FREE(valid_count, stream);
+      }
     }
   };
+ } //end anonymous namespace
 
-  gdf_error find_and_replace_all(gdf_column*       col,
-                                 const gdf_column* old_values,
-                                 const gdf_column* new_values)
-  {
-    GDF_REQUIRE(col != nullptr && old_values != nullptr && new_values != nullptr, GDF_DATASET_EMPTY);
-    GDF_REQUIRE(old_values->size == new_values->size, GDF_COLUMN_SIZE_MISMATCH);
-    GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
-    GDF_REQUIRE(col->valid == nullptr || col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
-    GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
-    GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+namespace cudf{
+namespace detail {
 
+  gdf_column find_and_replace_all(const gdf_column &input_col,
+                                  const gdf_column &values_to_replace,
+                                  const gdf_column &replacement_values,
+                                  cudaStream_t stream = 0) {
 
-    cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
-                          col->data,
-                          col->size,
-                          old_values->data,
-                          new_values->data,
-                          new_values->size);
+    if (0 == input_col.size )
+    {
+      return cudf::empty_like(input_col);
+    }
 
-    return GDF_SUCCESS;
+    if (0 == values_to_replace.size || 0 == replacement_values.size)
+    {
+      return cudf::copy(input_col, stream);
+    }
+
+    CUDF_EXPECTS(values_to_replace.size == replacement_values.size,
+                 "values_to_replace and replacement_values size mismatch.");
+    CUDF_EXPECTS(input_col.dtype == values_to_replace.dtype &&
+                 input_col.dtype == replacement_values.dtype,
+                 "Columns type mismatch.");
+    CUDF_EXPECTS(input_col.data != nullptr, "Null input data.");
+    CUDF_EXPECTS(values_to_replace.data != nullptr && replacement_values.data != nullptr,
+                 "Null replace data.");
+    CUDF_EXPECTS(values_to_replace.valid == nullptr || values_to_replace.null_count == 0,
+                 "Nulls are in values_to_replace column.");
+
+    gdf_column output = cudf::allocate_like(input_col, true, stream);
+
+    if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
+      gdf_valid_type *valid = nullptr;
+      gdf_size_type bytes = gdf_valid_allocation_size(input_col.size);
+      RMM_ALLOC(&valid, bytes, stream);
+      CUDA_TRY(cudaMemsetAsync(valid, 0, bytes, stream));
+      CUDF_EXPECTS(GDF_SUCCESS == gdf_column_view(&output, output.data, valid,
+                                                input_col.size, input_col.dtype),
+                "cudf::replace failed to add valid mask to output col.");
+    }
+
+    cudf::type_dispatcher(input_col.dtype, replace_kernel_forwarder{},
+                          input_col,
+                          values_to_replace,
+                          replacement_values,
+                          output,
+                          stream);
+
+    CHECK_STREAM(stream);
+    return output;
   }
 
-} //end anonymous namespace
+} //end details
 
 /* --------------------------------------------------------------------------*/
 /**
- * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col`
- *        with `new_values[i]`.
+ * @brief Replace elements from `input_col` according to the mapping `values_to_replace` to
+ *        `replacement_values`, that is, replace all `values_to_replace[i]` present in `input_col`
+ *        with `replacement_values[i]`.
  *
- * @param[in,out] col gdf_column with the data to be modified
- * @param[in] old_values gdf_column with the old values to be replaced
- * @param[in] new_values gdf_column with the new values
+ * @param[in] col gdf_column with the data to be modified
+ * @param[in] values_to_replace gdf_column with the old values to be replaced
+ * @param[in] replacement_values gdf_column with the new values
  *
- * @returns GDF_SUCCESS upon successful completion
+ * @returns output gdf_column with the modified data
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   const gdf_column* old_values,
-                                   const gdf_column* new_values)
-{
-  return find_and_replace_all(col, old_values, new_values);
-}
+gdf_column find_and_replace_all(const gdf_column  &input_col,
+                                const gdf_column &values_to_replace,
+                                const gdf_column &replacement_values){
+    return detail::find_and_replace_all(input_col, values_to_replace, replacement_values);
+  }
+
+} //end cudf
 
 namespace{ //anonymous
 
