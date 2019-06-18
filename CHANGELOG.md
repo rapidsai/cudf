@@ -51,6 +51,7 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1696 Added null support in `Series.replace()`.
 - PR #1390 Added some basic utility functions for `gdf_column`'s
 - PR #1791 Added general column comparison code for testing
 - PR #1795 Add printing of git submodule info to `print_env.sh`
@@ -148,7 +149,7 @@
 ## New Features
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
-- PR #1741 Add MultiIndex concatenation
+- PR #1741 Add MultiIndex concatenation 
 
 ## Bug Fixes
 
