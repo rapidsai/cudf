@@ -202,7 +202,7 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    expect = '<empty Series of dtype=float64>'
+    expect = 'Series([], dtype: float64)'
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -210,7 +210,7 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    expect = '<empty Series of dtype=float64>'
+    expect = 'Series([], dtype: float64)'
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -285,7 +285,7 @@ def test_dataframe_column_name_indexing():
 
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
-            assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
+            assert((df[list(idx)].to_pandas()).equals(pdf[list(idx)]))
 
     # test for only numeric columns
     df = pd.DataFrame()
@@ -712,13 +712,13 @@ def test_dataframe_iloc_index_error():
 
 
 def test_dataframe_to_string():
+    pd.options.display.max_rows = 5
     with set_options(formatting={'nrows': 5, 'ncols': 8}):
         # Test basic
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
                         ('b', [11, 12, 13, 14, 15, 16])])
         string = str(df)
-        print(string)
-        assert string.splitlines()[-1] == '[1 more rows]'
+        assert string.splitlines()[-1] == '[6 rows x 2 columns]'
 
         # Test skipped columns
         df = DataFrame([('a', [1,  2,  3,  4,  5,  6]),
@@ -726,9 +726,7 @@ def test_dataframe_to_string():
                         ('c', [11, 12, 13, 14, 15, 16]),
                         ('d', [11, 12, 13, 14, 15, 16])])
         string = df.to_string(ncols=3)
-        print(string)
-        assert string.splitlines()[-2] == '[1 more rows]'
-        assert string.splitlines()[-1] == '[1 more columns]'
+        assert string.splitlines()[-1] == '[6 rows x 4 columns]'
 
         # Test masked
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
@@ -755,15 +753,16 @@ def test_dataframe_to_string():
             if i not in validids:
                 assert values[i] is None
 
+        pd.options.display.max_rows = 6
         got = df.to_string(nrows=None)
         print(got)
         expect = '''
   a b  c
 0 1 11 0
-1 2 12
+1 2 12 NaN
 2 3 13 2
 3 4 14 3
-4 5 15
+4 5 15 NaN
 5 6 16 5
 '''
         # values should match despite whitespace difference
@@ -778,11 +777,12 @@ def test_dataframe_to_string_wide():
     got = df.to_string(ncols=8)
     print(got)
     expect = '''
-    a0   a1   a2   a3   a4   a5   a6 ...  a99
-0    0    0    0    0    0    0    0 ...    0
-1    1    1    1    1    1    1    1 ...    1
-2    2    2    2    2    2    2    2 ...    2
-[92 more columns]
+a0 a1 a2 a3   a4   a5   a6  a7     ... a92  a93  a94  a95  a96  a97  a98  a99
+0 0   0    0    0    0    0   0   0  ...   0    0    0    0    0    0    0    0
+1 1   1    1    1    1    1   1   1  ...   1    1    1    1    1    1    1    1
+2 2   2    2    2    2    2   2   2  ...   2    2    2    2    2    2    2    2
+
+[3 rows x 100 columns]
 '''
     # values should match despite whitespace difference
     assert got.split() == expect.split()
@@ -805,8 +805,9 @@ def test_dataframe_emptycolumns_to_string():
     df['b'] = []
     got = df.to_string()
     print(got)
-    expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
+    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
     # values should match despite whitespace difference
+    print(expect)
     assert got.split() == expect.split()
 
 
@@ -1119,9 +1120,12 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else -1
+            expected_value = row.key + 100 if valid else np.nan
             got_value = row.val
-            assert expected_value == got_value
+            if np.isnan(expected_value):
+                assert np.isnan(got_value)
+            else:
+                assert expected_value == got_value
 
 
 @pytest.mark.parametrize('nrows', [3, 10, 50])
@@ -1139,9 +1143,12 @@ def test_dataframe_hash_partition_masked_keys(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = row.val - 100 if valid else -1
+            expected_value = row.val - 100 if valid else np.nan
             got_value = row.key
-            assert expected_value == got_value
+            if np.isnan(expected_value):
+                assert np.isnan(got_value)
+            else:
+                assert expected_value == got_value
 
 
 def test_dataframe_empty_concat():
@@ -1255,6 +1262,10 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     expect = do_slice(gdf.to_pandas())
     got = do_slice(gdf).to_pandas()
 
+    # Any column containing a null will be promoted to Int64 by pandas
+    for col in gdf:
+        if gdf[col].has_null_mask:
+            got[col] = got[col].astype(pd.Int64Dtype())
     pd.testing.assert_frame_equal(expect, got)
 
 

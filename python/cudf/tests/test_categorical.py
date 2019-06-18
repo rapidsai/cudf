@@ -49,11 +49,12 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1
-2
+1 NaN
+2 NaN
 3 c
 4 a
 dtype: category
+Categories (3, object): [a, b, c]
 """
     assert string.split() == expect_str.split()
 

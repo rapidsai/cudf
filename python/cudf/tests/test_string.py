@@ -604,12 +604,11 @@ def test_string_join_key_nulls(str_data_nulls):
 
     expect = pdf.merge(pdf2, on='key', how='left')
     got = gdf.merge(gdf2, on='key', how='left')
-
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    expect["vals_y"] = expect["vals_y"].fillna(-1).astype('int64')
+    expect["vals_y"] = expect["vals_y"].astype('Int64')
 
     assert_eq(expect, got)
 

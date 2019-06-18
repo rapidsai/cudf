@@ -385,9 +385,13 @@ class Series(object):
 
     def __repr__(self):
         lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
-        lines = lines[:-1]
-        lines.append("Name: %s, Length: %d, dtype: %s" % (self.name, len(
-                self), self.dtype))
+        if lines[-1].startswith('N'):
+            lines = lines[:-1]
+            lines.append("Name: %s" % self.name)
+            if len(self) > len(lines):
+                lines[-1] = lines[-1] + ", Length: %d" % len(self)
+            lines[-1] = lines[-1] + ', '
+            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
         return '\n'.join(lines)
 
     def _repr_latex_(self):

@@ -174,20 +174,24 @@ class NumericalColumn(columnops.TypedColumnBase):
             return ret
         else:
             original_type = self.dtype
+            new_type = original_type
+            array = self
             if self.has_null_mask:
-                self = self.astype('float64')
-            array = self.to_array(fillna='pandas')
-            if original_type == np.int8:
-                new_type = pd.Int8Dtype()
-            elif original_type == np.int16:
-                new_type = pd.Int16Dtype()
-            elif original_type == np.int32:
-                new_type = pd.Int32Dtype()
-            elif original_type == np.int64:
-                new_type = pd.Int64Dtype()
-            else:
-                new_type = original_type
-            return pd.Series(array, index=index, dtype=new_type)
+                array = self.astype('float64')
+                if original_type == np.int8:
+                    new_type = pd.Int8Dtype()
+                elif original_type == np.int16:
+                    new_type = pd.Int16Dtype()
+                elif original_type == np.int32:
+                    new_type = pd.Int32Dtype()
+                elif original_type == np.int64:
+                    new_type = pd.Int64Dtype()
+                else:
+                    new_type = original_type
+                return pd.Series(array.to_array(fillna='pandas'),
+                                                index=index, dtype=new_type)
+            # tons of special casing to determine if a new dtype should be used?
+            return pd.Series(array.to_array(fillna='pandas'), index=index)
 
     def to_arrow(self):
         mask = None

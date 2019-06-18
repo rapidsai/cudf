@@ -70,6 +70,7 @@ def require_writeable_array(arr):
 
 def scalar_broadcast_to(scalar, shape, dtype):
     from cudf.utils.cudautils import fill_value
+
     if not isinstance(shape, tuple):
         shape = (shape,)
 
@@ -81,7 +82,6 @@ def scalar_broadcast_to(scalar, shape, dtype):
         scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
-        dtype = 'Int64'
         da = rmm.device_array(shape, dtype=dtype)
         if da.size != 0:
             fill_value(da, scalar)

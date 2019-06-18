@@ -444,16 +444,14 @@ class DataFrame(object):
         return self.__repr__()
 
     def __str__(self):
-        nrows = settings.formatting.get('nrows') or 10
-        ncols = settings.formatting.get('ncols') or 8
-        return self.to_string(nrows=nrows, ncols=ncols)
+        return self.to_string()
 
     def __repr__(self):
         lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
         if lines[-1].startswith('['):
-            lines = lines[:-1]  # final line counts number of rows
-            lines.append("[%d rows x %d columns]" % (len(self), len(
-                    self.columns)))
+            lines = lines[:-1]
+            lines.append("[%d rows x %d columns]" % (len(self),
+                                                     len(self.columns)))
         return '\n'.join(lines)
 
     def _repr_html_(self):
