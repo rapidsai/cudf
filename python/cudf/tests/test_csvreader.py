@@ -16,8 +16,6 @@ import gzip
 import shutil
 import os
 
-from cudf.bindings.GDFError import GDFError
-
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
@@ -49,11 +47,11 @@ def make_numpy_mixed_dataframe():
 def make_all_numeric_dtypes_dataframe():
     df = pd.DataFrame()
 
-    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
-                  "int32", "int64", "long"]
+    gdf_dtypes = ["float", "float32", "double", "float64", "int8",
+                  "short", "int16", "int", "int32", "long", "int64"]
 
-    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
-                 np.int32, np.int32, np.int64, np.int64]
+    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int8,
+                 np.int16, np.int16, np.int32, np.int32, np.int64, np.int64]
 
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
@@ -365,6 +363,21 @@ def test_csv_reader_NaN_values():
                        na_values=custom_na_values)
     assert(all(np.isnan(all_nan.to_pandas()['float32'])))
 
+    # data type detection should evaluate the column to int8 (all nulls)
+    df_int8 = read_csv(StringIO(default_na_cells + custom_na_cells),
+                       header=None,
+                       na_values=custom_na_values)
+    assert(df_int8.dtypes[0] == 'int8')
+    assert(all(val is None for val in df_int8['0']))
+
+    # data type detection should evaluate the column to object;
+    # for data type detection, cells need to be completely empty,
+    # but some cells in empty_cells contain blank characters and quotes
+    df_obj = read_csv(StringIO(all_cells),
+                      header=None,
+                      na_values=custom_na_values)
+    assert(df_obj.dtypes[0] == np.dtype('object'))
+
 
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
@@ -672,10 +685,12 @@ def test_csv_reader_empty_dataframe():
     # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['float64', 'int64']))
 
-    # should raise an error without dtypes
-    with pytest.raises(GDFError):
-        read_csv(StringIO(buffer))
+    # should default to string columns without dtypes
+    df = read_csv(StringIO(buffer))
+    assert(df.shape == (0, 2))
+    assert(all(df.dtypes == ['object', 'object']))
 
 
 def test_csv_reader_filenotfound(tmpdir):

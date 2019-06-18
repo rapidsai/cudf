@@ -460,6 +460,13 @@ cudf::bool8& operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
   return lhs;
 }
 
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator!(wrapper<T,type_id> const& me)
+{
+  return static_cast<cudf::bool8>( ! static_cast<bool>(me.value) );
+}
+
 } // namespace detail
 
 } // namespace cudf

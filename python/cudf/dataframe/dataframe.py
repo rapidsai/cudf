@@ -459,17 +459,22 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            max_num_rows = max(self.shape[0], other.shape[0])
             for col in other._cols:
                 if col in self._cols:
+                    if self.shape[0] != other.shape[0]:
+                        raise NotImplementedError(
+                                "%s on columns with different "
+                                "length is not supported", fn)
                     result[col] = getattr(self._cols[col], fn)(
                                           other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
             for col in self._cols:
                 if col not in other._cols:
-                    result[col] = Series(cudautils.full(self.shape[0],
+                    result[col] = Series(cudautils.full(max_num_rows,
                                          np.dtype('float64').type(np.nan),
                                          'float64'), nan_as_null=False)
         elif isinstance(other, Series):
@@ -1220,6 +1225,7 @@ class DataFrame(object):
         # Perform out = data[index] for all columns
         for k in self.columns:
             df[k] = self[k].take(sorted_indices.to_gpu_array())
+        df.index = self.index.take(sorted_indices.to_gpu_array())
         return df
 
     def argsort(self, ascending=True, na_position='last'):
@@ -1478,6 +1484,7 @@ class DataFrame(object):
             on = lhs.LEFT_RIGHT_INDEX_NAME
             lhs[on] = lhs.index
             rhs[on] = rhs.index
+            self._original_left_index_name = lhs.index.name
         if on is None and left_on is None and right_on is None:
             on = list(same_names)
             if len(on) == 0:
@@ -1640,8 +1647,9 @@ class DataFrame(object):
                 rhs_column_idx = rhs_column_idx + 1
 
         if left_index and right_index:
-            df = df.drop(lhs.LEFT_RIGHT_INDEX_NAME)
-            df = df.set_index(lhs.index[df.index.gpu_values])
+            df = df.set_index(lhs.LEFT_RIGHT_INDEX_NAME)
+            df = df.sort_values(df.columns[0])
+            df.index.name = self._original_left_index_name
         elif right_index and left_on:
             new_index = Series(lhs.index,
                                index=RangeIndex(0, len(lhs[left_on[0]])))
@@ -2624,35 +2632,34 @@ class DataFrame(object):
     #
     # Stats
     #
-    def count(self):
-        return self._apply_support_method('count')
+    def count(self, **kwargs):
+        return self._apply_support_method('count', **kwargs)
 
-    def min(self):
-        return self._apply_support_method('min')
+    def min(self, **kwargs):
+        return self._apply_support_method('min', **kwargs)
 
-    def max(self):
-        return self._apply_support_method('max')
+    def max(self, **kwargs):
+        return self._apply_support_method('max', **kwargs)
 
-    def sum(self):
-        return self._apply_support_method('sum')
+    def sum(self, **kwargs):
+        return self._apply_support_method('sum', **kwargs)
 
-    def product(self):
-        return self._apply_support_method('product')
+    def product(self, **kwargs):
+        return self._apply_support_method('product', **kwargs)
 
-    def cummin(self):
-        return self._apply_support_method('cummin')
+    def cummin(self, **kwargs):
+        return self._apply_support_method('cummin', **kwargs)
 
-    def cummax(self):
-        return self._apply_support_method('cummax')
+    def cummax(self, **kwargs):
+        return self._apply_support_method('cummax', **kwargs)
 
-    def cumsum(self):
-        return self._apply_support_method('cumsum')
+    def cumsum(self, **kwargs):
+        return self._apply_support_method('cumsum', **kwargs)
 
-    def cumprod(self):
-        return self._apply_support_method('cumprod')
+    def cumprod(self, **kwargs):
+        return self._apply_support_method('cumprod', **kwargs)
 
-    def mean(self, axis=None, skipna=None, level=None, numeric_only=None,
-             **kwargs):
+    def mean(self, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -2679,17 +2686,28 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
-        return self._apply_support_method('mean')
+        return self._apply_support_method('mean', **kwargs)
 
-    def std(self, ddof=1):
-        return self._apply_support_method('std', ddof)
+    def std(self, **kwargs):
+        return self._apply_support_method('std', **kwargs)
 
-    def var(self, ddof=1):
-        return self._apply_support_method('var', ddof)
+    def var(self, **kwargs):
+        return self._apply_support_method('var', **kwargs)
 
-    def _apply_support_method(self, *args, **kwargs):
-        method = args[0]
-        result = [getattr(self[col], method)(*kwargs)
+    def all(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'all', **kwargs)
+        return self._apply_support_method('all', **kwargs)
+
+    def any(self, bool_only=None, **kwargs):
+        if bool_only:
+            return self.select_dtypes(include='bool')._apply_support_method(
+                'any', **kwargs)
+        return self._apply_support_method('any', **kwargs)
+
+    def _apply_support_method(self, method, **kwargs):
+        result = [getattr(self[col], method)(**kwargs)
                   for col in self._cols.keys()]
         if isinstance(result[0], Series):
             support_result = result

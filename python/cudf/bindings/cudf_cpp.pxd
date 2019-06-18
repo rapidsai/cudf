@@ -22,6 +22,7 @@ cdef get_scalar_value(gdf_scalar scalar)
 
 cdef gdf_column* column_view_from_column(col)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
+cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
 
@@ -172,7 +173,7 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_VA
 
     ctypedef union gdf_data:
-        char          si08
+        signed char   si08
         short         si16
         int           si32
         long          si64

@@ -19,7 +19,7 @@ List of column names
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -100,6 +100,38 @@ cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
+_docstring_read_orc_metadata = """
+Read an ORC file's metadata and schema
+
+Parameters
+----------
+path : string or path object
+    Path of file to be read
+
+Returns
+-------
+Total number of rows
+Number of stripes
+List of column names
+
+Examples
+--------
+>>> import cudf
+>>> num_rows, stripes, names = cudf.io.read_orc_metadata(filename)
+>>> df = [cudf.read_orc(fname, stripe=i) for i in range(stripes)]
+>>> df = cudf.concat(df)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.orc.read_orc
+"""
+doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
+
 _docstring_read_orc = """
 Load an ORC object from the file path, returning a DataFrame.
 
@@ -111,6 +143,8 @@ engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
+stripe: int, default None
+    If not None, only the stripe with the specified index will be read.
 skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
