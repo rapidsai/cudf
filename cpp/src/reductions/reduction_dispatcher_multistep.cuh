@@ -105,9 +105,7 @@ private:
     static constexpr bool is_supported()
     {
         return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::bool8>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMin>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMax>::value ;
+               std::is_same<T, cudf::bool8>::value;
     }
 
 public:

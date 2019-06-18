@@ -142,8 +142,8 @@ struct ReductionVar{
             T mean = input.value / count;
             T asum = input.value_squared;
             gdf_size_type div = count -ddof;
-
             T var = asum / div - ((mean * mean) * count) /div;
+
             return var;
         };
     };

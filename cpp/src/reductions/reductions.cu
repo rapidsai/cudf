@@ -84,10 +84,10 @@ gdf_scalar reduction(const gdf_column *col,
         reduction_mean(col, &scalar);
         break;
     case GDF_REDUCTION_VAR:
-        reduction_mean(col, &scalar);
+        reduction_var(col, &scalar);
         break;
     case GDF_REDUCTION_STD:
-        reduction_mean(col, &scalar);
+        reduction_std(col, &scalar);
         break;
 #endif
     default:

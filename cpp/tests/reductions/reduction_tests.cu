@@ -191,6 +191,33 @@ TYPED_TEST(MultiStepReductionTest, Mean)
         GDF_REDUCTION_MEAN, GDF_FLOAT64);
 }
 
+TYPED_TEST(MultiStepReductionTest, var_std)
+{
+    using T = TypeParam;
+    std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
+    std::vector<T> v = convert_values<T>(int_values);
+
+    double mean = std::accumulate(v.begin(), v.end(), double{0});
+    mean /= int_values.size() ;
+
+    double sum_of_sq = std::accumulate(v.begin(), v.end(), double{0},
+        [](double acc, TypeParam i) { return acc + i * i; });
+
+
+    int ddof = 1;
+    gdf_size_type count = v.size();
+    gdf_size_type div = count - ddof;
+
+    double var = sum_of_sq / div - ((mean * mean) * count) /div;
+    double std = std::sqrt(var);
+
+    this->reduction_test(v, var, true,
+        GDF_REDUCTION_VAR, GDF_FLOAT64);
+
+    this->reduction_test(v, std, true,
+        GDF_REDUCTION_STD, GDF_FLOAT64);
+}
+
 // ----------------------------------------------------------------------------
 
 struct ReductionDtypeTest : public GdfTest

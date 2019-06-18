@@ -17,7 +17,7 @@
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
 
-void reduction_std(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
+void reduction_std(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
         ReduceDispatcher<cudf::reductions::ReductionStd>(), col, scalar, stream);
