@@ -259,7 +259,7 @@ cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
         else:
             if len(val_columns_out) == 0:
                 if groupby_class._as_index:
-                    val_columns_out = ['cudfvalcol_'+by for by in groupby_class._by]
+                    val_columns_out = ['cudfvalcol+'+by for by in groupby_class._by]
                 else:
                     raise ValueError('cannot insert %s, already exists' % (
                             groupby_class._by[0]))

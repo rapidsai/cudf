@@ -23,6 +23,8 @@ from cudf.dataframe import columnops
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.utils.docutils import copy_docstring
+from cudf.window import Rolling
 
 import cudf.bindings.copying as cpp_copying
 
@@ -1043,7 +1045,8 @@ class Series(object):
                     "Replacement arg {} is not supported.".format(type(other))
             )
 
-        result = self._column.find_and_replace(to_replace, new_value, all_nan=False)
+        result = self._column.find_and_replace(to_replace, new_value,
+                                               all_nan=False)
 
         # To replace nulls
         if (cond & self.isnull()).any():
@@ -1316,9 +1319,9 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, value):
+    def replace(self, to_replace, replacement):
         """
-        Replace values given in *to_replace* with *value*.
+        Replace values given in *to_replace* with *replacement*.
 
         Parameters
         ----------
@@ -1331,9 +1334,9 @@ class Series(object):
 
             * list of numeric or str:
 
-                - If *value* is also list-like, *to_replace* and *value* must
-                be of same length.
-        value : numeric, str, list-like, or dict
+                - If *replacement* is also list-like, *to_replace* and
+                *replacement* must be of same length.
+        replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
 
         See also
@@ -1345,33 +1348,45 @@ class Series(object):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
+        # if all the elements of replacement column are None then propagate the
+        # same dtype as self.dtype in columnops.as_column() for replacement
+        all_nan = False
         if not is_scalar(to_replace):
-            if is_scalar(value):
-                value = utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value))
-                )
+            if is_scalar(replacement):
+                all_nan = replacement is None
+                if all_nan:
+                    replacement = [replacement] * len(to_replace)
+                else:
+                    replacement = utils.scalar_broadcast_to(
+                        replacement, (len(to_replace),),
+                        np.dtype(type(replacement))
+                    )
         else:
-            if not is_scalar(value):
+            if not is_scalar(replacement):
                 raise TypeError(
                     "Incompatible types '{}' and '{}' "
-                    "for *to_replace* and *value*.".format(
-                        type(to_replace).__name__, type(value).__name__
+                    "for *to_replace* and *replacement*.".format(
+                        type(to_replace).__name__, type(replacement).__name__
                     )
                 )
             to_replace = [to_replace]
-            value = [value]
+            replacement = [replacement]
 
-        if len(to_replace) != len(value):
+        if len(to_replace) != len(replacement):
             raise ValueError(
                 "Replacement lists must be"
                 "of same length."
-                "Expected {}, got {}.".format(len(to_replace), len(value))
+                "Expected {}, got {}.".format(len(to_replace),
+                                              len(replacement))
             )
 
-        if is_dict_like(to_replace) or is_dict_like(value):
+        if is_dict_like(to_replace) or is_dict_like(replacement):
             raise TypeError("Dict-like args not supported in Series.replace()")
 
-        result = self._column.find_and_replace(to_replace, value)
+        if isinstance(replacement, list):
+            all_nan = replacement.count(None) == len(replacement)
+        result = self._column.find_and_replace(to_replace,
+                                               replacement, all_nan)
 
         return self._copy_construct(data=result)
 
@@ -1963,6 +1978,10 @@ class Series(object):
 
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
+
+    @copy_docstring(Rolling)
+    def rolling(self, window, min_periods=None, center=False):
+        return Rolling(self, window, min_periods=min_periods, center=center)
 
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """
