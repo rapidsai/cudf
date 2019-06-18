@@ -176,7 +176,7 @@ TYPED_TEST(PerimeterTest, MultiplePolygonWithADegeneratePolygon)
 }
 
 // Polygons generate manually
-TYPED_TEST(PerimeterTest, MultiplesPolygons)
+TYPED_TEST(PerimeterTest, MultiplePolygons)
 {
     std::vector<double> poly1_lats {-10, 10, -10, -10}, poly1_lons {-10, 0, 10, -10};
     std::vector<double> poly2_lats {-20, 20, 20, -20, -20}, poly2_lons {-20, -20, 20, 20, -20};
