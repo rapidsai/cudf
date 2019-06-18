@@ -77,8 +77,8 @@
 - PR #1964 Added support for list-like types in Series.str.cat
 - PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
+- PR #2017 Convert `read_orc()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
-
 
 ## Bug Fixes
 
@@ -134,6 +134,7 @@
 - PR #1978 Fix for values being filled in an empty dataframe 
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
+- PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
 
 
 # cudf 0.7.2 (16 May 2019)
