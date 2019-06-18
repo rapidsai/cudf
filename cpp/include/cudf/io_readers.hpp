@@ -211,6 +211,77 @@ public:
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Options for the ORC reader
+ *---------------------------------------------------------------------------**/
+struct OrcReaderOptions {
+  std::vector<std::string> columns;
+  bool use_index = true;
+
+  OrcReaderOptions() = default;
+  OrcReaderOptions(OrcReaderOptions const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] use_index_lookup Whether to use row index for faster scanning
+   *---------------------------------------------------------------------------**/
+  OrcReaderOptions(std::vector<std::string> cols, bool use_index_lookup)
+      : columns(std::move(cols)),
+        use_index(use_index_lookup) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache ORC data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class OrcReader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit OrcReader(std::string filepath,
+                     OrcReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit OrcReader(const char *buffer, size_t length,
+                     OrcReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a specific stripe.
+   *
+   * @param[in] stripe Index of the stripe
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_stripe(size_t stripe);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~OrcReader();
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Options for the Parquet reader
  *---------------------------------------------------------------------------**/
 struct ParquetReaderOptions {
