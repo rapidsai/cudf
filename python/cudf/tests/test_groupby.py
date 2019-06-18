@@ -150,7 +150,6 @@ def test_groupby_agg_mean_min(nelem, method):
 @pytest.mark.parametrize('nelem', get_nelem())
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_agg_min_max_dictargs(nelem, method):
-    # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ['x', 'y'], method=method).agg({'a': 'min', 'b': 'max'})
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
@@ -326,7 +325,6 @@ def test_series_groupby(agg):
     assert_eq(sa, ga, check_dtype=check_dtype)
 
 
-@pytest.mark.xfail(reason="Prefixed column names are not removed yet")
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
@@ -459,6 +457,7 @@ def test_advanced_groupby_levels():
     lambda df: df.groupby(['x']).sum(),
     lambda df: df.groupby(['x']).agg('sum'),
     lambda df: df.groupby(['x', 'y']).z.sum(),
+    lambda df: df.groupby(['x', 'y']).z.agg('sum'),
 ])
 def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
@@ -563,3 +562,19 @@ def test_groupby_multi_agg_single_groupby_series():
     pdg = pdf.groupby("x").y.agg(["sum", "max"])
     gdg = gdf.groupby("x").y.agg(["sum", "max"])
     assert_eq(pdg, gdg)
+
+
+def test_groupby_multi_agg_multi_groupby():
+    pdf = pd.DataFrame({"a": np.random.randint(0, 5, 10),
+                        "b": np.random.randint(0, 5, 10),
+                        "c": np.random.randint(0, 5, 10),
+                        "d": np.random.randint(0, 5, 10)})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_empty_dataframe():
+    gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
+    gdf.groupby(level=[0, 1])  # it doesn't crash

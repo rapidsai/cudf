@@ -284,11 +284,6 @@ cdef extern from "cudf.h" nogil:
                                     gdf_context* ctxt) except +
 
 
-    cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   gdf_column* old_values,
-                                   gdf_column* new_values) except +
-
-
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
