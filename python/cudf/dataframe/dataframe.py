@@ -1176,11 +1176,16 @@ class DataFrame(object):
             raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [series._column for name, series in self._cols.items()
                        if name in subset]
-        out_cols, new_index = cpp_drop_duplicates([self.index.as_column()],
+        in_index = self.index
+        if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates([in_index.as_column()],
                                                   in_cols, subset_cols, keep)
         new_index = as_index(new_index)
         if len(self.index) == len(new_index) and self.index.equals(new_index):
             new_index = self.index
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            new_index = self.index.take(new_index)
         if inplace:
             self._index = new_index
             self._size = len(new_index)
@@ -2536,8 +2541,6 @@ class DataFrame(object):
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
-            if isinstance(colk, tuple):
-                colk = str(colk)
             if len(vals.shape) == 1:
                 df[colk] = Series(vals, nan_as_null=nan_as_null)
             else:
@@ -2545,6 +2548,10 @@ class DataFrame(object):
                 if vals.shape[0] == 1:
                     df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
+                    #TODO fix multiple column with same name with different
+                    #method.
+                    if isinstance(colk, tuple):
+                        colk = str(colk)
                     for idx in range(len(vals.shape)):
                         df[colk+str(idx)] = Series(vals[idx],
                                                    nan_as_null=nan_as_null)
