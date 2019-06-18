@@ -133,6 +133,7 @@
 - PR #1978 Fix for values being filled in an empty dataframe 
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
+- PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
 
 
 # cudf 0.7.2 (16 May 2019)
