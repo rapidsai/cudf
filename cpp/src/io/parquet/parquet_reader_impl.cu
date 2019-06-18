@@ -163,7 +163,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
       if (pos != std::string::npos) {
         const auto begin = it->value.find('[', pos);
         const auto end = it->value.find(']', begin);
-        if ((end - begin - 3) > 0) {
+        if ((end - begin) > 1) {
           return it->value.substr(begin + 2, end - begin - 3);
         }
       }
@@ -226,7 +226,9 @@ struct ParquetMetadata : public parquet::FileMetaData {
 
     if (not use_names.empty()) {
       if (get_total_rows() > 0) {
-        use_names.push_back(use_index_col);
+        if (std::find(use_names.begin(), use_names.end(), use_index_col) == use_names.end()) {
+          use_names.push_back(use_index_col);
+        }
       }
       for (const auto &use_name : use_names) {
         size_t index = 0;
