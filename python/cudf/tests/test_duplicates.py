@@ -138,7 +138,6 @@ def test_drop_duplicates():
 
 @pytest.mark.skip(reason="cudf does not support duplicate column names yet")
 def test_drop_duplicates_with_duplicate_column_names():
-    # GH17836
     df = DataFrame([
         [1, 2, 5],
         [3, 4, 6],

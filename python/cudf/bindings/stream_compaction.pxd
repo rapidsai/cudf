@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 cdef extern from "stream_compaction.hpp" nogil:
     #defined in cpp/include/stream_compaction.hpp

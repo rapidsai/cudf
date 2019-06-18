@@ -6,6 +6,7 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
+#from cudf.bindings.cudf_cpp cimport table as cudf_table
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
@@ -390,6 +391,30 @@ cdef gdf_column* column_view_from_string_column(col, col_name=None):
                                 c_extra_dtype_info)
 
     return c_col
+
+
+cdef gdf_column** cols_view_from_cols(cols):
+    col_count=len(cols)
+    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
+
+    cdef i
+    for i in range(col_count):
+        check_gdf_compatibility(cols[i])
+        c_cols[i] = column_view_from_column(cols[i])
+
+    return c_cols
+
+
+cdef free_table(cudf_table* table0, gdf_column** cols):
+    cdef i
+    cdef gdf_column *c_col
+    for i in range(table0[0].num_columns()) :
+        c_col = table0[0].get_column(i)
+        free(c_col)
+
+    del table0
+    free(cols)
+
 
 # gdf_context functions
 

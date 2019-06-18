@@ -7,8 +7,6 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.types cimport table as cudf_table
-from cudf.bindings.types import *
 
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
