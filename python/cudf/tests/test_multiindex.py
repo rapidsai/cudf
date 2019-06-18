@@ -510,3 +510,18 @@ def test_multiindex_groupby_reset_index():
     gdg = gdf.groupby(['x', 'y']).sum()
     pdg = pdf.groupby(['x', 'y']).sum()
     assert_eq(pdg.reset_index(), gdg.reset_index())
+
+
+def test_multiindex_columns_from_pandas(pdf, pdfIndex):
+    pdf.index = pdfIndex
+    pdfT = pdf.T
+    gdfT = cudf.from_pandas(pdfT)
+    assert(isinstance(gdfT.columns, cudf.dataframe.multiindex.MultiIndex))
+
+
+def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(gdf, pdf)
+    assert_eq(gdf.T, pdf.T)
