@@ -9,6 +9,7 @@ from cudf.tests import utils
 from cudf.tests.utils import assert_eq
 
 pytest.importorskip('dask.distributed')
+pytest.importorskip('distributed.protocol')
 
 import msgpack  # noqa: E402
 from distributed.protocol import serialize, deserialize  # noqa: E402

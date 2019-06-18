@@ -61,7 +61,7 @@ class Buffer(object):
         (header, frames)
             See custom serialization documentation in dask.distributed.
         """
-        return {}, [self.to_gpu_array()]
+        return {}, [self.mem]
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
