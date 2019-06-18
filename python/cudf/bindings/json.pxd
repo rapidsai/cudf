@@ -25,9 +25,6 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         json_reader_args() except +
 
     cdef cppclass JsonReader:
-
-        JsonReader()
-
         JsonReader(const json_reader_args &args) except +
 
         cudf_table read() except +

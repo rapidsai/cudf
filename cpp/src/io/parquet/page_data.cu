@@ -259,7 +259,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
     int32_t coded_count = s->nz_count;      // Count of non-null values
     while (coded_count < target_count && value_count < num_values)
     {
-        int batch_len, is_valid, valid_mask;
+        int batch_len, is_valid;
+        uint32_t valid_mask;
         if (def_run <= 1)
         {
             // Get a new run symbol from the byte stream

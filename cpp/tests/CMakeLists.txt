@@ -2,6 +2,10 @@
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif()
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -35,8 +39,11 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif()
+
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
@@ -209,10 +216,15 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
 set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -270,6 +282,14 @@ set(UTILITIES_TEST_SRC
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
 ###################################################################################################
+# - iterator tests -------------------------------------------------------------------------------
+
+set(ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+
+ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
+
+###################################################################################################
 # - device atomics tests -------------------------------------------------------------------------------
 
 set(DEVICE_ATOMICS_TEST_SRC
@@ -318,15 +338,6 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - json tests -------------------------------------------------------------------------------------
-
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp")
-
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-
-
-###################################################################################################
 # - point in polygon test -----------------------------------------------------------------------------------
 
 set(GIS_TEST_SRC
@@ -355,3 +366,12 @@ set(STREAM_COMPACTION_BENCH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
 
 ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+
+###################################################################################################
+# - iterator benchmarks-------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+

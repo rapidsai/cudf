@@ -15,13 +15,16 @@
 - PR #1819 Logical operators (AND, OR, NOT) for libcudf and cuDF
 - PR #1813 ORC Reader: Add support for stripe selection
 - PR #1828 JSON Reader: add suport for bool8 columns
+- PR #1833 Add column iterator with/without nulls
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
+- PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
+- PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 
 
@@ -70,8 +73,11 @@
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
 - PR #1973 Update `std::tuple` to `std::pair` in top-most libcudf APIs and C++ transition guide
+- PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
+- PR #1944 Groupby design improvements
 
 
 ## Bug Fixes
@@ -120,9 +126,14 @@
 - PR #1959 Add support for comparing boolean Series to scalar
 - PR #1966 Ignore index fix in series append
 - PR #1967 Compute index __sizeof__ only once for DataFrame __sizeof__
+- PR #1977 Support CUDA installation in default system directories
 - PR #1982 Fixes incorrect index name after join operation
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
+- PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
+- PR #1978 Fix for values being filled in an empty dataframe 
+- PR #2001 Correctly create MultiColumn from Pandas MultiColumn
+- PR #2006 Handle empty dataframe groupby construction for dask
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -131,7 +142,6 @@
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
 - PR #1741 Add MultiIndex concatenation
-
 
 ## Bug Fixes
 
