@@ -131,7 +131,6 @@ def test_drop_duplicates():
     df = cudf.DataFrame.from_pandas(df)
     assert_df(df.drop_duplicates(), df)
 
-    # GH 11864
     df = DataFrame([i] * 9 for i in range(16))
     df = df.append([[1] + [0] * 8], ignore_index=True)
     df = cudf.DataFrame.from_pandas(df)
