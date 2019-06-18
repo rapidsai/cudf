@@ -58,7 +58,7 @@
  *     auto it_squared = thrust::make_transform_iterator(it, transformer);
  *
  * 4. template parameter for using `meanvar`
- *     using T_output = cudf::meanvar<T_upcast>;
+ *     using ResultType = cudf::meanvar<T_upcast>;
  *     cudf::transformer_meanvar<T_upcast> transformer{};
  *     auto it_pair = make_pair_iterator<has_nulls, T, T_upcast>(column, T{0});
  *     auto it_meanvar = thrust::make_transform_iterator(it_pair, transformer);
@@ -75,7 +75,7 @@
 #include <iterator/transform_unary_functions.cuh>
 
 #include <bitmask/bit_mask.cuh>         // need for bit_mask::bit_mask_t
-#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
+#include <utilities/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -94,28 +94,38 @@ namespace cudf
  * `operator() (gdf_index_type id)` computes
  * `data` value and valid flag at `id`
  *
- * If has_nulls = false, the data is always `static_cast<T_output>(data[id])`
+ * If has_nulls = false, the data is always `static_cast<ResultType>(data[id])`
  * If has_nulls = true,  the data value = (is_valid(id))?
- *      static_cast<T_output>(data[id]) : identity;
+ *      static_cast<ResultType>(data[id]) : identity;
  *
- * @tparam  T_element cudf data type of input element array
- * @tparam  T_output  cudf data type of output and `identity` value
+ * @tparam  ElementType cudf data type of input element array
+ * @tparam  ResultType  cudf data type of output and `identity` value
  *                    which is used when null bitmaps flag is false.
- * @tparam  has_nulls if true, this struct holds only data array.
+ * @tparam  has_nulls if false, this struct holds only data array.
  *                    else, this struct holds data array and
  *                    bitmask array and identity value
  * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output, bool has_nulls>
+template <typename ElementType, typename ResultType, bool has_nulls>
 struct value_accessor;
 
-template <typename T_element, typename T_output>
-struct value_accessor<T_element, T_output, true>
+/** -------------------------------------------------------------------------*
+ * @overload value_accessor<ElementType, ResultType, true>
+ * @brief specialization for columns that contain null values
+ * -------------------------------------------------------------------------**/
+template <typename ElementType, typename ResultType>
+struct value_accessor<ElementType, ResultType, true>
 {
-  T_element const* elements{};
-  bit_mask::bit_mask_t const* bitmask{};
-  T_output const identity{};
+  ElementType const* elements{};          ///< pointer of cudf data array
+  bit_mask::bit_mask_t const* bitmask{};  ///< pointer of cudf bitmask (null) array
+  ResultType const identity{};            ///< identity value used when the validity is false
 
-  value_accessor(T_element const* e, bit_mask::bit_mask_t const* b, T_output i)
+/** -------------------------------------------------------------------------*
+ * @brief constructor
+ * @param[in] e pointer of cudf data array
+ * @param[in] b pointer of cudf bitmask (null) array
+ * @param[in] i identity value used when the validity is false at operator()
+ * -------------------------------------------------------------------------**/
+  value_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
     : elements{e}, bitmask{b}, identity{i}
   {
 #if  !defined(__CUDA_ARCH__)
@@ -124,66 +134,97 @@ struct value_accessor<T_element, T_output, true>
 #endif
   }
 
-  CUDA_HOST_DEVICE_CALLABLE
-  T_output operator()(gdf_index_type i) const {
-    return bit_mask::is_valid(bitmask, i) ? static_cast<T_output>(elements[i]) : identity;
+  CUDA_DEVICE_CALLABLE
+  ResultType operator()(gdf_index_type i) const {
+    return bit_mask::is_valid(bitmask, i) ? static_cast<ResultType>(elements[i]) : identity;
   }
 };
 
-template <typename T_element, typename T_output>
-struct value_accessor<T_element, T_output, false>
+/** -------------------------------------------------------------------------*
+ * @overload value_accessor<ElementType, ResultType, false>
+ * @brief specialization for columns that don't contain null values
+ * -------------------------------------------------------------------------**/
+template <typename ElementType, typename ResultType>
+struct value_accessor<ElementType, ResultType, false>
 {
-  T_element const* elements{};
-  value_accessor(T_element const* e, bit_mask::bit_mask_t const*, T_output) : elements{e} {}
+  ElementType const* elements{};         ///< pointer of cudf data array
 
-  CUDA_HOST_DEVICE_CALLABLE
-  T_output operator()(gdf_index_type i) const { return static_cast<T_output>(elements[i]); }
+/** -------------------------------------------------------------------------*
+ * @brief constructor
+ * @param[in] e pointer of cudf data array
+ * @param[in] bit_mask::bit_mask_t   not used
+ * @param[in] ResultType             not used
+ * -------------------------------------------------------------------------**/
+  value_accessor(ElementType const* e, bit_mask::bit_mask_t const*, ResultType) : elements{e} {}
+
+  CUDA_DEVICE_CALLABLE
+  ResultType operator()(gdf_index_type i) const { return static_cast<ResultType>(elements[i]); }
 };
 
 /** -------------------------------------------------------------------------*
  * @brief pair accessor with/without null bitmask
- * A unary function returns pair of scalar value and validity at `id`.
- * `operator() (gdf_index_type id)` computes
- * `data` value and validity at `id`
- * and return `thrust::pair<T_output, bool>(data, validity)`.
+ * A unary function returns `thrust::pair<ResultType, bool>`. 
+ * If the element at index `i` is valid, returns `ResultType{data[i]}` and `true`
+ * indicating the value was valid. If the element at `i` is null,
+ * returns `ResultType{identity}` and `false` indicating the element was null.
  *
  * If has_nulls = false, the validity is always true.
  * If has_nulls = true, the valid flag corresponds to null bitmask flag at `id`,
- * and the data value = (is_valid(id))? static_cast<T_output>(data[id]) : identity;
+ * and the data value = (is_valid(id))? static_cast<ResultType>(data[id]) : identity;
  *
- * @tparam  T_element cudf data type of input element array
- * @tparam  T_output  cudf data type of output and `identity` value
- *                    which is used when null bitmaps flag is false.
- * @tparam  has_nulls if true, this struct holds only data array.
- *                    else, this struct holds data array and
- *                    bitmask array and identity value
+ * @tparam  ElementType cudf data type of input element array
+ * @tparam  ResultType  cudf data type of output and `identity` value
+ *                      which is used when null bitmaps flag is false.
+ * @tparam  has_nulls   if false, this struct holds only data array.
+ *                      else, this struct holds data array and
+ *                      bitmask array and identity value
  * -------------------------------------------------------------------------**/
-template <typename T_element, typename T_output, bool has_nulls>
+template <typename ElementType, typename ResultType, bool has_nulls>
 struct pair_accessor;
 
-template <typename T_element, typename T_output>
-struct pair_accessor<T_element, T_output, true> : public value_accessor<T_element, T_output, true>
+/** -------------------------------------------------------------------------*
+ * @overload pair_accessor<ElementType, ResultType, true>
+ * @brief specialization for columns that contain null values
+ * -------------------------------------------------------------------------**/
+template <typename ElementType, typename ResultType>
+struct pair_accessor<ElementType, ResultType, true> : public value_accessor<ElementType, ResultType, true>
 {
-  pair_accessor(T_element const* e, bit_mask::bit_mask_t const* b, T_output i)
-    : value_accessor<T_element, T_output, true>(e, b, i) {};
+/** -------------------------------------------------------------------------*
+ * @brief constructor
+ * @param[in] e pointer of cudf data array
+ * @param[in] b pointer of cudf bitmask (null) array
+ * @param[in] i identity value used when the validity is false at operator()
+ * -------------------------------------------------------------------------**/
+  pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
+    : value_accessor<ElementType, ResultType, true>(e, b, i) {};
 
-  CUDA_HOST_DEVICE_CALLABLE
-  thrust::pair<T_output, bool> operator()(gdf_index_type i) const {
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
     return bit_mask::is_valid(this->bitmask, i) ?
-        thrust::make_pair(static_cast<T_output>(this->elements[i]), true) :
+        thrust::make_pair(static_cast<ResultType>(this->elements[i]), true) :
         thrust::make_pair(this->identity, false) ;
   }
 };
 
-template <typename T_element, typename T_output>
-struct pair_accessor<T_element, T_output, false> : public value_accessor<T_element, T_output, false>
+/** -------------------------------------------------------------------------*
+ * @overload pair_accessor<ElementType, ResultType, false>
+ * @brief specialization for columns that don't contain null values
+ * -------------------------------------------------------------------------**/
+template <typename ElementType, typename ResultType>
+struct pair_accessor<ElementType, ResultType, false> : public value_accessor<ElementType, ResultType, false>
 {
-  pair_accessor(T_element const* e, bit_mask::bit_mask_t const* b , T_output i)
-    : value_accessor<T_element, T_output, false>(e, b, i) {};
+/** -------------------------------------------------------------------------*
+ * @brief constructor
+ * @param[in] e pointer of cudf data array
+ * @param[in] b not used
+ * @param[in] i not used
+ * -------------------------------------------------------------------------**/
+  pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b , ResultType i)
+    : value_accessor<ElementType, ResultType, false>(e, b, i) {};
 
-  CUDA_HOST_DEVICE_CALLABLE
-  thrust::pair<T_output, bool> operator()(gdf_index_type i) const {
-    return thrust::make_pair(static_cast<T_output>(this->elements[i]), true);
+  CUDA_DEVICE_CALLABLE
+  thrust::pair<ResultType, bool> operator()(gdf_index_type i) const {
+    return thrust::make_pair(static_cast<ResultType>(this->elements[i]), true);
   }
 };
 
@@ -191,128 +232,147 @@ struct pair_accessor<T_element, T_output, false> : public value_accessor<T_eleme
 // helper functions to make iterator
 
 /** -------------------------------------------------------------------------*
- * @brief helper function to make a cudf column iterator
- * Input iterator which can be used for cub and thrust.
- * The iterator returns same cudf data type of input: `T_element`.
+ * @brief Constructs an iterator over the elements of a column.
  *
- * @tparam has_nulls True if the data has valid bit mask, False else
- * @tparam T_element The cudf data type of input array
- * @tparam T_output  cudf data type of output and `identity` value
- *                   which is used when null bitmaps flag is false.
+ * If the column contains no null values (indicated by `has_nulls == false`) 
+ * then dereferencing an iterator `it` returned by this function as `*(it + n)` 
+ * will return `ResultType{ static_cast<ElementType*>(data)[n] }`.
+ * 
+ * If the column contains null values (indicated by `has_nulls == true`) 
+ * then the result of de-referencing an iterator `it` returned by this function
+ * as `*(it+n)` will depend if element is valid or null. 
+ * If the element is valid, 
+ * it will return `ResultType{ static_cast<ElementType*>(data)[n] }`.
+ * If the element is null, it will return `ResultType{identity}`.
+ *
+ * @tparam has_nulls Indicates if the column contains null values 
+ *                   (`null_count > 0`)
+ * @tparam ElementType The cudf data type of input array
+ * @tparam ResultType  cudf data type of output and `identity` value
+ *                     which is used when null bitmaps flag is false.
  * @tparam Iterator_Index
- *                   The base iterator which gives the index of array.
- *                   The default is `thrust::counting_iterator`
+ *                     The base iterator which gives the index of array.
+ *                     The default is `thrust::counting_iterator`
  *
  * @param[in] data     The pointer of column data array
  * @param[in] valid    The pointer of null bitmask of column
  * @param[in] identity The identity value used when the mask value is false
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
-    T_output identity, Iterator_Index const it = Iterator_Index(0))
+auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
+    CUDF_EXPECTS(data != nullptr, "non-null data is required");
+    CUDF_EXPECTS(not ( has_nulls == true && valid == nullptr), 
+        "non-null bit mask is required");
+
     return thrust::make_transform_iterator(
-      it, value_accessor<T_element, T_output, has_nulls>{data, valid, identity});
+      it, value_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
- * @overload auto make_iterator(const T_element *data,
- *                     const gdf_valid_type *valid, T_output identity,
+ * @overload auto make_iterator(const ElementType *data,
+ *                     const gdf_valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from the pointer of null bitmask of column as gdf_valid_type
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_iterator(const T_element *data, const gdf_valid_type *valid,
-    T_output identity, Iterator_Index const it = Iterator_Index(0))
+auto make_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
-    return make_iterator<has_nulls, T_element, T_output, Iterator_Index>
+    return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
         (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
- * @overload auto make_iterator(const gdf_column& column, T_element identity,
+ * @overload auto make_iterator(const gdf_column& column, ElementType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from a column
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_iterator(const gdf_column& column,
-    T_output identity, const Iterator_Index it = Iterator_Index(0))
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
+    CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
 
-    return make_iterator<has_nulls, T_element, T_output, Iterator_Index>
-        (static_cast<const T_element*>(column.data),
+    return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
+        (static_cast<const ElementType*>(column.data),
         reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
- * @brief helper function to make iterator with nulls
+ * @brief Constructs an iterator over the elements of a column
  * Input iterator which can be used for cub and thrust.
- * The iterator returns thrust::pair<T_element, bool>
+ * 
+ * The iterator returns thrust::pair<ResultType, bool>
  * This is useful for more complex logic that depends on the validity.
  * e.g. group_by.count, mean_var, sort algorism.
  *
- * @tparam has_nulls True if the data has valid bit mask, False else
- * @tparam T_element The cudf data type of input array
- * @tparam T_output  cudf data type of output and `identity` value
- *                   which is used when null bitmaps flag is false.
+ * @tparam has_nulls   True if the data has valid bit mask, False else
+ * @tparam ElementType The cudf data type of input array
+ * @tparam ResultType  cudf data type of output and `identity` value
+ *                     which is used when null bitmaps flag is false.
  * @tparam Iterator_Index
- *                   The base iterator which gives the index of array.
- *                   The default is `thrust::counting_iterator`
+ *                     The base iterator which gives the index of array.
+ *                     The default is `thrust::counting_iterator`
  *
  * @param[in] data     The pointer of column data array
  * @param[in] valid    The pointer of null bitmask of column
  * @param[in] identity The identity value used when the mask value is false
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_pair_iterator(const T_element *data, const bit_mask::bit_mask_t *valid,
-    T_output identity, Iterator_Index const it = Iterator_Index(0))
+auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
+    CUDF_EXPECTS(data != nullptr, "non-null data is required");
+    CUDF_EXPECTS(not ( has_nulls == true && valid == nullptr), 
+        "non-null bit mask is required");
+	
     return thrust::make_transform_iterator(
-      it, pair_accessor<T_element, T_output, has_nulls>{data, valid, identity});
+      it, pair_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
- * @overload auto make_pair_iterator(const T_element *data,
- *                     const gdf_valid_type *valid, T_output identity,
+ * @overload auto make_pair_iterator(const ElementType *data,
+ *                     const gdf_valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from the pointer of null bitmask of column as gdf_valid_type
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
-auto make_pair_iterator(const T_element *data, const gdf_valid_type *valid,
-    T_output identity, Iterator_Index const it = Iterator_Index(0))
+auto make_pair_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
-    return make_pair_iterator<has_nulls, T_element, T_output, Iterator_Index>
+    return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
         (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
- * @overload auto make_pair_iterator(const gdf_column& column, T_output identity,
+ * @overload auto make_pair_iterator(const gdf_column& column, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
  * make iterator from a column
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename T_element, typename T_output = T_element,
+template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<gdf_index_type> >
 auto make_pair_iterator(const gdf_column& column,
-    T_output identity, const Iterator_Index it = Iterator_Index(0))
+    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<T_element>() == column.dtype, "the data type mismatch");
+    CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
 
-    return make_pair_iterator<has_nulls, T_element, T_output, Iterator_Index>
-        (static_cast<const T_element*>(column.data),
+    return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
+        (static_cast<const ElementType*>(column.data),
         reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
 }
 

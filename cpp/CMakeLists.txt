@@ -17,6 +17,10 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
 
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif()
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
@@ -81,6 +85,8 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
+
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -189,10 +195,30 @@ if(BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ###################################################################################################
+# - add google benchmark --------------------------------------------------------------------------
+
+if(BUILD_BENCHMARKS)
+  
+  include(ConfigureGoogleBenchmark)
+  
+  if(GBENCH_FOUND)
+    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
+    include_directories(${GBENCH_INCLUDE_DIR})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+  else()
+    message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
+  endif(GBENCH_FOUND)
+
+endif(BUILD_BENCHMARKS)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif()
+
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
@@ -265,7 +291,7 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
-            src/io/csv/csv_reader.cu
+            src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader.cu

@@ -44,21 +44,21 @@ namespace cudf
  * Those will be used to compute `mean` (= sum / count)
  * and `variance` (= sum of squares / count - mean^2).
  *
-  @tparam  T  element data type of value and value_squared.
+ * @tparam ElementType  element data type of value and value_squared.
  * -------------------------------------------------------------------------**/
-template<typename T>
+template<typename ElementType>
 struct meanvar
 {
-    T value;                /// the value
-    T value_squared;        /// the value of squared
+    ElementType value;                /// the value
+    ElementType value_squared;        /// the value of squared
     gdf_index_type count;   /// the count
 
     CUDA_HOST_DEVICE_CALLABLE
-    meanvar(T _value=0, T _value_squared=0, gdf_index_type _count=0)
+    meanvar(ElementType _value=0, ElementType _value_squared=0, gdf_index_type _count=0)
     : value(_value), value_squared(_value_squared), count(_count)
     {};
 
-    using this_t = cudf::meanvar<T>;
+    using this_t = cudf::meanvar<ElementType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -92,13 +92,13 @@ struct meanvar
  *
  * This will be used to compute "sum of squares".
  *
- * @tparam  T_output  scalar data type of output
+ * @tparam  ResultType  scalar data type of output
  * -------------------------------------------------------------------------**/
-template<typename T_element>
+template<typename ElementType>
 struct transformer_squared
 {
     CUDA_HOST_DEVICE_CALLABLE
-    T_element operator() (T_element const & value)
+    ElementType operator() (ElementType const & value)
     {
         return (value*value);
     };
@@ -106,23 +106,23 @@ struct transformer_squared
 
 /** -------------------------------------------------------------------------*
  * @brief Uses a scalar value to construct a `meanvar` object.
- * This transforms `thrust::pair<T_element, bool>` into
- * `T_output = meanvar<T_element>` form.
+ * This transforms `thrust::pair<ElementType, bool>` into
+ * `ResultType = meanvar<ElementType>` form.
  *
  * This struct transforms the value and the squared value and the count at once.
  *
- * @tparam  T_element         scalar data type of input
+ * @tparam  ElementType         scalar data type of input
  * -------------------------------------------------------------------------**/
-template<typename T_element>
+template<typename ElementType>
 struct transformer_meanvar
 {
-    using T_output = meanvar<T_element>;
+    using ResultType = meanvar<ElementType>;
 
     CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (thrust::pair<T_element, bool> const& pair)
+    ResultType operator() (thrust::pair<ElementType, bool> const& pair)
     {
-        T_element v = pair.first;
-        return T_output(v, v*v, (pair.second)? 1 : 0 );
+        ElementType v = pair.first;
+        return ResultType(v, v*v, (pair.second)? 1 : 0 );
     };
 };
 
