@@ -536,46 +536,6 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Functor for comparing if two elements between two gdf_columns are
-   * equal.
-   *
-   *---------------------------------------------------------------------------**/
-  struct elements_equal {
-    gdf_column lhs_col;
-    gdf_column rhs_col;
-    bool nulls_are_equivalent;
-
-    /**---------------------------------------------------------------------------*
-     * @brief Constructs functor for comparing elements between two gdf_column's
-     *
-     * @param lhs The left column for comparison
-     * @param rhs The right column for comparison
-     * @param nulls_are_equal Desired behavior for whether or not nulls are
-     * treated as equal to other nulls. Defaults to true.
-     *---------------------------------------------------------------------------**/
-    __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs,
-                                       bool nulls_are_equal = true)
-        : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
-
-    __device__ bool operator()(gdf_index_type row) {
-      bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
-      bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
-
-      if (lhs_is_valid and rhs_is_valid) {
-        return static_cast<ColumnType const*>(lhs_col.data)[row] ==
-               static_cast<ColumnType const*>(rhs_col.data)[row];
-      }
-
-      // If one value is valid but the other is not
-      if (lhs_is_valid != rhs_is_valid) {
-        return false;
-      }
-
-      return nulls_are_equivalent;
-    }
-  };
-
-  /**---------------------------------------------------------------------------*
    * @brief Compares this wrapper to a gdf_column for equality.
    *
    * Treats NULL == NULL
