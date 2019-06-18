@@ -257,14 +257,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def product(self, dtype=None):
         return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self, dtype=None):
+    def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1, dtype=None):
-        x = self.astype('f8')
-        mu = x.mean(dtype=dtype)
-        n = x.valid_count
-        asum = x.sum_of_squares(dtype=dtype)
+    def mean_var(self, ddof=1, dtype=np.float64):
+        mu = self.mean(dtype=dtype)
+        n = self.valid_count
+        asum = np.float64(self.sum_of_squares(dtype=dtype))
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
@@ -317,17 +316,19 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
 
-    def find_and_replace(self, to_replace, value):
+    def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = columnops.as_column(to_replace)
-        value_col = columnops.as_column(value)
+        replacement_dtype = self.dtype if all_nan else None
+        replacement_col = columnops.as_column(replacement,
+                                              dtype=replacement_dtype)
         replaced = self.copy()
-        to_replace_col, value_col, replaced = numeric_normalize_types(
-               to_replace_col, value_col, replaced)
-        cpp_replace.replace(replaced, to_replace_col, value_col)
-        return replaced
+        to_replace_col, replacement_col, replaced = numeric_normalize_types(
+               to_replace_col, replacement_col, replaced)
+        output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
+        return output
 
     def fillna(self, fill_value, inplace=False):
         """

@@ -127,9 +127,74 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.dataframe import Series, Index
+
         if isinstance(others, (Series, Index)):
+            '''
+            If others is just another Series/Index,
+            great go ahead with concatenation
+            '''
             assert others.dtype == np.dtype('object')
             others = others.data
+        elif utils.is_list_like(others) and others:
+            '''
+            If others is a list-like object (in our case lists & tuples)
+            just another Series/Index, great go ahead with concatenation.
+            '''
+
+            '''
+            Picking first element and checking if it really adheres to
+            list like conditions, if not we switch to next case
+
+            Note: We have made a call not to iterate over the entire list as
+            it could be more expensive if it was of very large size.
+            Thus only doing a sanity check on just the first element of list.
+            '''
+            first = others[0]
+
+            if utils.is_list_like(first) or \
+                    isinstance(first, (Series, Index, pd.Series, pd.Index)):
+                '''
+                Internal elements in others list should also be
+                list-like and not a regular string/byte
+                '''
+                first = None
+                for frame in others:
+                    if not isinstance(frame, (Series, Index)):
+                        '''
+                        Make sure all inputs to .cat function call
+                        are of type nvstrings so creating a Series object.
+                        '''
+                        frame = Series(frame, dtype='str')
+
+                    if (first is None):
+                        '''
+                        extracting nvstrings pointer since
+                        `frame` is of type Series/Index and
+                        first isn't yet initialized.
+                        '''
+                        first = frame.data
+                    else:
+                        assert frame.dtype == np.dtype('object')
+                        frame = frame.data
+                        first = first.cat(frame, sep=sep, na_rep=na_rep)
+
+                others = first
+            elif not utils.is_list_like(first):
+                '''
+                Picking first element and checking if it really adheres to
+                non-list like conditions.
+
+                Note: We have made a call not to iterate over the entire
+                list as it could be more expensive if it was of very
+                large size. Thus only doing a sanity check on just the
+                first element of list.
+                '''
+                others = Series(others)
+                others = others.data
+        elif isinstance(others, (pd.Series, pd.Index)):
+            others = Series(others)
+            others = others.data
+
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
             index=self._index
@@ -624,6 +689,18 @@ class StringColumn(columnops.TypedColumnBase):
 
     def take(self, indices):
         return self.element_indexing(indices)
+
+    def binary_operator(self, binop, rhs, reflect=False):
+        lhs = self
+        if reflect:
+            lhs, rhs = rhs, lhs
+        if isinstance(rhs, StringColumn) and binop == 'add':
+            return lhs.data.cat(
+                others=rhs.data,
+            )
+        else:
+            msg = "{!r} operator not supported between {} and {}"
+            raise TypeError(msg.format(binop, type(self), type(rhs)))
 
 
 def string_column_binop(lhs, rhs, op):

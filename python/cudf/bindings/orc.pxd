@@ -7,26 +7,38 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
+from cudf.bindings.types cimport table as cudf_table
 
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf.h" namespace "cudf" nogil:
 
-    # See cpp/include/cudf/io_types.h
-    ctypedef struct orc_read_arg:
-        # Output Arguments - Allocated in reader
-        int num_cols_out
-        int num_rows_out
-        gdf_column **data
-
-        # Input arguments
-        gdf_input_type source_type
-        const char *source
-        size_t buffer_size
-        const char **use_cols
-        int use_cols_len
-        int stripe
-        int skip_rows
-        int num_rows
+    cdef cppclass OrcReaderOptions:
+        vector[string] columns
         bool use_index
 
-    cdef gdf_error read_orc(orc_read_arg *args) except +
+        OrcReaderOptions() except +
+
+        OrcReaderOptions(
+            vector[string] columns,
+            bool use_index
+        ) except +
+
+    cdef cppclass OrcReader:
+        OrcReader(
+            string filepath,
+            const OrcReaderOptions &args
+        ) except +
+
+        OrcReader(
+            const char *buffer,
+            size_t length,
+            const OrcReaderOptions &args
+        ) except +
+
+        cudf_table read_all() except +
+
+        cudf_table read_rows(size_t skip_rows, size_t num_rows) except +
+
+        cudf_table read_stripe(size_t stripe) except +
