@@ -229,7 +229,6 @@ def test_drop_duplicates_tuple():
 ])
 def test_drop_duplicates_empty(df):
     df = cudf.DataFrame.from_pandas(df)
-    # GH 20516
     result = df.drop_duplicates()
     assert_df(result, df)
 
