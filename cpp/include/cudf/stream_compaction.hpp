@@ -21,15 +21,6 @@
 #include "types.hpp"
 
 
-/**
- * @brief Choices for drop_duplicates API for retainment of duplicate rows
- */
-enum duplicate_keep_option {
-  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
-  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
-  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
-};
-
 namespace cudf {
 
 /**
@@ -83,6 +74,14 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  */
 gdf_column drop_nulls(gdf_column const &input);
 
+/**
+ * @brief Choices for drop_duplicates API for retainment of duplicate rows
+ */
+enum duplicate_keep_option {
+  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
+  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
+};
 
 /**
  * @brief Create a new table without duplicate rows 

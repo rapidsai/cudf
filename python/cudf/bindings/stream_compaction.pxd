@@ -7,14 +7,13 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
-cdef extern from "stream_compaction.hpp" nogil:
+cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
+
     #defined in cpp/include/stream_compaction.hpp
     ctypedef enum duplicate_keep_option:
         KEEP_FIRST
         KEEP_LAST
         KEEP_NONE
-
-cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
     cdef gdf_column apply_boolean_mask(const gdf_column &input,
                                        const gdf_column &boolean_mask) except +

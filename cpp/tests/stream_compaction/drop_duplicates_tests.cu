@@ -41,7 +41,7 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<T> source,
 {
   gdf_column* inrow[]{source.get()};
   cudf::table input_table(inrow, 1);
-  enum duplicate_keep_option keep=duplicate_keep_option::KEEP_LAST;
+  enum cudf::duplicate_keep_option keep=cudf::duplicate_keep_option::KEEP_LAST;
   cudf::table out_table;
 
   EXPECT_NO_THROW(out_table = cudf::drop_duplicates(input_table, input_table, keep));
@@ -186,7 +186,7 @@ void TypedDropDuplicatesTest(
     cudf::test::column_wrapper<typename T::Type1> source_col2, 
     cudf::test::column_wrapper<typename T::Type0> expected_col1, 
     cudf::test::column_wrapper<typename T::Type1> expected_col2,
-    enum duplicate_keep_option keep)
+    enum cudf::duplicate_keep_option keep)
 {
   cudf::test::column_wrapper<gdf_index_type> index{source_col1.size(),
       [](gdf_index_type row) { return row; },
@@ -212,7 +212,7 @@ TYPED_TEST(DropDuplicatesDoubleTest, Empty)
     cudf::test::column_wrapper<typename TypeParam::Type1>{}, //{0, false},
     cudf::test::column_wrapper<typename TypeParam::Type0>{}, //{0, false},
     cudf::test::column_wrapper<typename TypeParam::Type1>{}, //{0, false},
-    duplicate_keep_option::KEEP_LAST);
+    cudf::duplicate_keep_option::KEEP_LAST);
 }
 
 TYPED_TEST(DropDuplicatesDoubleTest, Distinct)
@@ -226,21 +226,21 @@ TYPED_TEST(DropDuplicatesDoubleTest, Distinct)
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{column_size, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{column_size, lamda_type1, lamda_valid},
-    duplicate_keep_option::KEEP_FIRST);
+    cudf::duplicate_keep_option::KEEP_FIRST);
 
   TypedDropDuplicatesTest<TypeParam>(
     col1,
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{column_size, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{column_size, lamda_type1, lamda_valid},
-    duplicate_keep_option::KEEP_LAST);
+    cudf::duplicate_keep_option::KEEP_LAST);
 
   TypedDropDuplicatesTest<TypeParam>(
     col1,
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{column_size, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{column_size, lamda_type1, lamda_valid},
-    duplicate_keep_option::KEEP_NONE);
+    cudf::duplicate_keep_option::KEEP_NONE);
 }
 
 TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
@@ -254,7 +254,7 @@ TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{700, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{700, lamda_type1, lamda_valid},
-    duplicate_keep_option::KEEP_FIRST);
+    cudf::duplicate_keep_option::KEEP_FIRST);
 
   TypedDropDuplicatesTest<TypeParam>(
     col1,
@@ -262,13 +262,13 @@ TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
     cudf::test::column_wrapper<typename TypeParam::Type0>{700, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{700,
       [](gdf_index_type row) { return typename TypeParam::Type1((column_size-700+row)%7); }, lamda_valid},
-    duplicate_keep_option::KEEP_LAST);
+    cudf::duplicate_keep_option::KEEP_LAST);
 
   TypedDropDuplicatesTest<TypeParam>(
     col1,
     col2,
     cudf::test::column_wrapper<typename TypeParam::Type0>{0, lamda_type0, lamda_valid},
     cudf::test::column_wrapper<typename TypeParam::Type1>{0, lamda_type1, lamda_valid},
-    duplicate_keep_option::KEEP_NONE);
+    cudf::duplicate_keep_option::KEEP_NONE);
 }
 

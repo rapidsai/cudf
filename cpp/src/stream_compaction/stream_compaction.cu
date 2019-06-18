@@ -213,11 +213,8 @@ get_unique_ordered_indices(const cudf::table& key_columns,
         comp,
         keep);
   }
- 
   //not resizing vector to avoid copy
-  cudaStreamSynchronize(stream);
 
-  //return unique_indices;
   return std::make_pair(unique_indices, 
                         thrust::distance(unique_indices.begin(), result_end));
 }
