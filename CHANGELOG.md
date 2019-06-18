@@ -135,7 +135,7 @@
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
-- PR #XXXX Add pip to conda environment files to fix warning
+- PR #2033 Add pip to conda environment files to fix warning
 
 
 # cudf 0.7.2 (16 May 2019)
