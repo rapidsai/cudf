@@ -607,13 +607,15 @@ class Groupby(object):
             results = groups.apply_grouped(rolling_avg,
                                            incols=['val'],
                                            outcols=dict(avg=np.float64))
-            print("Results: \n", results)
+            print("Results:", results)
 
             # Note this gives the same result as its pandas equivalent
             pdf = df.to_pandas()
             pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
 
+
         Output:
+
         .. code-block:: python
 
             Results:
@@ -632,6 +634,7 @@ class Groupby(object):
 
         This is functionally equivalent to `pandas.DataFrame.Rolling
         <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
+
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))

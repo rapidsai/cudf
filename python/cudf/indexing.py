@@ -1,11 +1,9 @@
-import numbers
-
 import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.dataframe.index import Index
+from cudf.utils.utils import is_single_value
 
 
 class _SeriesLocIndexer(object):
@@ -18,6 +16,7 @@ class _SeriesLocIndexer(object):
 
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
+        from cudf.dataframe.index import Index
         if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
                             DeviceNDArray)):
             if len(arg) == 0:
@@ -35,7 +34,7 @@ class _SeriesLocIndexer(object):
             for s in arg:
                 out = out.append(self._sr.loc[s:s], ignore_index=False)
             return out
-        elif _is_single_value(arg):
+        elif is_single_value(arg):
             found_index = self._sr.index.find_label_range(arg, None)[0]
             return self._sr.iloc[found_index]
         elif isinstance(arg, slice):
@@ -91,7 +90,7 @@ class _DataFrameIndexer(object):
         if not hasattr(arg, '__len__'):
             return False
         for obj in arg:
-            if not _is_single_value(obj):
+            if not is_single_value(obj):
                 return False
         return True
 
@@ -114,7 +113,7 @@ class _DataFrameIndexer(object):
         nrows, ncols = df.shape
         if nrows == 1:
             if type(arg[0]) is slice:
-                if not _is_single_value(arg[1]):
+                if not is_single_value(arg[1]):
                     return False
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
@@ -125,7 +124,7 @@ class _DataFrameIndexer(object):
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
-                if not _is_single_value(arg[0]):
+                if not is_single_value(arg[0]):
                     return False
             return True
         return False
@@ -138,7 +137,7 @@ class _DataFrameIndexer(object):
         nrows, ncols = df.shape
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
-            if not _is_single_value(arg[0]):
+            if not is_single_value(arg[0]):
                 axis = 1
             else:
                 axis = 0
@@ -190,7 +189,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return self._df._index._get_row_major(self._df, arg)
 
     def _get_column_selection(self, arg):
-        if _is_single_value(arg):
+        if is_single_value(arg):
             return [arg]
 
         elif isinstance(arg, slice):
@@ -223,9 +222,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
         columns = self._get_column_selection(arg[1])
-        df = DataFrame()
-        for col in columns:
-            df.add_column(name=col, data=self._df[col].iloc[arg[0]])
+
+        if isinstance(arg[0], slice):
+            df = DataFrame()
+            for col in columns:
+                df.add_column(name=col, data=self._df[col].iloc[arg[0]])
+        else:
+            df = self._df._columns_view(columns).take(arg[0])
+
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
                 df.index = as_index(self._df.index[arg[0].start])
@@ -245,7 +249,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     def _get_column_selection(self, arg):
         cols = self._df.columns
-        if _is_single_value(arg):
+        if is_single_value(arg):
             return [cols[arg]]
         else:
             return cols[arg]
@@ -259,12 +263,11 @@ def _normalize_dtypes(df):
     return df
 
 
-def _is_single_value(val):
-    from pandas.core.dtypes.common import is_datetime_or_timedelta_dtype
-    return (
-            isinstance(val, str)
-            or isinstance(val, numbers.Number)
-            or is_datetime_or_timedelta_dtype(val)
-            or isinstance(val, pd.Timestamp)
-            or isinstance(val, pd.Categorical)
-    )
+class _IndexLocIndexer(object):
+
+    def __init__(self, idx):
+        self.idx = idx
+
+    def __getitem__(self, arg):
+        from cudf.dataframe.index import as_index
+        return as_index(self.idx.to_series().loc[arg])

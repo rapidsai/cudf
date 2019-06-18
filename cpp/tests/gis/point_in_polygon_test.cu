@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#include "gis.hpp"
-#include "gtest/gtest.h"
+#include <cudf/gis.hpp>
+#include <gtest/gtest.h>
 
 #include <tests/groupby/groupby_test_helpers.cuh>
 #include <tests/utilities/cudf_test_utils.cuh>

@@ -16,7 +16,7 @@
 
 #include "unary_ops.cuh"
 
-#include "utilities/type_dispatcher.hpp"
+#include <utilities/type_dispatcher.hpp>
 
 #include <cmath>
 #include <algorithm>
