@@ -1,9 +1,29 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef CUDF_REDUCTION_OPERATORS_CUH
+#define CUDF_REDUCTION_OPERATORS_CUH
+
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/error_utils.hpp>
+#include <iterator/iterator.cuh>
 
-#include <utilities/device_atomics.cuh>
+#include <utilities/device_operators.cuh>
 
 #include <cmath>
 
@@ -84,10 +104,10 @@ struct ReductionMean{
     struct Intermediate{
         using IType = T;
 
-        static
-        auto get_transformer() {
-            return cudf::transformer_squared<T>{};
-        };
+        template<bool has_nulls, typename T_in, typename T_out>
+        static auto make_iterator(const gdf_column* column, T_out identity){
+            return cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+        }
 
         static
         T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
@@ -103,13 +123,18 @@ struct ReductionVar{
 
     template<typename T>
     struct Intermediate{
-        using IType = transformer_meanvar_no_count<T>;
+        using IType = meanvar_no_count<T>;
 
-        static
-        auto get_transformer() {
-            return cudf::reductions::transformer_meanvar_no_count<T>{};
-        };
+        static IType identity() {
+            return T{0};
+        }
 
+        template<bool has_nulls, typename T_in, typename T_out>
+        static auto make_iterator(const gdf_column* column, T_out identity){
+            auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
+            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+            return thrust::make_transform_iterator(it_raw, transformer);
+        }
 
         static
         T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
@@ -129,12 +154,14 @@ struct ReductionStd{
 
     template<typename T>
     struct Intermediate{
-        using IType = transformer_meanvar_no_count<T>;
+        using IType = meanvar_no_count<T>;
 
-        static
-        auto get_transformer() {
-            return cudf::reductions::transformer_meanvar_no_count<T>{};
-        };
+        template<bool has_nulls, typename T_in, typename T_out>
+        static auto make_iterator(const gdf_column* column, T_out identity){
+            auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
+            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+            return thrust::make_transform_iterator(it_raw, transformer);
+        }
 
         static
         T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
@@ -142,7 +169,7 @@ struct ReductionStd{
             using intermediateOp = typename ReductionVar::template Intermediate<T>;
             T var = intermediateOp::ComputeResult(input, count, ddof);
 
-            return T{std::sqrt(var)};
+            return static_cast<T>(std::sqrt(var));
         };
     };
 };
@@ -151,3 +178,4 @@ struct ReductionStd{
 } // namespace reductions
 } // namespace cudf
 
+#endif

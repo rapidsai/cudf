@@ -113,7 +113,7 @@ TYPED_TEST(ReductionTest, Product)
     TypeParam expected_value = std::accumulate(v.begin(), v.end(), TypeParam{1},
         [](TypeParam acc, TypeParam i) { return acc * i; });
 
-    this->reduction_test(v, expected_value, this->ret_non_arithmetic, 
+    this->reduction_test(v, expected_value, this->ret_non_arithmetic,
                          GDF_REDUCTION_PRODUCT);
 }
 
@@ -142,10 +142,35 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 // ----------------------------------------------------------------------------
 
 template <typename T>
-struct MultiStepReductionTest : public ReductionTest<T>
+struct MultiStepReductionTest : public GdfTest
 {
     MultiStepReductionTest(){}
     ~MultiStepReductionTest(){}
+
+    template <typename T_out>
+    void reduction_test(std::vector<T>& input_values,
+        T_out expected_value, bool succeeded_condition,
+        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
+    {
+        cudf::test::column_wrapper<T> const col(input_values);
+
+        const gdf_column * underlying_column = col.get();
+        thrust::device_vector<T_out> dev_result(1);
+
+        if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
+
+        auto statement = [&]() {
+            cudf::test::scalar_wrapper<T_out> result
+                = cudf::reduction(underlying_column, op, output_dtype);
+            EXPECT_EQ(expected_value, result.value());
+        };
+
+        if( succeeded_condition ){
+            CUDF_EXPECT_NO_THROW(statement());
+        }else{
+            EXPECT_ANY_THROW(statement());
+        }
+    };
 };
 
 using MultiStepReductionTypes = testing::Types<
@@ -156,14 +181,13 @@ TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
 TYPED_TEST(MultiStepReductionTest, Mean)
 {
     using T = TypeParam;
-    std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2});
+    std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
     std::vector<T> v = convert_values<T>(int_values);
 
     double expected_value = std::accumulate(v.begin(), v.end(), double{0});
     expected_value /= int_values.size() ;
-//    double expected_value = mean_value(accum_value, int_values.size() );
 
-    this->reduction_test(v, expected_value, this->ret_non_arithmetic,
+    this->reduction_test(v, expected_value, true,
         GDF_REDUCTION_MEAN, GDF_FLOAT64);
 }
 
@@ -240,6 +264,22 @@ TEST_F(ReductionDtypeTest, different_precision)
         (int_values, static_cast<cudf::date64>(expected_value), false,
          GDF_REDUCTION_SUM, GDF_DATE64);
 
+    this->reduction_test<int8_t, cudf::timestamp>
+        (int_values, static_cast<cudf::timestamp>(expected_value), false,
+         GDF_REDUCTION_SUM, GDF_TIMESTAMP);
+
+    this->reduction_test<int8_t, cudf::nvstring_category>
+        (int_values, static_cast<cudf::nvstring_category>(expected_value), false,
+           GDF_REDUCTION_SUM, GDF_STRING_CATEGORY);
+
+    this->reduction_test<int8_t, cudf::category>
+        (int_values, static_cast<cudf::category>(expected_value), false,
+         GDF_REDUCTION_SUM, GDF_CATEGORY);
+
+    this->reduction_test<cudf::bool8, cudf::date32>
+        (int_values, static_cast<cudf::date32>(expected_value), false,
+         GDF_REDUCTION_SUM, GDF_CATEGORY);
+
     // supported case: cudf::bool8
     std::vector<bool> v = convert_values<bool>(int_values);
 
@@ -301,13 +341,13 @@ TEST(ReductionErrorTest, empty_column)
     cudf::test::column_wrapper<T> const col0(0);
     CUDF_EXPECT_NO_THROW(statement(col0.get()));
 
-    // test if null count is equal or greater than size of input 
+    // test if null count is equal or greater than size of input
     // expect result.is_valid() is false
     int col_size = 5;
     std::vector<T> col_data(col_size);
     std::vector<gdf_valid_type> valids(gdf_valid_allocation_size(col_size));
     std::fill(valids.begin(), valids.end(), 0);
-    
+
     cudf::test::column_wrapper<T> col_empty(col_data, valids);
     CUDF_EXPECT_NO_THROW(statement(col_empty.get()));
 }
