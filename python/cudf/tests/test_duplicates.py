@@ -28,7 +28,6 @@ def assert_df2(g, p):
 
 @pytest.mark.parametrize('subset', ['a', ['a'], ['a', 'B']])
 def test_duplicated_with_misspelled_column_name(subset):
-    # GH 19730
     df = DataFrame({'A': [0, 0, 1],
                     'B': [0, 0, 1],
                     'C': [0, 0, 1]})
