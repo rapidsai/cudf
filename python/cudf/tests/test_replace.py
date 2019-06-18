@@ -312,3 +312,17 @@ def test_series_fillna_invalid_dtype(data_dtype):
         type(fill_value).__name__,
         gdf.dtype.type.__name__
     ))
+
+
+@pytest.mark.parametrize(
+    'data_dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64'])
+def test_series_where(data_dtype):
+    fill_value = 100
+    psr = pd.Series(list(range(10)), dtype=data_dtype)
+    sr = Series.from_pandas(psr)
+    expect = psr.where(psr > 0, fill_value)
+    got = sr.where(sr > 0, fill_value)
+
+    assert_eq(expect, got)
+

@@ -1035,21 +1035,30 @@ class Series(object):
 
         """
 
-        to_replace = self._column.apply_boolean_mask(cond & self.notna())
+        to_replace = self._column.apply_boolean_mask(~cond & self.notna())
         if is_scalar(other):
-            new_value = utils.scalar_broadcast_to(
-                other, (len(to_replace),), np.dtype(type(other))
-            )
+            all_nan = other is None
+            if all_nan:
+                new_value = [other] * len(to_replace)
+            else:
+                typ = to_replace.dtype if other == int(other) else type(other)
+                new_value = utils.scalar_broadcast_to(
+                    other, (len(to_replace),), np.dtype(typ)
+                )
         else:
             raise NotImplementedError(
-                    "Replacement arg {} is not supported.".format(type(other))
+                "Replacement arg of {} is not supported.".format(type(other))
             )
 
         result = self._column.find_and_replace(to_replace, new_value,
-                                               all_nan=False)
+                                               all_nan=all_nan)
 
-        # To replace nulls
-        if (cond & self.isnull()).any():
+        # To replace nulls:: If there are nulls in `cond` series, then we will
+        # fill them with `False`, which means, by default, elements containing
+        # nulls, are failing the given condition.
+        # But, if condition is deliberately setting the `True` for nulls (i.e.
+        # `s.isnulls()`), then there are no nulls in `cond`
+        if not all_nan and (~cond.fillna(False) & self.isnull()).any():
             result = result.fillna(other)
         return self._copy_construct(data=result)
 
