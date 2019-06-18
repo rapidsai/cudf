@@ -21,12 +21,11 @@ from types import GeneratorType
 from librmm_cffi import librmm as rmm
 
 import cudf
-from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.core import get_renderable_pandas_dataframe
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
-from cudf.settings import NOTSET, settings
+from cudf.settings import NOTSET
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer

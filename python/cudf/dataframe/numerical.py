@@ -189,8 +189,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                 else:
                     new_type = original_type
                 return pd.Series(array.to_array(fillna='pandas'),
-                                                index=index, dtype=new_type)
-            # tons of special casing to determine if a new dtype should be used?
+                                 index=index, dtype=new_type)
             return pd.Series(array.to_array(fillna='pandas'), index=index)
 
     def to_arrow(self):
@@ -327,7 +326,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if dkind == 'f':
             return self.dtype.type(np.nan)
         elif dkind in 'iu':
-            return np.nan
+            return -1
         elif dkind == 'b':
             return False
         else:

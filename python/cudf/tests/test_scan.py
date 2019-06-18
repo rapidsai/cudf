@@ -64,7 +64,7 @@ def test_cumsum_masked():
         assert_eq(gs.cumsum(), ps.cumsum())
 
     for type_ in int_types:
-        expected = pd.Series([1, 3, -1, 7, 12]).astype('int64')
+        expected = pd.Series([1, 3, np.nan, 7, 12]).astype('Int64')
         gs = Series(data).astype(type_)
         assert_eq(gs.cumsum(), expected)
 
@@ -97,7 +97,7 @@ def test_cummin(dtype, nelem):
 def test_cummin_masked():
     data = [1, 2, None, 4, 5]
     float_types = ['float32', 'float64']
-    int_types = ['int8', 'int16', 'int32', 'int64']
+    int_types = ['Int8', 'Int16', 'Int32', 'Int64']
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
@@ -105,7 +105,7 @@ def test_cummin_masked():
         assert_eq(gs.cummin(), ps.cummin())
 
     for type_ in int_types:
-        expected = pd.Series([1, 1, -1, 1, 1]).astype(type_)
+        expected = pd.Series([1, 1, np.nan, 1, 1]).astype(type_)
         gs = Series(data).astype(type_)
         assert_eq(gs.cummin(), expected)
 
@@ -138,7 +138,7 @@ def test_cummax(dtype, nelem):
 def test_cummax_masked():
     data = [1, 2, None, 4, 5]
     float_types = ['float32', 'float64']
-    int_types = ['int8', 'int16', 'int32', 'int64']
+    int_types = ['Int8', 'Int16', 'Int32', 'Int64']
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
@@ -146,7 +146,7 @@ def test_cummax_masked():
         assert_eq(gs.cummax(), ps.cummax())
 
     for type_ in int_types:
-        expected = pd.Series([1, 2, -1, 4, 5]).astype(type_)
+        expected = pd.Series([1, 2, np.nan, 4, 5]).astype(type_)
         gs = Series(data).astype(type_)
         assert_eq(gs.cummax(), expected)
 
@@ -187,7 +187,7 @@ def test_cumprod_masked():
         assert_eq(gs.cumprod(), ps.cumprod())
 
     for type_ in int_types:
-        expected = pd.Series([1, 2, -1, 8, 40]).astype('int64')
+        expected = pd.Series([1, 2, np.nan, 8, 40]).astype('Int64')
         gs = Series(data).astype(type_)
         assert_eq(gs.cumprod(), expected)
 
