@@ -79,6 +79,8 @@
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
+- PR #2034 Adding support for string columns concatenation using "add" binary operator
+
 
 ## Bug Fixes
 
