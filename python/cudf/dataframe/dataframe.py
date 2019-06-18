@@ -2548,8 +2548,8 @@ class DataFrame(object):
                 if vals.shape[0] == 1:
                     df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
-                    #TODO fix multiple column with same name with different
-                    #method.
+                    # TODO fix multiple column with same name with different
+                    # method.
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):

@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import cudf
-from pandas import DataFrame, MultiIndex, date_range
+from pandas import DataFrame, date_range
 from cudf.multi import concat
 from cudf.tests.utils import assert_eq
 
@@ -507,13 +507,11 @@ def test_drop_duplicates_inplace():
 
 def test_drop_duplicates_multi_index():
     arrays = [['bar', 'bar', 'baz', 'baz', 'foo', 'foo', 'qux', 'qux'],
-            ['one', 'two', 'one', 'two', 'one', 'two', 'one', 'two']]
-    tuples = list(zip(*arrays))
-    index = MultiIndex.from_tuples(tuples, names=['first', 'second'])
+              ['one', 'two', 'one', 'two', 'one', 'two', 'one', 'two']]
     pdf = DataFrame(np.random.randint(0, 2, (8, 4)), index=arrays)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    expected  = pdf.drop_duplicates()
+    expected = pdf.drop_duplicates()
     result = gdf.drop_duplicates()
-    assert_df(result.to_pandas(), expected) 
-    #FIXME: to_pandas needed until sort_index support for MultiIndex
+    assert_df(result.to_pandas(), expected)
+    # FIXME: to_pandas needed until sort_index support for MultiIndex
