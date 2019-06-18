@@ -87,6 +87,7 @@
 - PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
+- PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
 
 ## Bug Fixes
 
