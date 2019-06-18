@@ -26,10 +26,10 @@ namespace gis {
 /**
  * @brief Compute the perimeter of polygons on the Earth surface using Haversine formula.
  * 
- * Note: The polygon must not have holes.
+ * Note: The polygons must not have holes
  * 
- * The polygon is defined by a set of coordinates (latitudes and longitudes),
- * where the first and last coordinates must have the same value (closed).
+ * The polygons are defined by sets of coordinates (latitudes and longitudes),
+ * where the first and last coordinates of each polygon must have the same value (closed).
  * 
  * polygon_latitudes and polygon_longitudes must have equal size to 'num_polygons'.
  *

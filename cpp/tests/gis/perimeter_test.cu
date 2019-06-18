@@ -79,6 +79,19 @@ struct PerimeterTest : public GdfTest
         }
     }
 
+    T haversine_formula (const T current_latitude, const T current_longitude,
+                         const T next_latitude, const T next_longitude)
+    {
+        T lat_variation = (next_latitude - current_latitude) * DEG_TO_RAD;
+        T lon_variation = (next_longitude - current_longitude) * DEG_TO_RAD;
+        T partial_1 = sin(lat_variation * 0.5);
+        partial_1 *= partial_1;
+        T partial_2 = sin(lon_variation * 0.5);
+        partial_2 *= partial_2;
+        T tmp = cos(current_latitude * DEG_TO_RAD) * cos(next_latitude * DEG_TO_RAD);
+        return ( 2.0 * EARTH_RADIUS * asin(sqrt(partial_1 + tmp * partial_2)) );
+    }
+
     std::vector<T> compute_reference_perimeter(std::vector<T> poly_concat_lats[], std::vector<T> poly_concat_lons[], int n_polygons)
     {
         validation(poly_concat_lats, poly_concat_lons, n_polygons);
@@ -87,19 +100,12 @@ struct PerimeterTest : public GdfTest
         for (int poly_i = 0; poly_i < n_polygons; ++poly_i)
         {
             int size_poly_i = poly_concat_lats[poly_i].size();
-            double perimeter = 0.0;
+            host_perimeter[poly_i] = 0.0;
             for (int side_i = 0; side_i < size_poly_i - 1; ++side_i)
             {
-                T lat_variation = (poly_concat_lats[poly_i][side_i + 1] - poly_concat_lats[poly_i][side_i]) * DEG_TO_RAD;
-                T lon_variation = (poly_concat_lons[poly_i][side_i + 1] - poly_concat_lons[poly_i][side_i]) * DEG_TO_RAD;
-                T partial_1 = sin(lat_variation * 0.5);
-                partial_1 *= partial_1;
-                T partial_2 = sin(lon_variation * 0.5);
-                partial_2 *= partial_2;
-                T tmp = cos(poly_concat_lats[poly_i][side_i] * DEG_TO_RAD) * cos(poly_concat_lats[poly_i][side_i + 1] * DEG_TO_RAD);
-                perimeter += 2.0 * EARTH_RADIUS * asin(sqrt(partial_1 + tmp * partial_2));
+                host_perimeter[poly_i] += haversine_formula(poly_concat_lats[poly_i][side_i], poly_concat_lons[poly_i][side_i],
+                    poly_concat_lats[poly_i][side_i + 1], poly_concat_lons[poly_i][side_i + 1]);
             }
-            host_perimeter[poly_i] = perimeter;
         }
         
         return host_perimeter;
@@ -221,7 +227,7 @@ TYPED_TEST(PerimeterTest, RandomPolygons)
 TYPED_TEST(PerimeterTest, BigUniquePolygon)
 {
     const int num_polygons = 1;
-    const int size_polygon = 100000;
+    const int size_polygon = 10000;
     std::vector<double> poly_concat_lats[num_polygons], poly_concat_lons[num_polygons];
 
     this->initialize_random(poly_concat_lats, poly_concat_lons, num_polygons, size_polygon, -90, 90, -180, 180);

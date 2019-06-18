@@ -90,7 +90,7 @@ __global__ void perimeters_kernel( const T* const __restrict__ concat_lats,
 * @param[in] pol_lats: Pointer to latitudes of only one polygon
 * @param[in] pol_lons: Pointer to longitudes of only one polygon
 * @param[in] size_polygon: Size polygon
-* @param[out] lenghts_polygon: Pointer indicating the length for each side of polygon
+* @param[out] lengths_polygon: Pointer indicating the length for each side of polygon
 *
 * @returns
 */
@@ -98,13 +98,13 @@ template <typename T>
 __global__ void perimeter_for_one_polygon_kernel( const T* const __restrict__ pol_lats, 
                                                   const T* const __restrict__ pol_lons,
                                                   const gdf_size_type size_polygon,
-                                                  T* const __restrict__ lenghts_polygon )
+                                                  T* const __restrict__ lengths_polygon )
 {
     gdf_index_type start_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     for (gdf_index_type idx = start_idx; idx < size_polygon - 1; idx += blockDim.x * gridDim.x)
     {   
-        lenghts_polygon[idx] = haversine_formula(pol_lats[idx], pol_lons[idx], pol_lats[idx + 1], pol_lons[idx + 1]);
+        lengths_polygon[idx] = haversine_formula(pol_lats[idx], pol_lons[idx], pol_lats[idx + 1], pol_lons[idx + 1]);
     }
 }
 
@@ -191,8 +191,6 @@ namespace gis {
 gdf_column perimeter( gdf_column* polygons_latitudes[], gdf_column* polygons_longitudes[],
                       gdf_size_type const & num_polygons, cudaStream_t stream )
 {
-    CUDA_TRY( cudaStreamCreate(&stream) );
-
     // Expects data be in good format 
     for (gdf_index_type polygon_i = 0; polygon_i < num_polygons; ++polygon_i)
     {
