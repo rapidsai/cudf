@@ -2,6 +2,10 @@
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif()
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -35,8 +39,11 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif()
+
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
@@ -197,11 +204,26 @@ ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 # - binary tests ----------------------------------------------------------------------------------
 
 set(BINARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/binop-verify-input-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-integration-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
+# - jit cache tests -------------------------------------------------------------------------------
+
+set(JITCACHE_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-test.cu")
+
+ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
+
+set(JITCACHE_MULTI_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-multiprocess-test.cpp")
+
+ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 ###################################################################################################
 # - io tests -------------------------------------------------------------------------------------
@@ -273,6 +295,14 @@ set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - iterator tests -------------------------------------------------------------------------------
+
+set(ITERATOR_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+
+ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
 
 ###################################################################################################
 # - device atomics tests -------------------------------------------------------------------------------
@@ -350,3 +380,12 @@ set(STREAM_COMPACTION_BENCH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
 
 ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+
+###################################################################################################
+# - iterator benchmarks-------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
