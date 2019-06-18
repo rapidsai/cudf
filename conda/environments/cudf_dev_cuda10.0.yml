@@ -9,7 +9,7 @@ dependencies:
 - rmm=0.8.*
 - cmake>=3.12
 - python>=3.6,<3.8
-- numba>=0.44
+- numba>=0.41
 - pandas>=0.23.4
 - pyarrow=0.12.1
 - notebook>=0.5.0
