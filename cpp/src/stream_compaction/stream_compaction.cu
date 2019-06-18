@@ -172,6 +172,7 @@ template<typename DerivedPolicy,
 auto 
 get_unique_ordered_indices(const cudf::table& key_columns,
                            const duplicate_keep_option keep,
+                           const bool nulls_are_equal = true,
                            cudaStream_t stream=0)
 {
   gdf_size_type ncols = key_columns.num_columns();
@@ -197,7 +198,8 @@ get_unique_ordered_indices(const cudf::table& key_columns,
 
   bool nullable = device_input_table->has_nulls();
   if(nullable) {
-    auto comp = row_equality_comparator<true>(*device_input_table, true);
+    auto comp = row_equality_comparator<true>(*device_input_table,
+        nulls_are_equal);
     result_end = unique_copy(exec,
         sorted_indices.begin(),
         sorted_indices.end(),
@@ -205,7 +207,8 @@ get_unique_ordered_indices(const cudf::table& key_columns,
         comp,
         keep);
   } else {
-    auto comp = row_equality_comparator<false>(*device_input_table, true);
+    auto comp = row_equality_comparator<false>(*device_input_table,
+        nulls_are_equal);
     result_end = unique_copy(exec,
         sorted_indices.begin(),
         sorted_indices.end(),
@@ -222,7 +225,8 @@ get_unique_ordered_indices(const cudf::table& key_columns,
 
 cudf::table drop_duplicates(const cudf::table& input_table,
                             const cudf::table& key_columns,
-                            const duplicate_keep_option keep)
+                            const duplicate_keep_option keep,
+                            const bool nulls_are_equal)
 {
   CUDF_EXPECTS( input_table.num_rows() == key_columns.num_rows(), "number of \
 rows in input table should be equal to number of rows in key colums table");
@@ -235,7 +239,8 @@ rows in input table should be equal to number of rows in key colums table");
   }
   rmm::device_vector<gdf_index_type> unique_indices;
   gdf_size_type unique_count; 
-  std::tie(unique_indices, unique_count) = detail::get_unique_ordered_indices(key_columns, keep);
+  std::tie(unique_indices, unique_count) =
+    detail::get_unique_ordered_indices(key_columns, keep, nulls_are_equal);
   // Allocate output columns
   cudf::table destination_table(unique_count, cudf::column_dtypes(input_table), true);
   // run gather operation to establish new order
