@@ -82,8 +82,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks"
-       ON)
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
