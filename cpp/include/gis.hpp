@@ -55,7 +55,7 @@ gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
                              gdf_column const & query_point_longitudes );
 
 /**
- * @brief Compute the perimeter of polygons on the Earth surface using Haversine formula.
+ * @brief Compute the perimeter of polygons on the Earth's surface using the Haversine formula.
  * 
  * Note: The polygons must not have holes
  * 

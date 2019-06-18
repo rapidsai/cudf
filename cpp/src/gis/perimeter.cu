@@ -117,6 +117,7 @@ struct perimeter_functor {
                            gdf_size_type* const offset_size_polygons, gdf_size_type const num_polygons, 
                            gdf_size_type const total_points_of_all_polygons, cudaStream_t stream = 0 )
     {
+        
         // Preparing the output perimeter
         gdf_column perimeter_output;
         col_type* buffer_perimeter;
