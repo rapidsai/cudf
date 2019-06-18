@@ -695,7 +695,6 @@ class StringColumn(columnops.TypedColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and binop == 'add':
-            out_dtype = np.result_type(lhs.dtype, rhs.dtype)
             return lhs.data.cat(
                 others=rhs.data,
             )
