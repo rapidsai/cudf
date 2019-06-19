@@ -341,14 +341,14 @@ table CsvReader::Impl::read()
 	CUDF_EXPECTS(opts.decimal != opts.delimiter, "Decimal point cannot be the same as the delimiter");
 	CUDF_EXPECTS(opts.thousands != opts.delimiter, "Thousands separator cannot be the same as the delimiter");
 
-  const string compression_type =
-      inferCompressionType(args_.compression, args_.input_data_form, args_.filepath_or_buffer,
-                           {{"csv", "none"}, {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  const auto compression_type = inferCompressionType(
+      args_.compression, args_.input_data_form, args_.filepath_or_buffer,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
-	if (byte_range_offset > 0 || byte_range_size > 0) {
-		CUDF_EXPECTS(compression_type == "none", 
-			"Cannot read compressed input when using the byte range parameter");
-	}
+  if (byte_range_offset > 0 || byte_range_size > 0) {
+    CUDF_EXPECTS(compression_type == "none",
+                 "Compression unsupported when reading using byte range");
+  }
 
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1

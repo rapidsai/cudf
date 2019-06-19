@@ -535,6 +535,16 @@ struct column_wrapper {
   gdf_size_type size() const { return the_column.size; }
 
   /**---------------------------------------------------------------------------*
+   * @brief Prints the values of the underlying gdf_column to a string
+   * 
+   *---------------------------------------------------------------------------**/
+  std::string to_str() const {
+    std::ostringstream buffer;
+    print_gdf_column(&the_column, 1, buffer);
+    return buffer.str();
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Compares this wrapper to a gdf_column for equality.
    *
    * Treats NULL == NULL
