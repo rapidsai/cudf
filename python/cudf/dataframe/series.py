@@ -1027,11 +1027,28 @@ class Series(object):
         :param cond: boolean
             Where cond is True, keep the original value. Where False,
             replace with corresponding value from other.
-        :param other: scalar
+        :param other: scalar, default None
             Entries where cond is False are replaced with
             corresponding value from other.
         :param axis:
         :return: Series
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.where(ser > 2, 10))
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        >>> print(ser.where(ser > 2))
+        0    4
+        1    3
+        2
+        3
+        4
 
         """
 
@@ -1041,7 +1058,12 @@ class Series(object):
             if all_nan:
                 new_value = [other] * len(to_replace)
             else:
-                typ = to_replace.dtype if other == int(other) else type(other)
+                # pre-determining the dtype to match the pandas's API
+                typ = to_replace.dtype
+                if np.issubdtype(other, np.floating) and \
+                        np.issubdtype(typ, np.integer):
+                    typ = np.int64 if other == int(other) else np.float64
+
                 new_value = utils.scalar_broadcast_to(
                     other, (len(to_replace),), np.dtype(typ)
                 )
