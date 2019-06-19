@@ -8,6 +8,9 @@ python/    @rapidsai/cudf-python-codeowners
 **/CMakeLists.txt  @rapidsai/cudf-cmake-codeowners
 **/cmake/          @rapidsai/cudf-cmake-codeowners
 
+#java code owners
+java/              @rapidsai/cudf-java-codeowners
+
 #build/ops code owners
 .github/           @rapidsai/cudf-ops-codeowners 
 ci/                @rapidsai/cudf-ops-codeowners

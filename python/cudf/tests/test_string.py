@@ -316,30 +316,25 @@ def test_string_len(ps_gs):
     pd.Index(['f', 'g', 'h', 'i', 'j']),
     (['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']),
     [['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']],
-    (pd.Series(['f', 'g', 'h', 'i', 'j']),
-     pd.Series(['f', 'g', 'h', 'i', 'j'])),
-    (pd.Index(['f', 'g', 'h', 'i', 'j']),
-     pd.Index(['1', '2', '3', '4', '5'])),
-    [pd.Series(['f', 'g', 'h', 'i', 'j']), pd.Series(
-        ['f', 'g', 'h', 'i', 'j'])] * 20,
     (
         pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
         pd.Series(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j']),
-        ['f', 'a', 'b', 'f', 'a']
+        ['f', 'a', 'b', 'f', 'a'],
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['1', '2', '3', '4', '5']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j'])
     ),
     [
-        ['f', 'a', 'b', 'f', 'a'], pd.Series(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j'])
-    ],
-    [
-        ['f', 'a', 'b', 'f', 'a'], pd.Index(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j']),
         pd.Index(['f', 'g', 'h', 'i', 'j']),
-        pd.Series(['f', 'g', 'h', 'i', 'j'])
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j'])
     ]
 ])
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
@@ -349,12 +344,7 @@ def test_string_len(ps_gs):
     pd.Series(['1', '2', '3', '4', '5']),
     pd.Index(['1', '2', '3', '4', '5'])
 ])
-@pytest.mark.parametrize('misc_with_index', [
-    ['1', '2', '3', '4', '5'],
-    pd.Series(['1', '2', '3', '4', '5']),
-    pd.Index(['1', '2', '3', '4', '5'])
-])
-def test_string_cat(ps_gs, others, sep, na_rep, index, misc_with_index):
+def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
 
     pd_others = others
@@ -373,16 +363,16 @@ def test_string_cat(ps_gs, others, sep, na_rep, index, misc_with_index):
 
     assert_eq(expect, got)
 
-    expect = ps.str.cat(others=[ps.index] + [misc_with_index],
+    expect = ps.str.cat(others=[ps.index] + [ps.index],
                         sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=[gs.index] + [misc_with_index],
+    got = gs.str.cat(others=[gs.index] + [gs.index],
                      sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
-    expect = ps.str.cat(others=(ps.index, misc_with_index),
+    expect = ps.str.cat(others=(ps.index, ps.index),
                         sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=(gs.index, misc_with_index),
+    got = gs.str.cat(others=(gs.index, gs.index),
                      sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
@@ -926,3 +916,24 @@ def test_string_equality():
     got = (gs1 == gs2)
 
     assert_eq(expect, got.fillna(False))
+
+
+@pytest.mark.parametrize(
+    'lhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['abc', 'xyz', 'a', 'ab', '123', '097']
+    ]
+)
+@pytest.mark.parametrize(
+    'rhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A', 'z']
+    ]
+)
+def test_string_binary_op_add(lhs, rhs):
+    pds = pd.Series(lhs) + pd.Series(rhs)
+    gds = Series(lhs) + Series(rhs)
+
+    assert_eq(pds, gds)
