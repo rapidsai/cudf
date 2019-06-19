@@ -147,6 +147,7 @@
 - PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
 - PR #2033 Add pip to conda environment files to fix warning
+- PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
 
 
 # cudf 0.7.2 (16 May 2019)
