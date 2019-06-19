@@ -11,7 +11,6 @@ from numba import cuda
 from cudf import concat
 from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import StringIndex, StringColumn
-from cudf.bindings.GDFError import GDFError
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
 
@@ -751,11 +750,6 @@ def test_string_groupby_key(str_data, str_data_raise, num_keys):
     pdf['a'] = other_data
     gdf['a'] = other_data
 
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
-
     expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
     got = gdf.groupby(list(range(num_keys)), as_index=False).count()
 
@@ -781,11 +775,6 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
         gdf[i] = Series(str_data, dtype='str')
     pdf['a'] = other_data
     gdf['a'] = other_data
-
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
 
     expect = pdf.groupby('a', as_index=False).count()
     got = gdf.groupby('a', as_index=False).count()

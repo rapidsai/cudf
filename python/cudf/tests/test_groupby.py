@@ -616,7 +616,7 @@ def test_groupby_nulls_basic(agg):
         check_dtype=check_dtype
     )
 
-    df = pd.DataFrame({
+    pdf = pd.DataFrame({
         'a': [0, 0, 1, 1, 2, 2],
         'b': [1, 2, 1, 2, 1, None],
         'c': [1, 2, None, None, 1, 2]
@@ -663,4 +663,3 @@ def test_groupby_all_nulls_index():
         pdf.groupby('a').sum(),
         gdf.groupby('a').sum()
     )
-
