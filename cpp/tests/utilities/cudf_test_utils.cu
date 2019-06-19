@@ -24,6 +24,8 @@
 
 namespace {
 
+static constexpr char null_signifier = '@';
+
 namespace detail {
 
 // When streaming char-like types, the standard library streams tend to treat
@@ -43,64 +45,86 @@ int promote_for_streaming(const signed char& x)   { return x; }
 
 
 struct column_printer {
-    template<typename Element>
-    void operator()(gdf_column const* the_column, unsigned min_printing_width)
-    {
-        gdf_size_type num_rows { the_column->size };
+  template<typename Element>
+  void operator()(gdf_column const* the_column, unsigned min_printing_width)
+  {
+    gdf_size_type num_rows { the_column->size };
 
-        Element const* column_data { static_cast<Element const*>(the_column->data) };
+    Element const* column_data { static_cast<Element const*>(the_column->data) };
 
-        std::vector<Element> host_side_data(num_rows);
-        cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element), cudaMemcpyDeviceToHost);
+    std::vector<Element> host_side_data(num_rows);
+    cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
+               cudaMemcpyDeviceToHost);
 
-        gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
-        std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
-        if (nullptr != the_column->valid) {
-            cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-        }
-
-        for (gdf_size_type i = 0; i < num_rows; ++i) {
-            std::cout << std::setw(min_printing_width);
-            if (gdf_is_valid(h_mask.data(), i)) {
-                std::cout << detail::promote_for_streaming(host_side_data[i]);
-            }
-            else {
-                std::cout << null_representative;
-            }
-            std::cout << ' ';
-        }
-        std::cout << std::endl;
-
-        if(the_column->dtype == GDF_STRING_CATEGORY){
-            std::cout<<"Data on category:\n";
-            size_t length = 1;
-
-            if(the_column->dtype_info.category != nullptr){
-                size_t keys_size = static_cast<NVCategory *>(the_column->dtype_info.category)->keys_size();
-                if(keys_size>0){
-                    char ** data = new char *[keys_size];
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i]=new char[length+1];
-                    }
-
-                    static_cast<NVCategory *>(the_column->dtype_info.category)->get_keys()->to_host(data, 0, keys_size);
-
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i][length]=0;
-                    }
-
-                    for(size_t i=0; i<keys_size; i++){
-                        std::cout<<"("<<data[i]<<"|"<<i<<")\t";
-                    }
-                    std::cout<<std::endl;
-                }
-            }
-        }
+    gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
+    std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
+    if (nullptr != the_column->valid) {
+      cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type),
+                 cudaMemcpyDeviceToHost);
     }
+
+    for (gdf_size_type i = 0; i < num_rows; ++i) {
+      std::cout << std::setw(min_printing_width);
+      if (gdf_is_valid(h_mask.data(), i)) {
+        std::cout << detail::promote_for_streaming(host_side_data[i]);
+      }
+      else {
+        std::cout << null_representative;
+      }
+      std::cout << ' ';
+    }
+    std::cout << std::endl;
+
+    if(the_column->dtype == GDF_STRING_CATEGORY){
+      std::cout<<"Category Data (index | key):\n";
+
+      if(the_column->dtype_info.category != nullptr){
+        NVCategory *category =
+          static_cast<NVCategory *>(the_column->dtype_info.category);
+        
+        size_t keys_size = category->keys_size();
+        NVStrings *keys = category->get_keys();
+        
+        if (keys_size>0) {
+          char ** data = new char *[keys_size];
+          int * byte_sizes = new int[keys_size];
+          keys->byte_count(byte_sizes, false);
+          for(size_t i=0; i<keys_size; i++){
+            data[i]=new char[std::max(2, byte_sizes[i])];
+          }
+
+          keys->to_host(data, 0, keys_size);
+
+          for(size_t i=0; i<keys_size; i++){ // null terminate strings
+            // TODO: nvstrings overwrites data[i] ifit is a null string
+            // Update this based on resolution of https://github.com/rapidsai/custrings/issues/330
+            if (byte_sizes[i]!=-1)  
+              data[i][byte_sizes[i]]=0;
+          }
+          
+          for(size_t i=0; i<keys_size; i++){ // print category strings
+            std::cout << "(" << i << "|";
+            if (data[i] == nullptr)
+               std::cout << null_signifier; // account for null
+            else
+              std::cout << data[i];
+            std::cout << ")\t";
+          }
+          std::cout<<std::endl;
+
+          for(size_t i=0; i<keys_size; i++){
+              delete data[i];
+          }
+          delete [] data;
+          delete [] byte_sizes;
+        }
+      }
+    }
+  }
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Functor for comparing if two elements between two gdf_columns are
+ * @brief Functor for comparing whether two elements from two gdf_columns are
  * equal.
  *
  *---------------------------------------------------------------------------**/
@@ -237,7 +261,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   std::transform(
       h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
       std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
-        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@');
+        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string(null_signifier);
         return std::string(bits.rbegin(), bits.rend());
       });
   std::cout << std::endl;
