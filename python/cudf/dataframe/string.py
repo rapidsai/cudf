@@ -598,13 +598,16 @@ class StringColumn(columnops.TypedColumnBase):
         }
         frames = []
         sub_headers = []
-        arr = np.arange(self.data.size(),dtype=np.int32)
-        d_arr = rmm.to_device(arr)
-        self.data.len(d_arr.device_ctypes_pointer.value)
-        nchars = sum(d_arr.copy_to_host()) + self.null_count * 2
-        values = np.empty(nchars, dtype=np.int8)
-        offsets = np.empty(nchars+1, dtype=np.int32)
-        self.data.to_offsets(values, offsets)
+        if self.data.size() > 0:
+            arr = np.arange(self.data.size(),dtype=np.int32)
+            d_arr = rmm.to_device(arr)
+            self.data.len(d_arr.device_ctypes_pointer.value)
+            nchars = sum(d_arr.copy_to_host()) + self.null_count * 2
+            values = np.empty(nchars, dtype=np.int8)
+            offsets = np.empty(nchars+1, dtype=np.int32)
+            self.data.to_offsets(values, offsets)
+        else:
+            values, offsets = None, None
         for i, item in enumerate([self.mask, values, offsets]):
             if i == 0:
                 sheader, [frame] = serialize(item)

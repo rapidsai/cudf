@@ -40,10 +40,10 @@ cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
             index=[1, None, 3],
         ),
         pd.util.testing.makeTimeDataFrame,
-        pd.util.testing.makeMissingDataframe,
-        pd.util.testing.makeMultiIndex,
-        pd.util.testing.makeMixedDataFrame,
-        pd.util.testing.makeTimeDataFrame,
+        # pd.util.testing.makeMissingDataframe,
+        # pd.util.testing.makeMultiIndex,
+        # pd.util.testing.makeMixedDataFrame,
+        # pd.util.testing.makeTimeDataFrame,
     ],
 )
 def test_serialize(df):
