@@ -33,8 +33,6 @@
 
 #include <rmm/rmm.h>
 
-#include <gtest/gtest.h>
-
 #include <iostream>
 #include <random>
 #include <cstring>
@@ -73,7 +71,7 @@ gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strin
 
   gdf_column * column = new gdf_column{};
   int * data;
-  EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
+  RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0);
 
 
   category->get_values( (int *)data, true );
@@ -94,7 +92,7 @@ gdf_column * create_nv_category_column_strings(const char ** string_host_data, g
 
   gdf_column * column = new gdf_column{};
   int * data;
-  EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
+  RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0);
 
   category->get_values( (int *)data, true );
   bit_mask::bit_mask_t * valid;
