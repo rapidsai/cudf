@@ -126,64 +126,14 @@ table JsonReader::Impl::read() {
   return table(out_cols.data(), out_cols.size());
 }
 
-table JsonReader::Impl::read_byte_range(size_t offset, size_t size){
+table JsonReader::Impl::read_byte_range(size_t offset, size_t size) {
   byte_range_offset_ = offset;
   byte_range_size_ = size;
   return read();
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Infer the compression type from the compression parameter and
- * the input data.
- *
- * Returns "none" if the input is not compressed.
- * Throws if the input is not not valid.
- *
- * @param[in] compression_arg Input string that is potentially describing
- * the compression type. Can also be "none" or "infer".
- * @param[in] source_type Enum describing the type of the data source
- * @param[in] source If source_type is FILE_PATH, contains the filepath.
- * If source_type is HOST_BUFFER, contains the input JSON data.
- *
- * @return string representing the compression type.
- *---------------------------------------------------------------------------**/
-std::string inferCompressionType(const std::string &compression_arg, gdf_input_type source_type,
-                                 const std::string &source) {
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  const std::string comp_arg_lower = str_tolower(compression_arg.begin(), compression_arg.end());
-  if (comp_arg_lower != "infer") {
-    return comp_arg_lower;
-  }
-  // Cannot infer compression type from a buffer, assume the input is uncompressed
-  if (source_type == gdf_csv_input_form::HOST_BUFFER) {
-    return "none";
-  }
-
-  // Need to infer compression from the file extension
-  const auto ext_start = std::find(source.rbegin(), source.rend(), '.').base();
-  const std::string file_ext = str_tolower(ext_start, source.end());
-  if (file_ext == "json")
-    return "none";
-  if (file_ext == "gz")
-    return "gzip";
-  if (file_ext == "zip")
-    return "zip";
-  if (file_ext == "bz2")
-    return "bz2";
-  if (file_ext == "xz")
-    return "xz";
-
-  // None of the supported compression types match
-  CUDF_FAIL("Invalid compression argument");
-}
-
 void JsonReader::Impl::ingestRawInput() {
-  if (args_.source_type == gdf_csv_input_form::FILE_PATH) {
+  if (args_.source_type == gdf_input_type::FILE_PATH) {
     map_file_ = std::make_unique<MappedFile>(args_.source.c_str(), O_RDONLY);
     CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
     CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "byte_range offset is too big for the input size.\n");
@@ -208,7 +158,7 @@ void JsonReader::Impl::ingestRawInput() {
     input_data_ = static_cast<const char *>(map_file_->data()) + page_padding;
     // Ignore page padding for parsing purposes
     input_size_ = map_size - page_padding;
-  } else if (args_.source_type == gdf_csv_input_form::HOST_BUFFER) {
+  } else if (args_.source_type == gdf_input_type::HOST_BUFFER) {
     input_data_ = args_.source.c_str() + byte_range_offset_;
     input_size_ = args_.source.size() - byte_range_offset_;
   } else {
@@ -217,7 +167,9 @@ void JsonReader::Impl::ingestRawInput() {
 }
 
 void JsonReader::Impl::decompressInput() {
-  const std::string compression_type = inferCompressionType(args_.compression, args_.source_type, args_.source);
+  const auto compression_type = inferCompressionType(
+      args_.compression, args_.source_type, args_.source,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid copying the whole file to the heap
     uncomp_data_ = input_data_;
@@ -583,8 +535,7 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
     // Modify start & end to ignore whitespace and quotechars
     adjustForWhitespaceAndQuotes(data, &start, &field_data_last, opts.quotechar);
     // Empty fields are not legal values
-    if (start <= field_data_last &&
-      !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
+    if (start <= field_data_last && !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
       // Type dispatcher does not handle GDF_STRINGS
       if (dtypes[col] == gdf_dtype::GDF_STRING) {
         auto str_list = static_cast<string_pair *>(gdf_columns[col]);
@@ -608,7 +559,7 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
 }
 
 void JsonReader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns,
-                                      gdf_valid_type *const *valid_fields, gdf_size_type *num_valid_fields) {
+                                            gdf_valid_type *const *valid_fields, gdf_size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
@@ -639,8 +590,7 @@ void JsonReader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const
  * @returns void
  *---------------------------------------------------------------------------**/
 __global__ void detectJsonDataTypes(const char *data, size_t data_size, const ParseOptions opts, int num_columns,
-                                    const uint64_t *rec_starts, gdf_size_type num_records,
-                                    ColumnInfo *column_infos) {
+                                    const uint64_t *rec_starts, gdf_size_type num_records, ColumnInfo *column_infos) {
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records)
     return;
@@ -662,8 +612,7 @@ __global__ void detectJsonDataTypes(const char *data, size_t data_size, const Pa
     const int field_len = field_data_last - start + 1;
 
     // Checking if the field is empty
-    if (start > field_data_last ||
-      serializedTrieContains(opts.naValuesTrie, data + start, field_len)) {
+    if (start > field_data_last || serializedTrieContains(opts.naValuesTrie, data + start, field_len)) {
       atomicAdd(&column_infos[col].null_count, 1);
       start = field_end + 1;
       continue;
@@ -798,15 +747,14 @@ void JsonReader::Impl::setDataTypes() {
     thrust::host_vector<ColumnInfo> h_column_infos = d_column_infos;
 
     for (const auto &cinfo : h_column_infos) {
-      if (cinfo.null_count == static_cast<int>(rec_starts_.size())){
+      if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
         dtypes_.push_back(GDF_INT8);
       } else if (cinfo.string_count > 0) {
         dtypes_.push_back(GDF_STRING);
       } else if (cinfo.datetime_count > 0) {
         dtypes_.push_back(GDF_DATE64);
-      } else if (cinfo.float_count > 0 ||
-        (cinfo.int_count > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
         dtypes_.push_back(GDF_FLOAT64);
       } else if (cinfo.int_count > 0) {
         dtypes_.push_back(GDF_INT64);

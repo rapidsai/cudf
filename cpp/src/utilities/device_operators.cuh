@@ -24,7 +24,7 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/cudf_utils.h>       // need for CUDA_HOST_DEVICE_CALLABLE
 #include <utilities/wrapper_types.hpp>
 #include <utilities/error_utils.hpp>
 
