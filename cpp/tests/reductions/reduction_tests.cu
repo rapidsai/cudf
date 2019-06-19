@@ -81,31 +81,6 @@ struct ReductionTest : public GdfTest
 
     ~ReductionTest(){}
 
-    void reduction_test(std::vector<T>& input_values,
-        T expected_value, bool succeeded_condition,
-        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
-    {
-
-        cudf::test::column_wrapper<T> const col(input_values);
-
-        const gdf_column * underlying_column = col.get();
-        thrust::device_vector<T> dev_result(1);
-
-        if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
-
-        auto statement = [&]() {
-            cudf::test::scalar_wrapper<T> result
-                = cudf::reduction(underlying_column, op, output_dtype);
-            EXPECT_EQ(expected_value, result.value());
-        };
-
-        if( succeeded_condition ){
-            CUDF_EXPECT_NO_THROW(statement());
-        }else{
-            EXPECT_ANY_THROW(statement());
-        }
-    }
-
     void reduction_test(cudf::test::column_wrapper<T> &col,
         T expected_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
@@ -141,13 +116,13 @@ TYPED_TEST(ReductionTest, MinMax)
    using T = TypeParam;
    std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
    std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
+   std::vector<T> v = convert_values<T>(int_values);
 
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
    bool result_error(true);
 
    // test without nulls
-   std::vector<T> v = convert_values<T>(int_values);
    cudf::test::column_wrapper<T> col(v);
 
    T expected_min_result = *( std::min_element(v.begin(), v.end()) );
@@ -171,36 +146,85 @@ TYPED_TEST(ReductionTest, MinMax)
 
 TYPED_TEST(ReductionTest, Product)
 {
+    using T = TypeParam;
     std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
+    std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
     std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
 
-    TypeParam expected_value = std::accumulate(v.begin(), v.end(), TypeParam{1},
-        [](TypeParam acc, TypeParam i) { return acc * i; });
+    auto calc_prod = [](std::vector<T>& v){
+        T expected_value = std::accumulate(v.begin(), v.end(), T{1},
+        [](T acc, T i) { return acc * i; });
+        return expected_value;
+    };
 
-    this->reduction_test(v, expected_value, this->ret_non_arithmetic,
+    // test without nulls
+    cudf::test::column_wrapper<T> col(v);
+    TypeParam expected_value = calc_prod(v);
+
+    this->reduction_test(col, expected_value, this->ret_non_arithmetic,
                          GDF_REDUCTION_PRODUCT);
+
+    // test with nulls
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto r = replace_nulls(v, host_bools, T{1});
+    TypeParam expected_null_value = calc_prod(r);
+
+    this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+        GDF_REDUCTION_PRODUCT);
+
 }
 
 TYPED_TEST(ReductionTest, Sum)
 {
+    using T = TypeParam;
     std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-    std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
+    std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+    std::vector<T> v = convert_values<T>(int_values);
 
-    TypeParam expected_value = std::accumulate(v.begin(), v.end(), TypeParam{0});
+    // test without nulls
+    cudf::test::column_wrapper<T> col(v);
+    T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+    this->reduction_test(col, expected_value, this->ret_non_arithmetic, GDF_REDUCTION_SUM);
 
-    this->reduction_test(v, expected_value, this->ret_non_arithmetic, GDF_REDUCTION_SUM);
+    // test with nulls
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto r = replace_nulls(v, host_bools, T{0});
+    T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
+
+    this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+        GDF_REDUCTION_SUM);
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
 {
+    using T = TypeParam;
     std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2});
-    std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
+    std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+    std::vector<T> v = convert_values<T>(int_values);
 
-    TypeParam expected_value = std::accumulate(v.begin(), v.end(), TypeParam{0},
-        [](TypeParam acc, TypeParam i) { return acc + i * i; });
+    auto calc_reduction = [](std::vector<T>& v){
+        T value = std::accumulate(v.begin(), v.end(), T{0},
+        [](T acc, T i) { return acc + i * i; });
+        return value;
+    };
 
-    this->reduction_test(v, expected_value, this->ret_non_arithmetic,
+    // test without nulls
+    cudf::test::column_wrapper<T> col(v);
+    T expected_value = calc_reduction(v);
+
+    this->reduction_test(col, expected_value, this->ret_non_arithmetic,
                          GDF_REDUCTION_SUMOFSQUARES);
+
+    // test with nulls
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto r = replace_nulls(v, host_bools, T{0});
+    T expected_null_value = calc_reduction(r);
+
+    this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+        GDF_REDUCTION_SUMOFSQUARES);
 }
 
 // ----------------------------------------------------------------------------
@@ -216,8 +240,6 @@ struct MultiStepReductionTest : public GdfTest
         T_out expected_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
     {
-//        cudf::test::column_wrapper<T> const col(input_values);
-
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T_out> dev_result(1);
 
