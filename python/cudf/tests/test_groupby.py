@@ -580,21 +580,41 @@ def test_groupby_empty_dataframe():
     gdf.groupby(level=[0, 1])  # it doesn't crash
 
 
-def test_groupby_nulls_basic():
+@pytest.mark.parametrize(
+    'agg',
+    [
+        'min',
+        'max',
+        'sum',
+        'count',
+        'mean'
+    ]
+)
+def test_groupby_nulls_basic(agg):
+    check_dtype = False if agg == 'count' else True
+
     pdf = pd.DataFrame({
         'a': [0, 0, 1, 1, 2, 2],
         'b': [1, 2, 1, 2, 1, None]
     })
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)(),
+        getattr(gdf.groupby('a'), agg)(),
+        check_dtype=check_dtype
+    )
 
     pdf = pd.DataFrame({
         'a': [0, 0, 1, 1, 2, 2],
         'b': [1, 2, 1, 2, 1, None],
-        'c': [1, 2, 1, 1, 1, 2]
+        'c': [1, 2, 1, None, 1, 2]
     })
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)(),
+        getattr(gdf.groupby('a'), agg)(),
+        check_dtype=check_dtype
+    )
 
     df = pd.DataFrame({
         'a': [0, 0, 1, 1, 2, 2],
@@ -602,4 +622,45 @@ def test_groupby_nulls_basic():
         'c': [1, 2, None, None, 1, 2]
     })
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
+
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)(),
+        getattr(gdf.groupby('a'), agg)(),
+        check_dtype=check_dtype
+    )
+
+
+def test_groupby_nulls_in_index():
+    pdf = pd.DataFrame({
+        'a': [None, 2, 1, 1],
+        'b': [1, 2, 3, 4]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
+
+def test_groupby_all_nulls_index():
+    gdf = cudf.DataFrame({
+        'a': cudf.Series([None, None, None, None], dtype='object'),
+        'b': [1, 2, 3, 4]
+    })
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
+    gdf = cudf.DataFrame({
+        'a': cudf.Series([np.nan, np.nan, np.nan, np.nan]),
+        'b': [1, 2, 3, 4]
+    })
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
