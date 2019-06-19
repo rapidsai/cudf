@@ -14,7 +14,10 @@ from numba import types
 from packaging.version import Version
 
 
-@pytest.mark.skipif(Version(numba.__version__) < Version('0.44.0a'))
+@pytest.mark.skipif(
+    Version(numba.__version__) < Version('0.44.0a'),
+    reason="Numba 0.44.0a or newer required"
+)
 @pytest.mark.parametrize('dtype', ['int32', 'int64', 'float32', 'float64'])
 def test_generic_ptx(dtype):
 
