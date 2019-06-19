@@ -55,9 +55,3 @@ cdef cudf_table* table_from_columns(columns):
         c_columns.push_back(c_col)
     c_table = new cudf_table(c_columns)
     return c_table
-
-
-
-def test(column):
-    cdef gdf_column* c_col
-    c_col = column_view_from_column(column)
