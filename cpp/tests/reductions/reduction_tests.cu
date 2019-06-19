@@ -105,6 +105,28 @@ struct ReductionTest : public GdfTest
             EXPECT_ANY_THROW(statement());
         }
     }
+
+    void reduction_test(cudf::test::column_wrapper<T> &col,
+        T expected_value, bool succeeded_condition,
+        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
+    {
+        const gdf_column * underlying_column = col.get();
+        thrust::device_vector<T> dev_result(1);
+
+        if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
+
+        auto statement = [&]() {
+            cudf::test::scalar_wrapper<T> result
+                = cudf::reduction(underlying_column, op, output_dtype);
+            EXPECT_EQ(expected_value, result.value());
+        };
+
+        if( succeeded_condition ){
+            CUDF_EXPECT_NO_THROW(statement());
+        }else{
+            EXPECT_ANY_THROW(statement());
+        }
+    }
 };
 
 using Types = testing::Types<
@@ -116,18 +138,35 @@ TYPED_TEST_CASE(ReductionTest, Types);
 // ------------------------------------------------------------------------
 TYPED_TEST(ReductionTest, MinMax)
 {
+   using T = TypeParam;
    std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
-   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
-
-   TypeParam expected_min_result = *( std::min_element(v.begin(), v.end()) );
-   TypeParam expected_max_result = *( std::max_element(v.begin(), v.end()) );
+   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
 
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
    bool result_error(true);
 
-   this->reduction_test(v, expected_min_result, result_error, GDF_REDUCTION_MIN);
-   this->reduction_test(v, expected_max_result, result_error, GDF_REDUCTION_MAX);
+   // test without nulls
+   std::vector<T> v = convert_values<T>(int_values);
+   cudf::test::column_wrapper<T> col(v);
+
+   T expected_min_result = *( std::min_element(v.begin(), v.end()) );
+   T expected_max_result = *( std::max_element(v.begin(), v.end()) );
+   this->reduction_test(col, expected_min_result, result_error, GDF_REDUCTION_MIN);
+   this->reduction_test(col, expected_max_result, result_error, GDF_REDUCTION_MAX);
+
+   // test with nulls
+   cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+   gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+
+   auto r_min = replace_nulls(v, host_bools, std::numeric_limits<T>::max() );
+   auto r_max = replace_nulls(v, host_bools, std::numeric_limits<T>::lowest() );
+
+   T expected_min_null_result = *( std::min_element(r_min.begin(), r_min.end()) );
+   T expected_max_null_result = *( std::max_element(r_max.begin(), r_max.end()) );
+
+   this->reduction_test(col_nulls, expected_min_null_result, result_error, GDF_REDUCTION_MIN);
+   this->reduction_test(col_nulls, expected_max_null_result, result_error, GDF_REDUCTION_MAX);
 }
 
 TYPED_TEST(ReductionTest, Product)
