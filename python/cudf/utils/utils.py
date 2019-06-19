@@ -246,7 +246,15 @@ def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
     dtype : str, optional
         output dtype, default 'float64'
     """
-    assert (dummy_na is False) and (sparse is False) and (drop_first is False)
+    if dummy_na:
+        raise NotImplementedError("dummy_na is not supported yet")
+
+    if sparse:
+        raise NotImplementedError("sparse is not supported yet")
+
+    if drop_first:
+        raise NotImplementedError("drop_first is not supported yet")
+
     from cudf.multi import concat
     if columns is None:
         columns = df.columns
