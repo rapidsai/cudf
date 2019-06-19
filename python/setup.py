@@ -19,33 +19,12 @@ cython_files = [
     'cudf/bindings/**/*.pyx',
 ]
 
-
-cuda_include_dir = '/usr/local/cuda/include'
-cuda_lib_dir = "/usr/local/cuda/lib"
-
-if os.environ.get('CUDA_HOME', False):
-    cuda_lib_dir = os.path.join(os.environ.get('CUDA_HOME'), 'lib64')
-    cuda_include_dir = os.path.join(os.environ.get('CUDA_HOME'), 'include')
-
-
-rmm_include_dir = '/include'
-rmm_lib_dir = '/lib'
-
-if os.environ.get('CONDA_PREFIX', None):
-    conda_prefix = os.environ.get('CONDA_PREFIX')
-    rmm_include_dir = conda_prefix + rmm_include_dir
-
-
 extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
                 '../cpp/include/cudf',
                 '../cpp/thirdparty/dlpack/include/dlpack/',
-                '../cpp/thirdparty/rmm/include/',
-                '../cpp/thirdparty/rmm/thirdparty/cnmem/include',
-                rmm_include_dir,
-                cuda_include_dir
               ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
