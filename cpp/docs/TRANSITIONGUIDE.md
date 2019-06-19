@@ -108,24 +108,26 @@ column output = cudf::some_function(input, &in_out, size);
 
 ### Multiple Return Values
 
-Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a `struct` for the output). One convenient way to do this is using `std::tie` and `std::make_tuple`.
+Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a `struct` for the output). One convenient way to do this is using `std::tie` and `std::make_pair`.
 
 ```
-auto return_multiple_outputs(void){
+auto return_two_outputs(void){
   cudf::table out0;
   cudf::table out1;
   ...
   // Do stuff with out0, out1
   
-  // Return a tuple of all the outputs
-  return std::make_tuple(out0, out1);
+  // Return a std::pair of the two outputs
+  return std::make_pair(out0, out1);
 }
 
 
 cudf::table out0;
 cudf::table out1;
-std::tie(out0, out1) = cudf::return_multiple_outputs();
+std::tie(out0, out1) = cudf::return_two_outputs();
 ```
+
+Note: `std::tuple` *could* be used if not for the fact that Cython does not support `std::tuple`. Therefore, libcudf APIs must use `std::pair`, and are therefore limited to return only two objects of different types. Multiple objects of the same type may be returned via a `std::vector<T>`.
 
 
 ## Error Checking

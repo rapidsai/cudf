@@ -141,33 +141,29 @@ namespace jit {
 
     void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
 
-        Launcher::launch().kernel("kernel_v_s")
-                          .instantiate(ope, Operator::Type::Reverse, out, rhs, lhs)
-                          .launch(out, rhs, lhs);
+        Launcher().setKernelInst("kernel_v_s", ope, Operator::Type::Reverse, out, rhs, lhs)
+                  .launch(out, rhs, lhs);
 
     }
 
     void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
 
-        Launcher::launch().kernel("kernel_v_s")
-                          .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
-                          .launch(out, lhs, rhs);
+        Launcher().setKernelInst("kernel_v_s", ope, Operator::Type::Direct, out, lhs, rhs)
+                  .launch(out, lhs, rhs);
 
     }
 
     void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
 
-        Launcher::launch().kernel("kernel_v_v")
-                          .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
-                          .launch(out, lhs, rhs);
+        Launcher().setKernelInst("kernel_v_v", ope, Operator::Type::Direct, out, lhs, rhs)
+                  .launch(out, lhs, rhs);
 
     }
     
     void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx)  {
 
-        Launcher::launch(ptx).kernel("kernel_v_v")
-                          .instantiate(GDF_GENERIC_OP, Operator::Type::Direct, out, lhs, rhs)
-                          .launch(out, lhs, rhs);
+        Launcher(ptx).setKernelInst("kernel_v_v", GDF_GENERIC_OP, Operator::Type::Direct, out, lhs, rhs)
+                     .launch(out, lhs, rhs);
 
     }
 

@@ -169,7 +169,7 @@ class MultiIndex(Index):
             if len(self._source_data[by]) > 0:
                 level = self._source_data[by].unique()
                 replaced = self._source_data[by].replace(
-                        level, Series(range(len(level))))
+                        level, Series(cudautils.arange(len(level))))
             else:
                 level = np.array([])
                 replaced = np.array([])
@@ -249,6 +249,14 @@ class MultiIndex(Index):
                 # directly
                 result = result.T
                 result = result[result.columns[0]]
+                # convert to Series
+                series_name = []
+                for idx, code in enumerate(result.columns.codes):
+                    series_name.append(result.columns.levels[idx][
+                            result.columns.codes[code][0]])
+                result = Series(list(result._cols.values())[0],
+                                name=series_name)
+                result.name = tuple(series_name)
             elif(len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)
@@ -357,6 +365,33 @@ class MultiIndex(Index):
         for level, item in enumerate(match.codes):
             result.append(match.levels[level][match.codes[item][0]])
         return tuple(result)
+
+    def to_frame(self, index=True, name=None):
+        df = self._source_data if hasattr(
+                self, '_source_data') else self._to_frame()
+        if index:
+            df = df.set_index(self)
+        if name:
+            if len(name) != len(self.levels):
+                raise ValueError("'name' should have th same length as "
+                                 "number of levels on index.")
+            df.columns = name
+        return df
+
+    def _to_frame(self):
+        from cudf import DataFrame
+        # for each column of codes
+        # replace column with mapping from integers to levels
+        df = self.codes.copy(deep=False)
+        for idx, column in enumerate(df.columns):
+            # use merge as a replace fn
+            level = DataFrame({'idx': Series(cudautils.arange(len(
+                                                        self.levels[idx]),
+                                             dtype=df[column].dtype)),
+                               'level': self.levels[idx]})
+            code = DataFrame({'idx': df[column]})
+            df[column] = code.merge(level).level
+        return df
 
     @property
     def _values(self):

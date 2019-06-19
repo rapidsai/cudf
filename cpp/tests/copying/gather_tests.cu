@@ -22,6 +22,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/types.hpp>
 #include <utilities/wrapper_types.hpp>
 
@@ -38,8 +39,8 @@ TYPED_TEST(GatherTest, DtypeMistach){
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<int32_t> source(source_size);
-  cudf::test::column_wrapper<float> destination(destination_size);
+  cudf::test::column_wrapper<int32_t> source{source_size};
+  cudf::test::column_wrapper<float> destination{destination_size};
 
   gdf_column * raw_source = source.get();
   gdf_column * raw_destination = destination.get();
@@ -97,10 +98,9 @@ TYPED_TEST(GatherTest, IdentityTest) {
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source_column(
-      source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return true; }};
 
   thrust::device_vector<gdf_index_type> gather_map(destination_size);
   thrust::sequence(gather_map.begin(), gather_map.end());
@@ -117,7 +117,7 @@ TYPED_TEST(GatherTest, IdentityTest) {
   EXPECT_NO_THROW(
       cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
-  EXPECT_TRUE(source_column == destination_column);
+  expect_columns_are_equal<TypeParam>(source_column, destination_column);
 }
 
 TYPED_TEST(GatherTest, ReverseIdentityTest) {
@@ -127,10 +127,9 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   static_assert(source_size == destination_size,
                 "Source and destination columns must be the same size.");
 
-  cudf::test::column_wrapper<TypeParam> source_column(
-      source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return true; }};
 
   // Create gather_map that reverses order of source_column
   std::vector<gdf_index_type> host_gather_map(source_size);
@@ -161,9 +160,13 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   std::vector<gdf_valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
+  auto print_all_unequal_pairs { true };
+  expect_column_values_are_equal<TypeParam>(
+      destination_size, expected_data.data(), nullptr, "Expected",
+      result_data.data(), nullptr, "Actual",
+      print_all_unequal_pairs);
+
   for (gdf_index_type i = 0; i < destination_size; i++) {
-    EXPECT_EQ(expected_data[i], result_data[i])
-        << "Data at index " << i << " doesn't match!\n";
     EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
         << "Value at index " << i << " should be non-null!\n";
   }
@@ -174,10 +177,9 @@ TYPED_TEST(GatherTest, AllNull) {
   constexpr gdf_size_type destination_size{1000};
 
   // source column has all null values
-  cudf::test::column_wrapper<TypeParam> source_column(
-      source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return false; });
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return false; }};
 
   // Create gather_map that gathers to random locations
   std::vector<gdf_index_type> host_gather_map(source_size);
@@ -220,10 +222,9 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
                 "Source and destination columns must be equal size.");
 
   // elements with even indices are null
-  cudf::test::column_wrapper<TypeParam> source_column(
-      source_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return row % 2; });
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return row % 2; }};
 
   // Gather null values to the last half of the destination column
   std::vector<gdf_index_type> host_gather_map(source_size);

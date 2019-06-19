@@ -30,12 +30,18 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
+from cudf.utils.docutils import copy_docstring
+from cudf.window import Rolling
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
+from cudf.bindings.stream_compaction import (
+        apply_drop_duplicates as cpp_drop_duplicates
+        )
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -45,6 +51,39 @@ def _unique_name(existing_names, suffix="_unique_name"):
         ret = "%s_%d" % (suffix, i)
         i += 1
     return ret
+
+
+def _reverse_op(fn):
+    return {
+        'add':              'radd',
+        'radd':             'add',
+        'sub':              'rsub',
+        'rsub':             'sub',
+        'mul':              'rmul',
+        'rmul':             'mul',
+        'mod':              'rmod',
+        'rmod':             'mod',
+        'pow':              'rpow',
+        'rpow':             'pow',
+        'floordiv':         'rfloordiv',
+        'rfloordiv':        'floordiv',
+        'truediv':          'rtruediv',
+        'rtruediv':         'truediv',
+        '__add__':          '__radd__',
+        '__radd__':         '__add__',
+        '__sub__':          '__rsub__',
+        '__rsub__':         '__sub__',
+        '__mul__':          '__rmul__',
+        '__rmul__':         '__mul__',
+        '__mod__':          '__rmod__',
+        '__rmod__':         '__mod__',
+        '__pow__':          '__rpow__',
+        '__rpow__':         '__pow__',
+        '__floordiv__':     '__rfloordiv__',
+        '__rfloordiv__':    '__floordiv__',
+        '__truediv__':      '__rtruediv__',
+        '__rtruediv__':     '__truediv__',
+    }[fn]
 
 
 class DataFrame(object):
@@ -294,7 +333,9 @@ class DataFrame(object):
         self._drop_column(name)
 
     def __sizeof__(self):
-        return sum(col.__sizeof__() for col in self._cols.values())
+        columns = sum(col._column.__sizeof__() for col in self._cols.values())
+        index = self._index.__sizeof__()
+        return columns + index
 
     def __len__(self):
         """
@@ -456,9 +497,16 @@ class DataFrame(object):
         )
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other=None):
+    def _apply_op(self, fn, other=None, fill_value=None):
         result = DataFrame()
         result.set_index(self.index)
+
+        def op(lhs, rhs):
+            if fill_value is None:
+                return getattr(lhs, fn)(rhs)
+            else:
+                return getattr(lhs, fn)(rhs, fill_value)
+
         if other is None:
             for col in self._cols:
                 result[col] = getattr(self._cols[col], fn)()
@@ -468,23 +516,27 @@ class DataFrame(object):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             max_num_rows = max(self.shape[0], other.shape[0])
+
+            def fallback(col, fn):
+                if fill_value is None:
+                    return Series.from_masked_array(
+                        data=rmm.device_array(max_num_rows, dtype='float64'),
+                        mask=cudautils.make_empty_mask(max_num_rows))
+                else:
+                    return getattr(col, fn)(fill_value)
+
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = fallback(self._cols[col], fn)
             for col in other._cols:
                 if col in self._cols:
                     if self.shape[0] != other.shape[0]:
                         raise NotImplementedError(
                                 "%s on columns with different "
                                 "length is not supported", fn)
-                    result[col] = getattr(self._cols[col], fn)(
-                                          other._cols[col])
+                    result[col] = op(self._cols[col], other._cols[col])
                 else:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
-            for col in self._cols:
-                if col not in other._cols:
-                    result[col] = Series(cudautils.full(max_num_rows,
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
+                    result[col] = fallback(other._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -492,48 +544,93 @@ class DataFrame(object):
                     " Series into a DataFrame first.")
         elif isinstance(other, numbers.Number):
             for col in self._cols:
-                result[col] = getattr(self._cols[col], fn)(other)
+                result[col] = op(self._cols[col], other)
         else:
             raise NotImplementedError(
                     "DataFrame operations with " + str(type(other)) + " not "
                     "supported at this time.")
         return result
 
+    def add(self, other, fill_value=None):
+        return self._apply_op('add', other, fill_value)
+
     def __add__(self, other):
         return self._apply_op('__add__', other)
+
+    def radd(self, other, fill_value=None):
+        return self._apply_op('radd', other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op('__radd__', other)
 
+    def sub(self, other, fill_value=None):
+        return self._apply_op('sub', other, fill_value)
+
     def __sub__(self, other):
         return self._apply_op('__sub__', other)
+
+    def rsub(self, other, fill_value=None):
+        return self._apply_op('rsub', other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op('__rsub__', other)
 
+    def mul(self, other, fill_value=None):
+        return self._apply_op('mul', other, fill_value)
+
     def __mul__(self, other):
         return self._apply_op('__mul__', other)
+
+    def rmul(self, other, fill_value=None):
+        return self._apply_op('rmul', other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op('__rmul__', other)
 
+    def mod(self, other, fill_value=None):
+        return self._apply_op('mod', other, fill_value)
+
     def __mod__(self, other):
         return self._apply_op('__mod__', other)
+
+    def rmod(self, other, fill_value=None):
+        return self._apply_op('rmod', other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op('__rmod__', other)
 
+    def pow(self, other, fill_value=None):
+        return self._apply_op('pow', other, fill_value)
+
     def __pow__(self, other):
         return self._apply_op('__pow__', other)
+
+    def rpow(self, other, fill_value=None):
+        return self._apply_op('rpow', other, fill_value)
+
+    def __rpow__(self, other):
+        return self._apply_op('__pow__', other)
+
+    def floordiv(self, other, fill_value=None):
+        return self._apply_op('floordiv', other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op('__floordiv__', other)
 
+    def rfloordiv(self, other, fill_value=None):
+        return self._apply_op('rfloordiv', other, fill_value)
+
     def __rfloordiv__(self, other):
         return self._apply_op('__rfloordiv__', other)
 
+    def truediv(self, other, fill_value=None):
+        return self._apply_op('truediv', other, fill_value)
+
     def __truediv__(self, other):
         return self._apply_op('__truediv__', other)
+
+    def rtruediv(self, other, fill_value=None):
+        return self._apply_op('rtruediv', other, fill_value)
 
     def __rtruediv__(self, other):
         return self._apply_op('__rtruediv__', other)
@@ -788,10 +885,17 @@ class DataFrame(object):
             return df
 
     def reset_index(self, drop=False):
+        out = DataFrame()
         if not drop:
-            name = self.index.name or 'index'
-            out = DataFrame()
-            out[name] = self.index
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+                framed = self.index.to_frame()
+                for c in framed.columns:
+                    out[c] = framed[c]
+            else:
+                name = 'index'
+                if self.index.name is not None:
+                    name = self.index.name
+                out[name] = self.index
             for c in self.columns:
                 out[c] = self[c]
         else:
@@ -799,9 +903,20 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
+        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        for col in self.columns:
-            out[col] = self[col].take(positions, ignore_index=ignore_index)
+        cols = [s._column for s in self._cols.values()]
+
+        result_cols = cpp_copying.apply_gather(cols, positions)
+
+        out = DataFrame()
+        for i, col_name in enumerate(self._cols):
+            out[col_name] = result_cols[i]
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        else:
+            out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):
@@ -844,8 +959,24 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            return
 
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
@@ -867,8 +998,35 @@ class DataFrame(object):
         """
         if SCALAR:
             col = series
-        if not isinstance(series, Series):
+
+        if (utils.is_list_like(series)) \
+                or (isinstance(series, Series)):
+            '''
+            This case should handle following three scenarios:
+
+            1. when series is not a series and list-like.
+            Reason we will have to guard this with not Series check
+            is because we are converting non-scalars to cudf Series.
+
+            2. When series is scalar and of type list.
+
+            3. When series is a cudf Series
+            '''
             series = Series(series)
+        else:
+            # Case when series is just a non-list
+            series = Series(series)
+            if (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) == 0:
+                # When self has 0 columns and series has values
+                # we can safely go ahead and assign.
+                return series
+            elif (len(self.index) == 0) and (series.index > 0) \
+                    and len(self.columns) > 0:
+                # When self has 1 or more columns and series has values
+                # we cannot assign a non-list, hence returning empty series.
+                return Series(dtype=series.dtype)
+
         index = self._index
         sind = series.index
         if len(self) > 0 and len(series) == 1 and SCALAR:
@@ -903,10 +1061,13 @@ class DataFrame(object):
         series = self._sanitize_values(series, SCALAR)
 
         empty_index = len(self._index) == 0
-        if forceindex or empty_index or self._index.equals(series.index):
+
+        if not self._cols:
+            self._size = len(series)
+
+        if forceindex or empty_index or self.index is series.index:
             if empty_index:
                 self._index = series.index
-            self._size = len(series)
             return series
         else:
             return series.set_index(self._index)
@@ -998,6 +1159,45 @@ class DataFrame(object):
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
 
+    def drop_duplicates(self, subset=None, keep='first', inplace=False):
+        """
+        Return DataFrame with duplicate rows removed, optionally only
+        considering certain subset of columns.
+        """
+        in_cols = [series._column for series in self._cols.values()]
+        if subset is None:
+            subset = self._cols
+        elif (not np.iterable(subset) or
+                isinstance(subset, pd.compat.string_types) or
+                isinstance(subset, tuple) and subset in self.columns):
+            subset = subset,
+        diff = set(subset)-set(self._cols)
+        if len(diff) != 0:
+            raise KeyError("columns {!r} do not exist".format(diff))
+        subset_cols = [series._column for name, series in self._cols.items()
+                       if name in subset]
+        in_index = self.index
+        if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates([in_index.as_column()],
+                                                  in_cols, subset_cols, keep)
+        new_index = as_index(new_index)
+        if len(self.index) == len(new_index) and self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            new_index = self.index.take(new_index)
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            for k, new_col in zip(self._cols, out_cols):
+                self[k] = Series(new_col, new_index)
+        else:
+            outdf = DataFrame()
+            for k, new_col in zip(self._cols, out_cols):
+                outdf[k] = new_col
+            outdf = outdf.set_index(new_index)
+            return outdf
+
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
         """
@@ -1032,6 +1232,8 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='columns' only.
           * Not supporting: index, level
+        Rename will not overwite column names. If a list with duplicates it
+        passed, column names will be postfixed.
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -1039,11 +1241,16 @@ class DataFrame(object):
 
         out = DataFrame()
         out = out.set_index(self.index)
-
         if isinstance(mapper, Mapping):
+            postfix = 1
             for column in self.columns:
                 if column in mapper:
-                    out[mapper[column]] = self[column]
+                    if mapper[column] in out.columns:
+                        out_column = str(mapper[column]) + '_' + str(postfix)
+                        postfix += 1
+                    else:
+                        out_column = mapper[column]
+                    out[out_column] = self[column]
                 else:
                     out[column] = self[column]
         elif callable(mapper):
@@ -1338,10 +1545,13 @@ class DataFrame(object):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        from cudf.bindings.transpose import transpose as cpp_tranpose
-        result = cpp_tranpose(self)
+        from cudf.bindings.transpose import transpose as cpp_transpose
+        result = cpp_transpose(self)
         result = result.rename(dict(zip(result.columns, self.index)))
+        index = self.index
         result = result.set_index(self.columns)
+        if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
+            result.columns = index
         return result
 
     @property
@@ -1759,6 +1969,8 @@ class DataFrame(object):
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)
+        # change random number index to None to better reflect pandas behavior
+        df.index.name = None
 
         if sort and len(df):
             return df.sort_index()
@@ -1827,6 +2039,10 @@ class DataFrame(object):
             result = Groupby(self, by=by, method=method, as_index=as_index,
                              level=level)
             return result
+
+    @copy_docstring(Rolling)
+    def rolling(self, window, min_periods=None, center=False):
+        return Rolling(self, window, min_periods=min_periods, center=center)
 
     def query(self, expr, local_dict={}):
         """
@@ -2062,9 +2278,9 @@ class DataFrame(object):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, value):
+    def replace(self, to_replace, replacement):
         """
-        Replace values given in *to_replace* with *value*.
+        Replace values given in *to_replace* with *replacement*.
 
         Parameters
         ----------
@@ -2074,20 +2290,20 @@ class DataFrame(object):
             * numeric or str:
 
                 - values equal to *to_replace* will be replaced
-                  with *value*
+                  with *replacement*
 
             * list of numeric or str:
 
-                - If *value* is also list-like,
-                  *to_replace* and *value* must be of same length.
+                - If *replacement* is also list-like,
+                  *to_replace* and *replacement* must be of same length.
 
             * dict:
 
                 - Dicts can be used to replace different values in different
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with value*.
-        value : numeric, str, list-like, or dict
+                  replaced with replacement*.
+        replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
@@ -2102,11 +2318,11 @@ class DataFrame(object):
 
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(value):
-            value = dict.fromkeys(self.columns, value)
+        if not is_dict_like(replacement):
+            replacement = dict.fromkeys(self.columns, replacement)
 
         for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], value[k])
+            outdf[k] = self[k].replace(to_replace[k], replacement[k])
 
         return outdf
 
@@ -2290,7 +2506,7 @@ class DataFrame(object):
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
         if isinstance(self.columns, Index):
-            out.columns = self.columns
+            out.columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out.columns.names = self.columns.names
@@ -2323,14 +2539,33 @@ class DataFrame(object):
         # Set columns
         for colk in dataframe.columns:
             vals = dataframe[colk].values
-            df[colk] = Series(vals, nan_as_null=nan_as_null)
+            # necessary because multi-index can return multiple
+            # columns for a single key
+            if len(vals.shape) == 1:
+                df[colk] = Series(vals, nan_as_null=nan_as_null)
+            else:
+                vals = vals.T
+                if vals.shape[0] == 1:
+                    df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
+                else:
+                    # TODO fix multiple column with same name with different
+                    # method.
+                    if isinstance(colk, tuple):
+                        colk = str(colk)
+                    for idx in range(len(vals.shape)):
+                        df[colk+str(idx)] = Series(vals[idx],
+                                                   nan_as_null=nan_as_null)
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
             import cudf
             index = cudf.from_pandas(dataframe.index)
         else:
             index = dataframe.index
-        return df.set_index(index)
+        result = df.set_index(index)
+        if isinstance(dataframe.columns, pd.MultiIndex):
+            import cudf
+            result.columns = cudf.from_pandas(dataframe.columns)
+        return result
 
     def to_arrow(self, preserve_index=True):
         """
@@ -2693,6 +2928,16 @@ class DataFrame(object):
             result = result.set_index(self._cols.keys())
         return result
 
+    def _columns_view(self, columns):
+        """
+        Return a subset of the DataFrame's columns as a view.
+        """
+        columns = as_index(columns)
+        result_columns = OrderedDict({})
+        for col in columns:
+            result_columns[col] = self[col]
+        return DataFrame(result_columns)
+
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
 
@@ -2804,6 +3049,14 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
         return dlpack.to_dlpack(self)
+
+    @ioutils.doc_to_csv()
+    def to_csv(self, path=None, sep=',', na_rep='',
+               columns=None, header=True, index=True, line_terminator='\n'):
+        """{docstring}"""
+        import cudf.io.csv as csv
+        return csv.to_csv(self, path, sep, na_rep, columns,
+                          header, index, line_terminator)
 
 
 def from_pandas(obj):

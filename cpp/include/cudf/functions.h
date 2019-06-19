@@ -815,21 +815,6 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
                               gdf_scalar*  result,
                               gdf_context* ctxt);
 
-/** 
- * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col` 
- *        with `new_values[i]`.
- * 
- * @param[in,out] col gdf_column with the data to be modified
- * @param[in] old_values gdf_column with the old values to be replaced
- * @param[in] new_values gdf_column with the new values
- * 
- * @returns GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   const gdf_column* old_values,
-                                   const gdf_column* new_values);
 
 /** 
  * @brief Sorts an array of gdf_column.
@@ -847,37 +832,12 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column** input_columns,
+gdf_error gdf_order_by(gdf_column const* const* input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        gdf_context * context);
 
-
-/**
- * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
- *
- * This function is a binary function. It will take in two gdf_columns.
-
- * The first one is expected to be a regular gdf_column, the second one
- * has to be a column of the same type as the first, and it has to be of
- * size one or of the same size as the other column.
- * 
- * case 1: If the second column contains only one value, then this funciton will
- * replace all nulls in the first column with the value in the second
- * column.
- *  
- * case 2: If the second column is of the same size as the first, then the function will
- * replace all nulls of the first column with the corresponding elemetns of the
- * second column
- * 
- * @param[in,out] col_out A gdf_column that is the output of this function with null values replaced
- * @param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
- * 
- * @returns GDF_SUCCESS upon successful completion
- */
-gdf_error gdf_replace_nulls(gdf_column*       col_out,
-                                   const gdf_column* col_in);
 /**
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.

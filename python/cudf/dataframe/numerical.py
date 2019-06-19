@@ -257,14 +257,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def product(self, dtype=None):
         return cpp_reduce.apply_reduce('product', self, dtype=dtype)
 
-    def mean(self, dtype=None):
+    def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
 
-    def mean_var(self, ddof=1, dtype=None):
-        x = self.astype('f8')
-        mu = x.mean(dtype=dtype)
-        n = x.valid_count
-        asum = x.sum_of_squares(dtype=dtype)
+    def mean_var(self, ddof=1, dtype=np.float64):
+        mu = self.mean(dtype=dtype)
+        n = self.valid_count
+        asum = np.float64(self.sum_of_squares(dtype=dtype))
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
@@ -317,30 +316,42 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype))
 
-    def find_and_replace(self, to_replace, value):
+    def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = columnops.as_column(to_replace)
-        value_col = columnops.as_column(value)
+        replacement_dtype = self.dtype if all_nan else None
+        replacement_col = columnops.as_column(replacement,
+                                              dtype=replacement_dtype)
         replaced = self.copy()
-        to_replace_col, value_col, replaced = numeric_normalize_types(
-               to_replace_col, value_col, replaced)
-        cpp_replace.replace(replaced, to_replace_col, value_col)
-        return replaced
+        to_replace_col, replacement_col, replaced = numeric_normalize_types(
+               to_replace_col, replacement_col, replaced)
+        output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
+        return output
 
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with *fill_value*
         """
-        result = self.copy()
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
-        if is_integer_dtype(result.dtype):
-            fill_value_col = safe_cast_to_int(fill_value_col, result.dtype)
+        if np.isscalar(fill_value):
+            # castsafely to the same dtype as self
+            fill_value_casted = self.dtype.type(fill_value)
+            if not np.isnan(fill_value) and (fill_value_casted != fill_value):
+                raise TypeError(
+                    "Cannot safely cast non-equivalent {} to {}".format(
+                        type(fill_value).__name__, self.dtype.name
+                    )
+                )
+            fill_value = fill_value_casted
         else:
-            fill_value_col = fill_value_col.astype(result.dtype)
-        cpp_replace.replace_nulls(result, fill_value_col)
-        result = result.replace(mask=None)
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
+            # cast safely to the same dtype as self
+            if is_integer_dtype(self.dtype):
+                fill_value = safe_cast_to_int(fill_value, self.dtype)
+            else:
+                fill_value = fill_value.astype(self.dtype)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):

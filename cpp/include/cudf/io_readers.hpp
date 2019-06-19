@@ -61,19 +61,6 @@ private:
 
 public:
   /**---------------------------------------------------------------------------*
-   * @brief JsonReader defult constructor;
-   * 
-   * Calling read_XYZ() on a default-constructed object yields an empty table.
-   *---------------------------------------------------------------------------**/
-  JsonReader() noexcept;
-
-  JsonReader(JsonReader const &rhs);
-  JsonReader& operator=(JsonReader const &rhs);
-
-  JsonReader(JsonReader &&rhs);
-  JsonReader& operator=(JsonReader &&rhs);
-
-  /**---------------------------------------------------------------------------*
    * @brief JsonReader constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
   explicit JsonReader(json_reader_args const &args);
@@ -99,6 +86,200 @@ public:
   table read_byte_range(size_t offset, size_t size);
 
   ~JsonReader();
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Enumeration of quoting behavior for CSV readers/writers
+ *---------------------------------------------------------------------------**/
+enum gdf_csv_quote_style{
+  QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
+  QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
+  QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief  This struct contains all input parameters to the read_csv function.
+ *
+ * Parameters are all stored in host memory.
+ *
+ * Parameters in PANDAS that are unavailable in cudf:
+ *   squeeze          - data is always returned as a gdf_column array
+ *   engine           - this is the only engine
+ *   verbose
+ *   keep_date_col    - will not maintain raw data
+ *   date_parser      - there is only this parser
+ *   float_precision  - there is only one converter that will cover all specified values
+ *   dialect          - not used
+ *   encoding         - always use UTF-8
+ *   escapechar       - always use '\'
+ *   parse_dates      - infer date data types and always parse as such
+ *   infer_datetime_format - inference not supported
+
+ *---------------------------------------------------------------------------**/
+struct csv_reader_args{
+  gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
+  std::string filepath_or_buffer;               ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  std::string compression = "none";             ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
+
+  char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
+  char          delimiter = ',';            ///< Define the field separator; Default is ','.
+  char          decimal = '.';              ///< The decimal point character; default is '.'. Should not match the delimiter.
+  char          thousands = '\0';           ///< Single character that separates thousands in numeric data; default is '\0'. Should not match the delimiter.
+  char          comment = '\0';             ///< The character used to denote start of a comment line. The rest of the line will not be parsed. The default is '\0'.
+  bool          dayfirst = false;           ///< Is day the first value in the date format (DD/MM versus MM/DD)? false by default.
+  bool          delim_whitespace = false;   ///< Use white space as the delimiter; default is false. This overrides the delimiter argument.
+  bool          skipinitialspace = false;   ///< Skip white spaces after the delimiter; default is false.
+  bool          skip_blank_lines = true;    ///< Indicates whether to ignore empty lines, or parse and interpret values as NA. Default value is true.
+  gdf_size_type header = 0;                 ///< Row of the header data, zero based counting; Default is zero.
+
+  std::vector<std::string> names;           ///< Ordered List of column names; Empty by default.
+  std::vector<std::string> dtype;           ///< Ordered List of data types; Empty by default.
+
+  std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
+  std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
+
+  std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
+  std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
+  std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
+                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
+                                            'NaN', 'n/a', 'nan', 'null'. */
+  bool          keep_default_na = true;     ///< Keep the default NA values; true by default.
+  bool          na_filter = true;           ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
+
+  std::string   prefix;                     ///< If there is no header or names, prepend this to the column ID as the name; Default value is an empty string.
+  bool          mangle_dupe_cols = true;    ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
+
+  char          quotechar = '\"';           ///< Define the character used to denote start and end of a quoted item; default is '\"'.
+  gdf_csv_quote_style quoting = QUOTE_MINIMAL; ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
+  bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
+
+  csv_reader_args() = default;
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class used to parse Json input and convert it into gdf columns.
+ *
+ *---------------------------------------------------------------------------**/
+class CsvReader {
+private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+public:
+  /**---------------------------------------------------------------------------*
+   * @brief CsvReader constructor; throws if the arguments are not supported.
+   *---------------------------------------------------------------------------**/
+  explicit CsvReader(csv_reader_args const &args);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the input CSV file as specified with the csv_reader_args
+   * constuctor parameter.
+   *
+   * @return cudf::table object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the specified byte range of the input CSV file.
+   *
+   * Reads the row that starts before or at the end of the range, even if it ends
+   * after the end of the range.
+   *
+   * @param[in] offset Offset of the byte range to read.
+   * @param[in] size Size of the byte range to read. Set to zero to read to
+   * the end of the file.
+   *
+   * @return cudf::table object that contains the array of gdf_columns
+   *---------------------------------------------------------------------------**/
+  table read_byte_range(size_t offset, size_t size);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Parse the specified rows of the input CSV file.
+   * 
+   * Set num_skip_footer to zero when using num_rows parameter.
+   *
+   * @param[in] num_skip_header Number of rows at the start of the files to skip.
+   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
+   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows.
+   * 
+   * @return cudf::table object that contains the array of gdf_columns
+   *---------------------------------------------------------------------------**/
+  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows = -1);
+
+  ~CsvReader();
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Options for the ORC reader
+ *---------------------------------------------------------------------------**/
+struct OrcReaderOptions {
+  std::vector<std::string> columns;
+  bool use_index = true;
+
+  OrcReaderOptions() = default;
+  OrcReaderOptions(OrcReaderOptions const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] use_index_lookup Whether to use row index for faster scanning
+   *---------------------------------------------------------------------------**/
+  OrcReaderOptions(std::vector<std::string> cols, bool use_index_lookup)
+      : columns(std::move(cols)),
+        use_index(use_index_lookup) {}
+};
+
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache ORC data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class OrcReader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit OrcReader(std::string filepath,
+                     OrcReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit OrcReader(const char *buffer, size_t length,
+                     OrcReaderOptions const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a specific stripe.
+   *
+   * @param[in] stripe Index of the stripe
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_stripe(size_t stripe);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~OrcReader();
 };
 
 } // namespace cudf
