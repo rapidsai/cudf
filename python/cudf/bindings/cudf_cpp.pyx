@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-#from cudf.bindings.cudf_cpp cimport table as cudf_table
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
