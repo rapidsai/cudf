@@ -21,6 +21,7 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <utilities/type_dispatcher.hpp>
+#include <tests/utilities/nvcategory_utils.cuh>
 
 namespace {
 
@@ -128,7 +129,7 @@ struct column_printer {
  * equal.
  *
  *---------------------------------------------------------------------------**/
-template <typename T, bool has_nulls>
+template <typename T>
 struct elements_equal {
   gdf_column lhs_col;
   gdf_column rhs_col;
@@ -148,7 +149,7 @@ struct elements_equal {
                                      bool nulls_are_equal = true)
       : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
 
-  __device__ bool operator()(gdf_index_type row) {    
+  __device__ bool operator()(gdf_index_type row) {
     bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
     bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
@@ -199,24 +200,40 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
     return false;  // if one is null but not both
 
   if (left.data == nullptr)
-      return true;  // logically, both are null
+    return true;  // logically, both are null
 
-  // both are non-null...
-  bool const has_nulls {(left.valid != nullptr) && (left.null_count > 0)};
+  if (left.dtype == GDF_STRING_CATEGORY) {
+    // Transfer input column to host
+    std::vector<std::string> left_data, right_data;
+    std::vector<gdf_valid_type> left_bitmask, right_bitmask;
+    std::tie(left_data, left_bitmask) =
+      cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&left));
+    std::tie(right_data, right_bitmask) =
+      cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&right));
 
-  bool equal_data = (has_nulls) ?
-    thrust::all_of(rmm::exec_policy()->on(0),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(left.size),
-                   elements_equal<T, true>{left, right}) :
-    thrust::all_of(rmm::exec_policy()->on(0),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(left.size),
-                   elements_equal<T, false>{left, right});
+    for (size_t i=0; i < left_data.size();i++) {
+      bool const left_is_valid{gdf_is_valid(left_bitmask.data(), i)};
+      bool const right_is_valid{gdf_is_valid(right_bitmask.data(), i)};
+
+      if (left_is_valid != right_is_valid)
+        return false;
+      else if (left_is_valid && (left_data[i] != right_data[i]))
+          return false;
+    }
+    CHECK_STREAM(0);
+
+    return true;
+  }
+  else {
+    bool equal_data = thrust::all_of(rmm::exec_policy()->on(0),
+                                     thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(left.size),
+                                     elements_equal<T>{left, right});
+    
+    CHECK_STREAM(0);
   
-  CHECK_STREAM(0);
-
-  return equal_data;
+    return equal_data;
+  }
 }
 
 namespace {
