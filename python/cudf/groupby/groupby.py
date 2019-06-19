@@ -6,9 +6,9 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf import MultiIndex
 
-from cudf.bindings.groupby_old import (
+from cudf.bindings.groupby import (
     agg as cpp_agg,
-    _apply_basic_agg as _cpp_apply_basic_agg
+    apply_basic_agg as cpp_apply_basic_agg
 )
 
 
@@ -233,8 +233,8 @@ class Groupby(object):
             else:
                 for by in self._by:
                     agg_groupby._df._cols[by] = self._df._cols[by]
-        return _cpp_apply_basic_agg(agg_groupby, agg_type,
-                                    sort_results=sort_results)
+        return cpp_apply_basic_agg(agg_groupby, agg_type,
+                                   sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
