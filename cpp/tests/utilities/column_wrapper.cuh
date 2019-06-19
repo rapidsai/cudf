@@ -162,7 +162,6 @@ struct column_wrapper {
   // column data and bitmask destroyed by device_vector dtor
   ~column_wrapper() {
     if (std::is_same<ColumnType, cudf::nvstring_category>::value) {
-      std::cout << "nvstring category destruction\n";
       if (nullptr != the_column.dtype_info.category) {
         NVCategory::destroy(
             reinterpret_cast<NVCategory*>(the_column.dtype_info.category));
