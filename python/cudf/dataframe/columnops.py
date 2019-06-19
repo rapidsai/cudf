@@ -97,7 +97,10 @@ class TypedColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        data = cpp_apply_boolean_mask(self, mask)
+        if len(self) > 0 and len(mask) > 0:
+            data = cpp_apply_boolean_mask(self, mask)
+        else:
+            data = column_empty_like(self, newsize=0)
         return self.replace(data=data.data, mask=data.mask)
 
     def fillna(self, fill_value, inplace):

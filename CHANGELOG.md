@@ -83,7 +83,6 @@
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
 - PR #2034 Adding support for string columns concatenation using "add" binary operator
 
-
 ## Bug Fixes
 
 - PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
@@ -141,6 +140,7 @@
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
 - PR #2033 Add pip to conda environment files to fix warning
 - PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
+- PR #XXXX Fix handling empty columns / masks for `apply_boolean_mask`
 
 
 # cudf 0.7.2 (16 May 2019)
