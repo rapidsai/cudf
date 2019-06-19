@@ -5,6 +5,7 @@
 # "./print_env.sh" - prints to stdout
 # "./print_env.sh > env.txt" - prints to file "env.txt"
 
+print_env() {
 echo "**git***"
 if [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]; then
 git log --decorate -n 1
@@ -29,19 +30,19 @@ lscpu
 echo
 
 echo "***CMake***"
-which cmake && cmake --version 
+which cmake && echo cmake --version 
 echo 
 
 echo "***g++***"
-which g++ && g++ --version 
+which g++ && echo g++ --version 
 echo 
 
 echo "***nvcc***"
-which nvcc && nvcc --version 
+which nvcc && echo nvcc --version 
 echo 
 
 echo "***Python***"
-which python && python --version
+which python && echo python --version
 echo
 
 echo "***Environment Variables***"
@@ -64,15 +65,22 @@ echo
 # Print conda packages if conda exists
 if type "conda" &> /dev/null; then
 echo '***conda packages***'
-which conda && conda list 
+which conda && echo conda list 
 echo
 # Print pip packages if pip exists
 elif type "pip" &> /dev/null; then
 echo "conda not found"
 echo "***pip packages***"
-which pip && pip list
+which pip && echo pip list
 echo
 else
 echo "conda not found"
 echo "pip not found"
 fi
+}
+
+echo "<details><summary>Click here to see environment details</summary><pre>"
+print_env | while read -r line; do
+    echo "      $line"
+done
+echo "</pre></details>"
