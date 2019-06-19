@@ -31,14 +31,15 @@ namespace cudf {
  * @Param[in] sort_by_cols Indices of left_cols and right_cols to be used
  *                         for comparison criteria
  * @Param[in] asc_desc Sort order types of columns indexed by sort_by_cols
- * @Param[out] output_cols Merged columns
+ * @Param[in] nulls_are_smallest Flag indicating is nulls are to be treated as the smallest value
  *
  * @Returns A table containing sorted data from left_table and right_table
  */
 table sorted_merge(table const& left_table,
                    table const& right_table,
                    std::vector<gdf_size_type> const& sort_by_cols,
-                   rmm::device_vector<int8_t> const& asc_desc);
+                   rmm::device_vector<int8_t> const& asc_desc,
+                   bool nulls_are_smallest = false);
 
 }  // namespace cudf
 

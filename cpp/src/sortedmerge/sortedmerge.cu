@@ -87,6 +87,7 @@ std::pair<rmm::device_vector<gdf_size_type>, rmm::device_vector<gdf_size_type>>
 generate_merged_indices(device_table const& left_table,
                         device_table const& right_table,
                         rmm::device_vector<int8_t> const& asc_desc,
+                        bool nulls_are_smallest,
                         cudaStream_t stream = 0) {
 
     const gdf_size_type left_size  = left_table.num_rows();
@@ -111,7 +112,7 @@ generate_merged_indices(device_table const& left_table,
 
     bool nullable = left_table.has_nulls() || right_table.has_nulls();
     if (nullable){
-        auto ineq_op = row_inequality_comparator<true>(right_table, left_table, false, asc_desc.data().get()); 
+        auto ineq_op = row_inequality_comparator<true>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
         thrust::merge(rmm::exec_policy(stream)->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
@@ -125,7 +126,7 @@ generate_merged_indices(device_table const& left_table,
                         return ineq_op(right_row, left_row);
                     });			        
     } else {
-        auto ineq_op = row_inequality_comparator<false>(right_table, left_table, false, asc_desc.data().get()); 
+        auto ineq_op = row_inequality_comparator<false>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
         thrust::merge(rmm::exec_policy(stream)->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
@@ -153,7 +154,8 @@ namespace detail {
 table sorted_merge(table const& left_table,
                    table const& right_table,
                    std::vector<gdf_size_type> const& sort_by_cols,
-                   rmm::device_vector<int8_t> const& asc_desc) {
+                   rmm::device_vector<int8_t> const& asc_desc,
+                   bool nulls_are_smallest) {
     CUDF_EXPECTS(left_table.num_columns() == right_table.num_columns(), "Mismatched number of columns");
     CUDF_EXPECTS(left_table.num_columns() > 0, "Empty input tables");
     CUDF_EXPECTS(sort_by_cols.size() > 0, "Empty sort_by_cols");
@@ -215,7 +217,7 @@ table sorted_merge(table const& left_table,
 
     rmm::device_vector<gdf_size_type> mergedTableIndices;
     rmm::device_vector<gdf_size_type> mergedRowIndices;
-    std::tie(mergedTableIndices, mergedRowIndices) = generate_merged_indices(*leftKeyTable, *rightKeyTable, asc_desc);
+    std::tie(mergedTableIndices, mergedRowIndices) = generate_merged_indices(*leftKeyTable, *rightKeyTable, asc_desc, nulls_are_smallest);
 
     // Allocate output columns
     bool nullable = has_nulls(left_sync_table) || has_nulls(right_sync_table);
@@ -279,8 +281,9 @@ table sorted_merge(table const& left_table,
 table sorted_merge(table const& left_table,
                    table const& right_table,
                    std::vector<gdf_size_type> const& sort_by_cols,
-                   rmm::device_vector<int8_t> const& asc_desc) {
-    return detail::sorted_merge(left_table, right_table, sort_by_cols, asc_desc);
+                   rmm::device_vector<int8_t> const& asc_desc,
+                   bool nulls_are_smallest) {
+    return detail::sorted_merge(left_table, right_table, sort_by_cols, asc_desc, nulls_are_smallest);
 }
 
 }  // namespace cudf
