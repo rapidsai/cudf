@@ -3,7 +3,6 @@ from libc.stdlib cimport free
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.types cimport *
 
 
 cdef cudf_table* table_from_dataframe(df):

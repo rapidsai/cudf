@@ -10,7 +10,6 @@ from libcpp.vector cimport vector
 
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.cudf_cpp cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 cimport cudf.bindings.groupby.common as groupby_common
 

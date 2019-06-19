@@ -6,7 +6,6 @@ from libc.stdlib cimport malloc, free
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.utils cimport *
-from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.categorical import CategoricalColumn
 
 cimport cudf.bindings.groupby.hash as hash_groupby
