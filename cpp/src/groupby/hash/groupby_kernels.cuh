@@ -205,12 +205,12 @@ __device__ inline void aggregate_row(device_table const& target,
                                      operators* ops) {
   using namespace bit_mask;
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    bit_mask_t* const __restrict__ source_mask{
-        reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid)};
+    bit_mask_t const* const __restrict__ source_mask{
+        reinterpret_cast<bit_mask_t const*>(source.get_column(i)->valid)};
 
     if (values_have_nulls and nullptr != source_mask and
         not is_valid(source_mask, source_index)) {
-      return;
+      continue;
     }
 
     cudf::type_dispatcher(source.get_column(i)->dtype,
@@ -291,7 +291,6 @@ __global__ void build_aggregation_map(
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
-
     if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, i)) {
       i += blockDim.x * gridDim.x;
       continue;
