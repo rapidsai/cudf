@@ -24,11 +24,12 @@
 #include "table.hpp"
 
 namespace cudf {
- 
- /**---------------------------------------------------------------------------*
+namespace io {
+namespace json {
+/**---------------------------------------------------------------------------*
  * @brief Arguments to the read_json interface.
  *---------------------------------------------------------------------------**/
-struct json_reader_args{
+struct reader_options {
   gdf_input_type  source_type = HOST_BUFFER;      ///< Type of the data source.
   std::string     source;                         ///< If source_type is FILE_PATH, contains the filepath. If source_type is HOST_BUFFER, contains the input JSON data.
 
@@ -36,37 +37,38 @@ struct json_reader_args{
   std::string               compression = "infer";///< Compression type ("none", "infer", "gzip", "zip"); default is "infer".
   bool                      lines = false;        ///< Read the file as a json object per line; default is false.
 
-  json_reader_args() = default;
- 
-  json_reader_args(json_reader_args const &) = default;
+  reader_options() = default;
+
+  reader_options(reader_options const &) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief json_reader_args constructor that sets the source data members.
-   * 
+   * @brief Constructor that sets the source data members.
+   *
    * @param[in] src_type Enum describing the type of the data source.
    * @param[in] src If src_type is FILE_PATH, contains the filepath.
    * If source_type is HOST_BUFFER, contains the input JSON data.
    *---------------------------------------------------------------------------**/
-  json_reader_args(gdf_input_type src_type, std::string const &src) : source_type(src_type), source(src) {}
+  reader_options(gdf_input_type src_type, std::string const &src)
+      : source_type(src_type), source(src) {}
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns.
  *
  *---------------------------------------------------------------------------**/
-class JsonReader {
-private:
+class reader {
+ private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
-public:
+ public:
   /**---------------------------------------------------------------------------*
-   * @brief JsonReader constructor; throws if the arguments are not supported.
+   * @brief Constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
-  explicit JsonReader(json_reader_args const &args);
+  explicit reader(reader_options const &args);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the json_reader_args
+   * @brief Parse the input JSON file as specified with the reader_options
    * constuctor parameter.
    *
    * @return cudf::table object that contains the array of gdf_columns.
@@ -85,13 +87,16 @@ public:
    *---------------------------------------------------------------------------**/
   table read_byte_range(size_t offset, size_t size);
 
-  ~JsonReader();
+  ~reader();
 };
 
+}  // namespace json
+
+namespace csv {
 /**---------------------------------------------------------------------------*
- * @brief Enumeration of quoting behavior for CSV readers/writers
+ * @brief Quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
-enum gdf_csv_quote_style{
+enum quote_style {
   QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
   QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
   QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
@@ -117,7 +122,7 @@ enum gdf_csv_quote_style{
  *   infer_datetime_format - inference not supported
 
  *---------------------------------------------------------------------------**/
-struct csv_reader_args{
+struct reader_options {
   gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
   std::string filepath_or_buffer;               ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   std::string compression = "none";             ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
@@ -151,29 +156,29 @@ struct csv_reader_args{
   bool          mangle_dupe_cols = true;    ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names; true by default.
 
   char          quotechar = '\"';           ///< Define the character used to denote start and end of a quoted item; default is '\"'.
-  gdf_csv_quote_style quoting = QUOTE_MINIMAL; ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
+  quote_style   quoting = QUOTE_MINIMAL;    ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
   bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
-  csv_reader_args() = default;
+  reader_options() = default;
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns.
  *
  *---------------------------------------------------------------------------**/
-class CsvReader {
-private:
+class reader {
+ private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
-public:
+ public:
   /**---------------------------------------------------------------------------*
-   * @brief CsvReader constructor; throws if the arguments are not supported.
+   * @brief Constructor; throws if the arguments are not supported.
    *---------------------------------------------------------------------------**/
-  explicit CsvReader(csv_reader_args const &args);
+  explicit reader(reader_options const &args);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input CSV file as specified with the csv_reader_args
+   * @brief Parse the input CSV file as specified with the reader_options
    * constuctor parameter.
    *
    * @return cudf::table object that contains the array of gdf_columns.
@@ -205,20 +210,24 @@ public:
    * 
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows = -1);
+  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer,
+                  gdf_size_type num_rows = -1);
 
-  ~CsvReader();
+  ~reader();
 };
 
+}  // namespace csv
+
+namespace orc {
 /**---------------------------------------------------------------------------*
  * @brief Options for the ORC reader
  *---------------------------------------------------------------------------**/
-struct OrcReaderOptions {
+struct reader_options {
   std::vector<std::string> columns;
   bool use_index = true;
 
-  OrcReaderOptions() = default;
-  OrcReaderOptions(OrcReaderOptions const &) = default;
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
@@ -226,16 +235,14 @@ struct OrcReaderOptions {
    * @param[in] columns List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
    *---------------------------------------------------------------------------**/
-  OrcReaderOptions(std::vector<std::string> cols, bool use_index_lookup)
-      : columns(std::move(cols)),
-        use_index(use_index_lookup) {}
+  reader_options(std::vector<std::string> cols, bool use_index_lookup)
+      : columns(std::move(cols)), use_index(use_index_lookup) {}
 };
-
 
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache ORC data into cuDF columns
  *---------------------------------------------------------------------------**/
-class OrcReader {
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -244,14 +251,13 @@ class OrcReader {
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
-  explicit OrcReader(std::string filepath,
-                     OrcReaderOptions const &options);
+  explicit reader(std::string filepath, reader_options const &options);
 
   /**---------------------------------------------------------------------------*
    * @brief Constructor for an existing memory buffer source.
    *---------------------------------------------------------------------------**/
-  explicit OrcReader(const char *buffer, size_t length,
-                     OrcReaderOptions const &options);
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
 
   /**---------------------------------------------------------------------------*
    * @brief Reads and returns the entire data set.
@@ -279,7 +285,9 @@ class OrcReader {
    *---------------------------------------------------------------------------**/
   table read_rows(size_t skip_rows, size_t num_rows);
 
-  ~OrcReader();
+  ~reader();
 };
 
-} // namespace cudf
+}  // namespace orc
+}  // namespace io
+}  // namespace cudf

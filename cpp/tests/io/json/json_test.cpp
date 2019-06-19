@@ -36,8 +36,7 @@
 #include <io/utilities/parsing_utils.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 
-using cudf::json_reader_args;
-using cudf::JsonReader;
+using namespace cudf::io;
 using std::string;
 using std::vector;
 
@@ -93,11 +92,11 @@ TEST_F(gdf_json_test, BracketsLevels) {
 }
 
 TEST_F(gdf_json_test, BasicJsonLines) {
-  json_reader_args args(HOST_BUFFER, "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n");
+  json::reader_options args(HOST_BUFFER, "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n");
   args.lines = true;
   args.dtype = {"int", "float64"};
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 2);
   ASSERT_EQ(df.num_rows(), 3);
@@ -113,11 +112,11 @@ TEST_F(gdf_json_test, BasicJsonLines) {
 }
 
 TEST_F(gdf_json_test, JsonLinesStrings) {
-  json_reader_args args(HOST_BUFFER, "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]");
+  json::reader_options args(HOST_BUFFER, "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]");
   args.lines = true;
   args.dtype = {"2:str", "0:int", "1:float64"};
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 3);
   ASSERT_EQ(df.num_rows(), 2);
@@ -136,10 +135,10 @@ TEST_F(gdf_json_test, JsonLinesStrings) {
 }
 
 TEST_F(gdf_json_test, JsonLinesDtypeInference) {
-  json_reader_args args(HOST_BUFFER, "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]");
+  json::reader_options args(HOST_BUFFER, "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]");
   args.lines = true;
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 3);
   ASSERT_EQ(df.num_rows(), 2);
@@ -164,10 +163,10 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
-  json_reader_args args(FILE_PATH, fname);
+  json::reader_options args(FILE_PATH, fname);
   args.lines = true;
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 2);
   ASSERT_EQ(df.num_rows(), 2);
@@ -189,10 +188,10 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
-  json_reader_args args(FILE_PATH, fname);
+  json::reader_options args(FILE_PATH, fname);
   args.lines = true;
 
-  const cudf::table df = cudf::JsonReader(args).read_byte_range(11,20);
+  const auto df = json::reader(args).read_byte_range(11,20);
 
   ASSERT_EQ(df.num_columns(), 1);
   ASSERT_EQ(df.num_rows(), 3);
@@ -210,10 +209,10 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
   outfile.close();
   ASSERT_TRUE(checkFile(fname));
 
-  json_reader_args args(FILE_PATH, fname);
+  json::reader_options args(FILE_PATH, fname);
   args.lines = true;
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 2);
   ASSERT_EQ(df.num_rows(), 1);
@@ -228,11 +227,11 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
 }
 
 TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
-  json_reader_args args(HOST_BUFFER, "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
+  json::reader_options args(HOST_BUFFER, "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
                                   "{\"col1\":200, \"col2\":2.2, \"col3\":\"bbb\"}\n");
   args.lines = true;
 
-  const cudf::table df = cudf::JsonReader(args).read();
+  const auto df = json::reader(args).read();
 
   ASSERT_EQ(df.num_columns(), 3);
   ASSERT_EQ(df.num_rows(), 2);
