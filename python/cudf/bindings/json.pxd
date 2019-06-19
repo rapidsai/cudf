@@ -7,7 +7,6 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
