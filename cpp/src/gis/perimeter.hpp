@@ -42,9 +42,9 @@ namespace gis {
  * @returns gdf_column of perimeters with size 'num_polygons'
  */
 gdf_column perimeter( gdf_column* polygons_latitudes[],
-					  gdf_column* polygons_longitudes[],
-					  gdf_size_type const & num_polygons,
-					  cudaStream_t stream = 0 );
+                      gdf_column* polygons_longitudes[],
+                      gdf_size_type const & num_polygons,
+                      cudaStream_t stream = 0 );
 }  // namespace gis
 }  // namespace cudf
 

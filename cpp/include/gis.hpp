@@ -73,8 +73,8 @@ gdf_column point_in_polygon( gdf_column const & polygon_latitudes,
  * @returns gdf_column of perimeters with size 'num_polygons'
  */
 gdf_column perimeter( gdf_column* polygons_latitudes[],
-					  gdf_column* polygons_longitudes[],
-					  gdf_size_type const & num_polygons );
+                      gdf_column* polygons_longitudes[],
+                      gdf_size_type const & num_polygons );
 
 }  // namespace cudf
 

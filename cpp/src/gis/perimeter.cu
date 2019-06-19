@@ -220,6 +220,7 @@ gdf_column perimeter( gdf_column* polygons_latitudes[], gdf_column* polygons_lon
                                                     num_polygons,
                                                     offset_size_polygons,
                                                     stream );
+
     return perimeter_output;
 }
 }   // namespace gis
