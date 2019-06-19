@@ -1058,10 +1058,9 @@ class Series(object):
             if all_nan:
                 new_value = [other] * len(to_replace)
             else:
-                # pre-determining the dtype to match the pandas's API
+                # pre-determining the dtype to match the pandas's output
                 typ = to_replace.dtype
-                if np.issubdtype(other, np.floating) and \
-                        np.issubdtype(typ, np.integer):
+                if np.dtype(type(other)).kind in 'f' and typ.kind in 'i':
                     typ = np.int64 if other == int(other) else np.float64
 
                 new_value = utils.scalar_broadcast_to(
