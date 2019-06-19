@@ -16,6 +16,7 @@
 
 #include <cudf/copying.hpp>
 #include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/make_column_wrapper.hpp>
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/nvcategory_utils.cuh>
@@ -60,86 +61,6 @@ using test_types =
                    cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(CopyRangeTest, test_types);
 
-template <typename T>
-T convert(gdf_index_type row) {
-  return static_cast<T>(row);
-}
-
-template <>
-const char* convert<const char*>(gdf_index_type row) {
-  std::ostringstream convert;
-  convert << row;
-  char *s = new char[convert.str().size()+1];
-  std::strcpy(s, convert.str().c_str());
-  return s; 
-}
-
-template <typename T>
-struct make_input
-{
-  template<typename DataInitializer>
-  column_wrapper<T>
-  operator()(gdf_size_type size,
-             DataInitializer data_init) {
-    return column_wrapper<T>(size,
-      [&](gdf_index_type row) { return convert<T>(data_init(row)); });
-  }
-
-  template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<T>
-  operator()(gdf_size_type size,
-             DataInitializer data_init,
-             BitInitializer bit_init) {
-    return column_wrapper<T>(size,
-      [&](gdf_index_type row) { return convert<T>(data_init(row)); },
-      bit_init);
-  }
-};
-
-template <>
-struct make_input<cudf::nvstring_category>
-{
-  int scale;
-  template<typename DataInitializer>
-  column_wrapper<cudf::nvstring_category>
-  operator()(gdf_size_type size,
-             DataInitializer data_init) {
-    std::vector<const char*> strings(size);
-    std::generate(strings.begin(), strings.end(), [data_init, row=0]() mutable {
-      return convert<const char*>(data_init(row++));
-    });
-    
-    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
-    
-    std::for_each(strings.begin(), strings.end(), [](const char* x) { 
-      delete [] x; 
-    });
-
-    return c;
-  }
-
-  template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<cudf::nvstring_category>
-  operator()(gdf_size_type size,
-             DataInitializer data_init,
-             BitInitializer bit_init) {
-    std::vector<const char*> strings(size);
-    std::generate(strings.begin(), strings.end(), [data_init, row=0]() mutable {
-      return convert<const char*>(data_init(row++));
-    });
-
-    auto c =  column_wrapper<cudf::nvstring_category>{size,
-                                                      strings.data(),
-                                                      bit_init};
-    
-    std::for_each(strings.begin(), strings.end(), [](const char* x) { 
-      delete [] x; 
-    });
-
-    return c;
-  }
-};
-
 struct row_value {
   int scale;
   gdf_index_type operator()(gdf_index_type row) { return row * scale; }
@@ -158,7 +79,7 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  make_input<T> maker{};
+  cudf::test::make_column_wrapper<T> maker{};
 
   column_wrapper<T> dest = maker(size, row_value{1}, valid);
   
@@ -187,7 +108,7 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  make_input<T> maker{};
+  cudf::test::make_column_wrapper<T> maker{};
 
   column_wrapper<T> dest = maker(size, row_value{1});
 
