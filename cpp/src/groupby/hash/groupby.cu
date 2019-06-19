@@ -352,7 +352,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                  });
 
   // Some aggregations are "compound", meaning they need be satisfied via the
-  // composition of 1 or more "simple" aggregation requests. For example, AVG is
+  // composition of 1 or more "simple" aggregation requests. For example, MEAN is
   // satisfied via the division of the SUM by the COUNT aggregation. We
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple

@@ -74,9 +74,9 @@ struct expected_result_type<SourceType, COUNT> {
   using type = gdf_size_type;
 };
 
-// Always use `double` as output of AVG
+// Always use `double` as output of MEAN
 template <typename SourceType>
-struct expected_result_type<SourceType, AVG> { using type = double; };
+struct expected_result_type<SourceType, MEAN> { using type = double; };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>

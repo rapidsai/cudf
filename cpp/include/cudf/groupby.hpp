@@ -20,9 +20,17 @@
 #include "cudf.h"
 #include "types.hpp"
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <tuple>
 #include <vector>
+
+// Not possible to forward declare rmm::device_vector because it's a type alias
+// to a type with a default template arg. Therefore, this is the best we can do
+namespace thrust {
+template <typename T, typename A>
+class device_vector;
+}
+template <typename T>
+class rmm_allocator;
 
 namespace cudf {
 
@@ -70,15 +78,16 @@ namespace hash {
 
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
- *
  *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {};
+struct Options : groupby::Options {
+  Options(bool _ignore_null_keys = true)
+      : groupby::Options(_ignore_null_keys) {}
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Supported aggregation operations
- *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, AVG };
+enum operators { SUM, MIN, MAX, COUNT, MEAN };
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
@@ -160,8 +169,8 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
  *
  * @returns A device vector containing the first index of every unique row.
  */
-rmm::device_vector<gdf_index_type> gdf_unique_indices(
-    cudf::table const& input_table, gdf_context const& context);
+thrust::device_vector<gdf_index_type, rmm_allocator<gdf_index_type>>
+gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 
 /**
  * @brief Sorts a set of columns based on specified "key" columns. Returns a
@@ -184,7 +193,8 @@ rmm::device_vector<gdf_index_type> gdf_unique_indices(
  * columns.
  *          - A device vector containing the first index of every unique row
  */
-std::pair<cudf::table, rmm::device_vector<gdf_index_type>>
+std::pair<cudf::table,
+          thrust::device_vector<gdf_index_type, rmm_allocator<gdf_index_type>>>
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const* key_col_indices,
