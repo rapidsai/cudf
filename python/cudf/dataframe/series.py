@@ -1020,6 +1020,69 @@ class Series(object):
         if not inplace:
             return self._copy_construct(data=data)
 
+    def where(self, cond, other=None, axis=None):
+        """
+        Replace values with other where the condition is False.
+
+        :param cond: boolean
+            Where cond is True, keep the original value. Where False,
+            replace with corresponding value from other.
+        :param other: scalar, default None
+            Entries where cond is False are replaced with
+            corresponding value from other.
+        :param axis:
+        :return: Series
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.where(ser > 2, 10))
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        >>> print(ser.where(ser > 2))
+        0    4
+        1    3
+        2
+        3
+        4
+
+        """
+
+        to_replace = self._column.apply_boolean_mask(~cond & self.notna())
+        if is_scalar(other):
+            all_nan = other is None
+            if all_nan:
+                new_value = [other] * len(to_replace)
+            else:
+                # pre-determining the dtype to match the pandas's output
+                typ = to_replace.dtype
+                if np.dtype(type(other)).kind in 'f' and typ.kind in 'i':
+                    typ = np.int64 if other == int(other) else np.float64
+
+                new_value = utils.scalar_broadcast_to(
+                    other, (len(to_replace),), np.dtype(typ)
+                )
+        else:
+            raise NotImplementedError(
+                "Replacement arg of {} is not supported.".format(type(other))
+            )
+
+        result = self._column.find_and_replace(to_replace, new_value,
+                                               all_nan=all_nan)
+
+        # To replace nulls:: If there are nulls in `cond` series, then we will
+        # fill them with `False`, which means, by default, elements containing
+        # nulls, are failing the given condition.
+        # But, if condition is deliberately setting the `True` for nulls (i.e.
+        # `s.isnulls()`), then there are no nulls in `cond`
+        if not all_nan and (~cond.fillna(False) & self.isnull()).any():
+            result = result.fillna(other)
+        return self._copy_construct(data=result)
+
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
