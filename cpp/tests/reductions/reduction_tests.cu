@@ -43,6 +43,31 @@ std::vector<T> convert_values(std::vector<int> const & int_values)
     return v;
 }
 
+template <typename T>
+cudf::test::column_wrapper<T> construct_null_column(std::vector<T> const & values,
+    std::vector<bool> const & bools)
+{
+    if( values.size() > bools.size() ){
+        throw std::logic_error("input vector size mismatch.");
+    }
+    return cudf::test::column_wrapper<T>(
+        values.size(),
+        [&values](gdf_index_type row) { return values[row]; },
+        [&bools](gdf_index_type row) { return bools[row]; });
+}
+
+template <typename T>
+std::vector<T> replace_nulls(
+    std::vector<T> const & values,
+    std::vector<bool> const & bools,
+    T identity)
+{
+    std::vector<T> v(values.size());
+    std::transform(values.begin(), values.end(), bools.begin(),
+        v.begin(), [identity](T x, bool b) { return (b)? x : identity; } );
+    return v;
+}
+
 // This is the main test feature
 template <typename T>
 struct ReductionTest : public GdfTest
@@ -148,11 +173,11 @@ struct MultiStepReductionTest : public GdfTest
     ~MultiStepReductionTest(){}
 
     template <typename T_out>
-    void reduction_test(std::vector<T>& input_values,
+    void reduction_test(cudf::test::column_wrapper<T> &col,
         T_out expected_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
     {
-        cudf::test::column_wrapper<T> const col(input_values);
+//        cudf::test::column_wrapper<T> const col(input_values);
 
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T_out> dev_result(1);
@@ -171,6 +196,7 @@ struct MultiStepReductionTest : public GdfTest
             EXPECT_ANY_THROW(statement());
         }
     };
+
 };
 
 using MultiStepReductionTypes = testing::Types<
@@ -182,40 +208,71 @@ TYPED_TEST(MultiStepReductionTest, Mean)
 {
     using T = TypeParam;
     std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
+    std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
+
+    auto calc_mean = [](std::vector<int>& v, gdf_size_type valid_count){
+        double sum = std::accumulate(v.begin(), v.end(), double{0});
+        return sum / valid_count ;
+    };
+
+    // test without nulls
     std::vector<T> v = convert_values<T>(int_values);
+    cudf::test::column_wrapper<T> col(v);
+    double expected_value = calc_mean(int_values, int_values.size());
+    this->reduction_test(col, expected_value, true,
+        GDF_REDUCTION_MEAN, GDF_FLOAT64);
 
-    double expected_value = std::accumulate(v.begin(), v.end(), double{0});
-    expected_value /= int_values.size() ;
+    // test with nulls
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto replaced_array = replace_nulls(int_values, host_bools, int{0});
 
-    this->reduction_test(v, expected_value, true,
+    double expected_value_nulls = calc_mean(replaced_array, valid_count);
+    this->reduction_test(col_nulls, expected_value_nulls, true,
         GDF_REDUCTION_MEAN, GDF_FLOAT64);
 }
+
 
 TYPED_TEST(MultiStepReductionTest, var_std)
 {
     using T = TypeParam;
     std::vector<int> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
+    std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
+
+    auto calc_var = [](std::vector<int>& v, gdf_size_type valid_count){
+        double mean = std::accumulate(v.begin(), v.end(), double{0});
+        mean /= valid_count ;
+
+        double sum_of_sq = std::accumulate(v.begin(), v.end(), double{0},
+            [](double acc, TypeParam i) { return acc + i * i; });
+
+        int ddof = 1;
+        gdf_size_type div = valid_count - ddof;
+
+        double var = sum_of_sq / div - ((mean * mean) * valid_count) /div;
+        return var;
+    };
+
+    // test without nulls
     std::vector<T> v = convert_values<T>(int_values);
+    cudf::test::column_wrapper<T> col(v);
 
-    double mean = std::accumulate(v.begin(), v.end(), double{0});
-    mean /= int_values.size() ;
-
-    double sum_of_sq = std::accumulate(v.begin(), v.end(), double{0},
-        [](double acc, TypeParam i) { return acc + i * i; });
-
-
-    int ddof = 1;
-    gdf_size_type count = v.size();
-    gdf_size_type div = count - ddof;
-
-    double var = sum_of_sq / div - ((mean * mean) * count) /div;
+    double var = calc_var(int_values, int_values.size());
     double std = std::sqrt(var);
 
-    this->reduction_test(v, var, true,
-        GDF_REDUCTION_VAR, GDF_FLOAT64);
+    this->reduction_test(col, var, true, GDF_REDUCTION_VAR, GDF_FLOAT64);
+    this->reduction_test(col, std, true, GDF_REDUCTION_STD, GDF_FLOAT64);
 
-    this->reduction_test(v, std, true,
-        GDF_REDUCTION_STD, GDF_FLOAT64);
+    // test with nulls
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto replaced_array = replace_nulls(int_values, host_bools, int{0});
+
+    double var_nulls = calc_var(replaced_array, valid_count);
+    double std_nulls = std::sqrt(var_nulls);
+
+    this->reduction_test(col_nulls, var_nulls, true, GDF_REDUCTION_VAR, GDF_FLOAT64);
+    this->reduction_test(col_nulls, std_nulls, true, GDF_REDUCTION_STD, GDF_FLOAT64);
 }
 
 // ----------------------------------------------------------------------------
