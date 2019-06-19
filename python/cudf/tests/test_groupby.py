@@ -568,3 +568,28 @@ def test_groupby_multi_agg_single_groupby_series():
 def test_groupby_empty_dataframe():
     gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
     gdf.groupby(level=[0, 1])  # it doesn't crash
+
+
+def test_groupby_nulls_basic():
+    pdf = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None]
+    })
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
+
+    pdf = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None],
+        'c': [1, 2, 1, 1, 1, 2]
+    })
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
+
+    df = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None],
+        'c': [1, 2, None, None, 1, 2]
+    })
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.groupby('a').sum(), gdf.groupby('a').sum())
