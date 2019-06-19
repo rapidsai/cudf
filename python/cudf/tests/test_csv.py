@@ -27,7 +27,7 @@ def make_numeric_dataframe(nrows, dtype):
 def make_datetime_dataframe():
     df = pd.DataFrame()
     df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
-                          '18/10/1990', '1/1/1970', '2016-04-30T01:02:03.400'])
+                          '18/10/1990', '1/1/1970', '2016-04-30T01:02:03.000'])
     df['col2'] = np.array(['18/04/1995', '14 / 07 / 1994', '07/06/2006',
                           '16/09/2005', '2/2/1970', '2007-4-30 1:6:40.000PM'])
     return df
@@ -41,6 +41,8 @@ def make_numpy_mixed_dataframe():
     df['Float'] = np.array([9.001, 8.343, 6, 2.781])
     df['Integer2'] = np.array([2345, 106, 2088, 789277])
     df['Category'] = np.array(['M', 'F', 'F', 'F'])
+    df['String'] = np.array(['Alpha', 'Beta', 'Gamma', 'Delta'])
+    df['Boolean'] = np.array([True, False, True, False])
     return df
 
 
@@ -116,14 +118,16 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5', '6', '7'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category',
+                           'str', 'bool'],
                     dayfirst=True, **cudf_arg)
-    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
-                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5', '6', '7'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category',
+                           'str', 'bool'],
                     dayfirst=True, **pandas_arg)
 
-    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
+    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5', '6', '7'],
                       parse_dates=[1], dayfirst=True, **pandas_arg)
 
     assert len(gdf1.columns) == len(pdf.columns)
@@ -460,18 +464,25 @@ def test_csv_reader_buffer_strings():
     assert(df2['text'][3] == 'd')
 
 
-def test_csv_reader_gzip_compression(tmpdir):
+@pytest.mark.parametrize('ext, out_comp, in_comp', [('.geez', 'gzip', 'gzip'),
+                                                    ('.beez', 'bz2', 'bz2'),
+                                                    ('.gz', 'gzip', 'infer'),
+                                                    ('.bz2', 'bz2', 'infer'),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
+                                                    ('', None, None)])
+def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
 
-    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file10.csv.gz')
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_compression' + ext)
 
     df = make_datetime_dataframe()
-    df.to_csv(fname, index=False, header=False, compression='gzip')
+    df.to_csv(fname, index=False, header=False, compression=out_comp)
 
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
-                         dayfirst=True, compression='gzip')
-    dtypes = ['date', 'date']
-    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
-                   dayfirst=True, compression='gzip')
+                         dayfirst=True, compression=in_comp)
+    out = read_csv(str(fname), names=list(df.columns.values),
+                   dtype=['date', 'date'], dayfirst=True,
+                   compression=in_comp)
 
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
@@ -720,22 +731,6 @@ def test_csv_reader_carriage_return(tmpdir):
     for row in range(0, rows):
         assert(df[names[0]][row] == row)
         assert(df[names[1]][row] == 2 * row)
-
-
-def test_csv_reader_bzip2_compression(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file16.csv.bz2')
-
-    df = make_datetime_dataframe()
-    df.to_csv(fname, index=False, header=False, compression='bz2')
-
-    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
-                         dayfirst=True, compression='bz2')
-    dtypes = ['date', 'date']
-    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
-                   dayfirst=True, compression='bz2')
-
-    assert len(out.columns) == len(df_out.columns)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
 def test_csv_reader_tabs():
@@ -1053,3 +1048,129 @@ def test_csv_reader_partial_dtype(dtype):
 
     assert(names_df == header_df)
     assert(all(names_df.dtypes == ['int16', 'int32']))
+
+
+@pytest.mark.parametrize('dtype', dtypes)
+@pytest.mark.parametrize('nelem', nelem)
+def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
+
+    pdf_df_fname = tmpdir.join("pdf_df_1.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_1.csv")
+
+    df = make_numeric_dataframe(nelem, dtype)
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
+    gdf.to_csv(path=gdf_df_fname, index=False)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+def test_csv_writer_datetime_data(tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_2.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_2.csv")
+
+    df = make_datetime_dataframe()
+    df = df.astype('datetime64[ms]')
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=False, line_terminator='\n')
+    gdf.to_csv(path=gdf_df_fname, index=False)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname).astype('datetime64[ms]')
+    got = pd.read_csv(gdf_df_fname).astype('datetime64[ms]')
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'sep',
+    [
+        ',',
+        '|',
+        ' ',
+        ';',
+    ]
+)
+@pytest.mark.parametrize(
+    'columns',
+    [
+        ['Integer', 'Date', 'Float', 'Integer2', 'Category'],
+        ['Category', 'Date', 'Float'],
+        ['Integer2'],
+        ['Category', 'Integer2', 'Float', 'Date', 'Integer'],
+        ['Category', 'Integer2', 'Float', 'Date', 'Integer', 'String',
+            'Boolean'],
+        None
+    ]
+)
+@pytest.mark.parametrize(
+    'header',
+    [
+        True,
+        False
+    ]
+)
+@pytest.mark.parametrize(
+    'index',
+    [
+        True,
+        False
+    ]
+)
+@pytest.mark.parametrize(
+    'line_terminator',
+    [
+        '\r',
+        '\n',
+        'NEWLINE',
+        '<<<<<'
+    ]
+)
+def test_csv_writer_mixed_data(sep, columns, header, index,
+                               line_terminator, tmpdir):
+    import csv
+    pdf_df_fname = tmpdir.join("pdf_df_3.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_3.csv")
+
+    df = make_numpy_mixed_dataframe()
+    df['Date'] = df['Date'].astype('datetime64')
+    gdf = cudf.from_pandas(df)
+    df.to_csv(pdf_df_fname, index=index, sep=sep, columns=columns,
+              header=header, line_terminator=line_terminator,
+              date_format="%Y-%m-%dT%H:%M:%SZ", quoting=csv.QUOTE_NONNUMERIC)
+    gdf.to_csv(path=gdf_df_fname, index=index, sep=sep, columns=columns,
+               header=header, line_terminator=line_terminator)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+def test_csv_writer_multiindex(tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_3.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_3.csv")
+
+    gdf = cudf.DataFrame({'a': np.random.randint(0, 5, 20),
+                          'b': np.random.randint(0, 5, 20),
+                          'c': range(20),
+                          'd': np.random.random(20)})
+    gdg = gdf.groupby(['a', 'b']).mean()
+    pdg = gdg.to_pandas()
+    pdg.to_csv(pdf_df_fname)
+    gdg.to_csv(gdf_df_fname)
+
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
