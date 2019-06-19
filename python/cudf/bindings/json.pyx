@@ -13,7 +13,6 @@ from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 
-from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.column import Column
 from cudf.utils import ioutils

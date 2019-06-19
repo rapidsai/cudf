@@ -162,7 +162,6 @@ struct column_wrapper {
   // column data and bitmask destroyed by device_vector dtor
   ~column_wrapper() {
     if (std::is_same<ColumnType, cudf::nvstring_category>::value) {
-      std::cout << "nvstring category destruction\n";
       if (nullptr != the_column.dtype_info.category) {
         NVCategory::destroy(
             reinterpret_cast<NVCategory*>(the_column.dtype_info.category));
@@ -296,8 +295,11 @@ struct column_wrapper {
                  "Type mismatch between column_wrapper and gdf_column");
 
     if (column.data != nullptr) {
-      data.assign(static_cast<ColumnType*>(column.data),
-                  static_cast<ColumnType*>(column.data) + column.size);
+      // Using device_vector::assign causes a segfault on CentOS7 when trying to
+      // assign `wrapper` types. This is a workaround
+      data.resize(column.size);
+      CUDA_TRY(cudaMemcpy(data.data().get(), column.data,
+                          sizeof(ColumnType) * column.size, cudaMemcpyDefault));
     }
 
     if (column.valid != nullptr) {
@@ -531,6 +533,16 @@ struct column_wrapper {
   }
 
   gdf_size_type size() const { return the_column.size; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Prints the values of the underlying gdf_column to a string
+   * 
+   *---------------------------------------------------------------------------**/
+  std::string to_str() const {
+    std::ostringstream buffer;
+    print_gdf_column(&the_column, 1, buffer);
+    return buffer.str();
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Compares this wrapper to a gdf_column for equality.

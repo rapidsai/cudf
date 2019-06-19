@@ -240,14 +240,14 @@ gdf_column create_gdf_column(const size_t size)
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Given a column for the SUM and COUNT aggregations, computes the MEAN
- * aggregation column result as MEAN[i] = SUM[i] / COUNT[i].
+ * @brief Given a column for the SUM and COUNT aggregations, computes the AVG
+ * aggregation column result as AVG[i] = SUM[i] / COUNT[i].
  * 
- * @param[out] avg_column The output MEAN aggregation column
+ * @param[out] avg_column The output AVG aggregation column
  * @param count_column The input COUNT aggregation column
  * @param sum_column The input SUM aggregation column
  * @tparam sum_type The type used for the SUM column
- * @tparam avg_type The type used for the MEAN column
+ * @tparam avg_type The type used for the AVG column
  */
 /* ----------------------------------------------------------------------------*/
 template <typename sum_type, typename avg_type>
@@ -294,7 +294,7 @@ struct compute_average_functor {
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Computes the SUM and COUNT aggregations for the group by inputs. Calls 
- * another function to compute the MEAN aggregator based on the SUM and COUNT results.
+ * another function to compute the AVG aggregator based on the SUM and COUNT results.
  * 
  * @param ncols The number of input groupby columns
  * @param in_groupby_columns[] The groupby input columns
@@ -364,8 +364,8 @@ struct multi_pass_avg_functor {
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief  Computes the MEAN aggregation for a hash-based group by. This aggregator
- * requires its own function as MEAN is implemented via the COUNT and SUM aggregators.
+ * @brief  Computes the AVG aggregation for a hash-based group by. This aggregator
+ * requires its own function as AVG is implemented via the COUNT and SUM aggregators.
  * 
  * @param ncols The number of columns to groupby
  * @param in_groupby_columns[] The input groupby columns

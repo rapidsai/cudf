@@ -167,9 +167,9 @@ void JsonReader::Impl::ingestRawInput() {
 }
 
 void JsonReader::Impl::decompressInput() {
-  const std::string compression_type =
-      inferCompressionType(args_.compression, args_.source_type, args_.source,
-                           {{"json", "none"}, {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  const auto compression_type = inferCompressionType(
+      args_.compression, args_.source_type, args_.source,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid copying the whole file to the heap
     uncomp_data_ = input_data_;

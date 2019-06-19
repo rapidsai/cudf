@@ -914,3 +914,24 @@ def test_string_equality():
     got = (gs1 == gs2)
 
     assert_eq(expect, got.fillna(False))
+
+
+@pytest.mark.parametrize(
+    'lhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['abc', 'xyz', 'a', 'ab', '123', '097']
+    ]
+)
+@pytest.mark.parametrize(
+    'rhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A', 'z']
+    ]
+)
+def test_string_binary_op_add(lhs, rhs):
+    pds = pd.Series(lhs) + pd.Series(rhs)
+    gds = Series(lhs) + Series(rhs)
+
+    assert_eq(pds, gds)

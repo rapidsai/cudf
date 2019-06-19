@@ -12,7 +12,6 @@ from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
