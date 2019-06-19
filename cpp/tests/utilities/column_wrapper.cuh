@@ -296,8 +296,11 @@ struct column_wrapper {
                  "Type mismatch between column_wrapper and gdf_column");
 
     if (column.data != nullptr) {
-      data.assign(static_cast<ColumnType*>(column.data),
-                  static_cast<ColumnType*>(column.data) + column.size);
+      // Using device_vector::assign causes a segfault on CentOS7 when trying to
+      // assign `wrapper` types. This is a workaround
+      data.resize(column.size);
+      CUDA_TRY(cudaMemcpy(data.data().get(), column.data,
+                          sizeof(ColumnType) * column.size, cudaMemcpyDefault));
     }
 
     if (column.valid != nullptr) {
