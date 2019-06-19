@@ -58,9 +58,11 @@ namespace cudf {
  *
  * @param[in] col Input column
  * @param[in] op  The operator applied by the reduction
- * @param[in] dtype The computation and output precision.
+ * @param[in] output_dtype  The computation and output precision.
  *     `dtype` must be a data type that is convertible from the input dtype.
- *     If the input column has arithmetic type, any arithmetic type can be specified.
+ *     If the input column has arithmetic type and bool8 type,
+ *     any arithmetic type and bool8 type can be specified.
+ *     For `mean`, `var` and `std` ops, floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
  *
