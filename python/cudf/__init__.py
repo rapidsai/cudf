@@ -14,7 +14,7 @@ from cudf.ops import (sqrt, sin, cos, tan, arcsin, arccos, arctan, exp, log,
                       logical_not, logical_and, logical_or)
 
 from librmm_cffi import librmm as rmm
-from cudf.utils.utils import get_dummies_v2 as get_dummies
+from cudf.utils.utils import get_dummies
 
 # Versioneer
 from cudf._version import get_versions
