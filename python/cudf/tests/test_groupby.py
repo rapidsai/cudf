@@ -150,7 +150,6 @@ def test_groupby_agg_mean_min(nelem, method):
 @pytest.mark.parametrize('nelem', get_nelem())
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_agg_min_max_dictargs(nelem, method):
-    # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ['x', 'y'], method=method).agg({'a': 'min', 'b': 'max'})
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
@@ -326,7 +325,6 @@ def test_series_groupby(agg):
     assert_eq(sa, ga, check_dtype=check_dtype)
 
 
-@pytest.mark.xfail(reason="Prefixed column names are not removed yet")
 @pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
@@ -459,6 +457,7 @@ def test_advanced_groupby_levels():
     lambda df: df.groupby(['x']).sum(),
     lambda df: df.groupby(['x']).agg('sum'),
     lambda df: df.groupby(['x', 'y']).z.sum(),
+    lambda df: df.groupby(['x', 'y']).z.agg('sum'),
 ])
 def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
@@ -505,3 +504,77 @@ def test_groupby_use_agg_column_as_index():
     pdg = pdf.groupby('a').agg({'a': 'count'})
     gdg = gdf.groupby('a').agg({'a': 'count'})
     assert_eq(pdg, gdg, check_dtype=False)
+
+
+def test_groupby_list_then_string():
+    gdf = cudf.DataFrame()
+    gdf['a'] = [0, 1, 0, 1, 2]
+    gdf['b'] = [11, 2, 15, 12, 2]
+    gdf['c'] = [6, 7, 6, 7, 6]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby('a', as_index=True).agg({'b': [
+        'min', 'max'], 'c': 'max'})
+    pdg = pdf.groupby('a', as_index=True).agg({'b': [
+        'min', 'max'], 'c': 'max'})
+    assert_eq(gdg, pdg)
+
+
+def test_groupby_different_unequal_length_column_aggregations():
+    gdf = cudf.DataFrame()
+    gdf['a'] = [0, 1, 0, 1, 2]
+    gdf['b'] = [11, 2, 15, 12, 2]
+    gdf['c'] = [11, 2, 15, 12, 2]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby('a', as_index=True).agg(
+            {'b': 'min', 'c': ['max', 'min']})
+    pdg = pdf.groupby('a', as_index=True).agg(
+            {'b': 'min', 'c': ['max', 'min']})
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_single_var_two_aggs():
+    gdf = cudf.DataFrame()
+    gdf['a'] = [0, 1, 0, 1, 2]
+    gdf['b'] = [11, 2, 15, 12, 2]
+    gdf['c'] = [11, 2, 15, 12, 2]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby('a', as_index=True).agg({'b': ['min', 'max']})
+    pdg = pdf.groupby('a', as_index=True).agg({'b': ['min', 'max']})
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_apply_basic_agg_single_column():
+    gdf = DataFrame()
+    gdf['key'] = [0, 0, 1, 1, 2, 2, 0]
+    gdf['val'] = [0, 1, 2, 3, 4, 5, 6]
+    gdf['mult'] = gdf['key'] * gdf['val']
+    pdf = gdf.to_pandas()
+
+    gdg = gdf.groupby(['key', 'val']).mult.sum()
+    pdg = pdf.groupby(['key', 'val']).mult.sum()
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_multi_agg_single_groupby_series():
+    pdf = pd.DataFrame({"x": np.random.randint(0, 5, size=10000),
+                        "y": np.random.normal(size=10000)})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby("x").y.agg(["sum", "max"])
+    gdg = gdf.groupby("x").y.agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_multi_agg_multi_groupby():
+    pdf = pd.DataFrame({"a": np.random.randint(0, 5, 10),
+                        "b": np.random.randint(0, 5, 10),
+                        "c": np.random.randint(0, 5, 10),
+                        "d": np.random.randint(0, 5, 10)})
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_empty_dataframe():
+    gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
+    gdf.groupby(level=[0, 1])  # it doesn't crash

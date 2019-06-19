@@ -123,7 +123,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return CategoricalAccessor(self, categories=self._categories,
                                    ordered=self._ordered)
 
-    def binary_operator(self, binop, rhs):
+    def binary_operator(self, binop, rhs, reflect=False):
         msg = 'Series of dtype `category` cannot perform the operation: {}'\
             .format(binop)
         raise TypeError(msg)
@@ -233,9 +233,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return -1
 
-    def find_and_replace(self, to_replace, value):
+    def find_and_replace(self, to_replace, replacement, all_nan):
         """
-        Return col with *to_replace* replaced with *value*.
+        Return col with *to_replace* replaced with *replacement*.
         """
         replaced = columnops.as_column(self.cat().codes)
 
@@ -243,48 +243,74 @@ class CategoricalColumn(columnops.TypedColumnBase):
             np.asarray([self._encode(val) for val in to_replace],
                        dtype=replaced.dtype)
         )
-        value_col = columnops.as_column(
-            np.asarray([self._encode(val) for val in value],
+        replacement_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in replacement],
                        dtype=replaced.dtype)
         )
 
-        cpp_replace.replace(replaced, to_replace_col, value_col)
+        output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
 
-        return self.replace(data=replaced.data)
+        return self.replace(data=output.data)
 
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with *fill_value*
         """
-
-        result = self.copy()
-
         if not self.has_null_mask:
-            return result
+            return self
 
         fill_is_scalar = np.isscalar(fill_value)
 
-        if fill_is_scalar and fill_value == self.default_na_value():
-            fill_value_col = columnops.as_column(
-                [fill_value], nan_as_null=False, dtype=self.data.dtype)
+        if fill_is_scalar:
+            if fill_value == self.default_na_value():
+                fill_value = self.data.dtype.type(fill_value)
+            else:
+                try:
+                    fill_value = self._encode(
+                        pd.Categorical(
+                            fill_value, categories=self.cat().categories
+                        )
+                    )
+                    fill_value = self.data.dtype.type(fill_value)
+                except (ValueError) as err:
+                    err_msg = "fill value must be in categories"
+                    raise ValueError(err_msg) from err
         else:
-            if fill_is_scalar:
-                if fill_value != self.default_na_value():
-                    if (fill_value not in self.cat().categories):
-                        raise ValueError("fill value must be in categories")
-                fill_value = pd.Categorical(fill_value,
-                                            categories=self.cat().categories)
-
-            fill_value_col = columnops.as_column(
-                fill_value, nan_as_null=False)
-
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
-            fill_value_col = fill_value_col.cat()._set_categories(
-                self.cat().categories)
+            fill_value = fill_value.cat()._set_categories(
+                self.cat().categories
+            )
+            fill_value = columnops.as_column(fill_value.data).astype(
+                self.data.dtype
+            )
 
-        cpp_replace.replace_nulls(result, fill_value_col)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
+
+        result = columnops.build_column(
+            result.data,
+            "category",
+            result.mask,
+            categories=self.cat().categories,
+        )
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.Categorical(value, categories=self.cat().categories)
+        value = value.codes[0].astype("int32")
+        return self.as_numerical.astype("int32").find_first_value(value)
+
+    def find_last_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        value = pd.Categorical(value, categories=self.cat().categories)
+        value = value.codes[0].astype("int32")
+        return self.as_numerical.astype("int32").find_first_value(value)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

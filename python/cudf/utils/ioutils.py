@@ -19,7 +19,7 @@ List of column names
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -100,6 +100,38 @@ cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
+_docstring_read_orc_metadata = """
+Read an ORC file's metadata and schema
+
+Parameters
+----------
+path : string or path object
+    Path of file to be read
+
+Returns
+-------
+Total number of rows
+Number of stripes
+List of column names
+
+Examples
+--------
+>>> import cudf
+>>> num_rows, stripes, names = cudf.io.read_orc_metadata(filename)
+>>> df = [cudf.read_orc(fname, stripe=i) for i in range(stripes)]
+>>> df = cudf.concat(df)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.orc.read_orc
+"""
+doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
+
 _docstring_read_orc = """
 Load an ORC object from the file path, returning a DataFrame.
 
@@ -111,10 +143,14 @@ engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
+stripe: int, default None
+    If not None, only the stripe with the specified index will be read.
 skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
+use_index : bool, default True
+    If True, use row index if available for faster seeking.
 kwargs are passed to the engine
 
 Returns
@@ -496,3 +532,167 @@ pycapsule_obj : PyCapsule
     object.
 """
 doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
+
+_docstring_read_csv = """
+Load and parse a CSV file into a DataFrame
+
+Parameters
+----------
+filepath_or_buffer : str
+    Path of file to be read or a file-like object containing the file.
+sep : char, default ','
+    Delimiter to be used.
+delimiter : char, default None
+    Alternative argument name for sep.
+delim_whitespace : bool, default False
+    Determines whether to use whitespace as delimiter.
+lineterminator : char, default '\\n'
+    Character to indicate end of line.
+skipinitialspace : bool, default False
+    Skip spaces after delimiter.
+names : list of str, default None
+    List of column names to be used.
+dtype : list of str or dict of {col: dtype}, default None
+    List of data types in the same order of the column names
+    or a dictionary with column_name:dtype (pandas style).
+quotechar : char, default '"'
+    Character to indicate start and end of quote item.
+quoting : str or int, default 0
+    Controls quoting behavior. Set to one of
+    0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
+    2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
+    Quoting is enabled with all values except 3.
+doublequote : bool, default True
+    When quoting is enabled, indicates whether to interpret two
+    consecutive quotechar inside fields as single quotechar
+header : int, default 'infer'
+    Row number to use as the column names. Default behavior is to infer
+    the column names: if no names are passed, header=0;
+    if column names are passed explicitly, header=None.
+usecols : list of int or str, default None
+    Returns subset of the columns given in the list. All elements must be
+    either integer indices (column number) or strings that correspond to
+    column names
+mangle_dupe_cols : boolean, default True
+    Duplicate columns will be specified as 'X','X.1',...'X.N'.
+skiprows : int, default 0
+    Number of rows to be skipped from the start of file.
+skipfooter : int, default 0
+    Number of rows to be skipped at the bottom of file.
+compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+    For on-the-fly decompression of on-disk data. If ‘infer’, then detect
+    compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
+    decompression). If using ‘zip’, the ZIP file must contain only one
+    data file to be read in, otherwise the first non-zero-sized file will
+    be used. Set to None for no decompression.
+decimal : char, default '.'
+    Character used as a decimal point.
+thousands : char, default None
+    Character used as a thousands delimiter.
+true_values : list, default None
+    Values to consider as boolean True
+false_values : list, default None
+    Values to consider as boolean False
+nrows : int, default None
+    If specified, maximum number of rows to read
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes. Set the
+    size to zero to read all data after the offset location. Reads the row
+    that starts before or at the end of the range, even if it ends after
+    the end of the range.
+skip_blank_lines : bool, default True
+    If True, discard and do not parse empty lines
+    If False, interpret empty lines as NaN values
+comment : char, default None
+    Character used as a comments indicator. If found at the beginning of a
+    line, the line will be ignored altogether.
+na_values : list, default None
+    Values to consider as invalid
+keep_default_na : bool, default True
+    Whether or not to include the default NA values when parsing the data.
+na_filter : bool, default True
+    Detect missing values (empty strings and the values in na_values).
+    Passing False can improve performance.
+prefix : str, default None
+    Prefix to add to column numbers when parsing without a header row
+index_col : int or string, default None
+    Column to use as the row labels
+
+Returns
+-------
+GPU ``DataFrame`` object.
+
+Examples
+--------
+
+Create a test csv file
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> lines = [
+...   "num1,datetime,text",
+...   "123,2018-11-13T12:00:00,abc",
+...   "456,2018-11-14T12:35:01,def",
+...   "789,2018-11-15T18:02:59,ghi"
+... ]
+>>> with open(filename, 'w') as fp:
+...     fp.write('\\n'.join(lines)+'\\n')
+
+Read the file with ``cudf.read_csv``
+
+>>> cudf.read_csv(filename)
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.csv.to_csv
+"""
+doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
+
+_docstring_to_csv = """
+Write a dataframe to csv file format.
+
+Parameters
+----------
+df : DataFrame
+    DataFrame object to be written to csv
+path : str, default None
+    Path of file where DataFrame will be written
+sep : char, default ','
+    Delimiter to be used.
+na_rep : str, default ''
+    String to use for null entries
+columns : list of str, optional
+    Columns to write
+header : bool, default True
+    Write out the column names
+index : bool, default True
+    Write out the index as a column
+line_terminator: char, default '\\n'
+
+Notes
+-----
+Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+
+Examples
+--------
+
+Write a dataframe to csv.
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
+                         'y': [1.0, 3.3, 2.2, 4.4],
+                         'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index([3, 2, 1, 0])
+>>> cudf.to_csv(filename)
+
+See Also
+--------
+cudf.io.csv.read_csv
+"""
+doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)

@@ -296,6 +296,7 @@ class Groupby(object):
         # Prepare dataframe
         orig_df = df.copy()
         df = df.loc[:, levels].reset_index(drop=True)
+        df = df.to_frame() if isinstance(df, Series) else df
         rowid_column = '__cudf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
@@ -402,6 +403,7 @@ class Groupby(object):
         """Shuffle columns in *src_df* with *reordering_indices*
         and store the new columns into *out_df*
         """
+        src_df = src_df.to_frame() if isinstance(src_df, Series) else src_df
         for k in src_df.columns:
             col = src_df[k].reset_index(drop=True)
             newcol = col.take(reordering_indices, ignore_index=True)
@@ -561,6 +563,77 @@ class Groupby(object):
             4    2    4    8    6
             5    2    5   10    7
             6    2    6   12    8
+
+
+
+        .. code-block:: python
+
+            import cudf
+            import numpy as np
+            from numba import cuda
+            import pandas as pd
+            from random import randint
+
+
+            # Create a random 15 row dataframe with one categorical
+            # feature and one random integer valued feature
+            df = cudf.DataFrame(
+                    {
+                        "cat": [1] * 5 + [2] * 5 + [3] * 5,
+                        "val": [randint(0, 100) for _ in range(15)],
+                    }
+                 )
+
+            # Group the dataframe by its categorical feature
+            groups = df.groupby("cat", method="cudf")
+
+            # Define a kernel which takes the moving average of a
+            # sliding window
+            def rolling_avg(val, avg):
+                win_size = 3
+                for row, i in enumerate(range(cuda.threadIdx.x,
+                                              len(val), cuda.blockDim.x)):
+                    if row < win_size - 1:
+                        # If there is not enough data to fill the window,
+                        # take the average to be NaN
+                        avg[i] = np.nan
+                    else:
+                        total = 0
+                        for j in range(i - win_size + 1, i + 1):
+                            total += val[j]
+                        avg[i] = total / win_size
+
+            # Compute moving avgs on all groups
+            results = groups.apply_grouped(rolling_avg,
+                                           incols=['val'],
+                                           outcols=dict(avg=np.float64))
+            print("Results:", results)
+
+            # Note this gives the same result as its pandas equivalent
+            pdf = df.to_pandas()
+            pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
+
+
+        Output:
+
+        .. code-block:: python
+
+            Results:
+                 cat  val                 avg
+            0    1   16
+            1    1   45
+            2    1   62                41.0
+            3    1   45  50.666666666666664
+            4    1   26  44.333333333333336
+            5    2    5
+            6    2   51
+            7    2   77  44.333333333333336
+            8    2    1                43.0
+            9    2   46  41.333333333333336
+            [5 more rows]
+
+        This is functionally equivalent to `pandas.DataFrame.Rolling
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
 
         """
         if not callable(function):
