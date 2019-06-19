@@ -8,6 +8,7 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                    ${CMAKE_TEST_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
@@ -22,6 +23,7 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     if(CMAKE_ENABLE_BENCHMARKS)
         add_executable(${CMAKE_BENCH_NAME}
                     ${CMAKE_BENCH_SRC}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
                     "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
         set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         target_link_libraries(${CMAKE_BENCH_NAME} cudf)
