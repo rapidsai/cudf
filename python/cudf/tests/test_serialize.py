@@ -53,8 +53,13 @@ def test_serialize(df):
         a = cudf.from_pandas(a)
     header, frames = cuda_serialize(a)
     msgpack.dumps(header)  # ensure that header is msgpack serializable
+    ndevice = 0
     for frame in frames:
-        bytes(frame)  # this should work
+        if not isinstance(frame, (bytes, memoryview)):
+            ndevice += 1
+    # Indices etc. will not be DeviceNDArray
+    # but data should be...
+    assert ndevice > 0
 
     b = cuda_deserialize(header, frames)
     assert_eq(a, b)
@@ -146,6 +151,28 @@ def test_serialize_string():
     recreated = cuda_deserialize(*cuda_serialize(gdf))
     # Check
     assert_eq(recreated, df)
+
+
+def test_serialize_buffer_column():
+    from cudf.dataframe.column import Column
+    from cudf.dataframe.buffer import Buffer
+
+    # Test Buffer serialization
+    s = cudf.Series([1, 2, None, 4])
+    buf = s.data
+    # (De)serialize roundtrip
+    recreated_buf = cuda_deserialize(*cuda_serialize(buf))
+    # Check
+    col = Column(buf)
+    recreated_col = Column(recreated_buf)
+    assert_eq(recreated_col.to_array(), col.to_array())
+    assert_eq(cudf.Series(recreated_col), cudf.Series(col))
+
+    # Test Column Serialization
+    # (De)serialize roundtrip
+    recreated_col = cuda_deserialize(*cuda_serialize(col))
+    # Check
+    assert_eq(recreated_col[0].to_array(), col.to_array())
 
 
 def test_serialize_empty_string():

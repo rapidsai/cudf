@@ -5,6 +5,7 @@ import numpy as np
 import pyarrow as pa
 import nvstrings
 from numbers import Number
+import numba.cuda as cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
@@ -16,6 +17,7 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
+from cudf.comm.serialize import register_distributed_serializer
 
 
 _str_to_numeric_typecast_functions = {
@@ -590,6 +592,61 @@ class StringColumn(columnops.TypedColumnBase):
 
         return self.to_arrow().to_pandas()
 
+    def serialize(self, serialize):
+        header = {
+            'null_count': self._null_count,
+        }
+        frames = []
+        sub_headers = []
+        arr = np.arange(self.data.size(),dtype=np.int32)
+        d_arr = rmm.to_device(arr)
+        self.data.len(d_arr.device_ctypes_pointer.value)
+        nchars = sum(d_arr.copy_to_host()) + self.null_count * 2
+        values = np.empty(nchars, dtype=np.int8)
+        offsets = np.empty(nchars+1, dtype=np.int32)
+        self.data.to_offsets(values, offsets)
+        for i, item in enumerate([self.mask, values, offsets]):
+            if i == 0:
+                sheader, [frame] = serialize(item)
+            else:
+                item_ndarray = cuda.to_device(item)
+                sheader, [frame] = serialize(item_ndarray)
+            sub_headers.append(sheader)
+            frames.append(frame)
+
+        header["nvstrings"] = len(self.data)
+        header["subheaders"] = sub_headers
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        # Deserialize the mask
+        mask_header = header["subheaders"][0]
+        mask_frame = frames[0]
+        mask_array = deserialize(mask_header, [mask_frame])
+
+        # Deserialize the value array
+        value_header = header["subheaders"][1]
+        value_frame = frames[1]
+        value_array = deserialize(value_header, [value_frame])
+
+        # Deserialize the offset array
+        offset_header = header["subheaders"][2]
+        offset_frame = frames[2]
+        offset_array = deserialize(offset_header, [offset_frame])
+
+        # Use from_offsets to get nvstring data
+        vals = value_array.copy_to_host()
+        offsets = offset_array.copy_to_host()
+        scount = header["nvstrings"]
+        mask = None
+        if mask_array:
+            mask = mask_array.to_array()
+        data = nvstrings.from_offsets(vals, offsets, scount, nbuf=mask,
+                                      ncount=header["null_count"])
+
+        return data
+
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
             nullfirst = False
@@ -702,3 +759,6 @@ def string_column_binop(lhs, rhs, op):
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
     return result
+
+
+register_distributed_serializer(StringColumn)
