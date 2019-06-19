@@ -65,15 +65,13 @@ echo
 # Print conda packages if conda exists
 if type "conda" &> /dev/null; then
 echo '***conda packages***'
-which conda
-conda list
+which conda && conda list
 echo
 # Print pip packages if pip exists
 elif type "pip" &> /dev/null; then
 echo "conda not found"
 echo "***pip packages***"
-which pip
-pip list
+which pip && pip list
 echo
 else
 echo "conda not found"
