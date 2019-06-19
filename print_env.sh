@@ -42,10 +42,7 @@ which nvcc && nvcc --version
 echo 
 
 echo "***Python***"
-if type "python" &> /dev/null; then
-which python
-python -c "import sys; print('Python {0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))"
-fi
+which python && python -c "import sys; print('Python {0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))"
 echo
 
 echo "***Environment Variables***"
