@@ -101,7 +101,10 @@ class Groupby(object):
         self._df = df.copy(deep=False)
         self._as_index = as_index
         if len(df) == 0:  # empty case
-            self._by = by
+            if by is None or isinstance(by, str):
+                self._by = [by]
+            else:
+                self._by = list(by)
             self._df = df
             self._val_columns = []
             if by is not None:
