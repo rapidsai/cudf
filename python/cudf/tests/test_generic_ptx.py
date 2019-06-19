@@ -3,6 +3,7 @@
 from __future__ import division
 
 import pytest
+import numba
 import numpy as np
 
 from cudf.bindings import binops
@@ -10,8 +11,10 @@ from cudf.dataframe import Series
 
 from numba import cuda
 from numba import types
+from packaging.version import Version
 
 
+@pytest.mark.skipif(Version(numba.__version__) < Version('0.44.0'))
 @pytest.mark.parametrize('dtype', ['int32', 'int64', 'float32', 'float64'])
 def test_generic_ptx(dtype):
 

@@ -26,7 +26,7 @@ requirements:
   run:
     - python
     - pandas >=0.23.4
-    - numba >=0.44
+    - numba >=0.41
     - pyarrow 0.12.1.*
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*

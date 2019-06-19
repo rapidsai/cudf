@@ -169,7 +169,6 @@ def apply_op_udf(lhs, rhs, out, ptx):
     check_gdf_compatibility(out)
     cdef gdf_column* c_lhs = NULL
     cdef gdf_column* c_rhs = NULL
-    cdef gdf_scalar* c_scalar = NULL
     cdef gdf_column* c_out = column_view_from_column(out)
 
     check_gdf_compatibility(lhs)
@@ -186,7 +185,6 @@ def apply_op_udf(lhs, rhs, out, ptx):
 
     free(c_lhs)
     free(c_rhs)
-    free(c_scalar)
     free(c_out)
 
     return nullct
