@@ -67,9 +67,9 @@ struct target_type<SourceType, MAX> { using type = SourceType; };
 template <typename SourceType>
 struct target_type<SourceType, COUNT> { using type = gdf_size_type; };
 
-// Always use `double` for AVG
+// Always use `double` for MEAN
 template <typename SourceType>
-struct target_type<SourceType, AVG> { using type = double; };
+struct target_type<SourceType, MEAN> { using type = double; };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>

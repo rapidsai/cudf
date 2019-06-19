@@ -46,9 +46,9 @@ std::vector<AggRequestType> compound_to_simple(
         gdf_column* col = const_cast<gdf_column*>(pair.first);
         CUDF_EXPECTS(col != nullptr, "Null column in aggregation request.");
         auto op = pair.second;
-        // AVG requires computing a COUNT and SUM aggregation and then doing
+        // MEAN requires computing a COUNT and SUM aggregation and then doing
         // elementwise division
-        if (op == AVG) {
+        if (op == MEAN) {
           columns_to_ops[col].insert(COUNT);
           columns_to_ops[col].insert(SUM);
         } else {
@@ -72,7 +72,7 @@ std::vector<AggRequestType> compound_to_simple(
 struct avg_result_type {
   template <typename SourceType>
   gdf_dtype operator()() {
-    return cudf::gdf_dtype_of<target_type_t<SourceType, AVG>>();
+    return cudf::gdf_dtype_of<target_type_t<SourceType, MEAN>>();
   }
 };
 
@@ -114,7 +114,7 @@ table compute_original_requests(
   // Iterate requests. For any compound request, compute the compound result
   // from the corresponding simple requests
   for (auto const& req : original_requests) {
-    if (req.second == AVG) {
+    if (req.second == MEAN) {
       auto found = simple_requests_to_outputs.find({req.first, SUM});
       CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
                    "SUM request missing.");

@@ -40,7 +40,7 @@ using cudaStream_t = struct CUstream_st*;
  * requests, and then transforming the result of the simple aggregation request
  * into the requested compound aggregation.
  *
- * For example, `AVG` is a "compound" aggregation. The request to compute an AVG
+ * For example, `MEAN` is a "compound" aggregation. The request to compute an MEAN
  * on a column can be satisfied via the `COUNT` and `SUM` "simple" aggregation
  * operations.
  *---------------------------------------------------------------------------**/
@@ -59,7 +59,7 @@ std::vector<AggRequestType> compound_to_simple(
     std::vector<AggRequestType> const& compound_requests);
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the `AVG` aggregation of a column by doing element-wise
+ * @brief Computes the `MEAN` aggregation of a column by doing element-wise
  * division of the corresponding `SUM` and `COUNT` aggregation columns.
  *
  * @param sum The result of a `SUM` aggregation request

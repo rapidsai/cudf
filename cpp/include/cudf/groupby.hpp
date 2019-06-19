@@ -70,15 +70,15 @@ namespace hash {
 
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
- *
  *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {};
+struct Options : groupby::Options {
+  Options(bool _ignore_null_keys = true) : groupby::Options(_ignore_null_keys) {}
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Supported aggregation operations
- *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, AVG };
+enum operators { SUM, MIN, MAX, COUNT, MEAN };
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
