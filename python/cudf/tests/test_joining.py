@@ -102,8 +102,7 @@ def test_dataframe_join_how(aa, bb, how, method):
     expect.drop(['a'], axis=1)
     expect['a'] = expecta.astype(np.float64).fillna(np.nan)
 
-    # print(expect)
-    # print(got.to_string(nrows=None))
+    assert got.index.name is None
 
     assert list(expect.columns) == list(got.columns)
     # test disabled until libgdf sort join gets updated with new api

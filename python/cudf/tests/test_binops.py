@@ -11,10 +11,8 @@ import numpy as np
 import pandas as pd
 
 import cudf
-
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
-
 from cudf.tests import utils
 
 
@@ -32,18 +30,43 @@ _binops = [
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('binop', _binops)
 def test_series_binop(binop, obj_class):
-    arr = np.random.random(100)
-    sr = Series(arr)
+    nelem = 1000
+    arr1 = utils.gen_rand('float64', nelem) * 10000
+    # Keeping a low value because CUDA 'pow' has 2 full range error
+    arr2 = utils.gen_rand('float64', nelem) * 10
+
+    sr1 = Series(arr1)
+    sr2 = Series(arr2)
 
     if obj_class == 'Index':
-        sr = as_index(sr)
+        sr1 = as_index(sr1)
+        sr2 = as_index(sr2)
 
-    result = binop(sr, sr)
+    result = binop(sr1, sr2)
+    expect = binop(pd.Series(arr1), pd.Series(arr2))
 
     if obj_class == 'Index':
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(arr, arr))
+    utils.assert_eq(result, expect)
+
+
+@pytest.mark.parametrize('binop', _binops)
+def test_series_binop_concurrent(binop):
+    def func(index):
+        arr = np.random.random(100) * 10
+        sr = Series(arr)
+
+        result = binop(sr.astype('int32'), sr)
+        expect = binop(arr.astype('int32'), arr)
+
+        np.testing.assert_almost_equal(result.to_array(), expect, decimal=5)
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    indices = range(10)
+    with ThreadPoolExecutor(4) as e:  # four processes
+        list(e.map(func, indices))
 
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
@@ -310,6 +333,7 @@ _reflected_ops = [
     lambda x: 3 - x,
     lambda x: 3 // x,
     lambda x: 3 / x,
+    lambda x: 3 % x,
     lambda x: -1 + x,
     lambda x: -2 * x,
     lambda x: -2 - x,
@@ -320,6 +344,7 @@ _reflected_ops = [
     lambda x: -3 - x,
     lambda x: -3 // x,
     lambda x: -3 / x,
+    lambda x: -3 % x,
     lambda x: 0 + x,
     lambda x: 0 * x,
     lambda x: 0 - x,
@@ -333,7 +358,7 @@ _reflected_ops = [
 def test_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
-    random_series = pd.Series(np.random.sample(100) + 10, dtype=dtype)
+    random_series = utils.gen_rand(dtype, 100, low=10)
 
     # gpu series
     gs = Series(random_series)
@@ -396,6 +421,16 @@ def test_different_shapes_and_same_columns(binop):
         binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
 
 
+@pytest.mark.parametrize('op',
+                         [operator.eq,
+                          operator.ne])
+def test_boolean_scalar_binop(op):
+    psr = pd.Series(np.random.choice([True, False], 10))
+    gsr = cudf.from_pandas(psr)
+    utils.assert_eq(op(psr, True), op(gsr, True))
+    utils.assert_eq(op(psr, False), op(gsr, False))
+
+
 _operator_funcs = [
     'add',
     'radd',
@@ -403,8 +438,8 @@ _operator_funcs = [
     'rsub',
     'mul',
     'rmul',
-    # 'mod', << Coming Later
-    # 'rmod', << Coming Later
+    'mod',
+    'rmod',
     'pow',
     'rpow',
     'floordiv',
