@@ -17,7 +17,7 @@ agg_names = {
     'min': hash_groupby.MIN,
     'max': hash_groupby.MAX,
     'count': hash_groupby.COUNT,
-    'mean': hash_groupby.AVG
+    'mean': hash_groupby.MEAN
 }
 
 

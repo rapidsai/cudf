@@ -23,7 +23,7 @@ cdef extern from "groupby.hpp" namespace "cudf::groupby::hash":
         MIN,
         MAX,
         COUNT,
-        AVG,
+        MEAN
 
     cdef pair[cudf_table, cudf_table] groupby(
             cudf_table  keys,
