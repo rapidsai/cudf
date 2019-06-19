@@ -81,17 +81,18 @@ struct ReductionTest : public GdfTest
 
     ~ReductionTest(){}
 
+    template <typename T_out>
     void reduction_test(cudf::test::column_wrapper<T> &col,
-        T expected_value, bool succeeded_condition,
+        T_out expected_value, bool succeeded_condition,
         gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
     {
         const gdf_column * underlying_column = col.get();
-        thrust::device_vector<T> dev_result(1);
+        thrust::device_vector<T_out> dev_result(1);
 
         if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
 
         auto statement = [&]() {
-            cudf::test::scalar_wrapper<T> result
+            cudf::test::scalar_wrapper<T_out> result
                 = cudf::reduction(underlying_column, op, output_dtype);
             EXPECT_EQ(expected_value, result.value());
         };
@@ -230,34 +231,10 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 // ----------------------------------------------------------------------------
 
 template <typename T>
-struct MultiStepReductionTest : public GdfTest
+struct MultiStepReductionTest : public ReductionTest<T>
 {
     MultiStepReductionTest(){}
     ~MultiStepReductionTest(){}
-
-    template <typename T_out>
-    void reduction_test(cudf::test::column_wrapper<T> &col,
-        T_out expected_value, bool succeeded_condition,
-        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
-    {
-        const gdf_column * underlying_column = col.get();
-        thrust::device_vector<T_out> dev_result(1);
-
-        if( N_GDF_TYPES == output_dtype) output_dtype = underlying_column->dtype;
-
-        auto statement = [&]() {
-            cudf::test::scalar_wrapper<T_out> result
-                = cudf::reduction(underlying_column, op, output_dtype);
-            EXPECT_EQ(expected_value, result.value());
-        };
-
-        if( succeeded_condition ){
-            CUDF_EXPECT_NO_THROW(statement());
-        }else{
-            EXPECT_ANY_THROW(statement());
-        }
-    };
-
 };
 
 using MultiStepReductionTypes = testing::Types<
@@ -335,6 +312,75 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     this->reduction_test(col_nulls, var_nulls, true, GDF_REDUCTION_VAR, GDF_FLOAT64);
     this->reduction_test(col_nulls, std_nulls, true, GDF_REDUCTION_STD, GDF_FLOAT64);
 }
+
+// ----------------------------------------------------------------------------
+
+template <typename T>
+struct ReductionMultiStepErrorCheck : public ReductionTest<T>
+{
+    ReductionMultiStepErrorCheck(){}
+    ~ReductionMultiStepErrorCheck(){}
+
+    void reduction_error_check(cudf::test::column_wrapper<T> &col,
+        bool succeeded_condition,
+        gdf_reduction_op op, gdf_dtype output_dtype)
+    {
+        const gdf_column * underlying_column = col.get();
+        auto statement = [&]() {
+            cudf::reduction(underlying_column, op, output_dtype);
+        };
+
+        if( succeeded_condition ){
+            CUDF_EXPECT_NO_THROW(statement());
+        }else{
+            EXPECT_ANY_THROW(statement());
+        }
+    }
+};
+
+using AllTypes = testing::Types<
+    int8_t,int16_t, int32_t, int64_t, float, double,
+    cudf::bool8, cudf::date32, cudf::date64, cudf::timestamp, cudf::category>;
+
+TYPED_TEST_CASE(ReductionMultiStepErrorCheck, AllTypes);
+
+TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
+{
+    using T = TypeParam;
+    std::vector<int> int_values({-3, 2});
+    std::vector<bool> host_bools({1, 0});
+
+    std::vector<T> v = convert_values<T>(int_values);
+    cudf::test::column_wrapper<T> col(v);
+    cudf::test::column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+
+    bool is_input_accpetable = this->ret_non_arithmetic;
+
+    std::vector<gdf_dtype> dtypes(N_GDF_TYPES+1);
+    int i=0;
+    std::generate(dtypes.begin(), dtypes.end(), [&](){ return static_cast<gdf_dtype>(i++); });
+
+    auto is_supported_outdtype = [](gdf_dtype dtype){
+        if( dtype == GDF_FLOAT32)return true;
+        if( dtype == GDF_FLOAT64)return true;
+        return false;
+    };
+
+    auto evaluate = [&](gdf_dtype dtype) mutable {
+        bool expect_succeed = is_input_accpetable & is_supported_outdtype(dtype);
+        this->reduction_error_check(col, expect_succeed, GDF_REDUCTION_MEAN, dtype);
+        this->reduction_error_check(col, expect_succeed, GDF_REDUCTION_VAR,  dtype);
+        this->reduction_error_check(col, expect_succeed, GDF_REDUCTION_STD,  dtype);
+
+        this->reduction_error_check(col_nulls, expect_succeed, GDF_REDUCTION_MEAN, dtype);
+        this->reduction_error_check(col_nulls, expect_succeed, GDF_REDUCTION_VAR,  dtype);
+        this->reduction_error_check(col_nulls, expect_succeed, GDF_REDUCTION_STD,  dtype);
+        return;
+    };
+
+    std::for_each(dtypes.begin(), dtypes.end(), evaluate);
+}
+
 
 // ----------------------------------------------------------------------------
 
