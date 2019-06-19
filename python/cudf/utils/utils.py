@@ -281,10 +281,16 @@ def get_dummies_v2(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
         to the empty string
     prefix_sep : str, optional
         separator to use when appending prefixes
+    dummy_na : bool, optional
+        Right now this is NON-FUNCTIONAL argument in rapids.
     cats : dict, optional
         dictionary mapping column names to sequences of integers representing
         that column's category. See `cudf.DataFrame.one_hot_encoding` for more
         information. if not supplied, it will be computed
+    sparse : bool, optional
+        Right now this is NON-FUNCTIONAL argument in rapids.
+    drop_first : bool, optional
+        Right now this is NON-FUNCTIONAL argument in rapids.
     columns : sequence of str, optional
         Names of columns to encode. If not provided, will attempt to encode all
         columns. Note this is different from pandas default behavior, which
