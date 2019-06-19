@@ -30,19 +30,22 @@ lscpu
 echo
 
 echo "***CMake***"
-which cmake && echo cmake --version 
+which cmake && cmake --version
 echo 
 
 echo "***g++***"
-which g++ && echo g++ --version 
+which g++ && g++ --version
 echo 
 
 echo "***nvcc***"
-which nvcc && echo nvcc --version 
+which nvcc && nvcc --version
 echo 
 
 echo "***Python***"
-which python && echo python --version
+if type "python" &> /dev/null; then
+which python
+python -c "import sys; print('Python {0}.{1}.{2}'.format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))"
+fi
 echo
 
 echo "***Environment Variables***"
@@ -65,13 +68,15 @@ echo
 # Print conda packages if conda exists
 if type "conda" &> /dev/null; then
 echo '***conda packages***'
-which conda && echo conda list 
+which conda
+conda list
 echo
 # Print pip packages if pip exists
 elif type "pip" &> /dev/null; then
 echo "conda not found"
 echo "***pip packages***"
-which pip && echo pip list
+which pip
+pip list
 echo
 else
 echo "conda not found"
