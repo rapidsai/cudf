@@ -7,284 +7,42 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from cudf.bindings.cudf_cpp cimport *
-from cudf.bindings.cudf_cpp import *
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport free
-from libcpp.vector cimport vector
-cimport cython
 
 import collections
 import numpy as np
-from pandas.api.types import is_categorical_dtype
 from numbers import Number
+from pandas.api.types import is_categorical_dtype
 
+cimport cython
+from libc.stdint cimport uintptr_t
+from libc.stdlib cimport free
+from libcpp.vector cimport vector
+
+import nvcategory
+import nvstrings
+from librmm_cffi import librmm as rmm
+
+import cudf
+import cudf.dataframe.index as index
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
 from cudf.bindings.nvtx import nvtx_range_pop
-import cudf.dataframe.index as index
-from librmm_cffi import librmm as rmm
-import nvcategory
-import nvstrings
+from cudf.bindings.groupby.groupby import apply_groupby
 
 
+def columns_from_dataframe(df):
+    return [sr._column for sr in df._cols.values()]
 
-cdef _apply_agg(groupby_class, agg_type, result, add_col_values,
-                gdf_context* ctx, val_columns, val_columns_out,
-                sort_results=True):
-    """
-        Parameters
-        ----------
-        groupby_class : :class:`~cudf.groupby.Groupby`
-            Instance of :class:`~cudf.groupby.Groupby`.
-        agg_type : str
-            The aggregation function to run.
-        result : DataFrame
-            The DataFrame to store the result of the aggregation into.
-        add_col_values : bool
-            Boolean to indicate whether this is the first aggregation being
-            run and should add the additional columns' values.
-        ctx : gdf_context* C++ object
-            Context object to pass information such as if the dataframe
-            is sorted and/or which method to use for grouping.
-        val_columns : list of *str*
-            The list of column names that the aggregation should be performed
-            on.
-        val_columns_out : list of *str*
-            The list of columns names that the aggregation results should be
-            output into.
-        sort_results : bool
-            Boolean indicating whether to sort the results or not.
-        """
-
-    if sort_results:
-        ctx.flag_sort_result = 1
-
-    ncols = len(groupby_class._by)
-    cdef vector[gdf_column*] vector_cols
-    for thisBy in groupby_class._by:
-        vector_cols.push_back(column_view_from_column(groupby_class._df[thisBy]._column))
-
-    first_run = add_col_values
-    need_to_index = groupby_class._as_index
-
-    col_count = 0
-    if isinstance(val_columns, (str, Number)):
-        val_columns = [val_columns]
-
-    cdef gdf_column* out_col_indices
-    cdef vector[gdf_column*] vector_out_col_values
-    cdef gdf_error err
-    for val_col in val_columns:
-        out_col_indices = NULL
-        vector_out_col_values.clear()
-        err = GDF_CUDA_ERROR
-        col_agg = column_view_from_column(groupby_class._df[val_col]._column)
-
-        # assuming here that if there are multiple aggregations that the
-        # aggregated results will be in the same order for GDF_SORT method
-        if need_to_index:
-            out_col_indices_series = Series(
-                Buffer(
-                    rmm.device_array(
-                        col_agg.size,
-                        dtype=np.int32
-                    )
-                )
-            )
-            out_col_indices = column_view_from_column(out_col_indices_series._column)
-        else:
-            out_col_indices = NULL
-
-        out_col_values_series = []
-        for i in range(0, ncols):
-            if groupby_class._df[groupby_class._by[i]].dtype == np.dtype('object'):
-                # This isn't ideal, but no better way to create an
-                # nvstrings object of correct size
-                gather_map = zeros(col_agg.size, dtype='int32')
-                col = Series([''], dtype='str')[gather_map]\
-                    .reset_index(drop=True)
-            else:
-                col = Series(
-                    Buffer(
-                        rmm.device_array(
-                            col_agg.size,
-                            dtype=groupby_class._df[groupby_class._by[i]]._column.data.dtype
-                        )
-                    )
-                )
-            out_col_values_series.append(col)
-        for i in range(0, ncols):
-            vector_out_col_values.push_back(column_view_from_column(out_col_values_series[i]._column))
-
-        if agg_type == "count":
-            # To ensure that we update this code if gdf_size_type changes
-            assert np.dtype(np.int32).itemsize == sizeof(gdf_size_type)
-            out_col_agg_series = Series(
-                Buffer(
-                    rmm.device_array(
-                        col_agg.size,
-                        dtype=np.int32
-                    )
-                )
-            )
-        elif agg_type == "mean":
-            out_col_agg_series = Series(
-                Buffer(
-                    rmm.device_array(
-                        col_agg.size,
-                        dtype=np.float64
-                    )
-                )
-            )
-        else:
-            if groupby_class._df[val_col].dtype == np.dtype('object'):
-                # This isn't ideal, but no better way to create an
-                # nvstrings object of correct size
-                gather_map = zeros(col_agg.size, dtype='int32')
-                out_col_agg_series = Series(
-                    [''],
-                    dtype='str'
-                )[gather_map].reset_index(drop=True)
-            else:
-                out_col_agg_series = Series(
-                    Buffer(
-                        rmm.device_array(
-                            col_agg.size,
-                            dtype=groupby_class._df[val_col]._column.data.dtype
-                        )
-                    )
-                )
-
-        out_col_agg = column_view_from_column(out_col_agg_series._column)
-
-        if agg_type is None:
-            raise NotImplementedError(
-                "this aggregator has not been implemented yet"
-            )
-        else:
-            with nogil:
-                if agg_type == 'mean':
-                    err = gdf_group_by_avg(
-                        ncols,
-                        vector_cols.data(),
-                        col_agg,
-                        out_col_indices,
-                        vector_out_col_values.data(),
-                        out_col_agg,
-                        ctx
-                    )
-                elif agg_type == 'min':
-                    err = gdf_group_by_min(
-                        ncols,
-                        vector_cols.data(),
-                        col_agg,
-                        out_col_indices,
-                        vector_out_col_values.data(),
-                        out_col_agg,
-                        ctx
-                    )
-                elif agg_type == 'max':
-                    err = gdf_group_by_max(
-                        ncols,
-                        vector_cols.data(),
-                        col_agg,
-                        out_col_indices,
-                        vector_out_col_values.data(),
-                        out_col_agg,
-                        ctx
-                    )
-                elif agg_type == 'count':
-                    err = gdf_group_by_count(
-                        ncols,
-                        vector_cols.data(),
-                        col_agg,
-                        out_col_indices,
-                        vector_out_col_values.data(),
-                        out_col_agg,
-                        ctx
-                    )
-                elif agg_type == 'sum':
-                    err = gdf_group_by_sum(
-                        ncols,
-                        vector_cols.data(),
-                        col_agg,
-                        out_col_indices,
-                        vector_out_col_values.data(),
-                        out_col_agg,
-                        ctx
-                    )
-
-        check_gdf_error(err)
-
-        num_row_results = out_col_agg.size
-
-        # NVStrings columns are not the same going in as coming out but we
-        # can't create entire memory views otherwise multiple objects will
-        # try to free the memory
-        for i, col in enumerate(out_col_values_series):
-            if col.dtype == np.dtype("object") and len(col) > 0:
-                update_nvstrings_col(
-                    out_col_values_series[i]._column,
-                    <uintptr_t>vector_out_col_values[i].dtype_info.category
-                )
-        if out_col_agg_series.dtype == np.dtype("object") and \
-                len(out_col_agg_series) > 0:
-            update_nvstrings_col(
-                out_col_agg_series._column,
-                <uintptr_t>out_col_agg.dtype_info.category
-            )
-
-        if first_run:
-            for i, thisBy in enumerate(groupby_class._by):
-                result[thisBy] = out_col_values_series[i][
-                    :num_row_results]
-
-                if is_categorical_dtype(groupby_class._df[thisBy].dtype):
-                    result[thisBy] = CategoricalColumn(
-                        data=result[thisBy].data,
-                        categories=groupby_class._df[thisBy].cat.categories,
-                        ordered=groupby_class._df[thisBy].cat.ordered
-                    )
-
-        if out_col_agg_series.dtype != np.dtype("object"):
-            out_col_agg_series.data.size = num_row_results
-        out_col_agg_series = out_col_agg_series.reset_index(drop=True)
-
-        if isinstance(val_columns_out, (str, Number)):
-            result[val_columns_out] = out_col_agg_series[:num_row_results]
-        else:
-            if len(val_columns_out) == 0:
-                if groupby_class._as_index:
-                    val_columns_out = ['cudfvalcol_'+by for by in groupby_class._by]
-                else:
-                    raise ValueError('cannot insert %s, already exists' % (
-                            groupby_class._by[0]))
-            result[val_columns_out[col_count]
-                    ] = out_col_agg_series[:num_row_results]
-
-        if out_col_agg_series.dtype != np.dtype("object"):
-            out_col_agg_series.data.size = num_row_results
-        out_col_agg_series = out_col_agg_series.reset_index(drop=True)
-
-        first_run = False
-        col_count = col_count + 1
-
-        # Free objects created each iteration
-        free(col_agg)
-        free(out_col_indices)
-        for val in vector_out_col_values:
-            free(val)
-        free(out_col_agg)
-
-    # Free objects created once
-    for val in vector_cols:
-        free(val)
-
-    return result
+def dataframe_from_columns(cols, index=None, columns=None):
+    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)))
+    if columns is not None:
+        df.columns = columns
+    return df
 
 def agg(groupby_class, args):
     """ Invoke aggregation functions on the groups.
@@ -311,86 +69,144 @@ def agg(groupby_class, args):
     Since multi-indexes aren't supported aggregation results are returned
     in columns using the naming scheme of `aggregation_columnname`.
     """
-    result = DataFrame()
-    add_col_values = True
-
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
-
     sort_results = True
+
+    key_columns = []
+    value_columns = []
+    result_key_names = []
+    result_value_names = []
+    agg_names = []
+
+    for colname in groupby_class._by:
+        key_columns.append(groupby_class._df._cols[colname]._column)
+        result_key_names = groupby_class._by
 
     # TODO: Use MultiColumn here instead of use_prefix
     # use_prefix enables old functionality - prefixing column
     # groupby names since we don't support MultiColumn quite yet
     # https://github.com/rapidsai/cudf/issues/483
-    use_prefix = 1 < len(groupby_class._val_columns) or 1 < len(args)
+    use_prefix = (
+        len(groupby_class._val_columns) > 1
+        or len(args) > 1
+    )
     if not isinstance(args, str) and isinstance(
             args, collections.abc.Sequence):
-        for agg_type in args:
-            val_columns_out = [
-                agg_type + '_' + val for val in groupby_class._val_columns
-            ]
+        # call apply_groupby and then rename the columns
+        for colname in groupby_class._val_columns:
+            in_column = groupby_class._df._cols[colname]._column
+            for agg_type in args:
+                value_columns.append(in_column)
+                if use_prefix:
+                    result_value_names.append(
+                        agg_type + '_' + colname)
+                agg_names.append(agg_type)
             if not use_prefix:
-                val_columns_out = groupby_class._val_columns
-            result = _apply_agg(
-                groupby_class,
-                agg_type,
-                result,
-                add_col_values,
-                ctx,
-                groupby_class._val_columns,
-                val_columns_out,
-                sort_results=sort_results
+                result_value_names.extend(groupby_class._val_columns)
+
+        result_keys, result_values = apply_groupby(
+            key_columns,
+            value_columns,
+            agg_names
+        )
+
+        result = cudf.concat(
+            [
+                dataframe_from_columns(result_keys, columns=result_key_names),
+                dataframe_from_columns(result_values, columns=result_value_names)
+            ],
+            axis=1
+        )
+
+        if (
+                result_key_names == result_value_names
+                and len(result_key_names) == 1
+        ):
+            # Special case as index and column have the same name,
+            # which `concat` cannot deal with
+            result = cudf.DataFrame(
+                {result_key_names[0]: result_values[0]},
+                index=cudf.Series(result_keys[0], name=result_key_names[0])
             )
-            add_col_values = False  # we only want to add them once
+            if sort_results:
+                result = result.sort_index()
+            return result
+
+        if sort_results:
+            result = result.sort_values(result_key_names)
+
         if(groupby_class._as_index):
             result = groupby_class.apply_multiindex_or_single_index(result)
         if use_prefix and groupby_class._as_index:
             result = groupby_class.apply_multicolumn(result, args)
-    elif isinstance(args, collections.abc.Mapping):
-        if (len(args.keys()) == 1):
-            if(len(list(args.values())[0]) == 1):
-                sort_results = False
-        for val, agg_type in args.items():
 
+    elif isinstance(args, collections.abc.Mapping):
+        if len(args) == 1:
+            for key, value in args.items():
+                if isinstance(value, str):
+                    use_prefix = False
+                else:
+                    if len(value) == 1:
+                        use_prefix = False
+        for colname, agg_type in args.items():
+            in_column = groupby_class._df._cols[colname]._column
             if not isinstance(agg_type, str) and \
                     isinstance(agg_type, collections.abc.Sequence):
                 for sub_agg_type in agg_type:
-                    val_columns_out = [sub_agg_type + '_' + val]
+                    agg_names.append(sub_agg_type)
+                    value_columns.append(in_column)
+                    if use_prefix:
+                        result_value_names.append(
+                            sub_agg_type + '_' + colname
+                        )
                     if not use_prefix:
-                        val_columns_out = groupby_class._val_columns
-                    result = _apply_agg(
-                        groupby_class,
-                        sub_agg_type,
-                        result,
-                        add_col_values,
-                        ctx,
-                        [val],
-                        val_columns_out,
-                        sort_results=sort_results
-                    )
+                        result_value_names.append(colname)
             elif isinstance(agg_type, str):
-                val_columns_out = [agg_type + '_' + val]
+                value_columns.append(in_column)
+                agg_names.append(agg_type)
+                if use_prefix:
+                    result_value_names.append(
+                        agg_type + '_' + colname
+                    )
                 if not use_prefix:
-                    val_columns_out = groupby_class._val_columns
-                result = _apply_agg(
-                    groupby_class,
-                    agg_type,
-                    result,
-                    add_col_values,
-                    ctx,
-                    [val],
-                    val_columns_out,
-                    sort_results=sort_results
-                )
-            add_col_values = False  # we only want to add them once
+                    result_value_names.append(colname)
+
+        result_keys, result_values = apply_groupby(
+            key_columns,
+            value_columns,
+            agg_names
+        )
+
+        result = cudf.concat(
+            [
+                dataframe_from_columns(result_keys, columns=result_key_names),
+                dataframe_from_columns(result_values, columns=result_value_names)
+            ],
+            axis=1
+        )
+
+        if (
+                result_key_names == result_value_names
+                and len(result_key_names) == 1
+        ):
+            # Special case as index and column have the same name,
+            # which `concat` cannot deal with
+            result = cudf.DataFrame(
+                {result_key_names[0]: result_values[0]},
+                index=cudf.Series(result_keys[0], name=result_key_names[0])
+            )
+            if sort_results:
+                result = result.sort_index()
+            return result
+
+        if sort_results:
+            result = result.sort_values(result_key_names)
+
         if groupby_class._as_index:
             result = groupby_class.apply_multiindex_or_single_index(result)
         if use_prefix and groupby_class._as_index:
             result = groupby_class.apply_multicolumn_mapped(result, args)
     else:
         result = groupby_class.agg([args])
-
-    free(ctx)
 
     nvtx_range_pop()
     return result
@@ -404,31 +220,48 @@ def _apply_basic_agg(groupby_class, agg_type, sort_results=False):
     agg_type : str
         The aggregation function to run.
     """
-    result = DataFrame()
-    add_col_values = True
+    sort_results = True
 
-    cdef gdf_context* ctx = create_context_view(0, groupby_class._method, 0, 0, 0, 'null_as_largest')
+    key_columns = columns_from_dataframe(groupby_class._df[groupby_class._by])
+    value_columns = columns_from_dataframe(groupby_class._df[groupby_class._val_columns])
+    result_key_names = groupby_class._by
+    result_value_names = groupby_class._val_columns
 
-    val_columns = groupby_class._val_columns
-    val_columns_out = groupby_class._val_columns
-
-    result = _apply_agg(
-        groupby_class,
-        agg_type,
-        result,
-        add_col_values,
-        ctx,
-        val_columns,
-        val_columns_out,
-        sort_results=sort_results
+    result_keys, result_values = apply_groupby(
+        key_columns,
+        value_columns,
+        agg_type
     )
 
-    free(ctx)
+    result = cudf.concat(
+        [
+            dataframe_from_columns(result_keys, columns=result_key_names),
+            dataframe_from_columns(result_values, columns=result_value_names)
+        ],
+        axis=1
+    )
+
+    if (
+            result_key_names == result_value_names
+            and len(result_key_names) == 1
+    ):
+        # Special case as index and column have the same name,
+        # which `concat` cannot deal with
+        result = cudf.DataFrame(
+            {result_key_names[0]: result_values[0]},
+            index=cudf.Series(result_keys[0], name=result_key_names[0])
+        )
+        if sort_results:
+            result = result.sort_index()
+        return result
+
+    if sort_results:
+        result = result.sort_values(result_key_names)
 
     # If a Groupby has one index column and one value column
     # and as_index is set, return a Series instead of a df
-    if isinstance(val_columns, (str, Number)) and groupby_class._as_index:
-        result_series = result[val_columns]
+    if isinstance(result_value_names, (str, Number)) and groupby_class._as_index:
+        result_series = result[result_value_names]
         idx = index.as_index(result[groupby_class._by[0]])
         if groupby_class.level == 0:
             idx.name = groupby_class._original_index_name
