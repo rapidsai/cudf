@@ -179,6 +179,15 @@ if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 
 ###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
+    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+endif(JITIFY_USE_CACHE)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -264,6 +273,7 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
@@ -286,7 +296,7 @@ add_library(cudf SHARED
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
-            src/io/orc/orc_reader.cu
+            src/io/orc/orc_reader_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
@@ -334,12 +344,6 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
 add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
-
-option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
-if(JITIFY_PROCESS_CACHE)
-    message(STATUS "Using process level cache for JIT compiled kernels")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
-endif(JITIFY_PROCESS_CACHE)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------

@@ -204,11 +204,26 @@ ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 # - binary tests ----------------------------------------------------------------------------------
 
 set(BINARY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/binop-verify-input-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-integration-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
+# - jit cache tests -------------------------------------------------------------------------------
+
+set(JITCACHE_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-test.cu")
+
+ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
+
+set(JITCACHE_MULTI_TEST_SRC 
+    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-multiprocess-test.cpp")
+
+ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 ###################################################################################################
 # - io tests -------------------------------------------------------------------------------------

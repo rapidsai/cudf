@@ -233,9 +233,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return -1
 
-    def find_and_replace(self, to_replace, value):
+    def find_and_replace(self, to_replace, replacement, all_nan):
         """
-        Return col with *to_replace* replaced with *value*.
+        Return col with *to_replace* replaced with *replacement*.
         """
         replaced = columnops.as_column(self.cat().codes)
 
@@ -243,14 +243,14 @@ class CategoricalColumn(columnops.TypedColumnBase):
             np.asarray([self._encode(val) for val in to_replace],
                        dtype=replaced.dtype)
         )
-        value_col = columnops.as_column(
-            np.asarray([self._encode(val) for val in value],
+        replacement_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in replacement],
                        dtype=replaced.dtype)
         )
 
-        cpp_replace.replace(replaced, to_replace_col, value_col)
+        output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
 
-        return self.replace(data=replaced.data)
+        return self.replace(data=output.data)
 
     def fillna(self, fill_value, inplace=False):
         """

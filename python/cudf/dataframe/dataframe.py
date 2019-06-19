@@ -2278,9 +2278,9 @@ class DataFrame(object):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, value):
+    def replace(self, to_replace, replacement):
         """
-        Replace values given in *to_replace* with *value*.
+        Replace values given in *to_replace* with *replacement*.
 
         Parameters
         ----------
@@ -2290,20 +2290,20 @@ class DataFrame(object):
             * numeric or str:
 
                 - values equal to *to_replace* will be replaced
-                  with *value*
+                  with *replacement*
 
             * list of numeric or str:
 
-                - If *value* is also list-like,
-                  *to_replace* and *value* must be of same length.
+                - If *replacement* is also list-like,
+                  *to_replace* and *replacement* must be of same length.
 
             * dict:
 
                 - Dicts can be used to replace different values in different
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with value*.
-        value : numeric, str, list-like, or dict
+                  replaced with replacement*.
+        replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
@@ -2318,11 +2318,11 @@ class DataFrame(object):
 
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(value):
-            value = dict.fromkeys(self.columns, value)
+        if not is_dict_like(replacement):
+            replacement = dict.fromkeys(self.columns, replacement)
 
         for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], value[k])
+            outdf[k] = self[k].replace(to_replace[k], replacement[k])
 
         return outdf
 
