@@ -28,9 +28,10 @@
 
 #include <cub/device/device_reduce.cuh>
 
+namespace cudf {
+namespace reductions {
 
-//namespace { // anonymous namespace
-
+// compute reduction by the operator
 template <typename Op, typename InputIterator, typename T_output>
 void reduction_op(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
     T_output init, Op op, cudaStream_t stream)
@@ -50,8 +51,6 @@ void reduction_op(T_output* dev_result, InputIterator d_in, gdf_size_type num_it
     // Free temporary storage
     RMM_TRY(RMM_FREE(d_temp_storage, stream));
 }
-//}
-
 
 void reduction_sum(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
 void reduction_min(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
@@ -63,5 +62,6 @@ void reduction_mean(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stre
 void reduction_var(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
 void reduction_std(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
 
-
+} // namespace reductions
+} // namespace cudf
 #endif

@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+// The translation unit for redunction `variance`
+
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
 
-void reduction_var(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
+void cudf::reductions::reduction_var(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceDispatcher<cudf::reductions::ReductionVar>(), col, scalar, stream);
+        ReduceMultiStepDispatcher<cudf::reductions::ReductionVar>(), col, scalar, ddof, stream);
 }
 
 

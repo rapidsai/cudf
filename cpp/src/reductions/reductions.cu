@@ -30,66 +30,31 @@ gdf_scalar reduction(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
-#if 0
     case GDF_REDUCTION_SUM:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionSum>(), col, &scalar);
+        cudf::reductions::reduction_sum(col, &scalar);
         break;
     case GDF_REDUCTION_MIN:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionMin>(), col, &scalar);
+        cudf::reductions::reduction_min(col, &scalar);
         break;
     case GDF_REDUCTION_MAX:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionMax>(), col, &scalar);
+        cudf::reductions::reduction_max(col, &scalar);
         break;
     case GDF_REDUCTION_PRODUCT:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, &scalar);
+        cudf::reductions::reduction_prod(col, &scalar);
         break;
     case GDF_REDUCTION_SUMOFSQUARES:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
-        break;
-    case GDF_REDUCTION_MEAN:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionMean>(), col, &scalar);
-        break;
-    case GDF_REDUCTION_VAR:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionVar>(), col, &scalar);
-        break;
-    case GDF_REDUCTION_STD:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionStd>(), col, &scalar);
-        break;
-#else
-    case GDF_REDUCTION_SUM:
-        reduction_sum(col, &scalar);
-        break;
-    case GDF_REDUCTION_MIN:
-        reduction_min(col, &scalar);
-        break;
-    case GDF_REDUCTION_MAX:
-        reduction_max(col, &scalar);
-        break;
-    case GDF_REDUCTION_PRODUCT:
-        reduction_prod(col, &scalar);
-        break;
-    case GDF_REDUCTION_SUMOFSQUARES:
-        reduction_sumofsquares(col, &scalar);
+        cudf::reductions::reduction_sumofsquares(col, &scalar);
         break;
 
     case GDF_REDUCTION_MEAN:
-        reduction_mean(col, &scalar);
+        cudf::reductions::reduction_mean(col, &scalar);
         break;
     case GDF_REDUCTION_VAR:
-        reduction_var(col, &scalar);
+        cudf::reductions::reduction_var(col, &scalar);
         break;
     case GDF_REDUCTION_STD:
-        reduction_std(col, &scalar);
+        cudf::reductions::reduction_std(col, &scalar);
         break;
-#endif
     default:
         CUDF_FAIL("Unsupported reduction operator");
     }

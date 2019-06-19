@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// The translation unit for redunction `standart deviation`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
 
-void reduction_std(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
+void cudf::reductions::reduction_std(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceDispatcher<cudf::reductions::ReductionStd>(), col, scalar, stream);
+        ReduceMultiStepDispatcher<cudf::reductions::ReductionStd>(), col, scalar, ddof, stream);
 }
 
 

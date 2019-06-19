@@ -19,10 +19,28 @@
 
 #include "reduction_functions.cuh"
 
-//namespace { // anonymous namespace
+namespace cudf {
+namespace reductions {
 
+// make an column iterator
+template<bool has_nulls, typename T_in, typename T_out, typename Op>
+auto make_iterator(const gdf_column &input, T_out identity, Op op)
+{
+    return cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
+}
 
+// make an column iterator, specialized for `cudf::reductions::ReductionSumOfSquares`
+template<bool has_nulls, typename T_in, typename T_out>
+auto make_iterator(const gdf_column &input, T_out identity,
+    cudf::reductions::ReductionSumOfSquares op)
+{
+    auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
+    return thrust::make_transform_iterator(it_raw,
+        cudf::transformer_squared<T_out>{});
+}
 
+// Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
+// which directly compute the reduction by a single step reduction call
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
 void ReduceOp(const gdf_column *input,
                    gdf_scalar* scalar, cudaStream_t stream)
@@ -38,16 +56,10 @@ void ReduceOp(const gdf_column *input,
             sizeof(T_out), cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
 
-    if( std::is_same<Op, cudf::reductions::ReductionSumOfSquares>::value ){
-        auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
-        auto it = thrust::make_transform_iterator(it_raw, cudf::transformer_squared<T_out>{});
-        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
-            typename Op::Op{}, stream);
-    }else{
-        auto it = cudf::make_iterator<has_nulls, T_in, T_out>(*input, identity);
-        reduction_op(static_cast<T_out*>(result), it, input->size, identity,
-            typename Op::Op{}, stream);
-    }
+    // reduction by iterator
+    auto it = make_iterator<has_nulls, T_in, T_out>(*input, identity, Op{});
+    reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+        typename Op::Op{}, stream);
 
     // read back the result to host memory
     // TODO: asynchronous copy
@@ -66,8 +78,13 @@ template <typename T_in, typename Op>
 struct ReduceOutputDispatcher {
 private:
     template <typename T_out>
-    static constexpr bool is_convertible_v()
+    static constexpr bool is_supported_v()
     {
+        // for single step reductions,
+        // the available combination of input and output dtypes are
+        //  - same dtypes (including cudf::wrappers)
+        //  - any arithmetic dtype to any arithmetic dtype
+        //  - cudf::bool8 to/from any arithmetic dtype
         return  std::is_convertible<T_in, T_out>::value ||
         ( std::is_arithmetic<T_in >::value && std::is_same<T_out, cudf::bool8>::value ) ||
         ( std::is_arithmetic<T_out>::value && std::is_same<T_in , cudf::bool8>::value );
@@ -75,7 +92,7 @@ private:
 
 public:
     template <typename T_out, typename std::enable_if<
-        is_convertible_v<T_out>() >::type* = nullptr>
+        is_supported_v<T_out>() >::type* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -87,7 +104,7 @@ public:
     }
 
     template <typename T_out, typename std::enable_if<
-        not is_convertible_v<T_out>() >::type* = nullptr >
+        not is_supported_v<T_out>() >::type* = nullptr >
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -129,7 +146,6 @@ public:
     }
 };
 
-
-//}
-
+} // namespace reductions
+} // namespace cudf
 #endif

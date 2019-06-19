@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+ // The translation unit for redunction `product`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher.cuh"
 
-void reduction_prod(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
+void cudf::reductions::reduction_prod(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
         ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, scalar, stream);

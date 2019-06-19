@@ -97,6 +97,7 @@ struct ReductionMax{
     using Op = cudf::DeviceMax;
 };
 
+// operator for `mean`
 struct ReductionMean{
     using Op = cudf::DeviceSum;
 
@@ -105,12 +106,13 @@ struct ReductionMean{
         using IType = T;
 
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out identity){
+        static auto make_iterator(const gdf_column* column, T_out& identity)
+        {
             return cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
         }
 
-        static
-        T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
+        // compute `mean` from intermediate type `IType`
+        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
             return (input / count);
         };
@@ -118,6 +120,7 @@ struct ReductionMean{
     };
 };
 
+// operator for `variance`
 struct ReductionVar{
     using Op = cudf::DeviceSum;
 
@@ -125,19 +128,16 @@ struct ReductionVar{
     struct Intermediate{
         using IType = meanvar_no_count<T>;
 
-        static IType identity() {
-            return T{0};
-        }
-
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out identity){
+        static auto make_iterator(const gdf_column* column, T_out identity)
+        {
             auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
             auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
             return thrust::make_transform_iterator(it_raw, transformer);
         }
 
-        static
-        T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
+        // compute `variance` from intermediate type `IType`
+        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
             T mean = input.value / count;
             T asum = input.value_squared;
@@ -149,6 +149,7 @@ struct ReductionVar{
     };
 };
 
+// operator for `standard deviation`
 struct ReductionStd{
     using Op = cudf::DeviceSum;
 
@@ -157,14 +158,15 @@ struct ReductionStd{
         using IType = meanvar_no_count<T>;
 
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out identity){
+        static auto make_iterator(const gdf_column* column, T_out identity)
+        {
             auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
             auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
             return thrust::make_transform_iterator(it_raw, transformer);
         }
 
-        static
-        T ComputeResult(IType& input, gdf_size_type count, gdf_size_type ddof = 1)
+        // compute `standard deviation` from intermediate type `IType`
+        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
             using intermediateOp = typename ReductionVar::template Intermediate<T>;
             T var = intermediateOp::ComputeResult(input, count, ddof);
