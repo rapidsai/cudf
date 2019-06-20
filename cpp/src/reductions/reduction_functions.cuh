@@ -33,7 +33,7 @@ namespace reductions {
 
 // compute reduction by the operator
 template <typename Op, typename InputIterator, typename T_output>
-void reduction_op(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
+void reduce(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
     T_output init, Op op, cudaStream_t stream)
 {
     void     *d_temp_storage = NULL;

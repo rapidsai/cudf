@@ -21,7 +21,7 @@
 void cudf::reductions::max(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceDispatcher<cudf::reductions::op::max>(), col, scalar, stream);
+        simple_reduction_dispatcher<cudf::reductions::op::max>(), col, scalar, stream);
 }
 
 

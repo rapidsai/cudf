@@ -21,7 +21,7 @@
 void cudf::reductions::mean(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceMultiStepDispatcher<cudf::reductions::op::mean>(), col, scalar,
+        compound_reduction_dispatcher<cudf::reductions::op::mean>(), col, scalar,
             /* ddof is not used for mean*/ 1, stream);
 }
 

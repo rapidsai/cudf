@@ -104,7 +104,7 @@ struct mean {
     using Op = cudf::DeviceSum;
 
     template<typename T>
-    struct Intermediate{
+    struct intermediate{
         using IType = T;
 
         template<bool has_nulls, typename T_in, typename T_out>
@@ -114,7 +114,7 @@ struct mean {
         }
 
         // compute `mean` from intermediate type `IType`
-        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
+        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
             return (input / count);
         };
@@ -127,7 +127,7 @@ struct variance {
     using Op = cudf::DeviceSum;
 
     template<typename T>
-    struct Intermediate{
+    struct intermediate{
         using IType = meanvar_no_count<T>;
 
         template<bool has_nulls, typename T_in, typename T_out>
@@ -139,7 +139,7 @@ struct variance {
         }
 
         // compute `variance` from intermediate type `IType`
-        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
+        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
             T mean = input.value / count;
             T asum = input.value_squared;
@@ -156,7 +156,7 @@ struct standard_deviation {
     using Op = cudf::DeviceSum;
 
     template<typename T>
-    struct Intermediate{
+    struct intermediate{
         using IType = meanvar_no_count<T>;
 
         template<bool has_nulls, typename T_in, typename T_out>
@@ -168,10 +168,10 @@ struct standard_deviation {
         }
 
         // compute `standard deviation` from intermediate type `IType`
-        static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
+        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
-            using intermediateOp = typename cudf::reductions::op::variance::template Intermediate<T>;
-            T var = intermediateOp::ComputeResult(input, count, ddof);
+            using intermediateOp = typename cudf::reductions::op::variance::template intermediate<T>;
+            T var = intermediateOp::compute_result(input, count, ddof);
 
             return static_cast<T>(std::sqrt(var));
         };

@@ -42,7 +42,7 @@ auto make_iterator(const gdf_column &input, T_out identity,
 // Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
 // which directly compute the reduction by a single step reduction call
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
-void ReduceOp(const gdf_column *input,
+void simple_reduction(const gdf_column *input,
                    gdf_scalar* scalar, cudaStream_t stream)
 {
     T_out identity = Op::Op::template identity<T_out>();
@@ -58,7 +58,7 @@ void ReduceOp(const gdf_column *input,
 
     // reduction by iterator
     auto it = make_iterator<has_nulls, T_in, T_out>(*input, identity, Op{});
-    reduction_op(static_cast<T_out*>(result), it, input->size, identity,
+    reduce(static_cast<T_out*>(result), it, input->size, identity,
         typename Op::Op{}, stream);
 
     // read back the result to host memory
@@ -75,7 +75,7 @@ void ReduceOp(const gdf_column *input,
 
 
 template <typename T_in, typename Op>
-struct ReduceOutputDispatcher {
+struct simple_reduction_result_type_dispatcher {
 private:
     template <typename T_out>
     static constexpr bool is_supported_v()
@@ -97,9 +97,9 @@ public:
                          gdf_scalar* scalar, cudaStream_t stream)
     {
         if( col->valid == nullptr ){
-            ReduceOp<T_in, T_out, Op, false>(col, scalar, stream);
+            simple_reduction<T_in, T_out, Op, false>(col, scalar, stream);
         }else{
-            ReduceOp<T_in, T_out, Op, true >(col, scalar, stream);
+            simple_reduction<T_in, T_out, Op, true >(col, scalar, stream);
         }
     }
 
@@ -113,7 +113,7 @@ public:
 };
 
 template <typename Op>
-struct ReduceDispatcher {
+struct simple_reduction_dispatcher {
 private:
     // return true if T is arithmetic type or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
@@ -133,7 +133,7 @@ public:
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
         cudf::type_dispatcher(scalar->dtype,
-            ReduceOutputDispatcher<T, Op>(), col, scalar, stream);
+            simple_reduction_result_type_dispatcher<T, Op>(), col, scalar, stream);
     }
 
     template <typename T, typename std::enable_if<

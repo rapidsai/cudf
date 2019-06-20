@@ -21,7 +21,7 @@
 void cudf::reductions::standard_deviation(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceMultiStepDispatcher<cudf::reductions::op::standard_deviation>(), col, scalar, ddof, stream);
+        compound_reduction_dispatcher<cudf::reductions::op::standard_deviation>(), col, scalar, ddof, stream);
 }
 
 
