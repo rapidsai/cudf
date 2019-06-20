@@ -47,7 +47,8 @@ def test_categorical_integer():
     np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
-    expect_str = """
+    if pd.__version__ >= '0.24.2':
+        expect_str = """
 0 a
 1 NaN
 2 NaN
@@ -55,6 +56,15 @@ def test_categorical_integer():
 4 a
 dtype: category
 Categories (3, object): [a, b, c]
+"""
+    else:
+        expect_str = """
+0 a
+1
+2
+3 c
+4 a
+dtype: category
 """
     assert string.split() == expect_str.split()
 

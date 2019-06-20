@@ -219,17 +219,25 @@ def test_dataframe_join_mismatch_cats(how):
     join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.to_pandas()
-    expect = join_pdf
 
-    # cudf creates the columns in different order than pandas for right join
     if how == 'right':
         got = got[['data_col_left', 'data_col_right']]
+    # cudf creates the columns in different order than pandas for right join
+    if hasattr(pd, 'Int64Dtype'):
+        expect = join_pdf
         expect.data_col_left = expect.data_col_left.astype(pd.Int64Dtype())
-    if how == 'left':
-        expect.data_col_right = expect.data_col_right.astype(pd.Int64Dtype())
-    if how == 'outer':
-        expect.data_col_left = expect.data_col_left.astype(pd.Int64Dtype())
-        expect.data_col_right = expect.data_col_right.astype(pd.Int64Dtype())
+        if how == 'left':
+            expect.data_col_right = expect.data_col_right.astype(
+                    pd.Int64Dtype())
+        if how == 'outer':
+            expect.data_col_left = expect.data_col_left.astype(pd.Int64Dtype())
+            expect.data_col_right = expect.data_col_right.astype(
+                    pd.Int64Dtype())
+    else:
+        expect = join_pdf.fillna(-1)
+        expect.data_col_right = expect.data_col_right.astype(np.int64)
+        expect.data_col_left = expect.data_col_left.astype(np.int64)
+
     # Expect has the wrong index type. Quick fix to get index type working
     # again I think this implies that CategoricalIndex.to_pandas() is not
     # working correctly, since the below corrects it. Remove this line for

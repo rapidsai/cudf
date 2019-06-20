@@ -178,16 +178,17 @@ class NumericalColumn(columnops.TypedColumnBase):
             array = self
             if self.has_null_mask:
                 array = self.astype('float64')
-                if original_type == np.int8:
-                    new_type = pd.Int8Dtype()
-                elif original_type == np.int16:
-                    new_type = pd.Int16Dtype()
-                elif original_type == np.int32:
-                    new_type = pd.Int32Dtype()
-                elif original_type == np.int64:
-                    new_type = pd.Int64Dtype()
-                else:
-                    new_type = original_type
+                if hasattr(pd, 'Int64Dtype'):
+                    if original_type == np.int8:
+                        new_type = pd.Int8Dtype()
+                    elif original_type == np.int16:
+                        new_type = pd.Int16Dtype()
+                    elif original_type == np.int32:
+                        new_type = pd.Int32Dtype()
+                    elif original_type == np.int64:
+                        new_type = pd.Int64Dtype()
+                    else:
+                        new_type = original_type
                 return pd.Series(array.to_array(fillna='pandas'),
                                  index=index, dtype=new_type)
             return pd.Series(array.to_array(fillna='pandas'), index=index)

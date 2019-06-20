@@ -202,7 +202,10 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    expect = 'Series([], dtype: float64)'
+    if pd.__version__ >= '0.24.2':
+        expect = 'Series([], dtype: float64)'
+    else:
+        expect = '<empty Series of dtype=float64>'
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -210,7 +213,10 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    expect = 'Series([], dtype: float64)'
+    if pd.__version__ >= '0.24.2':
+        expect = 'Series([], dtype: float64)'
+    else:
+        expect = '<empty Series of dtype=float64>'
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -718,7 +724,10 @@ def test_dataframe_to_string():
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
                         ('b', [11, 12, 13, 14, 15, 16])])
         string = str(df)
-        assert string.splitlines()[-1] == '[6 rows x 2 columns]'
+        if pd.__version__ >= '0.24.2':
+            assert string.splitlines()[-1] == '[6 rows x 2 columns]'
+        else:
+            assert string.splitlines()[-1] == '[1 more rows]'
 
         # Test skipped columns
         df = DataFrame([('a', [1,  2,  3,  4,  5,  6]),
@@ -726,7 +735,11 @@ def test_dataframe_to_string():
                         ('c', [11, 12, 13, 14, 15, 16]),
                         ('d', [11, 12, 13, 14, 15, 16])])
         string = df.to_string(ncols=3)
-        assert string.splitlines()[-1] == '[6 rows x 4 columns]'
+        if pd.__version__ >= '0.24.2':
+            assert string.splitlines()[-1] == '[6 rows x 4 columns]'
+        else:
+            assert string.splitlines()[-2] == '[1 more rows]'
+            assert string.splitlines()[-1] == '[1 more columns]'
 
         # Test masked
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
@@ -756,13 +769,24 @@ def test_dataframe_to_string():
         pd.options.display.max_rows = 6
         got = df.to_string(nrows=None)
         print(got)
-        expect = '''
+        if pd.__version__ >= '0.24.2':
+            expect = '''
   a b  c
 0 1 11 0
 1 2 12 NaN
 2 3 13 2
 3 4 14 3
 4 5 15 NaN
+5 6 16 5
+'''
+        else:
+            expect = '''
+  a b  c
+0 1 11 0
+1 2 12
+2 3 13 2
+3 4 14 3
+4 5 15
 5 6 16 5
 '''
         # values should match despite whitespace difference
@@ -776,7 +800,8 @@ def test_dataframe_to_string_wide():
         df['a{}'.format(i)] = list(range(3))
     got = df.to_string(ncols=8)
     print(got)
-    expect = '''
+    if pd.__version__ >= '0.24.2':
+        expect = '''
 a0 a1 a2 a3   a4   a5   a6  a7     ... a92  a93  a94  a95  a96  a97  a98  a99
 0 0   0    0    0    0    0   0   0  ...   0    0    0    0    0    0    0    0
 1 1   1    1    1    1    1   1   1  ...   1    1    1    1    1    1    1    1
@@ -784,6 +809,15 @@ a0 a1 a2 a3   a4   a5   a6  a7     ... a92  a93  a94  a95  a96  a97  a98  a99
 
 [3 rows x 100 columns]
 '''
+    else:
+        expect = '''
+    a0   a1   a2   a3   a4   a5   a6 ...  a99
+0    0    0    0    0    0    0    0 ...    0
+1    1    1    1    1    1    1    1 ...    1
+2    2    2    2    2    2    2    2 ...    2
+[92 more columns]
+'''
+
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -805,7 +839,10 @@ def test_dataframe_emptycolumns_to_string():
     df['b'] = []
     got = df.to_string()
     print(got)
-    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
+    if pd.__version__ >= '0.24.2':
+        expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
+    else:
+        expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
     # values should match despite whitespace difference
     print(expect)
     assert got.split() == expect.split()
@@ -1260,13 +1297,18 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
         return x[slice_start: slice_end]
 
     expect = do_slice(gdf.to_pandas())
-    got = do_slice(gdf).to_pandas()
+    got = do_slice(gdf)
 
     # Any column containing a null will be promoted to Int64 by pandas
-    for col in gdf:
-        if gdf[col].has_null_mask:
-            got[col] = got[col].astype(pd.Int64Dtype())
-    pd.testing.assert_frame_equal(expect, got)
+    if hasattr(pd, 'Int64Dtype'):
+        for col in gdf:
+            if got[col].has_null_mask:
+                got[col] = got[col].astype(pd.Int64Dtype())
+    else:
+        for col in gdf:
+            if gdf[col].has_null_mask:
+                got[col] = got[col].astype('float64')
+    pd.testing.assert_frame_equal(expect, got.to_pandas())
 
 
 def test_from_pandas():
@@ -2785,6 +2827,8 @@ def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
     pytest.param(lambda df: df.index, marks=pytest.mark.xfail()),
 ])
 def test_repr(func, transform, pdf, gdf):
+    if not hasattr(pd, 'Int64Dtype'):
+        pytest.skip(msg='This test only supports Pandas 0.24.2 + ')
     pdf = pd.concat([pdf] * 10)
     gdf = gd.concat([gdf] * 10)
     pdf = transform(pdf)
@@ -2800,6 +2844,8 @@ def test_repr(func, transform, pdf, gdf):
 
 
 def test_isnan_conversion_int():
+    if not hasattr(pd, 'Int64Dtype'):
+        pytest.skip(msg='This test only supports Pandas 0.24.2 + ')
     data = np.arange(4)
     mask = np.zeros(1, dtype=np.uint8)
     mask[0] = 0b00001101
@@ -2810,6 +2856,8 @@ def test_isnan_conversion_int():
 
 
 def test_isnan_conversion_cat():
+    if not hasattr(pd, 'Int64Dtype'):
+        pytest.skip(msg='This test only supports Pandas 0.24.2 + ')
     df = pd.DataFrame()
     df['a'] = pd.Series(['a', 'b', 'c', 'd'], dtype="category")
     mask = np.zeros(1, dtype=np.uint8)
@@ -2821,6 +2869,8 @@ def test_isnan_conversion_cat():
 
 
 def test_isnan_conversion_datetime():
+    if not hasattr(pd, 'Int64Dtype'):
+        pytest.skip(msg='This test only supports Pandas 0.24.2 + ')
     df = pd.DataFrame()
     df['a'] = np.random.randint(0, 100, 8).astype('datetime64[ms]')
     mask = np.zeros(1, dtype=np.uint8)

@@ -503,9 +503,9 @@ class DataFrame(object):
                                                          len(self.columns)))
             return '\n'.join(lines)
         return "<cudf.DataFrame ncols={} nrows={} >".format(
-                len(self.columns),
-                len(self),
-            )
+            len(self.columns),
+            len(self),
+        )
 
     def _repr_html_(self):
         lines = get_renderable_pandas_dataframe(self)._repr_html_().split('\n')

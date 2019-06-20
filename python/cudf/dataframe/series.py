@@ -2,6 +2,7 @@
 
 import warnings
 import operator
+from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
