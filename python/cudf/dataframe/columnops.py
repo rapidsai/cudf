@@ -15,7 +15,7 @@ import nvstrings
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
-from cudf.utils.utils import buffers_from_pyarrow
+from cudf.utils.utils import buffers_from_pyarrow, get_min_width_integer_dtype
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf.bindings.stream_compaction import (cpp_drop_nulls,
                                              cpp_apply_boolean_mask)
@@ -131,9 +131,8 @@ def column_empty(row_count, dtype, masked, categories=None):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
-        from math import ceil, log
-        width = str(ceil(log(max(2, len(categories)), 256)) * 8)
-        mem = rmm.device_array((row_count,), dtype='int' + width)
+        dtype = get_min_width_integer_dtype(len(categories))
+        mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
         dtype = 'category'
     elif dtype.kind in 'OU':
