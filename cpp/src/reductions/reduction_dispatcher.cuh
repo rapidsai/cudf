@@ -93,7 +93,7 @@ public:
     template <typename T_out, std::enable_if_t<is_supported_v<T_out>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
-        if( col.valid == nullptr ){
+        if( cudf::has_nulls(col) ){
             simple_reduction<T_in, T_out, Op, false>(col, scalar, stream);
         }else{
             simple_reduction<T_in, T_out, Op, true >(col, scalar, stream);
