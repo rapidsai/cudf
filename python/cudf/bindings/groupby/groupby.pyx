@@ -84,12 +84,13 @@ def apply_groupby(keys, values, ops, method='hash'):
 
     cdef hash_groupby.Options *options = new hash_groupby.Options()
 
-    result = hash_groupby.groupby(
-        c_keys_table[0],
-        c_values_table[0],
-        c_ops,
-        deref(options)
-    )
+    with nogil:
+        result = hash_groupby.groupby(
+            c_keys_table[0],
+            c_values_table[0],
+            c_ops,
+            deref(options)
+        )
 
     del c_keys_table
     del c_values_table
