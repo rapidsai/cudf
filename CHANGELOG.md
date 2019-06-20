@@ -85,7 +85,6 @@
 - PR #2036 Make library of common test utils to speed up tests compilation
 - PR #2022 Facilitating get_dummies to be a high level api too
 
-
 ## Bug Fixes
 
 - PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
