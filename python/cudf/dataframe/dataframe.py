@@ -443,7 +443,51 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
-        return self.__repr__()
+        if pd.__version__ >= '0.24.2':
+            return self.__repr__()
+        else:
+            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
+               isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
+                raise TypeError("You're trying to print a DataFrame that "
+                                "contains a MultiIndex. Print this dataframe "
+                                "with .to_pandas()")
+            if nrows is NOTSET:
+                nrows = settings.formatting.get('nrows')
+            if ncols is NOTSET:
+                ncols = settings.formatting.get('ncols')
+
+            if nrows is None:
+                nrows = len(self)
+            else:
+                nrows = min(nrows, len(self))  # cap row count
+
+            if ncols is None:
+                ncols = len(self.columns)
+            else:
+                ncols = min(ncols, len(self.columns))  # cap col count
+
+            more_cols = len(self.columns) - ncols
+            more_rows = len(self) - nrows
+
+            # Prepare cells
+            cols = OrderedDict()
+            dtypes = OrderedDict()
+            if hasattr(self, 'multi_cols'):
+                use_cols = list(range(len(self.columns)))
+            else:
+                use_cols = list(self.columns[:ncols - 1])
+                if ncols > 0:
+                    use_cols.append(self.columns[-1])
+
+            for h in use_cols:
+                cols[h] = self[h].values_to_string(nrows=nrows)
+                dtypes[h] = self[h].dtype
+
+            # Format into a table
+            return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
+                                     show_headers=True, more_cols=more_cols,
+                                     more_rows=more_rows, min_width=2)
+
 
     def __str__(self):
         return self.to_string()
@@ -454,6 +498,10 @@ class DataFrame(object):
             lines = lines[:-1]
             lines.append("[%d rows x %d columns]" % (len(self),
                                                      len(self.columns)))
+        for col in self.columns:
+            if self[col].has_null_mask:
+                lines.append('- warning NaN substitued for Null -')
+                break
         return '\n'.join(lines)
 
     def _repr_html_(self):
