@@ -18,7 +18,7 @@
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher.cuh"
 
-void cudf::reductions::reduction_min(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
+void cudf::reductions::min(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
         ReduceDispatcher<cudf::reductions::op::min>(), col, scalar, stream);

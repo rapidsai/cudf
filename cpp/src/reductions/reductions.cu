@@ -31,29 +31,29 @@ gdf_scalar reduction(const gdf_column *col,
 
     switch(op){
     case GDF_REDUCTION_SUM:
-        cudf::reductions::reduction_sum(col, &scalar);
+        cudf::reductions::sum(col, &scalar);
         break;
     case GDF_REDUCTION_MIN:
-        cudf::reductions::reduction_min(col, &scalar);
+        cudf::reductions::min(col, &scalar);
         break;
     case GDF_REDUCTION_MAX:
-        cudf::reductions::reduction_max(col, &scalar);
+        cudf::reductions::max(col, &scalar);
         break;
     case GDF_REDUCTION_PRODUCT:
-        cudf::reductions::reduction_prod(col, &scalar);
+        cudf::reductions::product(col, &scalar);
         break;
     case GDF_REDUCTION_SUMOFSQUARES:
-        cudf::reductions::reduction_sumofsquares(col, &scalar);
+        cudf::reductions::sum_of_squares(col, &scalar);
         break;
 
     case GDF_REDUCTION_MEAN:
-        cudf::reductions::reduction_mean(col, &scalar);
+        cudf::reductions::mean(col, &scalar);
         break;
     case GDF_REDUCTION_VAR:
-        cudf::reductions::reduction_var(col, &scalar);
+        cudf::reductions::variance(col, &scalar);
         break;
     case GDF_REDUCTION_STD:
-        cudf::reductions::reduction_std(col, &scalar);
+        cudf::reductions::standard_deviation(col, &scalar);
         break;
     default:
         CUDF_FAIL("Unsupported reduction operator");
