@@ -33,6 +33,7 @@
 - PR #1954 Add skip test argument to GPU build script
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
+- PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 - PR #1652 Added `Series.where()` feature 
