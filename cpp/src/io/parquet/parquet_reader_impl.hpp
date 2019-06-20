@@ -47,12 +47,6 @@ class reader::Impl {
                 reader_options const &options);
 
   /**
-   * @brief Convenience constructor from an Arrow dataset source.
-   **/
-  explicit Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                reader_options const &options);
-
-  /**
    * @brief Returns the index column derived from the dataset metadata.
    *
    * @return std::string Name of the column

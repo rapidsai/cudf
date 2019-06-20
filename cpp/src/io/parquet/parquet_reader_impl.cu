@@ -533,10 +533,6 @@ reader::Impl::Impl(std::unique_ptr<DataSource> source,
   strings_to_categorical_ = options.strings_to_categorical;
 }
 
-reader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                   reader_options const &options)
-    : reader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
-
 table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 
   // Select only row groups required
@@ -712,6 +708,11 @@ reader::reader(std::string filepath, reader_options const &options)
 reader::reader(const char *buffer, size_t length, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(buffer, length), options)) {}
+
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(file), options)) {}
 
 std::string reader::get_index_column() {
   return impl_->get_index_column();

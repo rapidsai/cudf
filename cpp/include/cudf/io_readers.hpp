@@ -154,8 +154,7 @@ struct reader_options {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Class used to parse Json input and convert it into gdf columns.
- *
+ * @brief Class used to parse CSV input and convert it into gdf columns.
  *---------------------------------------------------------------------------**/
 class reader {
  private:
@@ -328,6 +327,12 @@ class reader {
    * @brief Constructor for an existing memory buffer source.
    *---------------------------------------------------------------------------**/
   explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+ /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options);
 
   /**---------------------------------------------------------------------------*
