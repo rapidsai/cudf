@@ -16,9 +16,8 @@ cdef extern from "table.hpp" namespace "cudf" nogil:
 
         table(gdf_column* cols[], gdf_size_type num_cols) except +
 
-        table(const vector[gdf_column*] cols)
+        table(const vector[gdf_column*] cols) except +
 
-        table(const vector[gdf_column*] cols);
         table() except +
 
         gdf_column** begin() except +

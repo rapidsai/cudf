@@ -29,4 +29,4 @@ cdef extern from "groupby.hpp" namespace "cudf::groupby::hash":
             cudf_table values,
             vector[operators] ops,
             Options options
-    )
+    ) except +
