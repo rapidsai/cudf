@@ -603,7 +603,7 @@ class StringColumn(columnops.TypedColumnBase):
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
         nbuf = rmm.device_array(mask_size, dtype='int8')
         self.data.to_offsets(get_ctype_ptr(sbuf), get_ctype_ptr(obuf),
-                            nbuf=get_ctype_ptr(nbuf), bdevmem=True)
+                             nbuf=get_ctype_ptr(nbuf), bdevmem=True)
 
         for item in [nbuf, sbuf, obuf]:
             sheader, [frame] = serialize(item)
