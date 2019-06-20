@@ -26,6 +26,8 @@
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
 - PR #1998 Add google benchmark to cudf
+- PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
+- PR #1652 Added `Series.where()` feature 
 
 ## Improvements
 
@@ -81,7 +83,7 @@
 - PR #2017 Convert `read_orc()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
 - PR #2034 Adding support for string columns concatenation using "add" binary operator
-
+- PR #2036 Make library of common test utils to speed up tests compilation
 
 ## Bug Fixes
 

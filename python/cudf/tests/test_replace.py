@@ -312,3 +312,46 @@ def test_series_fillna_invalid_dtype(data_dtype):
         type(fill_value).__name__,
         gdf.dtype.type.__name__
     ))
+
+
+@pytest.mark.parametrize(
+    'data_dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64'])
+@pytest.mark.parametrize(
+    'fill_value',
+    [100, 100.0, 100.5])
+def test_series_where(data_dtype, fill_value):
+    psr = pd.Series(list(range(10)), dtype=data_dtype)
+    sr = Series.from_pandas(psr)
+
+    expect = psr.where(psr > 0, fill_value)
+    got = sr.where(sr > 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr < 0, fill_value)
+    got = sr.where(sr < 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr == 0, fill_value)
+    got = sr.where(sr == 0, fill_value)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'fill_value',
+    [100, 100.0, 100.5])
+def test_series_with_nulls_where(fill_value):
+    psr = pd.Series([None] * 3 + list(range(5)))
+    sr = Series.from_pandas(psr)
+
+    expect = psr.where(psr > 0, fill_value)
+    got = sr.where(sr > 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr < 0, fill_value)
+    got = sr.where(sr < 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr == 0, fill_value)
+    got = sr.where(sr == 0, fill_value)
+    assert_eq(expect, got)

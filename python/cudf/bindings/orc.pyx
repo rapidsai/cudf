@@ -8,7 +8,6 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.orc cimport *
-from cudf.bindings.types cimport table as cudf_table
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 
