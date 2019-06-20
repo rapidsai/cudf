@@ -18,6 +18,7 @@
 
 #include <tests/utilities/column_wrapper.cuh>
 #include <binaryop/jit/core/cache.h>
+#include <cudf/cudf.h>
 #include <gtest/gtest.h>
 #include <ftw.h>
 
