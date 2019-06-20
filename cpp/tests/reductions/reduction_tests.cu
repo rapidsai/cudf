@@ -68,6 +68,8 @@ std::vector<T> replace_nulls(
     return v;
 }
 
+// ------------------------------------------------------------------------
+
 // This is the main test feature
 template <typename T>
 struct ReductionTest : public GdfTest
@@ -105,11 +107,12 @@ struct ReductionTest : public GdfTest
     }
 };
 
-using Types = testing::Types<
+using AllTypes = testing::Types<
     int8_t,int16_t, int32_t, int64_t, float, double,
-    cudf::bool8, cudf::date32, cudf::date64, cudf::timestamp, cudf::category>;
+    cudf::bool8, cudf::date32, cudf::date64, cudf::timestamp,
+    cudf::category, cudf::nvstring_category>;
 
-TYPED_TEST_CASE(ReductionTest, Types);
+TYPED_TEST_CASE(ReductionTest, AllTypes);
 
 // ------------------------------------------------------------------------
 TYPED_TEST(ReductionTest, MinMax)
@@ -337,10 +340,6 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T>
         }
     }
 };
-
-using AllTypes = testing::Types<
-    int8_t,int16_t, int32_t, int64_t, float, double,
-    cudf::bool8, cudf::date32, cudf::date64, cudf::timestamp, cudf::category>;
 
 TYPED_TEST_CASE(ReductionMultiStepErrorCheck, AllTypes);
 
