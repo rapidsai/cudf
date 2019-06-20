@@ -68,3 +68,11 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
+# - join benchmark ------------------------------------------------------------------------------
+
+set(JOIN_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/join/join_benchmark.cu")
+
+ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
+
