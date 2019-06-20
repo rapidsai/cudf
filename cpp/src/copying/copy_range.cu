@@ -134,8 +134,11 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end)
 { 
-  if (end != begin) { // otherwise no-op
+  if (end != begin) { // otherwise no-op   
     validate(column);
+    // TODO: once gdf_scalar supports string scalar values we can add support
+    CUDF_EXPECTS(column->dtype != GDF_STRING_CATEGORY,
+                 "cudf::fill() does not support GDF_STRING_CATEGORY columns");
     CUDF_EXPECTS(column->dtype == value.dtype, "Data type mismatch");
     detail::copy_range(column, detail::scalar_factory{value}, begin, end);
   }
