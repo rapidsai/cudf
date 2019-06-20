@@ -91,8 +91,7 @@ private:
     }
 
 public:
-    template <typename T_out, typename std::enable_if<
-        is_supported_v<T_out>() >::type* = nullptr>
+    template <typename T_out, std::enable_if_t<is_supported_v<T_out>()>* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -103,8 +102,7 @@ public:
         }
     }
 
-    template <typename T_out, typename std::enable_if<
-        not is_supported_v<T_out>() >::type* = nullptr >
+    template <typename T_out, std::enable_if_t<not is_supported_v<T_out>()>* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream)
     {
@@ -118,7 +116,7 @@ private:
     // return true if T is arithmetic type or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
     template <typename T>
-    static constexpr bool is_supported()
+    static constexpr bool is_supported_v()
     {
         return std::is_arithmetic<T>::value ||
                std::is_same<T, cudf::bool8>::value ||
@@ -127,8 +125,7 @@ private:
     }
 
 public:
-    template <typename T, typename std::enable_if<
-        is_supported<T>()>::type* = nullptr>
+    template <typename T, std::enable_if_t<is_supported_v<T>()>* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
@@ -136,8 +133,7 @@ public:
             simple_reduction_result_type_dispatcher<T, Op>(), col, scalar, stream);
     }
 
-    template <typename T, typename std::enable_if<
-        not is_supported<T>()>::type* = nullptr>
+    template <typename T, std::enable_if_t<not is_supported_v<T>()>* = nullptr>
     void operator()(const gdf_column *col,
                          gdf_scalar* scalar, cudaStream_t stream=0)
     {
