@@ -85,6 +85,7 @@
 - PR #2042 Replace old "10 Minutes" guide with new guide for docs build process
 - PR #2036 Make library of common test utils to speed up tests compilation
 - PR #2022 Facilitating get_dummies to be a high level api too
+- PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 
 ## Bug Fixes
 
