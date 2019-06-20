@@ -106,8 +106,8 @@ TYPED_TEST(GatherOptTest, MultiColReverseIdentityTest) {
 }
 
 TYPED_TEST(GatherOptTest, MultiColNullTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr gdf_size_type source_size{1000000};
+  constexpr gdf_size_type destination_size{1000000};
   
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
@@ -211,9 +211,10 @@ TYPED_TEST(GatherOptTest, MultiColInPlaceTest) {
 
   cudf::table source_table{ vp_src };
 
-  EXPECT_NO_THROW(
-      cudf::opt::gather(&source_table, gather_map.data().get(), &source_table));
-
+  EXPECT_THROW(
+      cudf::opt::gather(&source_table, gather_map.data().get(), &source_table),
+      cudf::logic_error);
+/**
   for(size_t c = 0; c < n_cols; c++){
     // Copy result of source column to host
     std::vector<TypeParam> result_data;
@@ -236,7 +237,7 @@ TYPED_TEST(GatherOptTest, MultiColInPlaceTest) {
             << "Value at index " << i << " should be null!\n";
       }
     }
-  }
+  }*/
 }
 
 TYPED_TEST(GatherOptTest, DtypeMistach){
