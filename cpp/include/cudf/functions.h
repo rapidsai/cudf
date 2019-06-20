@@ -832,7 +832,7 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column** input_columns,
+gdf_error gdf_order_by(gdf_column const* const* input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
