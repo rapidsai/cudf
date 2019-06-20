@@ -119,8 +119,8 @@ enum gdf_csv_quote_style{
  *---------------------------------------------------------------------------**/
 struct csv_reader_args{
   gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
-  std::string        filepath_or_buffer;            ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  std::string        compression = "infer";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
+  std::string filepath_or_buffer;               ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  std::string compression = "none";             ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
   char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
   char          delimiter = ',';            ///< Define the field separator; Default is ','.
