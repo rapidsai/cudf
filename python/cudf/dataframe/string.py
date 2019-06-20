@@ -510,6 +510,7 @@ class StringColumn(columnops.TypedColumnBase):
         elif isinstance(arg, DeviceNDArray):
             # NVStrings gather call expects an array of int32s
             arg = cudautils.astype(arg, np.dtype('int32'))
+            arg = cudautils.modulo(arg, len(self))
             if len(arg) > 0:
                 gpu_ptr = get_ctype_ptr(arg)
                 out = self._data.gather(gpu_ptr, len(arg))
