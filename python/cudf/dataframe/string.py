@@ -5,7 +5,6 @@ import numpy as np
 import pyarrow as pa
 import nvstrings
 from numbers import Number
-import numba.cuda as cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
@@ -598,56 +597,44 @@ class StringColumn(columnops.TypedColumnBase):
         }
         frames = []
         sub_headers = []
-        if self.data.size() > 0:
-            arr = np.arange(self.data.size(),dtype=np.int32)
-            d_arr = rmm.to_device(arr)
-            self.data.len(d_arr.device_ctypes_pointer.value)
-            nchars = sum(d_arr.copy_to_host()) + self.null_count * 2
-            values = np.empty(nchars, dtype=np.int8)
-            offsets = np.empty(nchars+1, dtype=np.int32)
-            self.data.to_offsets(values, offsets)
-        else:
-            values, offsets = None, None
-        for i, item in enumerate([self.mask, values, offsets]):
-            if i == 0:
-                sheader, [frame] = serialize(item)
-            else:
-                item_ndarray = cuda.to_device(item)
-                sheader, [frame] = serialize(item_ndarray)
+
+        sbuf = rmm.device_array(self._data.byte_count(), dtype='int8')
+        obuf = rmm.device_array(len(self._data) + 1, dtype='int32')
+        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        nbuf = rmm.device_array(mask_size, dtype='int8')
+        self.data.to_offsets(get_ctype_ptr(sbuf), get_ctype_ptr(obuf),
+                            nbuf=get_ctype_ptr(nbuf), bdevmem=True)
+
+        for item in [nbuf, sbuf, obuf]:
+            sheader, [frame] = serialize(item)
             sub_headers.append(sheader)
             frames.append(frame)
 
-        header["nvstrings"] = len(self.data)
+        header["nvstrings"] = len(self._data)
         header["subheaders"] = sub_headers
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        # Deserialize the mask
-        mask_header = header["subheaders"][0]
-        mask_frame = frames[0]
-        mask_array = deserialize(mask_header, [mask_frame])
+        # Deserialize the mask, value, and offset frames
+        # Using copy_from_host() for now. `get_ctype_ptr`
+        # should be used as soon as `from_offsets`
+        # supports device-memory arguments.
+        arrays = []
+        for i, frame in enumerate(frames):
+            subheader = header["subheaders"][i]
+            arrays.append(deserialize(subheader, [frame]).copy_to_host())
 
-        # Deserialize the value array
-        value_header = header["subheaders"][1]
-        value_frame = frames[1]
-        value_array = deserialize(value_header, [value_frame])
-
-        # Deserialize the offset array
-        offset_header = header["subheaders"][2]
-        offset_frame = frames[2]
-        offset_array = deserialize(offset_header, [offset_frame])
-
-        # Use from_offsets to get nvstring data
-        vals = value_array.copy_to_host()
-        offsets = offset_array.copy_to_host()
+        # Use from_offsets to get nvstring data.
+        # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
-        mask = None
-        if mask_array:
-            mask = mask_array.to_array()
-        data = nvstrings.from_offsets(vals, offsets, scount, nbuf=mask,
-                                      ncount=header["null_count"])
-
+        data = nvstrings.from_offsets(
+            arrays[1],
+            arrays[2],
+            scount,
+            nbuf=arrays[0],
+            ncount=header["null_count"],
+        )
         return data
 
     def sort_by_values(self, ascending=True, na_position="last"):

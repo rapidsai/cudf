@@ -153,28 +153,6 @@ def test_serialize_string():
     assert_eq(recreated, df)
 
 
-def test_serialize_buffer_column():
-    from cudf.dataframe.column import Column
-    from cudf.dataframe.buffer import Buffer
-
-    # Test Buffer serialization
-    s = cudf.Series([1, 2, None, 4])
-    buf = s.data
-    # (De)serialize roundtrip
-    recreated_buf = cuda_deserialize(*cuda_serialize(buf))
-    # Check
-    col = Column(buf)
-    recreated_col = Column(recreated_buf)
-    assert_eq(recreated_col.to_array(), col.to_array())
-    assert_eq(cudf.Series(recreated_col), cudf.Series(col))
-
-    # Test Column Serialization
-    # (De)serialize roundtrip
-    recreated_col = cuda_deserialize(*cuda_serialize(col))
-    # Check
-    assert_eq(recreated_col[0].to_array(), col.to_array())
-
-
 def test_serialize_empty_string():
     pd_series = pd.Series([], dtype='str')
     gd_series = cudf.Series([], dtype='str')
