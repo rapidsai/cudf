@@ -77,28 +77,30 @@ struct transformer_meanvar_no_count
 // ------------------------------------------------------------------------
 // difinitions of device struct for binary operation
 
-struct ReductionSum {
+namespace op {
+
+struct sum {
     using Op = cudf::DeviceSum;
 };
 
-struct ReductionProduct {
+struct product {
     using Op = cudf::DeviceProduct;
 };
 
-struct ReductionSumOfSquares {
+struct sum_of_squares {
     using Op = cudf::DeviceSum;
 };
 
-struct ReductionMin{
+struct min {
     using Op = cudf::DeviceMin;
 };
 
-struct ReductionMax{
+struct max {
     using Op = cudf::DeviceMax;
 };
 
 // operator for `mean`
-struct ReductionMean{
+struct mean {
     using Op = cudf::DeviceSum;
 
     template<typename T>
@@ -121,7 +123,7 @@ struct ReductionMean{
 };
 
 // operator for `variance`
-struct ReductionVar{
+struct variance {
     using Op = cudf::DeviceSum;
 
     template<typename T>
@@ -150,7 +152,7 @@ struct ReductionVar{
 };
 
 // operator for `standard deviation`
-struct ReductionStd{
+struct standard_deviation {
     using Op = cudf::DeviceSum;
 
     template<typename T>
@@ -168,13 +170,14 @@ struct ReductionStd{
         // compute `standard deviation` from intermediate type `IType`
         static T ComputeResult(const IType& input, gdf_size_type count, gdf_size_type ddof)
         {
-            using intermediateOp = typename ReductionVar::template Intermediate<T>;
+            using intermediateOp = typename cudf::reductions::op::variance::template Intermediate<T>;
             T var = intermediateOp::ComputeResult(input, count, ddof);
 
             return static_cast<T>(std::sqrt(var));
         };
     };
 };
+} // namespace op
 
 
 } // namespace reductions

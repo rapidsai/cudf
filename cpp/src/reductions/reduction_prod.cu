@@ -21,7 +21,7 @@
 void cudf::reductions::reduction_prod(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, scalar, stream);
+        ReduceDispatcher<cudf::reductions::op::product>(), col, scalar, stream);
 }
 
 

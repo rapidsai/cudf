@@ -21,7 +21,7 @@
 void cudf::reductions::reduction_sumofsquares(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
 {
     cudf::type_dispatcher(col->dtype,
-        ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, scalar, stream);
+        ReduceDispatcher<cudf::reductions::op::sum_of_squares>(), col, scalar, stream);
 }
 
 

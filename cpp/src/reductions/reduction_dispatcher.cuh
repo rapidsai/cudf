@@ -29,10 +29,10 @@ auto make_iterator(const gdf_column &input, T_out identity, Op op)
     return cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
 }
 
-// make an column iterator, specialized for `cudf::reductions::ReductionSumOfSquares`
+// make an column iterator, specialized for `cudf::reductions::op::sum_of_squares`
 template<bool has_nulls, typename T_in, typename T_out>
 auto make_iterator(const gdf_column &input, T_out identity,
-    cudf::reductions::ReductionSumOfSquares op)
+    cudf::reductions::op::sum_of_squares op)
 {
     auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
     return thrust::make_transform_iterator(it_raw,
@@ -122,8 +122,8 @@ private:
     {
         return std::is_arithmetic<T>::value ||
                std::is_same<T, cudf::bool8>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMin>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMax>::value ;
+               std::is_same<Op, cudf::reductions::op::min>::value ||
+               std::is_same<Op, cudf::reductions::op::max>::value ;
     }
 
 public:
