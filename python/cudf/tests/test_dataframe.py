@@ -956,6 +956,8 @@ def test_dataframe_take(ntake):
     def check(**kwargs):
         out = df.take(take_indices, **kwargs)
         assert len(out) == ntake
+        assert out.ii.null_count == 0
+        assert out.ff.null_count == 0
         np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
         np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
         if kwargs.get('ignore_index'):
