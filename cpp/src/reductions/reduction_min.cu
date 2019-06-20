@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for redunction `min`
+ // The translation unit for reduction `min`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher.cuh"

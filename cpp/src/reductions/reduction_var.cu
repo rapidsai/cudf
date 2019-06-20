@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// The translation unit for redunction `variance`
+// The translation unit for reduction `variance`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for redunction `sum of squares`
+// The translation unit for reduction `sum of squares`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher.cuh"

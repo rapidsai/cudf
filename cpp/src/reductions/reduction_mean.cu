@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for redunction `mean`
+ // The translation unit for reduction `mean`
 
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
