@@ -23,6 +23,9 @@
 #include "cudf.h"
 #include "table.hpp"
 
+// Forward declarations
+namespace arrow { namespace io {  class RandomAccessFile; } }
+
 namespace cudf {
 namespace io {
 namespace json {
@@ -97,30 +100,18 @@ namespace csv {
  * @brief Quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
 enum quote_style {
-  QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_MINIMAL = 0,                        ///< Only quote those fields which contain special characters; enable quotation when parsing.
   QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
   QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
   QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
 };
 
 /**---------------------------------------------------------------------------*
- * @brief  This struct contains all input parameters to the read_csv function.
- *
- * Parameters are all stored in host memory.
- *
- * Parameters in PANDAS that are unavailable in cudf:
- *   squeeze          - data is always returned as a gdf_column array
- *   engine           - this is the only engine
- *   verbose
- *   keep_date_col    - will not maintain raw data
- *   date_parser      - there is only this parser
- *   float_precision  - there is only one converter that will cover all specified values
- *   dialect          - not used
- *   encoding         - always use UTF-8
- *   escapechar       - always use '\'
- *   parse_dates      - infer date data types and always parse as such
- *   infer_datetime_format - inference not supported
-
+ * @brief Options for the CSV reader
+ * 
+ * TODO: Clean-up the parameters, as it is decoupled from the `read_csv`
+ * interface. That interface allows it to be more closely aligned with PANDAS'
+ * for user-friendliness.
  *---------------------------------------------------------------------------**/
 struct reader_options {
   gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
@@ -257,6 +248,12 @@ class reader {
    * @brief Constructor for an existing memory buffer source.
    *---------------------------------------------------------------------------**/
   explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options);
 
   /**---------------------------------------------------------------------------*

@@ -48,12 +48,6 @@ class reader::Impl {
                 reader_options const &options);
 
   /**
-   * @brief Convenience constructor from an Arrow dataset source.
-   **/
-  explicit Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                reader_options const &options);
-
-  /**
    * @brief Read an entire set or a subset of data from the source and returns
    * an array of gdf_columns.
    *

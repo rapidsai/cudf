@@ -601,10 +601,6 @@ reader::Impl::Impl(std::unique_ptr<DataSource> source,
   use_index_ = options.use_index;
 }
 
-reader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                   reader_options const &options)
-    : reader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
-
 table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
 
   // Select only stripes required (aka row groups)
@@ -796,6 +792,11 @@ reader::reader(std::string filepath, reader_options const &options)
 reader::reader(const char *buffer, size_t length, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(buffer, length), options)) {}
+
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(file), options)) {}
 
 table reader::read_all() { return impl_->read(0, -1, -1); }
 
