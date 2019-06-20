@@ -15,6 +15,7 @@
  */
 
 #include <cudf/stream_compaction.hpp>
+#include <cudf/copying.hpp>
 
 #include <utilities/error_utils.hpp>
 
@@ -42,7 +43,12 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
   column_wrapper<int32_t> source(column_size);
   column_wrapper<cudf::bool8> mask(column_size);
 
-  CUDF_EXPECT_NO_THROW(cudf::apply_boolean_mask(bad_input, mask));
+  {
+    column_wrapper<int32_t> empty_column(cudf::empty_like(bad_input));
+    gdf_column output;
+    CUDF_EXPECT_NO_THROW(output = cudf::apply_boolean_mask(bad_input, mask));
+    EXPECT_TRUE(empty_column == output);
+  }
 
   bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
   bad_input.null_count = 2;
@@ -51,6 +57,15 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(bad_input, mask),
                             "Null input data");
 
+  {
+    column_wrapper<int32_t> empty_column(cudf::empty_like(source));
+    gdf_column output;
+    CUDF_EXPECT_NO_THROW(output = cudf::apply_boolean_mask(source, bad_mask));
+    EXPECT_TRUE(empty_column == output);
+  }
+
+  // null mask pointers but non-zero mask size
+  bad_mask.size = column_size;
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(source, bad_mask),
                             "Null boolean_mask");
 }
