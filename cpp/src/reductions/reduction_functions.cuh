@@ -52,15 +52,15 @@ void reduce(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
     RMM_TRY(RMM_FREE(d_temp_storage, stream));
 }
 
-void sum(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
-void min(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
-void max(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
-void product(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
-void sum_of_squares(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
+void sum(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+void min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+void max(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+void product(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+void sum_of_squares(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 
-void mean(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream=0);
-void variance(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
-void standard_deviation(const gdf_column *col, gdf_scalar* scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
+void mean(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+void variance(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
+void standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof = 1, cudaStream_t stream=0);
 
 } // namespace reductions
 } // namespace cudf

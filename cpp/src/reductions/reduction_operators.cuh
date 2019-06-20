@@ -108,9 +108,9 @@ struct mean {
         using IType = T;
 
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out& identity)
+        static auto make_iterator(gdf_column const& column, T_out identity)
         {
-            return cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+            return cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
         }
 
         // compute `mean` from intermediate type `IType`
@@ -131,10 +131,10 @@ struct variance {
         using IType = meanvar_no_count<T>;
 
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out identity)
+        static auto make_iterator(gdf_column const& column, T_out identity)
         {
             auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
-            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
             return thrust::make_transform_iterator(it_raw, transformer);
         }
 
@@ -160,10 +160,10 @@ struct standard_deviation {
         using IType = meanvar_no_count<T>;
 
         template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(const gdf_column* column, T_out identity)
+        static auto make_iterator(gdf_column const& column, T_out identity)
         {
             auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
-            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(*column, identity);
+            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
             return thrust::make_transform_iterator(it_raw, transformer);
         }
 

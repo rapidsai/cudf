@@ -42,8 +42,7 @@ auto make_iterator(const gdf_column &input, T_out identity,
 // Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
 // which directly compute the reduction by a single step reduction call
 template<typename T_in, typename T_out, typename Op, bool has_nulls>
-void simple_reduction(const gdf_column *input,
-                   gdf_scalar* scalar, cudaStream_t stream)
+void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
     T_out identity = Op::Op::template identity<T_out>();
 
@@ -57,20 +56,20 @@ void simple_reduction(const gdf_column *input,
     CHECK_STREAM(stream);
 
     // reduction by iterator
-    auto it = make_iterator<has_nulls, T_in, T_out>(*input, identity, Op{});
-    reduce(static_cast<T_out*>(result), it, input->size, identity,
+    auto it = make_iterator<has_nulls, T_in, T_out>(col, identity, Op{});
+    reduce(static_cast<T_out*>(result), it, col.size, identity,
         typename Op::Op{}, stream);
 
     // read back the result to host memory
     // TODO: asynchronous copy
-    CUDA_TRY(cudaMemcpy(&scalar->data, result,
+    CUDA_TRY(cudaMemcpy(&scalar.data, result,
             sizeof(T_out), cudaMemcpyDeviceToHost));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
 
     // set scalar is valid
-    scalar->is_valid = true;
+    scalar.is_valid = true;
 };
 
 
@@ -92,10 +91,9 @@ private:
 
 public:
     template <typename T_out, std::enable_if_t<is_supported_v<T_out>()>* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream)
+    void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
-        if( col->valid == nullptr ){
+        if( col.valid == nullptr ){
             simple_reduction<T_in, T_out, Op, false>(col, scalar, stream);
         }else{
             simple_reduction<T_in, T_out, Op, true >(col, scalar, stream);
@@ -103,8 +101,7 @@ public:
     }
 
     template <typename T_out, std::enable_if_t<not is_supported_v<T_out>()>* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream)
+    void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         CUDF_FAIL("input data type is not convertible to output data type");
     }
@@ -126,16 +123,14 @@ private:
 
 public:
     template <typename T, std::enable_if_t<is_supported_v<T>()>* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream=0)
+    void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
-        cudf::type_dispatcher(scalar->dtype,
+        cudf::type_dispatcher(scalar.dtype,
             simple_reduction_result_type_dispatcher<T, Op>(), col, scalar, stream);
     }
 
     template <typename T, std::enable_if_t<not is_supported_v<T>()>* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream=0)
+    void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");

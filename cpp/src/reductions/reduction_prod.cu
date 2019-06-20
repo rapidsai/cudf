@@ -18,9 +18,9 @@
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher.cuh"
 
-void cudf::reductions::product(const gdf_column *col, gdf_scalar* scalar, cudaStream_t stream)
+void cudf::reductions::product(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
-    cudf::type_dispatcher(col->dtype,
+    cudf::type_dispatcher(col.dtype,
         simple_reduction_dispatcher<cudf::reductions::op::product>(), col, scalar, stream);
 }
 
