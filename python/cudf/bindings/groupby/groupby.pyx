@@ -91,6 +91,8 @@ def apply_groupby(keys, values, ops, method='hash'):
         deref(options)
     )
 
+    del c_keys_table
+    del c_values_table
     del options
 
     result_key_cols = columns_from_table(&result.first)
