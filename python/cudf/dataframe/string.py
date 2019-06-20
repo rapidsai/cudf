@@ -623,7 +623,7 @@ class StringColumn(columnops.TypedColumnBase):
         arrays = []
         for i, frame in enumerate(frames):
             subheader = header["subheaders"][i]
-            arrays.append(deserialize(subheader, [frame]).copy_to_host())
+            arrays.append(get_ctype_ptr(deserialize(subheader, [frame])))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
@@ -634,6 +634,7 @@ class StringColumn(columnops.TypedColumnBase):
             scount,
             nbuf=arrays[0],
             ncount=header["null_count"],
+            bdevmem=True,
         )
         return data
 

@@ -27,10 +27,6 @@ cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
         lambda: cudf.Series([1, 2, 3], index=[4, 5, None]),
         lambda: cudf.Series(["a", "bb", "ccc"]),
         lambda: cudf.Series(["a", None, "ccc"]),
-        lambda: cudf.Series([None, None, None]),
-        lambda: cudf.Series([None, None, None], dtype='str'),
-        lambda: cudf.Series([]),
-        lambda: cudf.Series([], dtype='str'),
         lambda: cudf.DataFrame({"x": [1, 2, 3]}),
         lambda: cudf.DataFrame({"x": [1, 2, 3], "y": [1.0, None, 3.0]}),
         lambda: cudf.DataFrame(
@@ -44,10 +40,10 @@ cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
             index=[1, None, 3],
         ),
         pd.util.testing.makeTimeDataFrame,
-        # pd.util.testing.makeMissingDataframe,
-        # pd.util.testing.makeMultiIndex,
-        # pd.util.testing.makeMixedDataFrame,
-        # pd.util.testing.makeTimeDataFrame,
+        pd.util.testing.makeMixedDataFrame,
+        pd.util.testing.makeTimeDataFrame,
+        # pd.util.testing.makeMissingDataframe, # Using distributed?
+        # pd.util.testing.makeMultiIndex, # Not serialized on device
     ],
 )
 def test_serialize(df):
