@@ -53,9 +53,9 @@ cudf::table read_json(json_read_arg const &args);
  */
 cudf::table read_orc(orc_read_arg const &args);
 
+} // namespace cudf
+
 /*
  * @brief Interface to parse Parquet data to GDF columns using an arrow::io::RandomAccessFile
  */
 gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> file);
-
-} // namespace cudf
