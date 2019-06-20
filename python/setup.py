@@ -42,7 +42,8 @@ setup(name='cudf',
         "Programming Language :: Python :: 3.7"
       ],
       # Include the separately-compiled shared library
-      author="NVIDIA Corporation", setup_requires=['cython'],
+      author="NVIDIA Corporation",
+      setup_requires=['cython'],
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
       install_requires=install_requires,

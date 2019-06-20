@@ -156,10 +156,6 @@ def agg(groupby_class, args):
         key_columns.append(groupby_class._df._cols[colname]._column)
         result_key_names = groupby_class._by
 
-    # TODO: Use MultiColumn here instead of use_prefix
-    # use_prefix enables old functionality - prefixing column
-    # groupby names since we don't support MultiColumn quite yet
-    # https://github.com/rapidsai/cudf/issues/483
     use_prefix = (
         len(groupby_class._val_columns) > 1
         or len(args) > 1

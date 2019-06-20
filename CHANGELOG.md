@@ -22,7 +22,7 @@
 - PR #1807 Add Series.dropna()
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
-- PR #1478 Refactored groupby implementation: handles nulls in keys/values, does aggregations a single pass
+- PR #2018 Add bindings for new groupby C++ API
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
 - PR #1998 Add google benchmark to cudf

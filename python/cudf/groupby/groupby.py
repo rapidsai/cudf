@@ -457,11 +457,6 @@ class Groupby(object):
         Returns
         -------
         result : DataFrame
-
-        Notes
-        -----
-        Since multi-indexes aren't supported aggregation results are returned
-        in columns using the naming scheme of `aggregation_columnname`.
         """
         agg_groupby = self.copy(deep=False)
         return cpp_agg(agg_groupby, args)
