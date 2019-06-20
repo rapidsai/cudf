@@ -80,7 +80,8 @@ fi
 }
 
 echo "<details><summary>Click here to see environment details</summary><pre>"
+echo "     "
 print_env | while read -r line; do
-    echo "      $line"
+    echo "     $line"
 done
 echo "</pre></details>"
