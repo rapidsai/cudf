@@ -82,6 +82,7 @@
 - PR #2017 Convert `read_orc()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
 - PR #2034 Adding support for string columns concatenation using "add" binary operator
+- PR #2042 Replace old "10 Minutes" guide with new guide for docs build process
 - PR #2036 Make library of common test utils to speed up tests compilation
 
 ## Bug Fixes
