@@ -45,7 +45,7 @@ def columns_from_dataframe(df):
 
 
 def dataframe_from_columns(cols, index=None, columns=None):
-    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)))
+    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
     if columns is not None:
         df.columns = columns
     return df
