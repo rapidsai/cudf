@@ -12,9 +12,11 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 
 from cudf.utils import cudautils, utils, ioutils
+from cudf import formatting
 from cudf.dataframe.core import get_renderable_pandas_dataframe
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.index import Index, RangeIndex, as_index
+from cudf.settings import NOTSET, settings
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe import columnops
@@ -374,25 +376,59 @@ class Series(object):
 
         return self.iloc[-n:]
 
-    def to_string(self):
+    def to_string(self, nrows=NOTSET):
         """Convert to string
-        """
 
-        return self.__repr__()
+        Parameters
+        ----------
+        nrows : int
+            Maximum number of rows to show.
+            If it is None, all rows are shown.
+        """
+        if pd.__version__ >= '0.24.2':
+            return self.__repr__()
+        if nrows is NOTSET:
+            nrows = settings.formatting.get(nrows)
+
+        str_dtype = self.dtype
+
+        if len(self) == 0:
+            return "<empty Series of dtype={}>".format(str_dtype)
+
+        if nrows is None:
+            nrows = len(self)
+        else:
+            nrows = min(nrows, len(self))  # cap row count
+
+        more_rows = len(self) - nrows
+
+        # Prepare cells
+        cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
+        dtypes = OrderedDict([('', self.dtype)])
+        # Format into a table
+        output = formatting.format(index=self.index,
+                                   cols=cols, dtypes=dtypes,
+                                   more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, str_dtype)\
+            if self.name is not None else output + \
+            "\ndtype: {}".format(str_dtype)
 
     def __str__(self):
-        return self.to_string()
+        return self.to_string(nrows=10)
 
     def __repr__(self):
-        lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
-        if lines[-1].startswith('N'):
-            lines = lines[:-1]
-            lines.append("Name: %s" % self.name)
-            if len(self) > len(lines):
-                lines[-1] = lines[-1] + ", Length: %d" % len(self)
-            lines[-1] = lines[-1] + ', '
-            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
-        return '\n'.join(lines)
+        if pd.__version__ >= '0.24.2':
+            lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
+            if lines[-1].startswith('N'):
+                lines = lines[:-1]
+                lines.append("Name: %s" % self.name)
+                if len(self) > len(lines):
+                    lines[-1] = lines[-1] + ", Length: %d" % len(self)
+                lines[-1] = lines[-1] + ', '
+                lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+            return '\n'.join(lines)
+        return "<cudf.Series nrows={} >".format(len(self))
 
     def _repr_latex_(self):
         return get_renderable_pandas_dataframe(self)._repr_latex_()

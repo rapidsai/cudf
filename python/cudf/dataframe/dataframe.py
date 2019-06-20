@@ -21,11 +21,12 @@ from types import GeneratorType
 from librmm_cffi import librmm as rmm
 
 import cudf
+from cudf import formatting
 from cudf.utils import cudautils, queryutils, applyutils, utils, ioutils
 from cudf.dataframe.core import get_renderable_pandas_dataframe
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
-from cudf.settings import NOTSET
+from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
@@ -445,64 +446,66 @@ class DataFrame(object):
         """
         if pd.__version__ >= '0.24.2':
             return self.__repr__()
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
+           isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
+            raise TypeError("You're trying to print a DataFrame that contains "
+                            "a MultiIndex. Print this dataframe with "
+                            ".to_pandas()")
+        if nrows is NOTSET:
+            nrows = settings.formatting.get('nrows')
+        if ncols is NOTSET:
+            ncols = settings.formatting.get('ncols')
+
+        if nrows is None:
+            nrows = len(self)
         else:
-            if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
-               isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
-                raise TypeError("You're trying to print a DataFrame that "
-                                "contains a MultiIndex. Print this dataframe "
-                                "with .to_pandas()")
-            if nrows is NOTSET:
-                nrows = settings.formatting.get('nrows')
-            if ncols is NOTSET:
-                ncols = settings.formatting.get('ncols')
+            nrows = min(nrows, len(self))  # cap row count
 
-            if nrows is None:
-                nrows = len(self)
-            else:
-                nrows = min(nrows, len(self))  # cap row count
+        if ncols is None:
+            ncols = len(self.columns)
+        else:
+            ncols = min(ncols, len(self.columns))  # cap col count
 
-            if ncols is None:
-                ncols = len(self.columns)
-            else:
-                ncols = min(ncols, len(self.columns))  # cap col count
+        more_cols = len(self.columns) - ncols
+        more_rows = len(self) - nrows
 
-            more_cols = len(self.columns) - ncols
-            more_rows = len(self) - nrows
+        # Prepare cells
+        cols = OrderedDict()
+        dtypes = OrderedDict()
+        if hasattr(self, 'multi_cols'):
+            use_cols = list(range(len(self.columns)))
+        else:
+            use_cols = list(self.columns[:ncols - 1])
+            if ncols > 0:
+                use_cols.append(self.columns[-1])
 
-            # Prepare cells
-            cols = OrderedDict()
-            dtypes = OrderedDict()
-            if hasattr(self, 'multi_cols'):
-                use_cols = list(range(len(self.columns)))
-            else:
-                use_cols = list(self.columns[:ncols - 1])
-                if ncols > 0:
-                    use_cols.append(self.columns[-1])
+        for h in use_cols:
+            cols[h] = self[h].values_to_string(nrows=nrows)
+            dtypes[h] = self[h].dtype
 
-            for h in use_cols:
-                cols[h] = self[h].values_to_string(nrows=nrows)
-                dtypes[h] = self[h].dtype
-
-            # Format into a table
-            return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
-                                     show_headers=True, more_cols=more_cols,
-                                     more_rows=more_rows, min_width=2)
+        # Format into a table
+        return formatting.format(index=self._index, cols=cols, dtypes=dtypes,
+                                 show_headers=True, more_cols=more_cols,
+                                 more_rows=more_rows, min_width=2)
 
 
     def __str__(self):
-        return self.to_string()
+        nrows = settings.formatting.get('nrows') or 10
+        ncols = settings.formatting.get('ncols') or 8
+        return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
-        if lines[-1].startswith('['):
-            lines = lines[:-1]
-            lines.append("[%d rows x %d columns]" % (len(self),
-                                                     len(self.columns)))
-        for col in self.columns:
-            if self[col].has_null_mask:
-                lines.append('- warning NaN substitued for Null -')
-                break
-        return '\n'.join(lines)
+        if pd.__version__ >= '0.24.2':
+            lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
+            if lines[-1].startswith('['):
+                lines = lines[:-1]
+                lines.append("[%d rows x %d columns]" % (len(self),
+                                                         len(self.columns)))
+            return '\n'.join(lines)
+        return "<cudf.DataFrame ncols={} nrows={} >".format(
+                len(self.columns),
+                len(self),
+            )
 
     def _repr_html_(self):
         lines = get_renderable_pandas_dataframe(self)._repr_html_().split('\n')
