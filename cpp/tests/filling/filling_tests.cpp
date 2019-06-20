@@ -149,3 +149,12 @@ TEST_F(FillingErrorTest, DTypeMismatch)
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10),
                             "Data type mismatch");
 }
+
+TEST_F(FillingErrorTest, StringCategoryNotSupported)
+{
+  scalar_wrapper<int32_t> val(5, true);
+  std::vector<const char*> strings{"foo"};
+  column_wrapper<cudf::nvstring_category> dest(1, strings.data());
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 1),
+    "cudf::fill() does not support GDF_STRING_CATEGORY columns");
+}

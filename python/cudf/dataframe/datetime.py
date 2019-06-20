@@ -10,6 +10,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
+from cudf.utils.utils import is_single_value
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.replace as cpp_replace
@@ -202,15 +203,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 "datetime column of {} has no NaN value".format(self.dtype))
 
     def fillna(self, fill_value, inplace=False):
-        result = self.copy()
-
-        if np.isscalar(fill_value):
+        if is_single_value(fill_value):
             fill_value = np.datetime64(fill_value, 'ms')
-        elif pd.core.dtypes.common.is_datetime_or_timedelta_dtype(fill_value):
-            fill_value = pd.to_datetime(fill_value)
-        fill_value_col = columnops.as_column(fill_value, nan_as_null=False)
+        else:
+            fill_value = columnops.as_column(fill_value, nan_as_null=False)
 
-        cpp_replace.replace_nulls(result, fill_value_col)
+        result = cpp_replace.apply_replace_nulls(self, fill_value)
 
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)

@@ -20,6 +20,7 @@
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
+#include <string/nvcategory_util.hpp>
 
 #include <cub/cub.cuh>
 
@@ -175,10 +176,19 @@ void copy_range(gdf_column *out_column, InputFunctor input,
   validate(out_column);
   CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed");
   CUDF_EXPECTS((begin >= 0) and (end <= out_column->size), "Range is out of bounds");
-  
+
   cudf::type_dispatcher(out_column->dtype,
                         copy_range_dispatch<InputFunctor>{input},
                         out_column, begin, end);
+
+  // synchronize nvcategory after filtering
+  if (out_column->dtype == GDF_STRING_CATEGORY) {
+    CUDF_EXPECTS(
+    GDF_SUCCESS ==
+      nvcategory_gather(out_column,
+                        static_cast<NVCategory *>(out_column->dtype_info.category)),
+      "could not set nvcategory");
+  }
 }
 
 }; // namespace detail

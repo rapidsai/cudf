@@ -91,17 +91,17 @@ void test_column(cudf::test::column_wrapper<T> const& col,
         expected_bitmask);
 
     // The last element in the bitmask has to be handled as a special case
-      EXPECT_TRUE(thrust::equal(
-          rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
-          expected_device_bitmask.begin() +
-              gdf_num_bitmask_elements(expected_values.size()) - 1,
-          underlying_column->valid));
+    EXPECT_TRUE(thrust::equal(
+        rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
+        expected_device_bitmask.begin() +
+            gdf_num_bitmask_elements(expected_values.size()) - 1,
+        underlying_column->valid));
 
-      EXPECT_TRUE(
-          std::equal(expected_bitmask.begin(),
-                     expected_bitmask.begin() +
-                         gdf_num_bitmask_elements(expected_values.size()) - 1,
-                     actual_bitmask.begin()));
+    EXPECT_TRUE(
+        std::equal(expected_bitmask.begin(),
+                   expected_bitmask.begin() +
+                       gdf_num_bitmask_elements(expected_values.size()) - 1,
+                   actual_bitmask.begin()));
 
     // Only check the bits in the last mask that correspond to rows
     std::bitset<GDF_VALID_BITSIZE> expected_last_mask =
@@ -125,6 +125,19 @@ void test_column(cudf::test::column_wrapper<T> const& col,
   // Ensure operator== for column_wrapper to it's underlying gdf_column
   // returns true
   EXPECT_TRUE(col == *col.get());
+}
+
+TYPED_TEST(ColumnWrapperTest, DefaultConstructor) {
+  cudf::test::column_wrapper<TypeParam> const col_wrapper{};
+  gdf_column const* col = col_wrapper.get();
+  EXPECT_EQ(col->dtype, cudf::gdf_dtype_of<TypeParam>());
+  EXPECT_EQ(col->size, 0);
+  EXPECT_EQ(col->null_count, 0);
+  EXPECT_EQ(col->data, nullptr);
+  EXPECT_EQ(col->valid, nullptr);
+  EXPECT_EQ(col->col_name, nullptr);
+  EXPECT_EQ(col->dtype_info.category, nullptr);
+  EXPECT_EQ(col->dtype_info.time_unit, TIME_UNIT_NONE);
 }
 
 TYPED_TEST(ColumnWrapperTest, SizeConstructor) {
