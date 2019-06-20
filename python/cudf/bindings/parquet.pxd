@@ -6,37 +6,35 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-from cudf.bindings.io cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 
-cdef extern from "cudf.h" namespace "cudf" nogil:
+cdef extern from "cudf.h" namespace "cudf::io::parquet" nogil:
 
     # See cpp/include/cudf/io_types.h
-    cdef cppclass ParquetReaderOptions:
+    cdef cppclass reader_options:
         vector[string] columns
         bool strings_to_categorical
 
-        ParquetReaderOptions() except +
+        reader_options() except +
 
-        ParquetReaderOptions(
+        reader_options(
             vector[string] columns,
             bool strings_to_categorical
         ) except +
 
-    cdef cppclass ParquetReader:
-        ParquetReader(
+    cdef cppclass reader:
+        reader(
             string filepath,
-            const ParquetReaderOptions &args
+            const reader_options &args
         ) except +
 
-        ParquetReader(
+        reader(
             const char *buffer,
             size_t length,
-            const ParquetReaderOptions &args
+            const reader_options &args
         ) except +
 
         string get_index_column() except +

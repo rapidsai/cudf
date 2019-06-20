@@ -281,15 +281,17 @@ class OrcReader {
   ~OrcReader();
 };
 
+namespace io {
+namespace parquet {
 /**---------------------------------------------------------------------------*
  * @brief Options for the Parquet reader
  *---------------------------------------------------------------------------**/
-struct ParquetReaderOptions {
+struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
 
-  ParquetReaderOptions() = default;
-  ParquetReaderOptions(ParquetReaderOptions const &) = default;
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
@@ -297,7 +299,7 @@ struct ParquetReaderOptions {
    * @param[in] columns List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
    *---------------------------------------------------------------------------**/
-  ParquetReaderOptions(std::vector<std::string> cols,
+  reader_options(std::vector<std::string> cols,
                        bool strings_as_category)
       : columns(std::move(cols)),
         strings_to_categorical(strings_as_category) {}
@@ -306,7 +308,7 @@ struct ParquetReaderOptions {
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache Parquet data into cuDF columns
  *---------------------------------------------------------------------------**/
-class ParquetReader {
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -315,14 +317,13 @@ class ParquetReader {
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
-  explicit ParquetReader(std::string filepath,
-                         ParquetReaderOptions const &options);
+  explicit reader(std::string filepath, reader_options const &options);
 
   /**---------------------------------------------------------------------------*
    * @brief Constructor for an existing memory buffer source.
    *---------------------------------------------------------------------------**/
-  explicit ParquetReader(const char *buffer, size_t length,
-                         ParquetReaderOptions const &options);
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the index column derived from the dataset metadata.
@@ -357,7 +358,9 @@ class ParquetReader {
    *---------------------------------------------------------------------------**/
   table read_rows(size_t skip_rows, size_t num_rows);
 
-  ~ParquetReader();
+  ~reader();
 };
 
+} // namespace parquet
+} // namespace io
 } // namespace cudf

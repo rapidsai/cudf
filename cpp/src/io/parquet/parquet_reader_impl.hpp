@@ -29,6 +29,8 @@
 #include "parquet_gpu.h"
 
 namespace cudf {
+namespace io {
+namespace parquet {
 
 // Forward declare Parquet metadata parser
 class ParquetMetadata;
@@ -36,19 +38,19 @@ class ParquetMetadata;
 /**
  * @brief Implementation for Parquet reader
  **/
-class ParquetReader::Impl {
+class reader::Impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
   explicit Impl(std::unique_ptr<DataSource> source,
-                ParquetReaderOptions const &options);
+                reader_options const &options);
 
   /**
    * @brief Convenience constructor from an Arrow dataset source.
    **/
   explicit Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                ParquetReaderOptions const &options);
+                reader_options const &options);
 
   /**
    * @brief Returns the index column derived from the dataset metadata.
@@ -126,4 +128,6 @@ class ParquetReader::Impl {
   bool strings_to_categorical_ = false;
 };
 
-}  // namespace cudf
+} // namespace parquet
+} // namespace io
+} // namespace cudf

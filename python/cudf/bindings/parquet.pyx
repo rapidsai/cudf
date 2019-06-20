@@ -7,8 +7,8 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.parquet cimport *
-from cudf.bindings.types cimport table as cudf_table
+from cudf.bindings.parquet cimport reader as parquet_reader
+from cudf.bindings.parquet cimport reader_options as parquet_reader_options
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
@@ -34,7 +34,7 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
     """
 
     # Setup reader options
-    cdef ParquetReaderOptions options = ParquetReaderOptions()
+    cdef parquet_reader_options options = parquet_reader_options()
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.strings_to_categorical = strings_to_categorical
@@ -44,9 +44,9 @@ cpdef cpp_read_parquet(path, columns=None, row_group=None, skip_rows=None,
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )
-    cdef unique_ptr[ParquetReader] reader
-    reader = unique_ptr[ParquetReader](
-        new ParquetReader(str(path).encode(), options)
+    cdef unique_ptr[parquet_reader] reader
+    reader = unique_ptr[parquet_reader](
+        new parquet_reader(str(path).encode(), options)
     )
 
     # Read data into columns

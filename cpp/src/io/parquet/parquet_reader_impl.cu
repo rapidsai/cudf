@@ -25,6 +25,8 @@
 #include <array>
 
 namespace cudf {
+namespace io {
+namespace parquet {
 
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
@@ -271,7 +273,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
   }
 };
 
-size_t ParquetReader::Impl::count_page_headers(
+size_t reader::Impl::count_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
 
   size_t total_pages = 0;
@@ -302,7 +304,7 @@ size_t ParquetReader::Impl::count_page_headers(
   return total_pages;
 }
 
-void ParquetReader::Impl::decode_page_headers(
+void reader::Impl::decode_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -334,7 +336,7 @@ void ParquetReader::Impl::decode_page_headers(
 }
 
 
-device_buffer<uint8_t> ParquetReader::Impl::decompress_page_data(
+device_buffer<uint8_t> reader::Impl::decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -451,7 +453,7 @@ device_buffer<uint8_t> ParquetReader::Impl::decompress_page_data(
   return decomp_pages;
 }
 
-void ParquetReader::Impl::decode_page_data(
+void reader::Impl::decode_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t min_row,
@@ -514,8 +516,8 @@ void ParquetReader::Impl::decode_page_data(
   }
 }
 
-ParquetReader::Impl::Impl(std::unique_ptr<DataSource> source,
-                          ParquetReaderOptions const &options)
+reader::Impl::Impl(std::unique_ptr<DataSource> source,
+                   reader_options const &options)
     : source_(std::move(source)) {
 
   // Open and parse the source Parquet dataset metadata
@@ -531,11 +533,11 @@ ParquetReader::Impl::Impl(std::unique_ptr<DataSource> source,
   strings_to_categorical_ = options.strings_to_categorical;
 }
 
-ParquetReader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                          ParquetReaderOptions const &options)
-    : ParquetReader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
+reader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
+                   reader_options const &options)
+    : reader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
 
-table ParquetReader::Impl::read(int skip_rows, int num_rows, int row_group) {
+table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 
   // Select only row groups required
   const auto selected_row_groups =
@@ -703,32 +705,32 @@ table ParquetReader::Impl::read(int skip_rows, int num_rows, int row_group) {
   return table(out_cols.data(), out_cols.size());
 }
 
-ParquetReader::ParquetReader(std::string filepath,
-                             ParquetReaderOptions const &options)
+reader::reader(std::string filepath, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(filepath.c_str()), options)) {}
 
-ParquetReader::ParquetReader(const char *buffer, size_t length,
-                             ParquetReaderOptions const &options)
+reader::reader(const char *buffer, size_t length, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(buffer, length), options)) {}
 
-std::string ParquetReader::get_index_column() {
+std::string reader::get_index_column() {
   return impl_->get_index_column();
 }
 
-table ParquetReader::read_all() {
+table reader::read_all() {
   return impl_->read(0, -1, -1);
 }
 
-table ParquetReader::read_rows(size_t skip_rows, size_t num_rows) {
+table reader::read_rows(size_t skip_rows, size_t num_rows) {
   return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
 }
 
-table ParquetReader::read_row_group(size_t row_group) {
+table reader::read_row_group(size_t row_group) {
   return impl_->read(0, -1, row_group);
 }
 
-ParquetReader::~ParquetReader() = default;
+reader::~reader() = default;
 
-}  // namespace cudf
+} // namespace parquet
+} // namespace io
+} // namespace cudf
