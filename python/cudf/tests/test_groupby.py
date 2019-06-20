@@ -623,9 +623,11 @@ def test_groupby_nulls_basic(agg):
     })
     gdf = cudf.from_pandas(pdf)
 
+    # TODO: fillna() used here since we don't follow
+    # Pandas' null semantics. Should we change it?
     assert_eq(
-        getattr(pdf.groupby('a'), agg)(),
-        getattr(gdf.groupby('a'), agg)(),
+        getattr(pdf.groupby('a'), agg)().fillna(0),
+        getattr(gdf.groupby('a'), agg)().fillna(0),
         check_dtype=check_dtype
     )
 
