@@ -42,8 +42,8 @@ cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
         pd.util.testing.makeTimeDataFrame,
         pd.util.testing.makeMixedDataFrame,
         pd.util.testing.makeTimeDataFrame,
-        # pd.util.testing.makeMissingDataframe, # Using distributed?
-        # pd.util.testing.makeMultiIndex, # Not serialized on device
+        # pd.util.testing.makeMissingDataframe, # Problem in distributed
+        # pd.util.testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
 def test_serialize(df):

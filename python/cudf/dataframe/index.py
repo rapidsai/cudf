@@ -458,7 +458,7 @@ class GenericIndex(Index):
                 else:
                     values = np.asarray(values)
             values = columnops.as_column(values)
-            assert isinstance(values, NumericalColumn)
+            assert isinstance(values, (NumericalColumn, StringColumn))
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
 
