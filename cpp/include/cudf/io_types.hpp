@@ -183,4 +183,21 @@ struct orc_read_arg {
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `read_parquet` interface
+ *---------------------------------------------------------------------------**/
+struct parquet_read_arg {
+  source_info source;                       ///< Info on source of data
+
+  std::vector<std::string> columns;         ///< Names of column to read; empty is all
+
+  int row_group = -1;                       ///< Row group to read; -1 is all
+  int skip_rows = -1;                       ///< Rows to skip from the start; -1 is none
+  int num_rows = -1;                        ///< Rows to read; -1 is all
+
+  bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+
+  explicit parquet_read_arg(const source_info& src) : source(src) {}
+};
+
 } // namespace cudf
