@@ -22,6 +22,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -179,6 +180,8 @@ public final class Table implements AutoCloseable {
   private static native long[] gdfReadParquet(String[] filterColumnNames,
                                               String filePath, long address, long length) throws CudfException;
 
+
+  private static native long[] gdfGroupByCount(long inputTable, int[] indices) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -339,14 +342,28 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
+  public static Aggregate count() {
+    return Aggregate.count();
+  }
+
+  public AggregateOperation groupBy(int... indices) {
+    int[] operationIndicesArray = copyAndValidate(indices);
+    return new AggregateOperation(this, operationIndicesArray);
+  }
+
   public TableOperation onColumns(int... indices) {
+    int[] operationIndicesArray = copyAndValidate(indices);
+    return new TableOperation(this, operationIndicesArray);
+  }
+
+  private int[] copyAndValidate(int[] indices) {
     int[] operationIndicesArray = new int[indices.length];
     for (int i = 0; i < indices.length; i++) {
       operationIndicesArray[i] = indices[i];
       assert operationIndicesArray[i] >= 0 && operationIndicesArray[i] < columns.length :
           "operation index is out of range 0 <= " + operationIndicesArray[i] + " < " + columns.length;
     }
-    return new TableOperation(this, operationIndicesArray);
+    return operationIndicesArray;
   }
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
@@ -362,13 +379,95 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  public static final class TableOperation {
-    private final int[] indices;
-    private final Table table;
+  /**
+   * class to encapsulate indices and table
+   */
+  private final static class Operation {
+    final int[] indices;
+    final Table table;
 
-    TableOperation(final Table table, final int... indices) {
+    Operation(Table table, int... indices) {
       this.indices = indices;
       this.table = table;
+    }
+  }
+
+  /**
+   * Class representing aggregate operations
+   */
+  public static final class AggregateOperation {
+
+    private final Operation operation;
+
+    AggregateOperation(final Table table, final int... indices) {
+      operation = new Operation(table, indices);
+    }
+
+    /**
+     * Aggregates the group of columns represented by indices
+     * Usage:
+     *      aggregate(count(), max(2),...);
+     *      example:
+     *        input : 1, 1, 1
+     *                1, 2, 1
+     *                2, 4, 5
+     *
+     *        table.groupBy(0, 2).count()
+     *
+     *                col0, col1
+     *        output:   1,   1
+     *                  1,   2
+     *                  2,   1 ==> aggregated count
+     * @param aggregates
+     * @return
+     */
+    public Table aggregate(Aggregate... aggregates) {
+      assert aggregates != null && aggregates.length > 0;
+      long[][] aggregateTables = new long[aggregates.length][];
+      for (int i = 0 ; i < aggregates.length ; i++) {
+        if (aggregates[i].isCount()) {
+          aggregateTables[i] = gdfGroupByCount(operation.table.nativeHandle, operation.indices);
+        } else {
+          IntStream.rangeClosed(0, i).forEach(index -> {
+            Arrays.stream(aggregateTables[index]).forEach(e -> {
+              //Being defensive
+              if (e != 0) {
+                ColumnVector.freeCudfColumn(e, true);
+              }
+            });
+          });
+          throw new UnsupportedOperationException("Invalid aggregate function");
+        }
+      }
+
+      /**
+       * Currently Cudf calculates one aggregate at a time due to which we have multiple aggregate
+       * tables that we have to now merge into a single one
+       */
+      // copy the grouped columns to the new table
+      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0], operation.indices.length + aggregates.length);
+      // now copy the aggregated columns from each one of the aggregated tables to the end of the final table that
+      // has all the grouped columns
+      IntStream.range(1, aggregateTables.length).forEach(i -> {
+        IntStream.range(0, operation.indices.length).forEach(j -> {
+          //Being defensive
+          long e = aggregateTables[i][j];
+          if (e != 0) {
+            ColumnVector.freeCudfColumn(e, true);
+          }
+        });
+        finalAggregateTable[i + operation.indices.length] = aggregateTables[i][operation.indices.length];
+      });
+      return new Table(finalAggregateTable);
+    }
+  }
+
+  public static final class TableOperation {
+
+    private final Operation operation;
+
+    TableOperation(final Table table, final int... indices) {
+      operation = new Operation(table, indices);
     }
 
     /**
@@ -381,8 +480,8 @@ public final class Table implements AutoCloseable {
      * @return Joined {@link Table}
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
-      return new Table(gdfLeftJoin(this.table.nativeHandle, indices,
-          rightJoinIndices.table.nativeHandle, rightJoinIndices.indices));
+      return new Table(gdfLeftJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -395,8 +494,8 @@ public final class Table implements AutoCloseable {
      * @return Joined {@link Table}
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
-      return new Table(gdfInnerJoin(this.table.nativeHandle, indices,
-          rightJoinIndices.table.nativeHandle, rightJoinIndices.indices));
+      return new Table(gdfInnerJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -408,8 +507,8 @@ public final class Table implements AutoCloseable {
      */
     public PartitionedTable partition(int numberOfPartitions, HashFunction hashFunction) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(gdfPartition(this.table.nativeHandle,
-          this.indices,
+      return new PartitionedTable(new Table(gdfPartition(operation.table.nativeHandle,
+          operation.indices,
           hashFunction.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);

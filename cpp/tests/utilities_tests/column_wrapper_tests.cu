@@ -140,6 +140,18 @@ TYPED_TEST(ColumnWrapperTest, DefaultConstructor) {
   EXPECT_EQ(col->dtype_info.time_unit, TIME_UNIT_NONE);
 }
 
+TYPED_TEST(ColumnWrapperTest, ConstructFromGdfColumn) {
+  std::vector<TypeParam> data{TypeParam{1}, TypeParam{2}, TypeParam{42},
+                              TypeParam{37}};
+  rmm::device_vector<TypeParam> d_data = data;
+  gdf_column gdf_col{};
+  gdf_col.data = d_data.data().get();
+  gdf_col.size = d_data.size();
+  gdf_col.dtype = cudf::gdf_dtype_of<TypeParam>();
+  cudf::test::column_wrapper<TypeParam> col_wrapper(gdf_col);
+  test_column(col_wrapper, data);
+}
+
 TYPED_TEST(ColumnWrapperTest, SizeConstructor) {
   gdf_size_type const size{this->random_size()};
   cudf::test::column_wrapper<TypeParam> const col(size);

@@ -27,7 +27,89 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class UnaryOpTest {
   private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null};
   private static final Integer[] INTS_1 = new Integer[]{1, 10, -100, 5, 50, 100, null};
+  private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
   private static final String[] STRINGS_1 = new String[]{"1", "10", "-100", "5", "50", "100", null};
+
+  interface CpuOp {
+    void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index);
+  }
+
+  interface DoubleFun {
+    double apply(double val);
+  }
+
+  static DoubleCpuOp doubleFun(DoubleFun fun) {
+    return new DoubleCpuOp(fun);
+  }
+
+  static class DoubleCpuOp implements CpuOp {
+    private final DoubleFun fun;
+
+    DoubleCpuOp(DoubleFun fun) {
+      this.fun = fun;
+    }
+
+    @Override
+    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+      ret.append(fun.apply(input.getDouble(index)));
+    }
+  }
+
+  interface IntFun {
+    int apply(int val);
+  }
+
+  static IntCpuOp intFun(IntFun fun) {
+    return new IntCpuOp(fun);
+  }
+
+  static class IntCpuOp implements CpuOp {
+    private final IntFun fun;
+
+    IntCpuOp(IntFun fun) {
+      this.fun = fun;
+    }
+
+    @Override
+    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+      ret.append(fun.apply(input.getInt(index)));
+    }
+  }
+
+  interface BoolFun {
+    boolean apply(boolean val);
+  }
+
+  static BoolCpuOp boolFun(BoolFun fun) {
+    return new BoolCpuOp(fun);
+  }
+
+  static class BoolCpuOp implements CpuOp {
+    private final BoolFun fun;
+
+    BoolCpuOp(BoolFun fun) {
+      this.fun = fun;
+    }
+
+    @Override
+    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+      ret.append(fun.apply(input.getBoolean(index)));
+    }
+  }
+
+  public static ColumnVector forEach(ColumnVector input, CpuOp op) {
+    int len = (int)input.getRowCount();
+    try (ColumnVector.Builder builder = ColumnVector.builder(input.getType(), len)) {
+      for (int i = 0; i < len; i++) {
+        if (input.isNull(i)) {
+          builder.appendNull();
+        } else {
+          op.computeNullSafe(builder, input, i);
+        }
+      }
+      return builder.build();
+    }
+  }
 
   // These tests are not for the correctness of the underlying implementation, but really just
   // plumbing
@@ -37,8 +119,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.sin();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.sin(1.0), Math.sin(10.0),
-             Math.sin(-100.1), Math.sin(5.3), Math.sin(50.0), Math.sin(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::sin))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -48,8 +129,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.cos();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.cos(1.0), Math.cos(10.0),
-             Math.cos(-100.1), Math.cos(5.3), Math.cos(50.0), Math.cos(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::cos))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -59,8 +139,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.tan();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.tan(1.0), Math.tan(10.0),
-             Math.tan(-100.1), Math.tan(5.3), Math.tan(50.0), Math.tan(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::tan))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -70,8 +149,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arcsin();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.asin(1.0), Math.asin(10.0),
-             Math.asin(-100.1), Math.asin(5.3), Math.asin(50.0), Math.asin(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::asin))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -81,8 +159,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arccos();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.acos(1.0), Math.acos(10.0),
-             Math.acos(-100.1), Math.acos(5.3), Math.acos(50.0), Math.acos(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::acos))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -92,8 +169,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.arctan();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.atan(1.0), Math.atan(10.0),
-             Math.atan(-100.1), Math.atan(5.3), Math.atan(50.0), Math.atan(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::atan))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -103,8 +179,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.exp();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.exp(1.0), Math.exp(10.0),
-             Math.exp(-100.1), Math.exp(5.3), Math.exp(50.0), Math.exp(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::exp))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -114,8 +189,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.log();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.log(1.0), Math.log(10.0),
-             Math.log(-100.1), Math.log(5.3), Math.log(50.0), Math.log(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::log))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -125,8 +199,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.sqrt();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.sqrt(1.0), Math.sqrt(10.0),
-             Math.sqrt(-100.1), Math.sqrt(5.3), Math.sqrt(50.0), Math.sqrt(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::sqrt))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -136,8 +209,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.ceil();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.ceil(1.0), Math.ceil(10.0),
-             Math.ceil(-100.1), Math.ceil(5.3), Math.ceil(50.0), Math.ceil(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::ceil))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -147,8 +219,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.floor();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.floor(1.0), Math.floor(10.0),
-             Math.floor(-100.1), Math.floor(5.3), Math.floor(50.0), Math.floor(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::floor))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -158,8 +229,7 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.abs();
-         ColumnVector expected = ColumnVector.fromBoxedDoubles(Math.abs(1.0), Math.abs(10.0),
-             Math.abs(-100.1), Math.abs(5.3), Math.abs(50.0), Math.abs(100.0), null)) {
+         ColumnVector expected = forEach(dcv, doubleFun(Math::abs))) {
       assertColumnsAreEqual(expected, answer);
     }
   }
@@ -169,7 +239,17 @@ public class UnaryOpTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
          ColumnVector answer = icv.bitInvert();
-         ColumnVector expected = ColumnVector.fromBoxedInts(~1, ~10, ~-100, ~5, ~50, ~100, null)) {
+         ColumnVector expected = forEach(icv, intFun((i) -> ~i))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testNot() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector icv = ColumnVector.fromBoxedBooleans(BOOLEANS_1);
+         ColumnVector answer = icv.not();
+         ColumnVector expected = forEach(icv, boolFun((i) -> !i))) {
       assertColumnsAreEqual(expected, answer);
     }
   }

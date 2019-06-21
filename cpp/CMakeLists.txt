@@ -266,6 +266,8 @@ add_library(cudf SHARED
             src/sort/segmented_sorting.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
@@ -273,6 +275,7 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/core/parser.cpp
             src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp

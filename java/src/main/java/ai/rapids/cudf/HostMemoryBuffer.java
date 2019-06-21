@@ -283,6 +283,28 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
+   * Returns the Boolean value at that offset
+   * @param offset - offset from the address
+   * @return - value
+   */
+  final boolean getBoolean(long offset) {
+    long requestedAddress = this.address + offset;
+    addressOutOfBoundsCheck(requestedAddress, 1, "getBoolean");
+    return UnsafeMemoryAccessor.getBoolean(requestedAddress);
+  }
+
+  /**
+   * Sets the Boolean value at that offset
+   * @param offset - offset from the address
+   * @param value  - value to be set
+   */
+  final void setBoolean(long offset, boolean value) {
+    long requestedAddress = this.address + offset;
+    addressOutOfBoundsCheck(requestedAddress, 1, "setBoolean");
+    UnsafeMemoryAccessor.setBoolean(requestedAddress, value);
+  }
+
+  /**
    * Sets the values in this buffer repeatedly
    * @param offset - offset from the address
    * @param length - number of bytes to set

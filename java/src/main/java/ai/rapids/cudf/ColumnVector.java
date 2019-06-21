@@ -491,6 +491,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the boolean value at index
+   */
+  public final boolean getBoolean(long index) {
+    assert type == DType.BOOL8;
+    assertsForGet(index);
+    return offHeap.hostData.data.getBoolean(index * type.sizeInBytes);
+  }
+
+  /**
    * Get the value at index.  This API is slow as it has to translate the
    * string representation.  Please use it with caution.
    */
@@ -585,208 +594,103 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
-   * Multiple different unary operations.
+   * Multiple different unary operations. The output is the same type as input.
    * @param op      the operation to perform
-   * @param outType the type of output you want.
    * @return the result
    */
-  public ColumnVector unaryOp(UnaryOp op, DType outType) {
-    return new ColumnVector(Cudf.gdfUnaryMath(this, op, outType));
+  public ColumnVector unaryOp(UnaryOp op) {
+    return new ColumnVector(Cudf.gdfUnaryMath(this, op, type));
   }
 
   /**
-   * Calculate the sin.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector sin(DType outType) {
-    return unaryOp(UnaryOp.SIN, outType);
-  }
-
-  /**
-   * Calculate the sin, output defaults to same type.
+   * Calculate the sin, output is the same type as input.
    */
   public ColumnVector sin() {
-    return sin(type);
+    return unaryOp(UnaryOp.SIN);
   }
 
   /**
-   * Calculate the cos.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector cos(DType outType) {
-    return unaryOp(UnaryOp.COS, outType);
-  }
-
-  /**
-   * Calculate the cos, output defaults to same type.
+   * Calculate the cos, output is the same type as input.
    */
   public ColumnVector cos() {
-    return cos(type);
+    return unaryOp(UnaryOp.COS);
   }
 
   /**
-   * Calculate the tan.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector tan(DType outType) {
-    return unaryOp(UnaryOp.TAN, outType);
-  }
-
-  /**
-   * Calculate the tan, output defaults to same type.
+   * Calculate the tan, output is the same type as input.
    */
   public ColumnVector tan() {
-    return tan(type);
+    return unaryOp(UnaryOp.TAN);
   }
 
   /**
-   * Calculate the arcsin.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector arcsin(DType outType) {
-    return unaryOp(UnaryOp.ARCSIN, outType);
-  }
-
-  /**
-   * Calculate the arcsin, output defaults to same type.
+   * Calculate the arcsin, output is the same type as input.
    */
   public ColumnVector arcsin() {
-    return arcsin(type);
+    return unaryOp(UnaryOp.ARCSIN);
   }
 
   /**
-   * Calculate the arccos.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector arccos(DType outType) {
-    return unaryOp(UnaryOp.ARCCOS, outType);
-  }
-
-  /**
-   * Calculate the arccos, output defaults to same type.
+   * Calculate the arccos, output is the same type as input.
    */
   public ColumnVector arccos() {
-    return arccos(type);
+    return unaryOp(UnaryOp.ARCCOS);
   }
 
   /**
-   * Calculate the arctan.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector arctan(DType outType) {
-    return unaryOp(UnaryOp.ARCTAN, outType);
-  }
-
-  /**
-   * Calculate the arctan, output defaults to same type.
+   * Calculate the arctan, output is the same type as input.
    */
   public ColumnVector arctan() {
-    return arctan(type);
+    return unaryOp(UnaryOp.ARCTAN);
   }
 
   /**
-   * Calculate the exp.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector exp(DType outType) {
-    return unaryOp(UnaryOp.EXP, outType);
-  }
-
-  /**
-   * Calculate the exp, output defaults to same type.
+   * Calculate the exp, output is the same type as input.
    */
   public ColumnVector exp() {
-    return exp(type);
+    return unaryOp(UnaryOp.EXP);
   }
 
   /**
-   * Calculate the log.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector log(DType outType) {
-    return unaryOp(UnaryOp.LOG, outType);
-  }
-
-  /**
-   * Calculate the log, output defaults to same type.
+   * Calculate the log, output is the same type as input.
    */
   public ColumnVector log() {
-    return log(type);
+    return unaryOp(UnaryOp.LOG);
   }
 
   /**
-   * Calculate the sqrt.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector sqrt(DType outType) {
-    return unaryOp(UnaryOp.SQRT, outType);
-  }
-
-  /**
-   * Calculate the sqrt, output defaults to same type.
+   * Calculate the sqrt, output is the same type as input.
    */
   public ColumnVector sqrt() {
-    return sqrt(type);
+    return unaryOp(UnaryOp.SQRT);
   }
 
   /**
-   * Calculate the ceil.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector ceil(DType outType) {
-    return unaryOp(UnaryOp.CEIL, outType);
-  }
-
-  /**
-   * Calculate the ceil, output defaults to same type.
+   * Calculate the ceil, output is the same type as input.
    */
   public ColumnVector ceil() {
-    return ceil(type);
+    return unaryOp(UnaryOp.CEIL);
   }
 
   /**
-   * Calculate the floor.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector floor(DType outType) {
-    return unaryOp(UnaryOp.FLOOR, outType);
-  }
-
-  /**
-   * Calculate the floor, output defaults to same type.
+   * Calculate the floor, output is the same type as input.
    */
   public ColumnVector floor() {
-    return floor(type);
+    return unaryOp(UnaryOp.FLOOR);
   }
 
   /**
-   * Calculate the abs.
-   * @param outType the type of output you want.
-   */
-  public ColumnVector abs(DType outType) {
-    return unaryOp(UnaryOp.ABS, outType);
-  }
-
-  /**
-   * Calculate the abs, output defaults to same type.
+   * Calculate the abs, output is the same type as input.
    */
   public ColumnVector abs() {
-    return abs(type);
+    return unaryOp(UnaryOp.ABS);
   }
 
   /**
-   * Invert the bits
-   * @param outType the type of output you want.
-   */
-  public ColumnVector bitInvert(DType outType) {
-    return unaryOp(UnaryOp.BIT_INVERT, outType);
-  }
-
-  /**
-   * invert the bits, output defaults to same type.
+   * invert the bits, output is the same type as input.
    */
   public ColumnVector bitInvert() {
-    return bitInvert(type);
+    return unaryOp(UnaryOp.BIT_INVERT);
   }
 
   /**
@@ -943,6 +847,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public Scalar reduction(ReductionOp op, DType outType) {
     return Cudf.reduction(this, op, outType);
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // LOGICAL
+  /////////////////////////////////////////////////////////////////////////////
+ 
+  /**
+   * Returns a vector of the logical `not` of each value in the input 
+   * column (this)
+   */
+  public ColumnVector not() {
+    return unaryOp(UnaryOp.NOT);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1730,6 +1646,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       this.rows = rows;
       this.data = testData;
       this.valid = testValid;
+    }
+
+    public final Builder append(boolean value) {
+      assert type == DType.BOOL8;
+      assert currentIndex < rows;
+      data.setByte(currentIndex * type.sizeInBytes, value ? (byte)1 : (byte)0);
+      currentIndex++;
+      return this;
     }
 
     public final Builder append(byte value) {
