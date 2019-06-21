@@ -126,4 +126,29 @@ table read_orc(orc_read_arg const &args) {
   }
 }
 
+table read_parquet(parquet_read_arg const &args) {
+  auto reader = [&]() {
+    parquet::reader_options options{args.columns, args.strings_to_categorical};
+
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<parquet::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<parquet::reader>(
+          args.source.buffer.first, args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<parquet::reader>(args.source.file, options);
+    } else {
+      CUDF_FAIL("Unsupported source type");
+    }
+  }();
+
+  if (args.row_group != -1) {
+    return reader->read_row_group(args.row_group);
+  } else if (args.skip_rows != -1 || args.num_rows != -1) {
+    return reader->read_rows(args.skip_rows, args.num_rows);
+  } else {
+    return reader->read_all();
+  }
+}
+
 } // namespace cudf
