@@ -40,8 +40,8 @@ using bit_mask::bit_mask_t;
 
 namespace impl {
 
-static constexpr int warp_size = 32;
-/**
+constexpr int warp_size = 32;
+
 template<class T>
 __device__ inline void warp_wise_reduce(T& f) {
   #pragma unroll
@@ -51,7 +51,7 @@ __device__ inline void warp_wise_reduce(T& f) {
     f += other_f;
   }
 }
-*/
+
 template<class CountType, int lane = 0>
 __device__ inline void single_lane_reduce(CountType f, CountType* smem, CountType* d_output){
   int lane_id = (threadIdx.x % warp_size);
@@ -66,12 +66,12 @@ __device__ inline void single_lane_reduce(CountType f, CountType* smem, CountTyp
   if(warp_id == 0){ // Here I am assuming maximum block size is 1024 and 1024 >> 5 = 32
     f = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
 
-    __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
-    CountType block_valid_count = cub::WarpReduce<CountType>(temp_storage).Sum(f);
+    // __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
+    // CountType block_valid_count = cub::WarpReduce<CountType>(temp_storage).Sum(f);
     
-    // warp_wise_reduce(f); 
+    warp_wise_reduce(f); 
     if(lane_id == 0){
-      atomicAdd(d_output, block_valid_count);
+      atomicAdd(d_output, f);
     }
   }
 }
@@ -104,10 +104,39 @@ __device__ __inline__ void gather_bitmask_device(
   if(0 == threadIdx.x % warp_size){
     destination_valid[valid_index] = valid_warp;
   }
-  single_lane_reduce(__popc(valid_warp), smem_count, d_count);
+  // single_lane_reduce(__popc(valid_warp), smem_count, d_count);
 }
 
-template<bool check_bounds, bool do_valid>
+template<int block_size>
+struct copy_element_smem {
+  template <typename T>
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    reinterpret_cast<T*>(target.data)[target_index] 
+      = reinterpret_cast<const T*>(source.data)[source_index];
+    // static __shared__ T smem[block_size];
+    // smem[threadIdx.x] = reinterpret_cast<const T*>(source.data)[source_index];
+    // reinterpret_cast<T*>(target.data)[target_index] = smem[threadIdx.x];
+  }
+};
+
+template<int block_size>
+__device__ inline void copy_row_smem(device_table const& target,
+                                gdf_size_type target_index,
+                                device_table const& source,
+                                gdf_size_type source_index) {
+  for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
+    cudf::type_dispatcher(target.get_column(i)->dtype,
+                          copy_element_smem<block_size>{},
+                          *target.get_column(i), target_index,
+                          *source.get_column(i), source_index);
+  }
+}
+
+template<bool check_bounds, bool do_valid, int block_size>
+__launch_bounds__(block_size, 2048/block_size)
 __global__ void gather_kernel(const device_table source, 
                                   const gdf_size_type gather_map[], 
                                   device_table destination,
@@ -118,10 +147,13 @@ __global__ void gather_kernel(const device_table source,
   
   // Each element of gather_map[] only needs to be used once. 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-  gdf_index_type source_row = gather_map[destination_row];
+  gdf_index_type source_row = 0;
+ 
   // gather the entire row
-  if(!check_bounds || source_row < n_source_rows){
-    copy_row(destination, destination_row, source, source_row);
+  const bool active_threads = destination_row < n_destination_rows;
+  if(active_threads && (!check_bounds || source_row < n_source_rows)){
+    source_row = gather_map[destination_row];
+    copy_row_smem<block_size>(destination, destination_row, source, source_row);
   }
   if(do_valid){
     for(int i = 0; i < destination.num_columns(); i++){
@@ -143,6 +175,7 @@ namespace cudf {
 namespace opt   {
 namespace detail {
 
+template<int block_size>
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table, bool check_bounds, cudaStream_t stream) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
@@ -196,25 +229,23 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   CUDA_TRY(cudaMemset(d_count_p, 0, sizeof(gdf_size_type)*n_cols));
 
   // Call the optimized gather kernel
-  // TODO: Tune block size.
-  constexpr gdf_size_type block_size = 256;
   const gdf_size_type gather_grid_size =
       (destination_table->num_rows() + block_size - 1) / block_size;
 
   if (check_bounds) {
     if(dest_has_nulls){
-      impl::gather_kernel<true , true ><<<gather_grid_size, block_size, 0, stream>>>(
+      impl::gather_kernel<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }else{
-      impl::gather_kernel<true , false><<<gather_grid_size, block_size, 0, stream>>>(
+      impl::gather_kernel<true , false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }
   }else{
     if(dest_has_nulls){
-      impl::gather_kernel<false, true ><<<gather_grid_size, block_size, 0, stream>>>(
+      impl::gather_kernel<false, true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }else{
-      impl::gather_kernel<false, false><<<gather_grid_size, block_size, 0, stream>>>(
+      impl::gather_kernel<false, false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }
   }
@@ -232,8 +263,19 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 }  // namespace detail
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false, 0);
+            table* destination_table, int block_size) {
+  switch(block_size){
+  case  64:  
+    detail::gather< 64>(source_table, gather_map, destination_table, false, 0); break;
+  case 128:  
+    detail::gather<128>(source_table, gather_map, destination_table, false, 0); break;
+  case 192:  
+    detail::gather<192>(source_table, gather_map, destination_table, false, 0); break;
+  case 256:  
+    detail::gather<256>(source_table, gather_map, destination_table, false, 0); break;
+  default:
+    CUDF_EXPECTS(false, "Unsupported block size.");
+  }
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
