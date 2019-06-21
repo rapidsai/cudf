@@ -17,6 +17,7 @@ dependencies:
 - distributed>=1.23.0
 - cython>=0.29,<0.30
 - pytest
+- hypothesis
 - sphinx
 - sphinx_rtd_theme
 - sphinxcontrib-websupport
