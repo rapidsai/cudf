@@ -20,7 +20,10 @@
 #include <cstdint>
 #include "parquet_common.h"
 
-namespace parquet { namespace gpu {
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 
 #define PARQUET_GPU_USEC_TO_MSEC    1
 
@@ -160,6 +163,9 @@ cudaError_t DecodePageData(PageInfo *pages, int32_t num_pages,
                            size_t num_rows, size_t min_row = 0,
                            cudaStream_t stream = (cudaStream_t)0);
 
-}; }; // parquet::gpu namespace
+} // namespace gpu
+} // namespace parquet
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_PARQUET_GPU_H__

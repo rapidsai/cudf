@@ -302,7 +302,7 @@ add_library(cudf SHARED
             src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
