@@ -18,6 +18,7 @@
 - PR #1833 Add column iterator with/without nulls
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
+- PR #1908 cudf::copy_range and cudf::fill for copying/assigning an index or range to a constant
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
 - PR #1987 Allow user defined functions in the form of ptx code to be passed to binops
