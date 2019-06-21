@@ -59,9 +59,10 @@ void copy_range_kernel(T * __restrict__ const data,
   // computing the total change to null_count.
   // note maximum block size is limited to 1024 by this, but that's OK
   __shared__ uint32_t warp_null_change[has_validity ? warp_size : 1];
-  if (has_validity && threadIdx.x < warp_size) warp_null_change[threadIdx.x] = 0;
-
-  __syncthreads(); // wait for shared data and validity mask to be complete
+  if (has_validity) {
+    if (threadIdx.x < warp_size) warp_null_change[threadIdx.x] = 0;
+    __syncthreads(); // wait for shared data and validity mask to be complete
+  } 
 
   while (mask_idx <= end_mask_idx)
   {
@@ -74,7 +75,7 @@ void copy_range_kernel(T * __restrict__ const data,
     if (has_validity) { // update bitmask
       int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
 
-      bool valid = in_range & input.valid(input_idx);
+      bool valid = in_range and input.valid(input_idx);
       int warp_mask = __ballot_sync(active_mask, valid);
 
       bit_mask_t old_mask = bitmask[mask_idx];
@@ -153,7 +154,7 @@ struct copy_range_dispatch {
     kernel<<<grid.num_blocks, block_size, 0, stream>>>
       (data, bitmask, null_count, begin, end, input);
 
-    if (column->valid != nullptr) {
+    if (null_count != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
                                sizeof(gdf_size_type), cudaMemcpyDefault, stream));
       RMM_FREE(null_count, stream);
