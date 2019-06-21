@@ -153,7 +153,6 @@
 - PR #2069 Fix JNI code to use read_csv and read_parquet APIs
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 
-
 # cudf 0.7.2 (16 May 2019)
 
 ## New Features
