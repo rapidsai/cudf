@@ -156,7 +156,7 @@
 - PR #2033 Add pip to conda environment files to fix warning
 - PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
 - PR #2053 cudf::apply_boolean_mask return empty column for empty boolean mask
-
+- PR #2069 Fix JNI code to use read_csv and read_parquet APIs
 
 # cudf 0.7.2 (16 May 2019)
 
