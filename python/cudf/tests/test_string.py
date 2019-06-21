@@ -733,13 +733,13 @@ def test_string_join_values_nulls():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('str_data,str_data_raise', [
-    ([], 0),
-    (['a', 'b', 'c', 'd', 'e'], 0),
-    ([None, None, None, None, None], 1)
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
 ])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
-def test_string_groupby_key(str_data, str_data_raise, num_keys):
+def test_string_groupby_key(str_data, num_keys):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
