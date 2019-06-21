@@ -345,6 +345,10 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
 
 
+// TODO: enable this test also at __CUDACC_DEBUG__
+// This test causes fatal compilation error only at device debug mode.
+// Workaround: exclude this test only at device debug mode.
+#if !defined(__CUDACC_DEBUG__)
 // Test for mixed output value using `ColumnOutputMix`
 // It computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It wpuld be useful for `var`, `std` operation
@@ -393,7 +397,7 @@ TYPED_TEST(IteratorTest, mean_var_output)
     this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
     this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
 }
-
+#endif
 
 
 
