@@ -148,6 +148,7 @@
 - PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
 - PR #2053 cudf::apply_boolean_mask return empty column for empty boolean mask
 - PR #2069 Fix JNI code to use read_csv and read_parquet APIs
+- PR #XXXX Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 
 # cudf 0.7.2 (16 May 2019)
 
