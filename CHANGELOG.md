@@ -20,13 +20,16 @@
 - PR #1863 Series and Dataframe methods for all and any
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
+- PR #1987 Allow user defined functions in the form of ptx code to be passed to binops
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
+- PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 - PR #1652 Added `Series.where()` feature 
+- PR #2074 Java Aggregates, logical ops, and better RMM support 
 
 ## Improvements
 
@@ -80,9 +83,13 @@
 - PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
+- PR #2011 Convert `read_parquet()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
 - PR #2034 Adding support for string columns concatenation using "add" binary operator
+- PR #2042 Replace old "10 Minutes" guide with new guide for docs build process
 - PR #2036 Make library of common test utils to speed up tests compilation
+- PR #2022 Facilitating get_dummies to be a high level api too
+- PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 
 ## Bug Fixes
 
@@ -141,7 +148,11 @@
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
 - PR #2033 Add pip to conda environment files to fix warning
 - PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
+<<<<<<< HEAD
 - PR #2073 Fix an issue when gathering columns with NVCategory and nulls
+- PR #2053 cudf::apply_boolean_mask return empty column for empty boolean mask
+- PR #2069 Fix JNI code to use read_csv and read_parquet APIs
+- PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 
 
 # cudf 0.7.2 (16 May 2019)
