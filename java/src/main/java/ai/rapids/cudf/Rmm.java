@@ -38,6 +38,16 @@ public class Rmm {
 
 
   /**
+   * Check if RMM has been initialized already or not.
+   */
+  public static native boolean isInitialized() throws RmmException;
+
+  /**
+   * Shut down any initialized rmm.
+   */
+  public static native void shutdown() throws RmmException;
+
+  /**
    * ---------------------------------------------------------------------------*
    * Allocate memory and return a pointer to device memory.
    * <p>
@@ -57,5 +67,10 @@ public class Rmm {
    * @throws RmmException
    */
   static native void free(long ptr, long stream) throws RmmException;
+
+  /**
+   * If logging is enabled get the log as a String.
+   */
+  public static native String getLog() throws RmmException;
 
 }

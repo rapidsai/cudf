@@ -253,10 +253,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                    <systemPropertyVariables>
-                        <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
-                    </systemPropertyVariables>
+                  <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
+                  <trimStackTrace>false</trimStackTrace>
+                  <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                  <systemPropertyVariables>
+                    <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
+                  </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>
