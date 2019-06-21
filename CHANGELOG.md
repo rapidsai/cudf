@@ -29,7 +29,6 @@
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 - PR #1652 Added `Series.where()` feature 
 
-
 ## Improvements
 
 - PR #1538 Replacing LesserRTTI with inequality_comparator
