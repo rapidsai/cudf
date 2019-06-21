@@ -94,9 +94,9 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            simple_reduction<T_in, T_out, Op, false>(col, scalar, stream);
+            simple_reduction<T_in, T_out, Op, true>(col, scalar, stream);
         }else{
-            simple_reduction<T_in, T_out, Op, true >(col, scalar, stream);
+            simple_reduction<T_in, T_out, Op, false >(col, scalar, stream);
         }
     }
 

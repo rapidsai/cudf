@@ -84,9 +84,9 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            compound_reduction<T_in, T_out, Op, false>(col, scalar, ddof, stream);
+            compound_reduction<T_in, T_out, Op, true>(col, scalar, ddof, stream);
         }else{
-            compound_reduction<T_in, T_out, Op, true >(col, scalar, ddof, stream);
+            compound_reduction<T_in, T_out, Op, false >(col, scalar, ddof, stream);
         }
     }
 
