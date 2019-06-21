@@ -163,17 +163,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     cudf::jni::native_jstringArray n_false_values(env, false_values);
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
-    cudf::csv_reader_args read_arg{};
-
+    std::unique_ptr<cudf::source_info> source;
     if (read_buffer) {
-      read_arg.filepath_or_buffer = std::string(reinterpret_cast<const char *>(buffer), buffer_length);
-      read_arg.input_data_form = HOST_BUFFER;
+      source.reset(new cudf::source_info(reinterpret_cast<char *>(buffer), buffer_length));
     } else {
-      read_arg.filepath_or_buffer = filename.get();
-
-      read_arg.input_data_form = FILE_PATH;
+      source.reset(new cudf::source_info(filename.get()));
     }
 
+    cudf::csv_read_arg read_arg{*source};
     read_arg.lineterminator = '\n';
     // delimiter ideally passed in
     read_arg.delimiter = delim;
@@ -200,12 +197,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     read_arg.compression = "infer";
     read_arg.decimal = '.';
     read_arg.quotechar = quote;
-    read_arg.quoting = cudf::QUOTE_MINIMAL;
+    read_arg.quoting = cudf::csv_read_arg::QUOTE_MINIMAL;
     read_arg.doublequote = true;
     read_arg.comment = comment;
 
-    cudf::CsvReader reader(read_arg);
-    cudf::table result = reader.read();
+    cudf::table result = read_csv(read_arg);
     std::vector<gdf_column*> ptrs(result.begin(), result.end());
 
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
@@ -239,32 +235,27 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
-    pq_read_arg read_arg{};
-
+    std::unique_ptr<cudf::source_info> source;
     if (read_buffer) {
-      read_arg.source = reinterpret_cast<const char *>(buffer);
-      read_arg.source_type = HOST_BUFFER;
-      read_arg.buffer_size = buffer_length;
+      source.reset(new cudf::source_info(reinterpret_cast<char *>(buffer), buffer_length));
     } else {
-      read_arg.source = filename.get();
-      read_arg.source_type = FILE_PATH;
-      // don't use buffer, use file path
-      read_arg.buffer_size = 0;
+      source.reset(new cudf::source_info(filename.get()));
     }
 
-    read_arg.use_cols = n_filter_col_names.as_c_array();
-    read_arg.use_cols_len = n_filter_col_names.size();
+    cudf::parquet_read_arg read_arg{*source};
+
+    read_arg.columns = n_filter_col_names.as_cpp_vector();
 
     read_arg.row_group = -1;
-    read_arg.skip_rows = 0;
+    read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.strings_to_categorical = false;
 
-    gdf_error gdf_status = read_parquet(&read_arg);
-    JNI_GDF_TRY(env, NULL, gdf_status);
+    cudf::table result = read_parquet(read_arg);
+    std::vector<gdf_column*> ptrs(result.begin(), result.end());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(read_arg.data),
-                                                read_arg.num_cols_out);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
+                                                ptrs.size());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
