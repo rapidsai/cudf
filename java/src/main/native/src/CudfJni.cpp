@@ -432,7 +432,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
       return cudf::jni::cast_string_cat_to(env, cat, c_dtype, c_time_unit, size, input->null_count,
                                            input->valid);
     } else {
-      cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->null_count != 0);
+      // TODO should be but bug in cudf cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->null_count != 0);
+      cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->valid != nullptr);
       output.get()->dtype_info.time_unit = c_time_unit;
       JNI_GDF_TRY(env, 0, gdf_cast(input, output.get()));
       return reinterpret_cast<jlong>(output.release());
