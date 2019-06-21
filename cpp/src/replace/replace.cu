@@ -24,7 +24,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/cudf.h>
-
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
@@ -34,8 +33,6 @@
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy_bitmask.hpp>
 #include <bitmask/bit_mask.cuh>
-
-#include "replace_detail.hpp"
 
 using bit_mask::bit_mask_t;
 
@@ -365,31 +362,6 @@ __global__
   }
 }
 
-template <typename Type>
-__global__
-  void replace_nulls_with_scalar_inplace(gdf_size_type size,
-                                 Type* __restrict__ data,
-                                 bit_mask_t* __restrict__ valid,
-                                 const Type* __restrict__ replacement)
-{
-  int tid = threadIdx.x;
-  int blkid = blockIdx.x;
-  int blksz = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step = blksz * gridsz;
-
-  for (int i=start; i<size; i+=step) {
-    if (!bit_mask::is_valid(valid, i)) {
-        data[i] = *replacement;
-    }
-    if(tid % 32 == 0) { // only one thread per warp
-      valid[cudf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(i)] = 0xffffffff;
-    }
-   }
-}
-
 
 template <typename Type>
 __global__
@@ -464,21 +436,12 @@ struct replace_nulls_scalar_kernel_forwarder {
     CUDA_TRY(cudaMemcpyAsync(d_replacement, t_replacement, sizeof(col_type),
                              cudaMemcpyHostToDevice, stream));
 
-    if (d_in_data == d_out_data) {
-      replace_nulls_with_scalar_inplace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                          static_cast<col_type*>(d_in_data),
+    replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
+                                          static_cast<const col_type*>(d_in_data),
                                           reinterpret_cast<bit_mask_t*>(d_in_valid),
-                                          static_cast<const col_type*>(d_replacement)
+                                          static_cast<const col_type*>(d_replacement),
+                                          static_cast<col_type*>(d_out_data)
                                           );
-    }
-    else {
-      replace_nulls_with_scalar<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(nrows,
-                                            static_cast<const col_type*>(d_in_data),
-                                            reinterpret_cast<bit_mask_t*>(d_in_valid),
-                                            static_cast<const col_type*>(d_replacement),
-                                            static_cast<col_type*>(d_out_data)
-                                            );
-    }
     RMM_TRY(RMM_FREE(d_replacement, stream));
   }
 };
@@ -523,9 +486,9 @@ gdf_column replace_nulls(const gdf_column& input,
   return output;
 }
 
+
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_scalar& replacement,
-                         bool inplace,
                          cudaStream_t stream)
 {
   if (input.size == 0) {
@@ -541,13 +504,7 @@ gdf_column replace_nulls(const gdf_column& input,
   CUDF_EXPECTS(input.dtype == replacement.dtype, "Data type mismatch");
   CUDF_EXPECTS(true == replacement.is_valid, "Invalid replacement data");
 
-  gdf_column output;
-  if (not inplace) {
-    output = cudf::allocate_like(input, false, stream);
-  }
-  else {
-    output = input;
-  }
+  gdf_column output = cudf::allocate_like(input, false, stream);
 
   cudf::type_dispatcher(input.dtype, replace_nulls_scalar_kernel_forwarder{},
                         input.size,
@@ -555,11 +512,6 @@ gdf_column replace_nulls(const gdf_column& input,
                         input.valid,
                         &(replacement.data),
                         output.data);
-
-  if (inplace) {
-    const_cast<gdf_column&>(input).null_count = 0;
-    return input;
-  }
   return output;
 }
 
@@ -573,10 +525,9 @@ gdf_column replace_nulls(const gdf_column& input,
 
 
 gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_scalar& replacement,
-                         bool inplace)
+                         const gdf_scalar& replacement)
 {
-  return detail::replace_nulls(input, replacement, inplace, 0);
+  return detail::replace_nulls(input, replacement, 0);
 }
 
 }  // namespace cudf
