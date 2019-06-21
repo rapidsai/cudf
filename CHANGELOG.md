@@ -32,7 +32,6 @@
 - PR #1652 Added `Series.where()` feature 
 - PR #2074 Java Aggregates, logical ops, and better RMM support 
 
-
 ## Improvements
 
 - PR #1538 Replacing LesserRTTI with inequality_comparator
