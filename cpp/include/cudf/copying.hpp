@@ -82,7 +82,7 @@ table empty_like(table const& t);
  * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
- *---------------------------------------------------------------------------**/
+ */
 table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
 /**
@@ -102,8 +102,8 @@ table copy(table const& t, cudaStream_t stream = 0);
 /**
  * @brief Copies a range of elements from one column to another.
  * 
- * Copies N elements of @p in_column starting at @p in_begin from to the N
- * elements @p out_column starting at @p out_begin, where
+ * Copies N elements of @p in_column starting at @p in_begin to the N
+ * elements of @p out_column starting at @p out_begin, where
  * N = (@p out_end - @p out_begin)
  * 
  * The datatypes of in_column and out_column must be the same.
