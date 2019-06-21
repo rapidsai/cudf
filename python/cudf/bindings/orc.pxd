@@ -6,34 +6,33 @@
 # cython: language_level = 3
 
 from cudf.bindings.cudf_cpp cimport *
-from cudf.bindings.io cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" namespace "cudf" nogil:
+cdef extern from "cudf.h" namespace "cudf::io::orc" nogil:
 
-    cdef cppclass OrcReaderOptions:
+    cdef cppclass reader_options:
         vector[string] columns
         bool use_index
 
-        OrcReaderOptions() except +
+        reader_options() except +
 
-        OrcReaderOptions(
+        reader_options(
             vector[string] columns,
             bool use_index
         ) except +
 
-    cdef cppclass OrcReader:
-        OrcReader(
+    cdef cppclass reader:
+        reader(
             string filepath,
-            const OrcReaderOptions &args
+            const reader_options &args
         ) except +
 
-        OrcReader(
+        reader(
             const char *buffer,
             size_t length,
-            const OrcReaderOptions &args
+            const reader_options &args
         ) except +
 
         cudf_table read_all() except +

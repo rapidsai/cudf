@@ -88,9 +88,14 @@ namespace cudf {
  */
 gdf_column apply_boolean_mask(gdf_column const &input,
                               gdf_column const &boolean_mask) {
-  CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
+  if (boolean_mask.size == 0 || input.size == 0)
+      return cudf::empty_like(input);
+
+  // for non-zero-length masks we expect one of the pointers to be non-null    
   CUDF_EXPECTS(boolean_mask.data != nullptr ||
                boolean_mask.valid != nullptr, "Null boolean_mask");
+  CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
+  
   // zero-size inputs are OK, but otherwise input size must match mask size
   CUDF_EXPECTS(input.size == 0 || input.size == boolean_mask.size, 
                "Column size mismatch");

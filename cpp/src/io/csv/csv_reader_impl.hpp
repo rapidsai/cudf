@@ -26,6 +26,8 @@
 #include "type_conversion.cuh"
 
 namespace cudf {
+namespace io {
+namespace csv {
 
 struct column_data_t {
   gdf_size_type countFloat;
@@ -43,9 +45,9 @@ struct column_data_t {
  * @brief Class used to parse Json input and convert it into gdf columns
  *
  *---------------------------------------------------------------------------**/
-class CsvReader::Impl {
+class reader::Impl {
 private:
-  const csv_reader_args args_;
+  const reader_options args_;
   device_buffer<char> data;         ///< device: the raw unprocessed CSV data - loaded as a large char * array.
   device_buffer<uint64_t> recStart; ///< device: Starting position of the records.
 
@@ -88,9 +90,9 @@ private:
 
 public:
   /**---------------------------------------------------------------------------*
-   * @brief CsvReader::Impl constructor; throws if arguments are not supported
+   * @brief Constructor; throws if arguments are not supported
    *---------------------------------------------------------------------------**/
-  explicit Impl(csv_reader_args const &args);
+  explicit Impl(reader_options const &args);
 
   /**---------------------------------------------------------------------------*
    * @brief Parse the input CSV file as specified with the args_ data member
@@ -129,4 +131,6 @@ public:
   auto getArgs() const { return args_; }
 };
 
+} // namespace csv
+} // namespace io
 } // namespace cudf
