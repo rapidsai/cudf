@@ -21,29 +21,6 @@ namespace cudf {
 
 namespace detail {
 
-struct scalar_factory {
-  gdf_scalar value;
-
-  template <typename T>
-  struct scalar {
-    T value;
-    bool is_valid;
-
-    __device__
-    T data(gdf_index_type index) { return value; }
-
-    __device__
-    bool valid(gdf_index_type index) { return is_valid; }
-  };
-
-  template <typename T>
-  scalar<T> make() {
-    T val{}; // Safe type pun, compiler should optimize away the memcpy
-    memcpy(&val, &value.data, sizeof(T));
-    return scalar<T>{val, value.is_valid};
-  }
-};
-
 struct column_range_factory {
   gdf_column column;
   gdf_index_type begin;
@@ -84,7 +61,14 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
   if (num_elements != 0) { // otherwise no-op
     validate(in_column);
     validate(out_column);
+    
     CUDF_EXPECTS(out_column->dtype == in_column.dtype, "Data type mismatch");
+    
+    if (cudf::has_nulls(in_column)) {
+      CUDF_EXPECTS(cudf::is_nullable(*out_column),
+                   "Expected nullable output column");
+    }
+    
     // out range validated by detail::copy_range
     CUDF_EXPECTS((in_begin >= 0) && (in_begin + num_elements <= in_column.size),
                  "Range is out of bounds");
@@ -126,19 +110,6 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                          detail::column_range_factory{in_column, in_begin},
                          out_begin, out_end);
     }
-  }
-}
-
-void fill(gdf_column *column, gdf_scalar const& value, 
-          gdf_index_type begin, gdf_index_type end)
-{ 
-  if (end != begin) { // otherwise no-op   
-    validate(column);
-    // TODO: once gdf_scalar supports string scalar values we can add support
-    CUDF_EXPECTS(column->dtype != GDF_STRING_CATEGORY,
-                 "cudf::fill() does not support GDF_STRING_CATEGORY columns");
-    CUDF_EXPECTS(column->dtype == value.dtype, "Data type mismatch");
-    detail::copy_range(column, detail::scalar_factory{value}, begin, end);
   }
 }
 
