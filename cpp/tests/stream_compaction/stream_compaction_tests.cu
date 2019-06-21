@@ -19,7 +19,7 @@
 #include <utilities/error_utils.hpp>
 
 #include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/make_column_wrapper.hpp>
+#include <tests/utilities/column_wrapper_factory.hpp>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 

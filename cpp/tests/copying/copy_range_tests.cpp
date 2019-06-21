@@ -16,7 +16,7 @@
 
 #include <cudf/copying.hpp>
 #include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/make_column_wrapper.hpp>
+#include <tests/utilities/column_wrapper_factory.hpp>
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/nvcategory_utils.cuh>
