@@ -96,9 +96,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     null_index_scalar.is_valid = true;
     null_index_scalar.dtype = GDF_STRING_CATEGORY;
 
-    gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_scalar);
-    std::swap(column->data, column_nulls_replaced.data);
-    gdf_column_free(&column_nulls_replaced);
+    cudf::replace_nulls(*column, null_index_scalar, true);
   }
 
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
