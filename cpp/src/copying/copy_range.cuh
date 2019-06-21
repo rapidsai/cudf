@@ -170,6 +170,22 @@ namespace cudf {
 
 namespace detail {
 
+/**
+ * @brief Copies a range of values from a functor to a column
+ * 
+ * Copies N values from @p input to the range [@p begin, @p end)
+ * of @p out_column. @p out_column is modified in place.
+ * 
+ * InputFunctor must have these accessors:
+ * __device__ T data(gdf_index_type index);
+ * __device__ bool valid(gdf_index_type index);
+ * 
+ * @tparam InputFunctor the type of the input function object
+ * @p out_column the column to copy into
+ * @p input An instance of InputFunctor that provides data and valid mask
+ * @p begin The beginning of the output range to write to
+ * @p end The index after the last element of the output range to write to
+ */
 template <typename InputFunctor>
 void copy_range(gdf_column *out_column, InputFunctor input,
                 gdf_index_type begin, gdf_index_type end)
