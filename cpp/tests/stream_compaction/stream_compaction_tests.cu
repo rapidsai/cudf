@@ -85,7 +85,7 @@ TEST_F(ApplyBooleanMaskErrorTest, NonBooleanMask)
 template <typename T>
 struct ApplyBooleanMaskTest : GdfTest
 {
-  cudf::test::make_column_wrapper<T> maker{};
+  cudf::test::column_wrapper_factory<T> factory;
 };
 
 using test_types =
@@ -126,13 +126,13 @@ constexpr gdf_size_type column_size{100000};
 TYPED_TEST(ApplyBooleanMaskTest, Identity)
 {
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }),
     column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return true; }),
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }));
 }
@@ -140,7 +140,7 @@ TYPED_TEST(ApplyBooleanMaskTest, Identity)
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
 {
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }),
     column_wrapper<cudf::bool8>(column_size,
@@ -152,7 +152,7 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllFalse)
 TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
 {
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }),
     column_wrapper<cudf::bool8>(column_size, 
@@ -164,13 +164,13 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNull)
 TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
 {
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }),
     column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{row % 2 == 1}; },
       [](gdf_index_type row) { return true; }),
-    this->maker(column_size / 2,
+    this->factory.make(column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1; },
       [](gdf_index_type row) { return true; }));
 }
@@ -182,13 +182,13 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensNull)
   // vector should have all values nulled
 
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return row % 2 == 0; }),
     column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return row % 2 == 1; }),
-    this->maker(column_size / 2,
+    this->factory.make(column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1; },
       [](gdf_index_type row) { return false; }));
 }
@@ -198,13 +198,13 @@ TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
   const int start{1}, end{column_size / 4};
 
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }),
     column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{(row < start) || (row >= end)}; },
       [](gdf_index_type row) { return true; }),
-    this->maker(column_size - (end - start),
+    this->factory.make(column_size - (end - start),
       [](gdf_index_type row) { 
         return (row < start) ? row : row + end - start; 
       },
@@ -214,12 +214,12 @@ TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
 TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
 {
   BooleanMaskTest<TypeParam>(
-    this->maker(column_size, 
+    this->factory.make(column_size, 
       [](gdf_index_type row) { return row; }),
     column_wrapper<cudf::bool8>(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return row % 2 == 1; }),
-     this->maker(column_size / 2,
+     this->factory.make(column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1; }));
 }
 
@@ -273,14 +273,14 @@ void DropNulls(column_wrapper<T> const& source,
 template <typename T>
 struct DropNullsTest : GdfTest 
 {
-  cudf::test::make_column_wrapper<T> maker{};
+  cudf::test::column_wrapper_factory<T> factory;
 };
 
 TYPED_TEST_CASE(DropNullsTest, test_types);
 
 TYPED_TEST(DropNullsTest, Identity)
 {
-  auto col = this->maker(column_size,
+  auto col = this->factory.make(column_size,
     [](gdf_index_type row) { return row; },
     [](gdf_index_type row) { return true; });
   DropNulls<TypeParam>(col, col);
@@ -289,7 +289,7 @@ TYPED_TEST(DropNullsTest, Identity)
 TYPED_TEST(DropNullsTest, AllNull)
 {
   DropNulls<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return false; }),
     column_wrapper<TypeParam>(0, false));
@@ -298,10 +298,10 @@ TYPED_TEST(DropNullsTest, AllNull)
 TYPED_TEST(DropNullsTest, EvensNull)
 {
   DropNulls<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return row % 2 == 1; }),
-    this->maker(column_size / 2,
+    this->factory.make(column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1; },
       [](gdf_index_type row) { return true; }));
 }
@@ -311,10 +311,10 @@ TYPED_TEST(DropNullsTest, NonalignedGap)
   const int start{1}, end{column_size / 4};
 
   DropNulls<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return (row < start) || (row >= end); }),
-    this->maker(column_size - (end - start),
+    this->factory.make(column_size - (end - start),
       [](gdf_index_type row) { 
         return (row < start) ? row : row + end - start;
       },
@@ -324,8 +324,8 @@ TYPED_TEST(DropNullsTest, NonalignedGap)
 TYPED_TEST(DropNullsTest, NoNullMask)
 {
   DropNulls<TypeParam>(
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; }),
-    this->maker(column_size,
+    this->factory.make(column_size,
       [](gdf_index_type row) { return row; }));
 }

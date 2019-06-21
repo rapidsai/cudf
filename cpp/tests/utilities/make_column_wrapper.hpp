@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#ifndef MAKE_COLUMN_WRAPPER_HPP
-#define MAKE_COLUMN_WRAPPER_HPP
+#ifndef COLUMN_WRAPPER_FACTORY_HPP
+#define COLUMN_WRAPPER_FACTORY_HPP
 
 #include "column_wrapper.cuh"
 
@@ -34,56 +34,72 @@ namespace test {
  * string_category columns, for example, often require a separate path 
  * from numeric data types when generating input and reference columns and
  * running tests.
- * make_column_wrapper allows you to pass data and bit initializers just like
+ * column_wrapper_factory allows you to pass data and bit initializers just like
  * you do for the underlying column_wrapper, but it has a specialization for
  * nvstring_category columns that will convert generated numeric values into 
  * strings and initialize the column wrapper with a vector of those strings.
  * This, combined with column_wrapper's type-aware comparison function allow
  * using the same tests for numeric and string data with no special handling.
  * See copy_range_test.cpp and apply_boolean_mask_tests.cpp for examples.
- * 
+ *
  * Example:
- * 
- * make_column_wrapper<T> maker{};
- * 
- * column_wrapper<T> src = make(size, [](int row) { return 2 * row; },
- *                                    [](int row) { return true; });
- * 
+ *
+ * column_wrapper_factory<T> factory{};
+ *
+ * column_wrapper<T> src = factory.make(size,
+ *                                      [](int row) { return 2 * row; },
+ *                                      [](int row) { return true; });
+ *
  * If T is an int, src.data contains [0, 2, 4, ...]
  * If T is cudf::nvstring_category, src.data contains [0, 1, 2, ...] which are 
  * indices into an NVCategory containing the keys ["0", "2", "4", ...]
  */
 template <typename T>
-struct make_column_wrapper
+struct column_wrapper_factory
 {
-  T convert(gdf_index_type row) {
-    return static_cast<T>(row);
-  }
-
   template<typename DataInitializer>
-  column_wrapper<T>
-  operator()(gdf_size_type size,
-             DataInitializer data_init) {
+  column_wrapper<T> make(gdf_size_type size, DataInitializer data_init) {
     return column_wrapper<T>(size,
       [&](gdf_index_type row) { return convert(data_init(row)); });
   }
 
   template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<T>
-  operator()(gdf_size_type size,
-             DataInitializer data_init,
-             BitInitializer bit_init) {
+  column_wrapper<T> make(gdf_size_type size,
+                         DataInitializer data_init, BitInitializer bit_init) {
     return column_wrapper<T>(size,
       [&](gdf_index_type row) { return convert(data_init(row)); },
       bit_init);
   }
+protected: 
+  T convert(gdf_index_type row) {
+    return static_cast<T>(row);
+  }
 };
 
 template <>
-struct make_column_wrapper<cudf::nvstring_category>
+struct column_wrapper_factory<cudf::nvstring_category>
 {
-  int scale;
+  template<typename DataInitializer>
+  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+                                               DataInitializer data_init) {
+    std::vector<const char*> strings = generate_strings(size, data_init);
+    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
+    destroy_strings(strings);
+    return c;
+  }
 
+  template<typename DataInitializer, typename BitInitializer>
+  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+                                               DataInitializer data_init,
+                                               BitInitializer bit_init) {
+    std::vector<const char*> strings = generate_strings(size, data_init);
+    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data(),
+                                                      bit_init};
+    destroy_strings(strings);
+    return c;
+  }
+
+protected:
   const char* convert(gdf_index_type row) {
     std::ostringstream convert;
     convert << row;
@@ -92,43 +108,21 @@ struct make_column_wrapper<cudf::nvstring_category>
     return s; 
   }
 
-  template<typename DataInitializer>
-  column_wrapper<cudf::nvstring_category>
-  operator()(gdf_size_type size,
-             DataInitializer data_init) {
+  template <typename DataInitializer>
+  std::vector<const char*> generate_strings(gdf_size_type size,
+                                            DataInitializer data_init)
+  {
     std::vector<const char*> strings(size);
     std::generate(strings.begin(), strings.end(), [&, row=0]() mutable {
       return convert(data_init(row++));
     });
-    
-    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
-    
-    std::for_each(strings.begin(), strings.end(), [](const char* x) { 
-      delete [] x; 
-    });
-
-    return c;
+    return strings;
   }
 
-  template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<cudf::nvstring_category>
-  operator()(gdf_size_type size,
-             DataInitializer data_init,
-             BitInitializer bit_init) {
-    std::vector<const char*> strings(size);
-    std::generate(strings.begin(), strings.end(), [&, row=0]() mutable {
-      return convert(data_init(row++));
-    });
-
-    auto c =  column_wrapper<cudf::nvstring_category>{size,
-                                                      strings.data(),
-                                                      bit_init};
-    
+  void destroy_strings(std::vector<const char*> strings) {
     std::for_each(strings.begin(), strings.end(), [](const char* x) { 
       delete [] x; 
     });
-
-    return c;
   }
 };
 
@@ -136,4 +130,4 @@ struct make_column_wrapper<cudf::nvstring_category>
 
 } // namespace cudf
 
-#endif // MAKE_COLUMN_WRAPPER
+#endif // COLUMN_WRAPPER_FACTORY

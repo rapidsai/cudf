@@ -79,14 +79,14 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  cudf::test::make_column_wrapper<T> maker{};
+  cudf::test::column_wrapper_factory<T> factory;
 
-  column_wrapper<T> dest = maker(size, row_value{1}, valid);
+  column_wrapper<T> dest = factory.make(size, row_value{1}, valid);
   
   this->test(
     dest,
-    maker(size, row_value{2}, depends),
-    maker(size,
+    factory.make(size, row_value{2}, depends),
+    factory.make(size,
       [&](gdf_index_type row) {
         return ((row >= out_begin) && (row < out_end)) ?
           row_value{2}(row + row_diff) : row_value{1}(row);
@@ -108,15 +108,15 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
   gdf_index_type in_begin = 9;
   gdf_index_type row_diff = in_begin - out_begin;
 
-  cudf::test::make_column_wrapper<T> maker{};
+  cudf::test::column_wrapper_factory<T> factory;
 
-  column_wrapper<T> dest = maker(size, row_value{1});
+  column_wrapper<T> dest = factory.make(size, row_value{1});
 
   // First set it as valid
   this->test(
     dest,
-    maker(size, row_value{2}),
-    maker(size,
+    factory.make(size, row_value{2}),
+    factory.make(size,
       [&](gdf_index_type row) {
         return ((row >= out_begin) && (row < out_end)) ?
           row_value{2}(row + row_diff) : row_value{1}(row);
