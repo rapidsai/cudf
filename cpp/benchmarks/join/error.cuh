@@ -20,16 +20,41 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+#include <rmm/rmm.h>
+#include <cudf/cudf.h>
 
 
-#define CHECK_ERROR(rtv, expected_value, msg)                                            \
-{                                                                                        \
-    if (rtv != expected_value) {                                                         \
-        fprintf(stderr, "ERROR on line %d of file %s: %s\n",  __LINE__, __FILE__, msg);  \
-        std::cerr << "Error code " << rtv << std::endl;                                  \
-        exit(1);                                                                         \
-    }                                                                                    \
+#ifndef CUDA_RT_CALL
+#define CUDA_RT_CALL(call)                                                                         \
+{                                                                                                  \
+    cudaError_t cudaStatus = call;                                                                 \
+    if (cudaSuccess != cudaStatus)                                                                 \
+        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
+                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
 }
+#endif
+
+
+#ifndef RMM_CALL
+#define RMM_CALL(call)                                                                             \
+{                                                                                                  \
+    rmmError_t rmmStatus = call;                                                                   \
+    if (RMM_SUCCESS != rmmStatus)                                                                  \
+        fprintf(stderr, "\"%s\" in line %d of file %s failed with %s (%d).\n",                     \
+                        #call, __LINE__, __FILE__, rmmGetErrorString(rmmStatus), rmmStatus);       \
+}
+#endif
+
+
+#ifndef GDF_CALL
+#define GDF_CALL(call)                                                                             \
+{                                                                                                  \
+    gdf_error status = call;                                                                       \
+    if (GDF_SUCCESS != status)                                                                     \
+        fprintf(stderr, "\"%s\" in line %d of file %s failed with %s (%d).\n",                     \
+                        #call, __LINE__, __FILE__, gdf_error_get_name(status), status);            \
+}
+#endif
+
 
 #endif // __ERROR_CUH

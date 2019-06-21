@@ -52,18 +52,17 @@ static void join_benchmark(benchmark::State& state)
         col_ptr = new gdf_column;
     }
 
-    CHECK_ERROR(cudaDeviceSynchronize(), cudaSuccess, "cudaDeviceSynchronize");
+    CUDA_RT_CALL(cudaDeviceSynchronize());
 
     for (auto _ : state) {
-        CHECK_ERROR(
-            gdf_inner_join(probe_table.data(), probe_table.size(), columns_to_join,
-                           build_table.data(), build_table.size(), columns_to_join,
-                           1, build_table.size() + probe_table.size() - 1, join_result.data(),
-                           nullptr, nullptr, &ctxt),
-            GDF_SUCCESS, "gdf_inner_join"
+        GDF_CALL(gdf_inner_join(
+            probe_table.data(), probe_table.size(), columns_to_join,
+            build_table.data(), build_table.size(), columns_to_join,
+            1, build_table.size() + probe_table.size() - 1, join_result.data(),
+            nullptr, nullptr, &ctxt)
         );
 
-        CHECK_ERROR(cudaDeviceSynchronize(), cudaSuccess, "cudaDeviceSynchronize");
+        CUDA_RT_CALL(cudaDeviceSynchronize());
     }
 
     free_table(build_table);
