@@ -386,7 +386,7 @@ class Series(object):
             Maximum number of rows to show.
             If it is None, all rows are shown.
         """
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             return self.__repr__()
         if nrows is NOTSET:
             nrows = settings.formatting.get(nrows)
@@ -419,7 +419,7 @@ class Series(object):
         return self.to_string(nrows=10)
 
     def __repr__(self):
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
             if lines[-1].startswith('N'):
                 lines = lines[:-1]

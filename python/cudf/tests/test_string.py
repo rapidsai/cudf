@@ -608,7 +608,10 @@ def test_string_join_key_nulls(str_data_nulls):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    expect["vals_y"] = expect["vals_y"].astype('Int64')
+    if hasattr(pd, 'Int64Dtype'):
+        expect["vals_y"] = expect["vals_y"].astype('Int64')
+    else:
+        expect["vals_y"] = expect["vals_y"].fillna(-1).astype('int64')
 
     assert_eq(expect, got)
 

@@ -177,8 +177,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             new_type = original_type
             array = self
             if self.has_null_mask:
-                array = self.astype('float64')
                 if hasattr(pd, 'Int64Dtype'):
+                    array = self.astype('float64')
                     if original_type == np.int8:
                         new_type = pd.Int8Dtype()
                     elif original_type == np.int16:

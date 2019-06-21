@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-9, NVIDIA CORPORATION.
 
 import operator
 import pytest
@@ -202,7 +202,7 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    if pd.__version__ >= '0.24.2':
+    if hasattr(pd, 'Int64Dtype'):
         expect = 'Series([], dtype: float64)'
     else:
         expect = '<empty Series of dtype=float64>'
@@ -213,7 +213,7 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    if pd.__version__ >= '0.24.2':
+    if hasattr(pd, 'Int64Dtype'):
         expect = 'Series([], dtype: float64)'
     else:
         expect = '<empty Series of dtype=float64>'
@@ -724,7 +724,7 @@ def test_dataframe_to_string():
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
                         ('b', [11, 12, 13, 14, 15, 16])])
         string = str(df)
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             assert string.splitlines()[-1] == '[6 rows x 2 columns]'
         else:
             assert string.splitlines()[-1] == '[1 more rows]'
@@ -735,7 +735,7 @@ def test_dataframe_to_string():
                         ('c', [11, 12, 13, 14, 15, 16]),
                         ('d', [11, 12, 13, 14, 15, 16])])
         string = df.to_string(ncols=3)
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             assert string.splitlines()[-1] == '[6 rows x 4 columns]'
         else:
             assert string.splitlines()[-2] == '[1 more rows]'
@@ -769,7 +769,7 @@ def test_dataframe_to_string():
         pd.options.display.max_rows = 6
         got = df.to_string(nrows=None)
         print(got)
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             expect = '''
   a b  c
 0 1 11 0
@@ -800,7 +800,7 @@ def test_dataframe_to_string_wide():
         df['a{}'.format(i)] = list(range(3))
     got = df.to_string(ncols=8)
     print(got)
-    if pd.__version__ >= '0.24.2':
+    if hasattr(pd, 'Int64Dtype'):
         expect = '''
 a0 a1 a2 a3   a4   a5   a6  a7     ... a92  a93  a94  a95  a96  a97  a98  a99
 0 0   0    0    0    0    0   0   0  ...   0    0    0    0    0    0    0    0
@@ -839,7 +839,7 @@ def test_dataframe_emptycolumns_to_string():
     df['b'] = []
     got = df.to_string()
     print(got)
-    if pd.__version__ >= '0.24.2':
+    if hasattr(pd, 'Int64Dtype'):
         expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
     else:
         expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
@@ -1157,7 +1157,8 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else np.nan
+            expect_result = np.nan if hasattr(pd, 'Int64Dtype') else -1
+            expected_value = row.key + 100 if valid else expect_result
             got_value = row.val
             if np.isnan(expected_value):
                 assert np.isnan(got_value)
@@ -1180,7 +1181,8 @@ def test_dataframe_hash_partition_masked_keys(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = row.val - 100 if valid else np.nan
+            expect_result = np.nan if hasattr(pd, 'Int64Dtype') else -1
+            expected_value = row.val - 100 if valid else expect_result
             got_value = row.key
             if np.isnan(expected_value):
                 assert np.isnan(got_value)
@@ -1304,10 +1306,6 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
         for col in gdf:
             if got[col].has_null_mask:
                 got[col] = got[col].astype(pd.Int64Dtype())
-    else:
-        for col in gdf:
-            if gdf[col].has_null_mask:
-                got[col] = got[col].astype('float64')
     pd.testing.assert_frame_equal(expect, got.to_pandas())
 
 

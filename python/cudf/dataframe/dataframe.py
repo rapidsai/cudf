@@ -444,7 +444,7 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             return self.__repr__()
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
            isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
@@ -495,7 +495,7 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        if pd.__version__ >= '0.24.2':
+        if hasattr(pd, 'Int64Dtype'):
             lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
             if lines[-1].startswith('['):
                 lines = lines[:-1]

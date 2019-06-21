@@ -47,7 +47,7 @@ def test_categorical_integer():
     np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
-    if pd.__version__ >= '0.24.2':
+    if hasattr(pd, 'Int64Dtype'):
         expect_str = """
 0 a
 1 NaN
