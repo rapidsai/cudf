@@ -114,7 +114,7 @@ void copy_range_kernel(T * __restrict__ const data,
 
 template <typename InputFactory>
 struct copy_range_dispatch {
-  InputFactory make_input;
+  InputFactory factory;
 
   template <typename T>
   void operator()(gdf_column *column,
@@ -124,7 +124,7 @@ struct copy_range_dispatch {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
       "copy_range_kernel assumes bitmask element size in bits == warp size");
 
-    auto input = make_input.template operator()<T>();
+    auto input = factory.template make<T>();
     auto kernel = copy_range_kernel<T, decltype(input), false>;
 
     gdf_size_type *null_count = nullptr;

@@ -17,8 +17,6 @@
 #include "copy_range.cuh"
 #include <cudf/copying.hpp>
 
-#include "../../tests/utilities/cudf_test_fixtures.h"
-
 namespace cudf {
 
 namespace detail {
@@ -27,7 +25,7 @@ struct scalar_factory {
   gdf_scalar value;
 
   template <typename T>
-  struct scalar_functor {
+  struct scalar {
     T value;
     bool is_valid;
 
@@ -39,10 +37,10 @@ struct scalar_factory {
   };
 
   template <typename T>
-  scalar_functor<T> operator()() {
+  scalar<T> make() {
     T val{}; // Safe type pun, compiler should optimize away the memcpy
     memcpy(&val, &value.data, sizeof(T));
-    return scalar_functor<T>{val, value.is_valid};
+    return scalar<T>{val, value.is_valid};
   }
 };
 
@@ -51,7 +49,7 @@ struct column_range_factory {
   gdf_index_type begin;
 
   template <typename T>
-  struct column_range_functor {
+  struct column_range {
     T const * column_data;
     bit_mask_t const * bitmask;
     gdf_index_type begin;
@@ -67,8 +65,8 @@ struct column_range_factory {
   };
 
   template <typename T>
-  column_range_functor<T> operator()() {
-    return column_range_functor<T>{
+  column_range<T> make() {
+    return column_range<T>{
       static_cast<T*>(column.data),
       reinterpret_cast<bit_mask_t*>(column.valid),
       begin
