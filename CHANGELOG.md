@@ -24,7 +24,10 @@
 - PR #1954 Add skip test argument to GPU build script
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
+- PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
+- PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
+- PR #1652 Added `Series.where()` feature 
 
 ## Improvements
 
@@ -42,6 +45,7 @@
 - PR #1767 Speed up Python unit tests
 - PR #1770 Added build.sh script, updated CI scripts and documentation
 - PR #1739 ORC Reader: Add more pytest coverage
+- PR #1696 Added null support in `Series.replace()`.
 - PR #1390 Added some basic utility functions for `gdf_column`'s
 - PR #1791 Added general column comparison code for testing
 - PR #1795 Add printing of git submodule info to `print_env.sh`
@@ -77,6 +81,14 @@
 - PR #2005 Use HTML5 details tag in bug report issue template
 - PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
 - PR #1944 Groupby design improvements
+- PR #2017 Convert `read_orc()` into a C++ API
+- PR #2011 Convert `read_parquet()` into a C++ API
+- PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
+- PR #2034 Adding support for string columns concatenation using "add" binary operator
+- PR #2042 Replace old "10 Minutes" guide with new guide for docs build process
+- PR #2036 Make library of common test utils to speed up tests compilation
+- PR #2022 Facilitating get_dummies to be a high level api too
+- PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 
 ## Bug Fixes
 
@@ -132,6 +144,10 @@
 - PR #1978 Fix for values being filled in an empty dataframe 
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
+- PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
+- PR #2033 Add pip to conda environment files to fix warning
+- PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
+- PR #2053 cudf::apply_boolean_mask return empty column for empty boolean mask
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -139,7 +155,7 @@
 ## New Features
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
-- PR #1741 Add MultiIndex concatenation
+- PR #1741 Add MultiIndex concatenation 
 
 ## Bug Fixes
 
@@ -206,6 +222,7 @@
 - PR #1202 Simplify README.md
 - PR #1149 CSV Reader: Change convertStrToValue() functions to `__device__` only
 - PR #1238 Improve performance of the CUDA trie used in the CSV reader
+- PR #1245 Use file cache for JIT kernels
 - PR #1278 Update CONTRIBUTING for new conda environment yml naming conventions
 - PR #1163 Refactored UnaryOps. Reduced API to two functions: `gdf_unary_math` and `gdf_cast`. Added `abs`, `-`, and `~` ops. Changed bindings to Cython
 - PR #1284 Update docs version

@@ -815,21 +815,6 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
                               gdf_scalar*  result,
                               gdf_context* ctxt);
 
-/** 
- * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col` 
- *        with `new_values[i]`.
- * 
- * @param[in,out] col gdf_column with the data to be modified
- * @param[in] old_values gdf_column with the old values to be replaced
- * @param[in] new_values gdf_column with the new values
- * 
- * @returns GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   const gdf_column* old_values,
-                                   const gdf_column* new_values);
 
 /** 
  * @brief Sorts an array of gdf_column.
@@ -847,7 +832,7 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column** input_columns,
+gdf_error gdf_order_by(gdf_column const* const* input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,

@@ -7,21 +7,16 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.orc cimport *
+from cudf.bindings.orc cimport reader as orc_reader
+from cudf.bindings.orc cimport reader_options as orc_reader_options
 from libc.stdlib cimport free
-from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 from cudf.dataframe.column import Column
-from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.datetime import DatetimeColumn
 from cudf.utils import ioutils
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
-from librmm_cffi import librmm as rmm
 
-import nvstrings
-import numpy as np
-import collections.abc
 import errno
 import os
 
@@ -44,71 +39,48 @@ cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
     cudf.io.orc.read_orc
     """
 
-    # Setup arguments
-    cdef orc_read_arg orc_reader = orc_read_arg()
+    # Setup reader options
+    cdef orc_reader_options options = orc_reader_options()
+    for col in columns or []:
+        options.columns.push_back(str(col).encode())
+    options.use_index = use_index
 
+    # Create reader from source
     if not os.path.isfile(path) or not os.path.exists(path):
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )
-    path = str(path).encode()
-    source_ptr = <char*>path
-    orc_reader.source_type = FILE_PATH
-    orc_reader.source = source_ptr
+    cdef unique_ptr[orc_reader] reader
+    reader = unique_ptr[orc_reader](new orc_reader(str(path).encode(), options))
 
-    usecols = columns
-    arr_cols = []
-    orc_reader.use_cols_len = 0
-    cdef vector[const char*] vector_use_cols
-    if usecols is not None:
-        for col in usecols:
-            arr_cols.append(str(col).encode())
-        orc_reader.use_cols_len = len(usecols)
-    vector_use_cols = arr_cols
-    orc_reader.use_cols = vector_use_cols.data() 
-
-    if stripe is not None:
-        orc_reader.stripe = stripe
-    else:
-        orc_reader.stripe = -1
-
+    # Read data into columns
+    cdef cudf_table table
     if skip_rows is not None:
-        orc_reader.skip_rows = skip_rows
+        table = reader.get().read_rows(
+            skip_rows,
+            num_rows if num_rows is not None else 0
+        )
+    elif num_rows is not None:
+        table = reader.get().read_rows(
+            skip_rows if skip_rows is not None else 0,
+            num_rows
+        )
+    elif stripe is not None:
+        table = reader.get().read_stripe(stripe)
     else:
-        orc_reader.skip_rows = 0 
+        table = reader.get().read_all()
 
-    if num_rows is not None:
-        orc_reader.num_rows = num_rows
-    else:
-        orc_reader.num_rows = -1
-
-    orc_reader.use_index = use_index
-
-    # Call read_orc
-    with nogil:
-        result = read_orc(&orc_reader)
-
-    check_gdf_error(result)
-
-    out = orc_reader.data
-    if out is NULL:
-        raise ValueError("Failed to parse ORC")
-
-    # Extract parsed columns
+    # Extract read columns
     outcols = []
     new_names = []
-    for i in range(orc_reader.num_cols_out):
-        data_mem, mask_mem = gdf_column_to_column_mem(out[i])
-        if (out[i].dtype_info.time_unit == TIME_UNIT_ns):
-            newcol = Column.from_mem_views(data_mem, mask_mem)
-            outcols.append(
-                newcol.view(DatetimeColumn, dtype='datetime64[ns]')
-            )
-        else:
-            outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        new_names.append(out[i].col_name.decode())
-        free(out[i].col_name)
-        free(out[i])
+    cdef gdf_column* column
+    for i in range(table.num_columns()):
+        column = table.get_column(i)
+        data_mem, mask_mem = gdf_column_to_column_mem(column)
+        outcols.append(Column.from_mem_views(data_mem, mask_mem))
+        new_names.append(column.col_name.decode())
+        free(column.col_name)
+        free(column)
 
     # Construct dataframe from columns
     df = DataFrame()

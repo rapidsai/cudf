@@ -28,7 +28,10 @@
 #define BALLOT(v)   __ballot(v)
 #endif
 
-namespace parquet { namespace gpu {
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 
 // Minimal thrift implementation for parsing page headers
 
@@ -411,4 +414,7 @@ cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
   return cudaSuccess;
 }
 
-}; }; // parquet::gpu namespace
+} // namespace gpu
+} // namespace parquet
+} // namespace io
+} // namespace cudf

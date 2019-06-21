@@ -25,6 +25,8 @@
 #include <vector>
 #include <algorithm>
 
+namespace cudf {
+namespace io {
 namespace parquet {
 
 #define PARQUET_MAGIC   (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
@@ -274,6 +276,8 @@ class CompactProtocolReader
   const uint8_t *m_end = nullptr;
 };
 
-}; // namespace parquet
+} // namespace parquet
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_PARQUET_H__

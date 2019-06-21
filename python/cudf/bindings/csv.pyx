@@ -7,12 +7,12 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.csv cimport *
+from cudf.bindings.csv cimport reader as csv_reader
+from cudf.bindings.csv cimport reader_options as csv_reader_options
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
@@ -73,7 +73,7 @@ cpdef cpp_read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    cdef csv_reader_args args = csv_reader_args()
+    cdef csv_reader_options args = csv_reader_options()
 
     # Populate args struct
     if is_file_like(filepath_or_buffer):
@@ -173,9 +173,9 @@ cpdef cpp_read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef unique_ptr[CsvReader] reader
+    cdef unique_ptr[csv_reader] reader
     with nogil:
-        reader = unique_ptr[CsvReader](new CsvReader(args))
+        reader = unique_ptr[csv_reader](new csv_reader(args))
     
     cdef cudf_table table
     if byte_range is not None:
