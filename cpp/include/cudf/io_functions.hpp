@@ -16,9 +16,47 @@
 
 #pragma once
 
+#include "cudf.h"
+#include "table.hpp"
+
+#include <memory>
+
+namespace cudf {
 
 /*
- * @brief Interface to parse Parquet data to GDF columns using an arrow::io::RandomAccessFile
+ * @brief Interface to parse CSV data to cuDF columns.
+ *
+ * @param[in] args Arguments for controlling reading behavior
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
  */
-gdf_error read_parquet_arrow(pq_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> file);
+cudf::table read_csv(csv_read_arg const &args);
 
+/*
+ * @brief Interface to parse JSON data to cuDF columns
+ *
+ * @param[in] args Arguments for controlling reading behavior
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
+ */
+cudf::table read_json(json_read_arg const &args);
+
+/*
+ * @brief Interface to parse ORC data to cuDF columns
+ *
+ * @param[in] args Arguments for controlling reading behavior
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
+ */
+cudf::table read_orc(orc_read_arg const &args);
+
+/*
+ * @brief Interface to parse Parquet data to cuDF columns.
+ *
+ * @param[in] args Arguments for controlling reading behavior
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
+ */
+cudf::table read_parquet(parquet_read_arg const &args);
+
+} // namespace cudf

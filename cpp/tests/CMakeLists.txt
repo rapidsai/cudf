@@ -7,14 +7,25 @@ if(NOT CMAKE_CUDA_COMPILER)
 endif()
 
 ###################################################################################################
+# - common test utils -----------------------------------------------------------------------------
+
+add_library(cudftestutil STATIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+
+target_link_libraries(cudftestutil cudf)
+
+###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
-                   ${CMAKE_TEST_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+                   ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf
+                          cudftestutil rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory
+                          NVStrings nvrtc)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -106,7 +117,6 @@ set(HASH_GROUPBY_TEST_SRC
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(GROUPBY_WO_AGG_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
 
 ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
@@ -115,7 +125,6 @@ ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
@@ -124,7 +133,6 @@ ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 # - orderby tests ---------------------------------------------------------------------------------
 
 set(ORDERBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
 
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
@@ -271,8 +279,7 @@ ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 # - nvcategory tests -------------------------------------------------------------------------------
 
 set(NVCATEGORY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
 
 ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
@@ -292,8 +299,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 

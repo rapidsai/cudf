@@ -21,6 +21,7 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <utilities/type_dispatcher.hpp>
+#include <cudf/functions.h>
 
 namespace {
 
