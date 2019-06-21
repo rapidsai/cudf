@@ -318,7 +318,7 @@ cdef extern from "table.hpp" namespace "cudf" nogil:
 
         cudf_table(gdf_column* cols[], gdf_size_type num_cols) except +
 
-        cudf_table(const vector[gdf_column*] cols)
+        cudf_table(const vector[gdf_column*] cols) except +
 
         cudf_table() except +
 
