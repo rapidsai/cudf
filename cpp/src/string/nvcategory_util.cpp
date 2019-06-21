@@ -96,10 +96,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
     null_index_scalar.is_valid = true;
     null_index_scalar.dtype = GDF_STRING_CATEGORY;
 
-    const auto byte_width = (column->dtype == GDF_STRING)
-      ? sizeof(std::pair<const char *, size_t>)
-      : cudf::size_of(column->dtype);
-
+    const auto byte_width = cudf::size_of(column->dtype);
     gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_scalar);
     CUDA_TRY(cudaMemcpyAsync(
                              column->data,
