@@ -30,18 +30,18 @@
 namespace cudf {
 namespace reductions {
 
-template<typename T>
+template<typename ResultType>
 struct meanvar_no_count
 {
-    T value;                /// the value
-    T value_squared;        /// the value of squared
+    ResultType value;                /// the value
+    ResultType value_squared;        /// the value of squared
 
     CUDA_HOST_DEVICE_CALLABLE
-    meanvar_no_count(T _value=0, T _value_squared=0)
+    meanvar_no_count(ResultType _value=0, ResultType _value_squared=0)
     : value(_value), value_squared(_value_squared)
     {};
 
-    using this_t = cudf::reductions::meanvar_no_count<T>;
+    using this_t = cudf::reductions::meanvar_no_count<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -62,15 +62,15 @@ struct meanvar_no_count
     };
 };
 
-template<typename T_element>
+template<typename ResultType>
 struct transformer_meanvar_no_count
 {
-    using T_output = cudf::reductions::meanvar_no_count<T_element>;
+    using OutputType = cudf::reductions::meanvar_no_count<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
-    T_output operator() (T_element const & value)
+    OutputType operator() (ResultType const & value)
     {
-        return T_output(value, value*value);
+        return OutputType(value, value*value);
     };
 };
 
@@ -103,18 +103,18 @@ struct max {
 struct mean {
     using Op = cudf::DeviceSum;
 
-    template<typename T>
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+    }
+
+    template<typename ResultType>
     struct intermediate{
-        using IType = T;
+        using IntermediateType = ResultType;
 
-        template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(gdf_column const& column, T_out identity)
-        {
-            return cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
-        }
-
-        // compute `mean` from intermediate type `IType`
-        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
+        // compute `mean` from intermediate type `IntermediateType`
+        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
         {
             return (input / count);
         };
@@ -126,25 +126,25 @@ struct mean {
 struct variance {
     using Op = cudf::DeviceSum;
 
-    template<typename T>
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        auto transformer = cudf::reductions::transformer_meanvar_no_count<ResultType>{};
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return thrust::make_transform_iterator(it_raw, transformer);
+    }
+
+    template<typename ResultType>
     struct intermediate{
-        using IType = meanvar_no_count<T>;
+        using IntermediateType = meanvar_no_count<ResultType>;
 
-        template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(gdf_column const& column, T_out identity)
+        // compute `variance` from intermediate type `IntermediateType`
+        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
         {
-            auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
-            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
-            return thrust::make_transform_iterator(it_raw, transformer);
-        }
-
-        // compute `variance` from intermediate type `IType`
-        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
-        {
-            T mean = input.value / count;
-            T asum = input.value_squared;
+            ResultType mean = input.value / count;
+            ResultType asum = input.value_squared;
             gdf_size_type div = count -ddof;
-            T var = asum / div - ((mean * mean) * count) /div;
+            ResultType var = asum / div - ((mean * mean) * count) /div;
 
             return var;
         };
@@ -155,25 +155,24 @@ struct variance {
 struct standard_deviation {
     using Op = cudf::DeviceSum;
 
-    template<typename T>
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        auto transformer = cudf::reductions::transformer_meanvar_no_count<ResultType>{};
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return thrust::make_transform_iterator(it_raw, transformer);
+    }
+    template<typename ResultType>
     struct intermediate{
-        using IType = meanvar_no_count<T>;
+        using IntermediateType = meanvar_no_count<ResultType>;
 
-        template<bool has_nulls, typename T_in, typename T_out>
-        static auto make_iterator(gdf_column const& column, T_out identity)
+        // compute `standard deviation` from intermediate type `IntermediateType`
+        static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
         {
-            auto transformer = cudf::reductions::transformer_meanvar_no_count<T>{};
-            auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(column, identity);
-            return thrust::make_transform_iterator(it_raw, transformer);
-        }
+            using intermediateOp = typename cudf::reductions::op::variance::template intermediate<ResultType>;
+            ResultType var = intermediateOp::compute_result(input, count, ddof);
 
-        // compute `standard deviation` from intermediate type `IType`
-        static T compute_result(const IType& input, gdf_size_type count, gdf_size_type ddof)
-        {
-            using intermediateOp = typename cudf::reductions::op::variance::template intermediate<T>;
-            T var = intermediateOp::compute_result(input, count, ddof);
-
-            return static_cast<T>(std::sqrt(var));
+            return static_cast<ResultType>(std::sqrt(var));
         };
     };
 };

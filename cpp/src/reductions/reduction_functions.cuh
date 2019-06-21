@@ -33,9 +33,9 @@ namespace cudf {
 namespace reductions {
 
 // compute reduction by the operator
-template <typename Op, typename InputIterator, typename T_output>
-void reduce(T_output* dev_result, InputIterator d_in, gdf_size_type num_items,
-    T_output init, Op op, cudaStream_t stream)
+template <typename Op, typename InputIterator, typename OutputType>
+void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
+    OutputType init, Op op, cudaStream_t stream)
 {
     void     *d_temp_storage = NULL;
     size_t   temp_storage_bytes = 0;

@@ -23,47 +23,47 @@ namespace cudf {
 namespace reductions {
 
 // make an column iterator
-template<bool has_nulls, typename T_in, typename T_out, typename Op>
-auto make_iterator(const gdf_column &input, T_out identity, Op op)
+template<bool has_nulls, typename ElementType, typename ResultType, typename Op>
+auto make_iterator(const gdf_column &input, ResultType identity, Op op)
 {
-    return cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
+    return cudf::make_iterator<has_nulls, ElementType, ResultType>(input, identity);
 }
 
 // make an column iterator, specialized for `cudf::reductions::op::sum_of_squares`
-template<bool has_nulls, typename T_in, typename T_out>
-auto make_iterator(const gdf_column &input, T_out identity,
+template<bool has_nulls, typename ElementType, typename ResultType>
+auto make_iterator(const gdf_column &input, ResultType identity,
     cudf::reductions::op::sum_of_squares op)
 {
-    auto it_raw = cudf::make_iterator<has_nulls, T_in, T_out>(input, identity);
+    auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(input, identity);
     return thrust::make_transform_iterator(it_raw,
-        cudf::transformer_squared<T_out>{});
+        cudf::transformer_squared<ResultType>{});
 }
 
 // Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
 // which directly compute the reduction by a single step reduction call
-template<typename T_in, typename T_out, typename Op, bool has_nulls>
+template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
-    T_out identity = Op::Op::template identity<T_out>();
+    ResultType identity = Op::Op::template identity<ResultType>();
 
     // allocate temporary memory for the result
     void *result = NULL;
-    RMM_TRY(RMM_ALLOC(&result, sizeof(T_out), stream));
+    RMM_TRY(RMM_ALLOC(&result, sizeof(ResultType), stream));
 
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(result, &identity,
-            sizeof(T_out), cudaMemcpyHostToDevice, stream));
+            sizeof(ResultType), cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
 
     // reduction by iterator
-    auto it = make_iterator<has_nulls, T_in, T_out>(col, identity, Op{});
-    reduce(static_cast<T_out*>(result), it, col.size, identity,
+    auto it = make_iterator<has_nulls, ElementType, ResultType>(col, identity, Op{});
+    reduce(static_cast<ResultType*>(result), it, col.size, identity,
         typename Op::Op{}, stream);
 
     // read back the result to host memory
     // TODO: asynchronous copy
     CUDA_TRY(cudaMemcpy(&scalar.data, result,
-            sizeof(T_out), cudaMemcpyDeviceToHost));
+            sizeof(ResultType), cudaMemcpyDeviceToHost));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(result, stream));
@@ -73,10 +73,10 @@ void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t st
 };
 
 
-template <typename T_in, typename Op>
+template <typename ElementType, typename Op>
 struct simple_reduction_result_type_dispatcher {
 private:
-    template <typename T_out>
+    template <typename ResultType>
     static constexpr bool is_supported_v()
     {
         // for single step reductions,
@@ -84,23 +84,23 @@ private:
         //  - same dtypes (including cudf::wrappers)
         //  - any arithmetic dtype to any arithmetic dtype
         //  - cudf::bool8 to/from any arithmetic dtype
-        return  std::is_convertible<T_in, T_out>::value ||
-        ( std::is_arithmetic<T_in >::value && std::is_same<T_out, cudf::bool8>::value ) ||
-        ( std::is_arithmetic<T_out>::value && std::is_same<T_in , cudf::bool8>::value );
+        return  std::is_convertible<ElementType, ResultType>::value ||
+        ( std::is_arithmetic<ElementType >::value && std::is_same<ResultType, cudf::bool8>::value ) ||
+        ( std::is_arithmetic<ResultType>::value && std::is_same<ElementType , cudf::bool8>::value );
     }
 
 public:
-    template <typename T_out, std::enable_if_t<is_supported_v<T_out>()>* = nullptr>
+    template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            simple_reduction<T_in, T_out, Op, true>(col, scalar, stream);
+            simple_reduction<ElementType, ResultType, Op, true>(col, scalar, stream);
         }else{
-            simple_reduction<T_in, T_out, Op, false >(col, scalar, stream);
+            simple_reduction<ElementType, ResultType, Op, false >(col, scalar, stream);
         }
     }
 
-    template <typename T_out, std::enable_if_t<not is_supported_v<T_out>()>* = nullptr>
+    template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         CUDF_FAIL("input data type is not convertible to output data type");
@@ -110,26 +110,26 @@ public:
 template <typename Op>
 struct simple_reduction_dispatcher {
 private:
-    // return true if T is arithmetic type or
+    // return true if ElementType is arithmetic type or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
-    template <typename T>
+    template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-        return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::bool8>::value ||
+        return std::is_arithmetic<ElementType>::value ||
+               std::is_same<ElementType, cudf::bool8>::value ||
                std::is_same<Op, cudf::reductions::op::min>::value ||
                std::is_same<Op, cudf::reductions::op::max>::value ;
     }
 
 public:
-    template <typename T, std::enable_if_t<is_supported_v<T>()>* = nullptr>
+    template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         cudf::type_dispatcher(scalar.dtype,
-            simple_reduction_result_type_dispatcher<T, Op>(), col, scalar, stream);
+            simple_reduction_result_type_dispatcher<ElementType, Op>(), col, scalar, stream);
     }
 
-    template <typename T, std::enable_if_t<not is_supported_v<T>()>* = nullptr>
+    template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"

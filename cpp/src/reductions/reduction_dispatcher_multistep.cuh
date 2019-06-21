@@ -24,41 +24,41 @@ namespace reductions {
 
 // Reduction for mean, var, std
 // It requires extra step after single step reduction call
-template<typename T_in, typename T_out, typename Op, bool has_nulls>
+template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     gdf_size_type ddof, cudaStream_t stream)
 {
     gdf_size_type valid_count = col.size - col.null_count;
 
-    T_out identity = Op::Op::template identity<T_out>();
-    using intermediateOp = typename Op::template intermediate<T_out>;
-    // Itype: intermediate structure, output type of `reduction_op` and
+    ResultType identity = Op::Op::template identity<ResultType>();
+    using intermediateOp = typename Op::template intermediate<ResultType>;
+    // IntermediateType: intermediate structure, output type of `reduction_op` and
     // input type of `intermediateOp::ComputeResult`
-    using Itype = typename intermediateOp::IType;
-    Itype intermediate{0};
+    using IntermediateType = typename intermediateOp::IntermediateType;
+    IntermediateType intermediate{0};
 
     // allocate temporary memory for the dev_result
     void *dev_result = NULL;
-    RMM_TRY(RMM_ALLOC(&dev_result, sizeof(Itype), stream));
+    RMM_TRY(RMM_ALLOC(&dev_result, sizeof(IntermediateType), stream));
 
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(dev_result, &intermediate,
-            sizeof(Itype), cudaMemcpyHostToDevice, stream));
+            sizeof(IntermediateType), cudaMemcpyHostToDevice, stream));
     CHECK_STREAM(stream);
 
     // reduction by iterator
-    auto it = intermediateOp::template make_iterator<has_nulls, T_in, T_out>(col, identity);
-    reduce(static_cast<Itype*>(dev_result), it, col.size, intermediate,
+    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col, identity);
+    reduce(static_cast<IntermediateType*>(dev_result), it, col.size, intermediate,
         typename Op::Op{}, stream);
 
     // read back the dev_result to host memory
     // TODO: asynchronous copy
     CUDA_TRY(cudaMemcpy(&intermediate, dev_result,
-            sizeof(Itype), cudaMemcpyDeviceToHost));
+            sizeof(IntermediateType), cudaMemcpyDeviceToHost));
 
     // compute the dev_result value from intermediate value.
-    T_out hos_result = intermediateOp::compute_result(intermediate, valid_count, ddof);
-    memcpy(&scalar.data, &hos_result, sizeof(T_out));
+    ResultType hos_result = intermediateOp::compute_result(intermediate, valid_count, ddof);
+    memcpy(&scalar.data, &hos_result, sizeof(ResultType));
 
     // cleanup temporary memory
     RMM_TRY(RMM_FREE(dev_result, stream));
@@ -68,29 +68,29 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
 };
 
 
-template <typename T_in, typename Op>
+template <typename ElementType, typename Op>
 struct compound_reduction_result_type_dispatcher {
 private:
-    template <typename T_out>
+    template <typename ResultType>
     static constexpr bool is_supported_v()
     {
         // the operator `mean`, `var`, `std` only accepts
         // floating points as output dtype
-        return  std::is_floating_point<T_out>::value;
+        return  std::is_floating_point<ResultType>::value;
     }
 
 public:
-    template <typename T_out, std::enable_if_t<is_supported_v<T_out>()>* = nullptr>
+    template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            compound_reduction<T_in, T_out, Op, true>(col, scalar, ddof, stream);
+            compound_reduction<ElementType, ResultType, Op, true>(col, scalar, ddof, stream);
         }else{
-            compound_reduction<T_in, T_out, Op, false >(col, scalar, ddof, stream);
+            compound_reduction<ElementType, ResultType, Op, false >(col, scalar, ddof, stream);
         }
     }
 
-    template <typename T_out, std::enable_if_t<not is_supported_v<T_out>()>* = nullptr >
+    template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr >
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Unsupported output data type");
@@ -100,23 +100,23 @@ public:
 template <typename Op>
 struct compound_reduction_dispatcher {
 private:
-    // return true if T is arithmetic type or cudf::bool8
-    template <typename T>
+    // return true if ElementType is arithmetic type or cudf::bool8
+    template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-        return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::bool8>::value;
+        return std::is_arithmetic<ElementType>::value ||
+               std::is_same<ElementType, cudf::bool8>::value;
     }
 
 public:
-    template <typename T, std::enable_if_t<is_supported_v<T>()>* = nullptr>
+    template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         cudf::type_dispatcher(scalar.dtype,
-            compound_reduction_result_type_dispatcher<T, Op>(), col, scalar, ddof, stream);
+            compound_reduction_result_type_dispatcher<ElementType, Op>(), col, scalar, ddof, stream);
     }
 
-    template <typename T, std::enable_if_t<not is_supported_v<T>()>* = nullptr>
+    template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
