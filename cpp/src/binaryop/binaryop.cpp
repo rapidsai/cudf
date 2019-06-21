@@ -303,44 +303,7 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const s
     
     binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
 
-// (At least) for now we won't consider string and compiled kernels.
-/**
-    if (lhs->dtype == GDF_STRING_CATEGORY && rhs->dtype == GDF_STRING_CATEGORY) {
-        // if the columns are string types then we need to combine categories
-        // before checking for equality because the same category values can mean
-        // different things for different columns
-
-        // make temporary columns which will have synced categories
-        auto temp_lhs = cudf::allocate_like(*lhs);
-        auto temp_rhs = cudf::allocate_like(*rhs);
-        gdf_column* input_cols[2]   = {lhs, rhs};
-        gdf_column* temp_cols[2]    = {&temp_lhs, &temp_rhs};
-
-        // sync categories
-        sync_column_categories(input_cols, temp_cols, 2);
-
-        // now it's ok to directly compare the column data
-        auto err = binops::compiled::binary_operation(out, &temp_lhs, &temp_rhs, ope);
-        if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
-            binops::jit::binary_operation(out, &temp_lhs, &temp_rhs, ope);
-
-        // TODO: Need a better way to deallocate temporary columns
-        RMM_TRY(RMM_FREE(temp_lhs.data, 0));
-        RMM_TRY(RMM_FREE(temp_rhs.data, 0));
-        if (temp_lhs.valid != nullptr)
-            RMM_TRY(RMM_FREE(temp_lhs.valid, 0));
-        if (temp_rhs.valid != nullptr)
-            RMM_TRY(RMM_FREE(temp_rhs.valid, 0));
-        NVCategory::destroy(
-            reinterpret_cast<NVCategory*>(temp_lhs.dtype_info.category));
-        NVCategory::destroy(
-            reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
-        return;
-    }
-    auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
-    if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
-*/
-        binops::jit::binary_operation(out, lhs, rhs, ptx);
+    binops::jit::binary_operation(out, lhs, rhs, ptx);
 }
 
 } // namespace cudf
