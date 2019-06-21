@@ -16,12 +16,13 @@ Follow this guide http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-rep
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Environment details (please complete the following information):**
+**Environment overview (please complete the following information)**
  - Environment location: [Bare-metal, Docker, Cloud(specify cloud provider)]
  - Method of cuDF install: [conda, Docker, or from source]
    - If method of install is [Docker], provide `docker pull` & `docker run` commands used
- - Please run and attach the output of the `cudf/print_env.sh` script to gather relevant environment details
- 
+
+**Environment details**
+Please run and paste the output of the `cudf/print_env.sh` script here, to gather any other relevant environment details
 
 **Additional context**
 Add any other context about the problem here.
