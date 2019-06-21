@@ -62,7 +62,8 @@ class Column(object):
                 return Column(Buffer.null(dtype))
 
         # Find the dtype of each column ignoring pure NULL columns
-        col_dtypes = [o.dtype for o in filter(lambda o: len(o) != o.null_count, objs)]
+        col_dtypes = [o.dtype for o in
+                      filter(lambda o: len(o) != o.null_count, objs)]
         # Use NumPy to find a common dtype
         common_dtype = np.find_common_type(col_dtypes, [])
         # Cast all columns to the common dtype
