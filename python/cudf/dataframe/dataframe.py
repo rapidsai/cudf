@@ -30,7 +30,6 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
-from cudf.bindings import copying as cpp_copying
 from cudf._sort import get_sorted_inds
 from cudf.dataframe import columnops
 from cudf.indexing import _DataFrameLocIndexer, _DataFrameIlocIndexer
