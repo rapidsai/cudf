@@ -1299,14 +1299,9 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
         return x[slice_start: slice_end]
 
     expect = do_slice(gdf.to_pandas())
-    got = do_slice(gdf)
+    got = do_slice(gdf).to_pandas()
 
-    # Any column containing a null will be promoted to Int64 by pandas
-    if hasattr(pd, 'Int64Dtype'):
-        for col in gdf:
-            if got[col].has_null_mask:
-                got[col] = got[col].astype(pd.Int64Dtype())
-    pd.testing.assert_frame_equal(expect, got.to_pandas())
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_from_pandas():

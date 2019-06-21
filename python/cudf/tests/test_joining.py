@@ -250,6 +250,7 @@ def test_dataframe_join_mismatch_cats(how):
     expect.index = pd.Categorical(expect.index)
     pd.util.testing.assert_frame_equal(got, expect, check_names=False,
                                        check_index_type=False,
+                                       check_dtype=False,
                                        # For inner joins, pandas returns
                                        # weird categories.
                                        check_categorical=how != 'inner')
