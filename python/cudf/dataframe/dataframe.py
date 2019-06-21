@@ -920,21 +920,18 @@ class DataFrame(object):
         if idx is not None:
             idx = idx if isinstance(idx, Index) else as_index(idx)
             if df.index.dtype != idx.dtype:
+                cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
                 df = DataFrame(None, idx).join(df, how='left', sort=True)
-                # TODO: use df.take() once string cols are working
-                # df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
                 # double-argsort to map back from sorted to unsorted positions
-                positions = idx.argsort(True).argsort(True).to_gpu_array()
-                for col_name, col in df._cols.items():
-                    df[col_name] = col.take(positions)
+                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
 
-        idx = df.index if idx is None else idx
-        names = list(df.columns) if cols is None else cols
+        idx = idx if idx is not None else df.index
+        names = cols if cols is not None else list(df.columns)
 
         length = len(idx)
-        cols = OrderedDict({})
+        cols = OrderedDict()
 
         for name in names:
             if name in df:
@@ -991,13 +988,9 @@ class DataFrame(object):
     def take(self, positions, ignore_index=False):
         positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        cols = [s._column for s in self._cols.values()]
 
-        result_cols = cpp_copying.apply_gather(cols, positions)
-
-        out = DataFrame()
-        for i, col_name in enumerate(self._cols):
-            out[col_name] = result_cols[i]
+        for col_name, col in self._cols.items():
+            out[col_name] = col.take(positions)
 
         if ignore_index:
             out.index = RangeIndex(len(out))
