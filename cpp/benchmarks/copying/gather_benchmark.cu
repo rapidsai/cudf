@@ -104,6 +104,13 @@ void gather_random(benchmark::State& state){
   std::vector<gdf_index_type> host_gather_map(source_size);
   std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
   std::random_shuffle(host_gather_map.begin(), host_gather_map.end());
+  
+//  std::set<int> s;
+//  for(int i = 0; i < 256; i++){
+//    s.insert(host_gather_map[i] / 32);
+//  }
+//  printf("%lu\n", s.size());
+  
   thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
@@ -120,6 +127,11 @@ void gather_random(benchmark::State& state){
  
   cudf::table source_table{ vp_src };
   cudf::table destination_table{ vp_dest };
+  if(opt){
+    cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, state.range(1));
+  }else{
+    cudf::gather(&source_table, gather_map.data().get(), &destination_table);
+  }
 
   for(auto _ : state){
     if(opt){
@@ -132,8 +144,6 @@ void gather_random(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-// BENCHMARK_TEMPLATE(gather_random, double, 3,false)->RangeMultiplier(2)
-//  ->Range(1<<26, 1<<26);
-BENCHMARK_TEMPLATE(gather_random, double, 3, true)->RangeMultiplier(2)
-  ->Ranges({{1<<26, 1<<26},{256,256}});
+BENCHMARK_TEMPLATE(gather_random, double, 3,false)->RangeMultiplier(2)->Range(1<<10, 1<<26);
+BENCHMARK_TEMPLATE(gather_random, double, 3, true)->RangeMultiplier(2)->Ranges({{1<<10, 1<<26},{256,256}});
 

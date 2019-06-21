@@ -106,8 +106,8 @@ TYPED_TEST(GatherOptTest, MultiColReverseIdentityTest) {
 }
 
 TYPED_TEST(GatherOptTest, MultiColNullTest) {
-  constexpr gdf_size_type source_size{1000000};
-  constexpr gdf_size_type destination_size{1000000};
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
   
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");

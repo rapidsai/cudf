@@ -31,6 +31,8 @@
 #include <bitmask/bit_mask.cuh>
 #include <cub/cub.cuh>
 
+#include <cooperative_groups.h>
+
 /**
  * @brief Operations for copying from one column to another
  * @file copying_ops.cu
@@ -41,9 +43,9 @@ using bit_mask::bit_mask_t;
 namespace impl {
 
 constexpr int warp_size = 32;
-
+/**
 template<class T>
-__device__ inline void warp_wise_reduce(T& f) {
+__device__ __inline__ void warp_wise_reduce(T& f) {
   #pragma unroll
   for(int offset = 16; offset > 0; offset /= 2){
     // ONLY works for CUDA 9.2 or later
@@ -51,9 +53,12 @@ __device__ inline void warp_wise_reduce(T& f) {
     f += other_f;
   }
 }
-
+*/
 template<class CountType, int lane = 0>
-__device__ inline void single_lane_reduce(CountType f, CountType* smem, CountType* d_output){
+__device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
+  
+  static __shared__ gdf_size_type smem[warp_size];
+  
   int lane_id = (threadIdx.x % warp_size);
   int warp_id = (threadIdx.x / warp_size);
   
@@ -66,14 +71,15 @@ __device__ inline void single_lane_reduce(CountType f, CountType* smem, CountTyp
   if(warp_id == 0){ // Here I am assuming maximum block size is 1024 and 1024 >> 5 = 32
     f = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
 
-    // __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
-    // CountType block_valid_count = cub::WarpReduce<CountType>(temp_storage).Sum(f);
+    __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
+    f = cub::WarpReduce<CountType>(temp_storage).Sum(f);
     
-    warp_wise_reduce(f); 
+    // warp_wise_reduce(f); 
     if(lane_id == 0){
       atomicAdd(d_output, f);
     }
   }
+  __syncthreads();
 }
 
 template<bool check_bounds>
@@ -86,9 +92,8 @@ __device__ __inline__ void gather_bitmask_device(
     const gdf_size_type num_destination_rows,
     gdf_size_type* d_count 
 ){
-  static __shared__ gdf_size_type smem_count[warp_size];
   const uint32_t active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
-  
+
   bool source_bit_is_valid = false;
   if(check_bounds){
     source_bit_is_valid = source_row < num_source_rows && bit_mask::is_valid(source_valid, source_row);
@@ -104,7 +109,7 @@ __device__ __inline__ void gather_bitmask_device(
   if(0 == threadIdx.x % warp_size){
     destination_valid[valid_index] = valid_warp;
   }
-  // single_lane_reduce(__popc(valid_warp), smem_count, d_count);
+  single_lane_reduce(__popc(valid_warp), d_count);
 }
 
 template<int block_size>
@@ -122,19 +127,6 @@ struct copy_element_smem {
   }
 };
 
-template<int block_size>
-__device__ inline void copy_row_smem(device_table const& target,
-                                gdf_size_type target_index,
-                                device_table const& source,
-                                gdf_size_type source_index) {
-  for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.get_column(i)->dtype,
-                          copy_element_smem<block_size>{},
-                          *target.get_column(i), target_index,
-                          *source.get_column(i), source_index);
-  }
-}
-
 template<bool check_bounds, bool do_valid, int block_size>
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void gather_kernel(const device_table source, 
@@ -147,16 +139,20 @@ __global__ void gather_kernel(const device_table source,
   
   // Each element of gather_map[] only needs to be used once. 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-  gdf_index_type source_row = 0;
  
-  // gather the entire row
   const bool active_threads = destination_row < n_destination_rows;
-  if(active_threads && (!check_bounds || source_row < n_source_rows)){
-    source_row = gather_map[destination_row];
-    copy_row_smem<block_size>(destination, destination_row, source, source_row);
-  }
-  if(do_valid){
-    for(int i = 0; i < destination.num_columns(); i++){
+  gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
+  for(gdf_index_type i = 0; i < destination.num_columns(); i++){
+    
+    if(active_threads && (!check_bounds || source_row < n_source_rows)){
+      // gather the entire row
+      cudf::type_dispatcher(source.get_column(i)->dtype,
+                          copy_element_smem<block_size>{},
+                          *destination.get_column(i), destination_row,
+                          *source.get_column(i), source_row);
+    }
+    
+    if(do_valid){
       // Before bit_mask_t is used in device_table we will do the cast here.
       bit_mask_t* __restrict__ src_valid =
         reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
@@ -164,13 +160,12 @@ __global__ void gather_kernel(const device_table source,
         reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
  
       gather_bitmask_device<check_bounds>(src_valid, source_row, n_source_rows,
-        dest_valid, destination_row, n_destination_rows, d_count+i);
+        dest_valid, destination_row, n_destination_rows, d_count + i);
     }
   }
 }
 
 }  // namespace
-
 namespace cudf {
 namespace opt   {
 namespace detail {
