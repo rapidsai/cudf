@@ -141,6 +141,7 @@
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
 - PR #2033 Add pip to conda environment files to fix warning
 - PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
+- PR #2073 Fix an issue when gathering columns with NVCategory and nulls
 
 
 # cudf 0.7.2 (16 May 2019)
