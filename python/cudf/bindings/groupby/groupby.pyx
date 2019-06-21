@@ -139,11 +139,6 @@ def agg(groupby_class, args):
     Returns
     -------
     result : DataFrame
-
-    Notes
-    -----
-    Since multi-indexes aren't supported aggregation results are returned
-    in columns using the naming scheme of `aggregation_columnname`.
     """
     sort_results = True
 
