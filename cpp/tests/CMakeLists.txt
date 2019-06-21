@@ -36,10 +36,9 @@ option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     if(CMAKE_ENABLE_BENCHMARKS)
         add_executable(${CMAKE_BENCH_NAME}
-                    ${CMAKE_BENCH_SRC}
-                    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
+                    ${CMAKE_BENCH_SRC})
         set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        target_link_libraries(${CMAKE_BENCH_NAME} cudf)
+        target_link_libraries(${CMAKE_BENCH_NAME} cudf cudftestutil)
         set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
         add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
@@ -296,6 +295,7 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
@@ -368,12 +368,21 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - point in polygon test -----------------------------------------------------------------------------------
+# - point in polygon test --------------------------------------------------------------------------
 
 set(GIS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/gis/point_in_polygon_test.cu")
 
 ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
+
+###################################################################################################
+# - filling test --------------------------------------------------------------------------
+
+set(FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
+
+ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+
 
 
 ###################################################################################################
