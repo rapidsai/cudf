@@ -92,6 +92,7 @@ def apply_gather(in_cols, maps, out_cols=None):
             gather(c_in_table, c_maps, c_out_table)
 
     for i, col in enumerate(out_cols):
+        col._update_null_count(c_out_cols[i].null_count)
         if col.dtype == np.dtype("object") and len(col) > 0:
             update_nvstrings_col(
                 out_cols[i],
