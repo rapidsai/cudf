@@ -33,6 +33,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initialize(JNIEnv *env, jclass cl
   JNI_RMM_TRY(env, , rmmInitialize(&opts));
 }
 
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitialized(JNIEnv *env, jclass clazz) {
+  return rmmIsInitialized(nullptr);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdown(JNIEnv *env, jclass clazz) {
+  JNI_RMM_TRY(env, , rmmFinalize());
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz, jlong size,
                                                       jlong stream) {
   void *ret = 0;
@@ -47,4 +55,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_free(JNIEnv *env, jclass clazz, j
   cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
   JNI_RMM_TRY(env, , RMM_FREE(cptr, c_stream));
 }
+
+JNIEXPORT jstring JNICALL Java_ai_rapids_cudf_Rmm_getLog(JNIEnv *env, jclass clazz, jlong size,
+                                                      jlong stream) {
+  size_t amount = rmmLogSize();
+  std::unique_ptr<char> buffer(new char[amount]);
+  JNI_RMM_TRY(env, nullptr, rmmGetLog(buffer.get(), amount));
+  return env->NewStringUTF(buffer.get());
+}
+
 }

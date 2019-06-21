@@ -24,8 +24,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
+import static ai.rapids.cudf.Table.count;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -111,6 +116,31 @@ public class TableTest {
       ColumnVector expect = expected.getColumn(col);
       ColumnVector cv = table.getColumn(col);
       assertColumnsAreEqual(expect, cv, String.valueOf(col));
+    }
+  }
+
+  void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
+    assertEquals(expectedTable.length, table.getNumberOfColumns());
+    IntStream.range(0, table.getNumberOfColumns()).forEach(col ->
+        LongStream.range(0, table.getRowCount()).forEach(row -> {
+          ColumnVector cv = table.getColumn(col);
+          Object key = 0;
+          if (cv.getType() == DType.INT32) {
+            key = cv.getInt(row);
+          } else {
+            key = cv.getDouble(row);
+          }
+          assertTrue(expectedTable[col].containsKey(key));
+          Integer count = expectedTable[col].get(key);
+          if (count == 1) {
+            expectedTable[col].remove(key);
+          } else {
+            expectedTable[col].put(key, count - 1);
+          }
+        })
+    );
+    for (int i = 0 ; i < expectedTable.length ; i++) {
+      assertTrue(expectedTable[i].isEmpty());
     }
   }
 
@@ -620,6 +650,105 @@ public class TableTest {
           assertEquals(fromA / 2, fromB);
         }
         assertTrue(expected.isEmpty());
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountMulti() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+                                           .build()) {
+      try (Table t2 = t1.groupBy(0, 1, 2).aggregate(count(), count())) {
+        // verify t2
+        assertEquals(5, t2.getRowCount());
+
+        HashMap<Object, Integer>[] expectedResults = new HashMap[3];
+        expectedResults[0] = new HashMap<Object, Integer>() {{
+          put(1, 5);
+        }};
+        expectedResults[1] = new HashMap<Object, Integer>() {{
+          put(1, 1);
+          put(3, 2);
+          put(5, 1);
+          put(0, 1);
+        }};
+        expectedResults[2] = new HashMap<Object, Integer>() {{
+          put(12.0, 1);
+          put(14.0, 1);
+          put(13.0, 1);
+          put(17.0, 2);
+        }};
+
+        //verify grouped columns
+        ColumnVector[] cv = new ColumnVector[3];
+
+        IntStream.range(0, 3).forEach(i -> {
+          cv[i] = t2.getColumn(i);
+          cv[i].ensureOnHost();
+        });
+
+        try (Table t4 = new Table(cv)) {
+          assertTablesHaveSameValues(expectedResults, t4);
+        }
+
+        ColumnVector[] aggOut = new ColumnVector[2];
+        aggOut[0] = t2.getColumn(3);
+        aggOut[1] = t2.getColumn(4);
+        aggOut[0].ensureOnHost();
+        aggOut[1].ensureOnHost();
+
+        Map<Integer, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(1, 4);
+            put(2, 1);
+          }
+        };
+        for (int i = 0; i < 4; ++i) {
+          int key = aggOut[0].getInt(i);
+          assertEquals(key, aggOut[1].getInt(i));
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCount() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(count())) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        ColumnVector aggOut1 = t3.getColumn(2);
+        aggOut1.ensureOnHost();
+        Map<Object, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(1, 2);
+            put(2, 2);
+          }
+        };
+        for (int i = 0; i < 4; ++i) {
+          int key = aggOut1.getInt(i);
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
       }
     }
   }
