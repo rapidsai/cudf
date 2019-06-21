@@ -24,7 +24,7 @@
 - PR #1987 Allow user defined functions in the form of ptx code to be passed to binops
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
-- PR #1478 Refactored groupby implementation: handles nulls in keys/values, does aggregations a single pass
+- PR #2018 Add bindings for new groupby C++ API
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
 - PR #1995 Add Java API
@@ -32,7 +32,6 @@
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 - PR #1652 Added `Series.where()` feature 
 - PR #2074 Java Aggregates, logical ops, and better RMM support 
-
 
 ## Improvements
 
