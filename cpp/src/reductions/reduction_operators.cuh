@@ -77,9 +77,15 @@ struct transformer_var_std
 };
 
 // ------------------------------------------------------------------------
-// difinitions of device struct for binary operation
+// difinitions of device struct for reduction operation
+// all `op::xxx` must have `Op` and `make_iterator`
+// `Op`  is used to compute the reduction at device
+// `make_iterator` is used to make a iterator to be used to compute the reduction at device
 
 namespace op {
+
+// `product`, `product`, `sum_of_squares`, `min`, `max`
+// are used at simple_reduction
 
 struct sum {
     using Op = cudf::DeviceSum;
@@ -132,6 +138,13 @@ struct max {
         return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
     }
 };
+
+
+// `mean`, `variance`, `standard_deviation` are used at compound_reduction
+// compound_reduction requires intermediate::IntermediateType and intermediate::compute_result
+// IntermediateType is the intermediate data structure type of a single reduction call,
+// it is also used as OutputType of cudf::reduction::detail::reduce at compound_reduction.
+// compute_result computes the final ResultType from the IntermediateType.
 
 // operator for `mean`
 struct mean {

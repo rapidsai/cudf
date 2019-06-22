@@ -22,7 +22,6 @@
 namespace cudf {
 namespace reductions {
 
-
 void sum(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 void min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 void max(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);

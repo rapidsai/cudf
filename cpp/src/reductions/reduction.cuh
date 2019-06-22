@@ -33,8 +33,21 @@ namespace cudf {
 namespace reductions {
 namespace detail {
 
-// compute reduction by the operator
-template <typename Op, typename InputIterator, typename OutputType>
+/** --------------------------------------------------------------------------*
+ * @brief compute reduction by the operator
+ *
+ * @param[out] dev_result  output device memory
+ * @param[in] d_in      the begin iterator
+ * @param[in] num_items the number of items
+ * @param[in] init      the initial value of reduction
+ * @param[in] op        the device binary operator
+ * @param[in] stream    cuda stream
+ *
+ * @tparam Op               the device binary operator
+ * @tparam InputIterator    the input column iterator
+ * @tparam OutputType       the output type of reduction
+ * ----------------------------------------------------------------------------**/
+ template <typename Op, typename InputIterator, typename OutputType>
 void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
     OutputType init, Op op, cudaStream_t stream)
 {

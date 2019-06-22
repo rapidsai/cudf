@@ -23,11 +23,22 @@ namespace cudf {
 namespace reductions {
 namespace detail {
 
-// @brief Reduction for mean, var, std
-// It requires extra step after single step reduction call
-// @param[in] ddof `Delta Degrees of Freedom` used for `std`, `var`.
-//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
-template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
+/** --------------------------------------------------------------------------*
+ * @brief Reduction for mean, var, std
+ * It requires extra step after single step reduction call
+ *
+ * @param[in] col    input column
+ * @param[out] scalar  output scalar data
+ * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
+ *                   The divisor used in calculations is N - ddof, where N represents the number of elements.
+ * @param[in] stream cuda stream
+ *
+ * @tparam ElementType  the input column cudf dtype
+ * @tparam ResultType   the output cudf dtype
+ * @tparam Op           the operator of cudf::reduction::op::
+ * @tparam has_nulls    true if column has nulls
+ * ----------------------------------------------------------------------------**/
+ template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     gdf_size_type ddof, cudaStream_t stream)
 {

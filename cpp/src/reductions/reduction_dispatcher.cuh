@@ -23,14 +23,25 @@ namespace cudf {
 namespace reductions {
 namespace detail {
 
-// @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
-// which directly compute the reduction by a single step reduction call
+/** --------------------------------------------------------------------------*    
+ * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
+ * which directly compute the reduction by a single step reduction call
+ *
+ * @param[in] col    input column
+ * @param[out] scalar  output scalar data
+ * @param[in] stream cuda stream
+ *
+ * @tparam ElementType  the input column cudf dtype
+ * @tparam ResultType   the output cudf dtype
+ * @tparam Op           the operator of cudf::reduction::op::
+ * @tparam has_nulls    true if column has nulls
+ * ----------------------------------------------------------------------------**/
 template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
     ResultType identity = Op::Op::template identity<ResultType>();
 
-    // allocate temporary memory for the result
+    //  allocate temporary memory for the result
     void *result = NULL;
     RMM_TRY(RMM_ALLOC(&result, sizeof(ResultType), stream));
 
