@@ -83,22 +83,54 @@ namespace op {
 
 struct sum {
     using Op = cudf::DeviceSum;
+
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+    }
 };
 
 struct product {
     using Op = cudf::DeviceProduct;
+
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+    }
 };
 
 struct sum_of_squares {
     using Op = cudf::DeviceSum;
+
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return thrust::make_transform_iterator(it_raw,
+            cudf::transformer_squared<ResultType>{});
+    }
 };
 
 struct min {
     using Op = cudf::DeviceMin;
+
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+    }
 };
 
 struct max {
     using Op = cudf::DeviceMax;
+    
+    template<bool has_nulls, typename ElementType, typename ResultType>
+    static auto make_iterator(gdf_column const& column, ResultType identity)
+    {
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+    }
 };
 
 // operator for `mean`

@@ -18,6 +18,10 @@
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
 
+
+// @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
+//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
+
 void cudf::reductions::standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
 {
     using dispacher = cudf::reductions::detail::compound_reduction_element_type_dispatcher<cudf::reductions::op::standard_deviation>;

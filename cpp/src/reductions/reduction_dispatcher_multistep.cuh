@@ -23,8 +23,10 @@ namespace cudf {
 namespace reductions {
 namespace detail {
 
-// Reduction for mean, var, std
+// @brief Reduction for mean, var, std
 // It requires extra step after single step reduction call
+// @param[in] ddof `Delta Degrees of Freedom` used for `std`, `var`.
+//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
 template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
 void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     gdf_size_type ddof, cudaStream_t stream)
@@ -68,7 +70,7 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     scalar.is_valid = true;
 };
 
-
+// @brief result type dispatcher for compound reduction (a.k.a. mean, var, std)
 template <typename ElementType, typename Op>
 struct compound_reduction_result_type_dispatcher {
 private:
@@ -85,9 +87,9 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            compound_reduction<ElementType, ResultType, Op, true>(col, scalar, ddof, stream);
+            compound_reduction<ElementType, ResultType, Op, true >(col, scalar, ddof, stream);
         }else{
-            compound_reduction<ElementType, ResultType, Op, false >(col, scalar, ddof, stream);
+            compound_reduction<ElementType, ResultType, Op, false>(col, scalar, ddof, stream);
         }
     }
 
@@ -98,6 +100,7 @@ public:
     }
 };
 
+// @brief input column element dispatcher for compound reduction (a.k.a. mean, var, std)
 template <typename Op>
 struct compound_reduction_element_type_dispatcher {
 private:

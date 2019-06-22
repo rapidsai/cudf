@@ -24,6 +24,7 @@ gdf_scalar reduction(const gdf_column *col,
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
     scalar.is_valid = false; // the scalar is not valid for error case
+    gdf_size_type ddof = 1;  // Delta Degrees of Freedom used for `std`, `var`
 
     CUDF_EXPECTS(col != nullptr, "Input column is null");
     // check if input column is empty
@@ -50,10 +51,10 @@ gdf_scalar reduction(const gdf_column *col,
         cudf::reductions::mean(*col, scalar);
         break;
     case GDF_REDUCTION_VAR:
-        cudf::reductions::variance(*col, scalar);
+        cudf::reductions::variance(*col, scalar, ddof);
         break;
     case GDF_REDUCTION_STD:
-        cudf::reductions::standard_deviation(*col, scalar);
+        cudf::reductions::standard_deviation(*col, scalar, ddof);
         break;
     default:
         CUDF_FAIL("Unsupported reduction operator");
