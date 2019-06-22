@@ -21,6 +21,7 @@
 
 namespace cudf {
 namespace reductions {
+namespace detail {
 
 // Reduction for mean, var, std
 // It requires extra step after single step reduction call
@@ -98,7 +99,7 @@ public:
 };
 
 template <typename Op>
-struct compound_reduction_dispatcher {
+struct compound_reduction_element_type_dispatcher {
 private:
     // return true if ElementType is arithmetic type or cudf::bool8
     template <typename ElementType>
@@ -124,6 +125,7 @@ public:
     }
 };
 
+} // namespace detail
 } // namespace reductions
 } // namespace cudf
 #endif

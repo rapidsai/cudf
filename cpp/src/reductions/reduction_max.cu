@@ -20,8 +20,8 @@
 
 void cudf::reductions::max(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
-    cudf::type_dispatcher(col.dtype,
-        simple_reduction_dispatcher<cudf::reductions::op::max>(), col, scalar, stream);
+    using dispacher = cudf::reductions::detail::simple_reduction_element_type_dispatcher<cudf::reductions::op::max>;
+    cudf::type_dispatcher(col.dtype, dispacher(), col, scalar, stream);
 }
 
 

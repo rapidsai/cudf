@@ -21,8 +21,8 @@
 
 void cudf::reductions::variance(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
 {
-    cudf::type_dispatcher(col.dtype,
-        compound_reduction_dispatcher<cudf::reductions::op::variance>(), col, scalar, ddof, stream);
+    using dispacher = cudf::reductions::detail::compound_reduction_element_type_dispatcher<cudf::reductions::op::variance>;
+    cudf::type_dispatcher(col.dtype, dispacher(), col, scalar, ddof, stream);
 }
 
 

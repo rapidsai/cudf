@@ -17,41 +17,11 @@
 #ifndef CUDF_REDUCTION_FUNCTIONS_CUH
 #define CUDF_REDUCTION_FUNCTIONS_CUH
 
-#include <cudf/cudf.h>
-#include <cudf/reduction.hpp>
-#include "reduction_operators.cuh"
-
-#include <rmm/rmm.h>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <utilities/column_utils.hpp>
-
-#include <cub/device/device_reduce.cuh>
+#include "reduction.cuh"
 
 namespace cudf {
 namespace reductions {
 
-// compute reduction by the operator
-template <typename Op, typename InputIterator, typename OutputType>
-void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
-    OutputType init, Op op, cudaStream_t stream)
-{
-    void     *d_temp_storage = NULL;
-    size_t   temp_storage_bytes = 0;
-
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
-    // Allocate temporary storage
-    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
-
-    // Run reduction
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
-
-    // Free temporary storage
-    RMM_TRY(RMM_FREE(d_temp_storage, stream));
-}
 
 void sum(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 void min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);

@@ -21,6 +21,7 @@
 
 namespace cudf {
 namespace reductions {
+namespace detail {
 
 // make an column iterator
 template<bool has_nulls, typename ElementType, typename ResultType, typename Op>
@@ -108,7 +109,7 @@ public:
 };
 
 template <typename Op>
-struct simple_reduction_dispatcher {
+struct simple_reduction_element_type_dispatcher {
 private:
     // return true if ElementType is arithmetic type or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
@@ -137,6 +138,7 @@ public:
     }
 };
 
+} // namespace detail
 } // namespace reductions
 } // namespace cudf
 #endif
