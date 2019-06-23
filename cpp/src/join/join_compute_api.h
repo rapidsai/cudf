@@ -124,14 +124,18 @@ gdf_error estimate_join_output_size(device_table const & build_table,
 
     *d_size_estimate = 0;
 
-    constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    const gdf_size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
+    int block_size {0};
+    int probe_grid_size {0};
+
+    CUDA_TRY(cudaOccupancyMaxPotentialBlockSize (
+      &probe_grid_size, &block_size,
+      compute_join_output_size<join_type, multimap_type, DEFAULT_CUDA_CACHE_SIZE>
+    ));
     
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<join_type,
                              multimap_type,
-                             block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
     <<<probe_grid_size, block_size>>>(&hash_table,
                                       build_table,
