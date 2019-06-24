@@ -52,9 +52,10 @@ gdf_dtype gdf_dtype_from_col_type()
 
 __global__ static void init_curand(curandState * state, const int nstates)
 {
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
-    if (i < nstates) {
-        curand_init(1234ULL, i, 0, state + i);
+    int ithread = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (ithread < nstates) {
+        curand_init(1234ULL, ithread, 0, state + ithread);
     }
 }
 
@@ -68,6 +69,7 @@ __global__ static void init_build_tbl(
     curandState * state, const int num_states)
 {
     static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
+
     const int start_idx = blockIdx.x * blockDim.x + threadIdx.x;
     const key_type stride = blockDim.x * gridDim.x;
     assert(start_idx < num_states);
@@ -79,33 +81,42 @@ __global__ static void init_build_tbl(
 
         if (uniq_build_tbl_keys) {
 	        // If the build table keys need to be unique, go through lottery array from lottery_idx until finding a key
-            // which has not been used (not -1). Mark the key as been used by atomically setting the spot to -1.
+            // which has not been used (-1). Mark the key as been used by atomically setting the spot to -1.
+
             size_type lottery_idx = x * lottery_size;
             key_type lottery_val = -1;
-            while (-1 == lottery_val)
-            {
+
+            while (-1 == lottery_val) {
                 lottery_val = lottery[lottery_idx];
+
                 if (-1 != lottery_val) {
                     lottery_val = atomicCAS(lottery + lottery_idx, lottery_val, -1);
                 }
+
                 lottery_idx = (lottery_idx + 1) % lottery_size;
             }
+
             build_tbl[idx] = lottery_val;
         } else {
             build_tbl[idx] = x * rand_max;
         }
     }
+
     state[start_idx] = localState;
 }
 
 
 template<typename key_type, typename size_type>
 __global__ void init_probe_tbl(
-    key_type* const probe_tbl, const size_type probe_tbl_size,
-    const key_type* const build_tbl, const size_type build_tbl_size,
-    const key_type* const lottery, const size_type lottery_size,
-    const double selectivity,
-    curandState * state, const int num_states)
+                               key_type* const probe_tbl,
+                               const size_type probe_tbl_size,
+                               const key_type* const build_tbl,
+                               const size_type build_tbl_size,
+                               const key_type* const lottery,
+                               const size_type lottery_size,
+                               const double selectivity,
+                               curandState * state,
+                               const int num_states)
 {
     const int start_idx = blockIdx.x * blockDim.x + threadIdx.x;
     const size_type stride = blockDim.x * gridDim.x;
@@ -128,13 +139,13 @@ __global__ void init_probe_tbl(
             }
 
             val = build_tbl[build_tbl_idx];
-        }
-        else {
+        } else {
             // This key in the probe table should not be present in the build table, so we pick a key from lottery.
             x = curand_uniform_double(&localState);
             size_type lottery_idx = x * lottery_size;
             val = lottery[lottery_idx];
         }
+
         probe_tbl[idx] = val;
     }
 
@@ -170,27 +181,34 @@ __global__ void init_probe_tbl(
  */
 template<typename key_type, typename size_type>
 void generate_input_tables(
-    key_type* const build_tbl,
-    const size_type build_tbl_size,
-    key_type* const probe_tbl,
-    const size_type probe_tbl_size,
-    const double selectivity,
-    const key_type rand_max,
-    const bool uniq_build_tbl_keys)
+                           key_type* const build_tbl,
+                           const size_type build_tbl_size,
+                           key_type* const probe_tbl,
+                           const size_type probe_tbl_size,
+                           const double selectivity,
+                           const key_type rand_max,
+                           const bool uniq_build_tbl_keys)
 {
+    // With large values of rand_max the a lot of temporary storage is needed for the lottery. At the expense of not
+    // being that accurate with applying the selectivity an especially more memory efficient implementations would be
+    // to partition the random numbers into two intervals and then let one table choose random numbers from only one
+    // interval and the other only select with selectivity propability from the same interval and from the other in the
+    // other cases.
+
     static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
-    // With large values of rand_max the a lot of temporary storage is needed for the lottery. At the expense of not being that accurate
-    // with applying the selectivity an especially more memory efficient implementations would be to partition the random numbers into two
-    // intervals and then let one table choose random numbers from only one interval and the other only select with selectivity propability from
-    // the same interval and from the other in the other cases.
+
     const int block_size = 128;
 
-    // maximize exposed parallelism while minimizing storage for curand state
+    // Maximize exposed parallelism while minimizing storage for curand state
     int num_blocks_init_build_tbl {-1};
-    CUDA_RT_CALL(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_blocks_init_build_tbl, init_build_tbl<key_type, size_type>, block_size, 0));
+    CUDA_RT_CALL(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &num_blocks_init_build_tbl, init_build_tbl<key_type, size_type>, block_size, 0
+    ));
 
     int num_blocks_init_probe_tbl {-1};
-    CUDA_RT_CALL(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_blocks_init_probe_tbl, init_probe_tbl<key_type,size_type>, block_size, 0));
+    CUDA_RT_CALL(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &num_blocks_init_probe_tbl, init_probe_tbl<key_type,size_type>, block_size, 0
+    ));
 
     int dev_id {-1};
     CUDA_RT_CALL(cudaGetDevice(&dev_id));
@@ -201,37 +219,46 @@ void generate_input_tables(
     const int num_states = num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
     curandState *devStates;
     CUDA_RT_CALL(cudaMalloc(&devStates, num_states * sizeof(curandState)));
+
     init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates, num_states);
+
     CUDA_RT_CALL(cudaGetLastError());
     CUDA_RT_CALL(cudaDeviceSynchronize());
 
     key_type* build_tbl_sorted;
-    CUDA_RT_CALL(cudaMalloc(&build_tbl_sorted, build_tbl_size*sizeof(key_type)));
+    CUDA_RT_CALL(cudaMalloc(&build_tbl_sorted, build_tbl_size * sizeof(key_type)));
 
     size_type lottery_size = rand_max < std::numeric_limits<key_type>::max() - 1 ? rand_max + 1 : rand_max;
     key_type* lottery;
     bool lottery_in_device_memory = true;
+
     size_t free_gpu_mem {0};
     size_t total_gpu_mem {0};
+
     CUDA_RT_CALL(cudaMemGetInfo(&free_gpu_mem, &total_gpu_mem));
+
     if (free_gpu_mem > lottery_size * sizeof(key_type)) {
         CUDA_RT_CALL(cudaMalloc(&lottery, lottery_size * sizeof(key_type)));
     } else {
         CUDA_RT_CALL(cudaMallocHost(&lottery, lottery_size * sizeof(key_type)));
-        lottery_in_device_memory=false;
+        lottery_in_device_memory = false;
     }
 
     if (uniq_build_tbl_keys) {
         thrust::sequence(thrust::device, lottery, lottery + lottery_size, 0);
     }
 
-    init_build_tbl<<<num_blocks_init_build_tbl,block_size>>>(build_tbl, build_tbl_size, rand_max, uniq_build_tbl_keys, lottery, lottery_size, devStates, num_states);
+    init_build_tbl<<<num_sms*num_blocks_init_build_tbl, block_size>>>(
+        build_tbl, build_tbl_size, rand_max, uniq_build_tbl_keys,
+        lottery, lottery_size, devStates, num_states
+    );
+
     CUDA_RT_CALL(cudaGetLastError());
     CUDA_RT_CALL(cudaDeviceSynchronize());
 
     CUDA_RT_CALL(cudaMemcpy(
-        build_tbl_sorted, build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice)
-    );
+        build_tbl_sorted, build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice
+    ));
 
     thrust::sort(thrust::device, build_tbl_sorted, build_tbl_sorted + build_tbl_size);
 
@@ -245,10 +272,11 @@ void generate_input_tables(
 
     lottery_size = thrust::distance(lottery, lottery_end);
 
-    init_probe_tbl<<<num_blocks_init_build_tbl, block_size>>>(
+    init_probe_tbl<<<num_sms*num_blocks_init_build_tbl, block_size>>>(
         probe_tbl, probe_tbl_size, build_tbl, build_tbl_size,
         lottery, lottery_size, selectivity, devStates, num_states
     );
+
     CUDA_RT_CALL(cudaGetLastError());
     CUDA_RT_CALL(cudaDeviceSynchronize());
 
@@ -272,7 +300,7 @@ __global__ void linear_sequence(key_type* tbl, const size_type size)
 
 
 /**
- * Generate a build table and a probe table for testing join algorithm.
+ * Generate a build table and a probe table for testing join performance.
  *
  * Both the build table and the probe table have two columns. The first column is the key column,
  * with datatype KEY_T. The second column is the payload column, with datatype PAYLOAD_T. Both the
@@ -320,9 +348,13 @@ void generate_build_probe_tables(std::vector<gdf_column *> &build_table,
         selectivity, rand_max, uniq_build_tbl_keys
     );
 
-    linear_sequence<PAYLOAD_T, gdf_size_type><<<(build_table_size+127)/128,128>>>(build_payload_data, build_table_size);
+    linear_sequence<PAYLOAD_T, gdf_size_type><<<(build_table_size+127)/128,128>>>(
+        build_payload_data, build_table_size
+    );
 
-    linear_sequence<PAYLOAD_T, gdf_size_type><<<(probe_table_size+127)/128,128>>>(probe_payload_data, probe_table_size);
+    linear_sequence<PAYLOAD_T, gdf_size_type><<<(probe_table_size+127)/128,128>>>(
+        probe_payload_data, probe_table_size
+    );
 
     CUDA_RT_CALL(cudaGetLastError());
     CUDA_RT_CALL(cudaDeviceSynchronize());

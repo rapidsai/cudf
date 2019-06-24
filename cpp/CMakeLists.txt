@@ -266,6 +266,8 @@ add_library(cudf SHARED
             src/sort/segmented_sorting.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
@@ -273,6 +275,7 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/core/parser.cpp
             src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
@@ -302,7 +305,7 @@ add_library(cudf SHARED
             src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
@@ -321,7 +324,9 @@ add_library(cudf SHARED
             src/copying/slice.cu
             src/copying/split.cu
             src/bitmask/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu)
+            src/gis/point_in_polygon.cu
+            src/copying/copy_range.cu
+            src/filling/fill.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
