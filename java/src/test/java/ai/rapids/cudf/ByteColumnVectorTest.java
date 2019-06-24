@@ -177,17 +177,4 @@ public class ByteColumnVectorTest {
       }
     }
   }
-
-  @Test
-  void testClose() {
-    try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 8));
-         HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
-      try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.INT8, TimeUnit.NONE, 4,
-          mockDataBuffer, mockValidBuffer)) {
-        builder.appendArray(new byte[]{2, 3, 5}).appendNull();
-      }
-      Mockito.verify(mockDataBuffer).doClose();
-      Mockito.verify(mockValidBuffer).doClose();
-    }
-  }
 }
