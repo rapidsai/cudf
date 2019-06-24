@@ -6,7 +6,7 @@
 
 ## Bug Fixes
 
-- PR #2086 Fixed quantile api behavior mismatch
+- PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 
 
 # cuDF 0.8.0 (Date TBD)
