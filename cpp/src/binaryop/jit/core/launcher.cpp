@@ -19,6 +19,7 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
+#include "../core/parser.h"
 #include <types.h.jit>
 #include <cstdint>
 #include <chrono>
@@ -59,13 +60,31 @@ namespace jit {
                                            compilerFlags,
                                            headersCode);
     }
-
+    
+    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx)
+    {
+        std::string combined_kernel = 
+          parse_single_function_ptx(ptx, "GENERIC_BINARY_OP") + code::kernel;
+        program = cacheInstance.getProgram(prog_file_name,
+                                           combined_kernel.c_str(),
+                                           headersName,
+                                           compilerFlags,
+                                           headersCode);
+    }
+   
     Launcher::Launcher()
      : cacheInstance{cudf::jit::cudfJitCache::Instance()}
     { 
         this->setProgram("prog_binop");
     }
 
+    Launcher::Launcher(const std::string& ptx)
+     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
+    {
+        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx) ); 
+        this->setProgram("prog_binop." + ptx_hash_str, ptx);
+    }
+ 
     Launcher::Launcher(Launcher&& launcher)
      : program {std::move(launcher.program)}
      , cacheInstance {cudf::jit::cudfJitCache::Instance()}

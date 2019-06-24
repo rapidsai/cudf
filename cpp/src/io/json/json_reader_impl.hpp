@@ -27,6 +27,8 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 namespace cudf {
+namespace io {
+namespace json {
 
 struct ColumnInfo {
   gdf_size_type float_count;
@@ -41,10 +43,10 @@ struct ColumnInfo {
  * @brief Class used to parse Json input and convert it into gdf columns
  *
  *---------------------------------------------------------------------------**/
-class JsonReader::Impl {
+class reader::Impl {
 public:
 private:
-  const json_reader_args args_{};
+  const reader_options args_{};
 
   std::unique_ptr<MappedFile> map_file_;
   const char *input_data_ = nullptr;
@@ -161,9 +163,9 @@ private:
 
 public:
   /**---------------------------------------------------------------------------*
-   * @brief JsonReader constructor; throws if the arguments are not supported
+   * @brief Constructor; throws if the arguments are not supported
    *---------------------------------------------------------------------------**/
-  explicit Impl(json_reader_args const &args);
+  explicit Impl(reader_options const &args);
 
   /**---------------------------------------------------------------------------*
    * @brief Parse the input JSON file as specified with the args_ data member
@@ -187,4 +189,6 @@ public:
   auto getArgs() const { return args_; }
 };
 
+} // namespace json
+} // namespace io
 } // namespace cudf

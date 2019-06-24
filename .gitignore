@@ -41,5 +41,15 @@ cpp/thirdparty/googletest/
 .cproject
 .settings
 
+## IntelliJ IDE
+.idea/
+.idea_modules/
+*.iml
+*.ipr
+*.iws
+
 ## Doxygen
 cpp/doxygen/html
+
+#Java
+target

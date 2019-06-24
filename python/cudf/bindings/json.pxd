@@ -7,26 +7,24 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 
-cdef extern from "cudf.h" namespace "cudf" nogil:
+cdef extern from "cudf.h" namespace "cudf::io::json" nogil:
 
-    # See TODO
-    cdef struct json_reader_args:
+    cdef struct reader_options:
         gdf_input_type  source_type;
         string          source;
         vector[string]  dtype;
         string          compression;
         bool            lines;
 
-        json_reader_args() except +
+        reader_options() except +
 
-    cdef cppclass JsonReader:
-        JsonReader(const json_reader_args &args) except +
+    cdef cppclass reader:
+        reader(const reader_options &args) except +
 
         cudf_table read() except +
 

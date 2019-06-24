@@ -1748,6 +1748,27 @@ def test_dataframe_boolean_mask_with_None():
 
 
 @pytest.mark.parametrize(
+    'dtype',
+    [
+        int,
+        float,
+        str
+    ]
+)
+def test_empty_boolean_mask(dtype):
+    gdf = gd.datasets.randomdata(nrows=0, dtypes={'a': dtype})
+    pdf = gdf.to_pandas()
+
+    expected = pdf[pdf.a == 1]
+    got = gdf[gdf.a == 1]
+    assert_eq(expected, got)
+
+    expected = pdf.a[pdf.a == 1]
+    got = gdf.a[gdf.a == 1]
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
     'data',
     [
         [1, 2, 3, 4],

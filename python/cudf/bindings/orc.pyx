@@ -7,8 +7,8 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.orc cimport *
-from cudf.bindings.types cimport table as cudf_table
+from cudf.bindings.orc cimport reader as orc_reader
+from cudf.bindings.orc cimport reader_options as orc_reader_options
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 
@@ -40,7 +40,7 @@ cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
     """
 
     # Setup reader options
-    cdef OrcReaderOptions options = OrcReaderOptions()
+    cdef orc_reader_options options = orc_reader_options()
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.use_index = use_index
@@ -50,8 +50,8 @@ cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
         raise FileNotFoundError(
             errno.ENOENT, os.strerror(errno.ENOENT), path
         )
-    cdef unique_ptr[OrcReader] reader
-    reader = unique_ptr[OrcReader](new OrcReader(str(path).encode(), options))
+    cdef unique_ptr[orc_reader] reader
+    reader = unique_ptr[orc_reader](new orc_reader(str(path).encode(), options))
 
     # Read data into columns
     cdef cudf_table table

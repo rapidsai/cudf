@@ -67,3 +67,15 @@ def test_scatter_cols():
 
     np.testing.assert_array_almost_equal(cols_out[0].to_array(), expected)
     np.testing.assert_array_equal(cols_out[1].to_array(), expected2)
+
+
+def test_gather_string_col():
+    col = columnops.as_column(['a', 'b', 'c', 'd'])
+    gather_map = columnops.as_column([0, 2, 3], dtype='int32').data.mem
+    result = cpp_copying.apply_gather([col], gather_map)
+    assert(result[0].data.to_host() == ['a', 'c', 'd'])
+
+    col = columnops.as_column(['a', 'b', None, 'd'])
+    gather_map = columnops.as_column([0, 2, 3], dtype='int32').data.mem
+    result = cpp_copying.apply_gather([col], gather_map)
+    assert(result[0].data.to_host() == ['a', None, 'd'])

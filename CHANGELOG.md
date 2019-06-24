@@ -1,3 +1,14 @@
+# cuDF 0.9.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+- PR #1947 Cleanup serialization code
+
+## Bug Fixes
+
+
 # cuDF 0.8.0 (Date TBD)
 
 ## New Features
@@ -18,13 +29,20 @@
 - PR #1833 Add column iterator with/without nulls
 - PR #1665 Add the point-in-polygon GIS function
 - PR #1863 Series and Dataframe methods for all and any
+- PR #1908 cudf::copy_range and cudf::fill for copying/assigning an index or range to a constant
 - PR #1921 Add additional formats for typecasting to/from strings
 - PR #1807 Add Series.dropna()
+- PR #1987 Allow user defined functions in the form of ptx code to be passed to binops
 - PR #1948 Add operator functions like `Series.add()` to DataFrame and Series
 - PR #1954 Add skip test argument to GPU build script
+- PR #2018 Add bindings for new groupby C++ API
 - PR #1984 Add rolling window operations Series.rolling() and DataFrame.rolling()
 - PR #1542 Python method and bindings for to_csv
+- PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
+- PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
+- PR #1652 Added `Series.where()` feature 
+- PR #2074 Java Aggregates, logical ops, and better RMM support 
 
 ## Improvements
 
@@ -65,10 +83,10 @@
 - PR #1915 Improve iloc performance for non-contiguous row selection
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-- PR #1947 Cleanup serialization code
 - PR #1850 Support left_on and right_on for DataFrame merge operator
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1938 Add default constructor for `column_wrapper`
+- PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
 - PR #1949 Improved selection with boolmask using libcudf `apply_boolean_mask`
 - PR #1956 Add support for nulls in `query()`
@@ -76,10 +94,17 @@
 - PR #1981 Convert read_csv into a C++ API
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
-- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
+- PR #2005 Use HTML5 details tag in bug report issue template
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
+- PR #2011 Convert `read_parquet()` into a C++ API
 - PR #1756 Add documentation "10 Minutes to cuDF and dask_cuDF"
+- PR #2034 Adding support for string columns concatenation using "add" binary operator
+- PR #2042 Replace old "10 Minutes" guide with new guide for docs build process
+- PR #2036 Make library of common test utils to speed up tests compilation
+- PR #2022 Facilitating get_dummies to be a high level api too
+- PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 
 ## Bug Fixes
 
@@ -136,6 +161,13 @@
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
+- PR #2033 Add pip to conda environment files to fix warning
+- PR #2028 CSV Reader: Fix reading of uncompressed files without a recognized file extension
+- PR #2073 Fix an issue when gathering columns with NVCategory and nulls
+- PR #2053 cudf::apply_boolean_mask return empty column for empty boolean mask
+- PR #2066 exclude `IteratorTest.mean_var_output` test from debug build
+- PR #2069 Fix JNI code to use read_csv and read_parquet APIs
+- PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 
 
 # cudf 0.7.2 (16 May 2019)

@@ -39,6 +39,9 @@ from cudf.window import Rolling
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
+from cudf.bindings.stream_compaction import (
+        apply_drop_duplicates as cpp_drop_duplicates
+        )
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -1157,6 +1160,45 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def drop_duplicates(self, subset=None, keep='first', inplace=False):
+        """
+        Return DataFrame with duplicate rows removed, optionally only
+        considering certain subset of columns.
+        """
+        in_cols = [series._column for series in self._cols.values()]
+        if subset is None:
+            subset = self._cols
+        elif (not np.iterable(subset) or
+                isinstance(subset, pd.compat.string_types) or
+                isinstance(subset, tuple) and subset in self.columns):
+            subset = subset,
+        diff = set(subset)-set(self._cols)
+        if len(diff) != 0:
+            raise KeyError("columns {!r} do not exist".format(diff))
+        subset_cols = [series._column for name, series in self._cols.items()
+                       if name in subset]
+        in_index = self.index
+        if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates([in_index.as_column()],
+                                                  in_cols, subset_cols, keep)
+        new_index = as_index(new_index)
+        if len(self.index) == len(new_index) and self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            new_index = self.index.take(new_index)
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            for k, new_col in zip(self._cols, out_cols):
+                self[k] = Series(new_col, new_index)
+        else:
+            outdf = DataFrame()
+            for k, new_col in zip(self._cols, out_cols):
+                outdf[k] = new_col
+            outdf = outdf.set_index(new_index)
+            return outdf
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
@@ -2501,8 +2543,6 @@ class DataFrame(object):
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
-            if isinstance(colk, tuple):
-                colk = str(colk)
             if len(vals.shape) == 1:
                 df[colk] = Series(vals, nan_as_null=nan_as_null)
             else:
@@ -2510,6 +2550,10 @@ class DataFrame(object):
                 if vals.shape[0] == 1:
                     df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
+                    # TODO fix multiple column with same name with different
+                    # method.
+                    if isinstance(colk, tuple):
+                        colk = str(colk)
                     for idx in range(len(vals.shape)):
                         df[colk+str(idx)] = Series(vals[idx],
                                                    nan_as_null=nan_as_null)

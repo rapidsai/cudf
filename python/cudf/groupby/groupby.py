@@ -8,7 +8,7 @@ from cudf import MultiIndex
 
 from cudf.bindings.groupby import (
     agg as cpp_agg,
-    _apply_basic_agg as _cpp_apply_basic_agg
+    apply_basic_agg as cpp_apply_basic_agg
 )
 
 
@@ -138,7 +138,10 @@ class Groupby(object):
         self._df = df.copy(deep=False)
         self._as_index = as_index
         if len(df) == 0:  # empty case
-            self._by = by
+            if by is None or isinstance(by, str):
+                self._by = [by]
+            else:
+                self._by = list(by)
             self._df = df
             self._val_columns = []
             if by is not None:
@@ -230,8 +233,8 @@ class Groupby(object):
             else:
                 for by in self._by:
                     agg_groupby._df._cols[by] = self._df._cols[by]
-        return _cpp_apply_basic_agg(agg_groupby, agg_type,
-                                    sort_results=sort_results)
+        return cpp_apply_basic_agg(agg_groupby, agg_type,
+                                   sort_results=sort_results)
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
@@ -240,7 +243,10 @@ class Groupby(object):
                 if col not in self._by:
                     final_result[col] = result[col]
             if len(self._by) == 1 or len(final_result.columns) == 0:
-                dtype = 'float64' if len(self._by) == 1 else 'object'
+                if len(self._by) == 1:
+                    dtype = self._df[self._by[0]]
+                else:
+                    dtype = 'object'
                 name = self._by[0] if len(self._by) == 1 else None
                 from cudf.dataframe.index import GenericIndex
                 index = GenericIndex(Series([], dtype=dtype))
@@ -451,11 +457,6 @@ class Groupby(object):
         Returns
         -------
         result : DataFrame
-
-        Notes
-        -----
-        Since multi-indexes aren't supported aggregation results are returned
-        in columns using the naming scheme of `aggregation_columnname`.
         """
         agg_groupby = self.copy(deep=False)
         return cpp_agg(agg_groupby, args)

@@ -7,8 +7,6 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.types cimport table as cudf_table
-from cudf.bindings.types import *
 from cudf.utils.cudautils import astype, modulo
 from librmm_cffi import librmm as rmm
 
@@ -24,29 +22,6 @@ from libc.stdlib cimport calloc, malloc, free
 
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
-
-
-cdef gdf_column** cols_view_from_cols(cols):
-    col_count=len(cols)
-    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
-
-    cdef i
-    for i in range(col_count):
-        check_gdf_compatibility(cols[i])
-        c_cols[i] = column_view_from_column(cols[i])
-
-    return c_cols
-
-
-cdef free_table(cudf_table* table, gdf_column** cols):
-    cdef i
-    cdef gdf_column *c_col
-    for i in range(table[0].num_columns()) :
-        c_col = table[0].get_column(i)
-        free(c_col)
-
-    del table
-    free(cols)
 
 
 def clone_columns_with_size(in_cols, row_size):
@@ -117,6 +92,7 @@ def apply_gather(in_cols, maps, out_cols=None):
             gather(c_in_table, c_maps, c_out_table)
 
     for i, col in enumerate(out_cols):
+        col._update_null_count(c_out_cols[i].null_count)
         if col.dtype == np.dtype("object") and len(col) > 0:
             update_nvstrings_col(
                 out_cols[i],

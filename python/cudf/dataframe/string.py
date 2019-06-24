@@ -735,6 +735,18 @@ class StringColumn(columnops.TypedColumnBase):
     def take(self, indices):
         return self.element_indexing(indices)
 
+    def binary_operator(self, binop, rhs, reflect=False):
+        lhs = self
+        if reflect:
+            lhs, rhs = rhs, lhs
+        if isinstance(rhs, StringColumn) and binop == 'add':
+            return lhs.data.cat(
+                others=rhs.data,
+            )
+        else:
+            msg = "{!r} operator not supported between {} and {}"
+            raise TypeError(msg.format(binop, type(self), type(rhs)))
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

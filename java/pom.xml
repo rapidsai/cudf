@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2019, NVIDIA CORPORATION.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>ai.rapids</groupId>
+    <artifactId>cudf</artifactId>
+    <version>0.8</version>
+
+    <name>cudfjni</name>
+    <url>http://ai.rapids</url>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.9</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.9</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>2.25.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <junit.version>5.4.2</junit.version>
+        <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
+        <native.build.path>${basedir}/target/cmake-build</native.build.path>
+        <skipNativeCopy>false</skipNativeCopy>
+    </properties>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>${basedir}/target/native-deps/</directory>
+            </resource>
+        </resources>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.gmaven</groupId>
+                    <artifactId>gmaven-plugin</artifactId>
+                    <version>1.5</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-exec-plugin</artifactId>
+                    <version>1.6.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.1.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.0.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.8.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>2.22.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.junit.platform</groupId>
+                            <artifactId>junit-platform-surefire-provider</artifactId>
+                            <version>1.2.0</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.junit.jupiter</groupId>
+                            <artifactId>junit-jupiter-engine</artifactId>
+                            <version>5.2.0</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>2.22.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.0.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>2.5.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>2.8.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.7.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-project-info-reports-plugin</artifactId>
+                    <version>3.0.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>cmake</id>
+                        <phase>validate</phase>
+                        <configuration>
+                            <tasks>
+                                <mkdir dir="${native.build.path}"/>
+                                <exec dir="${native.build.path}"
+                                      failonerror="true"
+                                      executable="cmake">
+                                    <arg value="${basedir}/src/main/native"/>
+                                    <arg value="-DCMAKE_CXX11_ABI=ON"/>
+                                    <!--<arg value="-DUSE_NVTX"/>-->
+                                </exec>
+                                <exec dir="${native.build.path}"
+                                      failonerror="true"
+                                      executable="make">
+                                    <arg value="-j"/>
+                                </exec>
+                            </tasks>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.gmaven</groupId>
+                <artifactId>gmaven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>setproperty</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                        <configuration>
+                            <source>
+                            def sout = new StringBuffer(), serr = new StringBuffer()
+                            //This only works on linux
+                            def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
+                            proc.consumeProcessOutput(sout, serr)
+                            proc.waitForOrKill(10000)
+                            def librp = ~/librmm\\.so\\s+=>\\s+(.*)librmm.*\\.so\\s+.*/
+                            def m = librp.matcher(sout)
+                            if (m.find()) {
+                                pom.properties['native.deps.path'] = m.group(1)
+                            } else {
+                                fail("Could not find rmm as a dependency of libcudfjni out> $sout err> $serr")
+                            }
+
+                            def libcudf = ~/libcudf\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
+                            def cudfm = libcudf.matcher(sout)
+                            if (cudfm.find()) {
+                                pom.properties['native.cudf.path'] = cudfm.group(1)
+                            } else {
+                                fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
+                            }
+
+                            def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
+                            def cm = libcudart.matcher(sout)
+                            if (cm.find()) {
+                                switch(cm.group(1)) {
+                                    case ~/10\\.0.*/:
+                                        pom.properties['cuda.classifier'] = 'cuda10'
+                                        break
+                                    default:
+                                        pom.properties['cuda.classifier'] = ''
+                                        break
+                                }
+                            } else {
+                                fail("Could not find cudart as a dependency of libcudfjni out> $sout err> $serr")
+                            }
+                            </source>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <!--Set by groovy script-->
+                    <classifier>${cuda.classifier}</classifier>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>native-maven-plugin</artifactId>
+                <version>1.0-alpha-8</version>
+                <extensions>true</extensions>
+
+                <configuration>
+                    <javahClassNames>
+                        <javahClassName>ai.rapids.cudf.Cuda</javahClassName>
+                        <javahClassName>ai.rapids.cudf.Cudf</javahClassName>
+                        <javahClassName>ai.rapids.cudf.ColumnVector</javahClassName>
+                        <javahClassName>ai.rapids.cudf.Table</javahClassName>
+                        <javahClassName>ai.rapids.cudf.Rmm</javahClassName>
+                    </javahClassNames>
+                    <javahOutputDirectory>${basedir}/src/main/native/include/</javahOutputDirectory>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                  <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
+                  <trimStackTrace>false</trimStackTrace>
+                  <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                  <systemPropertyVariables>
+                    <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
+                  </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-native-libs</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <overwrite>true</overwrite>
+                            <skip>${skipNativeCopy}</skip>
+                            <outputDirectory>${basedir}/target/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${native.build.path}</directory>
+                                    <includes>
+                                        <include>libcudfjni.so</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <!--Set by groovy script-->
+                                    <directory>${native.cudf.path}</directory>
+                                    <includes>
+                                        <include>libcudf.so</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <!--Set by groovy script-->
+                                    <directory>${native.deps.path}</directory>
+                                    <includes>
+                                        <include>librmm.so</include>
+                                        <include>libNVCategory.so</include>
+                                        <include>libNVStrings.so</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
