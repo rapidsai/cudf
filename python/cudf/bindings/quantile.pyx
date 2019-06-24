@@ -48,7 +48,7 @@ def apply_quantile(column, quant, method, exact):
 
     cdef gdf_column* c_col = column_view_from_column(column)
     cdef gdf_context* ctx = create_context_view(0, 'sort', 0, 0, 0, 'null_as_largest')
-    
+
     res = []
     cdef gdf_scalar* c_result = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     for q in quant:
