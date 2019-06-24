@@ -6,6 +6,8 @@
 
 ## Bug Fixes
 
+- PR #2086 Fixed quantile api behavior mismatch
+
 
 # cuDF 0.8.0 (Date TBD)
 

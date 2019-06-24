@@ -34,8 +34,6 @@ def apply_math_op(incol, outcol, op):
     """
     Call Unary math ops.
     """
-    if len(incol) == 0:
-        return
 
     check_gdf_compatibility(incol)
     check_gdf_compatibility(outcol)
