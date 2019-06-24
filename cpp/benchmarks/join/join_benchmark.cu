@@ -68,6 +68,8 @@ static void join_benchmark(benchmark::State& state)
     free_table(build_table);
     free_table(probe_table);
     free_table(join_result);
+
+    CUDA_RT_CALL(cudaDeviceSynchronize());
 }
 
 BENCHMARK_TEMPLATE(join_benchmark, int, int)
@@ -81,5 +83,4 @@ BENCHMARK_TEMPLATE(join_benchmark, int, int)
     ->Args({1'000'000, 4'000'000})
     ->Args({1'000'000, 10'000'000})
     ->Args({10'000'000, 10'000'000})
-    ->Args({10'000'000, 40'000'000})
-    ->Args({10'000'000, 100'000'000});
+    ->Args({10'000'000, 40'000'000});

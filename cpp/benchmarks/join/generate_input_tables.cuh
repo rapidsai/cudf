@@ -55,7 +55,7 @@ __global__ static void init_curand(curandState * state, const int nstates)
     int ithread = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (ithread < nstates) {
-        curand_init(1234ULL, i, 0, state + i);
+        curand_init(1234ULL, ithread, 0, state + ithread);
     }
 }
 
