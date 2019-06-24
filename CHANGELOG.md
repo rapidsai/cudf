@@ -165,6 +165,7 @@
 - PR #2066 exclude `IteratorTest.mean_var_output` test from debug build
 - PR #2069 Fix JNI code to use read_csv and read_parquet APIs
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
+- PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
 
 
 # cudf 0.7.2 (16 May 2019)
