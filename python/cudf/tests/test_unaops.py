@@ -98,7 +98,7 @@ def test_series_pandas_methods(mth):
 
 
 @pytest.mark.parametrize('mth', [
-    'min', 'max', 'sum', 'product', 'abs', 'quantile'
+    'min', 'max', 'sum', 'product', 'quantile'
 ])
 def test_series_pandas_methods_empty(mth):
     arr = np.array([])
