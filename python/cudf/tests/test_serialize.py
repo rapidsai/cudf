@@ -59,7 +59,10 @@ def test_serialize(df):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
-    assert ndevice > 0
+    if hasattr(df, '_cols'):
+        assert ndevice >= len(df._cols)
+    else:
+        assert ndevice > 0
 
     b = cuda_deserialize(header, frames)
     assert_eq(a, b)

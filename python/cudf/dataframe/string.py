@@ -617,9 +617,6 @@ class StringColumn(columnops.TypedColumnBase):
     @classmethod
     def deserialize(cls, deserialize, header, frames):
         # Deserialize the mask, value, and offset frames
-        # Using copy_from_host() for now. `get_ctype_ptr`
-        # should be used as soon as `from_offsets`
-        # supports device-memory arguments.
         arrays = []
         for i, frame in enumerate(frames):
             subheader = header["subheaders"][i]
