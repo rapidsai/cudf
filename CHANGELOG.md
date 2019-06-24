@@ -6,7 +6,7 @@
 
 ## Bug Fixes
 
-- PR #2086 fixed empty column issues in column unary operations & quantile api behavior
+- PR #2086 Fixed quantile api behavior mismatch
 
 
 # cuDF 0.8.0 (Date TBD)
