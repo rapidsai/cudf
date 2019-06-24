@@ -1,6 +1,6 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.7)](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.7)
+[![Build Status](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.9)](http://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI/cudf/branches/cudf-cpu-branch-0.9)
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
 
