@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2098 Align DataFrame and Series indices before executing binary ops
+
 ## Improvements
 
 ## Bug Fixes
