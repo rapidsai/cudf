@@ -6,6 +6,9 @@ from cudf import Series
 from cudf.utils import utils
 
 
+supported_numpy_dtypes = ['bool', 'int8', 'int16', 'int32',
+                          'int64', 'float32', 'float64']
+
 def random_bitmask(size):
     """
     Parameters
