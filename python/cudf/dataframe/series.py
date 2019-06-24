@@ -431,10 +431,13 @@ class Series(object):
             # TODO: fn is not the same as arg expected by _apply_op
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
+
         nvtx_range_push("CUDF_BINARY_OP", "orange")
-        other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other, reflect=reflect)
-        result = self._copy_construct(data=outcol)
+
+        lhs, rhs = _align_indices(self, other)
+        rhs = self._normalize_binop_value(rhs)
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
+        result = lhs._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
         return result
@@ -460,24 +463,26 @@ class Series(object):
         def func(lhs, rhs):
             return fn(rhs, lhs) if reflect else fn(lhs, rhs)
 
+        lhs, rhs = _align_indices(self, other)
+
         if fill_value is not None:
-            if isinstance(other, Series):
-                if self.has_null_mask and other.has_null_mask:
-                    lmask = Series(data=self.nullmask)
-                    rmask = Series(data=other.nullmask)
-                    out_mask = (lmask | rmask).data
-                    temp_lhs = self.fillna(fill_value)
-                    temp_rhs = other.fillna(fill_value)
-                    out = func(temp_lhs, temp_rhs)
-                    col = self._column.replace(data=out.data, mask=out_mask)
-                    return self._copy_construct(data=col)
-                else:
-                    return func(self.fillna(fill_value),
-                                other.fillna(fill_value))
-            elif is_scalar(other):
-                return func(self.fillna(fill_value), other)
-        else:
-            return func(self, other)
+            if isinstance(rhs, Series):
+                if lhs.has_null_mask and rhs.has_null_mask:
+                    lmask = Series(data=lhs.nullmask)
+                    rmask = Series(data=rhs.nullmask)
+                    mask = (lmask | rmask).data
+                    lhs = lhs.fillna(fill_value)
+                    rhs = rhs.fillna(fill_value)
+                    data = func(lhs, rhs).data
+                    data = lhs._column.replace(data=data, mask=mask)
+                    return lhs._copy_construct(data=data)
+                elif lhs.has_null_mask:
+                    return func(lhs.fillna(fill_value), rhs)
+                elif rhs.has_null_mask:
+                    return func(lhs, rhs.fillna(fill_value))
+            elif is_scalar(rhs):
+                return func(lhs.fillna(fill_value), rhs)
+        return func(lhs, rhs)
 
     def add(self, other, fill_value=None):
         """Addition of series and other, element-wise
@@ -2225,3 +2230,15 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+def _align_indices(lhs, rhs):
+    """
+    Internal util to align the indices of two Series. Returns a tuple of the
+    aligned series, or the original arguments if the indices are the same, or
+    if rhs isn't a Series.
+    """
+    if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
+        lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
+        lhs, rhs = lhs.join(rhs, how='outer', sort=True)._cols.values()
+    return lhs, rhs
+
