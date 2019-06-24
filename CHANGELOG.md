@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+
 - PR #2086 fixed empty column issues in column unary operations & quantile api behavior
 
 
