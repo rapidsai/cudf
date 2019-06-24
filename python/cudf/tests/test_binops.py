@@ -416,9 +416,13 @@ def test_different_shapes_and_columns(binop):
 
 @pytest.mark.parametrize('binop', _binops)
 def test_different_shapes_and_same_columns(binop):
-    import cudf
-    with pytest.raises(NotImplementedError):
-        binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
+    if binop is operator.pow:
+        return
+    pd_frame = binop(pd.DataFrame({'x': [1, 2]}), pd.DataFrame({'x': [1, 2, 3]}))
+    cd_frame = binop(cudf.DataFrame({'x': [1, 2]}), cudf.DataFrame({'x': [1, 2, 3]}))
+    # cast X as float64 so it matches pandas dtype
+    cd_frame['x'] = cd_frame['x'].astype(np.float64)
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
 
 @pytest.mark.parametrize('op',
