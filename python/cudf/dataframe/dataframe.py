@@ -3104,11 +3104,12 @@ merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
 
 register_distributed_serializer(DataFrame)
 
+
 def _align_indices(lhs, rhs):
     """
-    Internal util to align the indices of two DataFrames. Returns a tuple of the
-    aligned dataframes, or the original arguments if the indices are the same, or
-    if rhs isn't a DataFrame.
+    Internal util to align the indices of two DataFrames. Returns a tuple of
+    the aligned dataframes, or the original arguments if the indices are the
+    same, or if rhs isn't a DataFrame.
     """
     lhs_out, rhs_out = lhs, rhs
     if isinstance(rhs, DataFrame) and not lhs.index.equals(rhs.index):
@@ -3135,6 +3136,5 @@ def _align_indices(lhs, rhs):
             if col in rhs:
                 rhs_out[col] = df[col]
                 continue
-    
-    return lhs_out, rhs_out
 
+    return lhs_out, rhs_out

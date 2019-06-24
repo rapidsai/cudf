@@ -2231,6 +2231,7 @@ class DatetimeProperties(object):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
 
+
 def _align_indices(lhs, rhs):
     """
     Internal util to align the indices of two Series. Returns a tuple of the
@@ -2241,4 +2242,3 @@ def _align_indices(lhs, rhs):
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
         lhs, rhs = lhs.join(rhs, how='outer', sort=True)._cols.values()
     return lhs, rhs
-
