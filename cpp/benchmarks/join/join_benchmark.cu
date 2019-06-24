@@ -26,7 +26,7 @@ static void join_benchmark(benchmark::State& state)
 {
     const gdf_size_type build_table_size {(gdf_size_type) state.range(0)};
     const gdf_size_type probe_table_size {(gdf_size_type) state.range(1)};
-    const gdf_size_type rand_max_val {build_table_size * 3};
+    const gdf_size_type rand_max_val {build_table_size * 2};
     const double selectivity = 0.3;
     const bool is_build_table_key_unique = true;
 
@@ -69,13 +69,10 @@ static void join_benchmark(benchmark::State& state)
     free_table(probe_table);
     free_table(join_result);
 
-    CUDA_RT_CALL(cudaDeviceSynchronize());
+    CUDA_RT_CALL(cudaDeviceReset());
 }
 
 BENCHMARK_TEMPLATE(join_benchmark, int, int)
-    ->Args({10'000, 10'000})
-    ->Args({10'000, 40'000})
-    ->Args({10'000, 100'000})
     ->Args({100'000, 100'000})
     ->Args({100'000, 400'000})
     ->Args({100'000, 1'000'000})
@@ -83,4 +80,7 @@ BENCHMARK_TEMPLATE(join_benchmark, int, int)
     ->Args({1'000'000, 4'000'000})
     ->Args({1'000'000, 10'000'000})
     ->Args({10'000'000, 10'000'000})
-    ->Args({10'000'000, 40'000'000});
+    ->Args({10'000'000, 40'000'000})
+    ->Args({10'000'000, 100'000'000})
+    ->Args({100'000'000, 100'000'000})
+    ->Args({80'000'000, 240'000'000});
