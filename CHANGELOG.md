@@ -195,6 +195,7 @@
 - PR #1652 Added `Series.where()` feature
 - PR #2074 Java Aggregates, logical ops, and better RMM support
 - PR #2140 Add a `cudf::transform` function
+- PR #2068 Concatenation of different typed columns
 
 ## Improvements
 
