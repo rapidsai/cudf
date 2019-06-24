@@ -1838,8 +1838,12 @@ class Series(object):
             raise ValueError("percentiles should all \
                              be in the interval [0, 1]")
 
-        if len(self) == 0 and isinstance(q, (int, float)):
-            return np.nan
+        if isinstance(q, (int, float)):
+            if len(self) == 0:
+                return np.nan
+            else:
+                # if q is an int/float, we shouldn't be constructing series
+                return self._column.quantile(q, interpolation, exact)
 
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
