@@ -424,7 +424,7 @@ class Series(object):
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        output = preprocess.astype('str').fillna('null').to_pandas().__repr__()
+        output = preprocess.astype('O').fillna('null').to_pandas().__repr__()
         lines = output.split('\n')
         print(lines)
         print(len(preprocess))
