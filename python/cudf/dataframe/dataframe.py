@@ -443,6 +443,7 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
+        return self.__repr__()
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex) or\
            isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
             raise TypeError("You're trying to print a DataFrame that contains "
@@ -491,10 +492,10 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return "<cudf.DataFrame ncols={} nrows={} >".format(
-            len(self.columns),
-            len(self),
-        )
+        output = DataFrame()
+        for col in self.columns:
+            output[col] = self[col].astype('str').str.fillna('null')
+        return output.to_pandas().__repr__()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):

@@ -416,7 +416,34 @@ class Series(object):
         return self.to_string(nrows=10)
 
     def __repr__(self):
-        return "<cudf.Series nrows={} >".format(len(self))
+        mr = pd.options.display.max_rows
+        if len(self) > mr:
+            top = self.head(int(mr))
+            bottom = self.tail(int(mr))
+            from cudf import concat
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        output = preprocess.astype('str').fillna('null').to_pandas().__repr__()
+        lines = output.split('\n')
+        print(lines)
+        print(len(preprocess))
+        if lines[-1].startswith('N'):
+            lines = lines[:-1]
+            lines.append("Name: %s" % self.name)
+            if len(self) > len(preprocess)/2:
+                lines[-1] = lines[-1] + ", Length: %d" % len(self)
+            lines[-1] = lines[-1] + ', '
+        elif lines[-1].startswith('L'):
+            lines = lines[:-1]
+            lines.append("Length: %d" % len(self))
+            lines[-1] = lines[-1] + ', '
+        else:
+            lines = lines[:-1]
+            lines[-1] = lines[-1] + '\n'
+        lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+        return '\n'.join(lines)
+
 
     def _binaryop(self, other, fn, reflect=False):
         """
