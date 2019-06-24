@@ -13,19 +13,21 @@ install_requires = [
     'cython'
 ]
 
-cython_files = ['cudf/bindings/*.pyx']
+cython_files = [
+    'cudf/bindings/**/*.pyx',
+]
 
 extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
                 '../cpp/include/cudf',
-                '../cpp/thirdparty/dlpack/include/dlpack/'
+                '../cpp/thirdparty/dlpack/include/dlpack/',
               ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
-              extra_compile_args=['-std=c++11'])
+              extra_compile_args=['-std=c++14'])
 ]
 
 setup(name='cudf',

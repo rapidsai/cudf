@@ -20,10 +20,44 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class RmmMemoryAccessorTest {
+  @Test
+  public void log() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    if (Rmm.isInitialized()) {
+      Rmm.shutdown();
+    }
+    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, true, 1024*1024*1024);
+    long address = Rmm.alloc(10, 0);
+    try {
+      assertNotEquals(0, address);
+    } finally {
+      Rmm.free(address, 0);
+    }
+    String log = Rmm.getLog();
+    System.err.println(log);
+    assertNotNull(log);
+  }
+
+  @Test
+  public void init() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    if (Rmm.isInitialized()) {
+      Rmm.shutdown();
+    }
+    assertFalse(Rmm.isInitialized());
+    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, true, -1);
+    assertTrue(Rmm.isInitialized());
+    Rmm.shutdown();
+    assertFalse(Rmm.isInitialized());
+  }
+
   @Test
   public void allocate() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());

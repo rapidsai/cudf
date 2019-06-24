@@ -38,8 +38,10 @@ public enum BinaryOp {
   GREATER_EQUAL(14), // >=
   BITWISE_AND(15),
   BITWISE_OR(16),
-  BITWISE_XOR(17);
-  //NOT IMPLEMENTED YET COALESCE(18); // x == null ? y : x
+  BITWISE_XOR(17),
+  LOGICAL_AND(18),
+  LOGICAL_OR(19);
+  //NOT IMPLEMENTED YET COALESCE(20); // x == null ? y : x
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
       EQUAL, NOT_EQUAL, LESS, GREATER, LESS_EQUAL, GREATER_EQUAL);

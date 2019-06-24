@@ -302,6 +302,27 @@ class UnsafeMemoryAccessor {
   }
 
   /**
+   * Returns the Boolean value at this address
+   * @param address - memory address
+   * @return - value
+   * @throws IndexOutOfBoundsException
+   */
+  public static boolean getBoolean(long address) {
+    return getByte(address) != 0 ? true : false;
+  }
+
+  /**
+   * Sets the Boolean value at that address
+   * @param address - memory address
+   * @param value   - value to be set
+   * @throws IndexOutOfBoundsException
+   */
+  public static void setBoolean(long address, boolean value) {
+    setByte(address, (byte) (value ? 1 : 0));
+  }
+
+
+  /**
    * Copy memory from one address to the other.
    */
   public static void copyMemory(Object src, long srcOffset, Object dst, long dstOffset,

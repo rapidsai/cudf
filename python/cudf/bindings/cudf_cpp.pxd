@@ -9,6 +9,7 @@ from cudf.bindings.dlpack cimport DLManagedTensor
 
 from libcpp cimport bool
 from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
+from libcpp.vector cimport vector
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -312,10 +313,12 @@ cdef extern from "bitmask.hpp" nogil:
 
 
 cdef extern from "table.hpp" namespace "cudf" nogil:
-    
+
     cdef cppclass cudf_table "cudf::table":
 
         cudf_table(gdf_column* cols[], gdf_size_type num_cols) except +
+
+        cudf_table(const vector[gdf_column*] cols) except +
 
         cudf_table() except +
 
