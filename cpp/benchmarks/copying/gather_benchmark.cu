@@ -128,14 +128,14 @@ void gather_random(benchmark::State& state){
   cudf::table source_table{ vp_src };
   cudf::table destination_table{ vp_dest };
   if(opt){
-    cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, state.range(1));
+    cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table);
   }else{
     cudf::gather(&source_table, gather_map.data().get(), &destination_table);
   }
 
   for(auto _ : state){
     if(opt){
-      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, state.range(1));
+      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table);
     }else{
       cudf::gather(&source_table, gather_map.data().get(), &destination_table);
     }
@@ -144,6 +144,6 @@ void gather_random(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-BENCHMARK_TEMPLATE(gather_random, double, 3,false)->RangeMultiplier(2)->Range(1<<10, 1<<26);
-BENCHMARK_TEMPLATE(gather_random, double, 3, true)->RangeMultiplier(2)->Ranges({{1<<10, 1<<26},{256,256}});
+BENCHMARK_TEMPLATE(gather_random,double,3,false)->RangeMultiplier(2)->Range(1<<26, 1<<26);
+BENCHMARK_TEMPLATE(gather_random,double,3,true )->RangeMultiplier(2)->Range(1<<26, 1<<26);
 

@@ -31,29 +31,12 @@
 #include <bitmask/bit_mask.cuh>
 #include <cub/cub.cuh>
 
-#include <cooperative_groups.h>
-
-/**
- * @brief Operations for copying from one column to another
- * @file copying_ops.cu
- */
-
 using bit_mask::bit_mask_t;
 
 namespace impl {
 
 constexpr int warp_size = 32;
-/**
-template<class T>
-__device__ __inline__ void warp_wise_reduce(T& f) {
-  #pragma unroll
-  for(int offset = 16; offset > 0; offset /= 2){
-    // ONLY works for CUDA 9.2 or later
-    float other_f = __shfl_down_sync(0xffffffffu, f, offset);
-    f += other_f;
-  }
-}
-*/
+
 template<class CountType, int lane = 0>
 __device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
   
@@ -74,7 +57,6 @@ __device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
     __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
     f = cub::WarpReduce<CountType>(temp_storage).Sum(f);
     
-    // warp_wise_reduce(f); 
     if(lane_id == 0){
       atomicAdd(d_output, f);
     }
@@ -104,7 +86,7 @@ __device__ __inline__ void gather_bitmask_device(
   // Use ballot to find all valid bits in this warp and create the output bitmask element
   const uint32_t valid_warp = __ballot_sync(active_threads, source_bit_is_valid);
 
-  gdf_index_type const valid_index = destination_row / warp_size;
+  const gdf_index_type valid_index = destination_row / warp_size;
   // Only one thread writes output
   if(0 == threadIdx.x % warp_size){
     destination_valid[valid_index] = valid_warp;
@@ -112,7 +94,6 @@ __device__ __inline__ void gather_bitmask_device(
   single_lane_reduce(__popc(valid_warp), d_count);
 }
 
-template<int block_size>
 struct copy_element_smem {
   template <typename T>
   __device__ inline void operator()(gdf_column const& target,
@@ -121,9 +102,6 @@ struct copy_element_smem {
                                     gdf_size_type source_index) {
     reinterpret_cast<T*>(target.data)[target_index] 
       = reinterpret_cast<const T*>(source.data)[source_index];
-    // static __shared__ T smem[block_size];
-    // smem[threadIdx.x] = reinterpret_cast<const T*>(source.data)[source_index];
-    // reinterpret_cast<T*>(target.data)[target_index] = smem[threadIdx.x];
   }
 };
 
@@ -143,11 +121,10 @@ __global__ void gather_kernel(const device_table source,
   const bool active_threads = destination_row < n_destination_rows;
   gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
   for(gdf_index_type i = 0; i < destination.num_columns(); i++){
-    
     if(active_threads && (!check_bounds || source_row < n_source_rows)){
       // gather the entire row
       cudf::type_dispatcher(source.get_column(i)->dtype,
-                          copy_element_smem<block_size>{},
+                          copy_element_smem{},
                           *destination.get_column(i), destination_row,
                           *source.get_column(i), source_row);
     }
@@ -158,7 +135,7 @@ __global__ void gather_kernel(const device_table source,
         reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
       bit_mask_t* __restrict__ dest_valid =
         reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
- 
+      // Gather the bitmasks and do the null count 
       gather_bitmask_device<check_bounds>(src_valid, source_row, n_source_rows,
         dest_valid, destination_row, n_destination_rows, d_count + i);
     }
@@ -260,13 +237,13 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table, int block_size) {
   switch(block_size){
-  case  64:  
+  case  64:
     detail::gather< 64>(source_table, gather_map, destination_table, false, 0); break;
-  case 128:  
+  case 128:
     detail::gather<128>(source_table, gather_map, destination_table, false, 0); break;
-  case 192:  
+  case 192:
     detail::gather<192>(source_table, gather_map, destination_table, false, 0); break;
-  case 256:  
+  case 256:
     detail::gather<256>(source_table, gather_map, destination_table, false, 0); break;
   default:
     CUDF_EXPECTS(false, "Unsupported block size.");
