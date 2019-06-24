@@ -43,8 +43,6 @@ def apply_quantile(column, quant, method, exact):
     Returns value with the quantile specified by quant
     """
 
-    if len(column) == 0:
-        return [] * len(quant)
 
     cdef gdf_column* c_col = column_view_from_column(column)
     cdef gdf_context* ctx = create_context_view(0, 'sort', 0, 0, 0, 'null_as_largest')
