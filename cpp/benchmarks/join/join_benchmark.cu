@@ -20,6 +20,7 @@
 
 #include "generate_input_tables.cuh"
 
+
 template<typename key_type, typename payload_type>
 static void join_benchmark(benchmark::State& state)
 {
@@ -40,8 +41,7 @@ static void join_benchmark(benchmark::State& state)
 
     gdf_context ctxt = {
         0,                     // input data is not sorted
-        gdf_method::GDF_HASH,  // hash based join
-        0
+        gdf_method::GDF_HASH   // hash based join
     };
 
     int columns_to_join[] = {0};
@@ -71,7 +71,15 @@ static void join_benchmark(benchmark::State& state)
 }
 
 BENCHMARK_TEMPLATE(join_benchmark, int, int)
-    ->Args({1'000'000, 5'000'000})
-    ->Args({5'000'000, 5'000'000})
-    ->Args({100'000'000, 100'000'000})
-    ->Args({100'000'000, 400'000'000});
+    ->Args({10'000, 10'000})
+    ->Args({10'000, 40'000})
+    ->Args({10'000, 100'000})
+    ->Args({100'000, 100'000})
+    ->Args({100'000, 400'000})
+    ->Args({100'000, 1'000'000})
+    ->Args({1'000'000, 1'000'000})
+    ->Args({1'000'000, 4'000'000})
+    ->Args({1'000'000, 10'000'000})
+    ->Args({10'000'000, 10'000'000})
+    ->Args({10'000'000, 40'000'000})
+    ->Args({10'000'000, 100'000'000});
