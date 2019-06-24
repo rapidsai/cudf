@@ -2800,6 +2800,8 @@ class DataFrame(object):
         """
     def quantile(self,
                  q=0.5,
+                 axis=0,
+                 numeric_only=True,
                  interpolation='linear',
                  columns=None,
                  exact=True):
@@ -2811,6 +2813,10 @@ class DataFrame(object):
 
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
+        axis : int
+            axis is a NON-FUNCTIONAL parameter
+        numeric_only : boolean
+            numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This  parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -2826,6 +2832,11 @@ class DataFrame(object):
         DataFrame
 
         """
+        if axis not in (0, None):
+            raise NotImplementedError("axis is not implemented yet")
+
+        if not numeric_only:
+            raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
             columns = self.columns
 

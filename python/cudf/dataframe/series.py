@@ -1833,6 +1833,14 @@ class Series(object):
         DataFrame
 
         """
+
+        if isinstance(q, (int, float)) and not (0 <= q <= 1):
+            raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        if len(self) == 0 and isinstance(q, (int, float)):
+            return np.nan
+
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
         else:
