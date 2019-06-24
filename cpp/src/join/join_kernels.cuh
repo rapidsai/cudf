@@ -120,6 +120,7 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 /* ----------------------------------------------------------------------------*/
 template< JoinType join_type,
           typename multimap_type,
+          int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           device_table build_table,
@@ -127,14 +128,6 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           const gdf_size_type probe_table_num_rows,
                                           gdf_size_type* output_size)
 {
-
-  __shared__ gdf_size_type block_counter;
-  block_counter=0;
-  __syncthreads();
-
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  __syncwarp();
-#endif
 
   gdf_size_type thread_counter {0};
   const gdf_size_type start_idx {(gdf_size_type) (threadIdx.x + blockIdx.x * blockDim.x)};
@@ -206,7 +199,9 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
     }
   }
 
-  atomicAdd(&block_counter, thread_counter);
+  typedef cub::BlockReduce<gdf_size_type, block_size> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  gdf_size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   __syncthreads();
 
