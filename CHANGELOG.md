@@ -9,7 +9,7 @@
 ## Bug Fixes
 
 
-# cuDF 0.8.0 (Date TBD)
+# cuDF 0.8.0 (27 June 2019)
 
 ## New Features
 
@@ -104,6 +104,8 @@
 - PR #2036 Make library of common test utils to speed up tests compilation
 - PR #2022 Facilitating get_dummies to be a high level api too
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
+- PR #2104 Add a functional ``sort=`` keyword argument to groupby
+- PR #2108 Add `find_and_replace` for StringColumn for replacing single values
 
 ## Bug Fixes
 
@@ -167,6 +169,9 @@
 - PR #2066 exclude `IteratorTest.mean_var_output` test from debug build
 - PR #2069 Fix JNI code to use read_csv and read_parquet APIs
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
+- PR #2089 Configure Sphinx to render params correctly
+- PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
+- PR #2102 Fix memory leak in groupby
 
 
 # cudf 0.7.2 (16 May 2019)
