@@ -72,15 +72,16 @@ static void join_benchmark(benchmark::State& state)
     CUDA_RT_CALL(cudaDeviceReset());
 }
 
-BENCHMARK_TEMPLATE(join_benchmark, int, int)
+BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMillisecond)
     ->Args({100'000, 100'000})
     ->Args({100'000, 400'000})
     ->Args({100'000, 1'000'000})
-    ->Args({1'000'000, 1'000'000})
-    ->Args({1'000'000, 4'000'000})
-    ->Args({1'000'000, 10'000'000})
     ->Args({10'000'000, 10'000'000})
     ->Args({10'000'000, 40'000'000})
     ->Args({10'000'000, 100'000'000})
     ->Args({100'000'000, 100'000'000})
     ->Args({80'000'000, 240'000'000});
+
+BENCHMARK_TEMPLATE(join_benchmark, int64_t, int64_t)->Unit(benchmark::kMillisecond)
+    ->Args({50'000'000, 50'000'000})
+    ->Args({40'000'000, 120'000'000});

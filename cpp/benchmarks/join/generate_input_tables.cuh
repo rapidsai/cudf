@@ -24,29 +24,34 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/distance.h>
 #include <cassert>
+
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
-#include <string>
 
 #include "error.cuh"
+
+
+__device__ __inline__
+int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
+{
+    return (int64_t)atomicCAS((unsigned long long int*)address, (unsigned long long int)compare, (unsigned long long int)val);
+}
 
 
 template <typename col_type>
 gdf_dtype gdf_dtype_from_col_type()
 {
-    gdf_dtype gdf_col_type;
-    if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
-    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
-
-    return gdf_col_type;
+    if(std::is_same<col_type,int8_t>::value) return GDF_INT8;
+    else if(std::is_same<col_type,uint8_t>::value) return GDF_INT8;
+    else if(std::is_same<col_type,int16_t>::value) return GDF_INT16;
+    else if(std::is_same<col_type,uint16_t>::value) return GDF_INT16;
+    else if(std::is_same<col_type,int32_t>::value) return GDF_INT32;
+    else if(std::is_same<col_type,uint32_t>::value) return GDF_INT32;
+    else if(std::is_same<col_type,int64_t>::value) return GDF_INT64;
+    else if(std::is_same<col_type,uint64_t>::value) return GDF_INT64;
+    else if(std::is_same<col_type,float>::value) return GDF_FLOAT32;
+    else if(std::is_same<col_type,double>::value) return GDF_FLOAT64;
+    else return GDF_invalid;
 }
 
 
@@ -248,7 +253,7 @@ void generate_input_tables(
         thrust::sequence(thrust::device, lottery, lottery + lottery_size, 0);
     }
 
-    init_build_tbl<<<num_sms*num_blocks_init_build_tbl, block_size>>>(
+    init_build_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
         build_tbl, build_tbl_size, rand_max, uniq_build_tbl_keys,
         lottery, lottery_size, devStates, num_states
     );
@@ -272,7 +277,7 @@ void generate_input_tables(
 
     lottery_size = thrust::distance(lottery, lottery_end);
 
-    init_probe_tbl<<<num_sms*num_blocks_init_build_tbl, block_size>>>(
+    init_probe_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
         probe_tbl, probe_tbl_size, build_tbl, build_tbl_size,
         lottery, lottery_size, selectivity, devStates, num_states
     );
