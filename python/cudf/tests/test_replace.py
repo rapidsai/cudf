@@ -149,6 +149,15 @@ def test_dataframe_replace_with_nulls():
     pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
 
 
+def test_replace_strings():
+    pdf = pd.Series(['a', 'b', 'c', 'd'])
+    gdf = Series(['a', 'b', 'c', 'd'])
+    assert_eq(
+        pdf.replace('a', 'e'),
+        gdf.replace('a', 'e')
+    )
+
+
 @pytest.mark.parametrize('data_dtype', ['int8', 'int16', 'int32', 'int64',
                                         'float32', 'float64'])
 @pytest.mark.parametrize('fill_dtype', ['int8', 'int16', 'int32', 'int64',
