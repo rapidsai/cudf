@@ -22,25 +22,32 @@
 #if defined(JITIFY_USE_CACHE)
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
 
-    auto tester = [&] () {
+    int num_tests = 20;
+    int *input, *output;
+    int expect = 64;
+
+    auto tester = [&] (int pid, int test_no) {
         // Brand new cache object that has nothing in in-memory cache
         cudf::jit::cudfJitCache cache;
         
-        // Single value column
-        auto column = cudf::test::column_wrapper<int>{{4,0}};
-        auto expect = cudf::test::column_wrapper<int>{{64,0}};
+        // Parent writes to output[0], child writes to output[1]
+        size_t idx = 2 * test_no + (pid == 0);
+
+        *input = 4;
+        output[idx] = 1;
 
         // make program
-        auto program = cache.getProgram("MemoryCacheTestProg", program_source);
+        auto program = cache.getProgram("MemoryCacheTestProg", program3_source);
         // make kernel
         auto kernel = cache.getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
         (*std::get<1>(kernel)).configure_1d_max_occupancy()
-                 .launch(column.get()->data);
+            .launch(input, &output[idx]);
+        cudaDeviceSynchronize();
 
-        ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                      << "  Actual col: " << column.to_str();
+        ASSERT_TRUE(expect == output[idx]) << "Expected val: " << expect << '\n'
+                                           << "  Actual val: " << output[idx];
 
     };
 
@@ -60,12 +67,15 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to pipe
     }
 
-    for (size_t i = 0; i < 20; i++)
+    cudaMallocManaged(&input, sizeof(input));
+    cudaMallocManaged(&output, sizeof(output) * num_tests * 2);
+
+    for (size_t i = 0; i < num_tests; i++)
     {
         if (cpid > 0) usleep(10000);
         else purgeFileCache();
 
-        tester();
+        tester(cpid, i);
     }
 
     // Child ends here --------------------------------------------------------
