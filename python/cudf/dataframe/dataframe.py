@@ -2847,7 +2847,7 @@ class DataFrame(object):
                 res = col.quantile(q, interpolation=interpolation,
                                    exact=exact,
                                    quant_index=False)
-                if not isinstance(res, (int, float)) and len(res) == 0:
+                if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(q,
                                                       dtype=col.dtype,
                                                       masked=True,

@@ -1833,12 +1833,26 @@ class Series(object):
         DataFrame
 
         """
+        def invalid_quantile(q):
+            if 0 <= q <= 1:
+                return False
+            else:
+                return True
 
-        if isinstance(q, (int, float)) and not (0 <= q <= 1):
+        if isinstance(q, Number) and invalid_quantile(q):
             raise ValueError("percentiles should all \
                              be in the interval [0, 1]")
 
-        if isinstance(q, (int, float)):
+        if utils.is_list_like(q):
+            invalid_q_vector = np.vectorize(invalid_quantile, otypes=[np.bool8])
+            if any(invalid_q_vector(q)):
+                raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+
+        if isinstance(q, Number):
             res = self._column.quantile(q, interpolation, exact)
             if len(res) == 0:
                 return np.nan
