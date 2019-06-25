@@ -92,6 +92,17 @@ struct JitCacheTest : public ::testing::Test
         "    }\n"
         "}\n";
 
+    const char* program3_source =
+        "my_program\n"
+        "template<int N, typename T>\n"
+        "__global__\n"
+        "void my_kernel(T* data, T* out) {\n"
+        "    T data0 = data[0];\n"
+        "    for( int i=0; i<N; ++i ) {\n"
+        "        out[0] *= data0;\n"
+        "    }\n"
+        "}\n";
+
 };
 
 /**---------------------------------------------------------------------------*
