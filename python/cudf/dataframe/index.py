@@ -21,6 +21,7 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.comm.serialize import register_distributed_serializer
+from cudf.indexing import _IndexLocIndexer
 
 import cudf.bindings.copying as cpp_copying
 
@@ -76,7 +77,9 @@ class Index(object):
             # Gather
             index = cpp_copying.apply_gather_array(self.gpu_values, indices)
             col = self.as_column().replace(data=index.data)
-            return as_index(col)
+            new_index = as_index(col)
+            new_index.name = self.name
+            return new_index
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
@@ -291,6 +294,10 @@ class Index(object):
     def to_series(self):
         from cudf.dataframe.series import Series
         return Series(self._values)
+
+    @property
+    def loc(self):
+        return _IndexLocIndexer(self)
 
 
 class RangeIndex(Index):

@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-#include "copying.hpp"
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "types.hpp"
-#include "utilities/wrapper_types.hpp"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include "tests/utilities/compare_column_wrappers.cuh"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/compare_column_wrappers.cuh>
+#include <cudf/types.hpp>
+#include <utilities/wrapper_types.hpp>
 
 #include <random>
 
@@ -57,8 +59,8 @@ TYPED_TEST(GatherTest, DestMissingValid){
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source{source_size, true};
-  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+  cudf::test::column_wrapper<TypeParam> source(source_size, true);
+  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
 
   gdf_column * raw_source = source.get();
   gdf_column * raw_destination = destination.get();
@@ -76,9 +78,9 @@ TYPED_TEST(GatherTest, NumColumnsMismatch){
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source0{source_size, true};
-  cudf::test::column_wrapper<TypeParam> source1{source_size, true};
-  cudf::test::column_wrapper<TypeParam> destination{destination_size, false};
+  cudf::test::column_wrapper<TypeParam> source0(source_size, true);
+  cudf::test::column_wrapper<TypeParam> source1(source_size, true);
+  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
 
   std::vector<gdf_column*> source_cols{source0.get(), source1.get()};
 
@@ -116,7 +118,7 @@ TYPED_TEST(GatherTest, IdentityTest) {
   EXPECT_NO_THROW(
       cudf::gather(&source_table, gather_map.data().get(), &destination_table));
 
-  EXPECT_TRUE(source_column == destination_column);
+  expect_columns_are_equal<TypeParam>(source_column, destination_column);
 }
 
 TYPED_TEST(GatherTest, ReverseIdentityTest) {
@@ -159,9 +161,13 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   std::vector<gdf_valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
+  auto print_all_unequal_pairs { true };
+  expect_column_values_are_equal<TypeParam>(
+      destination_size, expected_data.data(), nullptr, "Expected",
+      result_data.data(), nullptr, "Actual",
+      print_all_unequal_pairs);
+
   for (gdf_index_type i = 0; i < destination_size; i++) {
-    EXPECT_EQ(expected_data[i], result_data[i])
-        << "Data at index " << i << " doesn't match!\n";
     EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
         << "Value at index " << i << " should be non-null!\n";
   }

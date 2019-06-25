@@ -1,9 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import pytest
 
 from cudf.dataframe import DataFrame, Series, GenericIndex
 from cudf.tests import utils
+from cudf.reshape import get_dummies
 
 
 def test_onehot_simple():
@@ -86,6 +88,41 @@ def test_onehot_generic_index():
     np.testing.assert_array_equal(values == 1, out.fo_1.to_array())
     np.testing.assert_array_equal(values == 2, out.fo_2.to_array())
     np.testing.assert_array_equal(values == 3, out.fo_3.to_array())
+
+
+def test_onehot_get_dummies_simple():
+    df = DataFrame({'x': np.arange(10)})
+    original = df.copy()
+    encoded = get_dummies(df, prefix='test')
+
+    assert df == original  # the original df should be unchanged
+    cols = list(encoded.columns)[1:]
+    actual = DataFrame(dict(zip(cols, np.eye(len(cols)))))
+    assert (encoded.loc[:, cols] == actual).all().all()
+
+
+@pytest.mark.parametrize('n_cols', [5, 10, 20])
+def test_onehot_get_dummies_multicol(n_cols):
+    from string import ascii_lowercase
+    n_categories = 5
+    df = DataFrame(
+        dict(zip(ascii_lowercase,
+                 (np.arange(n_categories) for _ in range(n_cols))))
+    )
+    original = df.copy()
+    encoded = get_dummies(df, prefix='test')
+
+    assert df == original
+
+    cols = list(encoded.columns)[n_cols:]
+    actual = DataFrame(
+        dict(
+            zip(cols,
+                np.concatenate(list(np.eye(n_categories)
+                                    for _ in range(n_cols))))
+        )
+    )
+    assert (encoded.loc[:, cols] == actual).all().all()
 
 
 if __name__ == '__main__':

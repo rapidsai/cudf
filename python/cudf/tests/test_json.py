@@ -211,14 +211,21 @@ def test_json_lines_dtypes(json_input, dtype):
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
 
-def test_json_lines_compression(tmpdir):
-    fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
+@pytest.mark.parametrize('ext, out_comp, in_comp', [('.geez', 'gzip', 'gzip'),
+                                                    ('.beez', 'bz2', 'bz2'),
+                                                    ('.gz', 'gzip', 'infer'),
+                                                    ('.bz2', 'bz2', 'infer'),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
+                                                    ('', None, None)])
+def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
+    fname = tmpdir.mkdir("gdf_json").join('tmp_json_compression' + ext)
 
     nrows = 20
     pd_df = make_numeric_dataframe(nrows, np.int32)
-    pd_df.to_json(fname, compression='gzip', lines=True, orient='records')
+    pd_df.to_json(fname, compression=out_comp, lines=True, orient='records')
 
-    cu_df = cudf.read_json(str(fname), compression='gzip', lines=True,
+    cu_df = cudf.read_json(str(fname), compression=in_comp, lines=True,
                            dtype=['int', 'int'])
 
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
@@ -264,3 +271,17 @@ def test_json_bool_values():
 
     cu_df = cudf.read_json(buffer, lines=True, dtype=['bool', 'long'])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
+
+
+@pytest.mark.parametrize('buffer', [
+        '[null,]\n[1.0, ]',
+        '{"0":null,"1":}\n{"0":1.0,"1": }'
+    ])
+def test_json_null_literal(buffer):
+    df = cudf.read_json(buffer, lines=True)
+
+    # first column contains a null field, type sould be set to float
+    # second column contains only empty fields, type should be set to int8
+    np.testing.assert_array_equal(df.dtypes, ['float64', 'int8'])
+    np.testing.assert_array_equal(df['0'], [None, 1.0])
+    np.testing.assert_array_equal(df['1'], [None, None])

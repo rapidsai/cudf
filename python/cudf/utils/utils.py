@@ -1,4 +1,5 @@
 from collections import namedtuple
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -200,3 +201,36 @@ def cudf_dtype_from_pydata_dtype(dtype):
         dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
+
+
+def is_single_value(val):
+    return (
+            isinstance(val, str)
+            or isinstance(val, numbers.Number)
+            or np.isscalar(val)
+            or isinstance(val, pd.Timestamp)
+            or isinstance(val, pd.Categorical)
+    )
+
+
+def is_list_like(obj):
+    '''
+    This function checks if the given `obj`
+    is a list-like (list, tuple, Series...)
+    type or not.
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    Boolean: True or False depending on whether the
+    input `obj` is like-like or not.
+    '''
+    from collections.abc import Sequence
+    if isinstance(obj, (Sequence,)) and \
+            not isinstance(obj, (str, bytes)):
+        return True
+    else:
+        return False

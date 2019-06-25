@@ -20,7 +20,12 @@
 #include <cstdint>
 #include "parquet_common.h"
 
-namespace parquet { namespace gpu {
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
+
+#define PARQUET_GPU_USEC_TO_MSEC    1
 
 constexpr int kINT96ClkRate = 1000;  // Clock frequency for INT96 timestamp conversion (1000=ms, 1000000000=ns)
 
@@ -67,7 +72,7 @@ struct ColumnChunkDesc {
       uint16_t datatype_, uint16_t datatype_length_, uint32_t start_row_,
       uint32_t num_rows_, int16_t max_definition_level_,
       int16_t max_repetition_level_, uint8_t def_level_bits_,
-      uint8_t rep_level_bits_, int8_t codec_)
+      uint8_t rep_level_bits_, int8_t codec_, int8_t converted_type_)
       : compressed_data(compressed_data_),
         compressed_size(compressed_size_),
         num_values(num_values_),
@@ -85,7 +90,8 @@ struct ColumnChunkDesc {
         str_dict_index(nullptr),
         valid_map_base(nullptr),
         column_data_base(nullptr),
-        codec(codec_) {}
+        codec(codec_),
+        converted_type(converted_type_) {}
 
   uint8_t *compressed_data;     // pointer to compressed column chunk data
   size_t compressed_size;       // total compressed data size for this chunk
@@ -107,6 +113,7 @@ struct ColumnChunkDesc {
   uint32_t *valid_map_base;     // base pointer of valid bit map for this column
   void *column_data_base;       // base pointer of column data
   int8_t codec;                 // compressed codec enum
+  int8_t converted_type;        // converted type enum
 };
 
 /**
@@ -156,6 +163,9 @@ cudaError_t DecodePageData(PageInfo *pages, int32_t num_pages,
                            size_t num_rows, size_t min_row = 0,
                            cudaStream_t stream = (cudaStream_t)0);
 
-}; }; // parquet::gpu namespace
+} // namespace gpu
+} // namespace parquet
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_PARQUET_GPU_H__

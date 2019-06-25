@@ -7,9 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.types cimport table as cudf_table
-from cudf.bindings.types import *
-from cudf.utils.cudautils import astype
+from cudf.utils.cudautils import astype, modulo
 from librmm_cffi import librmm as rmm
 
 import numpy as np
@@ -24,29 +22,6 @@ from libc.stdlib cimport calloc, malloc, free
 
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
-
-
-cdef gdf_column** cols_view_from_cols(cols):
-    col_count=len(cols)
-    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
-
-    cdef i
-    for i in range(col_count):
-        check_gdf_compatibility(cols[i])
-        c_cols[i] = column_view_from_column(cols[i])
-
-    return c_cols
-
-
-cdef free_table(cudf_table* table, gdf_column** cols):
-    cdef i
-    cdef gdf_column *c_col
-    for i in range(table[0].num_columns()) :
-        c_col = table[0].get_column(i)
-        free(c_col)
-
-    del table
-    free(cols)
 
 
 def clone_columns_with_size(in_cols, row_size):
@@ -71,10 +46,18 @@ def apply_gather(in_cols, maps, out_cols=None):
 
      * returns out_cols
     """
+    if in_cols[0].dtype == np.dtype("object"):
+        in_size = in_cols[0].data.size()
+    else:
+        in_size = in_cols[0].data.size
+
     maps = astype(maps, 'int32')
+    # TODO: replace with libcudf pymod when available
+    maps = modulo(maps, in_size)
 
     col_count=len(in_cols)
     gather_count = len(maps)
+
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
 
@@ -96,8 +79,11 @@ def apply_gather(in_cols, maps, out_cols=None):
     cdef uintptr_t c_maps_ptr
     cdef gdf_index_type* c_maps
     if gather_count != 0 :
-        # size check, cudf::gather requires same length for maps and out table.
-        assert gather_count == out_cols[0].data.size
+        if out_cols[0].dtype == np.dtype("object"):
+            out_size = out_cols[0].data.size()
+        else:
+            out_size = out_cols[0].data.size
+        assert gather_count == out_size
 
         c_maps_ptr = get_ctype_ptr(maps)
         c_maps = <gdf_index_type*>c_maps_ptr
@@ -105,11 +91,18 @@ def apply_gather(in_cols, maps, out_cols=None):
         with nogil:
             gather(c_in_table, c_maps, c_out_table)
 
-    if is_same_input == False :
+    for i, col in enumerate(out_cols):
+        col._update_null_count(c_out_cols[i].null_count)
+        if col.dtype == np.dtype("object") and len(col) > 0:
+            update_nvstrings_col(
+                out_cols[i],
+                <uintptr_t>c_out_cols[i].dtype_info.category)
+
+    if is_same_input == False:
         free_table(c_out_table, c_out_cols)
-    
+
     free_table(c_in_table, c_in_cols)
-    
+
     return out_cols
 
 
@@ -184,7 +177,11 @@ def apply_scatter(in_cols, maps, out_cols=None):
     cdef gdf_index_type* c_maps
     if gather_count != 0 :
         # size check, cudf::gather requires same length for maps and in table.
-        assert gather_count == in_cols[0].data.size
+        if out_cols[0].dtype == np.dtype("object"):
+            in_size = in_cols[0].data.size()
+        else:
+            in_size = in_cols[0].data.size
+        assert gather_count == in_size
 
         c_maps_ptr = get_ctype_ptr(maps)
         c_maps = <gdf_index_type*>c_maps_ptr
@@ -194,9 +191,9 @@ def apply_scatter(in_cols, maps, out_cols=None):
 
     if is_same_input == False :
         free_table(c_out_table, c_out_cols)
-    
+
     free_table(c_in_table, c_in_cols)
-    
+
     return out_cols
 
 
@@ -233,4 +230,3 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
-

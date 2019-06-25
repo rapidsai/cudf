@@ -10,10 +10,11 @@ from cudf.io import (read_csv, read_parquet, read_feather, read_json,
                      read_hdf, read_orc, from_dlpack)
 from cudf.settings import set_options
 from cudf.reshape import melt
-from cudf.ops import (sqrt, sin, cos, tan, arcsin, arccos, arctan, exp, log)
+from cudf.ops import (sqrt, sin, cos, tan, arcsin, arccos, arctan, exp, log,
+                      logical_not, logical_and, logical_or)
 
 from librmm_cffi import librmm as rmm
-
+from cudf.reshape import get_dummies
 
 # Versioneer
 from cudf._version import get_versions
