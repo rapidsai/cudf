@@ -1,6 +1,7 @@
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features
+- PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 
 ## Improvements
 
