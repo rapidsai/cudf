@@ -157,18 +157,18 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNullOrFalse)
   column_wrapper<TypeParam> input = this->factory.make(column_size,
       [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; });
-  column_wrapper<TypeParam> expected{0, false};
+  column_wrapper<TypeParam> expected(0, false);
   
   BooleanMaskTest<TypeParam>(input, 
-    cudf::test::column_wrapper<cudf::bool8>{column_size, 
+    cudf::test::column_wrapper<cudf::bool8>(column_size, 
       [](gdf_index_type row) { return cudf::bool8{true}; },
-      [](gdf_index_type row) { return false; }},
+      [](gdf_index_type row) { return false; }),
     expected);
   
   BooleanMaskTest<TypeParam>(input, 
-    cudf::test::column_wrapper<cudf::bool8>{column_size, 
+    cudf::test::column_wrapper<cudf::bool8>(column_size, 
       [](gdf_index_type row) { return cudf::bool8{false}; },
-      [](gdf_index_type row) { return true; }},
+      [](gdf_index_type row) { return true; }),
     expected);
 }
 
