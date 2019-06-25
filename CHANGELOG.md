@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2105 Add google benchmark for hash-based join
+
 ## Improvements
 
 ## Bug Fixes
