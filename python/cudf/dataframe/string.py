@@ -630,16 +630,21 @@ class StringColumn(columnops.TypedColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
+        to_replace = columnops.as_column(to_replace)
+        replacement = columnops.as_column(replacement)
         if (
-                not isinstance(to_replace, str)
-                and not isinstance(replacement, str)
+                len(to_replace) == 1
+                and len(replacement) == 1
         ):
+            to_replace = to_replace.data.to_host()[0]
+            replacement = replacement.data.to_host()[0]
+            result = self.data.replace(to_replace, replacement)
+            return self.replace(data=result)
+        else:
             raise NotImplementedError(
-                "StringColumns currently only support "
-                "replacing single values"
+                "StringColumn currently only supports replacing"
+                " single values"
             )
-        result = self.data.replace(to_replace, replacement)
-        return self.replace(data=result)
 
     def fillna(self, fill_value, inplace=False):
         """
