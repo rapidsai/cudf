@@ -683,17 +683,16 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
   const table input_table(cols, 1);
   table output_table = copy_if(input_table, filter, stream);
   gdf_column * out = output_table.get_column(0);
-  return *out;
-  
+    
   // synchronize nvcategory after filtering
-  if (output.dtype == GDF_STRING_CATEGORY) {
+  if (out->dtype == GDF_STRING_CATEGORY) {
     CUDF_EXPECTS(
     GDF_SUCCESS ==
-      nvcategory_gather(&output,
+      nvcategory_gather(out,
                         static_cast<NVCategory *>(input.dtype_info.category)),
       "could not set nvcategory");
   }
-  return output;
+  return *out;
 }
 
 } // namespace detail
