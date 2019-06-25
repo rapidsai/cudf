@@ -90,6 +90,10 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
         assert isinstance(data, columnops.TypedColumnBase)
+        from cudf.dataframe.string import StringColumn
+        if isinstance(data, StringColumn):
+            data._name = name
+
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self.name = name
