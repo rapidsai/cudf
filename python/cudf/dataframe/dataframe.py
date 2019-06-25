@@ -493,8 +493,13 @@ class DataFrame(object):
 
     def __repr__(self):
         output = DataFrame()
-        for col in self.columns:
-            output[col] = self[col].astype('str').str.fillna('null')
+        for col in self._cols:
+            if self._cols[col].null_count > 0:
+                output[col] = self._cols[col].astype('str').str.fillna('null')
+            else:
+                output[col] = self._cols[col]
+        output.index = self.index
+        output.columns = self.columns
         return output.to_pandas().__repr__()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare

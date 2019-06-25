@@ -712,62 +712,62 @@ def test_dataframe_iloc_index_error():
 
 
 def test_dataframe_to_string():
-    with set_options(formatting={'nrows': 5, 'ncols': 8}):
-        # Test basic
-        df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
-                        ('b', [11, 12, 13, 14, 15, 16])])
-        string = str(df)
-        print(string)
-        assert string.splitlines()[-1] == '[1 more rows]'
+    pd.options.display.max_rows = 5
+    pd.options.display.max_columns = 8
+    # Test basic
+    df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
+                    ('b', [11, 12, 13, 14, 15, 16])])
+    string = str(df)
+    print(string)
+    assert string.splitlines()[-1] == '[6 rows x 2 columns]'
 
-        # Test skipped columns
-        df = DataFrame([('a', [1,  2,  3,  4,  5,  6]),
-                        ('b', [11, 12, 13, 14, 15, 16]),
-                        ('c', [11, 12, 13, 14, 15, 16]),
-                        ('d', [11, 12, 13, 14, 15, 16])])
-        string = df.to_string(ncols=3)
-        print(string)
-        assert string.splitlines()[-2] == '[1 more rows]'
-        assert string.splitlines()[-1] == '[1 more columns]'
+    # Test skipped columns
+    df = DataFrame([('a', [1,  2,  3,  4,  5,  6]),
+                    ('b', [11, 12, 13, 14, 15, 16]),
+                    ('c', [11, 12, 13, 14, 15, 16]),
+                    ('d', [11, 12, 13, 14, 15, 16])])
+    string = df.to_string(ncols=3)
+    print(string)
+    assert string.splitlines()[-1] == '[6 rows x 4 columns]'
 
-        # Test masked
-        df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
-                        ('b', [11, 12, 13, 14, 15, 16])])
+    # Test masked
+    df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
+                    ('b', [11, 12, 13, 14, 15, 16])])
 
-        data = np.arange(6)
-        mask = np.zeros(1, dtype=np.uint8)
-        mask[0] = 0b00101101
+    data = np.arange(6)
+    mask = np.zeros(1, dtype=np.uint8)
+    mask[0] = 0b00101101
 
-        masked = Series.from_masked_array(data, mask)
-        assert masked.null_count == 2
-        df['c'] = masked
+    masked = Series.from_masked_array(data, mask)
+    assert masked.null_count == 2
+    df['c'] = masked
 
-        # check data
-        values = list(masked)
-        validids = [0, 2, 3, 5]
-        densearray = masked.to_array()
-        np.testing.assert_equal(data[validids], densearray)
-        # valid position is corret
-        for i in validids:
-            assert data[i] == values[i]
-        # null position is correct
-        for i in range(len(values)):
-            if i not in validids:
-                assert values[i] is None
-
-        got = df.to_string(nrows=None)
-        print(got)
-        expect = '''
-  a b  c
+    # check data
+    values = list(masked)
+    validids = [0, 2, 3, 5]
+    densearray = masked.to_array()
+    np.testing.assert_equal(data[validids], densearray)
+    # valid position is corret
+    for i in validids:
+        assert data[i] == values[i]
+    # null position is correct
+    for i in range(len(values)):
+        if i not in validids:
+            assert values[i] is None
+    pd.options.display.max_rows = 999
+    got = df.to_string(nrows=None)
+    print(got)
+    expect = '''
+a b  c
 0 1 11 0
-1 2 12
+1 2 12 null
 2 3 13 2
 3 4 14 3
-4 5 15
+4 5 15 null
 5 6 16 5
 '''
-        # values should match despite whitespace difference
-        assert got.split() == expect.split()
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
 
 
 def test_dataframe_to_string_wide():
@@ -778,11 +778,12 @@ def test_dataframe_to_string_wide():
     got = df.to_string(ncols=8)
     print(got)
     expect = '''
-    a0   a1   a2   a3   a4   a5   a6 ...  a99
-0    0    0    0    0    0    0    0 ...    0
-1    1    1    1    1    1    1    1 ...    1
-2    2    2    2    2    2    2    2 ...    2
-[92 more columns]
+    a0   a1   a2   a3 ... a96  a97  a98 a99
+0    0    0    0    0 ...   0    0    0   0
+1    1    1    1    1 ...   1    1    1   1
+2    2    2    2    2 ...   2    2    2   2
+
+[3 rows x 100 columns]
 '''
     # values should match despite whitespace difference
     assert got.split() == expect.split()
@@ -805,7 +806,7 @@ def test_dataframe_emptycolumns_to_string():
     df['b'] = []
     got = df.to_string()
     print(got)
-    expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
+    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 

@@ -426,11 +426,9 @@ class Series(object):
             preprocess = self
         output = preprocess.astype('O').fillna('null').to_pandas().__repr__()
         lines = output.split('\n')
-        print(lines)
-        print(len(preprocess))
         if lines[-1].startswith('N'):
             lines = lines[:-1]
-            lines.append("Name: %s" % self.name)
+            lines.append("Name: %s" % str(self.name))
             if len(self) > len(preprocess)/2:
                 lines[-1] = lines[-1] + ", Length: %d" % len(self)
             lines[-1] = lines[-1] + ', '
