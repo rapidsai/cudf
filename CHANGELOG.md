@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
 
 ## Bug Fixes
 
