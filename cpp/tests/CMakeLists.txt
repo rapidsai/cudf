@@ -294,11 +294,6 @@ set(COPYING_OPT_TEST_SRC
 
 ConfigureTest(COPYING_OPT_TEST "${COPYING_OPT_TEST_SRC}")
 
-set(GATHER_RANDOM_MAP_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_nsys.cu")
-
-ConfigureTest(GATHER_RANDOM_MAP_TEST "${GATHER_RANDOM_MAP_TEST_SRC}")
-
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
 
