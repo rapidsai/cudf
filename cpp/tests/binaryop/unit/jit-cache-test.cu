@@ -91,7 +91,7 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
     auto expect = cudf::test::column_wrapper<int>{{625,0}};
 
     // make program
-    auto program = cache.getProgram("MemoryCacheTestProg");
+    auto program = cache.getProgram("MemoryCacheTestProg", program_source);
     // make kernel that HAS to be compiled
     auto kernel = cache.getKernelInstantiation("my_kernel",
                                                 program,
@@ -112,10 +112,8 @@ TEST_F(JitCacheTest, FileCacheKernelTest) {
     auto expect = cudf::test::column_wrapper<int>{{125,0}};
 
     // make program
-    auto program = cache.getProgram("MemoryCacheTestProg1", program2_source);
+    auto program = cache.getProgram("MemoryCacheTestProg", program_source);
     // make kernel that should NOT need to be compiled
-    // TODO (dm): convert this pair to a class, so the name can be edited
-    std::get<0>(program) = "MemoryCacheTestProg";
     auto kernel = cache.getKernelInstantiation("my_kernel",
                                                 program,
                                                 {"3", "int"});
