@@ -155,6 +155,9 @@ gdf_error gdf_column_view(gdf_column *column,
   column->size = size;
   column->dtype = dtype;
   column->null_count = 0;
+  column->col_name = nullptr;
+  column->dtype_info.category = nullptr;
+  column->dtype_info.time_unit = TIME_UNIT_NONE;
   return GDF_SUCCESS;
 }
 
@@ -169,10 +172,7 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_size_type null_count,
                                     gdf_dtype_extra_info extra_info)
 {
-  column->data = data;
-  column->valid = valid;
-  column->size = size;
-  column->dtype = dtype;
+  gdf_column_view(column, data, valid, size, dtype);
   column->null_count = null_count;
   column->dtype_info = extra_info;
   return GDF_SUCCESS;

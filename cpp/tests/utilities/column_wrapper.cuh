@@ -601,13 +601,12 @@ struct column_wrapper {
     data = host_data;
 
     // Fill the gdf_column members
-    the_column.data = data.data().get();
-    the_column.size = data.size();
-    the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = TIME_UNIT_NONE;
     extra_info.category = nullptr;
-    the_column.dtype_info = extra_info;
+    gdf_column_view_augmented(&the_column, data.data().get(), nullptr,
+                              data.size(), cudf::gdf_dtype_of<ColumnType>(),
+                              0, extra_info);
 
     // If a validity bitmask vector was passed in, allocate device storage
     // and copy its contents from the host vector
