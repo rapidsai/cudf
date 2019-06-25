@@ -471,3 +471,55 @@ TYPED_TEST(GatherOptTest, EveryOtherNull) {
     }
   }
 }
+
+TYPED_TEST(GatherOptTest, ScatterReverseIdentityTest) {
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  static_assert(source_size == destination_size,
+                "Source and destination columns must be the same size.");
+
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return true; }};
+
+  // Create gather_map that reverses order of source_column
+  std::vector<gdf_index_type> host_gather_map(source_size);
+  std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
+  std::reverse(host_gather_map.begin(), host_gather_map.end());
+  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
+                                                           true);
+
+  gdf_column* raw_source = source_column.get();
+  gdf_column* raw_destination = destination_column.get();
+
+  cudf::table source_table{&raw_source, 1};
+  cudf::table destination_table{&raw_destination, 1};
+
+  EXPECT_NO_THROW(
+      cudf::opt::scatter(&source_table, gather_map.data().get(), &destination_table));
+
+  // Expected result is the reversal of the source column
+  std::vector<TypeParam> expected_data;
+  std::vector<gdf_valid_type> expected_bitmask;
+  std::tie(expected_data, expected_bitmask) = source_column.to_host();
+  std::reverse(expected_data.begin(), expected_data.end());
+
+  // Copy result of destination column to host
+  std::vector<TypeParam> result_data;
+  std::vector<gdf_valid_type> result_bitmask;
+  std::tie(result_data, result_bitmask) = destination_column.to_host();
+
+  auto print_all_unequal_pairs { true };
+  expect_column_values_are_equal<TypeParam>(
+      destination_size, expected_data.data(), nullptr, "Expected",
+      result_data.data(), nullptr, "Actual",
+      print_all_unequal_pairs);
+
+  for (gdf_index_type i = 0; i < destination_size; i++) {
+    EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
+        << "Value at index " << i << " should be non-null!\n";
+  }
+}

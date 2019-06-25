@@ -74,11 +74,17 @@ __device__ __inline__ void gather_bitmask_device(
     const gdf_size_type num_destination_rows,
     gdf_size_type* d_count 
 ){
+  // instead of setting it to true by default.
   const uint32_t active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   bool source_bit_is_valid = false;
   if(check_bounds){
-    source_bit_is_valid = source_row < num_source_rows && bit_mask::is_valid(source_valid, source_row);
+    if(source_row < num_source_rows){
+      source_bit_is_valid = bit_mask::is_valid(source_valid, source_row);
+    }else{
+      // If gather_map does not include this row we should just keep the originla value,
+      source_bit_is_valid = bit_mask::is_valid(destination_valid, destination_row);
+    }
   }else{
     source_bit_is_valid = bit_mask::is_valid(source_valid, source_row);
   }
@@ -112,16 +118,16 @@ __global__ void gather_kernel(const device_table source,
                                   device_table destination,
                                   gdf_size_type* d_count)
 {
-  const gdf_index_type n_source_rows = source.num_rows();
-  const gdf_index_type n_destination_rows = destination.num_rows();
+  const gdf_index_type num_source_rows = source.num_rows();
+  const gdf_index_type num_destination_rows = destination.num_rows();
   
   // Each element of gather_map[] only needs to be used once. 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
  
-  const bool active_threads = destination_row < n_destination_rows;
+  const bool active_threads = destination_row < num_destination_rows;
   gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
   for(gdf_index_type i = 0; i < destination.num_columns(); i++){
-    if(active_threads && (!check_bounds || source_row < n_source_rows)){
+    if(active_threads && (!check_bounds || source_row < num_source_rows)){
       // gather the entire row
       cudf::type_dispatcher(source.get_column(i)->dtype,
                           copy_element_smem{},
@@ -136,13 +142,65 @@ __global__ void gather_kernel(const device_table source,
       bit_mask_t* __restrict__ dest_valid =
         reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
       // Gather the bitmasks and do the null count 
-      gather_bitmask_device<check_bounds>(src_valid, source_row, n_source_rows,
-        dest_valid, destination_row, n_destination_rows, d_count + i);
+      gather_bitmask_device<check_bounds>(src_valid, source_row, num_source_rows,
+        dest_valid, destination_row, num_destination_rows, d_count + i);
     }
   }
 }
 
+ 
+template<bool check_bounds, bool do_valid, int block_size>
+__launch_bounds__(block_size, 2048/block_size)
+__global__ void gather_kernel_sparse(const device_table source, 
+                                  const gdf_size_type gather_map[], 
+                                  device_table destination,
+                                  gdf_size_type* d_count)
+{
+  const gdf_index_type num_source_rows = source.num_rows();
+  const gdf_index_type num_destination_rows = destination.num_rows();
+  for(gdf_index_type i = 0; i < destination.num_columns(); i++){
+    
+    // data part
+    gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+    while(destination_row < num_destination_rows){
+      
+      gdf_index_type source_row = gather_map[destination_row];
+      
+      cudf::type_dispatcher(source.get_column(i)->dtype,
+                            copy_element_smem{},
+                            *destination.get_column(i), destination_row,
+                            *source.get_column(i), source_row);
+      
+      destination_row += blockDim.x * gridDim.x; 
+    }
+    if(do_valid){ 
+      // bitmask part  
+      gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
+      while(destination_row_base < num_destination_rows){
+        
+        gdf_index_type destination_row = destination_row_base + threadIdx.x;
+        const bool active_threads = destination_row < num_destination_rows;
+        gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
+        
+        // Before bit_mask_t is used in device_table we will do the cast here.
+        bit_mask_t* __restrict__ src_valid =
+          reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
+        bit_mask_t* __restrict__ dest_valid =
+          reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
+        // Gather the bitmasks and do the null count 
+        
+        gather_bitmask_device<check_bounds>(src_valid, source_row, num_source_rows,
+          dest_valid, destination_row, num_destination_rows, d_count + i);
+        
+        destination_row_base += blockDim.x * gridDim.x; 
+      }
+    }
+  }
+
+}
+
 }  // namespace
+
 namespace cudf {
 namespace opt   {
 namespace detail {
@@ -201,6 +259,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   CUDA_TRY(cudaMemset(d_count_p, 0, sizeof(gdf_size_type)*n_cols));
 
   // Call the optimized gather kernel
+#if 0
   const gdf_size_type gather_grid_size =
       (destination_table->num_rows() + block_size - 1) / block_size;
 
@@ -221,7 +280,27 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }
   }
-  
+#else
+  constexpr gdf_size_type gather_grid_size = 64/(block_size/impl::warp_size)*80;
+
+  if (check_bounds) {
+    if(dest_has_nulls){
+      impl::gather_kernel_sparse<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
+          *d_source_table, gather_map, *d_destination_table, d_count_p);
+    }else{
+      impl::gather_kernel_sparse<true , false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
+          *d_source_table, gather_map, *d_destination_table, d_count_p);
+    }
+  }else{
+    if(dest_has_nulls){
+      impl::gather_kernel_sparse<false, true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
+          *d_source_table, gather_map, *d_destination_table, d_count_p);
+    }else{
+      impl::gather_kernel_sparse<false, false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
+          *d_source_table, gather_map, *d_destination_table, d_count_p);
+    }
+  }
+#endif 
   std::vector<gdf_size_type> h_count(n_cols);
   CUDA_TRY(cudaMemcpy(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost));
   if(dest_has_nulls){  
@@ -249,6 +328,32 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     CUDF_EXPECTS(false, "Unsupported block size.");
   }
   nvcategory_gather_table(*source_table, *destination_table);
+}
+
+__global__ void invert_map(gdf_index_type gather_map[], const gdf_size_type destination_rows,
+                            gdf_index_type const scatter_map[], const gdf_size_type source_rows){
+  gdf_index_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
+  if(source_row < source_rows){
+    gdf_index_type destination_row = scatter_map[source_row];
+    if(destination_row < destination_rows){
+      gather_map[destination_row] = source_row;
+    }
+  }
+}
+
+void scatter(table const* source_table, gdf_index_type const scatter_map[],
+            table* destination_table, int block_size) {
+  const gdf_size_type num_source_rows = source_table->num_rows();
+  const gdf_size_type num_destination_rows = destination_table->num_rows();
+  // Turn the scatter_map[] into a gather_map[] and then call gather(...).
+  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, num_destination_rows);
+  
+  const gdf_size_type invert_grid_size =
+    (destination_table->num_rows() + block_size - 1) / block_size;
+
+  invert_map<<<invert_grid_size, block_size>>>(v_gather_map.data().get(), num_destination_rows, scatter_map, num_source_rows);
+  
+  gather(source_table, v_gather_map.data().get(), destination_table, block_size);    
 }
 
 } // namespace opt

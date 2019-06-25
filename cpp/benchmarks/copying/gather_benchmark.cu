@@ -31,11 +31,13 @@
 #include <algorithm>
 
 
-template<class TypeParam, int n_cols, bool opt>
+template<class TypeParam, bool opt>
 void gather_inverse(benchmark::State& state){
   const gdf_size_type source_size{(gdf_size_type)state.range(0)};
   const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
-  
+
+  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
+
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
     { source_size, 
@@ -43,7 +45,7 @@ void gather_inverse(benchmark::State& state){
       [](gdf_index_type row) { return true; }
     }
   );
-  std::vector<gdf_column*> vp_src {n_cols};
+  std::vector<gdf_column*> vp_src(n_cols);
   for(size_t i = 0; i < v_src.size(); i++){
     vp_src[i] = v_src[i].get();  
   }
@@ -61,7 +63,7 @@ void gather_inverse(benchmark::State& state){
       [](gdf_index_type row) { return true; }
     }
   );
-  std::vector<gdf_column*> vp_dest {n_cols};
+  std::vector<gdf_column*> vp_dest (n_cols);
   for(size_t i = 0; i < v_src.size(); i++){
     vp_dest[i] = v_dest[i].get();  
   }
@@ -71,7 +73,7 @@ void gather_inverse(benchmark::State& state){
 
   for(auto _ : state){
     if(opt){
-      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, state.range(1));
+      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table);
     }else{
       cudf::gather(&source_table, gather_map.data().get(), &destination_table);
     }
@@ -80,14 +82,16 @@ void gather_inverse(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-// BENCHMARK_TEMPLATE(gather_inverse, double, 3, true)->RangeMultiplier(2)
-//   ->Ranges({{1<<25, 1<<26},{64, 256}});
+BENCHMARK_TEMPLATE(gather_inverse,double,false)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_TEMPLATE(gather_inverse,double, true)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
 
-template<class TypeParam, int n_cols, bool opt>
-void gather_random(benchmark::State& state){
+template<class TypeParam, bool opt>
+void gather_random_(benchmark::State& state){
   const gdf_size_type source_size{(gdf_size_type)state.range(0)};
   const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
   
+  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
+
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
     { source_size, 
@@ -95,7 +99,7 @@ void gather_random(benchmark::State& state){
       [](gdf_index_type row) { return true; }
     }
   );
-  std::vector<gdf_column*> vp_src {n_cols};
+  std::vector<gdf_column*> vp_src (n_cols);
   for(size_t i = 0; i < v_src.size(); i++){
     vp_src[i] = v_src[i].get();  
   }
@@ -120,7 +124,7 @@ void gather_random(benchmark::State& state){
       [](gdf_index_type row) { return true; }
     }
   );
-  std::vector<gdf_column*> vp_dest {n_cols};
+  std::vector<gdf_column*> vp_dest (n_cols);
   for(size_t i = 0; i < v_src.size(); i++){
     vp_dest[i] = v_dest[i].get();  
   }
@@ -144,6 +148,6 @@ void gather_random(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-BENCHMARK_TEMPLATE(gather_random,double,3,false)->RangeMultiplier(2)->Range(1<<26, 1<<26);
-BENCHMARK_TEMPLATE(gather_random,double,3,true )->RangeMultiplier(2)->Range(1<<26, 1<<26);
+BENCHMARK_TEMPLATE(gather_random_,double,false)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_TEMPLATE(gather_random_,double, true)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
 

@@ -68,3 +68,11 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
+# - scatter benchmark -----------------------------------------------------------------------------
+
+set(SCATTER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
+
+ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
