@@ -143,6 +143,14 @@ struct table {
     return 0;
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Destroys the `gdf_column`s in the table.
+   *
+   * Free's each column's device memory and destroys the `gdf_column` object.
+   *
+   *---------------------------------------------------------------------------**/
+  void destroy(void);
+
  private:
   std::vector<gdf_column*> _columns;  ///< Pointers to the wrapped columns
 };
