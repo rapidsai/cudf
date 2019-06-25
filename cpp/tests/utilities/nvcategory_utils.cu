@@ -20,7 +20,7 @@
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
 #include <cudf/types.h>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>
 

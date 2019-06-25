@@ -27,7 +27,7 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
 using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::function<void(gdf_valid_type*)>>;

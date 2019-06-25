@@ -25,7 +25,7 @@
 #include <utilities/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <nvstrings/NVCategory.h>
-#include <bitmask/bit_mask.cuh> 
+#include <bitmask/legacy/bit_mask.cuh> 
 #include <copying/slice.hpp>
 
 namespace cudf {

@@ -21,7 +21,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 
 #include <cudf/cudf.h>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 
 #include <thrust/device_vector.h>
 

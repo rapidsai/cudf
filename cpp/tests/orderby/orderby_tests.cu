@@ -25,7 +25,7 @@
 
 #include <utilities/bit_util.cuh>
 #include <utilities/wrapper_types.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 
 #include <rmm/rmm.h>

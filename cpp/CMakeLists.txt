@@ -279,7 +279,7 @@ add_library(cudf SHARED
             src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
-            src/bitmask/bitmask_ops.cu
+            src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
@@ -323,7 +323,7 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp
+            src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu)

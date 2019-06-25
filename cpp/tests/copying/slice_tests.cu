@@ -21,7 +21,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/copying/copying_test_helper.hpp>
 #include <tests/utilities/nvcategory_utils.cuh>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 
 void call_slice(gdf_column const*          input_column,
                 gdf_index_type const*      indices,
