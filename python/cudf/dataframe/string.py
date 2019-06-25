@@ -626,6 +626,21 @@ class StringColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
 
+    def find_and_replace(self, to_replace, replacement, all_nan):
+        """
+        Return col with *to_replace* replaced with *value*
+        """
+        if (
+                not isinstance(to_replace, str)
+                and not isinstance(replacement, str)
+        ):
+            raise NotImplementedError(
+                "StringColumns currently only support "
+                "replacing single values"
+            )
+        result = self.data.replace(to_replace, replacement)
+        return self.replace(data=result)
+
     def fillna(self, fill_value, inplace=False):
         """
         Fill null values with * fill_value *
