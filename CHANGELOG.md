@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+- PR #2110 fixed a typo in to_csv documentation
 
 
 # cuDF 0.8.0 (Date TBD)
