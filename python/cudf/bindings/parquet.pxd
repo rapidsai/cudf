@@ -13,7 +13,6 @@ from libcpp.vector cimport vector
 
 cdef extern from "cudf.h" namespace "cudf::io::parquet" nogil:
 
-    # See cpp/include/cudf/io_types.h
     cdef cppclass reader_options:
         vector[string] columns
         bool strings_to_categorical
@@ -22,7 +21,7 @@ cdef extern from "cudf.h" namespace "cudf::io::parquet" nogil:
 
         reader_options(
             vector[string] columns,
-            bool strings_to_categorical
+            bool strings_as_category
         ) except +
 
     cdef cppclass reader:

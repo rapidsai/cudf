@@ -23,14 +23,20 @@ def read_parquet_metadata(path):
 
 
 @ioutils.doc_read_parquet()
-def read_parquet(path, engine='cudf', columns=None, row_group=None,
-                 skip_rows=None, num_rows=None, strings_to_categorical=False,
-                 *args, **kwargs):
+def read_parquet(filepath_or_buffer, engine='cudf', columns=None,
+                 row_group=None, skip_rows=None, num_rows=None,
+                 strings_to_categorical=False, *args, **kwargs):
     """{docstring}"""
+
+    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        filepath_or_buffer, None
+    )
+    if compression is not None:
+        ValueError('URL content-encoding decompression is not supported')
 
     if engine == 'cudf':
         df = cpp_read_parquet(
-            path,
+            filepath_or_buffer,
             columns,
             row_group,
             skip_rows,
@@ -40,7 +46,7 @@ def read_parquet(path, engine='cudf', columns=None, row_group=None,
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
         pa_table = pq.read_pandas(
-            path,
+            filepath_or_buffer,
             columns=columns,
             *args,
             **kwargs

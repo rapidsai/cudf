@@ -2,6 +2,11 @@
 
 from cudf.utils.docutils import docfmt_partial
 
+from io import BytesIO
+import os
+import urllib
+
+
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
 
@@ -36,12 +41,15 @@ doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata)
 
 _docstring_read_parquet = """
-Read a Parquet file into DataFrame
+Load a Parquet dataset into a DataFrame
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+filepath_or_buffer : str, path object, bytes, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    Python bytes of raw binary data, or any object with a `read()` method
+    (such as builtin `open()` file handler function or `BytesIO`).
 engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
 columns : list, default None
@@ -133,12 +141,15 @@ cudf.io.orc.read_orc
 doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
 
 _docstring_read_orc = """
-Load an ORC object from the file path, returning a DataFrame.
+Load an ORC dataset into a DataFrame
 
 Parameters
 ----------
-path : string
-    File path
+filepath_or_buffer : str, path object, bytes, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    Python bytes of raw binary data, or any object with a `read()` method
+    (such as builtin `open()` file handler function or `BytesIO`).
 engine : { 'cudf', 'pyarrow' }, default 'cudf'
     Parser engine to use.
 columns : list, default None
@@ -175,14 +186,15 @@ cudf.io.parquet.to_parquet
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
 _docstring_read_json = """
-Convert a JSON string to a cuDF object.
+Load a JSON dataset into a DataFrame
 
 Parameters
 ----------
-path_or_buf : a valid JSON string or file-like
-    The string could be a URL (pandas engine only). Valid URL schemes include
-    http, ftp, s3, gcs, and file. For file URLs, a host is expected.
-    For instance, a local file could be ``file://localhost/path/to/table.json``
+path_or_buf : str, path object, or file-like object
+    Either JSON data in a `str`, path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    or any object with a `read()` method (such as builtin `open()` file handler
+    function or `StringIO`).
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters.
@@ -534,12 +546,15 @@ pycapsule_obj : PyCapsule
 doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
 
 _docstring_read_csv = """
-Load and parse a CSV file into a DataFrame
+Load a comma-seperated-values (CSV) dataset into a DataFrame
 
 Parameters
 ----------
-filepath_or_buffer : str
-    Path of file to be read or a file-like object containing the file.
+filepath_or_buffer : str, path object, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    or any object with a `read()` method (such as builtin `open()` file handler
+    function or `StringIO`).
 sep : char, default ','
     Delimiter to be used.
 delimiter : char, default None
@@ -696,3 +711,81 @@ See Also
 cudf.io.csv.read_csv
 """
 doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)
+
+
+def is_url(url):
+    """Check if a string is a valid URL to a network location.
+
+    Parameters
+    ----------
+    url : str
+        String containing a possible URL
+
+    Returns
+    -------
+    bool : bool
+        If `url` has a valid protocol return True otherwise False.
+    """
+    # Do not include the empty ('') scheme in the check
+    schemes = urllib.parse.uses_netloc[1:]
+    try:
+        return urllib.parse.urlparse(url).scheme in schemes
+    except Exception:
+        return False
+
+
+def is_file_like(obj):
+    """Check if the object is a file-like object, per PANDAS' definition.
+    An object is considered file-like if it has an iterator AND has a either or
+    both `read()` / `write()` methods as attributes.
+
+    Parameters
+    ----------
+    obj : object
+        Object to check for file-like properties
+
+    Returns
+    -------
+    is_file_like : bool
+        If `obj` is file-like returns True otherwise False
+    """
+    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+        return False
+    elif not hasattr(obj, "__iter__"):
+        return False
+    else:
+        return True
+
+
+def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
+    """Return either a filepath string to data, or a memory buffer of data.
+    If filepath, then the source filepath is expanded to user's environment.
+    If buffer, then data is returned in-memory as bytes or a ByteIO object.
+
+    Parameters
+    ----------
+    path_or_data : str, file-like object, bytes, ByteIO
+        Path to data or the data itself.
+    compression : str
+        Type of compression algorithm for the content
+    iotypes : (), default (BytesIO)
+        Object type to exclude from file-like check
+
+    Returns
+    -------
+    filepath_or_buffer : str, bytes, BytesIO
+        Filepath string or in-memory buffer of data
+    compression : str
+        Type of compression algorithm for the content
+    """
+    if is_url(path_or_data):
+        with urllib.request.urlopen(path_or_data) as url:
+            compression = url.headers.get('Content-Encoding', None)
+            buffer = BytesIO(url.read())
+        return buffer, compression
+    elif isinstance(path_or_data, str):
+        return os.path.expanduser(path_or_data), compression
+    elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
+        return BytesIO(path_or_data.read()), compression
+    else:
+        return path_or_data, compression
