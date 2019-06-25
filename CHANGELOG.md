@@ -7,7 +7,7 @@
 ## Bug Fixes
 
 
-# cuDF 0.8.0 (Date TBD)
+# cuDF 0.8.0 (27 June 2019)
 
 ## New Features
 
@@ -102,6 +102,7 @@
 - PR #2036 Make library of common test utils to speed up tests compilation
 - PR #2022 Facilitating get_dummies to be a high level api too
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
+- PR #2104 Add a functional ``sort=`` keyword argument to groupby
 
 ## Bug Fixes
 
