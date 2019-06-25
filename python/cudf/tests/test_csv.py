@@ -1,20 +1,19 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pytest
-from collections import OrderedDict
+import cudf
+from cudf import read_csv
+from cudf.tests.utils import assert_eq
 
+import pytest
 import numpy as np
 import pandas as pd
 
-from io import StringIO
-from io import BytesIO
-
-from cudf import read_csv
-import cudf
-from cudf.tests.utils import assert_eq
 import gzip
 import shutil
 import os
+from collections import OrderedDict
+from io import StringIO, BytesIO
+from pathlib import Path
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -63,6 +62,31 @@ def make_all_numeric_dtypes_dataframe():
         OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
         OrderedDict(zip(gdf_dtypes, np_dtypes))
     )
+
+
+@pytest.fixture
+def path_or_buf(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_path_or_buf.csv')
+    df = make_numeric_dataframe(10, np.int32)
+
+    df.to_csv(fname, index=False, header=False)
+    buffer = df.to_csv(index=False, header=False)
+
+    def _make_path_or_buf(src):
+        if src == 'filepath':
+            return str(fname)
+        if src == 'pathobj':
+            return fname
+        if src == 'bytes_io':
+            return BytesIO(buffer.encode())
+        if src == 'string_io':
+            return StringIO(buffer)
+        if src == 'url':
+            return Path(fname).as_uri()
+
+        raise ValueError('Invalid source type')
+
+    yield _make_path_or_buf
 
 
 dtypes = [np.float64, np.float32, np.int64, np.int32]
@@ -408,33 +432,6 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(int64_ref, df['int64'])
 
 
-def test_csv_reader_buffer():
-
-    names = dtypes = ["float32", "int32", "date"]
-    lines = [','.join(names),
-             "1234.5, 1234567, 11/22/1995",
-             "12345.6, 12345, 1/2/2002"]
-
-    buffer = '\n'.join(lines)
-
-    f32_ref = [1234.5, 12345.6]
-    int32_ref = [1234567, 12345]
-
-    df_str = read_csv(StringIO(buffer),
-                      names=names, dtype=dtypes, skiprows=1)
-    np.testing.assert_allclose(f32_ref, df_str['float32'])
-    np.testing.assert_allclose(int32_ref, df_str['int32'])
-    assert("1995-11-22T00:00:00.000" == str(df_str['date'][0]))
-    assert("2002-01-02T00:00:00.000" == str(df_str['date'][1]))
-
-    df_bytes = read_csv(BytesIO(str.encode(buffer)),
-                        names=names, dtype=dtypes, skiprows=1)
-    np.testing.assert_allclose(f32_ref, df_bytes['float32'])
-    np.testing.assert_allclose(int32_ref, df_bytes['int32'])
-    assert("1995-11-22T00:00:00.000" == str(df_bytes['date'][0]))
-    assert("2002-01-02T00:00:00.000" == str(df_bytes['date'][1]))
-
-
 def test_csv_reader_buffer_strings():
 
     names = ['text', 'int']
@@ -715,6 +712,15 @@ def test_csv_reader_filenotfound(tmpdir):
     dname = tmpdir.mkdir("gdf_csv")
     with pytest.raises(FileNotFoundError):
         read_csv(str(dname))
+
+
+@pytest.mark.parametrize('src', ['filepath', 'pathobj', 'bytes_io',
+                                 'string_io', 'url'])
+def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
+    expect = pd.read_csv(path_or_buf('filepath'))
+    got = cudf.read_csv(path_or_buf(src))
+
+    assert_eq(expect, got)
 
 
 def test_csv_reader_carriage_return(tmpdir):

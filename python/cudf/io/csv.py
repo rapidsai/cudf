@@ -3,6 +3,8 @@
 from cudf.bindings.csv import cpp_read_csv, cpp_write_csv
 from cudf.utils import ioutils
 
+from io import BytesIO, StringIO
+
 
 @ioutils.doc_read_csv()
 def read_csv(filepath_or_buffer, lineterminator='\n',
@@ -17,6 +19,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              na_values=None, keep_default_na=True, na_filter=True,
              prefix=None, index_col=None):
     """{docstring}"""
+
+    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        filepath_or_buffer, compression, (BytesIO, StringIO)
+    )
     return cpp_read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
