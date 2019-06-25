@@ -1999,7 +1999,7 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, group_series=None, level=None, sort=False,
+    def groupby(self, group_series=None, level=None, sort=True,
                 group_keys=True):
         if group_keys is not True:
             raise NotImplementedError(
