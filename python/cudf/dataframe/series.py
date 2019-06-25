@@ -1844,7 +1844,8 @@ class Series(object):
                              be in the interval [0, 1]")
 
         if utils.is_list_like(q):
-            invalid_q_vector = np.vectorize(invalid_quantile, otypes=[np.bool8])
+            invalid_q_vector = np.vectorize(invalid_quantile,
+                                            otypes=[np.bool8])
             if any(invalid_q_vector(q)):
                 raise ValueError("percentiles should all \
                              be in the interval [0, 1]")
