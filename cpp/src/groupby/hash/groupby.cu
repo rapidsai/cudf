@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/bitmask.hpp>
+#include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table.hpp>
